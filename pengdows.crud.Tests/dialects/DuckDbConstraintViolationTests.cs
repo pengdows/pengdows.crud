@@ -37,7 +37,7 @@ public class DuckDbConstraintViolationTests
     public void IsUniqueViolation_DuckDB_DuplicateKeyMessage_ReturnsTrue()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("Duplicate key 'xyz' violates unique constraint 'pk_orders'");
+        var ex = new PlainMessageDbException("Duplicate key 'xyz' violates unique constraint 'pk_orders'");
         Assert.True(ctx.GetDialect().IsUniqueViolation(ex));
     }
 
@@ -45,7 +45,7 @@ public class DuckDbConstraintViolationTests
     public void IsUniqueViolation_DuckDB_UniqueConstraintMessage_ReturnsTrue()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("unique constraint failed: table.col");
+        var ex = new PlainMessageDbException("unique constraint failed: table.col");
         Assert.True(ctx.GetDialect().IsUniqueViolation(ex));
     }
 
@@ -53,7 +53,7 @@ public class DuckDbConstraintViolationTests
     public void IsUniqueViolation_DuckDB_UnrelatedMessage_ReturnsFalse()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("arithmetic overflow");
+        var ex = new PlainMessageDbException("arithmetic overflow");
         Assert.False(ctx.GetDialect().IsUniqueViolation(ex));
     }
 
@@ -71,7 +71,7 @@ public class DuckDbConstraintViolationTests
     public void IsForeignKeyViolation_DuckDB_ForeignKeyMessage_ReturnsTrue()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("Violates foreign key constraint fk_orders_customers");
+        var ex = new PlainMessageDbException("Violates foreign key constraint fk_orders_customers");
         Assert.True(ctx.GetDialect().IsForeignKeyViolation(ex));
     }
 
@@ -79,7 +79,7 @@ public class DuckDbConstraintViolationTests
     public void IsForeignKeyViolation_DuckDB_UnrelatedMessage_ReturnsFalse()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("NOT NULL constraint failed");
+        var ex = new PlainMessageDbException("NOT NULL constraint failed");
         Assert.False(ctx.GetDialect().IsForeignKeyViolation(ex));
     }
 
@@ -97,7 +97,7 @@ public class DuckDbConstraintViolationTests
     public void IsNotNullViolation_DuckDB_NotNullConstraintMessage_ReturnsTrue()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("NOT NULL constraint failed: orders.customer_id");
+        var ex = new PlainMessageDbException("NOT NULL constraint failed: orders.customer_id");
         Assert.True(ctx.GetDialect().IsNotNullViolation(ex));
     }
 
@@ -105,7 +105,7 @@ public class DuckDbConstraintViolationTests
     public void IsNotNullViolation_DuckDB_UnrelatedMessage_ReturnsFalse()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("division by zero");
+        var ex = new PlainMessageDbException("division by zero");
         Assert.False(ctx.GetDialect().IsNotNullViolation(ex));
     }
 
@@ -123,7 +123,7 @@ public class DuckDbConstraintViolationTests
     public void IsCheckConstraintViolation_DuckDB_CheckConstraintMessage_ReturnsTrue()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("CHECK constraint chk_positive_value failed");
+        var ex = new PlainMessageDbException("CHECK constraint chk_positive_value failed");
         Assert.True(ctx.GetDialect().IsCheckConstraintViolation(ex));
     }
 
@@ -131,7 +131,7 @@ public class DuckDbConstraintViolationTests
     public void IsCheckConstraintViolation_DuckDB_UnrelatedMessage_ReturnsFalse()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("table not found");
+        var ex = new PlainMessageDbException("table not found");
         Assert.False(ctx.GetDialect().IsCheckConstraintViolation(ex));
     }
 
@@ -150,7 +150,7 @@ public class DuckDbConstraintViolationTests
     public void AnalyzeException_DuckDB_ConstraintErrorMessage_ClassifiesAsConstraintViolation()
     {
         using var ctx = CreateContext();
-        var ex = new PlainDbException("Constraint Error: Duplicate key 'x'");
+        var ex = new PlainMessageDbException("Constraint Error: Duplicate key 'x'");
         var info = ctx.GetDialect().AnalyzeException(ex);
         Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
     }
@@ -159,7 +159,7 @@ public class DuckDbConstraintViolationTests
     public void AnalyzeException_Firebird_ViolationOfMessage_ClassifiesAsConstraintViolation()
     {
         using var ctx = CreateFirebirdContext();
-        var ex = new PlainDbException("violation of PRIMARY KEY constraint \"PK_ORDER\" on table \"ORDERS\"");
+        var ex = new PlainMessageDbException("violation of PRIMARY KEY constraint \"PK_ORDER\" on table \"ORDERS\"");
         var info = ctx.GetDialect().AnalyzeException(ex);
         Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
     }
@@ -168,7 +168,7 @@ public class DuckDbConstraintViolationTests
     public void AnalyzeException_Firebird_NullMarkerMessage_ClassifiesAsConstraintViolation()
     {
         using var ctx = CreateFirebirdContext();
-        var ex = new PlainDbException("validation error for column \"name\", value \"*** null ***\"");
+        var ex = new PlainMessageDbException("validation error for column \"name\", value \"*** null ***\"");
         var info = ctx.GetDialect().AnalyzeException(ex);
         Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
     }
@@ -177,7 +177,7 @@ public class DuckDbConstraintViolationTests
     public void AnalyzeException_Firebird_CheckConstraintMessage_ClassifiesAsConstraintViolation()
     {
         using var ctx = CreateFirebirdContext();
-        var ex = new PlainDbException("Operation violates CHECK constraint CHK_VALUE on table ORDERS");
+        var ex = new PlainMessageDbException("Operation violates CHECK constraint CHK_VALUE on table ORDERS");
         var info = ctx.GetDialect().AnalyzeException(ex);
         Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
     }
@@ -191,12 +191,36 @@ public class DuckDbConstraintViolationTests
         Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
     }
 
-    // ── Helper types ─────────────────────────────────────────────────────────
+    // ── Serialization conflict ───────────────────────────────────────────────
 
-    private sealed class PlainDbException : DbException
+    [Fact]
+    public void AnalyzeException_DuckDB_ConflictOnUpdateMessage_ClassifiesAsSerializationFailure()
     {
-        public PlainDbException(string message) : base(message) { }
+        // Regression: confirmed against a real DuckDBException from two concurrent transactions
+        // conflicting on the same row — ErrorType reports "Transaction" (not "Serialization",
+        // despite that enum member's name), message is "TransactionContext Error: Conflict on
+        // update!". Message text is the reliable trigger here, not ErrorType.
+        using var ctx = CreateContext();
+        var ex = new PlainMessageDbException("TransactionContext Error: Conflict on update!");
+        var info = ctx.GetDialect().AnalyzeException(ex);
+        Assert.Equal(DbErrorCategory.SerializationFailure, info.Category);
     }
+
+    [Fact]
+    public void AnalyzeException_Firebird_UpdateConflictMessage_ClassifiesAsSerializationFailure()
+    {
+        // Regression: confirmed against a live container that Firebird cannot distinguish a true
+        // lock-cycle deadlock from an optimistic update conflict — both produce this identical
+        // signature. Classified as SerializationFailure (not Deadlock), matching Db2's precedent
+        // for its own ambiguous SQLSTATE 40001.
+        using var ctx = CreateFirebirdContext();
+        var ex = new SqlStateDbException("40001",
+            "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is 21");
+        var info = ctx.GetDialect().AnalyzeException(ex);
+        Assert.Equal(DbErrorCategory.SerializationFailure, info.Category);
+    }
+
+    // ── Helper types ─────────────────────────────────────────────────────────
 
     private sealed class SqlStateDbException : DbException
     {

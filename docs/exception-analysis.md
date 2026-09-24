@@ -37,9 +37,9 @@ public readonly record struct DbExceptionInfo(
 
 | Field | Meaning |
 |---|---|
-| `Category` | `None`, `Deadlock`, `SerializationFailure`, `ConstraintViolation`, `Timeout`, `ReadOnlyViolation`, or `Unknown`. |
+| `Category` | `None`, `Deadlock`, `SerializationFailure`, `ConstraintViolation`, `Timeout`, `ReadOnlyViolation`, `AmbiguousResult`, or `Unknown`. |
 | `ConstraintKind` | Only meaningful when `Category == ConstraintViolation`: `Unique`, `ForeignKey`, `NotNull`, `Check`, or `Unknown` (a real constraint violation whose specific kind the provider's error text didn't let the dialect determine). `None` otherwise. |
-| `IsTransient` | `true` for `Deadlock`, `SerializationFailure`, `Timeout` — categories where retrying the same operation might succeed because nothing about the operation itself was wrong. |
+| `IsTransient` | `true` for `Deadlock`, `SerializationFailure`, `Timeout` — categories where retrying the same operation might succeed because nothing about the operation itself was wrong. `false` for `AmbiguousResult`: the commit outcome is unknown, so the write may already have taken effect. |
 | `IsRetryable` | Currently identical to `IsTransient` in every shipped dialect (`AnalyzeException`'s base implementation sets both from the same category check) — kept as a separate field because a future dialect-specific override could in principle diverge them (e.g. a transient condition that's still not safe to blindly retry). Don't assume they'll always be equal; check the one that matches your intent. |
 | `ProviderErrorCode` | The raw provider error number, when the provider exposes one as an integer (`SqlException.Number`, MySQL error codes, etc.) — `null` for providers that only expose SQLSTATE. |
 | `SqlState` | The ANSI SQLSTATE code, when the provider exposes one — `null` for providers that only expose a numeric code (SQL Server). |
@@ -62,24 +62,35 @@ never wrapped into a `DatabaseException` (see CLAUDE.md's Exception Hierarchy se
 
 ## How classification actually works, per provider family
 
-`ClassifyException` matches on the connected `DatabaseType` against the provider's raw error code
-or SQLSTATE (`SqlDialect.TryClassifyProviderException`, a single private method with one `switch`
-per database family), falling back to message-text heuristics when no provider-specific rule
-matched. `ClassifyException`/`AnalyzeException` are virtual, but only `SybaseDialect` overrides them
-(it classifies off `AseException`'s message number). Concrete examples from the current mapping:
+`SqlDialect.ClassifyException` checks, in order:
 
-| Database family | Deadlock | Serialization failure | Timeout | Constraint violation |
+1. `OperationCanceledException` → `None`.
+2. A `DbException` that any of the dialect's four `Is*Violation` checks recognizes →
+   `ConstraintViolation`.
+3. The dialect's own `TryClassifyProviderException` override (protected virtual; the base returns
+   no match) → a provider-specific category from the raw error code or SQLSTATE.
+4. `DbExceptionTranslationSupport.LooksLikeTimeout`, which walks the `InnerException` chain and
+   checks exception type names as well as messages → `Timeout`.
+5. Message-text heuristics (deadlock, serialization, constraint keywords) → the matching
+   category, else `Unknown`.
+
+`PostgreSqlDialect` covers CockroachDB, YugabyteDB, Aurora PostgreSQL and Spanner by
+inheritance; `MySqlDialect` covers MariaDB, TiDB, Aurora MySQL and SingleStore. `SybaseDialect`
+overrides `ClassifyException` itself (it classifies off `AseException`'s message number).
+Concrete examples from the current mapping:
+
+| Database family | Deadlock | Serialization failure | Timeout | Other |
 |---|---|---|---|---|
-| SQL Server | error `1205` | error `3960` | error `-2` | errors `515`, `547`, `2601`, `2627` |
-| PostgreSQL / CockroachDB / YugabyteDB / Aurora PostgreSQL | SQLSTATE `40P01` | SQLSTATE `40001` | SQLSTATE `55P03` or `57014` | any SQLSTATE class `23xxx` |
-| MySQL / MariaDB / TiDB / Aurora MySQL | error `1213` | SQLSTATE `40001` | error `1205` | errors `1048`, `1062`, `1451`, `1452`, `3819`, `4025` |
+| SQL Server | error `1205` | error `3960` | error `-2` | — |
+| PostgreSQL / CockroachDB / YugabyteDB / Aurora PostgreSQL | SQLSTATE `40P01` | SQLSTATE `40001` | SQLSTATE `55P03` or `57014` | SQLSTATE `40003` → `AmbiguousResult` (CockroachDB's "result is ambiguous"); any other class `23xxx` → `ConstraintViolation` |
+| MySQL / MariaDB / TiDB / Aurora MySQL | error `1213` | SQLSTATE `40001` | error `1205` | — |
 
-Oracle, SQLite, DuckDB, Firebird, Db2, Informix, SAP HANA, Spanner, and Access have their own
-entries in the same `switch` — check `SqlDialect.cs`'s `TryClassifyProviderException` directly for
-the exact codes if you're targeting one of those specifically; the shape (numeric code vs.
-SQLSTATE, per family) follows the same pattern. Databases with no case there (e.g. Snowflake,
-InterBase, SingleStore) fall through to the message-text heuristics for `Category`, while their
-dialect's `Is*Violation` overrides still drive `ConstraintKind`. Access
+Constraint kinds come from each dialect's `Is*Violation` overrides — e.g. MySQL `1062`/`1169`
+unique, `1216`/`1451`/`1452` foreign key, `1048` not-null, `3819`/`4025` check. Oracle, SQLite,
+DuckDB, Firebird, Db2, Informix, SAP HANA, Spanner and Access have their own
+`TryClassifyProviderException` overrides; check the dialect file directly for the exact codes if
+you're targeting one of those specifically. Snowflake, InterBase and FlatFile override only the
+`Is*Violation` checks and fall through to steps 4–5 for other categories. Access
 is the most extreme case of the "no numeric signal at all" shape: `OleDbException.ErrorCode` is
 always the identical generic COM HRESULT (`-2147467259`) and `Errors` is empty for every
 violation kind, including connection failures — classification (constraint kinds, a lock-wait
@@ -91,7 +102,7 @@ always the generic COM HRESULT `-2147467259` regardless of violation kind — `H
 classifies purely off `HanaException.NativeError` (301 unique, 461/462 foreign key, 287 not-null,
 677 check, 133 deadlock, 131 lock-wait timeout, 129 read-only violation), confirmed live against a
 real `saplabs/hanaexpress` container. (The constraint codes live in `HanaDialect`'s `Is*Violation`
-overrides; the deadlock/timeout/read-only codes in the `TryClassifyProviderException` switch.)
+overrides; the deadlock/timeout/read-only codes in its `TryClassifyProviderException` override.)
 InterBase is the opposite case: `IBException.ErrorCode`
 *reliably* carries the real ISC status code (confirmed live — no "Number"/"NativeError"-shaped
 property shadows it), so `InterBaseDialect`'s `Is*Violation` overrides check `ErrorCode` directly
@@ -100,13 +111,18 @@ check). Unlike
 Firebird's shared-code-discriminated-by-message pattern, InterBase's not-null and check codes are
 numerically distinct, confirmed live.
 
-**Two independent classification systems exist in this codebase and can disagree** — this
-`DbErrorCategory`/`DbExceptionInfo` system (for application control flow) and the separate
-`IDbExceptionTranslator`/`DbExceptionTranslatorRegistry` system that produces the typed
-`DatabaseException` subclass pengdows.crud actually throws (`UniqueConstraintViolationException`,
-`DeadlockException`, etc. — see CLAUDE.md's Exception Hierarchy). They are maintained separately;
-adding a new database requires updating both (see CLAUDE.md's "Adding a New Database" checklist,
-item 11).
+**One source of truth for both systems.** The `IDbExceptionTranslator`/`DbExceptionTranslatorRegistry`
+system that produces the typed `DatabaseException` subclass pengdows.crud actually throws
+(`UniqueConstraintViolationException`, `DeadlockException`, etc. — see CLAUDE.md's Exception
+Hierarchy) takes the dialect: `Translate(ISqlDialect dialect, ...)` delegates constraint kinds to
+the same `Is*Violation` checks and deadlock/serialization/timeout/read-only/ambiguous-result to
+`dialect.ClassifyException` (via `DbExceptionTranslationSupport.TryCreateFromCategory`), so the
+thrown type and `AnalyzeException` agree by construction. Translators keep only what is not a
+`DbErrorCategory` — connection failures (e.g. SQL Server 10053/10054/10060/233/10061, PostgreSQL
+SQLSTATE `08xxx`, MySQL 1040/1042/1043/1044, SQLite 14/26, Informix SQLSTATE `08xxx` or
+-908/-27001/-27002, DuckDB/Access file-open failures) and file-lock contention. The one
+exception is Sybase: `AseException` is not a `DbException`, so `SybaseExceptionTranslator` keeps
+its own complete classification.
 
 ## Relationship to thrown `DatabaseException` subclasses
 
@@ -120,9 +136,10 @@ item 11).
 | `ConstraintViolation` + `NotNull` | `NotNullViolationException` |
 | `ConstraintViolation` + `Check` | `CheckConstraintViolationException` |
 | `ReadOnlyViolation` | `ReadOnlyViolationException` |
+| `AmbiguousResult` | `AmbiguousResultException` (`IsTransient = false` — check the outcome before retrying) |
 
-These two systems agree by design on the well-known cases, but `AnalyzeException`/`ClassifyException`
-is the one meant for you to call directly in a `catch` block for control-flow branching —
+`AnalyzeException`/`ClassifyException` is the one meant for you to call directly in a `catch`
+block for control-flow branching (for example on a raw provider exception you caught yourself) —
 `IDbExceptionTranslator` runs internally to decide which typed exception pengdows.crud itself
 throws in the first place, before your code ever sees it.
 

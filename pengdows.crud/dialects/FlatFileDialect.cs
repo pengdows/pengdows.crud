@@ -107,4 +107,29 @@ internal class FlatFileDialect : SqlDialect
     {
         return Task.FromResult(connection.ServerVersion);
     }
+
+    /// <summary>
+    /// pengdows.flatfile's <c>FlatFileException.SqlState</c> deliberately uses the real ANSI SQL
+    /// class-23 codes a server-based database would report (see pengdows.flatfile's own CLAUDE.md
+    /// "Constraint Violations" section and <c>FlatFileException.cs</c>'s file-level remarks) —
+    /// exactly so a consumer like this dialect can classify it via SqlState alone, the same pattern
+    /// PostgreSqlDialect already uses for its own identical code set. The base
+    /// SqlDialect.IsXxxViolation overrides only match message text ("foreign key", "not null",
+    /// etc.), which FlatFileException's actual messages don't contain, so without these overrides
+    /// every FlatFile constraint violation fell through to a generic, unclassified exception.
+    /// </summary>
+    public override bool IsUniqueViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc cref="IsUniqueViolation"/>
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc cref="IsUniqueViolation"/>
+    public override bool IsNotNullViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase);
+
+    /// <inheritdoc cref="IsUniqueViolation"/>
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase);
 }

@@ -254,4 +254,18 @@ public class SybaseDialectTests
 
         [Column("counter", DbType.Int32)] public int Counter { get; set; }
     }
+
+    [Fact]
+    public void ClassifyException_UnrecognizedAseErrorNumber_FallsBackToBaseHeuristic()
+        => Assert.Equal(DbErrorCategory.Unknown, Dialect().ClassifyException(Ase(99999, "some unrecognized ASE failure")));
+
+    [Fact]
+    public void AnalyzeException_ExceptionWithNoErrorCode_FallsBackToBaseAnalyzeException()
+    {
+        var ex = new InvalidOperationException("no ASE error number available at all");
+
+        var info = Dialect().AnalyzeException(ex);
+
+        Assert.Equal(DbErrorCategory.Unknown, info.Category);
+    }
 }

@@ -47,6 +47,21 @@ These are the rules the code is being brought in line with.
   recognize; emulated Access reports ServerVersion `04.00.0000`. Everything else in fakeDb that
   differs from 3.0 is 2.0.6's own fix (B12) or a comment correction.
 
+- [x] **Exception classification and translators brought level with 3.0** — classification moved
+  onto the dialects (per-dialect `Is*Violation` and protected `TryClassifyProviderException`
+  overrides); every translator takes the `ISqlDialect` and delegates to them, so the thrown
+  `DatabaseException` type and `AnalyzeException` can no longer disagree. New
+  `DbErrorCategory.AmbiguousResult` / `AmbiguousResultException` (CockroachDB SQLSTATE 40003, not
+  transient); new `FlatFileExceptionTranslator`/`SnowflakeExceptionTranslator`; `LooksLikeTimeout`
+  walks inner exceptions; provider-exception detection in `SqlContainer` is by type
+  (`AseException`), not by property shape. Kept 2.0.6 behavior 3.0 lacks: Informix
+  -908/-27001/-27002 → `ConnectionException`. *Release notes (widenings taken from 3.0):* MySQL
+  SQLSTATE 40001 without error 1213 now throws `SerializationConflictException`; PostgreSQL
+  SQLSTATE 55P03 (lock_not_available) now throws `CommandTimeoutException`; DuckDB "Conflict on …"
+  (insert/delete, not just update) now throws `SerializationConflictException`; CockroachDB 40003
+  throws `AmbiguousResultException`; an application exception that merely exposes a
+  `SqlState`/`Number` property is no longer wrapped as a `DatabaseException`.
+
 ## Fix — no caller-visible break
 
 - [x] **B01 — SQL numbers use the current culture.** *(fixed; also `Append(object)` and `AppendFormat(null, …)`)* `SqlQueryBuilder.cs:110-175`:

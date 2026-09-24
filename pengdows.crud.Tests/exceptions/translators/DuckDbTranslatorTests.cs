@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -8,6 +11,8 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class DuckDbTranslatorTests
 {
     private readonly DuckDbExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     // ── SQLSTATE-based detection ──────────────────────────────────────────────
 
@@ -17,7 +22,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException(sqlState, "Constraint Error: Duplicate key 'x' violates unique constraint 'pk'");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -27,7 +32,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("23503", "Constraint Error: Violates foreign key constraint");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -37,7 +42,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("23502", "Constraint Error: NOT NULL constraint failed: jobs.name");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -47,7 +52,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("23514", "Constraint Error: CHECK constraint failed: jobs");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -61,7 +66,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException(message);
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -71,7 +76,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("Violates foreign key constraint because key does not exist");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -81,7 +86,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("NOT NULL constraint failed: jobs.name");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -91,7 +96,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("CHECK constraint failed: jobs");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -105,7 +110,7 @@ public class DuckDbTranslatorTests
         // must not be misclassified as CommandTimeoutException when SQLSTATE is present.
         var raw = new SqlStateDbException("23505", "Constraint Error: Duplicate key 'timeout_value' violates unique constraint 'pk'");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -116,7 +121,7 @@ public class DuckDbTranslatorTests
         // Same scenario using the message-pattern fallback (no SqlState populated).
         var raw = new SqliteMessageDbException("Duplicate key 'session_timeout' violates unique constraint 'pk_sessions'");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -128,7 +133,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("connection timeout waiting for lock");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<CommandTimeoutException>(result);
     }
@@ -138,7 +143,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException("some unexpected database error");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<UniqueConstraintViolationException>(result);
@@ -152,7 +157,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("25006", "Cannot execute statement of type 'INSERT' in read-only transaction");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
     }
@@ -167,7 +172,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqliteMessageDbException(message);
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
     }
@@ -177,7 +182,7 @@ public class DuckDbTranslatorTests
     {
         var raw = new SqlStateDbException("25006", "read-only transaction");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
         Assert.Equal(false, result.IsTransient);
@@ -190,82 +195,102 @@ public class DuckDbTranslatorTests
         // misclassified as a timeout just because the read-only check comes first.
         var raw = new SqliteMessageDbException("Cannot execute in read-only transaction for session_timeout_user");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
         Assert.IsNotType<CommandTimeoutException>(result);
     }
 
-    // ── Write-write conflict detection (MVCC optimistic concurrency) ──────────
-    //
-    // DuckDB has no locking/deadlock concept (unlike Postgres/MySQL/SQL Server/Oracle, which
-    // all map an analogous condition to DeadlockException/SerializationConflictException here).
-    // Instead, two connections racing to modify the same row under DuckDB's MVCC model both
-    // proceed until commit, and the loser's ExecuteNonQuery/Commit throws a DuckDBException whose
-    // message starts with "TransactionContext Error: Conflict on ..." (confirmed empirically
-    // against DuckDB.NET.Data.Full 1.4.1: "Conflict on update!" for two concurrent UPDATEs of the
-    // same row, "Conflict on tuple deletion!" for two concurrent DELETEs). This is the real
-    // failure mode a caller hits when e.g. a Hangfire job and a web request write to the same row
-    // in a shared DuckDB file concurrently -- without this classification it fell through to
-    // CreateFallback (IsTransient = null), giving the caller no signal that retrying is
-    // appropriate, unlike every other multi-writer-capable dialect in this codebase.
+    // ── Connection failure (file-open failure — DuckDB is embedded, no TCP concept) ─────────
+
+    [Fact]
+    public void ConnectionFailure_CannotOpenFileMessage_Maps_ConnectionException()
+    {
+        // Regression: confirmed against a real DuckDBException opening a nonexistent database
+        // path. DuckDBException.ErrorType reports the generic "Invalid" value here (NOT a more
+        // specific "Io"/"Connection" enum member), so message text is the only reliable trigger.
+        var raw = new SqliteMessageDbException(
+            "DuckDBOpen failed: IO Error: Cannot open file \"/nonexistent_dir/db.duckdb\": No such file or directory");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
+
+    // ── Serialization conflict ────────────────────────────────────────────────
+
+    [Fact]
+    public void ConflictOnUpdateMessage_Maps_SerializationConflictException()
+    {
+        // Regression: confirmed against a real DuckDBException from two concurrent transactions
+        // conflicting on the same row — ErrorType reports "Transaction" (not "Serialization",
+        // despite that enum member's name), message is "TransactionContext Error: Conflict on
+        // update!". Message text is the reliable trigger here, not ErrorType.
+        var raw = new SqliteMessageDbException("TransactionContext Error: Conflict on update!");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+    }
 
     [Theory]
-    [InlineData("TransactionContext Error: Conflict on update!")]
     [InlineData("TransactionContext Error: Conflict on tuple deletion!")]
     [InlineData("TransactionContext Error: Conflict on insert!")]
-    public void DuckDb_WriteWriteConflictMessage_MapsTo_SerializationConflictException(string message)
+    public void ConflictOnOtherOperationMessage_Maps_SerializationConflictException(string message)
     {
+        // The existing update-conflict check above only matches "Conflict on update" literally,
+        // so it misses the same MVCC conflict on DELETE/INSERT. Confirmed empirically against
+        // DuckDB.NET.Data.Full 1.4.1: two concurrent DELETEs of the same row throw
+        // "TransactionContext Error: Conflict on tuple deletion!" -- same failure family, same
+        // retry-appropriate semantics, but previously fell through to the non-transient fallback.
         var raw = new SqliteMessageDbException(message);
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Delete);
 
         Assert.IsType<SerializationConflictException>(result);
         Assert.Equal(true, result.IsTransient);
     }
 
-    [Fact]
-    public void DuckDb_WriteWriteConflict_WithTimeoutKeywordInMessage_ClassifiesAsConflict_NotTimeout()
-    {
-        // Same precedence guard as the other DuckDB categories: a conflict message must not be
-        // misclassified as a timeout just because "timeout" appears in accompanying context.
-        var raw = new SqliteMessageDbException("TransactionContext Error: Conflict on update! (session_timeout_job)");
-
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Update);
-
-        Assert.IsType<SerializationConflictException>(result);
-        Assert.IsNotType<CommandTimeoutException>(result);
-    }
-
-    // ── Cross-process file-lock detection (embedded, OS-level file lock) ──────
+    // ── Cross-process file-lock (distinct from the file-open failure above) ───
 
     [Fact]
-    public void DuckDb_FileLockMessage_MapsTo_FileLockContentionException_AndIsNotTransient()
+    public void FileLockMessage_Maps_FileLockContentionException_AndIsNotTransient()
     {
-        // Exact message confirmed empirically against DuckDB.NET.Data.Full 1.4.1: a second
-        // process opening the same DuckDB file for read-write while a first still holds it open
-        // fails at connection-open time with this message.
+        // Distinct from ConnectionFailure_CannotOpenFileMessage_Maps_ConnectionException above:
+        // that one is a missing/inaccessible path ("Cannot open file"), non-retryable. This is a
+        // second process holding the OS-level file lock on an existing, valid DuckDB file --
+        // confirmed empirically against DuckDB.NET.Data.Full 1.4.1 by actually racing two
+        // processes for the same file.
         //
-        // This is deliberately NOT the same as the write-write MVCC conflict above. A conflict
-        // clears on its own -- the loser can always retry and eventually win. A file lock only
-        // clears if the other process closes its connection; if that "other process" is a second
-        // long-running writer that was never supposed to exist against this file (the actual
-        // single-node invariant DuckDB's embedded model assumes), retrying never succeeds. A
-        // blanket IsTransient = true here would let a generic retry loop quietly spin on a
-        // topology violation instead of surfacing it. So: its own exception type (still a
-        // ConnectionException, since it does fail at connection-open time and existing
-        // `catch (ConnectionException)` callers should still see it), non-transient by default --
-        // a caller who has verified their specific deployment shape really is transient
-        // contention (e.g. a Hangfire job briefly holding the file) can catch this type
-        // specifically and choose to retry; nothing does so blindly.
+        // Also distinct from the write-write MVCC conflict below: a conflict clears on its own
+        // (the loser can always retry and win eventually), but a file lock only clears if the
+        // other process closes its connection -- and if that other process is a second writer
+        // that was never supposed to exist against this file (the actual single-node invariant
+        // DuckDB's embedded model assumes), retrying never succeeds. A blanket IsTransient = true
+        // would let a generic retry loop quietly spin on a topology violation instead of
+        // surfacing it, so this gets its own type with IsTransient hardcoded false; a caller who
+        // has verified their specific deployment shape really is transient contention (e.g. a
+        // Hangfire job briefly holding the file) can catch this type specifically and retry.
         var raw = new SqliteMessageDbException(
-            "IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). " +
+            "DuckDBOpen failed: IO Error: Could not set lock on file \"test.db\": Conflicting lock is held in other_process (PID 12345). " +
             "See also https://duckdb.org/docs/stable/connect/concurrency");
 
-        var result = _translator.Translate(SupportedDatabase.DuckDB, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Query);
 
         Assert.IsType<FileLockContentionException>(result);
         Assert.IsAssignableFrom<ConnectionException>(result); // still catchable as a generic connection failure
         Assert.Equal(false, result.IsTransient);
+    }
+
+    // Kept from 2.0.6 (not in 3.0): a conflict message must not be misclassified as a timeout just
+    // because "timeout" appears in accompanying context.
+    [Fact]
+    public void WriteWriteConflict_WithTimeoutKeywordInMessage_ClassifiesAsConflict_NotTimeout()
+    {
+        var raw = new PlainMessageDbException("TransactionContext Error: Conflict on update! (session_timeout_job)");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
     }
 }

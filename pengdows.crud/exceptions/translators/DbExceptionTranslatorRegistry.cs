@@ -11,11 +11,13 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
     private static readonly IDbExceptionTranslator DuckDb = new DuckDbExceptionTranslator();
     private static readonly IDbExceptionTranslator Oracle = new OracleExceptionTranslator();
     private static readonly IDbExceptionTranslator Firebird = new FirebirdExceptionTranslator();
-    private static readonly IDbExceptionTranslator Sybase = new SybaseExceptionTranslator();
     private static readonly IDbExceptionTranslator Db2 = new Db2ExceptionTranslator();
+    private static readonly IDbExceptionTranslator Snowflake = new SnowflakeExceptionTranslator();
+    private static readonly IDbExceptionTranslator Sybase = new SybaseExceptionTranslator();
     private static readonly IDbExceptionTranslator Informix = new InformixExceptionTranslator();
-    private static readonly IDbExceptionTranslator SapHana = new HanaExceptionTranslator();
+    private static readonly IDbExceptionTranslator Hana = new HanaExceptionTranslator();
     private static readonly IDbExceptionTranslator InterBase = new InterBaseExceptionTranslator();
+    private static readonly IDbExceptionTranslator FlatFile = new FlatFileExceptionTranslator();
     private static readonly IDbExceptionTranslator Access = new AccessExceptionTranslator();
     private static readonly IDbExceptionTranslator Fallback = new FallbackExceptionTranslator();
 
@@ -25,19 +27,21 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
         {
             SupportedDatabase.SqlServer => SqlServer,
             SupportedDatabase.SybaseASE => Sybase,
-            SupportedDatabase.Db2 => Db2,
-            SupportedDatabase.Informix => Informix,
-            SupportedDatabase.SapHana => SapHana,
-            SupportedDatabase.InterBase => InterBase,
-            SupportedDatabase.Access => Access,
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
-                SupportedDatabase.AuroraPostgreSql or SupportedDatabase.Spanner => Postgres,
+            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb or
+                SupportedDatabase.AuroraPostgreSql => Postgres,
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql or
                 SupportedDatabase.TiDb or SupportedDatabase.SingleStore => MySql,
             SupportedDatabase.Sqlite => Sqlite,
             SupportedDatabase.DuckDB => DuckDb,
             SupportedDatabase.Oracle => Oracle,
             SupportedDatabase.Firebird => Firebird,
+            SupportedDatabase.Db2 => Db2,
+            SupportedDatabase.Snowflake => Snowflake,
+            SupportedDatabase.Informix => Informix,
+            SupportedDatabase.SapHana => Hana,
+            SupportedDatabase.InterBase => InterBase,
+            SupportedDatabase.FlatFile => FlatFile,
+            SupportedDatabase.Access => Access,
             _ => Fallback
         };
     }

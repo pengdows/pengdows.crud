@@ -74,6 +74,26 @@ public class DbExceptionInfoTests
     }
 
     [Fact]
+    public void PostgreSql_AnalyzeException_ReturnsNonRetryableInfoForAmbiguousResult()
+    {
+        // Unlike 40001 (SerializationFailure, IsTransient/IsRetryable = true above), 40003 must
+        // default to non-retryable: the operation might have already applied, so blind retry can
+        // double-apply a non-idempotent write. AnalyzeException's isTransient/isRetryable
+        // whitelist (SqlDialect.cs) only includes Deadlock/SerializationFailure/Timeout --
+        // AmbiguousResult is deliberately excluded from it.
+        var dialect = CreateDialect(SupportedDatabase.CockroachDb);
+
+        var info = dialect.AnalyzeException(new SqlStateDbException(
+            "40003", "result is ambiguous (error=context canceled [exhausted])"));
+
+        Assert.Equal(DbErrorCategory.AmbiguousResult, info.Category);
+        Assert.Equal(DbConstraintKind.None, info.ConstraintKind);
+        Assert.False(info.IsTransient);
+        Assert.False(info.IsRetryable);
+        Assert.Equal("40003", info.SqlState);
+    }
+
+    [Fact]
     public void MySql_AnalyzeException_ReturnsCheckConstraintInfo()
     {
         var dialect = CreateDialect(SupportedDatabase.MySql);

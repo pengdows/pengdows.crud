@@ -391,6 +391,7 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 │   ├── TransientWriteConflictException (abstract, IsTransient = true)
 │   │   ├── DeadlockException
 │   │   └── SerializationConflictException
+│   ├── AmbiguousResultException            — commit outcome unknown (e.g. CockroachDB 40003; IsTransient = false)
 │   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure (provider translators)

@@ -1,24 +1,30 @@
+using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
 
 internal sealed class PostgresExceptionTranslator : IDbExceptionTranslator
 {
-    public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
+    public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
-        if (database == SupportedDatabase.Snowflake)
-        {
-            return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);
-        }
-
+        var database = dialect.DatabaseType;
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
 
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception) ||
-            (sqlState == "57014" && exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase)))
+        // Deadlock (40P01)/SerializationFailure (40001)/AmbiguousResult (40003, CockroachDB's real
+        // "result is ambiguous" error, kept in this shared translator since it's inert for
+        // PostgreSql/AuroraPostgreSql)/Timeout (55P03 lock_not_available, 57014 query_canceled, or
+        // the generic LooksLikeTimeout heuristic) classification is delegated to the dialect's
+        // single ClassifyException/TryClassifyProviderException source — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment. Deliberately not
+        // SerializationConflictException for 40003 — retry is not automatically safe there (see
+        // AmbiguousResultException's own remarks).
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
@@ -26,65 +32,35 @@ internal sealed class PostgresExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
-        DatabaseException? typed = sqlState switch
+        // Constraint-kind classification (Unique/FK/NotNull/Check) is single-sourced from the
+        // dialect — see IDbExceptionTranslator.Translate's doc comment.
+        if (exception is DbException dbEx)
         {
-            "23505" => new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            "23503" => new ForeignKeyViolationException(
-                $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            "23502" => new NotNullViolationException(
-                $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            "23514" => new CheckConstraintViolationException(
-                $"{operationKind} violated a check constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            "40P01" => new DeadlockException(
-                $"{operationKind} deadlocked on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            "40001" => new SerializationConflictException(
-                $"{operationKind} hit a serialization conflict on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            _ => null
-        };
-
-        if (typed != null)
-        {
-            return typed;
-        }
-
-        // Spanner returns SqlState "P0001" (a generic raise-exception code) for NotNull/Check/
-        // delete-side ForeignKey violations, not the ANSI class-23 codes real PostgreSQL uses for
-        // those three (unique and insert-side foreign-key violations DO use the real "23505"/
-        // "23503" codes and are already caught above) — verified live against a real Spanner
-        // Omni + PGAdapter instance. Message-pattern matching is the only reliable signal here.
-        // Kept in sync with SpannerDialect's own identical IsXxxViolation overrides (used by the
-        // separate advisory ClassifyException path) - this branch's translators don't delegate to
-        // the dialect the way 3.0's do, so the same three patterns are necessarily duplicated here.
-        if (database == SupportedDatabase.Spanner)
-        {
-            var message = exception.Message;
-            if (message.Contains("must not be NULL", StringComparison.OrdinalIgnoreCase))
+            if (dialect.IsUniqueViolation(dbEx))
             {
-                return new NotNullViolationException(
-                    $"{operationKind} violated a not-null constraint on {database}: {message}",
+                return new UniqueConstraintViolationException(
+                    $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
                     database, exception, sqlState, errorCode, constraintName);
             }
 
-            if (message.Contains("Check constraint", StringComparison.OrdinalIgnoreCase) &&
-                message.Contains("is violated", StringComparison.OrdinalIgnoreCase))
-            {
-                return new CheckConstraintViolationException(
-                    $"{operationKind} violated a check constraint on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
-            }
-
-            if (message.Contains("Foreign key constraint violation", StringComparison.OrdinalIgnoreCase) &&
-                message.Contains("referenced row", StringComparison.OrdinalIgnoreCase))
+            if (dialect.IsForeignKeyViolation(dbEx))
             {
                 return new ForeignKeyViolationException(
-                    $"{operationKind} violated a foreign key constraint on {database}: {message}",
+                    $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
+
+            if (dialect.IsNotNullViolation(dbEx))
+            {
+                return new NotNullViolationException(
+                    $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
+
+            if (dialect.IsCheckConstraintViolation(dbEx))
+            {
+                return new CheckConstraintViolationException(
+                    $"{operationKind} violated a check constraint on {database}: {exception.Message}",
                     database, exception, sqlState, errorCode, constraintName);
             }
         }

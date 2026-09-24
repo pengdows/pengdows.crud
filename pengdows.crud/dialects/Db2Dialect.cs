@@ -178,4 +178,67 @@ internal sealed class Db2Dialect : SqlDialect
     {
         return "SELECT service_level FROM TABLE (SYSPROC.ENV_GET_INST_INFO()) AS INSTANCEINFO";
     }
+
+    // Db2 SQLCODE -803 / SQLSTATE 23505. Falls back to the numeric SQLCODE magnitude when no
+    // SqlState is available at all — IBM.Data.Db2's DB2Exception often doesn't populate SqlState
+    // (see TryGetProviderSqlState's message-embedded-SQLSTATE fallback, which itself can miss if
+    // the driver's message shape has neither "ERROR [nnnnn]" nor "SQLSTATE=nnnnn"). Matches
+    // Db2ExceptionTranslator's own numeric fallback so this dialect classification and that
+    // translator can't silently disagree (architecture-cleanup: previously SqlState-only here).
+    public override bool IsUniqueViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 803;
+
+    // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503 (insert/update) or 23504 (delete RESTRICT)
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(TryGetProviderSqlState(ex), "23504", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) is 530 or 531 or 532;
+
+    // Db2 SQLCODE -407 / SQLSTATE 23502
+    public override bool IsNotNullViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 407;
+
+    // Db2 SQLCODE -545 / SQLSTATE 23513 (note: 23513, not 23514 like Postgres/DuckDB)
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23513", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 545;
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var sqlState = TryGetProviderSqlState(ex);
+        var errorCode = TryGetProviderErrorCode(ex);
+        var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
+
+        // Db2 SQLSTATE 40001 covers both deadlock (SQLCODE -911 reason 2) and lock timeout
+        // (SQLCODE -911 reason 68 / -913) — SQLSTATE alone can't disambiguate; treated as
+        // SerializationFailure here, matching other ANSI-SQLSTATE dialects. The SQLCODE-magnitude
+        // fallback (911/913) matches Db2ExceptionTranslator's own check, for whenever SqlState
+        // isn't populated but the numeric code is (see DB2Exception's message-embedded-SQLSTATE
+        // situation documented on that translator).
+        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) || code is 911 or 913)
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        // Db2 uses ANSI SQLSTATE class 23 for integrity constraint violations. Checked here as a
+        // generic category-level fallback distinct from IsUniqueViolation/IsForeignKeyViolation/
+        // IsNotNullViolation/IsCheckConstraintViolation (already checked earlier, in
+        // SqlDialect.ClassifyException, before this method is ever called): those four each need
+        // to positively identify ONE specific kind, so a bare class-23 SqlState with no more
+        // specific signal (e.g. a raw SQLCODE the message-based kind checks don't recognize)
+        // matches none of them individually but is still, generically, a constraint violation —
+        // this branch is what lets ClassifyException's category answer stay accurate for that case
+        // even though Translate's kind-specific dispatch cannot name which kind it is.
+        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

@@ -275,4 +275,30 @@ public class FirebirdDialectTests
     {
         public TestDbException(string message) : base(message) { }
     }
+
+    // TryClassifyProviderException's message-text fallback ("violation of"/"*** null ***"/"CHECK
+    // constraint") is checked only after SqlDialect.ClassifyException has already ruled out
+    // IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation, and
+    // after this method's own SqlState-based checks — this message deliberately contains
+    // "violation of" without "PRIMARY"/"UNIQUE" (so IsUniqueViolation stays false), no "FOREIGN
+    // KEY"/"NOT NULL"/"CHECK constraint" wording, and has no SqlState set at all, to land
+    // specifically on that fallback rather than any of the earlier, more specific checks.
+    [Fact]
+    public void AnalyzeException_MessageContainsViolationOfWithNoOtherMatch_ClassifiesAsConstraintViolation()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird),
+            NullLogger<FirebirdDialect>.Instance);
+        var ex = new FirebirdTestDbException("violation of some other integrity constraint");
+
+        var info = dialect.AnalyzeException(ex);
+
+        Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+    }
+
+    private sealed class FirebirdTestDbException : System.Data.Common.DbException
+    {
+        public FirebirdTestDbException(string message) : base(message)
+        {
+        }
+    }
 }

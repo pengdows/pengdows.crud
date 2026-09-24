@@ -407,4 +407,48 @@ internal class SqliteDialect : SqlDialect
             _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
         };
     }
+
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        ex.ErrorCode == 787 ||
+        ex.Message.Contains("FOREIGN KEY constraint failed", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        ex.ErrorCode == 1299 ||
+        ex.Message.Contains("NOT NULL constraint failed", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        ex.ErrorCode == 275 ||
+        ex.Message.Contains("CHECK constraint failed", StringComparison.OrdinalIgnoreCase);
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+
+        // SQLITE_READONLY = 8: write attempted on a read-only connection.
+        // SqliteExceptionTranslator already classifies this as ReadOnlyViolation.
+        if (errorCode == 8)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
+        // Checked as a generic category-level fallback, distinct from IsUniqueViolation/
+        // IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation (already checked
+        // earlier in SqlDialect.ClassifyException, before this method is ever called) — those four
+        // each require a specific extended result code (1555/2067/787/1299/275) or specific message
+        // wording to identify ONE kind, so a bare SQLITE_CONSTRAINT (19, with no more specific
+        // extended code and no matching message text) matches none of them individually but is
+        // still, generically, a constraint violation.
+        if (errorCode == 19 ||
+            errorCode == 1555 ||
+            errorCode == 2067 ||
+            (errorCode is not null && (errorCode.Value & 0xFF) == 19))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

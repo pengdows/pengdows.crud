@@ -556,4 +556,57 @@ internal class FirebirdDialect : SqlDialect
     // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
     public override string? MinPoolSizeSettingName => "MinPoolSize";
     public override string? MaxPoolSizeSettingName => "MaxPoolSize";
+
+    // Firebird: "violation of PRIMARY OR UNIQUE KEY constraint <name> on table <table>"
+    public override bool IsUniqueViolation(DbException ex) =>
+        ex.Message.Contains("violation of PRIMARY", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("violation of UNIQUE", StringComparison.OrdinalIgnoreCase);
+
+    // Firebird: "validation error for column X, value \"*** null ***\""
+    public override bool IsNotNullViolation(DbException ex) =>
+        ex.Message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("not-null", StringComparison.OrdinalIgnoreCase);
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var sqlState = TryGetProviderSqlState(ex);
+
+        // Firebird cannot distinguish a true lock-cycle deadlock from an optimistic update
+        // conflict — confirmed against a live container, both scenarios produce the identical
+        // SQLSTATE 40001 / "update conflicts with concurrent update" signature. Classified as
+        // SerializationFailure here, matching the same ambiguous-40001 precedent used for Db2.
+        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("update conflicts with concurrent update", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        // Firebird 3+ uses SQLSTATE class 23 for all integrity constraint violations, with a
+        // message fallback for drivers that don't populate SqlState. Checked as a generic
+        // category-level fallback, distinct from IsUniqueViolation/IsForeignKeyViolation/
+        // IsNotNullViolation/IsCheckConstraintViolation (already checked earlier in
+        // SqlDialect.ClassifyException, before this method is ever called) — those four are all
+        // message-substring based and each need specific wording to identify ONE kind, so a bare
+        // SqlState with no matching message text (or an empty message) still needs to register as
+        // a constraint violation at the category level even though Translate's kind-specific
+        // dispatch cannot name which kind it is.
+        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        if (ex.Message.Contains("violation of", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

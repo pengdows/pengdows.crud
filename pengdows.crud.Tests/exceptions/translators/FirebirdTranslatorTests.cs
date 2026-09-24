@@ -1,7 +1,10 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -15,6 +18,8 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class FirebirdTranslatorTests
 {
     private readonly FirebirdExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     // ── Primary / unique constraint ───────────────────────────────────────────
 
@@ -24,7 +29,7 @@ public class FirebirdTranslatorTests
         var raw = new SqliteMessageDbException(
             "violation of PRIMARY KEY constraint \"PK_ORDERS\" on table \"ORDERS\"");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
         Assert.Equal(SupportedDatabase.Firebird, result.Database);
@@ -37,7 +42,7 @@ public class FirebirdTranslatorTests
         var raw = new SqliteMessageDbException(
             "violation of UNIQUE constraint \"UQ_CUSTOMER_EMAIL\" on table \"CUSTOMERS\"");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -50,7 +55,7 @@ public class FirebirdTranslatorTests
         var raw = new SqliteMessageDbException(
             "violation of FOREIGN KEY constraint \"FK_ORDER_ITEM_ORDER\" on table \"ORDER_ITEMS\"");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
         Assert.Equal(SupportedDatabase.Firebird, result.Database);
@@ -67,7 +72,7 @@ public class FirebirdTranslatorTests
         var raw = new SqliteMessageDbException(
             "validation error for column \"name\", value \"*** null ***\"");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
         Assert.Equal(SupportedDatabase.Firebird, result.Database);
@@ -80,7 +85,7 @@ public class FirebirdTranslatorTests
         // Some Firebird error paths include "NOT NULL" explicitly (e.g. named constraints)
         var raw = new SqliteMessageDbException("Column \"name\" is NOT NULL");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
         Assert.Same(raw, result.InnerException);
@@ -93,7 +98,7 @@ public class FirebirdTranslatorTests
     {
         var raw = new TimeoutException("lock wait timeout exceeded; try restarting transaction");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Query);
 
         Assert.IsType<CommandTimeoutException>(result);
         Assert.True(result.IsTransient);
@@ -110,7 +115,7 @@ public class FirebirdTranslatorTests
         var raw = new SqliteMessageDbException(
             "violation of PRIMARY OR UNIQUE constraint; row value was 'lock-timeout-abc123'");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -123,7 +128,7 @@ public class FirebirdTranslatorTests
         var raw = new SqliteMessageDbException(
             "Operation violates CHECK constraint CHK_VALUE_TEST_TABLE on table TEST_TABLE");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
         Assert.Equal(SupportedDatabase.Firebird, result.Database);
@@ -137,9 +142,69 @@ public class FirebirdTranslatorTests
     {
         var raw = new SqliteMessageDbException("arithmetic exception, numeric overflow, or string truncation");
 
-        var result = _translator.Translate(SupportedDatabase.Firebird, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Query);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<UniqueConstraintViolationException>(result);
+    }
+
+    // ── Connection failure ────────────────────────────────────────────────────
+
+    [Fact]
+    public void ConnectionFailure_SqlState08006_Maps_ConnectionException()
+    {
+        // Regression: confirmed against a live FbConnection.OpenAsync() attempt to a closed TCP
+        // port — FbException exposes SQLSTATE "08006" (ANSI connection-exception class) with
+        // message "Unable to complete network request to host \"localhost\".".
+        var raw = new SqlStateDbException("08006", "Unable to complete network request to host \"localhost\".");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
+
+    [Fact]
+    public void ConnectionFailure_TimeoutWordingInMessage_StillClassifiesAsConnectionNotTimeout()
+    {
+        // A blackholed/unreachable host (as opposed to a closed port) could produce an OS-level
+        // "connection timed out" message; SQLSTATE class 08 must still win over the timeout
+        // heuristic since this is fundamentally a connection failure, not a slow query.
+        var raw = new SqlStateDbException("08006", "Unable to complete network request: connection timed out.");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
+
+    // ── Serialization/deadlock conflict ──────────────────────────────────────
+
+    [Fact]
+    public void UpdateConflict_SqlState40001_MapsTo_SerializationConflictException()
+    {
+        // Regression: confirmed against a live container that Firebird CANNOT distinguish a true
+        // lock-cycle deadlock from an optimistic update conflict — a reversed-lock-order
+        // two-connection scenario produced the IDENTICAL signature to a snapshot-conflict
+        // scenario: SQLSTATE 40001, ISC code 335544336, message "deadlock\nupdate conflicts with
+        // concurrent update\nconcurrent transaction number is N". Classified as
+        // SerializationConflictException (not DeadlockException) since there is no reliable way
+        // to tell the two apart, matching the same ambiguous-40001 precedent used for Db2.
+        var raw = new SqlStateDbException("40001",
+            "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is 21");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+    }
+
+    [Fact]
+    public void UpdateConflict_MessageOnly_NoSqlState_MapsTo_SerializationConflictException()
+    {
+        // Message-based fallback for drivers/wrappers that don't populate SQLSTATE.
+        var raw = new SqliteMessageDbException(
+            "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is 9");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
     }
 }

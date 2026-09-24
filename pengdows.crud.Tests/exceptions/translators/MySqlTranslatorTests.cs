@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -8,6 +11,8 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class MySqlTranslatorTests
 {
     private readonly MySqlExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     [Theory]
     [InlineData(1062)]
@@ -16,7 +21,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(number, "duplicate entry");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -29,7 +34,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(number, "foreign key constraint fails");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -39,7 +44,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(1048, "Column cannot be null");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -49,7 +54,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(3819, "Check constraint is violated");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -59,7 +64,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(1213, "Deadlock found when trying to get lock");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Update);
 
         Assert.IsType<DeadlockException>(result);
     }
@@ -69,7 +74,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(1461, "Can't create more than max_prepared_stmt_count statements");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Query);
 
         Assert.IsType<DatabaseOperationException>(result);
     }
@@ -79,7 +84,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(9999, "unknown mysql error");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Query);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<ConcurrencyConflictException>(result);
@@ -94,7 +99,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(number, "connection failure");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
         Assert.Equal(SupportedDatabase.MySql, result.Database);
@@ -111,7 +116,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(1205, "Lock wait timeout exceeded; try restarting transaction");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Update);
 
         Assert.NotNull(result);
         Assert.IsAssignableFrom<DatabaseException>(result);
@@ -123,7 +128,7 @@ public class MySqlTranslatorTests
     {
         var raw = new NumberedDbException(4025, "CONSTRAINT `chk_amount` failed for `shop`.`orders`");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -135,7 +140,7 @@ public class MySqlTranslatorTests
         // No specific error code — relies on message pattern matching
         var raw = new NumberedDbException(0, "constraint failed for `orders`");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -147,7 +152,7 @@ public class MySqlTranslatorTests
         var raw = new SqlStateDbException("HY000",
             "Query execution was interrupted, maximum statement execution time exceeded (timeout)");
 
-        var result = _translator.Translate(SupportedDatabase.MySql, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Query);
 
         Assert.NotNull(result);
         Assert.IsAssignableFrom<DatabaseException>(result);

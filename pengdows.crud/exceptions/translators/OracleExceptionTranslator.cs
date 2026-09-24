@@ -1,3 +1,5 @@
+using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -18,48 +20,64 @@ namespace pengdows.crud.exceptions.translators;
 ///   ORA-02292  integrity constraint violated - child record found (FK delete)
 ///   ORA-00060  deadlock detected
 ///   ORA-08177  can't serialize access for this transaction
+///   ORA-50201  Oracle Communication: failed to connect to server (confirmed against a live
+///     ODP.NET connect attempt to a closed port — reports OracleException.Number == 50201).
 /// </remarks>
 internal sealed class OracleExceptionTranslator : IDbExceptionTranslator
 {
-    public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
+    public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
+        var database = dialect.DatabaseType;
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
 
-        switch (errorCode)
+        if (errorCode == 50201)
         {
-            case 1:
+            return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
+
+        // Constraint-kind classification (Unique/FK/NotNull/Check) is delegated to the dialect —
+        // see IDbExceptionTranslator.Translate's doc comment.
+        if (exception is DbException dbEx)
+        {
+            if (dialect.IsUniqueViolation(dbEx))
+            {
                 return new UniqueConstraintViolationException(
                     $"{operationKind} violated a unique constraint on {database}: {message}",
                     database, exception, sqlState, errorCode, constraintName);
-            case 1400:
+            }
+
+            if (dialect.IsNotNullViolation(dbEx))
+            {
                 return new NotNullViolationException(
                     $"{operationKind} violated a not-null constraint on {database}: {message}",
                     database, exception, sqlState, errorCode, constraintName);
-            case 2290:
+            }
+
+            if (dialect.IsCheckConstraintViolation(dbEx))
+            {
                 return new CheckConstraintViolationException(
                     $"{operationKind} violated a check constraint on {database}: {message}",
                     database, exception, sqlState, errorCode, constraintName);
-            case 2291:
-            case 2292:
+            }
+
+            if (dialect.IsForeignKeyViolation(dbEx))
+            {
                 return new ForeignKeyViolationException(
                     $"{operationKind} violated a foreign key constraint on {database}: {message}",
                     database, exception, sqlState, errorCode, constraintName);
-            case 60:
-                return new DeadlockException(
-                    $"{operationKind} deadlocked on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
-            case 8177:
-                return new SerializationConflictException(
-                    $"{operationKind} encountered a serialization conflict on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
+            }
         }
 
-        if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))
+        // Deadlock (60)/SerializationFailure (8177)/Timeout classification is delegated to the
+        // dialect's single ClassifyException/TryClassifyProviderException source — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
+            return classified;
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);

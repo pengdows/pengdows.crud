@@ -96,10 +96,10 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     // native Guid/UUID wire support (Sqlite/Oracle/Snowflake/Db2/DuckDB/Firebird).
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
-    // Spanner returns SqlState "P0001" (a generic raise-exception code) for NotNull/Check and
-    // delete-side ForeignKey violations, not the ANSI class-23 codes real PostgreSQL uses —
-    // verified live against a real Spanner Omni + PGAdapter instance. Inheriting PostgreSqlDialect's
-    // pure SqlState-based checks misses those shapes; message-pattern matching is the only reliable signal, the same
+    // Spanner returns SqlState "P0001" (a generic raise-exception code) for EVERY constraint
+    // violation, not the ANSI class-23 codes real PostgreSQL uses — verified live against a real
+    // Spanner Omni + PGAdapter instance. Inheriting PostgreSqlDialect's pure SqlState-based checks
+    // is therefore useless here; message-pattern matching is the only reliable signal, the same
     // approach Sqlite/Firebird already use for their own non-standard-SqlState shapes.
     public override bool IsNotNullViolation(DbException ex) =>
         ex.Message.Contains("must not be NULL", StringComparison.OrdinalIgnoreCase);
@@ -129,4 +129,21 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     // in IsolationResolver.cs's SupportedDatabase.Spanner cases on this branch instead.
 
     public override string GetBaseSessionSettings() => string.Empty;
+
+    // ClassifyException's base-class generic message fallback (SqlDialect.cs) only recognizes a
+    // constraint violation via keywords like "constraint"/"violates" — Spanner's real NotNull
+    // message ("... must not be NULL in table ...") contains neither, so without this override it
+    // silently classified as Unknown even after IsNotNullViolation above was fixed to recognize
+    // it. Reuses the same four predicates IDbExceptionTranslator.Translate delegates to
+    // so this category-level classifier can't drift from the constraint-kind classifier.
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        if (IsUniqueViolation(ex) || IsForeignKeyViolation(ex) || IsNotNullViolation(ex) || IsCheckConstraintViolation(ex))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        return base.TryClassifyProviderException(ex, out category);
+    }
 }

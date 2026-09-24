@@ -281,26 +281,27 @@ internal sealed class InterBaseDialect : SqlDialect
     // in IsolationResolver.cs's SupportedDatabase.InterBase cases on this branch instead.
 
     // All four codes below were captured live from a real InterBaseSql.Data.InterBaseClient
-    // IBException thrown against a real InterBase 15 server (see file-level AI SUMMARY).
+    // IBException thrown against a real InterBase 15 server (see file-level AI SUMMARY —
+    // including the correction to this session's own earlier, wrong NOT NULL code claim).
     // IBException.ErrorCode reliably carries the real ISC status code (confirmed via a live
     // property-enumeration of IBException: it has no "Number"/"SqliteErrorCode"/"NativeError"
-    // property, so DbExceptionTranslationSupport's reflection probe falls through to the base
+    // property, so TryGetProviderErrorCode's reflection probe falls through to the base
     // DbException.ErrorCode, which IS the real code for this driver).
     public override bool IsUniqueViolation(DbException ex) =>
-        DbExceptionTranslationSupport.TryGetErrorCode(ex) == 335544665;
+        TryGetProviderErrorCode(ex) == 335544665;
 
     // 335544466: CONFIRMED live for BOTH directions — insert/update referencing a missing parent,
     // and delete/update of a parent still referenced by a child — same code both ways.
     public override bool IsForeignKeyViolation(DbException ex) =>
-        DbExceptionTranslationSupport.TryGetErrorCode(ex) == 335544466;
+        TryGetProviderErrorCode(ex) == 335544466;
 
     // 335544347: "validation error for column X, value \"*** null ***\"" — a DISTINCT code from
     // CHECK (335544558), confirmed live. No message-text discrimination needed.
     public override bool IsNotNullViolation(DbException ex) =>
-        DbExceptionTranslationSupport.TryGetErrorCode(ex) == 335544347;
+        TryGetProviderErrorCode(ex) == 335544347;
 
     public override bool IsCheckConstraintViolation(DbException ex) =>
-        DbExceptionTranslationSupport.TryGetErrorCode(ex) == 335544558;
+        TryGetProviderErrorCode(ex) == 335544558;
 
     /// <summary>
     /// IBConnection.ServerVersion (e.g. "LI-V15.1.0.42/tcp (development)/P15") is populated
