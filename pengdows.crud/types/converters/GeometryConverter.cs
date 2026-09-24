@@ -111,6 +111,11 @@ internal sealed class GeometryConverter : SpatialConverter<Geometry>
         return spatial.WithProviderValue(providerValue);
     }
 
+    protected override Geometry FromBinaryWithSrid(ReadOnlySpan<byte> wkb, int srid, object providerValue)
+    {
+        return Geometry.FromWellKnownBinary(wkb, srid, providerValue);
+    }
+
     private static void ExtractSridFromEwkb(ReadOnlySpan<byte> source, out int srid, out byte[] normalized)
     {
         if (source.Length < 5)

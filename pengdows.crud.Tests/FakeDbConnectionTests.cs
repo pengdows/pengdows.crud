@@ -142,4 +142,33 @@ public class fakeDbConnectionTests
         var conn = new fakeDbConnection();
         Assert.Throws<InvalidOperationException>(() => conn.GetSchema());
     }
+
+    // SetFailOnOpen(skipFirstOpen: true) stored the flag but never read it, so the first open failed too.
+    [Fact]
+    public void SetFailOnOpen_SkipFirstOpen_FirstOpenSucceedsThenFails()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.SetFailOnOpen(true, skipFirstOpen: true);
+
+        conn.Open();
+        Assert.Equal(ConnectionState.Open, conn.State);
+        conn.Close();
+
+        Assert.ThrowsAny<Exception>(() => conn.Open());
+    }
+
+    [Fact]
+    public async Task SetFailOnOpen_SkipFirstOpen_FirstOpenAsyncSucceedsThenFails()
+    {
+        var conn = new fakeDbConnection();
+        conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}";
+        conn.SetFailOnOpen(true, skipFirstOpen: true);
+
+        await conn.OpenAsync();
+        Assert.Equal(ConnectionState.Open, conn.State);
+        await conn.CloseAsync();
+
+        await Assert.ThrowsAnyAsync<Exception>(() => conn.OpenAsync());
+    }
 }

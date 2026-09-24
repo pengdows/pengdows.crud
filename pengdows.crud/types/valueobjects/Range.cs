@@ -62,6 +62,12 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
 
         rangeText = rangeText.Trim();
 
+        // PostgreSQL's canonical text for an empty range.
+        if (rangeText.Equals("empty", StringComparison.OrdinalIgnoreCase))
+        {
+            return Empty;
+        }
+
         if (rangeText.Length < 3)
         {
             throw new FormatException($"Invalid range format: {rangeText}");

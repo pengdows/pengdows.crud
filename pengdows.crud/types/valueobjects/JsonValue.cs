@@ -101,8 +101,15 @@ public readonly struct JsonValue : IEquatable<JsonValue>
             return _element.Value;
         }
 
-        using var doc = AsDocument();
-        return doc.RootElement.Clone();
+        // The caller owns a document passed to the constructor — clone from it without disposing.
+        if (_document != null)
+        {
+            return _document.RootElement.Clone();
+        }
+
+        // Only a document parsed here is ours to dispose.
+        using var parsed = AsDocument();
+        return parsed.RootElement.Clone();
     }
 
     /// <summary>

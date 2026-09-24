@@ -22,8 +22,8 @@ namespace pengdows.crud;
 /// Provides utility methods for analyzing decimal values.
 /// </summary>
 /// <remarks>
-/// Infers the SQL precision and scale of decimal values. Not currently called by
-/// library code.
+/// This class is used internally to determine the precision and scale of decimal
+/// values for SQL parameter configuration and validation.
 /// </remarks>
 internal static class DecimalHelpers
 {

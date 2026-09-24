@@ -19,6 +19,7 @@
 // - Thread-safe: Converter instances and spatial value objects are immutable.
 // =============================================================================
 
+using System.Data.SqlTypes;
 using System.Text;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -111,6 +112,9 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
     }
 
     protected abstract TSpatial FromBinary(ReadOnlySpan<byte> wkb, SupportedDatabase provider);
+
+    /// <summary>Builds the value from WKB with an explicit SRID (e.g. read from a provider type).</summary>
+    protected abstract TSpatial FromBinaryWithSrid(ReadOnlySpan<byte> wkb, int srid, object providerValue);
     protected abstract TSpatial FromTextInternal(string text, SupportedDatabase provider);
     protected abstract TSpatial FromGeoJsonInternal(string json, SupportedDatabase provider);
     protected abstract TSpatial WrapWithProvider(TSpatial spatial, object providerValue);
@@ -127,44 +131,23 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
                 "Microsoft.SqlServer.Types is required for SQL Server spatial parameters. Reference the package or provide a provider-specific instance.");
         }
 
-        var methodName = !value.WellKnownBinary.IsEmpty ? "STGeomFromWKB" : "STGeomFromText";
-        if (targetType == sqlGeographyType)
-        {
-            methodName = !value.WellKnownBinary.IsEmpty ? "STGeomFromWKB" : "STGeomFromText";
-        }
-
-        var sqlBytesType = Type.GetType("Microsoft.SqlServer.Types.SqlBytes, Microsoft.SqlServer.Types");
-        var sqlCharsType = Type.GetType("Microsoft.SqlServer.Types.SqlChars, Microsoft.SqlServer.Types");
-        var sqlStringType = Type.GetType("System.Data.SqlTypes.SqlString, System.Data");
-        var sqlIntType = Type.GetType("System.Data.SqlTypes.SqlInt32, System.Data");
-
-        if (sqlBytesType == null || sqlCharsType == null || sqlStringType == null || sqlIntType == null)
-        {
-            throw new InvalidOperationException(
-                "SQL Server spatial conversion requires System.Data.SqlTypes and Microsoft.SqlServer.Types assemblies.");
-        }
-
+        // Microsoft.SqlServer.Types: STGeomFromWKB(SqlBytes, int srid) / STGeomFromText(SqlChars, int srid)
+        // on both SqlGeometry and SqlGeography. SqlBytes/SqlChars are System.Data.SqlTypes (BCL).
         if (!value.WellKnownBinary.IsEmpty)
         {
-            var ctor = sqlBytesType.GetConstructor(new[] { typeof(byte[]) });
-            var sqlBytes = ctor?.Invoke(new object[] { value.WellKnownBinary.ToArray() });
-            var srid = Activator.CreateInstance(sqlIntType, value.Srid);
-            return targetType.GetMethod(methodName, new[] { sqlBytesType, sqlIntType })
-                ?.Invoke(null, new[] { sqlBytes!, srid! });
+            return targetType.GetMethod("STGeomFromWKB", new[] { typeof(SqlBytes), typeof(int) })
+                !.Invoke(null, new object[] { new SqlBytes(value.WellKnownBinary.ToArray()), value.Srid });
         }
 
-        var text = value.WellKnownText ?? value.GeoJson;
-        if (string.IsNullOrWhiteSpace(text))
+        // SQL Server only accepts WKB or WKT; GeoJSON is not WKT and would fail to parse.
+        if (string.IsNullOrWhiteSpace(value.WellKnownText))
         {
-            throw new InvalidOperationException("Spatial value must contain WKB or WKT to build SQL Server UDT.");
+            throw new InvalidOperationException(
+                "SQL Server spatial parameters require WKB or WKT; this value has neither (GeoJSON is not supported for SQL Server).");
         }
 
-        var sqlCharsCtor = sqlCharsType.GetConstructor(new[] { typeof(char[]) });
-        var sqlChars = sqlCharsCtor?.Invoke(new object[] { text.ToCharArray() });
-        var sridValue = Activator.CreateInstance(sqlIntType, value.Srid);
-
-        return targetType.GetMethod(methodName, new[] { sqlCharsType, sqlIntType })
-            ?.Invoke(null, new[] { sqlChars!, sridValue! });
+        return targetType.GetMethod("STGeomFromText", new[] { typeof(SqlChars), typeof(int) })
+            !.Invoke(null, new object[] { new SqlChars(value.WellKnownText.ToCharArray()), value.Srid });
     }
 
     private object? CreatePostgresSpatial(SpatialValue value)
@@ -240,19 +223,21 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         if (typeName.Contains("SqlGeometry", StringComparison.OrdinalIgnoreCase) ||
             typeName.Contains("SqlGeography", StringComparison.OrdinalIgnoreCase))
         {
-            var method = type.GetMethod("STAsBinary", Type.EmptyTypes);
-            if (method != null)
+            // STAsBinary() returns SqlBytes and STSrid is a SqlInt32 (Microsoft.SqlServer.Types).
+            var binary = type.GetMethod("STAsBinary", Type.EmptyTypes)?.Invoke(value, Array.Empty<object>());
+            var bytes = binary switch
             {
-                if (method.Invoke(value, Array.Empty<object>()) is byte[] bytes)
-                {
-                    var sridProp = type.GetProperty("STSrid");
-                    var sridValue = sridProp?.GetValue(value);
-                    var srid = sridValue != null
-                        ? Convert.ToInt32(sridValue, System.Globalization.CultureInfo.InvariantCulture)
-                        : 4326;
-                    var spatial = FromBinary(bytes, provider);
-                    return WrapWithProvider(spatial, value);
-                }
+                SqlBytes { IsNull: false } sqlBytes => sqlBytes.Value,
+                byte[] raw => raw,
+                _ => null
+            };
+
+            if (bytes != null)
+            {
+                var srid = type.GetProperty("STSrid")?.GetValue(value) is SqlInt32 { IsNull: false } sqlSrid
+                    ? sqlSrid.Value
+                    : 0;
+                return FromBinaryWithSrid(bytes, srid, value);
             }
         }
 

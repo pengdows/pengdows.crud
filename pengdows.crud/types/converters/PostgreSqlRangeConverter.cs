@@ -11,7 +11,7 @@
 //   * Others: Raw Range<T> value
 // - ConvertToProvider(): Returns bracket notation string for PostgreSQL.
 // - TryConvertFromProvider(): Handles Range<T>, string, NpgsqlRange<T>, Tuple<T?,T?>.
-// - Parse(): Parses "[1,10)", "(,100]", "[5,]" formats (the literal "empty" is not supported).
+// - Parse(): Parses "[1,10)", "(,100]", "[5,]" formats, and the literal "empty" (→ Range<T>.Empty).
 // - Common types: int4range, int8range, numrange, daterange, tsrange, tstzrange.
 // - Thread-safe and immutable value objects.
 // =============================================================================
@@ -39,7 +39,7 @@ namespace pengdows.crud.types.converters;
 /// <para><strong>Supported conversions from database:</strong></para>
 /// <list type="bullet">
 /// <item><description>Range&lt;T&gt; → Range&lt;T&gt; (pass-through)</description></item>
-/// <item><description>string → Range&lt;T&gt; (parses "[1,10)", "(,100]", "[5,]", etc.; the literal "empty" is not supported)</description></item>
+/// <item><description>string → Range&lt;T&gt; (parses "[1,10)", "(,100]", "[5,]", etc., and the literal "empty")</description></item>
 /// <item><description>NpgsqlRange&lt;T&gt; → Range&lt;T&gt; (converts Npgsql provider-specific type via reflection)</description></item>
 /// <item><description>Tuple&lt;T?, T?&gt; → Range&lt;T&gt; (simple min/max tuple)</description></item>
 /// </list>
@@ -190,6 +190,13 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
     private static Range<T> Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text) || text.Length < 2)
+        {
+            return Range<T>.Empty;
+        }
+
+        text = text.Trim();
+        // PostgreSQL's canonical text for an empty range.
+        if (text.Equals("empty", StringComparison.OrdinalIgnoreCase))
         {
             return Range<T>.Empty;
         }

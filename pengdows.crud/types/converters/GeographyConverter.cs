@@ -137,6 +137,11 @@ internal sealed class GeographyConverter : SpatialConverter<Geography>
         return spatial.WithProviderValue(providerValue);
     }
 
+    protected override Geography FromBinaryWithSrid(ReadOnlySpan<byte> wkb, int srid, object providerValue)
+    {
+        return Geography.FromWellKnownBinary(wkb, srid, providerValue);
+    }
+
     private static void ExtractSridFromEwkb(ReadOnlySpan<byte> source, out int srid, out byte[] normalized)
     {
         if (source.Length < 5)
