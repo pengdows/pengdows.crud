@@ -202,7 +202,7 @@ database-agnostic policy decoupled from connection identity — is in
 - [`docs/cache-and-context-contract.md`](docs/cache-and-context-contract.md) — the full cache
   inventory (every cache in the library, its scope/key/bound, and why each one either is or isn't
   a multi-tenant-cardinality risk — including the process-wide `ConnectionStringNormalizationCache`,
-  which is unbounded and keyed by the raw connection string), and the context-derived generation
+  bounded and keyed by a hash, never the raw connection string), and the context-derived generation
   contract: which parts of a gateway call are re-derived from whichever `IDatabaseContext` you pass
   per-call (dialect, connection, parameters) vs. fixed once at gateway construction and shared
   across every later call regardless of context (entity metadata, reader-plan cache, and the

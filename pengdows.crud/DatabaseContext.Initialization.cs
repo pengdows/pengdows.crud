@@ -1470,7 +1470,8 @@ public partial class DatabaseContext
         string readOnlySuffix,
         out Dictionary<string, string> normalized)
     {
-        if (ConnectionStringNormalizationCache.TryGet(connectionString, out normalized!))
+        if (ConnectionStringNormalizationCache.TryGet(connectionString, readOnlyKey, readOnlyValue,
+                applicationNameSettingName, readOnlySuffix, out normalized!))
         {
             return true;
         }
@@ -1517,7 +1518,8 @@ public partial class DatabaseContext
             normalized[key] = value;
         }
 
-        _ = ConnectionStringNormalizationCache.TryAdd(connectionString, normalized);
+        _ = ConnectionStringNormalizationCache.TryAdd(connectionString, readOnlyKey, readOnlyValue,
+            applicationNameSettingName, readOnlySuffix, normalized);
         return true;
     }
 

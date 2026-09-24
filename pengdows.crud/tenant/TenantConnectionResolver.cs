@@ -164,7 +164,10 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             PoolAcquireTimeout = source.PoolAcquireTimeout,
             ModeLockTimeout = source.ModeLockTimeout,
             ApplicationName = source.ApplicationName,
-            EnableSingleWriterFairness = source.EnableSingleWriterFairness
+            EnableSingleWriterFairness = source.EnableSingleWriterFairness,
+            SessionInitializationFailureMode = source.SessionInitializationFailureMode,
+            MaxQueuedWrites = source.MaxQueuedWrites,
+            MaxQueuedReads = source.MaxQueuedReads
         };
     }
 

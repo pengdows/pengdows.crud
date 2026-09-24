@@ -54,4 +54,27 @@ public class DatabaseContextNormalizationCacheTests
         Assert.Equal(firstMap, cachedFirst);
         Assert.Equal(1, ConnectionStringNormalizationCache.Count);
     }
+
+    // The cached map depends on the read-only key/value, application name and suffix, so the cache
+    // key must too; otherwise the same connection string built with different parameters gets the
+    // first caller's map back.
+    [Fact]
+    public void TryBuildNormalizedConnectionMap_DifferentParameters_DoNotShareCachedMap()
+    {
+        ConnectionStringNormalizationCache.ClearForTests();
+        var method = typeof(DatabaseContext).GetMethod("TryBuildNormalizedConnectionMap",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        const string connectionString = "Server=test;ApplicationIntent=ReadOnly";
+
+        var plainArgs = new object?[] { connectionString, null, null, null, string.Empty, null };
+        Assert.True((bool)method.Invoke(null, plainArgs)!);
+        var plainMap = (Dictionary<string, string>)plainArgs[^1]!;
+
+        var readOnlyArgs = new object?[] { connectionString, "ApplicationIntent", "ReadOnly", null, string.Empty, null };
+        Assert.True((bool)method.Invoke(null, readOnlyArgs)!);
+        var readOnlyMap = (Dictionary<string, string>)readOnlyArgs[^1]!;
+
+        Assert.True(plainMap.ContainsKey("ApplicationIntent"));
+        Assert.False(readOnlyMap.ContainsKey("ApplicationIntent"));
+    }
 }

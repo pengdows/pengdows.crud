@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.metrics;
 using pengdows.crud.tenant;
 using Xunit;
 
@@ -446,6 +448,58 @@ public class TenantConnectionResolverTests
                 DbMode = DbMode.SingleConnection,
                 ReadWriteMode = ReadWriteMode.ReadWrite
             };
+        }
+    }
+
+    [Fact]
+    public void Register_And_GetConfiguration_PreservesEveryConfigurationProperty()
+    {
+        // CloneConfiguration omitted SessionInitializationFailureMode, MaxQueuedWrites and
+        // MaxQueuedReads, so every registered tenant silently got the defaults. Reflection over the
+        // whole IDatabaseContextConfiguration contract makes a property added later without a clone
+        // field fail here instead of reproducing the bug.
+        var source = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=Primary;",
+            ReadOnlyConnectionString = "Server=Replica;",
+            ProviderName = "Fake.Provider",
+            DbMode = DbMode.SingleWriter,
+            ReadWriteMode = ReadWriteMode.ReadOnly,
+            PrepareMode = CommandPrepareMode.Always,
+            ReaderPlanCacheSize = 42,
+            EnableMetrics = true,
+            MetricsOptions = new MetricsOptions
+            {
+                LongConnectionThreshold = TimeSpan.FromSeconds(17),
+                EnableApproxPercentiles = true,
+                PercentileWindowSize = 4096
+            },
+            MaxConcurrentWrites = 7,
+            MaxConcurrentReads = 9,
+            PoolAcquireTimeout = TimeSpan.FromSeconds(11),
+            ModeLockTimeout = TimeSpan.FromSeconds(61),
+            ApplicationName = "app-under-test",
+            EnableSingleWriterFairness = false,
+            SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed,
+            MaxQueuedWrites = 3,
+            MaxQueuedReads = 4
+        };
+
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-full-config", source);
+        var cloned = resolver.GetDatabaseContextConfiguration("tenant-full-config");
+
+        var defaults = new DatabaseContextConfiguration();
+        foreach (var property in typeof(IDatabaseContextConfiguration).GetProperties(
+                     BindingFlags.Public | BindingFlags.Instance))
+        {
+            var expected = property.GetValue(source);
+            // Guard the test itself: a property left at its default would pass vacuously.
+            Assert.False(Equals(expected, property.GetValue(defaults)),
+                $"Test must set '{property.Name}' to a non-default value.");
+            Assert.True(Equals(expected, property.GetValue(cloned)),
+                $"Property '{property.Name}' was not preserved by tenant registration cloning. " +
+                $"Expected '{expected}', got '{property.GetValue(cloned)}'.");
         }
     }
 }

@@ -69,13 +69,13 @@ These are the rules the code is being brought in line with.
   sub-millisecond precision; YugabyteDB is missing from the provider check. **Fix:** send an
   `NpgsqlInterval` (months/days/microseconds, preserving months), add YugabyteDB. **3.0:** partly
   fixed (`81eef2b` sends `ToTimeSpan()`, which drops months — do better here).
-- [ ] **B07 — Tenant configuration clone drops settings.**
+- [x] **B07 — Tenant configuration clone drops settings.** *(fixed; reflection test covers every configuration property)*
   `tenant/TenantConnectionResolver.cs:149-169` omits `MaxQueuedWrites`, `MaxQueuedReads` and
   `SessionInitializationFailureMode`; every registered tenant is cloned, so they all silently get the
   defaults (e.g. `FailClosed` becomes `BestEffort`). **Fix:** copy all three; port 3.0's
   reflection-based "every property preserved" test. *Release note:* tenants that set these now get
   them. **3.0:** fixed (`c5083b0`, CORE-001).
-- [ ] **B08 — Connection-string cache retains credentials, unbounded.**
+- [x] **B08 — Connection-string cache retains credentials, unbounded.** *(fixed, including the key-parameter issue 3.0 still has)*
   `internal/ConnectionStringNormalizationCache.cs`: static dictionary keyed by the raw connection
   string (passwords kept for the process lifetime), no size limit. Also its key ignores the
   read-only key/value, application name and suffix that shape the cached value. **Fix:** port 3.0's
@@ -213,6 +213,8 @@ These are the rules the code is being brought in line with.
   (Npgsql throws reading it as `TimeSpan`); port B06's `NpgsqlInterval` write and
   `IntervalFieldReader` read. `docs/advanced-types.md` on 3.0 also shows `DbType.String` for
   value-object columns (use `DbType.Object`).
+- `ConnectionStringNormalizationCache` on 3.0 hashes only the connection string, not the
+  read-only key/value, application name and suffix that shape the cached map — port B08's key.
 - `TotalConnectionsReused`: remove. `ConnectionPoolEfficiency` is computed from it (reused ÷
   created), so it is always 0 on both branches too — decide whether it goes with it.
 - Stale comments that 2.0.6 has corrected but 3.0 still carries: the Oracle, PostgreSQL,

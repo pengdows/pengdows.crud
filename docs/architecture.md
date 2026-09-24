@@ -1129,14 +1129,12 @@ A thread-safe LRU used for `DataReaderMapper`'s setter/plan/property-lookup cach
 `ConnectionStringNormalizationCache` (`pengdows.crud/internal/ConnectionStringNormalizationCache.cs`)
 is a static, process-lifetime cache backing the read-only/primary connection-string equivalence
 check (`AreConnectionStringsEquivalentIgnoringCredentials` in `DatabaseContext.Initialization.cs`).
-It is a plain, unbounded `ConcurrentDictionary<string, Dictionary<string,string>>` keyed on the
-**literal connection string as passed in**: the cached *value* has credential-like keys
-(password/user/secret/token/access) dropped before storage, but the *key* is the raw connection
-string itself — for most providers embedding the password directly — and entries are never
-evicted. An application constructing many distinct connection strings at runtime (per-tenant
-credentials, credential rotation) therefore retains every such raw connection string, including
-rotated-out credentials, resident in memory for the process lifetime. Keep this in mind for
-long-lived multi-tenant processes with high connection-string churn.
+It is a `BoundedCache` capped at 256 entries, keyed on a SHA-256 digest of the connection string
+together with the read-only key/value, application-name setting and read-only suffix — every input
+that shapes the cached map, so the same connection string normalized with different parameters
+never shares an entry. The cached *value* has credential-like keys (password/user/secret/token/
+access) dropped before storage, and the key is a one-way hash, so no raw connection string or
+credential stays resident; per-tenant or rotated credentials can't grow the cache past its bound.
 
 ### Connection Reuse
 
