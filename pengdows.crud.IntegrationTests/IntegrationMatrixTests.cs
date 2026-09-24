@@ -16,7 +16,7 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         _output = output;
 
         var builder = Host.CreateApplicationBuilder();
-        builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
+        builder.Services.AddSingleton<IAuditValueResolver, StringAuditContextProvider>();
         _host = builder.Build();
     }
 

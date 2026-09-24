@@ -32,4 +32,27 @@ public class VerifyNoVendorTests
             tempDir.Delete(true);
         }
     }
+
+    // The usage text shows `--allow "a;b"` (space-separated), but only `--allow=a;b` was parsed; the
+    // space form was silently ignored and every default-forbidden vendor stayed forbidden.
+    public static TheoryData<string[]> AllowForms() => new()
+    {
+        new[] { "dir", "--allow=Npgsql;DuckDB" },
+        new[] { "dir", "--allow", "Npgsql;DuckDB" },
+        new[] { "dir", "--ALLOW", "Npgsql;DuckDB" }
+    };
+
+    [Theory]
+    [MemberData(nameof(AllowForms))]
+    public void ParseAllows_AcceptsBothForms(string[] args)
+    {
+        var asm = Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "verify-novendor.dll"));
+        var method = asm.GetType("V", throwOnError: true)!
+            .GetMethod("ParseAllows", BindingFlags.NonPublic | BindingFlags.Static);
+        Assert.NotNull(method);
+
+        var allows = (string[])method!.Invoke(null, new object?[] { args })!;
+
+        Assert.Equal(new[] { "Npgsql", "DuckDB" }, allows);
+    }
 }

@@ -37,7 +37,7 @@ foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactori
 }
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
+builder.Services.AddSingleton<IAuditValueResolver, StringAuditContextProvider>();
 
 var host = builder.Build();
 

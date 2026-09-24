@@ -4,6 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("Uuid7StaticStateSerial")]
 public class Uuid7OptimizedTests
 {
     // Reset configuration to default before each test to ensure isolation

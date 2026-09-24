@@ -22,7 +22,7 @@ public abstract class SqliteTestBase : IAsyncLifetime
         Output = output;
 
         var builder = Microsoft.Extensions.Hosting.Host.CreateApplicationBuilder();
-        builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
+        builder.Services.AddSingleton<IAuditValueResolver, StringAuditContextProvider>();
         Host = builder.Build();
     }
 
