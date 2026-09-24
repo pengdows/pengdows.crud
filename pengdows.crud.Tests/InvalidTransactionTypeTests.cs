@@ -19,18 +19,33 @@ public class InvalidTransactionTypeTests
     // Unsupported isolation levels per database via the full BeginTransaction path
     // -------------------------------------------------------------------------
 
+    // Isolation fails up: an unsupported explicit level runs at the weakest supported level that
+    // guarantees at least as much.
     [Theory]
-    [InlineData(SupportedDatabase.PostgreSql, IsolationLevel.ReadUncommitted)]
-    [InlineData(SupportedDatabase.Oracle, IsolationLevel.ReadUncommitted)]
-    [InlineData(SupportedDatabase.Oracle, IsolationLevel.RepeatableRead)]
-    [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.ReadCommitted)]
-    [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.RepeatableRead)]
-    [InlineData(SupportedDatabase.DuckDB, IsolationLevel.ReadCommitted)]
-    [InlineData(SupportedDatabase.DuckDB, IsolationLevel.RepeatableRead)]
+    [InlineData(SupportedDatabase.PostgreSql, IsolationLevel.ReadUncommitted, IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.Oracle, IsolationLevel.ReadUncommitted, IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.Oracle, IsolationLevel.RepeatableRead, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.ReadCommitted, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.CockroachDb, IsolationLevel.RepeatableRead, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.DuckDB, IsolationLevel.ReadCommitted, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.DuckDB, IsolationLevel.RepeatableRead, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.Sqlite, IsolationLevel.ReadUncommitted, IsolationLevel.ReadCommitted)]
+    public void BeginTransaction_UnsupportedIsolationLevel_FailsUp(
+        SupportedDatabase product, IsolationLevel level, IsolationLevel expected)
+    {
+        var context = new DatabaseContext(
+            $"Data Source=test;EmulatedProduct={product}",
+            new fakeDbFactory(product));
+
+        using var tx = context.BeginTransaction(level);
+        Assert.Equal(expected, tx.IsolationLevel);
+    }
+
+    // Nothing at or above the requested level exists: throw rather than run weaker.
+    [Theory]
     [InlineData(SupportedDatabase.TiDb, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.Snowflake, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.Snowflake, IsolationLevel.RepeatableRead)]
-    [InlineData(SupportedDatabase.Sqlite, IsolationLevel.ReadUncommitted)]
     public void BeginTransaction_UnsupportedIsolationLevel_Throws(
         SupportedDatabase product, IsolationLevel level)
     {
@@ -116,14 +131,25 @@ public class InvalidTransactionTypeTests
     }
 
     [Fact]
-    public async Task BeginTransactionAsync_UnsupportedIsolationLevel_ThrowsInvalidOperationException()
+    public async Task BeginTransactionAsync_UnsupportedIsolationLevel_FailsUp()
     {
         var context = new DatabaseContext(
             $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
 
+        await using var tx = await context.BeginTransactionAsync(IsolationLevel.ReadUncommitted);
+        Assert.Equal(IsolationLevel.ReadCommitted, tx.IsolationLevel);
+    }
+
+    [Fact]
+    public async Task BeginTransactionAsync_NothingAtOrAboveRequestedLevel_ThrowsInvalidOperationException()
+    {
+        var context = new DatabaseContext(
+            $"Data Source=test;EmulatedProduct={SupportedDatabase.TiDb}",
+            new fakeDbFactory(SupportedDatabase.TiDb));
+
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
-            await context.BeginTransactionAsync(IsolationLevel.ReadUncommitted));
+            await context.BeginTransactionAsync(IsolationLevel.Serializable));
     }
 
     [Fact]

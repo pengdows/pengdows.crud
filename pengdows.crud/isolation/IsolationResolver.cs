@@ -116,6 +116,54 @@ internal sealed class IsolationResolver : IIsolationResolver
     }
 
     /// <summary>
+    /// Resolves an explicitly requested native level to the level a transaction actually uses:
+    /// the requested level when supported, otherwise the weakest supported level that guarantees
+    /// at least as much. Never resolves to a weaker level.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No supported level is at least as strong as <paramref name="requested"/>.</exception>
+    internal IsolationLevel ResolveAtLeast(IsolationLevel requested)
+    {
+        if (_supportedLevels.Contains(requested))
+        {
+            return requested;
+        }
+
+        // Chaos/Unspecified carry no guarantees, so "at least as strong" would match anything;
+        // they are never resolved, only used when the provider supports them as-is.
+        if (requested is not (IsolationLevel.ReadUncommitted or IsolationLevel.ReadCommitted
+            or IsolationLevel.RepeatableRead or IsolationLevel.Snapshot or IsolationLevel.Serializable))
+        {
+            throw new InvalidOperationException($"Isolation level {requested} not supported by {_product} (RCSI: {_rcsi})");
+        }
+
+        // At least as strong: a supported level whose guarantees are a superset of the
+        // requested level's (equal guarantees count — e.g. CockroachDB runs ReadCommitted
+        // requests as Serializable), nearest first.
+        var requestedGuarantees = _dialect.GetIsolationGuarantees(requested);
+        IsolationLevel? best = null;
+        var bestDistance = int.MaxValue;
+        foreach (var candidate in _supportedLevels)
+        {
+            var comparison = Compare(requestedGuarantees, _dialect.GetIsolationGuarantees(candidate));
+            if (comparison is not (IsolationLevelComparison.Exact or IsolationLevelComparison.Higher))
+            {
+                continue;
+            }
+
+            var distance = BitOperations.PopCount(
+                (uint)(requestedGuarantees ^ _dialect.GetIsolationGuarantees(candidate)));
+            if (distance < bestDistance)
+            {
+                bestDistance = distance;
+                best = candidate;
+            }
+        }
+
+        return best ?? throw new InvalidOperationException(
+            $"Isolation level {requested} not supported by {_product} (RCSI: {_rcsi}), and no level at least as strong is available.");
+    }
+
+    /// <summary>
     /// Finds the nearest supported substitute for <paramref name="requested"/> permitted by
     /// <paramref name="policy"/>, preferring a strictly-stronger level (exact already handled by
     /// the caller) over a strictly-weaker one when both are allowed.

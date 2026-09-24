@@ -133,7 +133,8 @@ public partial class DatabaseContext
             }
             else
             {
-                _isolationResolver.Validate(isolationLevel.Value);
+                // An explicit level is a minimum: use it, or the weakest stronger supported level.
+                isolationLevel = _isolationResolver.ResolveAtLeast(isolationLevel.Value);
             }
         }
         else
@@ -167,7 +168,8 @@ public partial class DatabaseContext
             }
             else
             {
-                _isolationResolver.Validate(isolationLevel.Value);
+                // An explicit level is a minimum: use it, or the weakest stronger supported level.
+                isolationLevel = _isolationResolver.ResolveAtLeast(isolationLevel.Value);
             }
         }
 

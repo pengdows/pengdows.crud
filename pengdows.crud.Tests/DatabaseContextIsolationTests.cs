@@ -113,12 +113,13 @@ public class DatabaseContextIsolationTests
     // level is now rejected like any other database's unsupported level instead of silently
     // substituted. Locks down that this is the actual, current, intentional behavior.
     [Fact]
-    public void BeginTransaction_NativeIsolationLevel_CockroachDb_UnsupportedLevel_Throws()
+    public void BeginTransaction_NativeIsolationLevel_CockroachDb_UnsupportedLevel_FailsUpToSerializable()
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.CockroachDb}",
             new fakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
 
-        Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(IsolationLevel.ReadCommitted));
+        using var tx = context.BeginTransaction(IsolationLevel.ReadCommitted);
+        Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
     }
 
     [Fact]

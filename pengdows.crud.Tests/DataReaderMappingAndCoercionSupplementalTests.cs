@@ -291,8 +291,9 @@ public class DataReaderMappingAndCoercionSupplementalTests
         Assert.Equal(level, transaction.IsolationLevel);
     }
 
+    // SQLite has nothing that guarantees Snapshot's non-blocking reads; ReadUncommitted instead
+    // fails up (see IsolationFailUpTests).
     [Theory]
-    [InlineData(IsolationLevel.ReadUncommitted)]
     [InlineData(IsolationLevel.Snapshot)]
     public void TransactionContext_UnsupportedIsolationLevel_Throws(IsolationLevel level)
     {

@@ -4790,6 +4790,14 @@ await using var tx = await context.BeginTransactionAsync(
 
 `ExecutionType` is required: pass `ExecutionType.Write` for mutating transactions and `ExecutionType.Read` for read-only transactions. In `SingleWriter` mode this determines whether the write-slot governor is acquired.
 
+**An explicit `IsolationLevel` is a minimum — isolation fails up, never down.** If the database
+supports the requested level it is used as-is; otherwise the transaction runs at the weakest
+supported level that guarantees at least as much (e.g. `ReadCommitted` on CockroachDB/DuckDB runs
+as `Serializable`, `ReadUncommitted` on PostgreSQL runs as `ReadCommitted`). If nothing at or above
+the request exists (e.g. `Serializable` on TiDB/Snowflake, or `Snapshot` where snapshot isolation
+is off), `BeginTransaction` throws `InvalidOperationException` rather than run weaker. The level
+actually used is reported by `ITransactionContext.IsolationLevel`.
+
 ## ITransactionContext properties and methods
 
 | Member | Description |

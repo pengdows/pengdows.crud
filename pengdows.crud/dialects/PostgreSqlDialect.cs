@@ -396,6 +396,10 @@ internal class PostgreSqlDialect : SqlDialect
         IsolationLevel.ReadCommitted => IsolationGuarantees.NoDirtyReads | IsolationGuarantees.NonBlockingReads,
         IsolationLevel.RepeatableRead => IsolationGuarantees.NoDirtyReads | IsolationGuarantees.NoNonRepeatableReads |
                                           IsolationGuarantees.NoPhantomReads | IsolationGuarantees.NonBlockingReads,
+        // Serializable is MVCC too (SSI on PostgreSQL, CockroachDB's default): readers don't block
+        // writers. Without this flag it looked incomparable with ReadCommitted, so an explicit
+        // ReadCommitted request couldn't fail up to CockroachDB's only level.
+        IsolationLevel.Serializable => base.GetIsolationGuarantees(level) | IsolationGuarantees.NonBlockingReads,
         _ => base.GetIsolationGuarantees(level)
     };
     public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
