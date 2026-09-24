@@ -78,7 +78,7 @@ public class GeneratedKeyPlanTests : SqlLiteContextTestBase
     [Table("sequence_entity")]
     private sealed class SequenceEntity
     {
-        [Id(true)] // Must be writable for prefetch
+        [Id(false)] // Not client-writable: PrefetchSequence only overwrites the Id when it is not writable (see c39890c)
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
