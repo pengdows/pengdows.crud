@@ -161,8 +161,13 @@ public partial class TableGateway<TEntity, TRowID> :
         var dialect = GetDialect(ctx);
         var plan = dialect.GetGeneratedKeyPlan();
 
-        // 1. Handle PREFETCH plans (Oracle)
-        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null)
+        // 1. Handle PREFETCH plans (InterBase)
+        //
+        // Only prefetch (and overwrite the entity's Id) when the column is NOT client-writable -
+        // mirrors branch 2's own IsIdWritable check below. Without it, an entity that explicitly
+        // sets its Id ([Id]/[Id(true)]) had that value silently replaced with a fresh sequence
+        // value, so a caller who inserted then looked the row up by its own id got "not found".
+        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null && !_idColumn.IsIdWritable)
         {
             var seqQuery = dialect.GetSequenceNextValQuery(GetSequenceName());
             using var seqSc = ctx.CreateSqlContainer(seqQuery);
@@ -171,6 +176,14 @@ public partial class TableGateway<TEntity, TRowID> :
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
             // Proceed with standard insert since ID is now populated
+            await using var sc = BuildCreate(entity, ctx);
+            var succeeded = await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
+            writeSucceeded[0] = succeeded;
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
+        }
+
+        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null && _idColumn.IsIdWritable)
+        {
             await using var sc = BuildCreate(entity, ctx);
             var succeeded = await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
             writeSucceeded[0] = succeeded;
@@ -346,8 +359,11 @@ public partial class TableGateway<TEntity, TRowID> :
         var dialect = GetDialect(ctx);
         var plan = dialect.GetGeneratedKeyPlan();
 
-        // 1. Handle PREFETCH plans (Oracle)
-        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null)
+        // 1. Handle PREFETCH plans (InterBase)
+        //
+        // Only prefetch when the Id is NOT client-writable - see the CreateAsync(TEntity,
+        // IDatabaseContext?) overload above for the rationale.
+        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null && !_idColumn.IsIdWritable)
         {
             var seqQuery = dialect.GetSequenceNextValQuery(GetSequenceName());
             using var seqSc = ctx.CreateSqlContainer(seqQuery);
@@ -355,6 +371,14 @@ public partial class TableGateway<TEntity, TRowID> :
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
+            await using var sc = BuildCreate(entity, ctx);
+            var succeeded = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
+            writeSucceeded[0] = succeeded;
+            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
+        }
+
+        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null && _idColumn.IsIdWritable)
+        {
             await using var sc = BuildCreate(entity, ctx);
             var succeeded = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
             writeSucceeded[0] = succeeded;

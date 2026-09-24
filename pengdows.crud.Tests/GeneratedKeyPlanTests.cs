@@ -4,6 +4,7 @@ using pengdows.crud.infrastructure;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
@@ -78,7 +79,7 @@ public class GeneratedKeyPlanTests : SqlLiteContextTestBase
     [Table("sequence_entity")]
     private sealed class SequenceEntity
     {
-        [Id(true)] // Must be writable for prefetch
+        [Id(false)] // Not client-writable: PrefetchSequence only overwrites the Id when it is not writable
         [Column("id", DbType.Int32)]
         public int Id { get; set; }
 
@@ -115,5 +116,65 @@ public class GeneratedKeyPlanTests : SqlLiteContextTestBase
 
         Assert.True(result);
         Assert.Equal(456, entity.Id);
+    }
+
+    [Table("sequence_entity")]
+    private sealed class WritableIdSequenceEntity
+    {
+        [Id(true)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private (TableGateway<WritableIdSequenceEntity, int> Gateway, fakeDbConnection Conn) CreateWritableIdPrefetchGateway()
+    {
+        var factory = ((DatabaseContext)Context).Factory;
+        var dialect = new TestDialect(factory) { Plan = GeneratedKeyPlan.PrefetchSequence };
+        var customContext = new DatabaseContext(Context.ConnectionString, factory, TypeMap, dialect);
+
+        TypeMap.Register<WritableIdSequenceEntity>();
+        var gateway = new TableGateway<WritableIdSequenceEntity, int>(customContext);
+
+        var tracked = customContext.GetConnection(ExecutionType.Write, false);
+        var conn = (fakeDbConnection)((IInternalConnectionWrapper)tracked).UnderlyingConnection;
+        conn.EnableDataPersistence = false;
+        conn.EmulatedProduct = SupportedDatabase.Unknown;
+
+        // If the gateway (wrongly) prefetched, this is the sequence value it would read.
+        conn.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["Value"] = 999 } });
+        conn.EnqueueNonQueryResult(1);
+        return (gateway, conn);
+    }
+
+    /// <summary>
+    /// A caller-supplied (writable) Id must survive CreateAsync under PrefetchSequence (InterBase's
+    /// plan). Previously the sequence value silently replaced it, so the row was stored under an
+    /// Id the caller never saw.
+    /// </summary>
+    [Fact]
+    public async Task CreateAsync_PrefetchSequence_WritableId_KeepsCallerSuppliedId()
+    {
+        var (gateway, _) = CreateWritableIdPrefetchGateway();
+        var entity = new WritableIdSequenceEntity { Id = 42, Name = "Test" };
+
+        var result = await gateway.CreateAsync(entity);
+
+        Assert.True(result);
+        Assert.Equal(42, entity.Id);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithCancellationToken_PrefetchSequence_WritableId_KeepsCallerSuppliedId()
+    {
+        var (gateway, _) = CreateWritableIdPrefetchGateway();
+        var entity = new WritableIdSequenceEntity { Id = 42, Name = "Test" };
+
+        var result = await gateway.CreateAsync(entity, null, CancellationToken.None);
+
+        Assert.True(result);
+        Assert.Equal(42, entity.Id);
     }
 }
