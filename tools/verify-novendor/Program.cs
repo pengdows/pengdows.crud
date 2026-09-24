@@ -1,5 +1,5 @@
 // dotnet add package Mono.Cecil
-// Usage: dotnet run --project tools/verify-novendor -- <dir-with-dlls> [--allow="Pattern1;Pattern2"]
+// Usage: dotnet run --project tools/verify-novendor -- <dir-with-dlls> [--allow="Pattern1;Pattern2" | --allow "Pattern1;Pattern2"]
 
 using System;
 using System.Collections.Generic;
@@ -49,6 +49,28 @@ static class V
         }
     }
 
+    // Accepts both `--allow=a;b` and `--allow a;b` (the form the usage text shows).
+    static string[] ParseAllows(string[] args)
+    {
+        string? value = null;
+        for (var i = 1; i < args.Length; i++)
+        {
+            if (args[i].StartsWith("--allow=", StringComparison.OrdinalIgnoreCase))
+            {
+                value = args[i].Substring("--allow=".Length);
+                break;
+            }
+
+            if (string.Equals(args[i], "--allow", StringComparison.OrdinalIgnoreCase) && i + 1 < args.Length)
+            {
+                value = args[i + 1];
+                break;
+            }
+        }
+
+        return (value ?? string.Empty).Split(';', StringSplitOptions.RemoveEmptyEntries);
+    }
+
     static int RunCore(string[] args, CancellationToken cancellationToken)
     {
         if (args.Length == 0)
@@ -64,8 +86,7 @@ static class V
             Console.Error.WriteLine($"[warn] Empty directory argument; using current directory: {root}");
         }
 
-        var allowArg = args.Skip(1).FirstOrDefault(a => a.StartsWith("--allow=", StringComparison.OrdinalIgnoreCase));
-        var allows = (allowArg?.Substring("--allow=".Length) ?? "").Split(';', StringSplitOptions.RemoveEmptyEntries);
+        var allows = ParseAllows(args);
 
         var forbidden = DefaultForbidden
             .Where(f => !allows.Any(a => f.StartsWith(a, StringComparison.OrdinalIgnoreCase)))

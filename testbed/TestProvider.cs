@@ -975,6 +975,39 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
+            case SupportedDatabase.Db2:
+                {
+                    // Db2 uses ProcWrappingStyle.Call (CALL proc()). The result set comes back through
+                    // a cursor declared WITH RETURN TO CALLER — the same SQL PL body 3.0's
+                    // StoredProcedureTests verified live.
+                    var db2ProcName = _context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE PROCEDURE {db2ProcName}()\n" +
+                        "DYNAMIC RESULT SETS 1\n" +
+                        "LANGUAGE SQL\n" +
+                        "BEGIN\n" +
+                        "  DECLARE c1 CURSOR WITH RETURN TO CALLER FOR SELECT 42 FROM SYSIBM.SYSDUMMY1;\n" +
+                        "  OPEN c1;\n" +
+                        "END");
+                    await sc.ExecuteNonQueryAsync();
+
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var db2Wrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                    sc.Clear();
+                    sc.Query.Append(db2Wrapped);
+                    var db2Result = await sc.ExecuteScalarOrNullAsync<int>();
+                    if (db2Result != 42)
+                    {
+                        throw new Exception($"[Db2 proc] Expected 42 but got {db2Result}");
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {db2ProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
             case SupportedDatabase.SybaseASE:
                 {
                     var sybaseProcName = _context.WrapObjectName("sp_pengdows_test");
@@ -1815,18 +1848,20 @@ INSERT INTO {table} (
             CheckOk("  [InvalidTxType] Chaos isolation level rejected: OK");
         }
 
-        // Database-specific: pick one level that is not supported by this database
-        IsolationLevel? unsupported = _context.Product switch
+        // Database-specific: pick one level this database doesn't support natively. Isolation
+        // fails up, never down: a level with a stronger supported level above it runs at that
+        // stronger level; one with nothing at or above it is rejected.
+        (IsolationLevel Level, bool Rejected)? unsupported = _context.Product switch
         {
             SupportedDatabase.PostgreSql
                 or SupportedDatabase.Firebird
                 or SupportedDatabase.Sqlite
-                or SupportedDatabase.YugabyteDb => IsolationLevel.ReadUncommitted,
-            SupportedDatabase.Oracle => IsolationLevel.RepeatableRead,
+                or SupportedDatabase.YugabyteDb => (IsolationLevel.ReadUncommitted, false),
+            SupportedDatabase.Oracle => (IsolationLevel.RepeatableRead, false),
             SupportedDatabase.CockroachDb
-                or SupportedDatabase.DuckDB => IsolationLevel.ReadCommitted,
-            SupportedDatabase.TiDb => IsolationLevel.Serializable,
-            SupportedDatabase.Snowflake => IsolationLevel.RepeatableRead,
+                or SupportedDatabase.DuckDB => (IsolationLevel.ReadCommitted, false),
+            SupportedDatabase.TiDb => (IsolationLevel.Serializable, true),
+            SupportedDatabase.Snowflake => (IsolationLevel.RepeatableRead, true),
             _ => null
         };
 
@@ -1836,15 +1871,33 @@ INSERT INTO {table} (
             return Task.CompletedTask;
         }
 
-        try
+        var (level, rejected) = unsupported.Value;
+        if (rejected)
         {
-            _context.BeginTransaction(unsupported.Value);
-            throw new Exception(
-                $"[InvalidTxType] {unsupported.Value} isolation on {_context.Product} should have been rejected");
+            try
+            {
+                _context.BeginTransaction(level).Dispose();
+                throw new Exception(
+                    $"[InvalidTxType] {level} isolation on {_context.Product} should have been rejected");
+            }
+            catch (InvalidOperationException)
+            {
+                CheckOk($"  [InvalidTxType] {level} isolation level rejected for {_context.Product}: OK");
+            }
+
+            return Task.CompletedTask;
         }
-        catch (InvalidOperationException)
+
+        using (var tx = _context.BeginTransaction(level))
         {
-            CheckOk($"  [InvalidTxType] {unsupported.Value} isolation level rejected for {_context.Product}: OK");
+            if (tx.IsolationLevel == level || tx.IsolationLevel < level)
+            {
+                throw new Exception(
+                    $"[InvalidTxType] {level} isolation on {_context.Product} ran at {tx.IsolationLevel}; expected a stronger level");
+            }
+
+            tx.Rollback();
+            CheckOk($"  [InvalidTxType] {level} isolation on {_context.Product} failed up to {tx.IsolationLevel}: OK");
         }
 
         return Task.CompletedTask;

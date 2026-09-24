@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using pengdows.crud;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using testbed.Db2;
 using testbed.Access;
 using testbed.Cockroach;
 using testbed.DuckDb;
@@ -61,6 +62,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
+            SupportedDatabase.Db2 => new Db2TestContainer(),
             SupportedDatabase.SybaseASE => new SybaseTestContainer(),
             SupportedDatabase.Informix => new InformixTestContainer(),
             SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
@@ -333,6 +335,13 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "Oracle",
                 Container = new OracleTestContainer(),
                 TestProviderFactory = (db, sp) => new OracleTestProvider(db, sp)
+            },
+            new()
+            {
+                ContainerName = "Db2",
+                DatabaseProvider = "Db2",
+                Container = new Db2TestContainer(),
+                TestProviderFactory = (db, sp) => new Db2TestProvider(db, sp)
             },
             new()
             {

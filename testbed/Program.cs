@@ -7,9 +7,15 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using pengdows.crud;
 using testbed;
+using testbed.Db2;
 using testbed.Informix;
 
 #endregion
+
+// Must run before ANY access to DB2Factory — including the reflection-based discovery in
+// DbProviderFactoryFinder.FindAllFactories() below, which triggers the driver's native
+// initialization merely by reading DB2Factory.Instance.
+Db2NativeLibraryBootstrap.Register();
 
 // Must run before ANY access to InformixClientFactory — including the reflection-based
 // discovery in DbProviderFactoryFinder.FindAllFactories() below, which triggers the driver's
@@ -27,7 +33,7 @@ foreach (var (assembly, type, factory) in DbProviderFactoryFinder.FindAllFactori
 }
 
 var builder = Host.CreateApplicationBuilder(args);
-builder.Services.AddScoped<IAuditValueResolver, StringAuditContextProvider>();
+builder.Services.AddSingleton<IAuditValueResolver, StringAuditContextProvider>();
 
 var host = builder.Build();
 
