@@ -1570,9 +1570,18 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var isTransaction = _context is ITransactionContext;
             if (!isTransaction)
             {
+                // DbMode.SingleConnection: a read through the context while a transaction is open
+                // on the shared connection is rejected rather than waiting for it (the flow that
+                // owns the transaction would wait on itself forever). A write through this path
+                // (e.g. INSERT ...; SELECT) waits its turn like ExecuteNonQueryAsync's writes.
                 singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
                 if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
                 {
+                    if (executionType == ExecutionType.Read && _context is DatabaseContext singleConnectionContext)
+                    {
+                        singleConnectionContext.ThrowIfSingleConnectionTransactionOpen();
+                    }
+
                     await singleConnectionTxGate.LockAsync(cancellationToken).ConfigureAwait(false);
                 }
             }

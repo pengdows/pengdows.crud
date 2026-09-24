@@ -90,7 +90,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 | **Standard** | ✅ Fully concurrent | Each operation gets ephemeral connection from provider pool. No serialization. |
 | **PreventDatabaseUnload** | ✅ Fully concurrent | Identical to Standard. One unused sentinel per materially separate pool prevents DB unload; sentinels never perform operations. |
 | **SingleWriter** | ⚠️ Writes serialize | Identical to Standard. Governor: writable connections capped at 1 concurrent writer; read-only connections allow 0 writers. Writer-starvation-prevention turnstile on. |
-| **SingleConnection** | ⚠️ All operations serialize | All operations share one persistent connection. Serialized at connection lock. |
+| **SingleConnection** | ⚠️ All operations serialize | All operations share one persistent connection. Serialized at connection lock; while a transaction is open, plain reads through the context are rejected and plain writes wait (see `docs/transactions.md`). |
 | **Transaction** | ⚠️ All operations serialize | TransactionContext always uses SingleConnection mode. Serialized at transaction user lock. |
 
 **Key Insight**: Serialization happens at the **connection lock** (or transaction lock), not the context lock. See [Locking Strategy](#locking-strategy-two-level-locking).

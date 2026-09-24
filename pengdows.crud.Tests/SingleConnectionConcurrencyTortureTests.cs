@@ -69,6 +69,9 @@ public class SingleConnectionConcurrencyTortureTests
         await mainTask;
     }
 
+    private static bool IsReadDuringTransactionRejection(InvalidOperationException ex) =>
+        ex.Message.StartsWith("Cannot read through the context while a transaction is open", StringComparison.Ordinal);
+
     private static async Task RunTortureTestAsync()
     {
         var typeMap = new TypeMapRegistry();
@@ -95,6 +98,7 @@ public class SingleConnectionConcurrencyTortureTests
             var writerFailures = new ConcurrentBag<Exception>();
             var txFailures = new ConcurrentBag<Exception>();
             long readsCompleted = 0;
+            long readsRejected = 0;
             long writesCompleted = 0;
             long txCommitted = 0;
 
@@ -113,6 +117,12 @@ public class SingleConnectionConcurrencyTortureTests
                             }
 
                             Interlocked.Increment(ref readsCompleted);
+                        }
+                        catch (InvalidOperationException ex) when (IsReadDuringTransactionRejection(ex))
+                        {
+                            // Expected contract: a read through the plain context while another
+                            // task's transaction is open on the one shared connection is rejected.
+                            Interlocked.Increment(ref readsRejected);
                         }
                         catch (Exception ex) when (!stop.IsCancellationRequested)
                         {

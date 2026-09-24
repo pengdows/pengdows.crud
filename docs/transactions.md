@@ -151,6 +151,14 @@ A `CancellationToken` passed to `CommitAsync`/`RollbackAsync` that is already ca
 
 Under `DbMode.SingleConnection` — where one physical connection is shared by the entire `DatabaseContext`, transactional and non-transactional work alike — beginning a transaction acquires a dedicated gate (bounded by `ModeLockTimeout`) for the transaction's **entire lifetime**, not just around individual commands. This is a separate lock from the one described above: it serializes the transaction against *other, non-transactional* callers of the same shared connection (an ordinary write issued while a transaction is open elsewhere correctly queues behind it, rather than being silently absorbed into or corrupting the open transaction), while the reader/reusable lock above serializes operations *within* the transaction itself. This gate is a no-op under every other `DbMode` — `Standard`, `SingleWriter`, and `PreventDatabaseUnload` transactions each get an ordinary pooled connection that isn't shared with concurrent non-transactional work in the first place, so there's nothing for this second gate to arbitrate.
 
+A **read** through the context (not the transaction) while such a transaction is open is rejected
+with `InvalidOperationException` rather than queued: on that one connection it would otherwise run
+outside the transaction or be silently enlisted in it (Microsoft.Data.Sqlite enlists a command
+created while a transaction is open), and a read from the code that owns the transaction would wait
+on itself forever. Read through the transaction instead. A write through the context — including one
+issued through the reader path, such as a compound `INSERT ...; SELECT` — still queues behind the
+transaction. An open plain reader holds the gate until it is disposed, so a transaction waits for it.
+
 ### Known, accepted limitation (not closed)
 
 A narrow TOCTOU remains between a command's internal "is this transaction already completed" check and the moment it actually acquires the lock — closing it fully would require a single atomic gate distinguishing "begin an ordinary operation" from "begin completion," a larger redesign than the current per-operation locking. Every realistic, materialized interleaving described above (command vs. commit, reader vs. commit, command vs. rollback, reader vs. dispose, savepoint vs. command) is covered; this residual gap is a race between two checks that would need to land in an implausibly narrow window to matter in practice, and is documented here as a deliberate, accepted limitation rather than an oversight.

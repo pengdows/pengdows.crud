@@ -69,13 +69,14 @@ public class InfrastructureTimeoutExceptionIdentityTests
         // Hold the SingleConnection transaction gate open with an active transaction.
         using var txn = context.BeginTransaction();
 
-        // An ordinary (non-transactional) operation on the same context must wait for the gate
-        // and, once ModeLockTimeout elapses, fail with ModeContentionException — not a translated
-        // CommandTimeoutException.
+        // An ordinary (non-transactional) write on the same context must wait for the gate and,
+        // once ModeLockTimeout elapses, fail with ModeContentionException — not a translated
+        // CommandTimeoutException. (An ordinary read is rejected outright instead; see
+        // SingleConnectionReadDuringTransactionTests.)
         using var sc = context.CreateSqlContainer("SELECT 1");
 
         var ex = await Assert.ThrowsAsync<ModeContentionException>(
-            () => sc.ExecuteScalarOrNullAsync<int>(CommandType.Text).AsTask());
+            () => sc.ExecuteScalarOrNullAsync<int>(ExecutionType.Write, CommandType.Text).AsTask());
 
         Assert.NotNull(ex);
     }
