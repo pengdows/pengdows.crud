@@ -5751,8 +5751,9 @@ public int LegacyFlag { get; set; }
 
 Required on every property that should be persisted — **properties without `[Column]` are
 silently ignored** by every gateway, not an error. `name` cannot be empty. `type` is the
-`System.Data.DbType` used for parameter creation and drives enum storage format (`DbType.String`
-→ enum stored as its name; a numeric `DbType` → stored as its underlying numeric value; anything
+`System.Data.DbType` used for parameter creation and drives enum storage format (any string
+`DbType` — `String`, `AnsiString`, `StringFixedLength`, `AnsiStringFixedLength` — → enum stored as
+its name; a numeric `DbType` → stored as its underlying numeric value; anything
 else on an enum-typed column throws `SqlGenerationException`). `ordinal` (default `0`) controls
 column/parameter ordering — see "Ordinal ordering" below.
 

@@ -96,8 +96,10 @@ public partial class DatabaseContext
     public long TotalConnectionsCreated => Interlocked.Read(ref _totalConnectionsCreated);
 
     /// <summary>
-    /// Gets the total number of connections that were reused from the connection pool.
+    /// Not tracked: always returns 0. Provider connection-pool reuse happens inside ADO.NET and is
+    /// not visible to pengdows.crud, so this counter is never incremented. Removed in 3.0.
     /// </summary>
+    [Obsolete("Not tracked: always returns 0 because provider connection-pool reuse is not visible to pengdows.crud. This property will be removed in 3.0.")]
     public long TotalConnectionsReused => Interlocked.Read(ref _totalConnectionsReused);
 
     /// <summary>
@@ -119,7 +121,7 @@ public partial class DatabaseContext
         get
         {
             var total = TotalConnectionsCreated;
-            return total == 0 ? 0.0 : (double)TotalConnectionsReused / total;
+            return total == 0 ? 0.0 : (double)Interlocked.Read(ref _totalConnectionsReused) / total;
         }
     }
 

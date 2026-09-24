@@ -329,7 +329,9 @@ internal class ColumnInfo : IColumnInfo
         {
             if (EnumType != null)
             {
-                if (DbType == DbType.String)
+                // Any string column type stores the enum's name, never its numeric value.
+                if (EnumAsString || DbType is DbType.String or DbType.AnsiString
+                        or DbType.StringFixedLength or DbType.AnsiStringFixedLength)
                 {
                     // Use pre-compiled delegate if set by TypeMapRegistry (eliminates MakeGenericType
                     // + GetMethod + Invoke per call); fall back to reflection for ad-hoc ColumnInfo.
