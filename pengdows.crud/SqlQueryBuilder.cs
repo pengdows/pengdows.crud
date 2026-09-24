@@ -110,9 +110,9 @@ internal sealed class SqlQueryBuilder : ISqlQueryBuilder
     public ISqlQueryBuilder Append(int value)
     {
         Span<char> scratch = stackalloc char[11];
-        if (!value.TryFormat(scratch, out var written, provider: CultureInfo.CurrentCulture))
+        if (!value.TryFormat(scratch, out var written, provider: CultureInfo.InvariantCulture))
         {
-            return Append(value.ToString(CultureInfo.CurrentCulture));
+            return Append(value.ToString(CultureInfo.InvariantCulture));
         }
 
         return Append(scratch[..written]);
@@ -121,9 +121,9 @@ internal sealed class SqlQueryBuilder : ISqlQueryBuilder
     public ISqlQueryBuilder Append(long value)
     {
         Span<char> scratch = stackalloc char[20];
-        if (!value.TryFormat(scratch, out var written, provider: CultureInfo.CurrentCulture))
+        if (!value.TryFormat(scratch, out var written, provider: CultureInfo.InvariantCulture))
         {
-            return Append(value.ToString(CultureInfo.CurrentCulture));
+            return Append(value.ToString(CultureInfo.InvariantCulture));
         }
 
         return Append(scratch[..written]);
@@ -131,17 +131,20 @@ internal sealed class SqlQueryBuilder : ISqlQueryBuilder
 
     public ISqlQueryBuilder Append(double value)
     {
-        return Append(value.ToString(CultureInfo.CurrentCulture));
+        return Append(value.ToString(CultureInfo.InvariantCulture));
     }
 
     public ISqlQueryBuilder Append(decimal value)
     {
-        return Append(value.ToString(CultureInfo.CurrentCulture));
+        return Append(value.ToString(CultureInfo.InvariantCulture));
     }
 
     public ISqlQueryBuilder Append(object? value)
     {
-        return Append(value?.ToString());
+        // Numbers and dates go into SQL text, so format them culture-invariantly.
+        return Append(value is IFormattable formattable
+            ? formattable.ToString(null, CultureInfo.InvariantCulture)
+            : value?.ToString());
     }
 
     public ISqlQueryBuilder AppendLine()
@@ -162,7 +165,7 @@ internal sealed class SqlQueryBuilder : ISqlQueryBuilder
             throw new ArgumentNullException(nameof(format));
         }
 
-        return Append(string.Format(CultureInfo.CurrentCulture, format, args));
+        return Append(string.Format(CultureInfo.InvariantCulture, format, args));
     }
 
     public ISqlQueryBuilder AppendFormat(IFormatProvider? provider, string format, params object?[] args)
@@ -172,7 +175,7 @@ internal sealed class SqlQueryBuilder : ISqlQueryBuilder
             throw new ArgumentNullException(nameof(format));
         }
 
-        return Append(string.Format(provider ?? CultureInfo.CurrentCulture, format, args));
+        return Append(string.Format(provider ?? CultureInfo.InvariantCulture, format, args));
     }
 
     public ISqlQueryBuilder Replace(string oldValue, string? newValue)

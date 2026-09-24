@@ -37,30 +37,30 @@ These are the rules the code is being brought in line with.
 
 ## Fix — no caller-visible break
 
-- [ ] **B01 — SQL numbers use the current culture.** `SqlQueryBuilder.cs:110-175`:
+- [x] **B01 — SQL numbers use the current culture.** *(fixed; also `Append(object)` and `AppendFormat(null, …)`)* `SqlQueryBuilder.cs:110-175`:
   `Append(int/long/double/decimal)` and `AppendFormat(string, …)` format with
   `CultureInfo.CurrentCulture`, so on `de-DE` `Append(1.5m)` writes `1,5` (invalid SQL); some ICU
   cultures emit U+2212 for negatives. The library's own paging goes through `Append(int)`.
   **Fix:** `CultureInfo.InvariantCulture`; update the `ISqlQueryBuilder` XML docs, which currently
   state "current culture". **3.0:** same bug.
-- [ ] **B02 — Aurora PostgreSQL and Spanner lose generated keys.** `dialects/SqlDialect.cs:2895-2911`
+- [x] **B02 — Aurora PostgreSQL and Spanner lose generated keys.** *(fixed; live Spanner check pending)* `dialects/SqlDialect.cs:2895-2911`
   `RenderInsertReturningClause` has no arm for `AuroraPostgreSql`/`Spanner`, but both inherit
   `SupportsInsertReturning = true`, so the INSERT goes out without `RETURNING` and the gateway falls
   back to `SELECT lastval()` on a different pooled connection (error, or a stale id). **Fix:** port
   3.0's `PostgreSqlDialect.RenderInsertReturningClause` override. **3.0:** fixed (`d85450d`).
   Verify Spanner `RETURNING` against the live testbed.
-- [ ] **B03 — SingleConnection gate leaked when a sync read-only begin fails.**
+- [x] **B03 — SingleConnection gate leaked when a sync read-only begin fails.** *(fixed)*
   `TransactionContext.cs:186-196`: if `TryEnterReadOnlyTransaction` throws, the catch rolls back and
   closes the connection but never releases `_singleConnectionTransactionGate` (or completes metrics /
   disposes locks). In `DbMode.SingleConnection` every later transaction or write then waits until
   `ModeLockTimeout`, or forever when it is null. The async path is correct. **Fix:** catch body →
   `Dispose(); throw;`. **3.0:** fixed (`dd4b470`).
-- [ ] **B04 — `PostgreSqlInterval.FromTimeSpan` counts days twice.**
+- [x] **B04 — `PostgreSqlInterval.FromTimeSpan` counts days twice.** *(fixed)*
   `types/valueobjects/PostgreSqlInterval.cs:72-77` uses the full `Ticks` *and* `TotalDays`, so a
   3-day interval round-trips as 6 days. Hot read path (Npgsql returns `TimeSpan`,
   `AdvancedCoercions.cs:98`). `ValueObjectCoverageTests.cs:26` asserts the wrong value. **Fix:**
   `value.Ticks % TimeSpan.TicksPerDay`. **3.0:** fixed (`81eef2b`).
-- [ ] **B05 — Interval parse drops years.** `types/converters/PostgreSqlIntervalConverter.cs:224-246`:
+- [x] **B05 — Interval parse drops years.** *(fixed; also weeks)* `types/converters/PostgreSqlIntervalConverter.cs:224-246`:
   the ISO-8601 parser ignores `Y` (and `W`), so `P1Y2M` → 2 months. `AdvancedTypeConverterTests.cs:294`
   locks in the bug. **Fix:** `Y` adds 12 months, `W` adds 7 days, `M` accumulates. **3.0:** same bug.
 - [ ] **B06 — PostgreSQL interval writes are rejected.**
@@ -176,6 +176,7 @@ These are the rules the code is being brought in line with.
 
 ## To investigate
 
+- **Intermittent failure:** `SingleConnectionConcurrencyTortureTests.MixedReadWriteTransactionLoad_SerializesCorrectly_RealSqliteSingleConnection` failed once on net8.0 while net8.0 and net10.0 ran in parallel; it passed 3/3 alone and in two further full runs. The failure message wasn't captured — capture it the next time it fails.
 - **Oracle `RETURNING … INTO`:** the gateway's SQL says `:1` but the output parameter is named `o0`;
   it only works through positional binding. Same on 3.0. Check against live Oracle.
 - **SQLite `[Version]` upserts get no concurrency check:** `SqliteDialect` doesn't set

@@ -291,9 +291,23 @@ public class AdvancedTypeConverterTests
         var success = converter.TryConvertFromProvider(iso, SupportedDatabase.PostgreSql, out var result);
 
         Assert.True(success);
-        Assert.Equal(2, result.Months);
+        Assert.Equal(14, result.Months); // 1 year + 2 months
         Assert.Equal(3, result.Days);
         Assert.True(result.Microseconds > 0);
+    }
+
+    [Theory]
+    [InlineData("P2Y", 24, 0)]
+    [InlineData("P1Y6M", 18, 0)]
+    [InlineData("P2W", 0, 14)]
+    [InlineData("P1W3D", 0, 10)]
+    public void PostgreSqlIntervalConverter_ParsesYearsAndWeeks(string iso, int months, int days)
+    {
+        var converter = new PostgreSqlIntervalConverter();
+
+        Assert.True(converter.TryConvertFromProvider(iso, SupportedDatabase.PostgreSql, out var result));
+        Assert.Equal(months, result.Months);
+        Assert.Equal(days, result.Days);
     }
 
     [Fact]

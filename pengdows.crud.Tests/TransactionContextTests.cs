@@ -210,6 +210,34 @@ public class TransactionContextTests
     }
 
     [Fact]
+    public void Create_ReadOnlyEnterFailure_CleansUpConnection()
+    {
+        var dialect = new ThrowingReadOnlySql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown),
+            NullLogger<SqlDialect>.Instance);
+        var context = CreateTestContext(isReadOnlyContext: true, dialectOverride: dialect);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            TransactionContext.Create(context, IsolationLevel.Serializable, ExecutionType.Read));
+
+        Assert.True(context.ConnectionReleased);
+    }
+
+    [Fact]
+    public void Create_ReadOnlyEnterFailure_DoesNotDisposeParentContext()
+    {
+        // Sync mirror of CreateAsync_ReadOnlyEnterFailure_DoesNotDisposeParentContext.
+        var dialect = new ThrowingReadOnlySql92Dialect(new fakeDbFactory(SupportedDatabase.Unknown),
+            NullLogger<SqlDialect>.Instance);
+        var context = CreateTestContext(isReadOnlyContext: true, dialectOverride: dialect);
+
+        Assert.Throws<InvalidOperationException>(() =>
+            TransactionContext.Create(context, IsolationLevel.Serializable, ExecutionType.Read));
+
+        Assert.True(context.ConnectionReleased);
+        Assert.False(context.IsDisposed);
+    }
+
+    [Fact]
     public void Commit_AfterDispose_Throws()
     {
         var tx = CreateContext(SupportedDatabase.Sqlite).BeginTransaction();
@@ -532,6 +560,11 @@ public class TransactionContextTests
 
         public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
             CancellationToken cancellationToken = default)
+        {
+            throw new InvalidOperationException("Simulated read-only session configuration failure.");
+        }
+
+        public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
         {
             throw new InvalidOperationException("Simulated read-only session configuration failure.");
         }

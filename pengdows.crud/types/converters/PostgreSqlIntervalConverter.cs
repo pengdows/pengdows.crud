@@ -11,8 +11,8 @@
 // - ConvertToProvider(): Returns ISO 8601-style text (months as M, e.g. P42M4DT12H30M5S) for
 //   PostgreSQL/CockroachDB.
 // - TryConvertFromProvider(): Handles PostgreSqlInterval, TimeSpan, string, NpgsqlTimeSpan.
-// - Parse(): Handles ISO 8601-style durations (M/D date part, H/M/S time part); a Y component is
-//   ignored and PostgreSQL's verbose text format ("1 year 2 mons") is not supported.
+// - Parse(): Handles ISO 8601-style durations (Y/M/W/D date part — years fold into months, weeks
+//   into days — and H/M/S time part); PostgreSQL's verbose text format ("1 year 2 mons") is not supported.
 // - Components: Months (includes years), Days, Microseconds (sub-day time).
 // - Thread-safe and immutable value objects.
 // =============================================================================
@@ -40,11 +40,11 @@ namespace pengdows.crud.types.converters;
 /// <list type="bullet">
 /// <item><description>PostgreSqlInterval → PostgreSqlInterval (pass-through)</description></item>
 /// <item><description>TimeSpan → PostgreSqlInterval (converts via PostgreSqlInterval.FromTimeSpan)</description></item>
-/// <item><description>string → PostgreSqlInterval (parses ISO 8601-style durations with M/D and H/M/S components)</description></item>
+/// <item><description>string → PostgreSqlInterval (parses ISO 8601-style durations with Y/M/W/D and H/M/S components)</description></item>
 /// <item><description>NpgsqlTimeSpan → PostgreSqlInterval (converts Npgsql provider-specific type via reflection)</description></item>
 /// </list>
-/// <para><strong>Format:</strong> Reads ISO 8601-style durations such as "P42M4DT12H30M5S" (a Y component is
-/// ignored; PostgreSQL's verbose text format is not parsed). Output is the same ISO 8601-style text
+/// <para><strong>Format:</strong> Reads ISO 8601-style durations such as "P3Y6M4DT12H30M5S" (years fold into
+/// months, weeks into days; PostgreSQL's verbose text format is not parsed). Output is the same ISO 8601-style text
 /// (months emitted as M) for PostgreSQL/CockroachDB providers.</para>
 /// <para><strong>Components:</strong> PostgreSqlInterval has three fields: Months (includes years), Days, and Microseconds (sub-day time).
 /// This matches PostgreSQL's internal representation.</para>
@@ -232,13 +232,24 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
                     continue;
                 }
 
-                if (c == 'M' && number.Length > 0)
+                if (number.Length > 0)
                 {
-                    months = int.Parse(number, CultureInfo.InvariantCulture);
-                }
-                else if (c == 'D' && number.Length > 0)
-                {
-                    days = int.Parse(number, CultureInfo.InvariantCulture);
+                    var n = int.Parse(number, CultureInfo.InvariantCulture);
+                    switch (c)
+                    {
+                        case 'Y':
+                            months += n * 12;
+                            break;
+                        case 'M':
+                            months += n;
+                            break;
+                        case 'W':
+                            days += n * 7;
+                            break;
+                        case 'D':
+                            days += n;
+                            break;
+                    }
                 }
 
                 number = string.Empty;

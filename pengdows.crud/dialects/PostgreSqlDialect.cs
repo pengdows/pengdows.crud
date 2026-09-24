@@ -217,6 +217,12 @@ internal class PostgreSqlDialect : SqlDialect
     public override bool MergeUpdateRequiresTargetAlias => false;
     public override bool SupportsInsertReturning => true;
 
+    // Inherited by AuroraPostgreSql (this class with a flavor), Spanner, CockroachDb and
+    // YugabyteDb — all support RETURNING with the same syntax. The base switch keys on
+    // DatabaseType and has no AuroraPostgreSql/Spanner arm, which dropped RETURNING for them.
+    public override string RenderInsertReturningClause(string idColumnWrapped) =>
+        $" RETURNING {idColumnWrapped}";
+
     public override string GetLastInsertedIdQuery()
     {
         // Fallback method - prefer RETURNING clause

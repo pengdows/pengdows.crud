@@ -29,19 +29,19 @@ public interface ISqlQueryBuilder : IDisposable
     /// <summary>Appends another query builder's content.</summary>
     ISqlQueryBuilder Append(ISqlQueryBuilder other);
 
-    /// <summary>Appends an integer formatted with the current culture.</summary>
+    /// <summary>Appends an integer formatted with the invariant culture (SQL text never depends on the thread culture).</summary>
     ISqlQueryBuilder Append(int value);
 
-    /// <summary>Appends a long formatted with the current culture.</summary>
+    /// <summary>Appends a long formatted with the invariant culture (SQL text never depends on the thread culture).</summary>
     ISqlQueryBuilder Append(long value);
 
-    /// <summary>Appends a double formatted with the current culture.</summary>
+    /// <summary>Appends a double formatted with the invariant culture (SQL text never depends on the thread culture).</summary>
     ISqlQueryBuilder Append(double value);
 
-    /// <summary>Appends a decimal formatted with the current culture.</summary>
+    /// <summary>Appends a decimal formatted with the invariant culture (SQL text never depends on the thread culture).</summary>
     ISqlQueryBuilder Append(decimal value);
 
-    /// <summary>Appends an object's string representation.</summary>
+    /// <summary>Appends an object's string representation; <see cref="IFormattable"/> values use the invariant culture.</summary>
     ISqlQueryBuilder Append(object? value);
 
     /// <summary>Appends a newline character.</summary>
@@ -50,10 +50,10 @@ public interface ISqlQueryBuilder : IDisposable
     /// <summary>Appends a string followed by a newline character.</summary>
     ISqlQueryBuilder AppendLine(string? value);
 
-    /// <summary>Appends a formatted string using the current culture.</summary>
+    /// <summary>Appends a formatted string using the invariant culture.</summary>
     ISqlQueryBuilder AppendFormat(string format, params object?[] args);
 
-    /// <summary>Appends a formatted string using the specified format provider.</summary>
+    /// <summary>Appends a formatted string using the specified format provider, or the invariant culture when it is null.</summary>
     ISqlQueryBuilder AppendFormat(IFormatProvider? provider, string format, params object?[] args);
 
     /// <summary>Replaces all occurrences of a string within the builder.</summary>

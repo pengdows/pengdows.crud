@@ -71,8 +71,9 @@ public readonly struct PostgreSqlInterval : IEquatable<PostgreSqlInterval>
 
     public static PostgreSqlInterval FromTimeSpan(TimeSpan value)
     {
-        var ticks = value.Ticks;
-        var microseconds = ticks / 10;
-        return new PostgreSqlInterval(0, (int)value.TotalDays, microseconds);
+        // Whole days go in Days and only the sub-day remainder in Microseconds, so ToTimeSpan()
+        // (Days + TimeComponent) round-trips. Both truncate toward zero, so negatives split consistently.
+        var microseconds = value.Ticks % TimeSpan.TicksPerDay / 10;
+        return new PostgreSqlInterval(0, value.Days, microseconds);
     }
 }
