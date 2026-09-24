@@ -10,13 +10,17 @@
 //   2. [Id] column if writable ([Id(true)] or [Id])
 //   3. Error if neither available
 // - Database-specific syntax:
-//   * SQL Server/Oracle/Snowflake: MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
-//   * PostgreSQL/CockroachDB: INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver]
+//   * SQL Server/Snowflake/Db2/PostgreSQL 15+: MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
+//     (Oracle: WHEN MATCHED THEN UPDATE ... [WHERE t.ver = s.ver])
+//   * CockroachDB/YugabyteDB/SQLite/DuckDB (and PostgreSQL < 15): INSERT ... ON CONFLICT DO UPDATE
+//     [WHERE table.ver = EXCLUDED.ver]
 //   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE (no version guard possible in this syntax)
 //   * Firebird: UPDATE OR INSERT ... MATCHING (...)
 // - Optimistic concurrency:
-//   * MERGE dialects: WHEN MATCHED AND t.ver = s.ver guard; 0 rows = version mismatch → ConcurrencyConflictException
-//   * ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB): DO UPDATE WHERE predicate; 0 rows = DO NOTHING → exception
+//   * MERGE dialects: WHEN MATCHED AND t.ver = s.ver guard (Oracle: UPDATE ... WHERE);
+//     0 rows = version mismatch → ConcurrencyConflictException
+//   * ON CONFLICT WHERE dialects (PostgreSQL family, SQLite, DuckDB): DO UPDATE WHERE predicate;
+//     0 rows = DO NOTHING → exception
 //   * ON DUPLICATE KEY (MySQL/MariaDB) and Firebird: cannot detect conflicts — no exception thrown
 // - Handles audit columns and version columns appropriately.
 // - Throws NotSupportedException for fallback/unknown dialects.
@@ -62,9 +66,9 @@ public partial class TableGateway<TEntity, TRowID>
         var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
         // Optimistic concurrency: throw only when the dialect enforced a version predicate in the SQL.
-        // MERGE dialects (SQL Server/Oracle/Snowflake) use WHEN MATCHED AND t.ver=s.ver → 0 rows on mismatch.
-        // ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB) use DO UPDATE WHERE → DO NOTHING on mismatch.
-        // Firebird UPDATE OR INSERT, MySQL ON DUPLICATE KEY, and non-WHERE ON CONFLICT (SQLite/DuckDB)
+        // MERGE dialects (SQL Server/Oracle/Snowflake) skip the matched update on a version mismatch
+        // → 0 rows. ON CONFLICT WHERE dialects (PostgreSQL family, SQLite, DuckDB) use DO UPDATE
+        // WHERE → DO NOTHING on mismatch. Firebird UPDATE OR INSERT and MySQL ON DUPLICATE KEY
         // cannot detect version conflicts — do NOT throw for those dialects.
         if (rowsAffected == 0)
         {
@@ -369,10 +373,20 @@ public partial class TableGateway<TEntity, TRowID>
         // → INSERT fails with PK violation (row already exists). Correct: WHEN MATCHED AND t.ver=s.ver
         // leaves the row untouched → 0 rows → detectable conflict via ConcurrencyConflictException.
         var whenMatchedClause = " WHEN MATCHED THEN UPDATE SET ";
+        // Oracle has no "WHEN MATCHED AND" form; there the check is a WHERE on the UPDATE branch,
+        // which likewise leaves a stale row untouched.
+        string? matchedUpdateWhere = null;
         if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn)
         {
             var v = dialect.WrapSimpleName(_versionColumn.Name);
-            whenMatchedClause = $" WHEN MATCHED AND t.{v} = s.{v} THEN UPDATE SET ";
+            if (dialect.MergeMatchedConditionAsUpdateWhere())
+            {
+                matchedUpdateWhere = $" WHERE t.{v} = s.{v}";
+            }
+            else
+            {
+                whenMatchedClause = $" WHEN MATCHED AND t.{v} = s.{v} THEN UPDATE SET ";
+            }
         }
 
         // WHEN NOT MATCHED INSERT must use only columns projected into the USING source alias s.
@@ -426,8 +440,13 @@ public partial class TableGateway<TEntity, TRowID>
                 .Append(" ON ")
                 .Append(onClause)
                 .Append(whenMatchedClause)
-                .Append(template.UpsertUpdateFragment)
-                .Append(" WHEN NOT MATCHED THEN INSERT (")
+                .Append(template.UpsertUpdateFragment);
+            if (matchedUpdateWhere != null)
+            {
+                sc.Query.Append(matchedUpdateWhere);
+            }
+
+            sc.Query.Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
                 .Append(")");
 

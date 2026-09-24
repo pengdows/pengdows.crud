@@ -363,6 +363,9 @@ internal class OracleDialect : SqlDialect
 
     public override bool SupportsMerge => true;
 
+    // Oracle MERGE: "WHEN MATCHED THEN UPDATE SET ... WHERE cond"; there is no "WHEN MATCHED AND".
+    public override bool MergeMatchedConditionAsUpdateWhere => true;
+
     // ODP.NET executes a single MERGE as one bare SQL statement, not inside a PL/SQL block — a
     // trailing semicolon there is rejected as an invalid character (ORA-00911).
     public override bool RequiresMergeStatementTerminator => false;

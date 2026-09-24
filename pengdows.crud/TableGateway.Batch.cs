@@ -550,9 +550,8 @@ public partial class TableGateway<TEntity, TRowID>
         // version-guard predicate (EmitsAnsiMergeSyntax is false there) — a 0-affected row from
         // Firebird can't reliably mean "version mismatch" any more than it can for MySQL/MariaDB.
         //  - Per-entity MERGE fallback (SQL Server/Oracle): guard always present.
-        //  - Chunked ON CONFLICT (PostgreSQL/CockroachDB): guard only present when the dialect
-        //    supports a WHERE predicate on DO UPDATE; without it (SQLite/DuckDB) every row always
-        //    succeeds unconditionally, so this never spuriously fires for them either way.
+        //  - Chunked ON CONFLICT (PostgreSQL family, SQLite, DuckDB): guard present because the
+        //    dialect supports a WHERE predicate on DO UPDATE (SupportsOnConflictWhere).
         //  - Chunked ON DUPLICATE KEY (MySQL/MariaDB) and Firebird's UPDATE OR INSERT: correctly
         //    EXCLUDED by this same expression, since neither sets SupportsOnConflictWhere nor
         //    (SupportsMerge && EmitsAnsiMergeSyntax) — a 0-affected row there is an ordinary no-op

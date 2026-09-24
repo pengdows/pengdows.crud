@@ -567,11 +567,13 @@ public sealed class PoolGovernorTurnstileTests
         // Writer holds the turnstile for the whole test — simulates a stalled writer.
         using var writer = new PoolGovernor(PoolLabel.Writer, "qd-w", 1,
             TimeSpan.FromSeconds(30), turnstile: turnstile, holdTurnstile: true);
-        using var wp = writer.Acquire();
+        var wp = writer.Acquire();
 
         // maxQueueDepth: 1 — only one reader may queue on the turnstile at a time.
-        // Acquire timeout is non-zero (250ms) so a fast-fail is unambiguously distinguishable
-        // from "waited out the timeout". trackMetrics: true so GetSnapshot().TurnstileQueued
+        // Acquire timeout is long (30s) so a fast-fail is unambiguously distinguishable from
+        // "waited out the timeout", and so the occupier below is still queued however late the
+        // polling loop gets to run: with a short timeout the occupier could time out and leave the
+        // queue before a starved polling loop ever observed it ("Occupier never registered"). trackMetrics: true so GetSnapshot().TurnstileQueued
         // can be polled below instead of guessing with a fixed sleep — under heavy parallel
         // test-suite load a fixed sleep is not long enough to reliably guarantee the
         // background occupier has actually registered on the turnstile queue yet, which
@@ -579,12 +581,11 @@ public sealed class PoolGovernorTurnstileTests
         // scheduled yet, so the "second" caller was actually the first, and no fast-fail
         // was expected to trigger at all).
         using var reader = new PoolGovernor(PoolLabel.Reader, "qd-r", 1,
-            TimeSpan.FromMilliseconds(250), trackMetrics: true, turnstile: turnstile, holdTurnstile: false,
+            TimeSpan.FromSeconds(30), trackMetrics: true, turnstile: turnstile, holdTurnstile: false,
             maxQueueDepth: 1);
 
-        // Occupy the one allowed queue slot with a background waiter that will not
-        // return until the test disposes the writer's slot (it never will here —
-        // it just blocks for the full 250ms timeout in the background).
+        // Occupy the one allowed queue slot with a background waiter that stays queued until the
+        // writer's slot is released at the end of the test.
         //
         // Runs on a dedicated OS thread rather than Task.Run/the ThreadPool: under heavy parallel
         // load (e.g. the whole solution's test suite running alongside a live Docker database
@@ -598,8 +599,10 @@ public sealed class PoolGovernorTurnstileTests
         var occupierDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var occupierThread = new Thread(() =>
         {
-            try { reader.Acquire(); }
-            catch (PoolSaturatedException) { /* expected eventually */ }
+            try
+            {
+                using var permit = reader.Acquire();
+            }
             finally { occupierDone.SetResult(); }
         })
         {
@@ -633,10 +636,8 @@ public sealed class PoolGovernorTurnstileTests
             $"Expected an immediate PoolSaturatedException from queue-depth admission control, " +
             $"but the call took {sw.ElapsedMilliseconds}ms — it waited out (part of) the timeout instead.");
 
-        // Not a correctness assertion — every assertion that matters already ran above. This is
-        // just winding down the occupier thread before the test method returns. Its own configured
-        // acquire timeout is 250ms, but under severe scheduler contention the worker can still
-        // take longer than that to run its cleanup continuation, so this keeps real headroom.
+        // Releasing the writer's slot lets the occupier through the turnstile; then wind it down.
+        wp.Dispose();
         await occupierDone.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 

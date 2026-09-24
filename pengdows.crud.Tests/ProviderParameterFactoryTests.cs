@@ -12,9 +12,27 @@ namespace pengdows.crud.Tests;
 
 public class ProviderParameterFactoryTests
 {
+    // Stand-in for Npgsql's NpgsqlDbType: real member names, deliberately different numbers, so a
+    // test only passes when ProviderParameterFactory sets members by name.
+    [Flags]
+    private enum StubNpgsqlDbType
+    {
+        None = 0,
+        Text = 1,
+        Integer = 2,
+        Uuid = 4,
+        Jsonb = 8,
+        Hstore = 16,
+        IntegerRange = 32,
+        TimestampRange = 64,
+        BigIntRange = 128,
+        NumericRange = 256,
+        Array = 1 << 20
+    }
+
     private sealed class NpgsqlParameterStub : fakeDbParameter
     {
-        public int NpgsqlDbType { get; set; }
+        public StubNpgsqlDbType NpgsqlDbType { get; set; }
     }
 
     private sealed class OracleParameterStub : fakeDbParameter
@@ -126,7 +144,7 @@ public class ProviderParameterFactoryTests
         Assert.True(configured);
         Assert.Equal(value, parameter.Value);
         Assert.Equal(DbType.Guid, parameter.DbType);
-        Assert.Equal(27, parameter.NpgsqlDbType); // UUID
+        Assert.Equal(StubNpgsqlDbType.Uuid, parameter.NpgsqlDbType); // UUID
     }
 
     [Fact]
@@ -140,7 +158,7 @@ public class ProviderParameterFactoryTests
             SupportedDatabase.PostgreSql, registry);
 
         Assert.True(configured);
-        Assert.Equal((1 << 30) | 16, parameter.NpgsqlDbType); // Array | Text
+        Assert.Equal(StubNpgsqlDbType.Array | StubNpgsqlDbType.Text, parameter.NpgsqlDbType); // Array | Text
     }
 
     [Fact]
@@ -202,7 +220,7 @@ public class ProviderParameterFactoryTests
 
         Assert.True(configured);
         Assert.Same(value, parameter.Value);
-        Assert.Equal((1 << 30) | 1, parameter.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.Array | StubNpgsqlDbType.Integer, parameter.NpgsqlDbType);
     }
 
     [Fact]
@@ -219,7 +237,7 @@ public class ProviderParameterFactoryTests
 
         Assert.True(configured);
         Assert.Equal(DbType.String, parameter.DbType);
-        Assert.Equal(14, parameter.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.Jsonb, parameter.NpgsqlDbType);
     }
 
     [Fact]

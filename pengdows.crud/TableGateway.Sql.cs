@@ -342,10 +342,18 @@ public partial class TableGateway<TEntity, TRowID>
 
                         if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn)
                         {
+                            var wrappedVersion = dialect.WrapSimpleName(_versionColumn.Name);
                             frag.Append(", ");
-                            frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                            frag.Append(wrappedVersion);
                             frag.Append(" = ");
-                            frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                            if (dialect.SupportsInsertOnConflict)
+                            {
+                                // EXCLUDED has the same column, so PostgreSQL-family engines reject
+                                // an unqualified reference as ambiguous.
+                                frag.Append(BuildWrappedTableName(dialect));
+                                frag.Append(".");
+                            }
+                            frag.Append(wrappedVersion);
                             frag.Append(" + 1");
                         }
                     }

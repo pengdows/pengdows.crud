@@ -72,6 +72,9 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         /// <summary>"AND t.\"ver\" = s.\"ver\"" appended to WHEN MATCHED arm; null when no [Version] column.</summary>
         public string? UpsertMergeVersionCondition;
 
+        /// <summary>Oracle: the MERGE version check as a WHERE on the UPDATE branch.</summary>
+        public string? UpsertMergeUpdateWhere;
+
         /// <summary>"WHERE \"table\".\"ver\" = EXCLUDED.\"ver\"" for ON CONFLICT WHERE; null when not applicable.</summary>
         public string? UpsertOnConflictVersionWhere;
     }
@@ -135,11 +138,20 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         string? upsertUpdateFragmentOnConflict = BuildOnConflictUpsertUpdateFragment(dialect, updateColumns);
 
         string? upsertMergeVersionCondition = null;
+        string? upsertMergeUpdateWhere = null;
         string? upsertOnConflictVersionWhere = null;
         if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn)
         {
             var wrappedVer = dialect.WrapSimpleName(_versionColumn.Name);
-            upsertMergeVersionCondition = $"AND t.{wrappedVer} = s.{wrappedVer}";
+            // Oracle has no "WHEN MATCHED AND"; its check is a WHERE on the UPDATE branch.
+            if (dialect.MergeMatchedConditionAsUpdateWhere())
+            {
+                upsertMergeUpdateWhere = $"WHERE t.{wrappedVer} = s.{wrappedVer}";
+            }
+            else
+            {
+                upsertMergeVersionCondition = $"AND t.{wrappedVer} = s.{wrappedVer}";
+            }
             if (dialect.SupportsOnConflictWhere)
             {
                 upsertOnConflictVersionWhere =
@@ -156,6 +168,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             UpsertUpdateFragment = upsertUpdateFragment,
             UpsertUpdateFragmentOnConflict = upsertUpdateFragmentOnConflict,
             UpsertMergeVersionCondition = upsertMergeVersionCondition,
+            UpsertMergeUpdateWhere = upsertMergeUpdateWhere,
             UpsertOnConflictVersionWhere = upsertOnConflictVersionWhere
         };
     }
@@ -247,6 +260,13 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                     frag.Append(", ");
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                     frag.Append(" = ");
+                    if (dialect.SupportsInsertOnConflict)
+                    {
+                        // EXCLUDED has the same column, so PostgreSQL-family engines reject an
+                        // unqualified reference as ambiguous.
+                        frag.Append(BuildWrappedTableName(dialect));
+                        frag.Append(".");
+                    }
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                     frag.Append(" + 1");
                 }

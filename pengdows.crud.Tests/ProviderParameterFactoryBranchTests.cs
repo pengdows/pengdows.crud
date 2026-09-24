@@ -18,38 +18,38 @@ public class ProviderParameterFactoryBranchTests
         var guidParam = new NpgsqlParameterStub();
         ProviderParameterFactory.TryConfigureParameter(guidParam, typeof(Guid), Guid.NewGuid(),
             SupportedDatabase.PostgreSql);
-        Assert.Equal(27, guidParam.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.Uuid, guidParam.NpgsqlDbType);
 
         var stringArrayParam = new NpgsqlParameterStub();
         ProviderParameterFactory.TryConfigureParameter(stringArrayParam, typeof(string[]), new[] { "a", "b" },
             SupportedDatabase.PostgreSql);
-        Assert.Equal((1 << 30) | 16, stringArrayParam.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.Array | StubNpgsqlDbType.Text, stringArrayParam.NpgsqlDbType);
 
         var intArrayParam = new NpgsqlParameterStub();
         ProviderParameterFactory.TryConfigureParameter(intArrayParam, typeof(int[]), new[] { 1, 2 },
             SupportedDatabase.PostgreSql);
-        Assert.Equal((1 << 30) | 1, intArrayParam.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.Array | StubNpgsqlDbType.Integer, intArrayParam.NpgsqlDbType);
 
         using var doc = JsonDocument.Parse("{\"a\":1}");
         var jsonParam = new NpgsqlParameterStub();
         ProviderParameterFactory.TryConfigureParameter(jsonParam, typeof(JsonElement), doc.RootElement,
             SupportedDatabase.PostgreSql);
-        Assert.Equal(14, jsonParam.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.Jsonb, jsonParam.NpgsqlDbType);
 
         var hstoreParam = new NpgsqlParameterStub();
         ProviderParameterFactory.TryConfigureParameter(hstoreParam, typeof(HStore),
             new HStore(new System.Collections.Generic.Dictionary<string, string?>()), SupportedDatabase.PostgreSql);
-        Assert.Equal(37, hstoreParam.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.Hstore, hstoreParam.NpgsqlDbType);
 
         var intRangeParam = new NpgsqlParameterStub();
         ProviderParameterFactory.TryConfigureParameter(intRangeParam, typeof(Range<int>), new Range<int>(1, 2),
             SupportedDatabase.PostgreSql);
-        Assert.Equal(33, intRangeParam.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.IntegerRange, intRangeParam.NpgsqlDbType);
 
         var dateRangeParam = new NpgsqlParameterStub();
         ProviderParameterFactory.TryConfigureParameter(dateRangeParam, typeof(Range<DateTime>),
             new Range<DateTime>(DateTime.UtcNow, DateTime.UtcNow.AddDays(1)), SupportedDatabase.PostgreSql);
-        Assert.Equal(35, dateRangeParam.NpgsqlDbType);
+        Assert.Equal(StubNpgsqlDbType.TimestampRange, dateRangeParam.NpgsqlDbType);
     }
 
     [Fact]
@@ -144,8 +144,26 @@ public class ProviderParameterFactoryBranchTests
         Assert.Equal(DbType.String, duckJson.DbType);
     }
 
+    // Stand-in for Npgsql's NpgsqlDbType: real member names, deliberately different numbers, so a
+    // test only passes when ProviderParameterFactory sets members by name.
+    [Flags]
+    private enum StubNpgsqlDbType
+    {
+        None = 0,
+        Text = 1,
+        Integer = 2,
+        Uuid = 4,
+        Jsonb = 8,
+        Hstore = 16,
+        IntegerRange = 32,
+        TimestampRange = 64,
+        BigIntRange = 128,
+        NumericRange = 256,
+        Array = 1 << 20
+    }
+
     private sealed class NpgsqlParameterStub : fakeDbParameter
     {
-        public int NpgsqlDbType { get; set; }
+        public StubNpgsqlDbType NpgsqlDbType { get; set; }
     }
 }

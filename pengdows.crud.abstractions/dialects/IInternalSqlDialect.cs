@@ -10,6 +10,13 @@ namespace pengdows.crud.dialects;
 internal interface IInternalSqlDialect : ISqlDialect
 {
     /// <summary>
+    /// True when the dialect's MERGE has no "WHEN MATCHED AND condition" form (Oracle), so a
+    /// matched-row condition such as an optimistic-concurrency version check must be written as
+    /// a WHERE on the UPDATE branch instead.
+    /// </summary>
+    bool MergeMatchedConditionAsUpdateWhere => false;
+
+    /// <summary>
     /// Reapplies provider-specific metadata after a cached command receives a set-valued value.
     /// </summary>
     void ConfigureSetValuedParameter(DbParameter parameter, Array value);

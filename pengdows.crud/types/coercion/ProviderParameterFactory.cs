@@ -157,31 +157,29 @@ internal static class ProviderParameterFactory
 
         try
         {
-            // Optimize common types for PostgreSQL using cached PropertyInfo
+            // NpgsqlDbType is set by member name, never by number: the numbers are Npgsql's
+            // implementation detail (hard-coded values here had drifted — JSONB was sent as Path,
+            // int[] as BigIntRange, ranges as Abstime).
             if (valueType == typeof(Guid) || valueType == typeof(Guid?))
             {
-                // NpgsqlDbType.Uuid = 27
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 27);
+                SetNpgsqlDbType(parameter, "Uuid");
             }
             else if (valueType == typeof(string[]))
             {
-                // NpgsqlDbType.Array | NpgsqlDbType.Text = (1 << 30) | 16
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, (1 << 30) | 16);
+                SetNpgsqlDbType(parameter, "Array", "Text");
             }
             else if (valueType == typeof(int[]))
             {
-                // NpgsqlDbType.Array | NpgsqlDbType.Integer = (1 << 30) | 1
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, (1 << 30) | 1);
+                SetNpgsqlDbType(parameter, "Array", "Integer");
             }
             else if (IsJsonType(valueType))
             {
-                // NpgsqlDbType.Jsonb = 14 (prefer JSONB for performance)
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 14);
+                // Prefer JSONB for performance.
+                SetNpgsqlDbType(parameter, "Jsonb");
             }
             else if (valueType.Name.Contains("HStore"))
             {
-                // NpgsqlDbType.Hstore = 37
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 37);
+                SetNpgsqlDbType(parameter, "Hstore");
 
                 // HStoreCoercion.TryWrite (the general coercion layer, which already ran by this
                 // point) stringifies to the canonical "key=>value, ..." text format for portable
@@ -200,7 +198,23 @@ internal static class ProviderParameterFactory
             }
             else if (valueType.IsGenericType && valueType.Name.Contains("Range"))
             {
-                ApplyNpgsqlRangeType(parameter, valueType);
+                var genericArg = valueType.GetGenericArguments()[0];
+                if (genericArg == typeof(int))
+                {
+                    SetNpgsqlDbType(parameter, "IntegerRange");
+                }
+                else if (genericArg == typeof(long))
+                {
+                    SetNpgsqlDbType(parameter, "BigIntRange");
+                }
+                else if (genericArg == typeof(decimal))
+                {
+                    SetNpgsqlDbType(parameter, "NumericRange");
+                }
+                else if (genericArg == typeof(DateTime))
+                {
+                    SetNpgsqlDbType(parameter, "TimestampRange");
+                }
             }
         }
         catch
@@ -209,24 +223,31 @@ internal static class ProviderParameterFactory
         }
     }
 
-    private static void ApplyNpgsqlRangeType(DbParameter parameter, Type valueType)
+    /// <summary>
+    /// Sets NpgsqlDbType to the named member (several names are OR-ed together, e.g. Array|Text).
+    /// Does nothing if the property isn't an enum or a name doesn't exist in it.
+    /// </summary>
+    private static void SetNpgsqlDbType(DbParameter parameter, params string[] memberNames)
     {
-        var genericArg = valueType.GetGenericArguments()[0];
-        if (genericArg == typeof(int))
+        var property = _cachedNpgsqlDbTypeProperty!;
+        var enumType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (!enumType.IsEnum)
         {
-            // NpgsqlDbType.IntegerRange = 33
-            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 33);
+            return;
         }
-        else if (genericArg == typeof(decimal))
+
+        long combined = 0;
+        foreach (var name in memberNames)
         {
-            // NpgsqlDbType.NumericRange = 34
-            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 34);
+            if (!Enum.TryParse(enumType, name, ignoreCase: false, out var member))
+            {
+                return;
+            }
+
+            combined |= Convert.ToInt64(member, System.Globalization.CultureInfo.InvariantCulture);
         }
-        else if (genericArg == typeof(DateTime))
-        {
-            // NpgsqlDbType.TimestampRange = 35
-            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 35);
-        }
+
+        property.SetValue(parameter, Enum.ToObject(enumType, combined));
     }
 
     /// <summary>

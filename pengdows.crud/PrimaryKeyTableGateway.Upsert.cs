@@ -451,8 +451,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
                     ? $" WHEN MATCHED {template.UpsertMergeVersionCondition} THEN UPDATE SET "
                     : " WHEN MATCHED THEN UPDATE SET ");
 
-            sc.Query.Append(template.UpsertUpdateFragment)
-                .Append(" WHEN NOT MATCHED THEN INSERT (")
+            sc.Query.Append(template.UpsertUpdateFragment);
+            if (template.UpsertMergeUpdateWhere != null)
+            {
+                sc.Query.Append(" ").Append(template.UpsertMergeUpdateWhere);
+            }
+
+            sc.Query.Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
                 .Append(") VALUES (")
                 .Append(insertValSb.AsSpan())
