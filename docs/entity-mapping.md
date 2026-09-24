@@ -144,7 +144,9 @@ gets the numeric `+ 1` increment. Use `byte[]` for a `[Version]` rowversion colu
   differs by gateway: `TableGateway<T,TId>.UpdateAsync` throws `ConcurrencyConflictException`;
   `PrimaryKeyTableGateway<T>.UpdateAsync` returns `0` without throwing, so check the returned
   row count. (`UpsertAsync` on both gateways throws `ConcurrencyConflictException` on a version
-  mismatch against MERGE/ON CONFLICT dialects.)
+  mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
+  ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY
+  UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites.)
 - On `TableGateway<T,TId>`, a `[Version]` column also enables `loadOriginal`-by-default
   change-aware updates (see `docs/batch-operations.md` and `BuildUpdateAsync`'s `loadOriginal`
   parameter) — versioned entities re-read the current row before building the UPDATE so only

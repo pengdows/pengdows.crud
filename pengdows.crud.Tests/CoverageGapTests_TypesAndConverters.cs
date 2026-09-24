@@ -250,11 +250,11 @@ public class CoverageGapTests_TypesAndConverters
     [Fact]
     public void Range_ToString_Empty()
     {
-        var range = Range<int>.Empty;
-        var text = range.ToString();
+        // Empty is PostgreSQL's empty range, not the unbounded default struct.
+        Assert.Equal("empty", Range<int>.Empty.ToString());
 
         // default struct: IsLowerInclusive=false, IsUpperInclusive=false
-        Assert.Equal("(, )", text);
+        Assert.Equal("(, )", default(Range<int>).ToString());
     }
 
     [Fact]

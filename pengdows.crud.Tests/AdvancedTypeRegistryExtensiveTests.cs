@@ -314,13 +314,13 @@ public class AdvancedTypeRegistryExtensiveTests
         var mapping = registry.GetMapping(typeof(Range<int>), SupportedDatabase.PostgreSql);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.String, mapping.DbType);
+        Assert.Equal(DbType.Object, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new PostgreSqlLikeParameter();
         mapping.ConfigureParameter(param, new Range<int>(1, 10));
 
-        Assert.Equal(MockNpgsqlDbType.Int4Range, param.NpgsqlDbType);
+        Assert.Equal(MockNpgsqlDbType.IntegerRange, param.NpgsqlDbType);
     }
 
     [Fact]
@@ -330,13 +330,13 @@ public class AdvancedTypeRegistryExtensiveTests
         var mapping = registry.GetMapping(typeof(Range<DateTime>), SupportedDatabase.PostgreSql);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.String, mapping.DbType);
+        Assert.Equal(DbType.Object, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new PostgreSqlLikeParameter();
         mapping.ConfigureParameter(param, new Range<DateTime>(DateTime.Today, DateTime.Today.AddDays(1)));
 
-        Assert.Equal(MockNpgsqlDbType.TsRange, param.NpgsqlDbType);
+        Assert.Equal(MockNpgsqlDbType.TimestampRange, param.NpgsqlDbType);
     }
 
     #endregion
@@ -747,8 +747,11 @@ public class AdvancedTypeRegistryExtensiveTests
         Inet = 16,
         Uuid = 32,
         Interval = 64,
-        Int4Range = 128,
-        TsRange = 256,
+        // Real NpgsqlDbType member names; the old Int4Range/TsRange names don't exist in Npgsql,
+        // which let the registry's wrong names pass here while failing against real PostgreSQL.
+        IntegerRange = 128,
+        TimestampRange = 256,
+        BigIntRange = 4096,
         MacAddr = 512,
         Jsonb = 1024,
         JSON = 2048

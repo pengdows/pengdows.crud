@@ -100,8 +100,11 @@ internal class AdvancedTypeRegistry
         public const string Integer = "Integer";
         public const string Text = "Text";
         public const string Array = "Array";
-        public const string Int4Range = "Int4Range";
-        public const string TsRange = "TsRange";
+        // NpgsqlDbType member names (NpgsqlDbType has no Int4Range/TsRange; an unknown name
+        // silently left the parameter as text, which PostgreSQL rejects for a range column).
+        public const string Int4Range = "IntegerRange";
+        public const string Int8Range = "BigIntRange";
+        public const string TsRange = "TimestampRange";
         public const string Inet = "Inet";
         public const string Cidr = "Cidr";
         public const string MacAddr = "MacAddr";
@@ -491,6 +494,7 @@ internal class AdvancedTypeRegistry
         // Range converters
         RegisterConverter(new PostgreSqlRangeConverter<int>());
         RegisterConverter(new PostgreSqlRangeConverter<DateTime>());
+        RegisterConverter(new PostgreSqlRangeConverter<long>());
 
         // Network converters
         RegisterConverter(new InetConverter());
@@ -624,7 +628,7 @@ internal class AdvancedTypeRegistry
         // PostgreSQL int4range
         var pgIntRange = new ProviderTypeMapping
         {
-            DbType = DbType.String,
+            DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
                 SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Int4Range);
@@ -637,7 +641,7 @@ internal class AdvancedTypeRegistry
         // PostgreSQL tsrange
         var pgTsRange = new ProviderTypeMapping
         {
-            DbType = DbType.String,
+            DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
             {
                 SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.TsRange);
@@ -646,6 +650,19 @@ internal class AdvancedTypeRegistry
         RegisterMapping<Range<DateTime>>(SupportedDatabase.PostgreSql, pgTsRange);
         RegisterMapping<Range<DateTime>>(SupportedDatabase.CockroachDb, pgTsRange);
         RegisterMapping<Range<DateTime>>(SupportedDatabase.YugabyteDb, pgTsRange);
+
+        // PostgreSQL int8range
+        var pgLongRange = new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Int8Range);
+            }
+        };
+        RegisterMapping<Range<long>>(SupportedDatabase.PostgreSql, pgLongRange);
+        RegisterMapping<Range<long>>(SupportedDatabase.CockroachDb, pgLongRange);
+        RegisterMapping<Range<long>>(SupportedDatabase.YugabyteDb, pgLongRange);
     }
 
     private void RegisterNetworkMappings()

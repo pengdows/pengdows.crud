@@ -44,4 +44,39 @@ public class RangeEmptyLiteralTests
         Assert.Equal(1, range.Lower);
         Assert.Equal(5, range.Upper);
     }
+
+    // Range<T>.Empty used to be default(Range<T>), the same value as an unbounded "(,)" range, so
+    // writing Empty stored "all values". Empty is now its own value; IsEmpty still reports true
+    // for an unbounded range too (unchanged on 2.0.x).
+    [Fact]
+    public void Empty_IsDistinctFromUnboundedRange()
+    {
+        var unbounded = new Range<int>(null, null, false, false);
+
+        Assert.NotEqual(Range<int>.Empty, unbounded);
+        Assert.NotEqual(Range<int>.Empty, default);
+        Assert.True(Range<int>.Empty.IsEmpty);
+        Assert.True(unbounded.IsEmpty);
+    }
+
+    [Fact]
+    public void Empty_ToString_IsEmptyLiteral()
+    {
+        Assert.Equal("empty", Range<int>.Empty.ToString());
+    }
+
+    [Fact]
+    public void Converter_WritesEmptyAsEmptyLiteral_WhenNpgsqlIsNotLoaded()
+    {
+        var converter = new PostgreSqlRangeConverter<int>();
+
+        Assert.Equal("empty", converter.ToProviderValue(Range<int>.Empty, SupportedDatabase.PostgreSql));
+        Assert.Equal("(,)", converter.ToProviderValue(new Range<int>(null, null, false, false), SupportedDatabase.PostgreSql));
+    }
+
+    [Fact]
+    public void Parse_EmptyLiteral_RoundTripsThroughToString()
+    {
+        Assert.Equal(Range<int>.Empty, Range<int>.Parse(Range<int>.Empty.ToString()));
+    }
 }

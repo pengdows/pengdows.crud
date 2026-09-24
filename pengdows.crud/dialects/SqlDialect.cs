@@ -582,7 +582,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Database-specific extensions (override as needed)
     public virtual bool SupportsMergeReturning => false;
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
-    public virtual bool SupportsOnConflictWhere => false; // PostgreSQL/CockroachDB only
+    public virtual bool SupportsOnConflictWhere => false; // e.g. PostgreSQL family, SQLite, DuckDB
+
+    /// <inheritdoc cref="IInternalSqlDialect.MergeMatchedConditionAsUpdateWhere"/>
+    public virtual bool MergeMatchedConditionAsUpdateWhere => false;
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
 

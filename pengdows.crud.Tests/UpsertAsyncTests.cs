@@ -127,9 +127,10 @@ public class UpsertAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
     }
 
     [Fact]
-    public async Task UpsertAsync_Sqlite_ZeroRows_DoesNotThrowConcurrencyConflictException()
+    public async Task UpsertAsync_Sqlite_ZeroRows_ThrowsConcurrencyConflictException()
     {
-        // SQLite SupportsOnConflictWhere = false — no version WHERE clause, no conflict detection.
+        // SQLite supports DO UPDATE ... WHERE (3.24+), so a stale version is detected: 0 rows
+        // means the version predicate rejected the update.
         var typeMap = new TypeMapRegistry();
         typeMap.Register<VersionedUpsertEntity>();
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -142,8 +143,8 @@ public class UpsertAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
         var gateway = new TableGateway<VersionedUpsertEntity, int>(context);
         var entity = new VersionedUpsertEntity { Id = 1, Name = "v", Version = 1 };
 
-        var affected = await gateway.UpsertAsync(entity, context);
-        Assert.Equal(0, affected);
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
+            await gateway.UpsertAsync(entity, context));
     }
 
     [Fact]

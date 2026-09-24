@@ -5840,7 +5840,9 @@ gets the numeric `+ 1` increment. Use `byte[]` for a `[Version]` rowversion colu
   differs by gateway: `TableGateway<T,TId>.UpdateAsync` throws `ConcurrencyConflictException`;
   `PrimaryKeyTableGateway<T>.UpdateAsync` returns `0` without throwing, so check the returned
   row count. (`UpsertAsync` on both gateways throws `ConcurrencyConflictException` on a version
-  mismatch against MERGE/ON CONFLICT dialects.)
+  mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
+  ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY
+  UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites.)
 - On `TableGateway<T,TId>`, a `[Version]` column also enables `loadOriginal`-by-default
   change-aware updates (see `docs/batch-operations.md` and `BuildUpdateAsync`'s `loadOriginal`
   parameter) — versioned entities re-read the current row before building the UPDATE so only
@@ -7609,7 +7611,7 @@ generator, execution path, or verification step implemented anywhere in this rep
 
 | Database | Plan | Notes |
 |---|---|---|
-| Oracle | `Returning` | `OracleDialect.GetGeneratedKeyPlan()` explicitly overrides the base class and returns `Returning`, not the `PrefetchSequence` the base `SqlDialect` special-cases for Oracle. The doc comment on the neighboring `RenderInsertReturningClause` method still says "in normal operation Oracle uses PrefetchSequence" — that comment is stale; `Returning` is the deliberate, working design. Oracle's `RETURNING id INTO :1` binds through an ADO.NET OUT parameter rather than a result set, so `TableGateway.Core.cs`'s `CreateAsync` special-cases `DatabaseType == SupportedDatabase.Oracle` and uses `ExecuteNonQueryAsync` + `GetParameterValue` instead of the `ExecuteScalarOrNullAsync` path other `Returning` dialects use. |
+| Oracle | `Returning` | `OracleDialect.GetGeneratedKeyPlan()` explicitly overrides the base class and returns `Returning`, not the `PrefetchSequence` the base `SqlDialect` special-cases for Oracle. The doc comment on the neighboring `RenderInsertReturningClause` method still says "in normal operation Oracle uses PrefetchSequence" — that comment is stale; `Returning` is the deliberate, working design. Oracle's `RETURNING id INTO :o0` binds through an ADO.NET OUT parameter rather than a result set, so `TableGateway.Core.cs`'s `CreateAsync` special-cases `DatabaseType == SupportedDatabase.Oracle` and uses `ExecuteNonQueryAsync` + `GetParameterValue` instead of the `ExecuteScalarOrNullAsync` path other `Returning` dialects use. |
 | SQL Server | `OutputInserted` | Base logic |
 | PostgreSQL, CockroachDB, YugabyteDB, DuckDB | `Returning` | Base logic |
 | Firebird | `Returning` | Explicit override (matches base logic) |
@@ -8050,7 +8052,7 @@ the CLR type of an ordinary (read-only, non-`[Version]`) mapped rowversion colum
 | `Inet` (`types/valueobjects/Inet.cs`) | IP address, optional CIDR prefix | PostgreSQL, CockroachDB, YugabyteDB → `inet` |
 | `Cidr` (`Cidr.cs`) | Network subnet, prefix required, host bits canonicalized to 0 | PostgreSQL, CockroachDB, YugabyteDB → `cidr` |
 | `MacAddress` (`MacAddress.cs`) | Hardware address, wraps `PhysicalAddress` | PostgreSQL, CockroachDB, YugabyteDB → `macaddr` |
-| `Range<T>` (`Range.cs`, `T : struct`) | Bounded range with inclusive/exclusive brackets | PostgreSQL/CockroachDB/YugabyteDB `int4range` (`Range<int>`), `tsrange` (`Range<DateTime>`) |
+| `Range<T>` (`Range.cs`, `T : struct`) | Bounded range with inclusive/exclusive brackets; `Range<T>.Empty` is PostgreSQL's `empty` (distinct from the unbounded `(,)`, which is `default`; `IsEmpty` is true for both, `IsEmptyRange` only for `Empty`) | PostgreSQL/CockroachDB/YugabyteDB `int4range` (`Range<int>`), `int8range` (`Range<long>`), `tsrange` (`Range<DateTime>`); sent as `NpgsqlRange<T>` |
 | `PostgreSqlInterval` (`PostgreSqlInterval.cs`) | months/days/microseconds, matches PG's internal storage | PostgreSQL, CockroachDB, YugabyteDB → `interval` |
 | `IntervalYearMonth` (`IntervalYearMonth.cs`) | Oracle `INTERVAL YEAR TO MONTH` | Oracle only |
 | `IntervalDaySecond` (`IntervalDaySecond.cs`) | Oracle `INTERVAL DAY TO SECOND` | Oracle only |

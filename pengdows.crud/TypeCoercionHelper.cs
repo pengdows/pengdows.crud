@@ -996,6 +996,7 @@ internal static class TypeCoercionHelper
     /// <summary>
     /// Byte reader for compiled mappers. Values of 256 bytes or less are read into a pooled
     /// buffer and copied to an exact-size array; larger values are read directly into a new array.
+    /// GetBytes may return fewer bytes than requested, so both paths read until the value is complete.
     /// </summary>
     public static byte[] ReadBytes(IDataRecord reader, int ordinal)
     {
@@ -1012,9 +1013,9 @@ internal static class TypeCoercionHelper
             var temp = System.Buffers.ArrayPool<byte>.Shared.Rent((int)length);
             try
             {
-                reader.GetBytes(ordinal, 0, temp, 0, (int)length);
-                var result = new byte[length];
-                Buffer.BlockCopy(temp, 0, result, 0, (int)length);
+                var read = ReadAllBytes(reader, ordinal, temp, (int)length);
+                var result = new byte[read];
+                Buffer.BlockCopy(temp, 0, result, 0, read);
                 return result;
             }
             finally
@@ -1024,8 +1025,30 @@ internal static class TypeCoercionHelper
         }
 
         var heapBuffer = new byte[length];
-        reader.GetBytes(ordinal, 0, heapBuffer, 0, (int)length);
+        var total = ReadAllBytes(reader, ordinal, heapBuffer, (int)length);
+        if (total < heapBuffer.Length)
+        {
+            Array.Resize(ref heapBuffer, total);
+        }
+
         return heapBuffer;
+    }
+
+    private static int ReadAllBytes(IDataRecord reader, int ordinal, byte[] buffer, int length)
+    {
+        var total = 0;
+        while (total < length)
+        {
+            var read = (int)reader.GetBytes(ordinal, total, buffer, total, length - total);
+            if (read <= 0)
+            {
+                break;
+            }
+
+            total += read;
+        }
+
+        return total;
     }
 
     /// <summary>
@@ -1037,7 +1060,7 @@ internal static class TypeCoercionHelper
         var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(16);
         try
         {
-            var read = reader.GetBytes(ordinal, 0, temp, 0, 16);
+            var read = ReadAllBytes(reader, ordinal, temp, 16);
             if (read < 16)
             {
                 throw new exceptions.InvalidValueException("Binary column does not contain 16 bytes for a GUID.");

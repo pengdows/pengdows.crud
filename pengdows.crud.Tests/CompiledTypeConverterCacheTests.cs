@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using pengdows.crud.types.valueobjects;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -162,5 +163,15 @@ public class CompiledTypeConverterCacheTests
 
         Assert.Equal(123.45, (double)result, precision: 2);
         Assert.IsType<double>(result);
+    }
+
+    // A conversion it can't make throws; it never hands back a default. (The all-zero intervals
+    // seen while fixing B06 came from DataReaderMapper's non-Strict mode, which logs the failure
+    // and leaves the property at its default by design.)
+    [Fact]
+    public void ConvertWithCache_UnconvertibleStruct_ThrowsInsteadOfReturningDefault()
+    {
+        Assert.Throws<InvalidCastException>(() =>
+            TypeCoercionHelper.ConvertWithCache(42, typeof(PostgreSqlInterval)));
     }
 }

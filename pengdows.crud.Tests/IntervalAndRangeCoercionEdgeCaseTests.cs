@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using Moq;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.converters;
@@ -335,5 +336,22 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         var result = IntervalYearMonth.Parse("P11M");
         Assert.Equal(0, result.Years);
         Assert.Equal(11, result.Months);
+    }
+
+    // PostgreSqlIntervalCoercion.TryWrite writes ToTimeSpan(), which drops months, but nothing
+    // on the write path calls it: a provider without an interval mapping gets the value object
+    // itself, months intact.
+    [Fact]
+    public void IntervalParameter_ProviderWithoutIntervalMapping_KeepsMonths()
+    {
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite",
+            new fakeDbFactory(SupportedDatabase.Sqlite));
+        var interval = new PostgreSqlInterval(14, 3, 5_000_000);
+
+        var parameter = context.CreateDbParameter("p0", DbType.Object, interval);
+
+        var written = Assert.IsType<PostgreSqlInterval>(parameter.Value);
+        Assert.Equal(14, written.Months);
+        Assert.Equal(3, written.Days);
     }
 }

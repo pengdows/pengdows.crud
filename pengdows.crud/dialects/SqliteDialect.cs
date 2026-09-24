@@ -146,6 +146,7 @@ internal class SqliteDialect : SqlDialect
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
     public override bool SupportsInsertOnConflict => true;
+    public override bool SupportsOnConflictWhere => true; // DO UPDATE ... WHERE (SQLite 3.24+)
     public override bool SupportsMerge => false;
     public override bool SupportsSavepoints => true;
 

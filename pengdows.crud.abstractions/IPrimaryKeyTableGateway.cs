@@ -107,7 +107,8 @@ public interface IPrimaryKeyTableGateway<TEntity>
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Builds an UPDATE statement, optionally reloading the original row first.
+    /// Builds an UPDATE statement. <paramref name="loadOriginal"/> exists for symmetry with
+    /// <c>ITableGateway</c> and is ignored: the SET clause always lists every updateable column.
     /// </summary>
     ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context = null, CancellationToken cancellationToken = default);
@@ -119,7 +120,8 @@ public interface IPrimaryKeyTableGateway<TEntity>
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Executes an UPDATE, optionally reloading original. Returns rows affected.
+    /// Executes an UPDATE. <paramref name="loadOriginal"/> is ignored (see
+    /// <see cref="BuildUpdateAsync(TEntity, bool, IDatabaseContext?, CancellationToken)"/>). Returns rows affected.
     /// </summary>
     ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);

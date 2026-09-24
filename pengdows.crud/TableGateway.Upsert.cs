@@ -12,15 +12,17 @@
 // - Database-specific syntax (single-entity; MERGE preferred when supported):
 //   * MERGE-capable dialects (e.g. SQL Server, Oracle, Snowflake, Db2, PostgreSQL 15+,
 //     DuckDB 1.4+): MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
+//     (Oracle: WHEN MATCHED THEN UPDATE ... [WHERE t.ver = s.ver])
 //   * ON CONFLICT dialects without MERGE (e.g. PostgreSQL < 15, CockroachDB, SQLite):
 //     INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver when supported]
 //   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE (no version guard possible in this syntax)
 //   * Firebird: UPDATE OR INSERT ... MATCHING (...)
 // - Optimistic concurrency:
-//   * MERGE dialects: WHEN MATCHED AND t.ver = s.ver guard; 0 rows = version mismatch → ConcurrencyConflictException
-//   * ON CONFLICT WHERE dialects (PostgreSQL family): DO UPDATE WHERE predicate; 0 rows = DO NOTHING → exception
-//   * ON DUPLICATE KEY (MySQL/MariaDB), ON CONFLICT without WHERE support (e.g. SQLite), and
-//     Firebird: cannot detect conflicts — no exception thrown
+//   * MERGE dialects: WHEN MATCHED AND t.ver = s.ver guard (Oracle: UPDATE ... WHERE);
+//     0 rows = version mismatch → ConcurrencyConflictException
+//   * ON CONFLICT WHERE dialects (PostgreSQL family, SQLite, DuckDB): DO UPDATE WHERE predicate;
+//     0 rows = DO NOTHING → exception
+//   * ON DUPLICATE KEY (MySQL/MariaDB) and Firebird: cannot detect conflicts — no exception thrown
 // - Handles audit columns and version columns appropriately.
 // - Throws NotSupportedException for fallback/unknown dialects.
 // - Returns affected row count (typically 1 for single-entity upsert).
@@ -62,10 +64,10 @@ public partial class TableGateway<TEntity, TRowID>
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
             // Optimistic concurrency: throw only when the dialect enforced a version predicate in the SQL.
-            // MERGE dialects (e.g. SQL Server/Oracle/Snowflake) use WHEN MATCHED AND t.ver=s.ver → 0 rows on mismatch.
-            // ON CONFLICT WHERE dialects (PostgreSQL family) use DO UPDATE WHERE → DO NOTHING on mismatch.
-            // Firebird UPDATE OR INSERT, MySQL ON DUPLICATE KEY, and non-WHERE ON CONFLICT (SQLite/DuckDB)
-            // cannot detect version conflicts — do NOT throw for those dialects.
+            // MERGE dialects (e.g. SQL Server/Oracle/Snowflake) skip the matched update on a version
+            // mismatch → 0 rows. ON CONFLICT WHERE dialects (PostgreSQL family, SQLite, DuckDB) use
+            // DO UPDATE WHERE → DO NOTHING on mismatch. Firebird UPDATE OR INSERT and MySQL ON
+            // DUPLICATE KEY cannot detect version conflicts — do NOT throw for those dialects.
             if (rowsAffected == 0)
             {
                 if (_versionColumn != null)
@@ -256,7 +258,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             sc.Query.Append(") DO UPDATE SET ")
-                .Append(template.UpsertUpdateFragment);
+                .Append(template.UpsertUpdateFragmentOnConflict);
 
             if (_versionColumn != null && dialect.SupportsOnConflictWhere)
             {
@@ -334,7 +336,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
-                .Append(template.UpsertUpdateFragment);
+                .Append(template.UpsertUpdateFragmentOnConflict);
 
             sc.AddParameters(parameters);
             return sc;
@@ -370,11 +372,21 @@ public partial class TableGateway<TEntity, TRowID>
         // Putting version in ON: stale version makes source row "unmatched" → WHEN NOT MATCHED fires
         // → INSERT fails with PK violation (row already exists). Correct: WHEN MATCHED AND t.ver=s.ver
         // leaves the row untouched → 0 rows → detectable conflict via ConcurrencyConflictException.
+        // Oracle has no "WHEN MATCHED AND" form; there the check is a WHERE on the UPDATE branch,
+        // which likewise leaves a stale row untouched.
         var whenMatchedClause = " WHEN MATCHED THEN UPDATE SET ";
+        string? matchedUpdateWhere = null;
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
         {
             var v = dialect.WrapSimpleName(_versionColumn.Name);
-            whenMatchedClause = $" WHEN MATCHED AND t.{v} = s.{v} THEN UPDATE SET ";
+            if (dialect.MergeMatchedConditionAsUpdateWhere())
+            {
+                matchedUpdateWhere = $" WHERE t.{v} = s.{v}";
+            }
+            else
+            {
+                whenMatchedClause = $" WHEN MATCHED AND t.{v} = s.{v} THEN UPDATE SET ";
+            }
         }
 
         // WHEN NOT MATCHED INSERT must use only columns projected into the USING source alias s.
@@ -429,8 +441,13 @@ public partial class TableGateway<TEntity, TRowID>
                 .Append(" ON ")
                 .Append(onClause)
                 .Append(whenMatchedClause)
-                .Append(template.UpsertUpdateFragment)
-                .Append(" WHEN NOT MATCHED THEN INSERT (")
+                .Append(template.UpsertUpdateFragment);
+            if (matchedUpdateWhere != null)
+            {
+                sc.Query.Append(matchedUpdateWhere);
+            }
+
+            sc.Query.Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
                 .Append(")");
 

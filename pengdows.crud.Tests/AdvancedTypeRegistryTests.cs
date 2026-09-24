@@ -190,8 +190,8 @@ public class AdvancedTypeRegistryTests
 
         Assert.NotNull(intRangeMapping);
         Assert.NotNull(dateRangeMapping);
-        Assert.Equal(DbType.String, intRangeMapping.DbType);
-        Assert.Equal(DbType.String, dateRangeMapping.DbType);
+        Assert.Equal(DbType.Object, intRangeMapping.DbType);
+        Assert.Equal(DbType.Object, dateRangeMapping.DbType);
     }
 
     [Fact]

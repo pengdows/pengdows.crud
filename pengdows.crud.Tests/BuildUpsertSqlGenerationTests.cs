@@ -43,7 +43,9 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
         var wrapped = Context.WrapObjectName("Version");
-        Assert.Contains($"{wrapped} = {wrapped} + 1", sql);
+        // Qualified with the table: EXCLUDED has the same column, and PostgreSQL-family engines
+        // reject the unqualified reference as ambiguous.
+        Assert.Contains($"{wrapped} = {Context.WrapObjectName("Test")}.{wrapped} + 1", sql);
     }
 
     [Fact]
@@ -97,8 +99,11 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var columns = BuildInsertColumns(Context);
         var values = BuildInsertValues(dialect);
         var updateSet = BuildConflictUpdateSet(Context, dialect);
-        var expected = $"INSERT INTO {Context.WrapObjectName("UpsertLite")} ({columns}) VALUES ({values}) " +
-                       $"ON CONFLICT ({Context.WrapObjectName("Id")}) DO UPDATE SET {updateSet}";
+        var table = Context.WrapObjectName("UpsertLite");
+        var version = Context.WrapObjectName("Version");
+        var expected = $"INSERT INTO {table} ({columns}) VALUES ({values}) " +
+                       $"ON CONFLICT ({Context.WrapObjectName("Id")}) DO UPDATE SET {updateSet}" +
+                       $" WHERE {table}.{version} = EXCLUDED.{version}";
         Assert.Equal(expected, sql);
     }
 
@@ -218,7 +223,11 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     {
         var wrappedName = context.WrapObjectName("Name");
         var wrappedVersion = context.WrapObjectName("Version");
-        return $"{wrappedName} = {dialect.UpsertIncomingColumn("Name")}, {wrappedVersion} = {wrappedVersion} + 1";
+        // ON CONFLICT qualifies the target's version (EXCLUDED has the same column); MySQL's
+        // ON DUPLICATE KEY UPDATE has no such ambiguity.
+        var target = dialect.SupportsInsertOnConflict ? context.WrapObjectName("UpsertLite") + "." : "";
+        return $"{wrappedName} = {dialect.UpsertIncomingColumn("Name")}, " +
+               $"{wrappedVersion} = {target}{wrappedVersion} + 1";
     }
 
     private static string BuildMergeUpdateSet(IDatabaseContext context, ISqlDialect dialect)
@@ -227,7 +236,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var wrappedName = context.WrapObjectName("Name");
         var wrappedVersion = context.WrapObjectName("Version");
         return $"{targetPrefix}{wrappedName} = s.{wrappedName}, " +
-               $"{targetPrefix}{wrappedVersion} = {targetPrefix}{wrappedVersion} + 1";
+               $"{targetPrefix}{wrappedVersion} = t.{wrappedVersion} + 1";
     }
 
     [Table("ByteVersion")]

@@ -94,6 +94,15 @@ internal static class InternalSqlDialectExtensions
         return GetInternal(dialect).RenderMergeSource(columns, parameterNames);
     }
 
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.MergeMatchedConditionAsUpdateWhere"/>; false for a
+    /// dialect that isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool MergeMatchedConditionAsUpdateWhere(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect && internalDialect.MergeMatchedConditionAsUpdateWhere;
+    }
+
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)
     {
         if (dialect is not IInternalSqlDialect internalDialect)

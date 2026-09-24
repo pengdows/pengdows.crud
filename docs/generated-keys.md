@@ -30,7 +30,7 @@
 
 | Database | Plan | Notes |
 |---|---|---|
-| Oracle | `Returning` | `OracleDialect.GetGeneratedKeyPlan()` explicitly overrides the base class and returns `Returning`, not the `PrefetchSequence` the base `SqlDialect` special-cases for Oracle. The doc comment on the neighboring `RenderInsertReturningClause` method still says "in normal operation Oracle uses PrefetchSequence" — that comment is stale; `Returning` is the deliberate, working design. Oracle's `RETURNING id INTO :1` binds through an ADO.NET OUT parameter rather than a result set, so `TableGateway.Core.cs`'s `CreateAsync` special-cases `DatabaseType == SupportedDatabase.Oracle` and uses `ExecuteNonQueryAsync` + `GetParameterValue` instead of the `ExecuteScalarOrNullAsync` path other `Returning` dialects use. |
+| Oracle | `Returning` | `OracleDialect.GetGeneratedKeyPlan()` explicitly overrides the base class and returns `Returning`, not the `PrefetchSequence` the base `SqlDialect` special-cases for Oracle. The doc comment on the neighboring `RenderInsertReturningClause` method still says "in normal operation Oracle uses PrefetchSequence" — that comment is stale; `Returning` is the deliberate, working design. Oracle's `RETURNING id INTO :o0` binds through an ADO.NET OUT parameter rather than a result set, so `TableGateway.Core.cs`'s `CreateAsync` special-cases `DatabaseType == SupportedDatabase.Oracle` and uses `ExecuteNonQueryAsync` + `GetParameterValue` instead of the `ExecuteScalarOrNullAsync` path other `Returning` dialects use. |
 | SQL Server | `OutputInserted` | Base logic |
 | PostgreSQL, CockroachDB, YugabyteDB, DuckDB | `Returning` | Base logic |
 | Firebird | `Returning` | Explicit override (matches base logic) |

@@ -43,7 +43,8 @@ public class TableGatewayUpsertTests
         using var container = helper.BuildUpsert(entity, context);
         var sql = container.Query.ToString();
 
-        Assert.Contains("\"version\" = \"version\" + 1", sql);
+        // PostgreSQL 15+ MERGE: the right-hand side must read the target row explicitly.
+        Assert.Contains("\"version\" = t.\"version\" + 1", sql);
         Assert.True(sql.Contains("ON CONFLICT") || sql.Contains("MERGE INTO"),
             "Expected Postgres upsert to use ON CONFLICT or MERGE.");
         Assert.Equal(1, entity.Version);

@@ -32,8 +32,8 @@ public partial class PrimaryKeyTableGateway<TEntity>
     public ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
         IDatabaseContext? context = null, CancellationToken cancellationToken = default)
     {
-        // TODO: PrimaryKeyTableGateway does not support loading the original entity by row ID
-        // (there is no TRowID type parameter). The loadOriginal flag is ignored.
+        // loadOriginal exists for symmetry with ITableGateway and is deliberately ignored: every
+        // updateable column is written, keyed on the [PrimaryKey] columns.
         return BuildUpdateAsync(objectToUpdate, context, cancellationToken);
     }
 

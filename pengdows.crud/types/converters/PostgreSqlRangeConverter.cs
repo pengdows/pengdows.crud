@@ -7,9 +7,10 @@
 // - Supports PostgreSQL range types with inclusive/exclusive bounds and infinite ranges.
 // - Bracket notation: [lower,upper] inclusive, (lower,upper) exclusive, [lower,) open-ended.
 // - Provider-specific:
-//   * PostgreSQL/CockroachDB: Native range types (int4range, int8range, daterange, tsrange)
+//   * PostgreSQL/CockroachDB/YugabyteDB: Native range types (int4range, int8range, daterange, tsrange)
 //   * Others: Raw Range<T> value
-// - ConvertToProvider(): Returns bracket notation string for PostgreSQL.
+// - ConvertToProvider(): NpgsqlRange<T> for the PostgreSQL family when Npgsql is loaded
+//   (Range<T>.Empty → NpgsqlRange<T>.Empty); otherwise bracket notation / "empty" text.
 // - TryConvertFromProvider(): Handles Range<T>, string, NpgsqlRange<T>, Tuple<T?,T?>.
 // - Parse(): Parses "[1,10)", "(,100]", "[5,]" formats, and the literal "empty" (→ Range<T>.Empty).
 // - Common types: int4range, int8range, numrange, daterange, tsrange, tstzrange.
@@ -18,6 +19,7 @@
 
 using System.ComponentModel;
 using System.Globalization;
+using System.Reflection;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -111,13 +113,51 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
 {
     protected override object? ConvertToProvider(Range<T> value, SupportedDatabase provider)
     {
-        if (provider != SupportedDatabase.PostgreSql && provider != SupportedDatabase.CockroachDb)
+        if (provider != SupportedDatabase.PostgreSql && provider != SupportedDatabase.CockroachDb &&
+            provider != SupportedDatabase.YugabyteDb)
         {
             return value;
         }
 
-        return FormatRange(value);
+        // Npgsql can't write range text into a range column (PostgreSQL rejects text there), so
+        // send NpgsqlRange<T> when Npgsql is loaded, found by name since pengdows.crud takes no
+        // Npgsql dependency. Range text is only the fallback.
+        var providerType = NpgsqlRangeType;
+        if (providerType == null)
+        {
+            return FormatRange(value);
+        }
+
+        if (value.IsEmptyRange)
+        {
+            // NpgsqlRange<T>.Empty is a static field.
+            return providerType.GetField("Empty", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+                   ?? providerType.GetProperty("Empty", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+                   ?? FormatRange(value);
+        }
+
+        var constructor = providerType.GetConstructor(new[]
+        {
+            typeof(T), typeof(bool), typeof(bool), typeof(T), typeof(bool), typeof(bool)
+        });
+        if (constructor == null)
+        {
+            return FormatRange(value);
+        }
+
+        return constructor.Invoke(new object[]
+        {
+            value.Lower ?? default(T),
+            value.IsLowerInclusive,
+            !value.HasLowerBound,
+            value.Upper ?? default(T),
+            value.IsUpperInclusive,
+            !value.HasUpperBound
+        });
     }
+
+    private static readonly Type? NpgsqlRangeType =
+        Type.GetType("NpgsqlTypes.NpgsqlRange`1, Npgsql", throwOnError: false)?.MakeGenericType(typeof(T));
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Range<T> result)
     {
@@ -138,6 +178,12 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
             var type = value.GetType();
             if (type.FullName?.StartsWith("NpgsqlTypes.NpgsqlRange", StringComparison.Ordinal) == true)
             {
+                if (type.GetProperty("IsEmpty")?.GetValue(value) is true)
+                {
+                    result = Range<T>.Empty;
+                    return true;
+                }
+
                 var lowerProp = type.GetProperty("LowerBound");
                 var upperProp = type.GetProperty("UpperBound");
                 var lowerInclusiveProp = type.GetProperty("LowerBoundIsInclusive");
@@ -175,6 +221,11 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
 
     private static string FormatRange(Range<T> range)
     {
+        if (range.IsEmptyRange)
+        {
+            return "empty";
+        }
+
         var lowerBrace = range.IsLowerInclusive ? '[' : '(';
         var upperBrace = range.IsUpperInclusive ? ']' : ')';
         var lower = range.HasLowerBound ? FormatValue(range.Lower) : string.Empty;

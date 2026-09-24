@@ -46,9 +46,14 @@ public partial class TableGateway<TEntity, TRowID>
         // Pre-built version increment fragment (", vercol = vercol + 1") or null when not applicable.
         public string? VersionIncrementClause;
 
-        // Pre-built upsert UPDATE SET fragment, e.g. "col = EXCLUDED.col, col2 = EXCLUDED.col2".
+        // Pre-built upsert UPDATE SET fragment: the MERGE form ("col = s.col") when the dialect
+        // supports MERGE, otherwise the same text as UpsertUpdateFragmentOnConflict.
         // Null for dialects that don't support upsert or where it could not be pre-built.
         public string? UpsertUpdateFragment;
+
+        // Pre-built SET fragment for ON CONFLICT / ON DUPLICATE KEY statements (single-row and
+        // batch), e.g. "col = EXCLUDED.col". Null when the dialect supports neither.
+        public string? UpsertUpdateFragmentOnConflict;
 
         public List<IColumnInfo> UpdateColumns = null!;
 
@@ -233,13 +238,16 @@ public partial class TableGateway<TEntity, TRowID>
 
         // Pre-build the upsert UPDATE SET fragment (deterministic per dialect+entity+auditResolver config).
         // Eliminates the per-call SbLite loop in BuildUpsertOnConflict/OnDuplicate/Merge.
+        // Two fragments, because one dialect can need both: PostgreSQL 15+ uses MERGE for a single
+        // row (source alias "s", target alias "t") and ON CONFLICT for batches (EXCLUDED, no alias).
         string? upsertUpdateFragment = null;
+        string? upsertUpdateFragmentOnConflict = null;
         if (updateColumns != null)
         {
-            var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-            try
+            if (dialect.SupportsMerge)
             {
-                if (dialect.SupportsMerge)
+                var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+                try
                 {
                     var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
                     foreach (var col in updateColumns)
@@ -268,15 +276,30 @@ public partial class TableGateway<TEntity, TRowID>
                         frag.Append(", ");
                         frag.Append(tp);
                         frag.Append(wrappedVersion);
-                        frag.Append(" = ");
-                        frag.Append(tp);
+                        // The right-hand side always reads the target row: unqualified, it is
+                        // ambiguous on engines that expose the source's column too (PostgreSQL).
+                        frag.Append(" = t.");
                         frag.Append(wrappedVersion);
                         frag.Append(" + 1");
                     }
+
+                    if (frag.Length > 0)
+                    {
+                        upsertUpdateFragment = frag.ToString();
+                    }
                 }
-                else
+                finally
                 {
-                    // ON CONFLICT (e.g. PostgreSQL/CockroachDB/SQLite) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
+                    frag.Dispose();
+                }
+            }
+
+            if (dialect.SupportsInsertOnConflict || dialect.SupportsOnDuplicateKey)
+            {
+                // ON CONFLICT (e.g. PostgreSQL/CockroachDB/SQLite) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
+                var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+                try
+                {
                     try
                     {
                         foreach (var col in updateColumns)
@@ -300,10 +323,18 @@ public partial class TableGateway<TEntity, TRowID>
 
                         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
                         {
+                            var wrappedVersion = dialect.WrapSimpleName(_versionColumn.Name);
                             frag.Append(", ");
-                            frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                            frag.Append(wrappedVersion);
                             frag.Append(" = ");
-                            frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                            if (dialect.SupportsInsertOnConflict)
+                            {
+                                // EXCLUDED has the same column, so PostgreSQL-family engines reject
+                                // an unqualified reference as ambiguous.
+                                frag.Append(BuildWrappedTableName(dialect));
+                                frag.Append(".");
+                            }
+                            frag.Append(wrappedVersion);
                             frag.Append(" + 1");
                         }
                     }
@@ -312,17 +343,19 @@ public partial class TableGateway<TEntity, TRowID>
                         // Dialect doesn't support upsert (e.g., FakeDb default dialect)
                         frag.Clear();
                     }
-                }
 
-                if (frag.Length > 0)
+                    if (frag.Length > 0)
+                    {
+                        upsertUpdateFragmentOnConflict = frag.ToString();
+                    }
+                }
+                finally
                 {
-                    upsertUpdateFragment = frag.ToString();
+                    frag.Dispose();
                 }
             }
-            finally
-            {
-                frag.Dispose();
-            }
+
+            upsertUpdateFragment ??= upsertUpdateFragmentOnConflict;
         }
 
         // Pre-wrap UpdateColumn names to eliminate per-call ConcurrentDictionary lookups in BuildSetClause.
@@ -352,6 +385,7 @@ public partial class TableGateway<TEntity, TRowID>
             UpdateSqlSuffix = updateSqlSuffix!,
             VersionIncrementClause = versionIncrementClause,
             UpsertUpdateFragment = upsertUpdateFragment,
+            UpsertUpdateFragmentOnConflict = upsertUpdateFragmentOnConflict,
             UpdateColumns = updateColumns!,
             UpdateColumnWrappedNames = updateColumnWrappedNames,
             IdEqualityWhereBody = idEqualityWhereBody,

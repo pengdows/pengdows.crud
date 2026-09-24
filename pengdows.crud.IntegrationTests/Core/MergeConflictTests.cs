@@ -65,6 +65,43 @@ public class MergeConflictTests : DatabaseTestBase
         });
     }
 
+    // A stale-version upsert must not silently overwrite a newer row. The dialects whose upsert
+    // syntax has no conditional update (MySQL-family ON DUPLICATE KEY, Firebird UPDATE OR INSERT)
+    // are the documented exceptions; every other provider must detect the conflict.
+    [SkippableFact]
+    public Task VersionedEntity_StaleUpsert_DetectsConflict()
+    {
+        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            await RecreateTableAsync(context, "versioned_entities", BuildVersionedEntityTableSql(provider, context));
+
+            var helper = new TableGateway<VersionedEntity, long>(context);
+            await helper.CreateAsync(new VersionedEntity { Id = 1, Name = "original", Version = 1 }, context);
+
+            var firstCopy = await helper.RetrieveOneAsync(1, context);
+            var staleCopy = await helper.RetrieveOneAsync(1, context);
+
+            firstCopy!.Name = "first";
+            Assert.Equal(1, await helper.UpdateAsync(firstCopy, context));
+
+            staleCopy!.Name = "stale";
+            var cannotDetect = provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb
+                or SupportedDatabase.TiDb or SupportedDatabase.Firebird;
+            if (cannotDetect)
+            {
+                Output.WriteLine($"{provider}: upsert cannot carry a version predicate; not asserted");
+                return;
+            }
+
+            await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
+                await helper.UpsertAsync(staleCopy, context));
+
+            var final = await helper.RetrieveOneAsync(1, context);
+            Assert.Equal("first", final!.Name);
+            Assert.Equal(2, final.Version);
+        });
+    }
+
     [SkippableFact]
     public Task MergeRecord_UpsertAfterRemoteChange_ProducesCombinedValue()
     {

@@ -32,6 +32,9 @@ These are the rules the code is being brought in line with.
   The testbed `[InvalidTxType]` check still expected every unsupported level to be rejected; it
   now checks that the level fails up (PostgreSQL, Firebird, SQLite, YugabyteDB, Oracle,
   CockroachDB, DuckDB) and is rejected only where nothing stronger exists (TiDB, Snowflake).
+  `TransactionTests.Transaction_IsolationProfile_SafeNonBlockingReads_Works` likewise still expected
+  SQL Server to run the profile; it now checks `snapshot_isolation_state` and expects
+  `TransactionModeNotSupportedException` when snapshot isolation is off.
 - [x] **Enum names for every string column type** — `ColumnInfo.MakeParameterValueFromField` only
   checked `DbType.String`, so `AnsiString`/fixed-length enum columns stored the number. *Release
   note:* rows written before the fix keep their numeric text; reads accept both. 3.0 has the same
@@ -185,37 +188,78 @@ These are the rules the code is being brought in line with.
 - [x] **T04 — `verify-novendor --allow`:** *(fixed; both forms accepted)* the usage text (`Program.cs:56`) shows `--allow "x;y"`, which
   the parser silently ignores (it only reads `--allow=`). Accept both forms. **3.0:** same.
 
-## To investigate
+## Investigated (tests written first; outcome per item)
 
-- **Intermittent timing failures, only when net8.0 and net10.0 run in parallel:**
-  `SingleConnectionConcurrencyTortureTests.MixedReadWriteTransactionLoad_SerializesCorrectly_RealSqliteSingleConnection`
-  and `PoolGovernorSyncAcquireTests.Acquire_SlotBusyThenReleasedWithinTimeout_SucceedsViaTimedSemaphoreWait`
-  each failed once in a combined run and passed alone and in later full runs. Capture the failure
-  message next time; likely timing margins under double load.
-- **`PoolGovernorTurnstileTests.Acquire_TurnstileQueueExceedsMaxQueueDepth_FailsFastInsteadOfWaitingFullTimeout`** also failed once (net8.0, combined run) — same timing pattern.
-- **`PostgreSqlIntervalCoercion.TryWrite` writes `value.ToTimeSpan()`**, dropping months, for any
-  provider without an `AdvancedTypeRegistry` interval mapping (the PostgreSQL family has one, so it
-  isn't affected).
-- **`TypeCoercionHelper.ConvertWithCache` returns a default value** when it can't convert a struct,
-  instead of failing — this is how `DataReaderMapper` produced all-zero intervals during B06. Silent
-  defaults hide conversion bugs.
-- **Oracle `RETURNING … INTO`:** the gateway's SQL says `:1` but the output parameter is named `o0`;
-  it only works through positional binding. Same on 3.0. Check against live Oracle.
-- **SQLite `[Version]` upserts get no concurrency check:** `SqliteDialect` doesn't set
-  `SupportsOnConflictWhere`.
-- **`TypeCoercionHelper.ReadBytes`** doesn't check how many bytes `GetBytes` returned.
-- **`PrimaryKeyTableGateway.BuildUpdateAsync(entity, loadOriginal, …)`** ignores `loadOriginal`
-  (TODO at `PrimaryKeyTableGateway.Update.cs:31-38`) although the interface exposes it.
+- [x] **Versioned upsert — broken on 6 providers, not just SQLite.** A live stale-version upsert test
+  (`MergeConflictTests.VersionedEntity_StaleUpsert_DetectsConflict`) found: PostgreSQL MERGE and
+  CockroachDB/YugabyteDB ON CONFLICT rejected every versioned upsert of an existing row
+  (`"version" = "version" + 1` is ambiguous with the MERGE source / `EXCLUDED`); Oracle rejected it
+  (`ORA-02000`: no `WHEN MATCHED AND` in Oracle MERGE); SQLite and DuckDB silently let a stale
+  upsert win. *(fixed, both gateways, single-row and batch: the MERGE increment reads `t.`;
+  ON CONFLICT gets its own SET fragment (3.0's split, replacing the `s.`→`EXCLUDED.` string
+  replace) with the increment qualified by the table; Oracle puts the check in
+  `UPDATE ... WHERE` via internal `IInternalSqlDialect.MergeMatchedConditionAsUpdateWhere`;
+  SQLite/DuckDB set `SupportsOnConflictWhere`. Unit: `UpsertVersionSqlTests`; live: all providers
+  green, MySQL-family/Firebird documented as unable to detect.)* *Release note:* a stale-version
+  upsert on SQLite/DuckDB now throws `ConcurrencyConflictException` instead of overwriting.
+  **3.0:** the ON CONFLICT ambiguity (CockroachDB/YugabyteDB), Oracle `WHEN MATCHED AND` and
+  SQLite/DuckDB detection are all still broken there.
+- [x] **Oracle `RETURNING … INTO :1`** — worked only because ODP.NET binds by position and the OUT
+  parameter came last; the dialect's own comment said it needs a named parameter. *(fixed: `INTO :o0`,
+  shared constant `OracleDialect.ReturningParameterName`; live Oracle identity tests pass.)* **3.0:** same.
+- [x] **`TypeCoercionHelper.ReadBytes`** — confirmed: a provider returning partial chunks produced a
+  truncated, zero-padded array; `ReadGuidFromBytes` wrongly threw "does not contain 16 bytes".
+  *(fixed: both read until complete; fakeDb gained `fakeDbDataReader.MaxBytesPerGetBytesCall` to
+  simulate streaming providers.)* **3.0:** same.
+- [x] **`Range<T>` writes to PostgreSQL were broken entirely**, not just `Empty`: the registry used
+  `NpgsqlDbType` names that don't exist (`Int4Range`/`TsRange`), so ranges went out as text, which
+  PostgreSQL rejects for a range column (the unit tests' mock enum used the same wrong names).
+  *(fixed: ported 3.0's `IntegerRange`/`BigIntRange`/`TimestampRange`, `NpgsqlRange<T>` write,
+  `Range<long>` mapping, YugabyteDB; plus `Range<T>.Empty` is now its own value written as
+  `NpgsqlRange<T>.Empty`/`empty`, read back from `NpgsqlRange.IsEmpty`. New `IsEmptyRange`;
+  `IsEmpty` unchanged (still true for unbounded). Live: `PostgreSqlRangeRoundTripTests` on
+  PostgreSQL + YugabyteDB.)* *Release note:* `Range<T>.Empty` no longer equals `default`/`(,)`.
+  **3.0:** still writes `Empty` as unbounded ("all values").
+- [x] **Flaky `PoolGovernorTurnstileTests…QueueExceedsMaxQueueDepth`** — test race: the occupier's 2s
+  timeout could expire before a starved polling loop saw it. *(fixed in the test: dedicated thread,
+  30s timeout, released at the end.)* 16 loaded combined runs: the other timing tests didn't fail.
+- [x] **`ConvertWithCache` "returns a default"** — not a bug: it throws `InvalidCastException`. The
+  zeros came from `DataReaderMapper`'s non-Strict mode (logs, leaves the default — documented).
+  Regression test added.
+- [x] **`PostgreSqlIntervalCoercion.TryWrite` drops months** — not reachable: only
+  `ProviderParameterFactory` (dead on 2.0.6) calls it; a provider without an interval mapping gets
+  the value object itself. Pinned by a test; moved to dead code.
+- [x] **`PrimaryKeyTableGateway` ignores `loadOriginal`** — by design (CLAUDE.md: "exists for API
+  symmetry but is always ignored"); the interface docs promised a reload. *(docs and TODO fixed,
+  pinned by a test.)* Implementing it would change behavior for callers passing `true` — 3.0 decision.
+
+## Decisions needed (found while investigating)
+
+- [ ] **D06 — `DbMode.SingleConnection`: a plain read during another task's open transaction fails on
+  real SQLite.** Reads deliberately skip the single-connection transaction gate (so code can read
+  through the plain context while its own transaction is open), but Microsoft.Data.Sqlite rejects a
+  command without its `Transaction` set while one is pending: "Execute requires the command to have a
+  transaction object…". This is the intermittent `SingleConnectionConcurrencyTortureTests` failure
+  (reproduced, message captured); fakeDb doesn't enforce the rule. 3.0 (`81eef2b`) makes reads hold the
+  gate for the reader's lifetime and changed the streaming tests to read through the transaction —
+  but then a plain read from the flow that owns the open transaction waits on the gate (forever when
+  `ModeLockTimeout` is null). Alternative: attach the open transaction to such reads.
+
+## Still open
+
 - **Batch update keys on `[PrimaryKey]`, single-row update on `[Id]`.** 3.0 changed this (`bbb2ef8`);
   changing it on 2.0.6 would break callers — leave unless a bug report forces it.
-- **`Range<T>.Empty` is `default`, the same value as an unbounded `(,)` range**, so the model can't
-  distinguish PostgreSQL's `empty` from "all values". Needs a real empty flag to fix.
+- **`Range<T>.IsEmpty` is true for an unbounded range** — kept for compatibility; 3.0 should make it
+  mean "empty" only.
 - **Dead code** (candidates for removal on 3.0, not 2.0.6): `ProviderParameterFactory`'s
   `NpgsqlDbType` numbers are wrong and its Oracle Guid branch is broken, but nothing on 2.0.6 calls
-  it (it is **live and still wrong on 3.0** — fix there urgently); `TableGateway.BuildUpdateByKey`
-  and helpers, `SqlContainer.Reset()`, `DataReaderMapper.CoerceValue`/`TryHandleEnumFailure`,
-  the Snowflake branch in `PostgresExceptionTranslator`, the Oracle `PrefetchSequence` branch in
+  it (it is **live and still wrong on 3.0** — fix there urgently); `PostgreSqlIntervalCoercion.TryWrite`
+  (drops months); `TableGateway.BuildUpdateByKey` and helpers, `SqlContainer.Reset()`,
+  `DataReaderMapper.CoerceValue`/`TryHandleEnumFailure`, the Snowflake branch in
+  `PostgresExceptionTranslator`, the Oracle `PrefetchSequence` branch in
   `SqlDialect.GetGeneratedKeyPlan`, and a duplicated enum-converter block in `TypeMapRegistry`.
+- **`docs/FUTURE_WORK.md`** describes 3.0 work (e.g. `VersionedUpsertConflictTests.cs`) as if it were on
+  this branch — a planning doc, left as is.
 
 ## 3.0 follow-ups found during this work
 

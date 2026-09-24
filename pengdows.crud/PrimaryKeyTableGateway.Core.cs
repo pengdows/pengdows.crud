@@ -55,6 +55,10 @@ public partial class PrimaryKeyTableGateway<TEntity> :
 
         /// <summary>ON CONFLICT / MERGE / ON DUPLICATE KEY UPDATE fragment, or null when upsert not applicable.</summary>
         public string? UpsertUpdateFragment;
+        // SET fragment for ON CONFLICT / ON DUPLICATE KEY (single-row and batch).
+        public string? UpsertUpdateFragmentOnConflict;
+        // Oracle: the MERGE version check as a WHERE on the UPDATE branch.
+        public string? UpsertMergeUpdateWhere;
 
         /// <summary>"AND t.\"ver\" = s.\"ver\"" appended to WHEN MATCHED arm; null when there is no integer (non-byte[]) [Version] column.</summary>
         public string? UpsertMergeVersionCondition;
@@ -118,14 +122,30 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                 $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
         }
 
-        string? upsertUpdateFragment = BuildUpsertUpdateFragment(dialect, updateColumns);
+        // Two fragments, because one dialect can need both: PostgreSQL 15+ uses MERGE for a
+        // single row and ON CONFLICT for batches.
+        string? upsertUpdateFragmentOnConflict = dialect.SupportsInsertOnConflict || dialect.SupportsOnDuplicateKey
+            ? BuildOnConflictUpdateFragment(dialect, updateColumns)
+            : null;
+        string? upsertUpdateFragment = dialect.SupportsMerge
+            ? BuildMergeUpdateFragment(dialect, updateColumns)
+            : upsertUpdateFragmentOnConflict;
 
         string? upsertMergeVersionCondition = null;
+        string? upsertMergeUpdateWhere = null;
         string? upsertOnConflictVersionWhere = null;
         if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
         {
             var wrappedVer = dialect.WrapSimpleName(_versionColumn.Name);
-            upsertMergeVersionCondition = $"AND t.{wrappedVer} = s.{wrappedVer}";
+            // Oracle has no "WHEN MATCHED AND"; its check is a WHERE on the UPDATE branch.
+            if (dialect.MergeMatchedConditionAsUpdateWhere())
+            {
+                upsertMergeUpdateWhere = $"WHERE t.{wrappedVer} = s.{wrappedVer}";
+            }
+            else
+            {
+                upsertMergeVersionCondition = $"AND t.{wrappedVer} = s.{wrappedVer}";
+            }
             if (dialect.SupportsOnConflictWhere)
             {
                 upsertOnConflictVersionWhere =
@@ -140,19 +160,64 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             UpdateSqlPrefix = updateSqlPrefix,
             VersionIncrementClause = versionIncrementClause,
             UpsertUpdateFragment = upsertUpdateFragment,
+            UpsertUpdateFragmentOnConflict = upsertUpdateFragmentOnConflict,
+            UpsertMergeUpdateWhere = upsertMergeUpdateWhere,
             UpsertMergeVersionCondition = upsertMergeVersionCondition,
             UpsertOnConflictVersionWhere = upsertOnConflictVersionWhere
         };
     }
 
-    private string? BuildUpsertUpdateFragment(ISqlDialect dialect, List<IColumnInfo> updateColumns)
+    private string? BuildMergeUpdateFragment(ISqlDialect dialect, List<IColumnInfo> updateColumns)
     {
         var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         try
         {
-            if (dialect.SupportsMerge)
+            var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+            foreach (var col in updateColumns)
             {
-                var tp = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+                if (_auditValueResolver == null && col.IsLastUpdatedBy)
+                {
+                    continue;
+                }
+
+                if (frag.Length > 0)
+                {
+                    frag.Append(", ");
+                }
+
+                frag.Append(tp);
+                frag.Append(dialect.WrapSimpleName(col.Name));
+                frag.Append(" = s.");
+                frag.Append(dialect.WrapSimpleName(col.Name));
+            }
+
+            if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
+            {
+                frag.Append(", ");
+                frag.Append(tp);
+                frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                // Always read the target row: unqualified, the reference is ambiguous on engines
+                // that expose the source's column too (PostgreSQL).
+                frag.Append(" = t.");
+                frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                frag.Append(" + 1");
+            }
+
+            return frag.Length > 0 ? frag.ToString() : null;
+        }
+        finally
+        {
+            frag.Dispose();
+        }
+    }
+
+    private string? BuildOnConflictUpdateFragment(ISqlDialect dialect, List<IColumnInfo> updateColumns)
+    {
+        var frag = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        try
+        {
+            try
+            {
                 foreach (var col in updateColumns)
                 {
                     if (_auditValueResolver == null && col.IsLastUpdatedBy)
@@ -165,57 +230,30 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                         frag.Append(", ");
                     }
 
-                    frag.Append(tp);
                     frag.Append(dialect.WrapSimpleName(col.Name));
-                    frag.Append(" = s.");
-                    frag.Append(dialect.WrapSimpleName(col.Name));
+                    frag.Append(" = ");
+                    frag.Append(dialect.UpsertIncomingColumn(col.Name));
                 }
 
                 if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
                 {
                     frag.Append(", ");
-                    frag.Append(tp);
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                     frag.Append(" = ");
-                    frag.Append(tp);
+                    if (dialect.SupportsInsertOnConflict)
+                    {
+                        // EXCLUDED has the same column, so PostgreSQL-family engines reject an
+                        // unqualified reference as ambiguous.
+                        frag.Append(BuildWrappedTableName(dialect));
+                        frag.Append(".");
+                    }
                     frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
                     frag.Append(" + 1");
                 }
             }
-            else
+            catch (NotSupportedException)
             {
-                try
-                {
-                    foreach (var col in updateColumns)
-                    {
-                        if (_auditValueResolver == null && col.IsLastUpdatedBy)
-                        {
-                            continue;
-                        }
-
-                        if (frag.Length > 0)
-                        {
-                            frag.Append(", ");
-                        }
-
-                        frag.Append(dialect.WrapSimpleName(col.Name));
-                        frag.Append(" = ");
-                        frag.Append(dialect.UpsertIncomingColumn(col.Name));
-                    }
-
-                    if (_versionColumn != null && _versionColumn.PropertyInfo.PropertyType != typeof(byte[]))
-                    {
-                        frag.Append(", ");
-                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
-                        frag.Append(" = ");
-                        frag.Append(dialect.WrapSimpleName(_versionColumn.Name));
-                        frag.Append(" + 1");
-                    }
-                }
-                catch (NotSupportedException)
-                {
-                    frag.Clear();
-                }
+                frag.Clear();
             }
 
             return frag.Length > 0 ? frag.ToString() : null;

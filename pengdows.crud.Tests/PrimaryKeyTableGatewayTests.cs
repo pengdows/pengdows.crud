@@ -278,6 +278,20 @@ public class PrimaryKeyTableGatewayTests
         Assert.Contains("line_number", sql);
     }
 
+    // loadOriginal exists for symmetry with ITableGateway and is ignored: the UPDATE is the same.
+    [Fact]
+    public async Task BuildUpdateAsync_LoadOriginal_BuildsSameUpdate()
+    {
+        using var ctx = MakeContext(SupportedDatabase.Sqlite);
+        var gw = new PrimaryKeyTableGateway<OrderLine>(ctx);
+        var line = new OrderLine { OrderId = 1, LineNumber = 2, ProductCode = "SKU-002", Quantity = 5 };
+
+        await using var plain = await gw.BuildUpdateAsync(line);
+        await using var withOriginal = await gw.BuildUpdateAsync(line, loadOriginal: true);
+
+        Assert.Equal(plain.Query.ToString(), withOriginal.Query.ToString());
+    }
+
     [Fact]
     public async Task UpdateAsync_ReturnsAffectedRows()
     {

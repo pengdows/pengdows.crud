@@ -540,15 +540,9 @@ public partial class TableGateway<TEntity, TRowID>
         // Resolve conflict key once for all chunks.
         var conflictCols = ResolveUpsertKey();
 
-        // A dialect may support both MERGE and ON CONFLICT. The cached fragment is normally built
-        // for MERGE in that case and references its source alias (s), while PostgreSQL's ON
-        // CONFLICT branch requires EXCLUDED. This is a per-dialect, not per-chunk, fact - compute
-        // it once for the whole batch.
-        var updateFragment = template.UpsertUpdateFragment;
-        if (dialect.SupportsMerge && dialect.SupportsInsertOnConflict && updateFragment != null)
-        {
-            updateFragment = updateFragment.Replace("s.", "EXCLUDED.", StringComparison.OrdinalIgnoreCase);
-        }
+        // Batches always use ON CONFLICT, even on a dialect that also supports MERGE (PostgreSQL
+        // 15+), so they take the ON CONFLICT fragment, never the MERGE one.
+        var updateFragment = template.UpsertUpdateFragmentOnConflict;
 
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
@@ -616,7 +610,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             // Append ON DUPLICATE KEY UPDATE clause
-            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);
+            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
             result.Add(sc);
         }
 

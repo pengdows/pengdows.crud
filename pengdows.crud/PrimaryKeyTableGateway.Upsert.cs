@@ -10,12 +10,12 @@
 // - UpsertAsync() - Executes BuildUpsert, then post-execute concurrency check:
 //   * 0 rows + [Version] + (non-Firebird MERGE dialect or ON CONFLICT ... WHERE dialect)
 //     → ConcurrencyConflictException
-//   * MySQL/MariaDB ON DUPLICATE KEY, ON CONFLICT dialects with SupportsOnConflictWhere=false
-//     (e.g. SQLite), and Firebird:
-//     conflict not detectable, no exception
+//   * MySQL/MariaDB ON DUPLICATE KEY, ON CONFLICT dialects with SupportsOnConflictWhere=false,
+//     and Firebird: conflict not detectable, no exception
 // - Database-specific syntax (single-entity):
 //   * MERGE-capable dialects (e.g. SQL Server, Oracle, Snowflake, Db2, PostgreSQL 15+,
 //     DuckDB 1.4+): MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
+//     (Oracle: WHEN MATCHED THEN UPDATE ... [WHERE t.ver = s.ver])
 //   * ON CONFLICT dialects without MERGE (e.g. PostgreSQL < 15, CockroachDB, SQLite):
 //     INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver when supported]
 //   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE (no version guard)
@@ -309,7 +309,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             sc.Query.Append(dialect.WrapSimpleName(pkCols[i].Name));
         }
 
-        sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragment);
+        sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragmentOnConflict);
 
         if (template.UpsertOnConflictVersionWhere != null)
         {
@@ -337,7 +337,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
         }
 
-        sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);
+        sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
 
         sc.AddParameters(parameters);
         return sc;
@@ -430,8 +430,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
                     ? $" WHEN MATCHED {template.UpsertMergeVersionCondition} THEN UPDATE SET "
                     : " WHEN MATCHED THEN UPDATE SET ");
 
-            sc.Query.Append(template.UpsertUpdateFragment)
-                .Append(" WHEN NOT MATCHED THEN INSERT (")
+            sc.Query.Append(template.UpsertUpdateFragment);
+            if (template.UpsertMergeUpdateWhere != null)
+            {
+                sc.Query.Append(" ").Append(template.UpsertMergeUpdateWhere);
+            }
+
+            sc.Query.Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
                 .Append(") VALUES (")
                 .Append(insertValSb.AsSpan())
@@ -565,15 +570,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 sc.Query.Append(dialect.WrapSimpleName(pkCols[i].Name));
             }
 
-            // A dialect may support both MERGE and ON CONFLICT. The cached fragment is normally
-            // built for MERGE in that case and references its source alias (s), while
-            // PostgreSQL's ON CONFLICT branch requires EXCLUDED. Mirrors the identical fix in
-            // TableGateway.Batch.cs's BuildBatchUpsertOnConflict.
-            var updateFragment = template.UpsertUpdateFragment;
-            if (dialect.SupportsMerge && dialect.SupportsInsertOnConflict && updateFragment != null)
-            {
-                updateFragment = updateFragment.Replace("s.", "EXCLUDED.", StringComparison.OrdinalIgnoreCase);
-            }
+            // Batches always use ON CONFLICT, even on a dialect that also supports MERGE
+            // (PostgreSQL 15+), so they take the ON CONFLICT fragment, never the MERGE one.
+            var updateFragment = template.UpsertUpdateFragmentOnConflict;
 
             sc.Query.Append(") DO UPDATE SET ").Append(updateFragment);
 
@@ -618,7 +617,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
             }
 
-            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragment);
+            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
             result.Add(sc);
         }
 

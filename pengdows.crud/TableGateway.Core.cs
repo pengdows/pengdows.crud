@@ -637,7 +637,7 @@ public partial class TableGateway<TEntity, TRowID> :
     private const string
         ReturningClausePlaceholder = "{returning}"; // PostgreSQL/SQLite/etc: RETURNING id (after VALUES)
 
-    private const string OracleReturningParameterName = "o0";
+    private const string OracleReturningParameterName = OracleDialect.ReturningParameterName;
 
     /// <inheritdoc/>
     public ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null)

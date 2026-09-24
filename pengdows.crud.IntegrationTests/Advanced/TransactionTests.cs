@@ -377,7 +377,17 @@ public class TransactionTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
+            // The profile throws rather than run below its guarantee: always on PostgreSQL/YugabyteDB,
+            // and on SQL Server when the database has snapshot isolation off.
+            var cannotGuarantee = provider is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb;
+            if (provider == SupportedDatabase.SqlServer)
+            {
+                await using var probe = context.CreateSqlContainer(
+                    "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()");
+                cannotGuarantee = await probe.ExecuteScalarRequiredAsync<int>() != 1;
+            }
+
+            if (cannotGuarantee)
             {
                 await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
                 {

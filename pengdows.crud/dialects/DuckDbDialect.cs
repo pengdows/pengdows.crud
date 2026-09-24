@@ -112,6 +112,7 @@ internal class DuckDbDialect : SqlDialect
     public override bool MergeUpdateRequiresTargetAlias => false;
 
     public override bool SupportsInsertOnConflict => true; // ON CONFLICT support
+    public override bool SupportsOnConflictWhere => true; // DO UPDATE ... WHERE
     public override bool SupportsJsonTypes => true; // Excellent JSON support
     public override bool SupportsArrayTypes => true; // Strong array support
     public override bool SupportsWindowFunctions => true; // Comprehensive window functions
