@@ -12,6 +12,13 @@ namespace pengdows.crud.fakeDb;
 /// In-memory data store for FakeDb that provides automatic data persistence
 /// Simulates database behavior by storing INSERT data and returning it on SELECT
 /// </summary>
+/// <remarks>
+/// This is a regex/prefix-based SQL parser, not a real SQL engine — it recognizes only the
+/// handful of statement shapes pengdows.crud itself generates. A passing test against
+/// <see cref="FakeDataStore"/> proves that SQL was shaped the way this parser expects; it is
+/// NOT evidence that a real database would accept or execute that SQL correctly. Use
+/// <c>testbed</c>/integration tests against real database containers for correctness evidence.
+/// </remarks>
 public class FakeDataStore
 {
     // Table_name -> List of rows (each row is a Dictionary of column->value)
@@ -19,6 +26,17 @@ public class FakeDataStore
     private readonly object _lockObject = new();
     private int _nextId = 1;
     private int _lastInsertId = 0;
+
+    /// <summary>
+    /// When <c>false</c> (the default, unchanged from before this flag existed), a statement
+    /// shape this parser doesn't recognize silently "succeeds" instead of failing loudly: an
+    /// unparseable INSERT and any other unrecognized nonquery SQL both return 1 affected row, and
+    /// an unrecognized SELECT returns zero rows. When <c>true</c>, all three throw
+    /// <see cref="NotSupportedException"/> instead — for a test that wants the stronger
+    /// substitutability guarantee that every statement it runs through fakeDb was actually
+    /// understood, not just tolerated.
+    /// </summary>
+    public bool StrictMode { get; set; }
 
     public void Clear()
     {
@@ -64,6 +82,12 @@ public class FakeDataStore
         }
 
         // Default for other operations
+        if (StrictMode)
+        {
+            throw new NotSupportedException(
+                $"FakeDataStore (StrictMode) does not recognize this nonquery statement shape: {commandText}");
+        }
+
         return 1;
     }
 
@@ -196,6 +220,12 @@ public class FakeDataStore
                     _tables[tableName].Add(row);
                 }
                 return 1;
+            }
+
+            if (StrictMode)
+            {
+                throw new NotSupportedException(
+                    $"FakeDataStore (StrictMode) does not recognize this INSERT statement shape: {commandText}");
             }
 
             return 1; // Unrecognized INSERT format — treat as success
@@ -377,6 +407,12 @@ public class FakeDataStore
 
         if (!selectMatch.Success)
         {
+            if (StrictMode)
+            {
+                throw new NotSupportedException(
+                    $"FakeDataStore (StrictMode) does not recognize this SELECT statement shape: {commandText}");
+            }
+
             return Enumerable.Empty<Dictionary<string, object?>>();
         }
 
@@ -402,22 +438,40 @@ public class FakeDataStore
                 return filteredRows.ToList();
             }
 
-            // Handle specific columns
-            var columns = selectPart.Split(',').Select(c => CleanIdentifier(c.Trim())).ToList();
+            // Handle specific columns, honoring an optional "AS alias" or implicit "column alias"
+            // suffix on each — mirrors HandleLiteralSelect's identical alias pattern for the
+            // no-FROM literal-select path, so both SELECT forms support aliasing consistently.
+            var columnSpecs = selectPart.Split(',').Select(ParseColumnSpec).ToList();
             return filteredRows.Select(row =>
             {
                 var result = new Dictionary<string, object?>();
-                foreach (var col in columns)
+                foreach (var (sourceColumn, outputKey) in columnSpecs)
                 {
-                    if (row.ContainsKey(col))
+                    if (row.ContainsKey(sourceColumn))
                     {
-                        result[col] = row[col];
+                        result[outputKey] = row[sourceColumn];
                     }
                 }
 
                 return result;
             }).ToList();
         }
+    }
+
+    private (string SourceColumn, string OutputKey) ParseColumnSpec(string token)
+    {
+        var trimmed = token.Trim();
+        var match = Regex.Match(trimmed, @"^(.+?)\s+(?:AS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)$", RegexOptions.IgnoreCase);
+
+        if (match.Success)
+        {
+            var sourceColumn = CleanIdentifier(match.Groups[1].Value.Trim());
+            var alias = match.Groups[2].Value.Trim();
+            return (sourceColumn, alias);
+        }
+
+        var column = CleanIdentifier(trimmed);
+        return (column, column);
     }
 
     private object? HandleCountQuery(string commandText, DbParameterCollection? parameters)
@@ -735,14 +789,18 @@ public class FakeDataStore
 
     private void ApplySetClause(Dictionary<string, object?> row, string setClause, DbParameterCollection? parameters)
     {
-        // Simple SET clause parsing - handles "column = value, column2 = value2"
+        // Simple SET clause parsing - handles "column = value, column2 = value2". The column-name
+        // character class matches EvaluateWhereClause's (backtick/bracket/double-quote/single-quote
+        // plus word chars) so a real dialect-generated UPDATE — every dialect quotes identifiers by
+        // default, e.g. "column" = @p0 — is recognized here too, not just a bare, unquoted name.
         var assignments = setClause.Split(',');
         foreach (var assignment in assignments)
         {
-            var match = Regex.Match(assignment, @"(\w+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
+            var match = Regex.Match(assignment, @"([`\[\]""'\w.]+)\s*=\s*(.+)", RegexOptions.IgnoreCase);
             if (match.Success)
             {
-                var column = match.Groups[1].Value.Trim();
+                var column = ResolveRowKey(row, CleanIdentifier(match.Groups[1].Value.Trim())) ??
+                             CleanIdentifier(match.Groups[1].Value.Trim());
                 var valueExpression = match.Groups[2].Value.Trim();
                 var value = GetCompareValue(valueExpression, parameters);
                 row[column] = value;

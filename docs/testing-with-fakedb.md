@@ -241,8 +241,8 @@ a commit or rollback mid-flight to deliberately race a concurrent `Dispose` agai
 Everything above answers with canned/queued data. Setting `EnableDataPersistence = true` (on the
 factory or a connection) switches to a genuine, if intentionally limited, in-memory SQL engine:
 real `CREATE TABLE`, `INSERT` (single and multi-row `VALUES`, auto-assigning `Id` when omitted,
-trimming trailing `ON CONFLICT`/`RETURNING`/`OUTPUT`/`ON DUPLICATE KEY` clauses), `UPDATE`/`DELETE`
-with a real `WHERE` evaluator (`AND`, `IS [NOT] NULL`, `LIKE` with `%`/`_` wildcards, `IN (...)`,
+trimming trailing `ON CONFLICT`/`RETURNING`/`OUTPUT`/`ON DUPLICATE KEY` clauses), `UPDATE` (quoted or bare
+column names in `SET`)/`DELETE` with a real `WHERE` evaluator (`AND`, `IS [NOT] NULL`, `LIKE` with `%`/`_` wildcards, `IN (...)`,
 comparisons), and `SELECT` (`*`, column lists with aliasing, `COUNT(...)`, literal no-`FROM`
 selects). Tables persist for the lifetime of one `FakeDataStore` instance (`Clear()` resets); by
 default every connection from one factory shares a single store.
@@ -253,6 +253,12 @@ way this parser expects; it does not prove a real database would accept or execu
 For that, use `testbed/` (Testcontainers-backed integration tests against real engines) — the same
 discipline this library applies to its own test suite: fakeDb for fast, deterministic unit tests of
 *your* logic; real containers for proof the generated SQL actually works.
+
+By default a statement shape the parser doesn't recognize quietly "succeeds": an unparseable
+`INSERT` or other unrecognized nonquery returns 1 affected row, and an unrecognized `SELECT` returns
+no rows. Set `FakeDataStore.StrictMode = true` (e.g. `connection.DataStore.StrictMode = true`) to
+make all three throw `NotSupportedException` instead, so a test fails when fakeDb didn't understand
+its SQL rather than passing without having run it.
 
 ## Building your own fixture layer
 

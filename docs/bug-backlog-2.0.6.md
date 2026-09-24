@@ -38,6 +38,12 @@ These are the rules the code is being brought in line with.
   bug (see 3.0 follow-ups).
 - [x] **`TotalConnectionsReused` marked `[Obsolete]`** — never incremented; always 0.
 
+- [x] **fakeDb brought level with 3.0** — `UPDATE … SET "col" = …` with quoted names now persists
+  (it reported 1 row but never wrote the value); `SELECT col AS alias` / `col alias` return the
+  alias; opt-in `FakeDataStore.StrictMode` throws `NotSupportedException` for SQL it doesn't
+  recognize; emulated Access reports ServerVersion `04.00.0000`. Everything else in fakeDb that
+  differs from 3.0 is 2.0.6's own fix (B12) or a comment correction.
+
 ## Fix — no caller-visible break
 
 - [x] **B01 — SQL numbers use the current culture.** *(fixed; also `Append(object)` and `AppendFormat(null, …)`)* `SqlQueryBuilder.cs:110-175`:

@@ -193,7 +193,10 @@ public class DataSourceInformationTests
         Assert.Equal(expectedMarker, info.ParameterMarker);
 
         // Assert: major version parsing
-        var expectedMajor = (db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) ? 15 : 1;
+        var expectedMajor = (db == SupportedDatabase.PostgreSql || db == SupportedDatabase.AuroraPostgreSql) ? 15
+            // Real ServerVersion observed live from a real .accdb: "04.00.0000".
+            : db == SupportedDatabase.Access ? 4
+            : 1;
         Assert.Equal(expectedMajor, info.ParsedVersion?.Major);
 
         // Assert: merge support

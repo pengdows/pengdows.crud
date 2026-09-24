@@ -683,7 +683,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             SupportedDatabase.CockroachDb => "v23.1.0",
             SupportedDatabase.DuckDB => "DuckDB 0.9.2",
             SupportedDatabase.Db2 => "DB2 11.05.0800",
-            // Products without a case here (e.g. SybaseASE, Access, Informix, SapHana, InterBase)
+            // Confirmed live: OleDbConnection.ServerVersion returns this exact string against a
+            // real .accdb via Microsoft.ACE.OLEDB.16.0 — the same Jet-compatibility version
+            // reported by DataSourceProductVersion, unchanged across ACE 12.0 and 16.0.
+            SupportedDatabase.Access => "04.00.0000",
+            // Products without a case here (e.g. SybaseASE, Informix, SapHana, InterBase)
             // report the generic "1.0"; use SetServerVersion when a test needs a specific version.
             _ => "1.0"
         };

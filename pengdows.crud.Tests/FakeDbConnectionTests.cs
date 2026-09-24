@@ -171,4 +171,15 @@ public class fakeDbConnectionTests
 
         await Assert.ThrowsAnyAsync<Exception>(() => conn.OpenAsync());
     }
+
+    // A real .accdb opened through Microsoft.ACE.OLEDB reports ServerVersion "04.00.0000" (the
+    // Jet-compatibility version, unchanged across ACE 12.0 and 16.0); the generic "1.0" default
+    // gave emulated Access a version the real provider never reports.
+    [Fact]
+    public void ServerVersion_Access_MatchesRealAceProvider()
+    {
+        using var conn = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Access };
+
+        Assert.Equal("04.00.0000", conn.ServerVersion);
+    }
 }

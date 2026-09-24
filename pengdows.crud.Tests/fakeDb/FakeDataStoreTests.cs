@@ -119,6 +119,36 @@ public class FakeDataStoreTests
         Assert.True(reader.Read()); // 'keep' row unchanged
     }
 
+    // Every real ISqlDialect quotes column identifiers by default (WrapObjectName's ANSI
+    // double-quote policy — see CLAUDE.md's "Do not hardcode identifier quoting" section), so an
+    // UPDATE generated through the real pengdows.crud SQL-building path always looks like
+    // UPDATE "table" SET "col" = @p0 WHERE "id" = @p1, never the bare `SET col = ...` shape every
+    // other UPDATE test in this file uses. EvaluateWhereClause's regex already tolerates quoted
+    // identifiers (its character class includes `[]"'), but ApplySetClause's did not — so a
+    // real dialect-generated UPDATE reported the correct affected-row count while silently never
+    // writing the new value, a "hide a failed operation behind a success result" defect that
+    // every existing bare-column-name test here was structurally unable to catch.
+    [Fact]
+    public async Task Update_WithQuotedColumnNames_ActuallyPersistsNewValue()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO quoted_things (\"name\") VALUES ('old')";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var updateCmd = conn.CreateCommand();
+        updateCmd.CommandText = "UPDATE \"quoted_things\" SET \"name\" = 'new' WHERE \"name\" = 'old'";
+        var affected = await updateCmd.ExecuteNonQueryAsync();
+        Assert.Equal(1, affected);
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM quoted_things";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+        Assert.True(reader.Read());
+        Assert.Equal("new", reader["name"]?.ToString());
+    }
+
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -179,6 +209,68 @@ public class FakeDataStoreTests
 
         Assert.True(reader.Read());
         Assert.NotNull(reader["name"]);
+    }
+
+    // Gap found while writing an external DataReaderMapper reachability test (FEAT-004):
+    // HandleSelect's specific-column branch split the select list on commas and treated each
+    // token as a bare column name (via CleanIdentifier) with no "AS alias" parsing at all — unlike
+    // HandleLiteralSelect (the no-FROM path), which already had this exact regex for
+    // "value AS alias"/"value alias". A token like "order_id AS OrderId" silently failed
+    // row.ContainsKey(...) and was dropped from the result entirely (no exception, no aliasing —
+    // the column just vanished), which is a real capability gap for any test needing a query
+    // result shaped by column aliases.
+    [Fact]
+    public async Task Select_WithColumnAliasUsingAs_ReturnsColumnUnderTheAliasName()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO orders (order_id, customer_name) VALUES (42, 'Acme Corp')";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT order_id AS OrderId, customer_name AS CustomerName FROM orders";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        Assert.True(reader.Read());
+        Assert.Equal(42L, Convert.ToInt64(reader["OrderId"]));
+        Assert.Equal("Acme Corp", reader["CustomerName"]?.ToString());
+        Assert.False(reader.Read());
+    }
+
+    [Fact]
+    public async Task Select_WithImplicitColumnAlias_ReturnsColumnUnderTheAliasName()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO orders (order_id) VALUES (7)";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT order_id OrderId FROM orders";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        Assert.True(reader.Read());
+        Assert.Equal(7L, Convert.ToInt64(reader["OrderId"]));
+    }
+
+    [Fact]
+    public async Task Select_MixOfAliasedAndPlainColumns_BothResolveCorrectly()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO orders (order_id, status) VALUES (1, 'shipped')";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT order_id AS OrderId, status FROM orders";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+
+        Assert.True(reader.Read());
+        Assert.Equal(1L, Convert.ToInt64(reader["OrderId"]));
+        Assert.Equal("shipped", reader["status"]?.ToString());
     }
 
     [Fact]
@@ -389,5 +481,102 @@ public class FakeDataStoreTests
 
         await Assert.ThrowsAsync<NotSupportedException>(
             () => selectCmd.ExecuteReaderAsync());
+    }
+
+    // ── StrictMode: unrecognized statement shape ────────────────────────────────
+    //
+    // FakeDataStore is a regex/prefix-based SQL parser, not a real SQL engine. By default
+    // (StrictMode = false, unchanged from before this test class) a statement shape it doesn't
+    // recognize silently "succeeds" instead of failing loudly: an unparseable INSERT format and
+    // any other unrecognized nonquery SQL both return 1 affected row, and an unrecognized SELECT
+    // returns zero rows — the main false-positive risk found in a fakeDb audit, since a test can
+    // pass without FakeDataStore ever having understood the SQL it was handed. StrictMode is an
+    // opt-in flag (default off, so nothing existing changes behavior) that makes all three throw
+    // instead, for tests that want the stronger guarantee.
+
+    [Fact]
+    public async Task Default_UnrecognizedInsertFormat_ReturnsOneRowAffected()
+    {
+        using var conn = MakeConnection();
+        using var cmd = conn.CreateCommand();
+        // Not a shape HandleInsert's regexes recognize (no VALUES clause at all).
+        cmd.CommandText = "INSERT INTO users DEFAULT VALUES";
+
+        var result = await cmd.ExecuteNonQueryAsync();
+
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public async Task Default_UnrecognizedNonQuery_ReturnsOneRowAffected()
+    {
+        using var conn = MakeConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "TRUNCATE TABLE users";
+
+        var result = await cmd.ExecuteNonQueryAsync();
+
+        Assert.Equal(1, result);
+    }
+
+    [Fact]
+    public async Task Default_UnrecognizedSelect_ReturnsEmptyRows()
+    {
+        using var conn = MakeConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
+
+        using var reader = await cmd.ExecuteReaderAsync();
+
+        Assert.False(reader.Read());
+    }
+
+    [Fact]
+    public async Task StrictMode_UnrecognizedInsertFormat_Throws()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "INSERT INTO users DEFAULT VALUES";
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => cmd.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
+    public async Task StrictMode_UnrecognizedNonQuery_Throws()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "TRUNCATE TABLE users";
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => cmd.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
+    public async Task StrictMode_UnrecognizedSelect_Throws()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT * FROM users JOIN orders ON users.id = orders.user_id";
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => cmd.ExecuteReaderAsync());
+    }
+
+    [Fact]
+    public async Task StrictMode_RecognizedStatements_StillWorkNormally()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO users (name) VALUES ('Alice')";
+        Assert.Equal(1, await insertCmd.ExecuteNonQueryAsync());
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM users";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+        Assert.True(reader.Read());
     }
 }
