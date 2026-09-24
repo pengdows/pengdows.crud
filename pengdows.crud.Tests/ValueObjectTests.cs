@@ -161,7 +161,7 @@ public class ValueObjectTests
 
         Assert.False(range.HasLowerBound);
         Assert.False(range.HasUpperBound);
-        Assert.True(range.IsEmpty); // The property is IsEmpty, not IsUnbounded
+        Assert.False(range.IsEmpty); // unbounded means "all values", not empty
     }
 
     [Fact]

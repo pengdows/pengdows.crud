@@ -49,7 +49,8 @@ public class SqlDialectBranchTests
     [InlineData(SupportedDatabase.PostgreSql, " RETURNING \"id\"")]
     [InlineData(SupportedDatabase.SqlServer, " OUTPUT INSERTED.\"id\"")]
     [InlineData(SupportedDatabase.Sqlite, " RETURNING \"id\"")]
-    [InlineData(SupportedDatabase.Oracle, " RETURNING \"id\" INTO :1")]
+    // Named, so it binds whether or not the command uses BindByName; the gateway reads "o0".
+    [InlineData(SupportedDatabase.Oracle, " RETURNING \"id\" INTO :o0")]
     [InlineData(SupportedDatabase.Firebird, " RETURNING \"id\"")]
     [InlineData(SupportedDatabase.DuckDB, " RETURNING \"id\"")]
     public void RenderInsertReturningClause_UsesProviderSyntax(SupportedDatabase db, string expected)

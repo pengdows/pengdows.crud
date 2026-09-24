@@ -443,9 +443,16 @@ internal class OracleDialect : SqlDialect
         return string.Concat("(", predicate, ")");
     }
 
+    /// <summary>
+    /// Name of the OUT parameter that receives the generated key from RETURNING ... INTO. The
+    /// placeholder is named, not positional (":1"), so it binds whether or not the command uses
+    /// BindByName; the positional form only worked because the OUT parameter happened to be last.
+    /// </summary>
+    internal const string ReturningParameterName = "o0";
+
     public override string GetInsertReturningClause(string idColumnName)
     {
-        return $"RETURNING {WrapObjectName(idColumnName)} INTO :1";
+        return $"RETURNING {WrapObjectName(idColumnName)} INTO {MakeParameterName(ReturningParameterName)}";
     }
 
     /// <summary>
@@ -457,7 +464,7 @@ internal class OracleDialect : SqlDialect
     /// </summary>
     public override string RenderInsertReturningClause(string idColumnWrapped)
     {
-        return $" RETURNING {idColumnWrapped} INTO :1";
+        return $" RETURNING {idColumnWrapped} INTO {MakeParameterName(ReturningParameterName)}";
     }
 
     public override string GetLastInsertedIdQuery()

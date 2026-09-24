@@ -79,7 +79,7 @@ public class RefactoringDuplicationTests
         var dialect = new OracleDialect(CreateFactory(SupportedDatabase.Oracle), _logger);
         var result = dialect.GetInsertReturningClause("id");
         Assert.Contains("RETURNING", result);
-        Assert.Contains("INTO", result);
+        Assert.EndsWith("INTO :o0", result);
     }
 
     #endregion

@@ -140,6 +140,64 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         Assert.Equal(data, bytes);
     }
 
+    // ADO.NET lets GetBytes return fewer bytes than requested (streaming providers do), so
+    // ReadBytes must keep reading until it has the whole value, not trust one call.
+    [Theory]
+    [InlineData(100)]  // pooled small-buffer path
+    [InlineData(1000)] // heap path
+    public void ReadBytes_ProviderReturnsPartialChunks_ReadsWholeValue(int size)
+    {
+        var data = new byte[size];
+        for (var i = 0; i < data.Length; i++)
+        {
+            data[i] = (byte)(i % 251 + 1);
+        }
+
+        using var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["payload"] = data }
+        })
+        {
+            MaxBytesPerGetBytesCall = 7
+        };
+        Assert.True(reader.Read());
+
+        Assert.Equal(data, TypeCoercionHelper.ReadBytes(reader, 0));
+    }
+
+    [Fact]
+    public void ReadGuidFromBytes_ProviderReturnsPartialChunks_ReadsWholeGuid()
+    {
+        var guid = Guid.NewGuid();
+        using var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["gid"] = guid.ToByteArray() }
+        })
+        {
+            MaxBytesPerGetBytesCall = 5
+        };
+        Assert.True(reader.Read());
+
+        Assert.Equal(guid, TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
+    }
+
+    [Fact]
+    public void FakeReader_MaxBytesPerGetBytesCall_CapsEachCall()
+    {
+        using var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["payload"] = new byte[20] }
+        })
+        {
+            MaxBytesPerGetBytesCall = 7
+        };
+        Assert.True(reader.Read());
+
+        Assert.Equal(20, reader.GetBytes(0, 0, null, 0, 0));
+        Assert.Equal(7, reader.GetBytes(0, 0, new byte[20], 0, 20));
+        Assert.Equal(6, reader.GetBytes(0, 14, new byte[20], 0, 20));
+    }
+
     [Fact]
     public void ReadGuidFromBytes_ShortBuffer_ThrowsInvalidValueException()
     {

@@ -76,6 +76,13 @@ public class fakeDbDataReader : DbDataReader
     public int RecordsAffectedOverride { get; set; }
 
     /// <summary>
+    /// When greater than zero, each <see cref="GetBytes"/> call that copies into a buffer returns
+    /// at most this many bytes, as streaming providers may — lets a test prove its caller keeps
+    /// reading until it has the whole value. Zero (the default) copies everything requested.
+    /// </summary>
+    public int MaxBytesPerGetBytesCall { get; set; }
+
+    /// <summary>
     /// When set, accessing <see cref="RecordsAffected"/> throws this exception instead of
     /// returning <see cref="RecordsAffectedOverride"/> — cleared after throwing once. Needed to
     /// simulate a raw provider failure for a provider whose rows-affected check reads
@@ -287,6 +294,11 @@ public class fakeDbDataReader : DbDataReader
         }
 
         var toCopy = (int)Math.Min(length, available);
+        if (MaxBytesPerGetBytesCall > 0)
+        {
+            toCopy = Math.Min(toCopy, MaxBytesPerGetBytesCall);
+        }
+
         if (toCopy > 0)
         {
             Array.Copy(bytes, (int)dataOffset, buffer, bufferOffset, toCopy);

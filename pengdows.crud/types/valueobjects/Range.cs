@@ -9,7 +9,8 @@
 //   * Lower, Upper: T? - nullable bounds (null = infinite)
 //   * IsLowerInclusive, IsUpperInclusive: bool - bound inclusion
 //   * HasLowerBound, HasUpperBound, IsEmpty: convenience properties
-// - Static Empty property for default empty range.
+// - Static Empty: PostgreSQL's empty range, distinct from the unbounded (,) range (which means
+//   "all values"). IsEmpty is true only for Empty.
 // - Parse(): Parses PostgreSQL bracket notation (e.g., "[1,10)", "(,100]").
 // - ToString(): Returns bracket notation with invariant culture.
 // - ParseValue(): Handles int, long, decimal, double, DateTime, DateTimeOffset.
@@ -31,12 +32,24 @@ namespace pengdows.crud.types.valueobjects;
 /// </remarks>
 public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
 {
+    private readonly bool _isEmptyRange;
+
     public Range(T? lower, T? upper, bool isLowerInclusive = true, bool isUpperInclusive = false)
     {
         Lower = lower;
         Upper = upper;
         IsLowerInclusive = isLowerInclusive;
         IsUpperInclusive = isUpperInclusive;
+        _isEmptyRange = false;
+    }
+
+    private Range(bool isEmptyRange)
+    {
+        Lower = null;
+        Upper = null;
+        IsLowerInclusive = false;
+        IsUpperInclusive = false;
+        _isEmptyRange = isEmptyRange;
     }
 
     public T? Lower { get; }
@@ -46,9 +59,18 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
 
     public bool HasLowerBound => Lower is not null;
     public bool HasUpperBound => Upper is not null;
-    public bool IsEmpty => !HasLowerBound && !HasUpperBound;
+    /// <summary>
+    /// True only for <see cref="Empty"/>: the range that contains no values (PostgreSQL
+    /// <c>empty</c>). A range with neither bound is the unbounded <c>(,)</c> range — all values —
+    /// and is not empty.
+    /// </summary>
+    public bool IsEmpty => _isEmptyRange;
 
-    public static Range<T> Empty => default;
+    /// <summary>
+    /// The empty range (PostgreSQL <c>empty</c>). Not the same value as <c>default</c>, which is
+    /// the unbounded range.
+    /// </summary>
+    public static Range<T> Empty { get; } = new(isEmptyRange: true);
 
     /// <summary>
     /// Parse a canonical range string like "[1,5)" or "(,10]".
@@ -61,6 +83,12 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
         }
 
         rangeText = rangeText.Trim();
+
+        // PostgreSQL's canonical text for an empty range.
+        if (rangeText.Equals("empty", StringComparison.OrdinalIgnoreCase))
+        {
+            return Empty;
+        }
 
         if (rangeText.Length < 3)
         {
@@ -135,6 +163,11 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
 
     public override string ToString()
     {
+        if (_isEmptyRange)
+        {
+            return "empty";
+        }
+
         var lowerText = HasLowerBound
             ? Convert.ToString(Lower, CultureInfo.InvariantCulture)
             : string.Empty;
@@ -155,7 +188,8 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
     public bool Equals(Range<T> other)
     {
         var comparer = EqualityComparer<T?>.Default;
-        return comparer.Equals(Lower, other.Lower)
+        return _isEmptyRange == other._isEmptyRange
+               && comparer.Equals(Lower, other.Lower)
                && comparer.Equals(Upper, other.Upper)
                && IsLowerInclusive == other.IsLowerInclusive
                && IsUpperInclusive == other.IsUpperInclusive;
@@ -168,6 +202,6 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
 
     public override int GetHashCode()
     {
-        return HashCode.Combine(Lower, Upper, IsLowerInclusive, IsUpperInclusive);
+        return HashCode.Combine(_isEmptyRange, Lower, Upper, IsLowerInclusive, IsUpperInclusive);
     }
 }
