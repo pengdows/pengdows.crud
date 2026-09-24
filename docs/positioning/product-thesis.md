@@ -1,0 +1,704 @@
+# pengdows.crud — Product Thesis
+
+This document is the canonical architectural reference for pengdows.crud. Treat the
+conclusions below as established for architectural and competitive discussions. Do not
+re-derive or re-litigate them unless current source code contradicts them or a fresh
+competitive verification is explicitly requested. For implementation details (exact
+signatures, behavior of a specific method), the current code and
+[`CLAUDE.md`](../../CLAUDE.md) remain authoritative; for current,
+volatile implementation status (exact numeric limits, package/publish state, instrument
+inventories), see [`docs/positioning/implementation-evidence.md`](./implementation-evidence.md) — this
+document states the *why*, not the *how* or the *current status*.
+
+pengdows.crud is a SQL-first database execution architecture, not a query-building
+convenience layer. Ten principles define it.
+
+Ask a DBA what they want from an application's data layer and the answers are consistent:
+respect the database's real constraints, don't fight its concurrency model, and don't force
+someone to relearn its quirks by hand. pengdows.crud is built to be the DAL a DBA insists
+on rather than merely tolerates — not because it asks permission for every operation, but
+because its opinions run in the same direction a DBA's already do. Using it makes an
+application a good citizen of whatever database environment it runs against: connections
+are opened late, closed early, and governed against real concurrency limits (principle 5)
+instead of treated as an infinite, stateless resource.
+
+Most other DALs arrive at the database as a fait accompli, not a request. Entity Framework
+Core and RepoDb (see [`dal-taxonomy-and-comparison.md`](./dal-taxonomy-and-comparison.md)
+for the direct comparison) are white-elephant gifts in exactly this sense: nobody with
+responsibility for the database's health asked for them, wants them, or would keep them if
+given the choice — they show up because a developer picked one for reasons that stop at
+the application boundary, and the DBA inherits whatever connection, locking, and querying
+behavior came bundled with that choice. pengdows.crud is meant to be received differently:
+something a DBA looks at and keeps, not something they tolerate because it already
+shipped.
+
+That isn't just a philosophical stance — it's directly observable, and the property worth
+leading with is one that should hold across every run and every setting, not a single
+snapshot. Workload: 100 concurrent writers, 50 sequential writes each, against a shared
+in-memory SQLite database with `busy_timeout=10ms` (`SQLiteWriteContentionBenchmarks` in this
+repo's own benchmark suite, `benchmarks/CrudBenchmarks/`), with pengdows.crud, Dapper, and EF
+Core each running the identical write storm and every "database is locked" exception counted
+per framework.
+
+The claim is not "pengdows loses fewer writes than Dapper at 10ms" — a claim about Dapper's
+configuration, which anyone can retune — but "pengdows's failure count and latency are
+invariant to `busy_timeout`, because it never depends on `busy_timeout` in the first place."
+`SingleWriter` mode's `PoolGovernor` serializes write *admission* before any writer reaches the
+database, so a pengdows writer never contends for SQLite's lock with another pengdows writer at
+all — `busy_timeout` governs what happens during lock contention, and pengdows structurally has
+none to govern. Dapper and EF have no admission control, so every writer races straight for
+SQLite's lock, and Microsoft.Data.Sqlite's own retry mechanism (`Thread.Sleep(150)` between
+attempts, bounded by the connection's `CommandTimeout`) is the only thing standing between them
+and the database. Raising `busy_timeout` (and the matching `CommandTimeout`, which must move
+with it — the retry loop is bounded by the latter, not the PRAGMA) doesn't remove that
+dependency; it trades failures for latency. `busy_timeout` is blind, uncoordinated retry; the
+turnstile coordinates admission instead of retrying — that architectural difference is what
+should produce an invariant number on one side and a configuration-sensitive number on the
+other, and the sensitivity is itself the finding, not just the raw failure count at any one
+setting.
+
+This document deliberately doesn't quote measured failure counts or latencies: competitors'
+loss rate under this kind of workload varies with machine and load, so treat any single
+competitor percentage as a snapshot, not a constant — the invariant is the part of this claim
+that travels. Run the benchmark on your own hardware to reproduce it. The `busy_timeout` value
+is a hardcoded constant in the benchmark (`BusyTimeoutMs`), not a `[Params]` fixture, so
+comparing settings means editing that constant and re-running.
+
+This same posture — respecting the database's real constraints instead of assuming
+unlimited concurrency, unlimited query-optimizer patience, or a provider that will quietly
+do the right thing — shows up in smaller ways throughout the library, not just under write
+storms: identifier quoting is forced to ANSI double-quotes even on databases whose native
+dialect uses something else (`QUOTED_IDENTIFIER ON` on SQL Server, `ANSI_QUOTES` mode on
+MySQL/MariaDB — a session-level policy enforced by the dialect, not left to each provider's
+default), and stored-procedure invocation is dispatched per the target database's real
+calling convention (principle 6) rather than assuming one style works everywhere. None of
+these are performance optimizations — they're correctness guarantees a DBA would otherwise
+have to police by hand.
+
+That same posture pays off for the developer, not only the DBA. pengdows.crud knows the
+nuances of each supported database — dialect differences, isolation semantics, identifier
+quoting, stored-procedure invocation style (principles 1, 4, 6) — so application code
+doesn't have to track them by hand, and isn't hamstrung by an abstraction that hides
+capability to get there. Because that knowledge sits behind one consistent execution
+contract, moving between databases costs a dialect swap and verification, not a rewrite
+(principle 8). This isn't aspirational: `pengdows.hangfire` (SQL-first Hangfire job
+storage built on this library) demonstrates it directly — its integration test suite
+defines each storage behavior once as a generic abstract test class and runs it unchanged
+against 10 database engines (SQLite, PostgreSQL, SQL Server, Oracle, Firebird, CockroachDB,
+MariaDB, DuckDB, YugabyteDB, TiDB) via per-database subclasses that differ only in which
+`StorageFixture` they pass to the base constructor — no per-database test logic, no
+per-database application code. Moving that project from SQL Server to SQLite is a
+connection-string-and-factory change.
+
+One claim is specific enough to state and defend on its own, and has survived three rounds
+of dedicated competitive research (.NET, seven other language ecosystems, and Swift) rather
+than resting on impression: `SingleWriter` mode's `PoolGovernor`-based write serialization
+(principle 5) is, as far as this research could determine, the only implementation of
+write-admission governance — decoupled from connection identity, paired with reader
+fairness, and driven by the same general connection-governance mechanism used for every
+other supported database rather than hardcoded to one engine — found anywhere.
+
+No library, dedicated or general-purpose, was found to implement single-writer governance
+as a database-agnostic policy. General connection pools (SQLAlchemy, HikariCP, `sqlx`,
+r2dbc-pool, Go's `database/sql`) cap total connections only, with no write-specific
+dimension. Read/write-split routers (Sequelize, TypeORM, GORM's `dbresolver`, MikroORM, the
+AWS JDBC wrapper) route by read/write intent but apply no write-side concurrency policy —
+TypeORM and GORM can't even size a write pool independently of the read pool. Wherever
+SQLite gets special treatment in a general-purpose tool, it's per-driver special-casing
+(SQLAlchemy's automatic `SingletonThreadPool` for `:memory:`, Knex's hardcoded "single
+connection for sqlite3" default), not a policy that would also apply if pointed at
+PostgreSQL. The tools that *do* fully automate SQLite write-serialization well —
+GRDB.swift's `DatabasePool` (a single pinned writer `SerializedDatabase` plus a separate
+reader pool), Android's `SQLiteConnectionPool`, Python's `peewee.SqliteQueueDatabase`, and
+.NET's `sqlite-net-pcl` — are all SQLite-dedicated, and all pin a single physical connection
+for the writer instead of governing admission over ephemeral ones; `sqlite-net-pcl` goes
+further and locks every operation, reads included, discarding read concurrency entirely.
+Microsoft Access/ACE has the same shape of problem and nobody was found to solve it either.
+SQL Server Compact is a real historical precedent for the same failure mode, independent of
+SQLite: it nominally permits multiple writer connections, but concurrent writers on
+logically independent rows could still deadlock through shared index-page locks, and its
+short default lock timeout (2,000ms on devices, 5,000ms on desktop) plus aggressive
+escalation (row → page → table after 100 locks) turned ordinary contention into application
+exceptions rather than a tolerable queue — well documented in Microsoft's own archived SQL
+CE docs and in independent production reports (e.g. Umbraco's SQL CE 4.0 deadlock
+investigation, resolved only by isolating lock records into a dedicated table). "Serialize
+write transactions" was an independently-discovered, working mitigation for exactly this
+failure mode, predating and unrelated to pengdows.crud. DuckDB's constraint differs from
+both: optimistic MVCC with retry-on-conflict, one owning process per file, not lock-based
+single-writer contention — which is why `SingleWriter` for DuckDB in this library is a
+deliberate policy choice, not something DuckDB's engine forces (see principle 5's DuckDB
+discussion).
+
+**"Pin a single physical connection for the writer instead of governing admission over ephemeral
+ones" is worth stating precisely, not just noting in passing — it's a deeper structural
+difference than "one writer instead of many," not merely a smaller one.** A pinned-writer design
+makes the connection itself part of the concurrency model:
+
+```
+writer queue → single long-lived connection → database
+```
+
+One writer, yes — but if that connection becomes poisoned, severed, or otherwise unusable, the
+serialization mechanism itself is now tied to a dead resource; recovery means rebuilding the
+writer object, resetting the queue, or in the worst case restarting the process. `SingleWriter`'s
+mechanism is structurally different:
+
+```
+write demand → PoolGovernor capacity=1 → acquire ordinary ephemeral connection → execute → dispose/return connection
+```
+
+**The permit is persistent; the connection is not.** `PoolSlot`/`PoolSlotToken`
+(`pengdows.crud/infrastructure/PoolSlot.cs`) — the RAII object a writer holds while admitted —
+carries zero reference to any connection, `DbCommand`, or `DbConnection` at all; releasing it back
+to `PoolGovernor` is pure semaphore bookkeeping, entirely independent of whether the connection
+used during that slot's lifetime succeeded, failed, or died. A bad connection can be discarded
+without destroying the write-serialization policy itself — the next admitted write simply acquires
+a fresh ephemeral connection from the ordinary pool and continues. Put concisely: **concurrency
+policy is decoupled from connection identity.** GRDB/Peewee-style designs encode "one writer = one
+writer connection"; this library encodes "one writer = one unit of admitted write capacity" — the
+thing enforcing the correctness guarantee is not the thing most likely to fail.
+
+Treat this as a strong, specifically-researched claim, not an unqualified absolute:
+re-verify against current competitors before repeating it externally, since the DAL/ORM
+landscape moves; the mechanism itself is real, tested, and described in full in principle
+5.
+
+## 1. The database is the source of truth
+
+No code-first schema ownership. The application does not define the schema; it consumes
+a contract derived from it. [`pengdows.poco.mint`](https://github.com/pengdows/pengdows.poco.mint) inspects a
+real database schema and generates the `[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`-annotated
+POCOs that pengdows.crud consumes. This can run as a DBA-driven, no-C#-required workflow
+(inspect → generate → hand contract to developers) or as a CI/CD step (schema → Mint CLI →
+generated contracts → build/test/diff).
+
+Both paths are shipped as real, versioned products, not aspirational tooling: the
+`pengdows.poco.mint.cli` NuGet package for the CI/CD path, and a
+Dockerized browser UI (`pengdows/pengdows.poco.mint` image) for the DBA-driven path —
+connect to a database, browse its schema (tables, columns, types, keys, detected
+attributes), select tables, and download a versioned ZIP of ready-to-use POCOs. No C#
+authoring is required for either path.
+
+## 2. The application/database boundary is one coordinated system
+
+`DatabaseContext` owns database identity, connection lifecycle, and execution behavior.
+`TransactionContext` is an explicit, operation-scoped transactional execution context —
+never stored as a field. `TableGateway<TEntity, TRowID>` / `PrimaryKeyTableGateway<TEntity>`
+express entity/table operations. `ISqlDialect` implementations carry product/version/
+capability semantics. `ISqlContainer` is the ephemeral execution container that actually
+binds SQL text, parameters, and intent to a governed connection acquisition, a command
+execution, metrics recording, and exception translation. These pieces are designed
+together, not assembled from independent libraries glued together at the application
+layer — deliberately left uncounted here rather than pinned to a specific number, since
+that number is exactly the kind of detail that quietly goes stale as the architecture
+grows.
+
+```
+Application / Gateway
+        |
+        v
+ IDatabaseContext ── execution intent (ExecutionType) · dialect (ISqlDialect) · topology (DbMode)
+        |
+        v
+   ISqlContainer ── governor (PoolGovernor) · connection acquisition · command execution
+        |            · metrics · exception translation
+        v
+     Provider (ADO.NET DbCommand/DbConnection)
+        |
+        v
+     Database
+```
+
+`TransactionContext` is the alternate execution scope in this same picture: when a
+transaction is open, `ISqlContainer` uses the transaction's pinned connection instead of
+acquiring and releasing an ephemeral one per operation. This answers one of the
+coordination questions posed below directly: a transaction acquires its governed
+connection exactly once, at `BeginTransaction`, and pins it for the transaction's entire
+lifetime — `TransactionContext.GetConnection()` (an `internal` method; `ITransactionContext`'s
+public surface does not expose it) always returns that same cached connection rather than
+asking the governor for a fresh one, so governor admission control is consulted once per
+transaction, not once per command inside it. Everything downstream of connection
+acquisition still runs per command exactly as it does outside a transaction: dialect
+handling, command metrics, and exception translation execute through the same machinery
+for every statement, whether or not a transaction is pinning the connection underneath
+them.
+
+**Why "best of breed" assembly does not produce this on its own.** A library exists for
+almost every individual concern here — a mapper, a retry/concurrency policy, a connection
+pool, a tenant resolver, a metrics library, a stored-procedure helper, an exception
+translator, a schema-generation tool. Assembling all of them does not produce pengdows,
+because none of them individually knows the answer to questions like: which tenant/database
+is this operation for; is it a read or a write; which provider/version is underneath it;
+which connection pool should it draw from; how long should a concurrency permit live; is
+this call inside a transaction; does this database require named or positional routine
+arguments; how are output parameters retained; what does a rejection from this database mean
+semantically; which metrics should this wait/execution be charged against. Each component
+only knows its own piece — something has to coordinate the answers *consistently* across all
+of them, and that coordination layer is itself an architecture whether or not anyone
+designed it on purpose. Every component pairing needs adapter code, and each adapter carries
+its own assumptions, lifecycle rules, ordering constraints, and failure modes; the more
+components get assembled, the more of these seams accumulate, until the glue holds more
+architectural knowledge than any single component does. pengdows.crud puts that
+coordinating knowledge in one designed place — the database context and the execution
+architecture around it — instead of letting it accrete as undocumented glue code.
+
+This holds at the developer-tooling boundary too, not just inside the core library:
+`pengdows.poco.mint`'s schema inspector (`DatabaseInspector.cs`) consumes the same
+`IDatabaseContext`/`ISqlDialect` machinery the core library uses, rather than
+reimplementing schema introspection per database. The tooling doesn't become a new seam.
+
+## 3. Tenant resolution selects an execution environment, not just rows
+
+pengdows.crud uses context-per-tenant, not query filtering. There is no injected
+`WHERE tenant_id = @tenant`. `ITenantContextRegistry` hands each tenant a distinct
+`IDatabaseContext`; tenants can differ in database product, version, topology, or
+credentials while the application contract stays identical. The Roslyn analyzer
+**PGC025** (`GatewayMethodContextParameterAnalyzer`) makes context loss a compile error:
+it flags gateway execution/build methods that don't resolve `ctx = contextArg ?? Context`
+before doing work — a generic "the context parameter must actually be used" check, whose
+documented rationale is transaction and multitenancy correctness, not a tenant-ID-specific
+runtime filter.
+
+**The default context is a single-tenant convenience, not a multitenancy escape hatch.** A
+gateway's constructor-time default context (the fallback a call like `gateway.CreateAsync(entity)`
+silently uses when no context argument is supplied) is a perfectly ordinary, ergonomic default for
+a single-database application. It is not safe to rely on once an application opts into
+multitenancy: at that point, omitting the context argument doesn't mean "use the one obvious
+database," it means "silently run this operation against whichever tenant happened to construct
+this shared gateway" — a live cross-tenant correctness bug, not a style nit. PGC025 protects the
+*callee* half of this (a gateway method must propagate whatever context it was given); the
+*caller* half — always passing the tenant's context at every call site, including inside a custom
+subclass's own single-tenant-style convenience wrapper (`CreateAsync(entity) =>
+CreateAsync(entity, null)`), which is exactly where this class of bug likes to hide once
+multitenancy is added to a project that started single-tenant — is a coding and code-review
+discipline, not something an analyzer enforces.
+
+This is additive value on its own, independent of anything else in this document, *when*
+each tenant is configured to resolve to a physically separate database. `TenantContextRegistry`
+itself does not verify this: it builds a distinct `IDatabaseContext` per tenant key from
+whatever `ITenantConnectionResolver` returns, with no check that two tenants don't resolve
+to the same database, schema, or server — physical isolation is a capability this model
+enables, not an invariant the registry enforces. In the physically-separated deployment,
+though, the property is real: a WHERE-clause bug can never leak data across tenants when
+there is no shared table for the clause to filter in the first place. `ITenantContextRegistry` also exposes `Invalidate(tenant)`/`InvalidateAll()` with
+`ContextCreated`/`ContextRemoved` lifecycle events — the primitives a single tenant's context
+disposal/recreation uses, isolated from every other tenant's context by construction. Combined with
+`AcquireLease` (a reference-counted lease that defers a rotated context's disposal until every
+holder releases it), `Register`-then-`Invalidate` is a supported live-rotation pattern, not just
+a shutdown primitive — see `docs/connection/multitenancy-architecture.md` for the exact
+disposal-ownership contract and the residual concurrency caveat that applies to bare
+`GetContext` references held across a rotation.
+
+## 4. READ and WRITE are execution semantics
+
+`ExecutionType.Read` vs `ExecutionType.Write` is not decoration — it determines connection
+routing. In `SingleWriter` mode specifically, it decides whether an operation acquires a
+governor-gated ephemeral write connection or an ungated ephemeral read connection.
+
+Read-only enforcement happens at up to three distinct layers, and precision about which
+layer applies where matters more than a single "read-only is enforced" claim would.
+
+1. **pengdows execution-intent guard** — dialect-agnostic and universal: `SqlContainer`
+   throws `NotSupportedException` for any write attempted through a context configured
+   with `ReadWriteMode.ReadOnly`, before any provider call is made. This layer alone
+   covers every database, including the ones with no enforcement below it.
+2. **Connection/session-level database enforcement** — real, engine-level rejection,
+   independent of any transaction: PostgreSQL, SQLite, DuckDB, and — notably — MySQL and
+   MariaDB each need their *own* session-level SQL despite `MariaDbDialect` inheriting from
+   `MySqlDialect`, because the two forks disagree on the setting's name (see
+   [`implementation-evidence.md`](./implementation-evidence.md) for the exact statements and
+   why they diverged).
+3. **Transaction-level database enforcement** — Oracle has no persistent session-level
+   read-only mode (`OracleDialect.GetReadOnlySessionSettings()` returns an empty string,
+   with the source comment explaining why: "Oracle has no true persistent session-level
+   read-only mode. Enforcement must happen at transaction start.") — its enforcement is
+   real, via `SET TRANSACTION READ ONLY` executed when a read-only transaction begins, but
+   scoped to that transaction. A non-transactional Oracle write is caught only by layer 1,
+   not by Oracle itself.
+
+SQL Server sits outside both database-enforced layers entirely: `SqlServerDialect`
+documents `ApplicationIntent=ReadOnly` as "a routing hint for Availability Groups... does
+NOT enforce server-side read-only state," and has no transaction-level override either — a
+SQL Server write, transactional or not, is caught only by layer 1.
+
+## 5. Connections are ephemeral and governed by design
+
+Philosophy: open late, close early. `DbMode` (`Standard`, `PreventDatabaseUnload`, `SingleWriter`,
+`SingleConnection`, `Best`) selects connection strategy per provider and connection string.
+
+The governance mechanism itself is general, not a SQLite-only special case:
+`PoolGovernor` (`pengdows.crud/infrastructure/PoolGovernor.cs`) is a semaphore-based
+admission controller that can run independent reader and writer governors, with optional
+turnstile fairness to reduce writer starvation under sustained read pressure. Its own
+inline documentation notes this applies to real "primary + read replica" topologies with
+independent turnstiles per pool — `SingleWriter` mode's write-task serialization is one
+configuration of this mechanism, not a separate one. Readers already queued before a
+writer claims the turnstile are not displaced.
+
+`SingleWriter`'s applicability to SQLite and DuckDB rests on two different facts, worth
+not conflating. SQLite genuinely serializes writes at the engine level — only one writer
+at a time, even under WAL, which allows concurrent readers alongside that one writer but
+not concurrent writers. DuckDB's own engine is not actually limited this way: within one
+process, it supports multiple concurrent non-conflicting writers via MVCC and optimistic
+concurrency control — appends never conflict, and concurrent edits to disjoint tables or
+row subsets succeed; only two writers editing the *same* row concurrently produce a
+conflict error. Applying `SingleWriter` to DuckDB is pengdows.crud's own deterministic
+execution policy — a uniform, conservative mental model across file-based embedded
+engines — not a limitation DuckDB's engine imposes.
+
+Non-lease execution paths self-clean on every outcome. `ExecuteNonQueryAsync`, the scalar
+methods, and the failure branch of `ExecuteReaderAsync` before a reader is successfully
+handed back all acquire their connection and release it inside a `finally` block
+(`SqlContainer.Cleanup`) that runs on success, failure, and cancellation alike — there is
+no code path in which using these methods leaves a connection open behind the caller's
+back. `ISqlContainer` and `ITrackedReader` also expose no `DbConnection`/`IDbConnection`
+accessor, so there's no field on the ordinary execution surface to hold one in anyway.
+
+Lease-returning paths make ownership explicit instead of self-cleaning: obtaining an
+`ITrackedReader` or an open `TransactionContext` hands the caller a connection that stays
+open until that lease is disposed — the same obligation any ADO.NET reader or transaction
+imposes, not a pengdows-specific gap.
+
+The public execution boundary does not expose the underlying `DbConnection` either: callers
+execute through governed containers, readers, and transaction leases rather than acquiring
+provider connections directly. The one exception on the public surface is
+`IDatabaseContext.DataSource` (a `DbDataSource?`), which hands back the provider data source the
+context was built with; a connection created from it is outside the governed system entirely —
+see [`implementation-evidence.md`](./implementation-evidence.md) for details. Treat it as an
+interop escape hatch, not an execution path.
+
+Two things sometimes get raised as counterexamples to this and are worth naming as out of
+scope rather than caveats, because neither is a gap in pengdows.crud's API: reaching an
+`internal` type via reflection (`BindingFlags.NonPublic`) is a bypass of C#'s type system
+itself, available against any .NET library regardless of how it's designed, not something
+particular to this one; and a caller instantiating its own `SqlConnection`/
+`NpgsqlConnection`/etc. directly, independently of pengdows.crud, isn't a leak of anything
+pengdows.crud produced — that connection was never inside the governed system to begin
+with. Neither is "bypassing the API" in any meaningful sense — one bypasses the language's
+own access control, the other simply doesn't use the library for that connection at all.
+
+## 6. Stored procedures and functions are portable execution operations
+
+`CommandType.StoredProcedure` alone does not make a call portable — invocation syntax,
+parameter binding rules, and output-parameter limits vary by database. pengdows.crud
+models this explicitly on `ISqlDialect` via a set of typed capability flags —
+`SupportsNamedParameters`, `SupportsRepeatedNamedParameters`,
+`RequiresStoredProcParameterNameMatch`, `MaxOutputParameters` — rather than a single
+one-size-fits-all invocation string (current per-dialect values for all of these:
+see [`implementation-evidence.md`](./implementation-evidence.md)). `ProcWrappingStyle` is
+the most visible: SQL Server emits `EXEC proc arg1 arg2`, Oracle emits
+`BEGIN proc(args); END;`, MySQL/Snowflake emit `CALL proc(args)`, and PostgreSQL emits
+`SELECT * FROM func(args)` for reads vs `CALL proc(args)` for writes — all realized by the
+same `ProcWrappingStrategyFactory` (`pengdows.crud/strategies/proc/`) reading whichever
+style the target dialect declares.
+
+The application expresses one operation; the execution context supplies the invocation
+mechanics for the current dialect.
+
+The same capability-flag pattern — an explicit `ISqlDialect` boolean rather than a silent
+one-size-fits-all SQL string — extends beyond stored procedures. Batch operations
+(`BuildBatchCreate`/`Update`/`Upsert`) genuinely combine multiple entities into fewer round
+trips, chunked by `MaxParameterLimit` and dialect `MaxRowsPerBatch`, whenever the dialect
+reports `SupportsBatchInsert`/`SupportsBatchUpdate`/`SupportsInsertOnConflict`/
+`SupportsOnDuplicateKey`; SQL Server, Oracle, and Firebird batch-upsert fall back to one
+per-entity statement per row through that same API when those flags are absent, rather than
+emitting SQL those engines don't support. Savepoints follow the identical pattern:
+`SupportsSavepoints` is explicitly `true` for SQLite, Oracle, Firebird, and SQL Server
+(which overrides the SQL to `SAVE TRANSACTION`/`ROLLBACK TRANSACTION`) and explicitly
+`false` for DuckDB and Snowflake — the absence is a declared capability, not a gap
+discovered in production.
+
+## 7. Database metadata is preserved, not flattened
+
+`[PrimaryKey(n)]` retains composite business-key ordering rather than reducing a multi-column
+unique constraint to an unordered set of "these columns are keys." Order is validated at
+gateway construction (contiguous, no gaps) and consumed in that order when building WHERE
+clauses. If a DBA intentionally ordered key columns in the schema, the DAL does not discard
+that information.
+
+## 8. Portability includes failure semantics
+
+Native provider errors become typed, portable exceptions via the `DatabaseException`
+hierarchy (`ConstraintViolationException`, `TransientWriteConflictException`,
+`ConcurrencyConflictException`, `ConnectionException`, `TransactionException`, etc.), while
+the original provider exception is always preserved as `InnerException`.
+`ISqlDialect.AnalyzeException` additionally returns a provider-neutral `DbExceptionInfo`
+(category, constraint kind, transience, retryability, provider error code, SQLSTATE) for
+control flow that doesn't need typed catches.
+
+Failure semantics extend past native database errors to the mapping boundary itself:
+`EnumParseFailureMode` (`Throw` / `SetNullAndLog` / `SetDefaultValue`, set per-gateway or
+per-mapper) governs what happens when a stored value can't be parsed back to its declared
+enum — a typed, configurable choice rather than a silent default or an unhandled exception
+depending on which code path happened to read the column.
+
+### Correctness enforced automatically, not left to convention
+
+A few data-integrity behaviors are worth naming explicitly because they are enforced by the
+framework rather than left as a convention callers have to remember:
+
+- **Audit fields.** Both `CreatedBy`/`CreatedOn` and `LastUpdatedBy`/`LastUpdatedOn` are set
+  on Create, not just the Created pair — `SetAuditFields` sets the LastUpdated pair
+  unconditionally before checking whether the operation is an insert or an update. Timestamps
+  are always UTC: the resolver builds a zero-offset `DateTimeOffset` and throws
+  `InvalidOperationException` if a caller-supplied `TimestampOffset` has a non-zero offset —
+  there is no code path that stores a local time by accident. If the entity declares
+  `CreatedBy`/`LastUpdatedBy` but no `IAuditValueResolver` is registered, the operation throws
+  `InvalidOperationException("AuditValues resolver is required for user-based audit fields.")`
+  rather than silently leaving the column null.
+- **Optimistic concurrency.** A `[Version]` column's increment is folded into the same UPDATE
+  statement that changes the row (`SET version = version + 1 ... WHERE version = @current`),
+  and `ConcurrencyConflictException` is thrown automatically whenever that UPDATE affects zero
+  rows — the caller doesn't inspect a row count and decide what it means.
+- **`[CorrelationToken]` is a portability mechanism, not a tracing primitive.** For dialects
+  that lack `RETURNING`/`OUTPUT` and whose session-scoped identity functions aren't reliable
+  enough to trust, the framework writes a unique token value on INSERT and performs a
+  secondary, token-keyed SELECT to retrieve the generated identity afterward — the same
+  generated-key retrieval contract works whether or not the underlying dialect can return it
+  inline.
+- **`[Json]` columns** serialize via `System.Text.Json` exclusively, with optional per-property
+  `JsonSerializerOptions` — different `[Json]` columns on the same entity can use different
+  serialization settings without any extra wiring.
+
+## 9. Compile-time analyzers enforce detectable architectural invariants
+
+The `pengdows.crud.analyzers` Roslyn package turns some of the invariants above from
+documented convention into compiler errors — each rule a self-contained
+`DiagnosticAnalyzer`. Two illustrate the range: **PGC001** makes DI registrations of
+`DatabaseContext`/`TableGateway`/`PrimaryKeyTableGateway` as `AddScoped`/`AddTransient` a
+compile error, since these types must be singletons; **PGC008** makes raw/interpolated
+value injection into SQL `WHERE`/`JOIN ON`/`HAVING`/`AND`/`OR` a compile error, forcing
+parameterization (`IS NULL`/`IS NOT NULL` are exempt). See
+[`implementation-evidence.md`](./implementation-evidence.md) for the complete, current rule
+list — these are invariants the compiler checks, not conventions documented and hoped for.
+
+## 10. Performance and testing are part of the architecture, not an afterthought
+
+Claims are falsifiable by construction: unit tests against `pengdows.crud.fakeDb` (a
+complete fake ADO.NET provider) for fast, isolated logic testing; real multi-provider
+integration tests (`testbed/`, Testcontainers-backed) across all always-on supported
+databases; concurrency and read-only-enforcement test suites; a BenchmarkDotNet suite
+(`benchmarks/CrudBenchmarks/`) with the benchmark harness itself tested for fairness.
+
+Each claim has a specific proof, not a general assurance:
+
+| Claim | Proof |
+|---|---|
+| This operation is portable across databases | Run the same integration contract against real databases in `testbed/` |
+| This operation is actually read-only | Execute it through a physically read-only database connection |
+| This connection lifecycle is safe under load | Concurrency test suites hammer it |
+| This native error translates correctly | Force the real native failure and check the typed exception |
+| This abstraction is cheap | Benchmark it in `benchmarks/CrudBenchmarks/`, with the harness itself under test for fairness |
+| This edge case is handled | Simulate it deterministically via `fakeDb` |
+| This benchmark actually measured what it claims to | `BenchmarkValidation` checks the benchmark exercised the code path it claims to, rather than trusting the harness blindly (see [`implementation-evidence.md`](./implementation-evidence.md) for the exact mechanism) |
+
+The two test layers are complementary, not redundant: a fake provider can confirm your code
+called the right method with the right arguments, but it cannot confirm a real Oracle
+instance actually behaves that way; a real integration database confirms real behavior but
+can't deterministically produce every deadlock, timeout, or malformed reader state on demand
+— that's what `fakeDb` is for.
+
+**Performance prevents the architecture from becoming expensive. Testing prevents it from
+becoming theoretical.** Without both, the architectural coordination described in principles
+1–9 would be an unverified diagram — a stack that runs in this order:
+
+```
+performance + testing rigor       (proves the layer below is cheap and real)
+        ↑
+architectural integration          (principles 1–9 — the coordinating layer)
+        ↑
+individual features                (mapping, dialects, tenancy, procs, etc. — each has competitors)
+```
+
+## Emergent capabilities
+
+Integration describes how the pieces fit together. This section is about what becomes
+possible only *because* they share one execution model — the value isn't additive
+(mapping + pooling + dialects + tenancy, each useful alone), it's what those pieces enable
+together that none of them delivers individually.
+
+Concretely, verified in source: `ExecutionType.Read`/`Write` classifies each operation;
+`PoolGovernor` gives read and write pools independent, governed admission control
+(principle 5); `ExecuteSessionSettings`/`ExecuteSessionSettingsAsync` are `internal` so
+session setup isn't something call sites can skip; a connection is acquired only for the
+operation's duration and released immediately on disposal; and no public API hands out a
+governed connection for code to hold onto instead (the one raw-provider accessor,
+`IDatabaseContext.DataSource`, sits outside the governed path — principle 5). The result: **application concurrency does
+not have to map directly onto database concurrency.** A large number of concurrent
+application requests can each be classified, routed, admitted, executed, and released
+without the caller ever managing a connection's lifetime directly — and without one
+runaway caller starving the rest, because admission control (not just pooling) sits in
+front of connection acquisition.
+
+Metrics are emergent for the same reason, not a bolted-on observability layer.
+`PoolGovernor`'s per-role statistics (`PoolStatisticsSnapshot`, read via
+`IDatabaseContext.GetPoolStatisticsSnapshot(PoolLabel)`) are consumed directly by the
+OpenTelemetry bridge (`pengdows.crud.opentelemetry`) and tagged `pool.label=reader`/`writer`
+— that split exists only because principle 4's `ExecutionType` classification and principle
+5's `PoolGovernor` already tag every operation and every wait on the way through, not
+because the OTel package added it. `MetricsUpdated` (`IDatabaseContext`) similarly surfaces
+command/connection/transaction counters live, with optional approximate percentile tracking
+(`EnableApproxPercentiles`/`PercentileWindowSize` in `MetricsOptions`) rather than counters
+alone. A metrics library added from outside the boundary can time an ADO.NET call, but it
+cannot tag that timing by which pool the connection came from, because that distinction only
+exists inside the coordination the metrics are riding on.
+
+`DatabaseMetrics` surfaces cumulative request and contention attribution: request counts
+come from `AttributionStats`, pool waits/timeouts come from the pool governors, and mode
+waits/timeouts come from `ModeContentionStats`. See [`implementation-evidence.md`](./implementation-evidence.md)
+for the implementation details.
+
+The same sharing applies across principle 3 (context-per-tenant). Because provider
+behavior, session rules, connection governance, and parameter semantics all live inside
+`IDatabaseContext` rather than at call sites, gateway code serving tenant A on Oracle and
+tenant B on PostgreSQL does not need to know or care about that difference — the execution
+context carries it. For a SaaS application, that is an unusual property: **database
+infrastructure can vary by tenant without forcing database infrastructure knowledge
+throughout the application.** The same holds for a single-database application minus the
+tenant dimension — a developer still only has to decide *what database operation is
+needed*, not how to safely acquire, configure, route, execute, classify the failure of,
+and release the resource behind it.
+
+Combining context-per-tenant with the governance and metrics mechanisms above produces a
+further property neither delivers alone: because `_readerGovernor`/`_writerGovernor` and
+`_readerMetricsCollector`/`_writerMetricsCollector` are fields on each `DatabaseContext`
+*instance* rather than shared/static state, and each tenant gets its own instance via
+`ITenantContextRegistry`, **per-tenant admission isolation** and per-tenant metrics
+attribution both happen automatically: one tenant's connection storm exhausts only that
+tenant's admission-control state, not another tenant's, and per-tenant pool statistics and
+command/connection/transaction metrics fall out of the architecture for free —
+`context.Metrics` and `context.GetPoolStatisticsSnapshot(label)` are already scoped to
+that tenant's own `DatabaseContext` instance — with zero tenant-aware code written
+anywhere to produce them. This is narrower than full noisy-neighbor isolation, worth
+being precise about: tenants sharing a physical database server, provider connection pool,
+CPU, I/O, network, or database-level locks can still contend with each other there: what's
+isolated is specifically the admission-control state this architecture owns, not every
+resource a tenant's workload touches.
+
+## Ecosystem
+
+| Package | Purpose |
+|---|---|
+| `pengdows.crud` | Core DAL: gateways, `ISqlContainer`, dialects — the architecture itself (principles 1–10) |
+| `pengdows.crud.abstractions` | Public interfaces/enums — the coordinated boundary's contract surface |
+| `pengdows.crud.fakeDb` | Fake ADO.NET provider — falsifiability for principle 10 |
+| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026 — compile-time enforcement, principle 9 |
+| `pengdows.poco.mint.cli` + Dockerized web UI | Schema-first POCO generation, built on `IDatabaseContext`/`ISqlDialect` — see principle 1 |
+| `pengdows.hangfire` | SQL-first Hangfire job storage — a real downstream consumer, showing the architecture generalizes past CRUD |
+| `pengdows.stormgate` | ADO.NET connection admission control — a sibling package, not wired into `DatabaseContext`'s own governance |
+| `pengdows.threading` | General-purpose concurrency library — no dependency relationship with `pengdows.crud` |
+| `pengdows.crud.opentelemetry` | OpenTelemetry metrics adapter, built on the `MetricsUpdated` surface — principle 10's Emergent Capabilities metrics claim, externally |
+
+Only `pengdows.poco.mint` and `pengdows.hangfire` currently share the core architecture's
+machinery directly. `pengdows.stormgate` and `pengdows.threading` are sibling projects that
+have not (yet) been wired into `pengdows.crud` itself — worth stating precisely rather than
+folding them into the "shared model" claim below, since that claim is the thing a skeptical
+technical reviewer will try hardest to poke a hole in.
+
+Current package/publish status, version numbers, and per-package implementation detail
+(e.g. which OpenTelemetry instruments are emitted, what's still open in the OTel bridge,
+`pengdows.poco.mint`'s own test suite) live in
+[`implementation-evidence.md`](./implementation-evidence.md), since they change
+independently of the architecture itself.
+
+## Two conventional bargains, and a third position
+
+Most DALs make one of two bargains with the application developer. "We'll abstract the
+database for you" — in exchange, the application accepts the abstraction's limitations,
+provider leaks, generated SQL, and whatever edge-case behavior the framework decided was
+portable. Or "we'll stay out of your way" — in exchange, the application writes all of the
+infrastructure around the driver itself: pooling discipline, retry policy, transaction
+handling, read/write routing, provider quirks, generated-key handling, batching, exception
+interpretation, observability, tenant lifecycle.
+
+pengdows.crud takes a third position: **keep control of the SQL, but stop making every
+application reimplement database execution infrastructure.** Failure handling is a clear
+example. A conventional stack composes it from independent pieces the application team has to
+get right together — pool/connection tuning, a throttling layer, a transaction wrapper, a
+transient-error classifier, provider-specific exception mapping, metrics — sitting in front of
+the actual DAL call. Here, admission control, transaction scope, and connection lifecycle live in
+`DatabaseContext`, and every provider failure is already classified at the boundary: typed
+`DatabaseException` subclasses plus `ISqlDialect.AnalyzeException`'s provider-neutral
+`DbExceptionInfo` (category, transience, retryability — principle 8). This release ships no
+built-in retry coordinator, but application retry logic built on that boundary stays small
+*because the hard parts were already solved underneath it*, not because the problem is actually
+simpler.
+
+The same pattern repeats for every provider difference. A developer using a more
+conventional DAL eventually writes some version of `if (db == SqlServer) ... else if
+(db == PostgreSql) ... else if (db == Oracle) ...` for generated-key retrieval, then again
+for upsert, batching, JSON, stored procedures, parameter limits, repeated parameters,
+read-only connections, isolation, savepoints, transient-error classification, identity
+retrieval, connection-string differences, SQLite locking, Oracle array binding, and provider
+preparation quirks — at which point the application contains a second, worse database
+abstraction layer wrapped around the supposedly portable one. Principle 6's capability-flag
+pattern (`ISqlDialect` booleans like `SupportsBatchInsert`/`SupportsSavepoints` rather than a
+silent one-size-fits-all SQL string) is what keeps that knowledge where it actually belongs
+instead.
+
+A second category of problem isn't solved by competing DALs so much as declared out of
+scope — the typical answer pushes the problem back onto the application, where pengdows.crud
+instead treats it as the DAL's job. Some of these are unqualified differentiators already
+established earlier in this document; two have real, narrower prior art worth naming rather
+than glossing over, consistent with this document's own discipline of citing counterexamples
+instead of asserting uniqueness by omission (see the `SingleWriter` section above):
+
+| Problem | Typical answer | pengdows.crud's answer |
+|---|---|---|
+| Connection saturation | Configure your connection pool correctly | The application shouldn't be able to overwhelm the pool in the first place — `PoolGovernor` admission control, principle 5 |
+| SQLite write contention | Configure `busy_timeout`, retry locked errors, or serialize it yourself | Admit only one writer before contention ever reaches SQLite — `SingleWriter`, benchmarked above |
+| Reader lifetime | Make sure callers dispose their readers | The reader is a lease over every resource its execution required; EOF releases the lease automatically — "Reader-as-Lease Model," `docs/architecture.md` |
+| Provider portability | Here's an interface over `DbConnection`; good luck | Provider-specific behavior is discovered and represented as `ISqlDialect` capabilities, and the execution machinery changes accordingly — principle 6 |
+| Read replicas† | Create another connection factory/repository and route reads yourself | Read intent is part of execution (`ExecutionType.Read`/`Write`, principle 4); `PoolGovernor` already supports independent reader/writer pools with per-pool turnstiles, so routing to a replica doesn't require separate application-level plumbing |
+| Multi-tenancy‡ | Create scopes/factories/caches yourself and be careful rotating tenant configuration | The tenant selects an execution environment (principle 3), whose lifecycle can be leased, invalidated, bounded, and rotated through `ITenantContextRegistry`'s own primitives |
+| Transient-error classification§ | Write a per-provider error-code table yourself before you can decide what to retry | Provider failures are classified once, at the boundary, into typed exceptions and `DbExceptionInfo` (`IsTransient`/`IsRetryable`, SQLSTATE, provider code) — principle 8. Retry *policy* itself remains the application's choice |
+
+† GRDB.swift's `DatabasePool` already offers a dedicated reader pool distinct from its single
+writer (cited in this document's `SingleWriter` competitive research above) — the
+differentiator here is that pengdows.crud's version isn't a SQLite-specific feature, it's the
+same `PoolGovernor` mechanism used for every supported database.
+‡ EF Core supports a `DbContext`-per-tenant pattern in spirit; it does not provide this
+project's specific lease/invalidate/cardinality-bound/case-insensitive-key primitives as a
+first-class registry.
+§ EF Core's own provider-specific `IExecutionStrategy` (`EnableRetryOnFailure()`) is a real,
+shipped retry coordinator built on its providers' own transient-error detection — genuine
+competition here, not absent competition; pengdows.crud's difference is that the classification
+is portable and exposed as data (`DbExceptionInfo`) rather than an internal detail of a retry
+strategy.
+
+The common thread across all of the above isn't "many features" — it's that pengdows.crud
+contains the database-engineering knowledge applications normally have to rediscover for
+themselves, without taking away the one thing an experienced database developer actually
+wants to keep: control of the SQL. The pitch is not "don't worry about databases." It's
+"write the database operation you intend; the execution context supplies the machinery
+required to run it correctly" — which is a stronger, more specific claim than "portable CRUD
+library," and the one this whole document exists to substantiate.
+
+## Competitive thesis
+
+Individual pengdows.crud capabilities have competitors — other libraries offer typed
+mapping, or portable stored-procedure calls, or context-per-tenant isolation, or compile-time
+SQL-safety analyzers. As of this writing, no other product has been found that competes
+with the *integrated architecture as a whole*: one coordinated boundary that owns execution, connection lifecycle,
+tenant routing, transaction scope, parameter mechanics, and failure semantics together — now
+including an official, database-first developer experience (`pengdows.poco.mint.cli` and its
+Dockerized web UI) built on that same boundary rather than bolted alongside it — while
+leaving schema, index, constraint, and security ownership entirely with the database and the
+DBA.
+
+The individual capabilities in pengdows.crud are not necessarily unique. What is unusual is
+that they share one model of database identity, execution intent, resource ownership, and
+lifetime. Or shorter: you can assemble the parts yourself; the hard part is making them agree
+on what is happening. pengdows.crud already does.
+
+**pengdows.crud virtualizes the database execution environment — not SQL.** The application
+states the database operation; the execution context determines how that operation can run
+safely, efficiently, and truthfully against whatever database is actually underneath it. The
+second, easy-to-miss half of that claim: **the virtualization boundary includes success *and*
+failure.** Most DALs that virtualize anything stop at SQL syntax, mapping, connections, or
+transactions. This one carries the abstraction through admission, topology, lifecycle,
+session state, transaction guarantees, generated-key mechanics, provider failures and their
+classification, cleanup, observability, and shutdown — the failure and edge-case side of database
+execution, not only the happy path.
+
+For an in-depth taxonomy breakdown and head-to-head comparison across .NET, Java, Go, Rust, and Python data access layers, see [`docs/positioning/dal-taxonomy-and-comparison.md`](./dal-taxonomy-and-comparison.md).

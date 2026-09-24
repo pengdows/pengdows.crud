@@ -18,4 +18,4 @@ echo ""
 echo "Note: First run will be slower due to JIT compilation warmup."
 echo ""
 
-dotnet run -c Release --project "${root}/CrudBenchmarks" --filter "*SimpleCrud*"
+dotnet run -c Release -f "${BENCH_FRAMEWORK:-net10.0}" --project "${root}/CrudBenchmarks" --filter "*SimpleCrud*"

@@ -10,13 +10,14 @@ functionality:
 
 ```
 📁 pengdows.crud.IntegrationTests/
-├── 📁 Infrastructure/           # Test infrastructure and base classes
-├── 📁 Core/                    # Basic CRUD operations
+├── 📁 Infrastructure/           # Test fixture, base classes, table creators, helpers
+├── 📁 Core/                    # CRUD, mapping, hydration, audit, quoting, parameters
 ├── 📁 Advanced/                # Transactions, concurrency, batch operations
-├── 📁 DatabaseSpecific/        # Database-specific features (PostgreSQL, SQL Server, etc.)
-├── 📁 ConnectionManagement/    # DbMode testing and connection optimization
-├── 📁 ErrorHandling/           # Failure scenarios and error recovery
-└── 📁 Performance/             # Large datasets and optimization validation
+├── 📁 DatabaseSpecific/        # Database-specific features (PostgreSQL, SQL Server, MySQL, Oracle, SQLite, DB2)
+├── 📁 ConnectionManagement/    # DbMode testing and async connection acquisition
+├── 📁 ErrorHandling/           # Failure scenarios and exception classification
+├── IntegrationMatrixTests.cs   # Runs the full testbed provider matrix under `dotnet test`
+└── SpannerOmniIntegrationTests.cs
 ```
 
 ## Test Categories
@@ -25,62 +26,75 @@ functionality:
 
 **Location**: `Core/`
 
-- **BasicCrudTests**: Comprehensive CRUD operations across all database providers
-- **EntityMappingTests**: Attribute-based mapping and type coercion
+- **BasicCrudTests**: Create/Retrieve/Update/Delete/Upsert across all database providers
+- **CompositeKeyTests**: Entities with multi-column primary keys
 - **AuditFieldTests**: CreatedBy/On, LastUpdatedBy/On functionality
+- **RoundTripTests** / **TypeHydrationTests**: Row round-trip fidelity and type hydration
+- **ParameterBindingTests**, **QuotingTortureTests**, **SqlContainerReuseTests**, **StoredProcedureTests**,
+  **MergeConflictTests**, **InsertReturningTests**, **DiagnosticsTests**, **TransactionResilienceTests**, and others
 
 ### ⚡ Advanced Tests
 
 **Location**: `Advanced/`
 
-- **TransactionTests**: Transaction isolation, rollback, savepoints, concurrent access, readonly transactions
-- **ConcurrencyTests**: Parallel operations, deadlock handling
-- **BatchOperationTests**: Large dataset operations, parameter-limit-aware batch processing
+- **TransactionTests**: Commit/rollback, isolation levels and profiles, savepoints, readonly transactions
+- **ConcurrencyTests**: Parallel reads/writes/transactions, multiple contexts, stress tests
+- **BatchOperationTests**: Bulk insert/update/delete/retrieve/upsert, chunked processing, large transactions
 
 ### 🎯 Database-Specific Tests
 
 **Location**: `DatabaseSpecific/`
 
-- **PostgreSQLFeatureTests**: JSONB operators, arrays, full-text search, native upserts
-- **SqlServerFeatureTests**: Indexed views, MERGE statements, session settings
-- **MySQLFeatureTests**: MySQL-specific syntax and optimizations
-- **OracleFeatureTests**: Oracle-specific features and procedures
+- **PostgreSQLFeatureTests**: JSONB operators, arrays, full-text search, `ON CONFLICT` upserts
+- **SqlServerIdentityTests** / **SqlServerUuid7OrderingTests**: SQL Server identity population and `uniqueidentifier` ordering
+- **MySqlSpatialRoundTripTests**: MySQL spatial types through the CRUD mapper
+- **OracleArrayBindingRoundTripTests**: Oracle array binding for batch creates
+- **SqliteCommandReaderLifetimeTests** / **SqliteValueDependentHydrationTests**: SQLite driver and affinity behavior
+- **Db2SessionSettingsTests**: DB2 session settings
 
 ### 🔗 Connection Management Tests
 
 **Location**: `ConnectionManagement/`
 
-- **DbModeTests**: Standard, KeepAlive, SingleWriter, SingleConnection modes
-- **ReadOnlyConnectionTests**: ReadOnly connection behavior and readonly transaction handling
-- **ExecutionTypeTests**: ExecutionType.Read vs ExecutionType.Write connection management
-- **PoolingTests**: Connection pool optimization and behavior
-- **IsolationTests**: Transaction isolation across different providers
+- **DbModeTests**: DbMode behavior, ExecutionType.Read vs ExecutionType.Write, readonly transactions,
+  connection reuse within transactions, connection metrics
+- **AsyncConnectionAcquisitionIntegrationTests**: Concurrent real reads exceeding the pool size
 
 ### ❌ Error Handling Tests
 
 **Location**: `ErrorHandling/`
 
-- **ConnectionFailureTests**: Network failures, timeout scenarios using FakeDb
-- **ConstraintViolationTests**: Primary key, foreign key, unique constraint violations
-- **TimeoutTests**: Command and connection timeout handling
+- **ConnectionFailureTests**: Open/command/transaction failures simulated with FakeDb
+- **ConstraintViolationTests**: Primary key, unique, foreign key, not-null, and check constraint violations
+- **ConcurrencyConflictTests**, **DeadlockConflictTests**, **ReadOnlyViolationTests**: Exception classification
 
 ## Running the Tests
 
 ### Prerequisites
 
-1. **.NET 8 SDK** installed
+1. **.NET 8 and .NET 10 SDKs** installed (the project targets `net8.0;net10.0`)
 2. **Docker** for database containers (PostgreSQL, SQL Server, MySQL, etc.)
-3. **Optional**: Oracle Database for Oracle-specific tests
 
 ### Run All Integration Tests
 
 ```bash
-# From the pengdows.crud.IntegrationTests directory
+# From the pengdows.crud.IntegrationTests directory (runs both target frameworks)
 dotnet test
 
 # Or from the solution root
 dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj
+
+# A single target framework
+dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj -f net10.0
+
+# Integration tests plus the testbed matrix for each framework in TESTBED_FRAMEWORKS
+# (default "net8.0 net10.0")
+./run-integration-tests.sh
 ```
+
+`IntegrationMatrixTests` excludes Informix: its native driver needs `LD_LIBRARY_PATH` set before the
+process starts, which is impossible inside vstest's testhost. Informix is covered by
+`dotnet run --project testbed -f net8.0` (or `-f net10.0`) instead.
 
 ### Run Specific Test Categories
 
@@ -108,34 +122,53 @@ dotnet test --filter "FullyQualifiedName~ErrorHandling"
 
 #### Database Provider Selection
 
-```bash
-# Include Oracle tests (requires Oracle database)
-export INCLUDE_ORACLE=true
+Tests derived from `DatabaseTestBase` run against SQLite, PostgreSQL, SQL Server, MySQL, MariaDB, Firebird,
+CockroachDB, DuckDB, Oracle, YugabyteDB, and TiDB by default.
 
+```bash
 # Include Snowflake tests (requires Snowflake credentials)
 export INCLUDE_SNOWFLAKE=true
 
-# Test only specific providers
-export TESTBED_ONLY="PostgreSql,SqlServer"
+# DatabaseTestBase tests: restrict to specific providers (SupportedDatabase enum names, case-insensitive)
+export INTEGRATION_ONLY="PostgreSql,SqlServer"
 
-# Exclude specific providers
+# IntegrationMatrixTests / testbed: restrict or exclude by testbed container or provider name
+export TESTBED_ONLY="PostgreSQL,SQL Server"
 export TESTBED_EXCLUDE="Oracle,Firebird"
+
+# Optional diagnostics and container control
+export INTEGRATION_TRACE=true                # verbose per-provider trace output
+export TESTBED_STARTUP_TIMEOUT_SECONDS=300   # override container startup wait
+export TESTBED_KEEP_CONTAINERS=true          # keep testbed containers running after the run
 ```
+
+The testbed (`dotnet run --project testbed -f net8.0|net10.0`) also accepts `--only`/`--exclude` and these
+opt-in databases, which `IntegrationMatrixTests` does not enable:
+
+- `INCLUDE_SAPHANA=true` — SAP HANA (Docker image, needs 16-32GB RAM)
+- `INCLUDE_INTERBASE=true` — InterBase (a pre-registered, licensed, already-running container; also needs
+  `LD_LIBRARY_PATH` pointing to a directory containing `libgds.so`)
+- `INCLUDE_ACCESS=true` — Microsoft Access (Windows only; requires the Access Database Engine Redistributable)
 
 #### Snowflake Configuration
 
-Snowflake tests use the external Snowflake account (no Docker image). Provide the required environment variables:
+Snowflake tests use the external Snowflake account (no Docker image). Provide the required environment variables
+(or use `./run-snowflake-integration-tests.sh`, which sets `INCLUDE_SNOWFLAKE`, `INTEGRATION_ONLY` and
+`TESTBED_ONLY` for you):
 
 ```bash
 export SNOWFLAKE_ACCOUNT="your_account_identifier"
 export SNOWFLAKE_USER="your_user"
 export SNOWFLAKE_PASSWORD="your_password"
 export SNOWFLAKE_WAREHOUSE="your_warehouse"
+# Optional role
+export SNOWFLAKE_ROLE="your_role"
 # Required unless SNOWFLAKE_CREATE_DATABASE=true
 export SNOWFLAKE_DATABASE="your_database"
-# Optional: defaults to PUBLIC if not set
-export SNOWFLAKE_SCHEMA="your_schema"
+# Optional: create a throwaway test database instead of a throwaway schema in SNOWFLAKE_DATABASE
 export SNOWFLAKE_CREATE_DATABASE=true
+# Optional: schema inside the created database when SNOWFLAKE_CREATE_DATABASE=true (default: PUBLIC)
+export SNOWFLAKE_SCHEMA="your_schema"
 # Optional: prefix for generated test database/schema names (default: PENGDOWS_TEST)
 export SNOWFLAKE_TEST_PREFIX="PENGDOWS_TEST"
 # Optional: admin connection database (defaults to SNOWFLAKE_DATABASE if provided)
@@ -151,29 +184,34 @@ The tests automatically start database containers using Testcontainers. Ensure D
 docker info
 
 # Pull required images (optional - done automatically)
-docker pull postgres:15-alpine
-docker pull mcr.microsoft.com/mssql/server:2022-latest
-docker pull mysql:8.0
-docker pull mariadb:10.9
+docker pull postgres:latest
+docker pull mcr.microsoft.com/mssql/server:latest
+docker pull mysql:latest
+docker pull mariadb:latest
 ```
 
 ## Test Architecture
 
 ### Database Test Base
 
-All integration tests inherit from `DatabaseTestBase` which provides:
+Most integration tests inherit from `DatabaseTestBase` and join the `"IntegrationTests"` collection, whose
+`IntegrationTestFixture` starts the database containers once (via testbed's `ParallelTestOrchestrator`) and
+hands out cached `IDatabaseContext` instances. `DatabaseTestBase` provides:
 
-- **Automatic container management** for multiple database providers
-- **Parallel test execution** across different databases
-- **Consistent setup/teardown** for each test scenario
-- **Flexible provider selection** for focused testing
+- **Shared container management** through `IntegrationTestFixture`
+- **Per-provider execution** of each test (providers run one after another; failures are aggregated)
+- **Consistent setup/teardown** via `SetupDatabaseAsync`/`CleanupDatabaseAsync` overrides
+- **Flexible provider selection** via `GetSupportedProviders()` and `INTEGRATION_ONLY`
+- **Automatic skipping** when none of the requested providers could be initialized
 
 ```csharp
+[Collection("IntegrationTests")]
 public class MyIntegrationTests : DatabaseTestBase
 {
-    public MyIntegrationTests(ITestOutputHelper output) : base(output) { }
+    public MyIntegrationTests(ITestOutputHelper output, IntegrationTestFixture fixture)
+        : base(output, fixture) { }
 
-    [Fact]
+    [SkippableFact]
     public async Task MyTest_WorksAcrossAllProviders()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -205,7 +243,7 @@ protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
 Most tests run against all supported database providers to ensure consistent behavior:
 
 ```csharp
-[Fact]
+[SkippableFact]
 public async Task CRUD_Operations_WorkConsistently()
 {
     await RunTestAgainstAllProvidersAsync(async (provider, context) =>
@@ -228,13 +266,13 @@ public async Task CRUD_Operations_WorkConsistently()
 Advanced tests showcase unique database capabilities:
 
 ```csharp
-[Fact]
+[SkippableFact]
 public async Task PostgreSQL_JSONB_NativeOperators()
 {
     await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
     {
         // Use PostgreSQL-specific JSONB operators
-        using var container = context.CreateSqlContainer(@"
+        await using var container = context.CreateSqlContainer(@"
             SELECT * FROM products
             WHERE specifications->>'brand' = @brand");
         container.AddParameterWithValue("brand", DbType.String, "Apple");
@@ -249,13 +287,13 @@ public async Task PostgreSQL_JSONB_NativeOperators()
 Tests for readonly connections and transactions demonstrate ExecutionType behavior:
 
 ```csharp
-[Fact]
+[SkippableFact]
 public async Task ReadOnlyTransaction_ReadCommitted_AllowsReadOperations()
 {
     await RunTestAgainstAllProvidersAsync(async (provider, context) =>
     {
         // Start readonly transaction
-        using var readonlyTransaction = await context.BeginTransactionAsync(
+        await using var readonlyTransaction = await context.BeginTransactionAsync(
             IsolationLevel.ReadCommitted, ExecutionType.Read);
 
         // Perform read operations within readonly transaction
@@ -266,18 +304,16 @@ public async Task ReadOnlyTransaction_ReadCommitted_AllowsReadOperations()
     });
 }
 
-[Fact]
+[SkippableFact]
 public async Task ExecutionType_Read_UsesReadOptimizedConnection()
 {
-    // Get read connection explicitly
-    using var readConnection = context.GetConnection(ExecutionType.Read);
-    await readConnection.OpenAsync();
-
-    // Execute read operation
-    using var container = context.CreateSqlContainer("SELECT * FROM TestTable");
-    using var command = container.CreateCommand(readConnection);
-    using var reader = await command.ExecuteReaderAsync();
-    // ... process results
+    await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+    {
+        // Execute a read operation on a read connection
+        await using var container = context.CreateSqlContainer("SELECT * FROM TestTable");
+        await using var reader = await container.ExecuteReaderAsync(ExecutionType.Read, CommandType.Text);
+        // ... process results
+    });
 }
 ```
 
@@ -287,19 +323,16 @@ Error handling tests use FakeDb to simulate failures:
 
 ```csharp
 [Fact]
-public async Task Connection_Failure_HandledGracefully()
+public void Connection_Failure_HandledGracefully()
 {
-    var factory = FakeDbFactory.CreateFailingFactory(
+    var factory = fakeDbFactory.CreateFailingFactory(
         SupportedDatabase.Sqlite,
         ConnectionFailureMode.FailOnOpen);
 
-    using var context = new DatabaseContext("Data Source=test", factory);
-
-    await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+    // The simulated failure surfaces while DatabaseContext initializes its connection
+    Assert.Throws<ConnectionFailedException>(() =>
     {
-        // This should fail due to simulated connection failure
-        var helper = new TableGateway<TestTable, long>(context);
-        await helper.CreateAsync(new TestTable(), context);
+        using var context = new DatabaseContext("Data Source=test.db", factory);
     });
 }
 ```
@@ -328,7 +361,6 @@ public async Task Connection_Failure_HandledGracefully()
 
 - Demonstrates database-specific optimizations
 - Validates that pengdows.crud leverages native features
-- Provides performance comparisons with EF/Dapper
 
 ### ✅ **Documentation Through Tests**
 

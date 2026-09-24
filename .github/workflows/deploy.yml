@@ -107,12 +107,15 @@ jobs:
 
       - name: Run integration suite
         run: |
-          dotnet run --no-build --configuration Release --project testbed/testbed.csproj
+          # testbed is multi-targeted (net8.0;net10.0) - run the matrix on each.
+          for tfm in net8.0 net10.0; do
+            dotnet run --no-build --configuration Release -f "$tfm" --project testbed/testbed.csproj
+          done
 
       - name: Generate coverage report
         run: |
             reportgenerator \
-              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -reports:"TestResults/**/coverage*.cobertura.xml" \
               -targetdir:"coverage-report" \
               -reporttypes:"Html;Cobertura" \
               -assemblyfilters:"+pengdows.crud;-pengdows.crud.Tests;-pengdows.crud.abstractions;-pengdows.crud.fakeDb;-testbed" \
@@ -121,7 +124,7 @@ jobs:
       - name: Generate stormgate coverage report
         run: |
             reportgenerator \
-              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -reports:"TestResults/**/coverage*.cobertura.xml" \
               -targetdir:"coverage-report-stormgate" \
               -reporttypes:"Html;Cobertura" \
               -assemblyfilters:"+pengdows.stormgate;-pengdows.stormgate.Tests" \
@@ -130,7 +133,7 @@ jobs:
       - name: Generate opentelemetry coverage report
         run: |
             reportgenerator \
-              -reports:"TestResults/**/coverage.cobertura.xml" \
+              -reports:"TestResults/**/coverage*.cobertura.xml" \
               -targetdir:"coverage-report-opentelemetry" \
               -reporttypes:"Html;Cobertura" \
               -assemblyfilters:"+pengdows.crud.opentelemetry" \
@@ -313,7 +316,7 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
-          files: TestResults/**/coverage.cobertura.xml
+          files: TestResults/**/coverage*.cobertura.xml
           # fail_ci_if_error intentionally false: CODECOV_TOKEN is unavailable on fork PRs,
           # so we suppress errors rather than blocking community contributions.
           fail_ci_if_error: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}

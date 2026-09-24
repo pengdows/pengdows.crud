@@ -485,7 +485,7 @@ public class CoverageGapTests_MetricsAndConnections
     [Fact]
     public void OrderedDictionary_KeyEnumerator_CoversReset()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict["a"] = 1;
         dict["b"] = 2;
         dict["c"] = 3;
@@ -511,7 +511,7 @@ public class CoverageGapTests_MetricsAndConnections
     [Fact]
     public void OrderedDictionary_ValueEnumerator_CoversReset()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict["x"] = 10;
         dict["y"] = 20;
 
@@ -535,7 +535,7 @@ public class CoverageGapTests_MetricsAndConnections
     [Fact]
     public void OrderedDictionary_Enumerator_CoversReset()
     {
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["one"] = 1,
             ["two"] = 2

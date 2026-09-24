@@ -57,7 +57,8 @@ public class TypeHydrationTableCreator
         var sql = _context.Product switch
         {
             SupportedDatabase.Sqlite => CreateSqliteSql(),
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => CreatePostgreSqlSql(),
+            // YugabyteDb is PostgreSQL-wire-compatible like CockroachDb.
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => CreatePostgreSqlSql(),
             SupportedDatabase.SqlServer => CreateSqlServerSql(),
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),

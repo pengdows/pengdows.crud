@@ -433,7 +433,7 @@ public class AdvancedTypeConverterTests
         Assert.IsType<MemoryStream>(result);
 
         var buffer = new byte[5];
-        result.Read(buffer, 0, 5);
+        result.ReadExactly(buffer, 0, 5);
         Assert.Equal(bytes, buffer);
     }
 
@@ -460,7 +460,7 @@ public class AdvancedTypeConverterTests
         Assert.True(success);
         Assert.IsType<MemoryStream>(result);
         var buffer = new byte[4];
-        result.Read(buffer, 0, 4);
+        result.ReadExactly(buffer, 0, 4);
         Assert.Equal(bytes, buffer);
     }
 
@@ -475,7 +475,7 @@ public class AdvancedTypeConverterTests
         Assert.True(success);
         Assert.IsType<MemoryStream>(result);
         var buffer = new byte[3];
-        result.Read(buffer, 0, 3);
+        result.ReadExactly(buffer, 0, 3);
         Assert.Equal(new byte[] { 2, 3, 4 }, buffer);
     }
 

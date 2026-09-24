@@ -11,7 +11,8 @@
 //   * Commit() / Rollback() for explicit transaction control
 //   * SavepointAsync() / RollbackToSavepointAsync() for partial rollbacks
 //   * Auto-rollback on disposal if not committed
-//   * Isolation level enforcement (promotes to minimum safe level)
+//   * Isolation level arrives already resolved by DatabaseContext (an unsupported
+//     level fails up to the weakest stronger supported level)
 //   * Read-only transaction support
 // - Thread-safe: uses internal locks for concurrent access.
 // - NOT for use with TransactionScope - pengdows.crud uses its own model.
@@ -61,12 +62,12 @@ namespace pengdows.crud;
 /// </remarks>
 /// <example>
 /// <code>
-/// await using var tx = await context.BeginTransaction();
+/// await using var tx = await context.BeginTransactionAsync();
 /// try
 /// {
 ///     await gateway.CreateAsync(entity1);
 ///     await gateway.CreateAsync(entity2);
-///     await tx.Commit();
+///     await tx.CommitAsync();
 /// }
 /// catch
 /// {
@@ -679,9 +680,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         if (!_dialect.SupportsSavepoints)
         {
-            // Unlike SavepointAsync's old no-op (creating a savepoint that's never used is
-            // harmless), silently no-op-ing a rollback here would let the caller believe partial
-            // work was undone when nothing happened — throw instead of lying about the outcome.
+            // Silently no-op-ing a rollback here would let the caller believe partial work was
+            // undone when nothing happened — throw instead of lying about the outcome.
             throw new NotSupportedException(
                 $"{_context.Product} does not support savepoints; RollbackToSavepointAsync is unavailable.");
         }
@@ -1069,9 +1069,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             }
             catch
             {
-                // Release the pinned connection and roll back — do NOT dispose the parent context,
-                // which is a singleton that must remain usable after a failed BeginTransactionAsync.
-                // (The sync constructor path only closes the connection; this matches that behaviour.)
+                // Dispose the transaction (rolls back, releases the pinned connection and the
+                // single-connection gate) — do NOT dispose the parent context, which is a
+                // singleton that must remain usable after a failed BeginTransactionAsync.
                 await tx.DisposeAsync().ConfigureAwait(false);
                 throw;
             }

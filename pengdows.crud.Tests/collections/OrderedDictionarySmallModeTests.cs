@@ -14,7 +14,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_StaysInSmallModeUpTo8Items()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Add exactly 8 items - should stay in small mode
         for (var i = 0; i < 8; i++)
@@ -36,7 +36,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_TransitionsToHashModeOn9thItem()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Add 8 items (small mode)
         for (var i = 0; i < 8; i++)
@@ -61,7 +61,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_RemoveMaintainsOrderByShifting()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
         dict.Add("b", 2);
         dict.Add("c", 3);
@@ -78,7 +78,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_RemoveFirst_ShiftsRemaining()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
         dict.Add("b", 2);
         dict.Add("c", 3);
@@ -93,7 +93,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_RemoveLast_NoShiftNeeded()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
         dict.Add("b", 2);
         dict.Add("c", 3);
@@ -108,7 +108,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_UpdateExistingKey_DoesNotChangeOrder()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
         dict.Add("b", 2);
         dict.Add("c", 3);
@@ -125,7 +125,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_TryAddDuplicate_ReturnsFalse()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         var result = dict.TryAdd("a", 2);
@@ -137,7 +137,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_FindValue_UsesHashPrefilter()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("key1", 100);
         dict.Add("key2", 200);
 
@@ -149,7 +149,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_ContainsKey_ReturnsFalseForMissing()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         Assert.False(dict.ContainsKey("missing"));
@@ -158,7 +158,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_RemoveNonExistent_ReturnsFalse()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         Assert.False(dict.Remove("missing"));
@@ -168,7 +168,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void HashMode_FreeListReuse_AfterRemove()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Fill past small mode threshold
         for (var i = 0; i < 10; i++)
@@ -205,7 +205,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void HashMode_RemoveMiddleOfChain_UnlinksCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Add enough items to likely create hash collisions
         for (var i = 0; i < 20; i++)
@@ -229,7 +229,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void TrimExcess_ShrinksBackToSmallMode()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Add many items to trigger hash mode
         for (var i = 0; i < 100; i++)
@@ -261,7 +261,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void TrimExcess_KeepsHashModeWhenAboveThreshold()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Add items to trigger hash mode
         for (var i = 0; i < 20; i++)
@@ -289,7 +289,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void TrimExcess_EmptyAfterClear_ReleasesMemory()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         for (var i = 0; i < 100; i++)
         {
@@ -307,7 +307,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void Clear_ReleasesArrays()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         for (var i = 0; i < 100; i++)
         {
@@ -327,7 +327,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void Constructor_WithSmallCapacity_StaysInSmallMode()
     {
-        var dict = new OrderedDictionary<string, int>(4);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(4);
 
         dict.Add("a", 1);
         dict.Add("b", 2);
@@ -343,7 +343,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void Constructor_WithLargeCapacity_StartsInHashMode()
     {
-        var dict = new OrderedDictionary<string, int>(100);
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>(100);
 
         dict.Add("a", 1);
 
@@ -354,7 +354,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void EnsureCapacity_SmallToSmall_GrowsEntriesOnly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         // This should just grow entries array, not switch to hash mode
@@ -370,7 +370,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void EnsureCapacity_SmallToHash_TransitionsCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
         dict.Add("b", 2);
 
@@ -390,7 +390,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void Enumeration_SmallMode_RespectsInsertionOrder()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("z", 1);
         dict.Add("a", 2);
         dict.Add("m", 3);
@@ -402,7 +402,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void Enumeration_AfterTransition_RespectsInsertionOrder()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Add in specific order
         dict.Add("z", 1);
@@ -424,7 +424,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void SmallMode_AllOperations_WorkCorrectly()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Add
         dict.Add("a", 1);
@@ -467,7 +467,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void HashMode_RemoveFromBucketHead_UpdatesBucketPointer()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Add enough items to be in hash mode
         for (var i = 0; i < 10; i++)
@@ -491,7 +491,7 @@ public class OrderedDictionarySmallModeTests
     [Fact]
     public void HashMode_RemoveNotInChain_ReturnsFalse()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         for (var i = 0; i < 10; i++)
         {

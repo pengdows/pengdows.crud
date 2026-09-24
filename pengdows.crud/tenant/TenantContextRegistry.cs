@@ -49,12 +49,12 @@ namespace pengdows.crud.tenant;
 /// contexts when tenant configuration changes:
 /// </para>
 /// <list type="number">
-///   <item>Update the tenant's configuration via <c>ITenantConnectionResolver.Register</c>.</item>
+///   <item>Update the tenant's configuration via <c>TenantConnectionResolver.Register</c>.</item>
 ///   <item>Call <see cref="Invalidate"/> (or <see cref="InvalidateAll"/>) to evict the stale context.</item>
 ///   <item>The next <see cref="GetContext"/> call creates a fresh context using the new configuration.</item>
 /// </list>
 /// <para>
-/// <b>Disposal:</b> After this registry is disposed, <see cref="GetContext"/> throws
+/// <b>Disposal:</b> After this registry is disposed, <see cref="GetContext"/> and <see cref="AcquireLease"/> throw
 /// <see cref="ObjectDisposedException"/>. Contexts obtained before disposal continue working
 /// normally until they are themselves disposed.
 /// </para>
@@ -122,7 +122,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         /// <summary>
         /// Releases a previously-added lease. If this was the last outstanding lease and the
-        /// entry has since been removed via <see cref="MarkRemoved"/>, disposes it.
+        /// entry has since been removed via <see cref="MarkRemoved"/>, schedules its disposal.
         /// </summary>
         public void ReleaseLease(TenantContextRegistry owner, string tenant)
         {
@@ -140,8 +140,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         /// <summary>
         /// Marks this entry as removed from the registry's lookup dictionary. If idle (no
-        /// outstanding leases) at this instant, disposes immediately — matching the registry's
-        /// pre-leasing behavior exactly for the common zero-lease case. Otherwise defers to
+        /// outstanding leases) at this instant, schedules disposal immediately. Otherwise defers to
         /// whichever <see cref="ReleaseLease"/> call eventually brings the count to zero.
         /// </summary>
         public void MarkRemoved(TenantContextRegistry owner, string tenant)
@@ -176,7 +175,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     /// <param name="loggerFactory">Logger factory for the registry and created contexts.</param>
     /// <param name="maxTenantCount">
     /// Optional upper bound on distinct cached tenants. When set and the limit is reached,
-    /// <see cref="GetContext"/> throws <see cref="InvalidOperationException"/> for new tenants.
+    /// <see cref="GetContext"/> and <see cref="AcquireLease"/> throw <see cref="InvalidOperationException"/> for new tenants.
     /// Call <see cref="Invalidate"/> or <see cref="InvalidateAll"/> to evict unused entries.
     /// </param>
     public TenantContextRegistry(

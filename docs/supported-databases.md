@@ -1,6 +1,6 @@
 # Supported Databases
 
-pengdows.crud supports 18 directly supported databases via the `SupportedDatabase` [Flags] enum, with tested ADO.NET providers:
+pengdows.crud supports 23 directly supported database products via the `SupportedDatabase` [Flags] enum. Some are managed-service or wire-compatible variants that reuse an existing dialect; the table lists every enum value:
 
 | Enum Value | Product |
 |---|---|
@@ -18,10 +18,15 @@ pengdows.crud supports 18 directly supported databases via the `SupportedDatabas
 | `Snowflake=2048` | Snowflake (opt-in; cloud-only, requires credentials) |
 | `AuroraMySql=4096` | Aurora MySQL (AWS managed; detected at runtime, delegates to MySQL dialect) |
 | `AuroraPostgreSql=8192` | Aurora PostgreSQL (AWS managed; detected at runtime, delegates to PostgreSQL dialect) |
-| `SingleStore=16384` | SingleStore (formerly MemSQL); detected at runtime, delegates to MySQL dialect — see note below |
+| `SingleStore=65536` | SingleStore (formerly MemSQL); detected at runtime, delegates to MySQL dialect — see note below |
 | `FlatFile=32768` | [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) — embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files |
-| `Sybase=65536` | Sybase (SAP) Adaptive Server Enterprise — dedicated `SybaseDialect`, T-SQL family — see note below |
-| `Db2=131072` | IBM Db2 for Linux/Unix/Windows (Db2 LUW) — dedicated `Db2Dialect` — see note below |
+| `SybaseASE=131072` | Sybase (SAP) Adaptive Server Enterprise — dedicated `SybaseDialect`, T-SQL family — see note below |
+| `Db2=16384` | IBM Db2 for Linux/Unix/Windows (Db2 LUW) — dedicated `Db2Dialect` — see note below |
+| `Spanner=262144` | Google Cloud Spanner through its PostgreSQL interface / PGAdapter |
+| `Informix=524288` | IBM Informix Dynamic Server |
+| `SapHana=1048576` | SAP HANA (opt-in integration coverage) |
+| `InterBase=2097152` | Embarcadero InterBase (opt-in integration coverage) |
+| `Access=4194304` | Microsoft Access / Jet/ACE (Windows-only, opt-in integration coverage) |
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 

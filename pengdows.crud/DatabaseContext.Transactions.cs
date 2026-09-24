@@ -6,13 +6,15 @@
 // - BeginTransaction() overloads for starting database transactions:
 //   * With IsolationLevel - Native ADO.NET isolation level
 //   * With IsolationProfile - Portable isolation semantics
-// - Isolation level validation and resolution:
-//   * Ensures requested level is supported by the database
-//   * Degrades gracefully with logging when exact level unavailable
-// - Read-only transaction support for read replicas.
-// - IsolationProfile mapping:
-//   * SafeNonBlockingReads - Snapshot isolation where available
-//   * RepeatableReads - Serializable-lite semantics
+// - Isolation level resolution "fails up", never down:
+//   * An explicit unsupported IsolationLevel resolves to the weakest stronger supported
+//     level (IsolationResolver.ResolveAtLeast); throws if none exists
+//   * BeginTransaction(IsolationProfile) throws TransactionModeNotSupportedException
+//     rather than run below the profile's guarantee (ResolveForTransaction)
+//   * Read transactions with no explicit level use SafeNonBlockingReads and log a
+//     warning if that profile degrades; write transactions default to ReadCommitted
+//     (else Serializable, else the first supported level)
+// - Read-only transactions (ExecutionType.Read) require a readable context.
 // - Returns TransactionContext which pins a connection for the duration.
 // - NOT compatible with TransactionScope - uses pengdows.crud's own model.
 // =============================================================================
@@ -107,7 +109,7 @@ public partial class DatabaseContext
             }
             else
             {
-                _isolationResolver.Validate(isolationLevel.Value);
+                isolationLevel = _isolationResolver.ResolveAtLeast(isolationLevel.Value);
             }
         }
         else
@@ -135,7 +137,7 @@ public partial class DatabaseContext
             }
             else
             {
-                _isolationResolver.Validate(isolationLevel.Value);
+                isolationLevel = _isolationResolver.ResolveAtLeast(isolationLevel.Value);
             }
         }
 

@@ -1,6 +1,6 @@
 # pengdows.stormgate.EntityFrameworkCore
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 
 Entity Framework Core connection admission control via a `DbConnectionInterceptor`.
 
@@ -53,7 +53,7 @@ only the first matters for production use of this package:
 |---|---|---|---|
 | SQLite | ✅ | ✅ | — |
 | SQL Server | ✅ | ✅ | — |
-| MySQL / MariaDB (Pomelo) | ✅ | ✅ | — |
+| MySQL / MariaDB (Pomelo) | ✅ | ✅ | — (verified on net8.0 only: Pomelo has no EF Core 10-compatible release, so the net10.0 test leg omits MySQL/MariaDB) |
 | Snowflake | ✅ | ✅ | — |
 | PostgreSQL (Npgsql) | ✅ | ❌ | `SaveChanges` crashes — Npgsql's own `NpgsqlModificationCommandBatch.Consume` casts the reader to concrete `NpgsqlDataReader` |
 | Firebird | ✅ | ❌ | any string-valued parameter crashes — FirebirdSql's own `FbStringTypeMapping.ConfigureParameter` casts to concrete `FbParameter` |
@@ -81,6 +81,8 @@ connection an application holds open for a long-running unit of work occupies it
 that entire duration, the same as if it were still in the middle of opening.
 
 ```csharp
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using pengdows.stormgate;
 using pengdows.stormgate.EntityFrameworkCore;
 

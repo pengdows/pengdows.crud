@@ -9,6 +9,7 @@
 // - Registers:
 //   * IOptions<MultiTenantOptions> via Configure<T>
 //   * ITenantConnectionResolver as singleton (TenantConnectionResolver)
+//   * IDatabaseContextFactory as singleton (DefaultDatabaseContextFactory, via TryAdd)
 //   * ITenantContextRegistry as singleton (TenantContextRegistry)
 // - Creates TenantConnectionResolver and pre-registers all tenants.
 // - Requires DbProviderFactory keyed services for each provider.

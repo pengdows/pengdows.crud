@@ -381,13 +381,13 @@ public class DatabaseContextTests
     }
 
     [Fact]
-    public void BeginTransaction_ReadOnly_UnsupportedIsolation_Throws()
+    public void BeginTransaction_ReadOnly_UnsupportedIsolation_ResolvesUp()
     {
         var product = SupportedDatabase.Sqlite;
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        Assert.Throws<InvalidOperationException>(() =>
-            context.BeginTransaction(IsolationLevel.Snapshot, ExecutionType.Read));
+        using var tx = context.BeginTransaction(IsolationLevel.Snapshot, ExecutionType.Read);
+        Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
     }
 
     [Fact]

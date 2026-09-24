@@ -4,7 +4,8 @@
 //
 // AI SUMMARY:
 // - Creates and configures DbParameter with provider-specific optimizations.
-// - TryConfigureParameter(): Main entry point - tries provider-specific then general coercion.
+// - TryConfigureParameter(): Main entry point - writes via CoercionRegistry.TryWrite, then applies
+//   provider-specific optimizations on success.
 // - Provider-specific optimizations:
 //   * PostgreSQL: NpgsqlDbType for UUID, arrays, JSONB, HStore, ranges via reflection
 //   * SQL Server: GUID, JSON as NVARCHAR(MAX), rowversion optimization
@@ -17,7 +18,7 @@
 //   * Rule 2: Boolean normalization (MySQL uses TINYINT)
 //   * Rule 3: Enum handling (PostgreSQL=string, others=int)
 //   * Rule 4: Array binding (PostgreSQL/DuckDB native, others=JSON)
-//   * Rule 5: Large object streaming (avoid LOH allocations)
+//   * Rule 5: Large object binding (byte[] over 85,000 bytes wrapped in a MemoryStream; long strings sized MAX)
 // =============================================================================
 
 using System.Data;
@@ -227,7 +228,7 @@ internal static class ProviderParameterFactory
         }
         else if (valueType == typeof(DateTime) || valueType == typeof(DateTime?))
         {
-            // Handle MySQL's zero date behavior
+            // Explicit DateTime DbType (no zero-date handling is applied here)
             parameter.DbType = DbType.DateTime;
         }
     }
@@ -372,7 +373,7 @@ internal static class ParameterBindingRules
                 // PostgreSQL prefers UTC for timestamp with time zone
                 if (dt.Kind == DateTimeKind.Unspecified)
                 {
-                    // Log warning about unspecified DateTimeKind
+                    // No-op: unspecified DateTimeKind is not currently flagged or logged
                 }
             }
         }
@@ -511,7 +512,7 @@ internal static class ParameterBindingRules
             return;
         }
 
-        // Stream large objects to provider to avoid LOH allocations
+        // Wrap large byte arrays (over the 85,000-byte LOH threshold) in a MemoryStream
         if (valueType == typeof(byte[]) && value is byte[] bytes && bytes.Length > 85000)
         {
             // Use streaming for large binary data

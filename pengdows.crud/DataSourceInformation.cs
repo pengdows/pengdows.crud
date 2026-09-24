@@ -45,8 +45,8 @@ namespace pengdows.crud;
 /// during initialization, or manually via <see cref="CreateAsync"/>.
 /// </para>
 /// <para>
-/// <strong>Thread Safety:</strong> This class is immutable after construction and safe
-/// for concurrent access.
+/// <strong>Thread Safety:</strong> All members are read-only after construction except the
+/// <see cref="MaxOutputParameters"/> override setter; reads are safe for concurrent access.
 /// </para>
 /// </remarks>
 /// <seealso cref="IDataSourceInformation"/>

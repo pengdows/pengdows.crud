@@ -102,7 +102,7 @@ behavior). Phase 3 below tests exactly this.
 - [Microsoft Access Database Engine Redistributable](https://www.microsoft.com/en-us/download/details.aspx?id=54920)
   (provides `Microsoft.ACE.OLEDB.16.0` and the `ADOX.Catalog` COM type used to create `.accdb`
   files). `AccessTestContainer.cs` already depends on this being installed — if
-  `INCLUDE_ACCESS=true dotnet run --project testbed -- --only "Access"` already works on the
+  `INCLUDE_ACCESS=true dotnet run -f net10.0 --project testbed -- --only "Access"` already works on the
   machine, this is satisfied.
 - .NET 8 SDK.
 - A checkout of this repo (`pengdows.crud`) so the probe can reference the real `pengdows.crud`

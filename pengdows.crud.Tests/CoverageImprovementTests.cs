@@ -292,14 +292,15 @@ public class CoverageImprovementTests
     }
 
     [Theory]
-    [InlineData(IsolationLevel.ReadUncommitted)]
-    [InlineData(IsolationLevel.Snapshot)]
-    public void TransactionContext_UnsupportedIsolationLevel_Throws(IsolationLevel level)
+    [InlineData(IsolationLevel.ReadUncommitted, IsolationLevel.ReadCommitted)]
+    [InlineData(IsolationLevel.Snapshot, IsolationLevel.Serializable)]
+    public void TransactionContext_UnsupportedIsolationLevel_ResolvesUp(IsolationLevel level, IsolationLevel expected)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=:memory:", factory);
 
-        Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(level));
+        using var tx = context.BeginTransaction(level);
+        Assert.Equal(expected, tx.IsolationLevel);
     }
 
     #endregion

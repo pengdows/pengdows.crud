@@ -35,7 +35,7 @@ echo "Running benchmarks... (this will take ~10-15 minutes)"
 echo ""
 
 # Run all thesis-proof benchmarks
-dotnet run -c Release --project "${root}/CrudBenchmarks" --filter "*ConnectionPoolStressBenchmarks*,*SqlGenerationSafetyBenchmarks*,*RawPerformanceComparison*"
+dotnet run -c Release -f "${BENCH_FRAMEWORK:-net10.0}" --project "${root}/CrudBenchmarks" --filter "*ConnectionPoolStressBenchmarks*,*SqlGenerationSafetyBenchmarks*,*RawPerformanceComparison*"
 
 echo ""
 echo "========================================================================="

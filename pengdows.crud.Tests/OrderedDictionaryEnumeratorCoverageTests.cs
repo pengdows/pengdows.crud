@@ -16,7 +16,7 @@ public class OrderedDictionaryEnumeratorCoverageTests
     {
         // This specifically tests the IEnumerator.Current property that was uncovered
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["first"] = 1,
             ["second"] = 2
@@ -41,7 +41,7 @@ public class OrderedDictionaryEnumeratorCoverageTests
     {
         // This tests the keyed enumerator's Current property (another uncovered item)
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["alpha"] = 100,
             ["beta"] = 200
@@ -61,7 +61,7 @@ public class OrderedDictionaryEnumeratorCoverageTests
     {
         // This tests the value enumerator's Current property
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["gamma"] = 300,
             ["delta"] = 400
@@ -81,7 +81,7 @@ public class OrderedDictionaryEnumeratorCoverageTests
     {
         // Test the full enumeration cycle
         // Arrange
-        var dict = new OrderedDictionary<string, string>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, string>
         {
             ["a"] = "apple",
             ["b"] = "banana"
@@ -110,7 +110,7 @@ public class OrderedDictionaryEnumeratorCoverageTests
     {
         // Test enumerator reset functionality
         // Arrange
-        var dict = new OrderedDictionary<int, string>
+        var dict = new pengdows.crud.collections.OrderedDictionary<int, string>
         {
             [1] = "one",
             [2] = "two"
@@ -136,7 +136,7 @@ public class OrderedDictionaryEnumeratorCoverageTests
     {
         // Test enumeration on empty dictionary
         // Arrange
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Act
         var enumerator = ((IEnumerable)dict).GetEnumerator();
@@ -150,7 +150,7 @@ public class OrderedDictionaryEnumeratorCoverageTests
     {
         // Test that multiple enumerators don't interfere with each other
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["x"] = 10,
             ["y"] = 20,

@@ -18,6 +18,8 @@
 // - Resolve(profile): Returns IsolationLevel.
 // - ResolveWithDetail(profile): Returns IsolationResolution with degradation info.
 // - Validate(level): Throws if level not supported by database.
+// - ResolveAtLeast(level): Requested level, or the weakest stronger supported one; never weaker.
+// - ResolveForTransaction(profile): Throws rather than return a level below the profile's guarantee.
 // - GetSupportedLevels(): Returns set of supported levels for current database.
 // - Constructor params: product, readCommittedSnapshotEnabled, allowSnapshotIsolation.
 // =============================================================================
@@ -70,8 +72,59 @@ internal sealed class IsolationResolver : IIsolationResolver
                 "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
         }
 
-        return Resolve(profile);
+        // A caller who asks for a profile gets at least that profile's guarantee, never less.
+        var resolution = ResolveWithDetail(profile);
+        if (resolution.Degraded)
+        {
+            throw new TransactionModeNotSupportedException(
+                $"IsolationProfile.{profile} cannot be guaranteed on {_product}: the strongest mapping available is " +
+                $"{resolution.Level}, which is weaker than the profile requires.");
+        }
+
+        return resolution.Level;
     }
+
+    /// <summary>
+    /// Resolves an explicitly requested native level to the level a transaction actually uses:
+    /// the requested level when supported, otherwise the weakest supported level that is at least
+    /// as strong. Never resolves to a weaker level.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No supported level is at least as strong as <paramref name="requested"/>.</exception>
+    internal IsolationLevel ResolveAtLeast(IsolationLevel requested)
+    {
+        if (_supportedLevels.Contains(requested))
+        {
+            return requested;
+        }
+
+        foreach (var candidate in StrongerLevels(requested))
+        {
+            if (_supportedLevels.Contains(candidate))
+            {
+                return candidate;
+            }
+        }
+
+        throw new InvalidOperationException(
+            $"Isolation level {requested} not supported by {_product} (RCSI: {_rcsi}), and no stronger level is available.");
+    }
+
+    // Levels that satisfy at least the guarantees of the requested level, weakest first.
+    // Snapshot does not satisfy RepeatableRead: locking RepeatableRead prevents write skew on
+    // rows it has read, which Snapshot allows.
+    private static IsolationLevel[] StrongerLevels(IsolationLevel requested) => requested switch
+    {
+        IsolationLevel.ReadUncommitted => new[]
+        {
+            IsolationLevel.ReadCommitted, IsolationLevel.RepeatableRead, IsolationLevel.Snapshot,
+            IsolationLevel.Serializable
+        },
+        IsolationLevel.ReadCommitted => new[]
+            { IsolationLevel.RepeatableRead, IsolationLevel.Snapshot, IsolationLevel.Serializable },
+        IsolationLevel.RepeatableRead => new[] { IsolationLevel.Serializable },
+        IsolationLevel.Snapshot => new[] { IsolationLevel.Serializable },
+        _ => Array.Empty<IsolationLevel>()
+    };
 
     public IsolationResolution ResolveWithDetail(IsolationProfile profile)
     {

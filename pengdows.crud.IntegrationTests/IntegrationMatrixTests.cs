@@ -28,6 +28,12 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         var only = ParseList(Environment.GetEnvironmentVariable("TESTBED_ONLY"));
         var exclude = ParseList(Environment.GetEnvironmentVariable("TESTBED_EXCLUDE"));
 
+        // Informix's native driver (libthcli15a.so) requires LD_LIBRARY_PATH to be set BEFORE the
+        // process starts, and this test already runs inside vstest's testhost, which can't be
+        // re-exec'd with a corrected environment. Informix is covered by `dotnet run --project
+        // testbed` instead, which sets LD_LIBRARY_PATH itself before any P/Invoke.
+        exclude.Add("Informix");
+
         var results = await orchestrator.RunAllTestsAsync(only, exclude);
         Assert.NotEmpty(results);
 

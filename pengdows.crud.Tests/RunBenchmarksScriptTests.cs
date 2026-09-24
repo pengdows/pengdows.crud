@@ -21,7 +21,10 @@ public class RunBenchmarksScriptTests
         var scriptPath = GetScriptPath();
         var contents = File.ReadAllText(scriptPath);
 
-        Assert.Contains("benchmarks/CrudBenchmarks/bin/Release/net8.0", contents, StringComparison.OrdinalIgnoreCase);
+        // CrudBenchmarks is multi-targeted (net8.0;net10.0): the compiled binary lives under the
+        // framework folder chosen by BENCH_FRAMEWORK (default net10.0).
+        Assert.Contains("bench_tfm=\"${BENCH_FRAMEWORK:-net10.0}\"", contents, StringComparison.Ordinal);
+        Assert.Contains("benchmarks/CrudBenchmarks/bin/Release/${bench_tfm}", contents, StringComparison.Ordinal);
         Assert.Contains("CrudBenchmarks", contents, StringComparison.OrdinalIgnoreCase);
     }
 

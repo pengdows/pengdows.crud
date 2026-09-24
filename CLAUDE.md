@@ -191,7 +191,7 @@ dotnet test --filter "ClassName=TableGatewayTests"
 dotnet test -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
 
 # Run integration suite (requires Docker)
-dotnet run -c Release --project testbed
+dotnet run -c Release -f net10.0 --project testbed
 
 # Verify API baseline (run after any interface changes)
 dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Release -- \
@@ -200,7 +200,7 @@ dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Relea
   --assembly pengdows.crud.abstractions/bin/Release/net8.0/pengdows.crud.abstractions.dll
 
 # Verify no vendor directories committed
-dotnet run --project tools/verify-novendor
+dotnet run -f net10.0 --project tools/verify-novendor
 ```
 
 ### Package Management

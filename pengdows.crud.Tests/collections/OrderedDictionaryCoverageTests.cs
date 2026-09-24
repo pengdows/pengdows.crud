@@ -16,7 +16,7 @@ public class OrderedDictionaryCoverageTests
     public void OrderedDictionary_IEnumerator_Current_ReturnsCorrectValue()
     {
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["first"] = 1,
             ["second"] = 2,
@@ -41,7 +41,7 @@ public class OrderedDictionaryCoverageTests
     public void OrderedDictionary_IEnumerator_MoveNext_IteratesCorrectly()
     {
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["a"] = 10,
             ["b"] = 20
@@ -72,7 +72,7 @@ public class OrderedDictionaryCoverageTests
     public void OrderedDictionary_IEnumerator_Reset_ResetsPosition()
     {
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["x"] = 100,
             ["y"] = 200
@@ -97,7 +97,7 @@ public class OrderedDictionaryCoverageTests
     {
         // This tests the keyed enumerator's Current property
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["key1"] = 42,
             ["key2"] = 84
@@ -117,7 +117,7 @@ public class OrderedDictionaryCoverageTests
     {
         // This tests the valued enumerator's Current property
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["alpha"] = 111,
             ["beta"] = 222
@@ -136,7 +136,7 @@ public class OrderedDictionaryCoverageTests
     public void OrderedDictionary_MultipleEnumerators_WorkIndependently()
     {
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["one"] = 1,
             ["two"] = 2,
@@ -167,7 +167,7 @@ public class OrderedDictionaryCoverageTests
     public void OrderedDictionary_EmptyDictionary_EnumeratorBehavesCorrectly()
     {
         // Arrange
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
 
         // Act
         var enumerator = ((IEnumerable)dict).GetEnumerator();
@@ -180,7 +180,7 @@ public class OrderedDictionaryCoverageTests
     public void OrderedDictionary_DisposedEnumerator_HandlesProperly()
     {
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["test"] = 123
         };
@@ -199,7 +199,7 @@ public class OrderedDictionaryCoverageTests
     public void OrderedDictionary_ConcurrentModification_EnumeratorHandlesGracefully()
     {
         // Arrange
-        var dict = new OrderedDictionary<string, int>
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>
         {
             ["original"] = 999
         };
@@ -220,7 +220,7 @@ public class OrderedDictionaryCoverageTests
     {
         // This tests the OrderedDictionaryExtensions.Logger property
         // Arrange
-        var dict = new OrderedDictionary<string, string>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, string>();
 
         // Act - Access the logger (this exercises the getter)
         var logger = OrderedDictionaryExtensions.Logger;
@@ -232,7 +232,7 @@ public class OrderedDictionaryCoverageTests
     [Fact]
     public void OrderedDictionary_RemoveHashMode_PreservesInsertionOrder()
     {
-        var dict = new OrderedDictionary<int, string>(capacity: 32);
+        var dict = new pengdows.crud.collections.OrderedDictionary<int, string>(capacity: 32);
         for (var i = 0; i < 12; i++)
         {
             dict.Add(i, $"v{i}");
@@ -259,7 +259,7 @@ public class OrderedDictionaryCoverageTests
     [Fact]
     public void OrderedDictionary_RemoveMissing_ReturnsFalse_AndKeepsOrder()
     {
-        var dict = new OrderedDictionary<int, string>(capacity: 32);
+        var dict = new pengdows.crud.collections.OrderedDictionary<int, string>(capacity: 32);
         for (var i = 0; i < 4; i++)
         {
             dict.Add(i, $"v{i}");

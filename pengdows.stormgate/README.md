@@ -81,6 +81,13 @@ public interface IConnectionFactory
 
 public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposable
 {
+    // Wrap an existing DbDataSource
+    public StormGate(
+        DbDataSource dataSource,
+        int maxConcurrentOpens,
+        TimeSpan acquireTimeout,
+        ILogger? logger = null);
+
     // Factory method to create a gate from a provider factory
     public static StormGate Create(
         DbProviderFactory factory,
@@ -88,8 +95,25 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
         int maxConcurrentOpens,
         TimeSpan acquireTimeout,
         ILogger? logger = null);
+
+    // Open a gated connection; the permit is released when the connection closes or is disposed
+    public Task<DbConnection> OpenAsync(CancellationToken ct = default);
+
+    // Acquire a permit from the same budget without opening a connection
+    // (used by pengdows.stormgate.EntityFrameworkCore's interceptor)
+    public Task<StormGatePermit> AcquirePermitAsync(CancellationToken ct = default);
+    public StormGatePermit AcquirePermit(CancellationToken ct = default);
+
+    public void Dispose();
+    public ValueTask DisposeAsync();
+
+    // Dispose exactly once to release the slot
+    public readonly struct StormGatePermit : IDisposable, IAsyncDisposable { }
 }
 ```
+
+`maxConcurrentOpens` must be greater than zero and `acquireTimeout` must not be negative; otherwise
+the constructor throws `ArgumentOutOfRangeException`.
 
 ---
 
@@ -101,7 +125,7 @@ Pass an `ILogger` to get operational visibility:
 var gate = StormGate.Create(..., logger: loggerFactory.CreateLogger<StormGate>());
 ```
 
-*   **Warning**: Logged when a permit times out (**Saturation Signal**). If you see this, you are either leaking connections, under-provisioned, or the database is the bottleneck.
+*   **Warning**: Logged when a permit times out (**Saturation Signal**). If you see this, you are either leaking connections, under-provisioned, or the database is the bottleneck. Also logged when the provider's connection string builder silently drops keys during normalization.
 *   **Error**: Logged when the underlying connection fails to open after a permit was successfully acquired.
 *   **Debug**: Information about provider resolution and connection string normalization.
 

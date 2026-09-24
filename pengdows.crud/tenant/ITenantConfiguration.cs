@@ -3,10 +3,8 @@
 // PURPOSE: Marker interface for tenant configuration types.
 //
 // AI SUMMARY:
-// - Empty marker interface for tenant configuration implementations.
-// - Enables generic constraints and type-safe configuration handling.
-// - Implementations provide tenant-specific database settings.
-// - Used with dependency injection for configuration discovery.
+// - Empty marker interface; nothing in the library implements or consumes it
+//   (TenantConfiguration does not implement it).
 // =============================================================================
 
 namespace pengdows.crud.tenant;

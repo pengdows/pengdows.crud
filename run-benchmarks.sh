@@ -2,7 +2,9 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-bench_dir="${root}/benchmarks/CrudBenchmarks/bin/Release/net8.0"
+# CrudBenchmarks is multi-targeted (net8.0;net10.0); BENCH_FRAMEWORK picks which one to run.
+bench_tfm="${BENCH_FRAMEWORK:-net10.0}"
+bench_dir="${root}/benchmarks/CrudBenchmarks/bin/Release/${bench_tfm}"
 bench_exe="${bench_dir}/CrudBenchmarks"
 
 build_benchmarks() {
@@ -11,10 +13,10 @@ build_benchmarks() {
 
 verify_benchmark_binaries() {
     local pairs=(
-        "pengdows.crud.dll:${root}/pengdows.crud/bin/Release/net8.0/pengdows.crud.dll:${bench_dir}/pengdows.crud.dll"
-        "pengdows.crud.abstractions.dll:${root}/pengdows.crud.abstractions/bin/Release/net8.0/pengdows.crud.abstractions.dll:${bench_dir}/pengdows.crud.abstractions.dll"
-        "pengdows.crud.fakeDb.dll:${root}/pengdows.crud.fakeDb/bin/Release/net8.0/pengdows.crud.fakeDb.dll:${bench_dir}/pengdows.crud.fakeDb.dll"
-        "pengdows.stormgate.dll:${root}/pengdows.stormgate/bin/Release/net8.0/pengdows.stormgate.dll:${bench_dir}/pengdows.stormgate.dll"
+        "pengdows.crud.dll:${root}/pengdows.crud/bin/Release/${bench_tfm}/pengdows.crud.dll:${bench_dir}/pengdows.crud.dll"
+        "pengdows.crud.abstractions.dll:${root}/pengdows.crud.abstractions/bin/Release/${bench_tfm}/pengdows.crud.abstractions.dll:${bench_dir}/pengdows.crud.abstractions.dll"
+        "pengdows.crud.fakeDb.dll:${root}/pengdows.crud.fakeDb/bin/Release/${bench_tfm}/pengdows.crud.fakeDb.dll:${bench_dir}/pengdows.crud.fakeDb.dll"
+        "pengdows.stormgate.dll:${root}/pengdows.stormgate/bin/Release/${bench_tfm}/pengdows.stormgate.dll:${bench_dir}/pengdows.stormgate.dll"
     )
 
     local entry name source target source_hash target_hash
@@ -60,5 +62,5 @@ if [[ -x "${bench_exe}" ]]; then
         CRUD_BENCH_INPROC=1 "${bench_exe}" -j short --filter '*'
     )
 else
-    CRUD_BENCH_INPROC=1 dotnet run -c Release --project "${root}/benchmarks/CrudBenchmarks" -- -j short --filter '*'
+    CRUD_BENCH_INPROC=1 dotnet run -c Release -f "${bench_tfm}" --project "${root}/benchmarks/CrudBenchmarks" -- -j short --filter '*'
 fi

@@ -8,19 +8,19 @@ with up to 2 databases in parallel.
 
 ```bash
 # All always-on databases (10)
-dotnet run -c Release --project testbed
+dotnet run -c Release -f net10.0 --project testbed
 
 # Include Oracle (requires license acceptance)
-INCLUDE_ORACLE=true dotnet run -c Release --project testbed
+INCLUDE_ORACLE=true dotnet run -c Release -f net10.0 --project testbed
 
 # Include Snowflake (requires credentials)
-INCLUDE_SNOWFLAKE=true dotnet run -c Release --project testbed
+INCLUDE_SNOWFLAKE=true dotnet run -c Release -f net10.0 --project testbed
 
 # Run only specific databases
-dotnet run -c Release --project testbed -- --only PostgreSQL,MySQL
+dotnet run -c Release -f net10.0 --project testbed -- --only PostgreSQL,MySQL
 
 # Exclude specific databases
-dotnet run -c Release --project testbed -- --exclude SQLite
+dotnet run -c Release -f net10.0 --project testbed -- --exclude SQLite
 ```
 
 ## Always-on Databases

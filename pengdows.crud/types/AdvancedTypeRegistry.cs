@@ -458,7 +458,7 @@ internal class AdvancedTypeRegistry
 
     private void RegisterAccessMappings()
     {
-        // Microsoft Access (Jet/ACE): CONFIRMED live (this session, via a real .accdb) that the
+        // Microsoft Access (Jet/ACE): CONFIRMED live (via a real .accdb) that the
         // generic positional-dialect bool->Int16(1/0) conversion (SqlDialect's
         // NeedsCommonConversions path, driven by !SupportsNamedParameters — Access is positional,
         // same as Informix/SAP HANA) does NOT round-trip correctly here: Jet's native YESNO type
@@ -467,7 +467,8 @@ internal class AdvancedTypeRegistry
         // True value (COUNT: 0), while Int16(-1) and the native OleDbType.Boolean both matched
         // correctly (COUNT: 1). Rather than re-deriving Jet's internal -1/0 storage convention by
         // hand, this binds the real native OleDbType.Boolean directly via reflection (same
-        // SetEnumProperty mechanism as the DateTime->OleDbType.Date fix above), which round-trips
+        // SetEnumProperty mechanism as the DateTime->OleDbType.Date mapping in
+        // RegisterTemporalMappings), which round-trips
         // correctly for both INSERT and equality comparison without the framework needing to know
         // Jet's specific boolean encoding at all.
         RegisterMapping<bool>(SupportedDatabase.Access, new ProviderTypeMapping

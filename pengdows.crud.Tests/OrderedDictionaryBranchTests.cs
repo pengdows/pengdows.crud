@@ -11,7 +11,7 @@ public class OrderedDictionaryBranchTests
 {
     private static T InvokePrivateStatic<T>(string name, params object?[] args)
     {
-        var method = typeof(OrderedDictionary<string, int>)
+        var method = typeof(pengdows.crud.collections.OrderedDictionary<string, int>)
             .GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
         return (T)method!.Invoke(null, args)!;
@@ -20,7 +20,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Clear_SmallMode_ClearsEntries()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
         dict.Add("b", 2);
 
@@ -33,7 +33,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Clear_BucketMode_ClearsEntries()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         for (var i = 0; i < 9; i++)
         {
             dict.Add($"k{i}", i);
@@ -48,7 +48,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void TryInsert_Behaviors_WorkInSmallMode()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         Assert.Throws<ArgumentException>(() => dict.Add("a", 2));
@@ -61,7 +61,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Remove_SmallMode_RemovesAndReturnsFalseForMissing()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
         dict.Add("b", 2);
 
@@ -72,7 +72,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Remove_BucketMode_UpdatesCollections()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         for (var i = 0; i < 10; i++)
         {
             dict.Add($"k{i}", i);
@@ -85,7 +85,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Remove_KeyValuePair_RequiresMatchingValue()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         Assert.False(dict.Remove(new KeyValuePair<string, int>("a", 2)));
@@ -95,7 +95,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Remove_WithValue_ReturnsValueWhenPresent()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         Assert.True(dict.Remove("a", out var value));
@@ -106,7 +106,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void EnsureCapacity_ResizesStorage()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.EnsureCapacity(32);
         dict.Add("a", 1);
 
@@ -116,7 +116,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void TrimExcess_HandlesEmptyAndCompacts()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.TrimExcess();
 
         dict.Add("a", 1);
@@ -141,7 +141,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Resize_UsesInsertionOrderWhenBucketsAllocated()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         for (var i = 0; i < 10; i++)
         {
             dict.Add($"k{i}", i);
@@ -178,7 +178,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Enumerators_ThrowWhenModified()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         var keyEnum = dict.Keys.GetEnumerator();
@@ -193,7 +193,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Enumerator_MoveNext_ThrowsWhenModifiedDuringIteration()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
         dict.Add("b", 2);
 
@@ -207,7 +207,7 @@ public class OrderedDictionaryBranchTests
     [Fact]
     public void Enumerator_Reset_ThrowsWhenModifiedDuringIteration()
     {
-        var dict = new OrderedDictionary<string, int>();
+        var dict = new pengdows.crud.collections.OrderedDictionary<string, int>();
         dict.Add("a", 1);
 
         IEnumerator enumerator = dict.GetEnumerator();

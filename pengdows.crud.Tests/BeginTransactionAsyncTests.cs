@@ -246,14 +246,10 @@ public class BeginTransactionAsyncTests
     }
 
     /// <summary>
-    /// BeginTransaction with an unsupported IsolationLevel on the write path must throw,
-    /// not silently pass the unsupported level to the driver.
+    /// BeginTransaction with an IsolationLevel that has nothing at or above it on the write path
+    /// must throw, not silently pass the unsupported level to the driver or run weaker.
     /// </summary>
     [Theory]
-    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.ReadUncommitted)]
-    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.ReadCommitted)]
-    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.RepeatableRead)]
-    [InlineData(SupportedDatabase.Snowflake, "EmulatedProduct=Snowflake", IsolationLevel.ReadUncommitted)]
     [InlineData(SupportedDatabase.Snowflake, "EmulatedProduct=Snowflake", IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.TiDb, "EmulatedProduct=TiDB", IsolationLevel.Serializable)]
     public void BeginTransaction_UnsupportedIsolationLevel_Throws(
@@ -271,6 +267,34 @@ public class BeginTransactionAsyncTests
 
         using var context = new DatabaseContext(config, factory);
         Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(unsupportedLevel));
+    }
+
+    /// <summary>
+    /// An unsupported level with a stronger supported one resolves up to it — the driver still
+    /// never sees an unsupported level, and the transaction never runs weaker than requested.
+    /// </summary>
+    [Theory]
+    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.ReadUncommitted, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.ReadCommitted, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.CockroachDb, "EmulatedProduct=CockroachDB", IsolationLevel.RepeatableRead, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.Snowflake, "EmulatedProduct=Snowflake", IsolationLevel.ReadUncommitted, IsolationLevel.ReadCommitted)]
+    public void BeginTransaction_UnsupportedIsolationLevel_ResolvesUp(
+        SupportedDatabase product,
+        string connectionStringFragment,
+        IsolationLevel requested,
+        IsolationLevel expected)
+    {
+        var factory = new fakeDbFactory(product);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;{connectionStringFragment}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory);
+        using var tx = context.BeginTransaction(requested);
+        Assert.Equal(expected, tx.IsolationLevel);
     }
 
     /// <summary>
