@@ -111,10 +111,10 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
         DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
-        // Standard strategy: reuse the initialization connection for detection, then dispose it
+        // Standard strategy: reuse the initialization connection for detection; DatabaseContext
+        // disposes it afterwards (Standard/SingleWriter).
         if (initConnection != null)
         {
-            // When using DbDataSource, factory is created from the connection and will not be null
             // When factory is null, fall back to SQL-92 dialect
             if (factory != null)
             {

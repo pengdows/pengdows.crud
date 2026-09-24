@@ -4,12 +4,14 @@
 //
 // AI SUMMARY:
 // - Implements ILockerAsync with actual SemaphoreSlim-based locking.
-// - Used for shared (persistent) connections in SingleWriter/SingleConnection modes.
+// - Used for shared (persistent) connections in SingleWriter/SingleConnection modes, the
+//   SingleConnection transaction gate, and as the fallback connection-open gate locker.
 // - Key methods:
 //   * Lock(): Sync lock acquisition with optional timeout
 //   * LockAsync(ct): Async lock acquisition with cancellation
 //   * TryLockAsync(timeout, ct): Timeout-based acquisition attempt
-// - Throws ModeContentionException on timeout (includes diagnostics snapshot).
+// - Lock/LockAsync throw ModeContentionException on timeout (includes diagnostics snapshot);
+//   TryLockAsync returns false instead.
 // - Contention tracking:
 //   * ModeContentionStats integration for wait metrics
 //   * Records wait start/end, timeouts

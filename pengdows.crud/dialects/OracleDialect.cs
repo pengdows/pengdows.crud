@@ -5,12 +5,12 @@
 // AI SUMMARY:
 // - Supports Oracle Database 12c+ with enterprise feature support.
 // - Key features:
-//   * MERGE statement for upserts (with RETURNING via dual table)
+//   * MERGE statement for upserts (source row via SELECT ... FROM DUAL)
 //   * Parameter marker: : (colon prefix, ODP.NET standard)
 //   * Identifier quoting: "name" (double quotes)
 //   * Max parameters: 65535 (Oracle's internal 16-bit bind variable slot limit)
-//   * Sequence-based ID generation
-// - Uses Oracle-specific RETURNING INTO clause via PL/SQL block.
+//   * Identity columns supported
+// - Generated keys via RETURNING ... INTO an output parameter (GeneratedKeyPlan.Returning).
 // - Statement cache preferred over manual prepare.
 // - Stored procedure support via Oracle anonymous blocks.
 // - Parameter name limit: 30 chars (pre-12.2), 128 chars (12.2+).
@@ -31,10 +31,10 @@ namespace pengdows.crud.dialects;
 /// <remarks>
 /// <para>
 /// Supports Oracle Database 12c and later with automatic version detection.
-/// Uses Oracle-specific syntax for sequences, upserts, and returning values.
+/// Uses Oracle-specific syntax for upserts and returning values.
 /// </para>
 /// <para>
-/// <strong>UPSERT:</strong> Uses MERGE statement with optional RETURNING via PL/SQL.
+/// <strong>UPSERT:</strong> Uses MERGE statement with a <c>SELECT ... FROM DUAL</c> source.
 /// </para>
 /// <para>
 /// <strong>Parameters:</strong> Uses colon prefix (:param) with ODP.NET naming.
@@ -232,9 +232,7 @@ internal class OracleDialect : SqlDialect
     /// <summary>
     /// Oracle RETURNING INTO requires a named output parameter bound by the driver,
     /// not a generic positional placeholder. Override base to provide the correct syntax.
-    /// Note: In normal operation Oracle uses PrefetchSequence (GetGeneratedKeyPlan returns
-    /// PrefetchSequence), so this path is only reached when the caller explicitly renders
-    /// the clause.
+    /// <see cref="GetGeneratedKeyPlan"/> returns Returning, so this is the normal generated-key path.
     /// </summary>
     public override string RenderInsertReturningClause(string idColumnWrapped)
     {

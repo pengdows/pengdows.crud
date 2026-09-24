@@ -15,7 +15,8 @@
 // - ThrowIfDisposed(): Guard method throws ObjectDisposedException.
 // - TrackDisposeState: Virtual property to opt-out (for singletons).
 // - GC.SuppressFinalize called after cleanup completes.
-// - Exception handling: Both sync and async paths call OnDisposeException for observability.
+// - Exception handling: Both sync and async paths call OnDisposeException for suppressed
+//   secondary exceptions only.
 // - Preserves the first exception, continues cleanup, then rethrows it after cleanup completes.
 // =============================================================================
 

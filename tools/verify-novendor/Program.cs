@@ -1,5 +1,5 @@
 // dotnet add package Mono.Cecil
-// Usage: dotnet run --project tools/verify-novendor -- <dir-with-dlls> [--allow "Pattern1;Pattern2"]
+// Usage: dotnet run --project tools/verify-novendor -- <dir-with-dlls> [--allow="Pattern1;Pattern2"]
 
 using System;
 using System.Collections.Generic;

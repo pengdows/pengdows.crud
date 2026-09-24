@@ -50,7 +50,7 @@
 //   false). Access has no server-side upsert mechanism at all, not just an unimplemented one —
 //   this is expected, correct behavior, not a gap to fill in later.
 // - No ADO.NET-invocable stored procedures — ProcWrappingStyle.None is a considered decision,
-//   not an unexamined default (CLAUDE.md's "Adding a New Database" checklist item 13).
+//   not an unexamined default.
 // - Embedded, file-based engine — architecturally in SQLite's category, not a client-server
 //   database. IsClientServerDatabase => false, coerced to DbMode.SingleWriter via the shared
 //   CoerceEmbeddedSingleWriterMode helper (same call SqliteDialect/DuckDbDialect make). Access
@@ -74,7 +74,7 @@
 //   a warning (not a block) when they do.
 //   RE-VERIFIED LIVE end-to-end on a real Windows machine (see
 //   docs/connection/access-concurrency-verification.md for the full run): the earlier finding
-//   above was correct in substance but the connection-string bug just above (SupportsExternalPooling)
+//   above was correct in substance but the connection-string bug described below (SupportsExternalPooling)
 //   meant DbMode.Standard couldn't even open a connection until that was fixed. Once fixed:
 //   (1) 20 concurrent single-statement auto-committing INSERTs into disjoint rows of the same
 //   table via DbMode.Standard all succeeded, 20/20, three runs in a row — a bare INSERT holds its
@@ -148,8 +148,7 @@
 //   end — confirmed via a live TableGateway CRUD round trip, not just fakeDb unit tests), while a
 //   Mode=ReadWrite control connection succeeds normally. Also confirmed live (3/3 trials) that a
 //   held-open Mode=Read connection actively issuing reads does NOT block a concurrent writer on
-//   the same file — unlike DuckDbDialect.ReadOnlyConnectionsCanBlockConcurrentWriters (true), so
-//   Access correctly keeps the SqlDialect base default (false) with no override.
+//   the same file.
 // - Isolation: CONFIRMED live that only ReadUncommitted and ReadCommitted are accepted by
 //   OleDbConnection.BeginTransaction — RepeatableRead/Serializable/Snapshot all throw "Neither
 //   the isolation level nor a strengthening of it is supported."
@@ -161,8 +160,8 @@
 //   produce a type Access accepts — every INSERT into a DATETIME column failed with "Data type
 //   mismatch in criteria expression" until OleDbType.Date was set explicitly. Fixed via
 //   AdvancedTypeRegistry.RegisterTemporalMappings' RegisterMapping<DateTime>(SupportedDatabase.Access, ...)
-//   entry (SetEnumProperty reflection-sets OleDbType.Date), the same mechanism Spanner's
-//   NpgsqlDbType.TimestampTz fix uses — not a CreateDbParameter override here, to avoid adding a
+//   entry (SetEnumProperty reflection-sets OleDbType.Date) — not a CreateDbParameter override
+//   here, to avoid adding a
 //   hard System.Data.OleDb reference to this library (matching SqliteDialect's own
 //   reflection-based provider-namespace check for the same reason). DateTimeOffset binding for
 //   Access has not been verified live and is NOT registered — do not assume the DateTime fix
@@ -171,17 +170,16 @@
 //   LIMIT-based fallback — mirrors SybaseDialect's GetNaturalKeySelectClause override (on 3.0;
 //   this branch inlines the equivalent case directly in SqlDialect.GetNaturalKeyLookupQuery).
 // - Exception classification: OleDbException DOES derive from DbException (unlike Sybase's
-//   AseException) — so, unlike Sybase, this dialect participates in the standard unified
-//   constraint-classification delegation (AccessExceptionTranslator delegates to the four
-//   IsXxxViolation overrides below rather than re-deriving the logic). CONFIRMED live that
+//   AseException), so the DbException-typed IsXxxViolation overrides below apply directly.
+//   AccessExceptionTranslator re-derives the same message-substring classification
+//   independently (2.0.6's translators don't delegate to the dialect). CONFIRMED live that
 //   OleDbException.ErrorCode is the identical generic COM HRESULT (-2147467259) and
 //   OleDbException.Errors is empty for every constraint-violation kind (UNIQUE, NOT NULL, CHECK,
 //   FK, PK-duplicate) — no numeric discrimination is possible at all, only English message-text
 //   substring matching (mirrors FirebirdDialect's approach). CONFIRMED live that the
 //   INSERT-blocked-by-missing-parent and DELETE-blocked-by-child-row FK messages use completely
-//   different wording ("a related record is required" vs. "includes related records") — the
-//   exact SQL Server pitfall CLAUDE.md's checklist item 22 documents; "related record" is a
-//   substring of both, deliberately chosen to cover both shapes.
+//   different wording ("a related record is required" vs. "includes related records");
+//   "related record" is a substring of both, deliberately chosen to cover both shapes.
 // =============================================================================
 
 using System.Data;
@@ -202,7 +200,7 @@ namespace pengdows.crud.dialects;
 /// <c>Microsoft.ACE.OLEDB.12.0</c> and <c>Microsoft.ACE.OLEDB.16.0</c> providers) vs. reasoned
 /// architecturally but not directly stress-tested. See <c>AccessDialectTests.cs</c> for the
 /// dedicated capability-flag and exception-classification test coverage (CLAUDE.md's "Adding a
-/// New Database" checklist item 7).
+/// New Database" checklist item 6).
 /// </remarks>
 internal sealed class AccessDialect : SqlDialect
 {
@@ -301,8 +299,8 @@ internal sealed class AccessDialect : SqlDialect
     // inline SupportedDatabase.Access case in SqlDialect.GetNaturalKeyLookupQuery), which has no
     // "skip n rows" capability at all. The base AppendPaging's default (SupportsOffsetFetch=true)
     // generated an invalid "OFFSET n ROWS FETCH NEXT m ROWS ONLY" suffix that failed with a raw,
-    // unhelpful OleDb "Unspecified error" — matches SqlServer/Sybase/InterBase's identical
-    // "TOP-only, no general paging" limitation, all of which also override both flags to false.
+    // unhelpful OleDb "Unspecified error". Sybase ASE and InterBase likewise override both flags
+    // to false.
     public override bool SupportsOffsetFetch => false;
     public override bool SupportsLimitOffset => false;
 
@@ -342,15 +340,14 @@ internal sealed class AccessDialect : SqlDialect
     public override string? GetReadOnlyConnectionParameter() => "Mode=Read";
 
     // CONFIRMED live (3/3 trials): a held-open Mode=Read connection, actively issuing reads,
-    // does NOT block a concurrent writer on the same file — unlike DuckDbDialect's confirmed
-    // true here. Access stays at the SqlDialect base default (false); no override needed, but
-    // documented explicitly since the value matters and was verified, not assumed.
+    // does NOT block a concurrent writer on the same file.
 
     // CONFIRMED live: SELECT @@IDENTITY works over OLE DB against a real .accdb COUNTER column,
     // and is still used by TableGateway.Core.cs's PopulateGeneratedIdAsync fallback path.
     public override string GetLastInsertedIdQuery() => "SELECT @@IDENTITY";
 
-    // Deliberately NOT overridden to true, unlike Sybase's identical-looking @@IDENTITY case.
+    // HasSessionScopedLastIdFunction() deliberately stays false for Access (the base switch returns
+    // true for Sybase's identical-looking @@IDENTITY case).
     // CONFIRMED live that Access/OleDb rejects multi-statement batches outright ("Characters
     // found after end of SQL statement") when trying "INSERT ...; SELECT @@IDENTITY" as one
     // command — so, unlike Sybase, GeneratedKeyPlan.CompoundStatement is not available here to
@@ -371,7 +368,7 @@ internal sealed class AccessDialect : SqlDialect
 
     /// <summary>
     /// There is no SQL-queryable version function in Jet SQL at all (confirmed by this dialect
-    /// having no <c>SET</c> statement support either — see the session-settings remarks above).
+    /// having no <c>SET</c> statement support either — see the session-settings remarks below).
     /// CONFIRMED live: <c>OleDbConnection.ServerVersion</c> returns the same "04.00.0000"
     /// Jet-compatibility version string reported by <c>DataSourceProductVersion</c>, populated
     /// directly by the driver — same idiom as FlatFileDialect/InterBaseDialect's own
@@ -388,8 +385,8 @@ internal sealed class AccessDialect : SqlDialect
     // all fail with "Invalid SQL statement; expected 'DELETE', 'INSERT', 'PROCEDURE', 'SELECT',
     // or 'UPDATE'."). Any engine-level behavior (locking mode, engine type) is controlled purely
     // via OLE DB connection-string properties at connect time, not runtime SQL — there is no
-    // pooled-connection session-state hazard for GetBaseSessionSettings (CLAUDE.md's "Adding a
-    // New Database" checklist item 12) to guard against here. Deliberately not overridden —
+    // pooled-connection session-state hazard for GetBaseSessionSettings to guard against here.
+    // Deliberately not overridden —
     // stays at the base class's empty-string default.
 
     public override string ExtractProductNameFromVersion(string versionString) => "MS Jet";

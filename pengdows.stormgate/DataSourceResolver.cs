@@ -8,7 +8,7 @@ namespace pengdows.stormgate;
 
 internal sealed class DataSourceResolver
 {
-    // P2: ProbeCache is intentionally static even though DataSourceResolver is instance-scoped.
+    // ProbeCache is intentionally static even though DataSourceResolver is instance-scoped.
     // Provider DbDataSource support is determined by factory *type*, never by instance state or
     // the logger. The first probe for a given factory type wins for the process lifetime, which
     // is correct — provider behavior is fixed per type. The owning logger does not influence the
@@ -138,7 +138,7 @@ internal sealed class DataSourceResolver
 
         if (!string.Equals(rawConnectionString, sanitized, StringComparison.Ordinal))
         {
-            // P1: Detect keys silently removed by the provider's builder. A stripped
+            // Detect keys silently removed by the provider's builder. A stripped
             // Encrypt=True or SslMode=Required is a silent security regression that will
             // be invisible in connection logs. Parse the raw string through the generic
             // builder (which accepts all keys) to find what the provider builder dropped.

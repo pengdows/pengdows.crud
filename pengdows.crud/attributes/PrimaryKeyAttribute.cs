@@ -8,9 +8,8 @@
 // - Used for:
 //   * UPSERT conflict detection (ON CONFLICT, ON DUPLICATE KEY)
 //   * RetrieveOneAsync(TEntity) lookup
-//   * Unique constraint enforcement
 // - Order parameter defines column sequence in composite keys (1, 2, 3...).
-// - NEVER use on the same column as [Id] - they're mutually exclusive concepts.
+// - NEVER use on the same column as [Id] - TypeMapRegistry throws PrimaryKeyOnRowIdColumn.
 // - [Id] = row identifier for TableGateway operations.
 // - [PrimaryKey] = business uniqueness constraint.
 // =============================================================================
@@ -43,7 +42,7 @@ namespace pengdows.crud.attributes;
 /// </para>
 /// <list type="bullet">
 /// <item><description>UPSERT uses these columns for conflict detection</description></item>
-/// <item><description><see cref="ITableGateway{TEntity,TRowID}.RetrieveOneAsync(TEntity,IDatabaseContext)"/> uses these for lookup</description></item>
+/// <item><description><see cref="ITableGateway{TEntity,TRowID}.RetrieveOneAsync(TEntity,IDatabaseContext,CancellationToken)"/> uses these for lookup</description></item>
 /// </list>
 /// </remarks>
 /// <seealso cref="IdAttribute"/>

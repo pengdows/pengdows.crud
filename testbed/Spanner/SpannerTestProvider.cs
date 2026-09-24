@@ -6,8 +6,7 @@ namespace testbed.Spanner;
 /// <summary>
 /// Spanner rides <see cref="PostgreSQLTestProvider"/>'s PostgreSQL-wire-compatible test suite, but
 /// its PostgreSQL interface (via PGAdapter) has a materially narrower type system than real
-/// PostgreSQL — see CLAUDE.md's "Adding a New Database" checklist items 17/27 for the full list of
-/// verified-live gaps. <see cref="PostgreSQLTestProvider.CreateTable"/>'s own <c>test_table</c> DDL
+/// PostgreSQL — see SpannerDialect.cs's file-level summary for the verified-live gaps. <see cref="PostgreSQLTestProvider.CreateTable"/>'s own <c>test_table</c> DDL
 /// hardcodes plain <c>TIMESTAMP</c> (no time zone) for <c>created_at</c>/<c>updated_at</c>, which
 /// Spanner's PostgreSQL interface rejects outright (<c>P0001: Type &lt;timestamp&gt; is not
 /// supported.</c>) — and because that DDL failure was caught, logged, and silently ignored

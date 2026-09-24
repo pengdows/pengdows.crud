@@ -36,8 +36,8 @@ dotnet build pengdows.crud.sln -c Release
 dotnet test -c Release --results-directory TestResults --logger trx
 
 # Run specific test
-dotnet test --filter "MethodName=TestMethodName"
-dotnet test --filter "ClassName=MyTests"
+dotnet test --filter "FullyQualifiedName~TestMethodName"
+dotnet test --filter "FullyQualifiedName~MyTests"
 
 # Test with coverage (CI-like)
 dotnet test -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
@@ -64,7 +64,7 @@ dotnet pack <project>.csproj -c Release
 
 ## Coding Style & Naming Conventions
 
-- C# 12 on `net8.0`; `Nullable` and `ImplicitUsings` enabled.
+- Projects multi-target `net8.0;net10.0` (the analyzers project targets `netstandard2.0`); keep code valid for C# 12 (the `net8.0` default language version). `Nullable` and `ImplicitUsings` enabled.
 - File-scoped namespaces; keep lowercase namespaces (`pengdows.crud.*`).
 - Indentation: 4 spaces; follow existing brace style; prefer expression-bodied members when clearer.
 - Minimize public APIs; make types/members `internal` when possible. `WarningsAsErrors=true`.
@@ -103,7 +103,7 @@ dotnet pack <project>.csproj -c Release
 ```csharp
 ISqlContainer BuildCreate(entity);
 ISqlContainer BuildBaseRetrieve("alias");   // SELECT with no WHERE — starting point for custom queries
-ISqlContainer BuildRetrieve(ids, "alias");  // SELECT ... WHERE id IN (...)
+ISqlContainer BuildRetrieve(ids, "alias");  // SELECT ... WHERE id IN (...); ids is IReadOnlyCollection<TRowID>
 ISqlContainer BuildDelete(id);
 ISqlContainer BuildUpsert(entity);
 ISqlContainer sc = await BuildUpdateAsync(entity);  // Only async Build method
@@ -130,7 +130,7 @@ IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 
 **Three-Tier API (PrimaryKeyTableGateway)**
 
-`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `SqlGenerationException` at construction if entity has no `[PrimaryKey]`.
+`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `InvalidOperationException` at construction if entity has no `[PrimaryKey]`.
 
 ```csharp
 // Tier 1 — Build
@@ -231,10 +231,10 @@ The `[Version]` attribute enables optimistic concurrency control:
 2. **Fallback:** `[Id]` column ONLY if writable (`[Id(true)]` or `[Id]`)
 3. **Error:** Throws if no `[PrimaryKey]` AND `[Id]` is not writable (`[Id(false)]`)
 
-**SQL generated depends on database:**
-- SQL Server/Oracle: `MERGE`
-- PostgreSQL: `INSERT ... ON CONFLICT`
-- MySQL/MariaDB: `INSERT ... ON DUPLICATE KEY UPDATE`
+**SQL generated depends on database** (`MERGE` is preferred wherever the dialect supports it, then `ON CONFLICT`, then `ON DUPLICATE KEY`):
+- SQL Server/Oracle/PostgreSQL 15+/Firebird/Snowflake/Db2/Sybase ASE/SAP HANA (and DuckDB 1.4+): `MERGE`
+- PostgreSQL < 15/CockroachDB/YugabyteDB/SQLite (and DuckDB < 1.4): `INSERT ... ON CONFLICT`
+- MySQL/MariaDB/TiDB (and Aurora MySQL/SingleStore): `INSERT ... ON DUPLICATE KEY UPDATE`
 
 ## Multi-Tenancy
 
@@ -320,8 +320,8 @@ This is intentional design — it allows "last modified" queries without checkin
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
-| `KeepAlive` | 1 | Embedded DBs needing sentinel connection |
-| `SingleWriter` | 2 | File-based SQLite/DuckDB — serializes writes via turnstile governor |
+| `PreventDatabaseUnload` | 1 | Sentinel connection keeps the database loaded (SQL Server LocalDB); `KeepAlive` is an `[Obsolete]` alias |
+| `SingleWriter` | 2 | File-based SQLite/DuckDB/Access — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
 
@@ -334,13 +334,21 @@ Transactions are **operation-scoped** — create inside methods, never store as 
 
 ```csharp
 using var txn = ctx.BeginTransaction();
-// or with portable isolation profile:
-using var txn = ctx.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
+// or with portable isolation profile (throws TransactionModeNotSupportedException if the
+// database can't guarantee it, e.g. SafeNonBlockingReads on PostgreSQL or on SQL Server
+// without snapshot isolation):
+using var txn = ctx.BeginTransaction(IsolationProfile.StrictConsistency);
 
 await txn.SavepointAsync("checkpoint1");
 await txn.RollbackToSavepointAsync("checkpoint1");
 txn.Commit();
 ```
+
+**Isolation never silently weakens ("fails up"):**
+- Explicit `IsolationLevel`: used as-is if supported; otherwise the weakest supported level that is at least as strong (e.g. `ReadCommitted` on CockroachDB/DuckDB → `Serializable`). Throws `InvalidOperationException` if nothing at or above it exists (e.g. `Serializable` on TiDB/Snowflake).
+- `IsolationProfile`: throws `TransactionModeNotSupportedException` rather than run below the profile's guarantee — `StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation, and on PostgreSQL/YugabyteDB.
+- Read-only `BeginTransaction(executionType: ExecutionType.Read)` with no level/profile: uses the `SafeNonBlockingReads` mapping and only logs a warning if it is degraded.
+- Savepoints on a dialect without savepoint support throw `NotSupportedException`.
 
 **CRITICAL: Do NOT use `TransactionScope`**
 
@@ -362,22 +370,27 @@ txn.Commit();
 ```csharp
 public interface IOrderGateway : ITableGateway<Order, long>
 {
-    Task<List<Order>> GetCustomerOrdersAsync(long customerId);
+    Task<List<Order>> GetCustomerOrdersAsync(long customerId, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default);
 }
 
 public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 {
     public OrderGateway(IDatabaseContext context, IAuditValueResolver resolver) : base(context, resolver) { }
 
-    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId)
+    // Accept an optional context and resolve ctx = context ?? Context so the method works inside
+    // transactions and per-tenant contexts (enforced by analyzer rule PGC025).
+    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
-        var sc = BuildBaseRetrieve("o");
+        var ctx = context ?? Context;
+        await using var sc = BuildBaseRetrieve("o", ctx);
         sc.Query.Append(" WHERE ");
         sc.Query.Append(sc.WrapObjectName("o.customer_id"));
         sc.Query.Append(" = ");
         var p = sc.AddParameterWithValue("cid", DbType.Int64, customerId);
         sc.Query.Append(sc.MakeParameterName(p));
-        return await LoadListAsync(sc);
+        return await LoadListAsync(sc, cancellationToken);
     }
 }
 ```
@@ -417,7 +430,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite/DuckDB `Standard` -> `SingleWriter`, LocalDB -> `KeepAlive`)
+8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite/DuckDB `Standard` -> `SingleWriter`, LocalDB -> `PreventDatabaseUnload`)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** — incompatible with connection management, use `ctx.BeginTransaction()`
 11. **ISqlContainer execution methods return ValueTask** — not Task, for reduced allocations
@@ -434,7 +447,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 - Never commit secrets or real connection strings; use environment variables and user-secrets. Strong-name via `SNK_PATH` (do not commit keys).
 - Do not hardcode identifier quoting. Use `WrapObjectName(...)` and `CompositeIdentifierSeparator` (e.g., `var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");`).
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
-- `pengdows.crud.analyzers` now enforces raw predicate/join value injection as `PGC008`; `IS NULL` / `IS NOT NULL` are the normal exceptions.
+- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), and `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call).
 
 ## Additional Requirements
 
@@ -448,7 +461,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 ## Related Projects
 
 - **`pengdows.poco.mint`**: Code generation tool that inspects a database schema and generates C# POCOs with the correct `[Table]`, `[Column]`, `[Id]`, and `[PrimaryKey]` attributes for use with `pengdows.crud`.
-- **`pengdows.crud.fakeDb`**: Standalone NuGet package providing a fake ADO.NET provider. Essential for fast, isolated unit tests for any data access logic based on ADO.NET interfaces, including code that uses `pengdows.crud` or Dapper.
+- **`pengdows.crud.fakeDb`**: Standalone NuGet package (ships `net8.0` and `net10.0`) providing a fake ADO.NET provider. Essential for fast, isolated unit tests for any data access logic based on ADO.NET interfaces, including code that uses `pengdows.crud` or Dapper.
 
 ## AI Agent Files
 
@@ -458,5 +471,6 @@ This repository contains guidance files for multiple AI coding assistants:
 - `GEMINI.md` — Google Gemini
 - `skills/claude/` — Claude Code skills (slash commands)
 - `skills/codex/` — Codex agent references
+- `skills/gemini/` — Gemini agent references
 
 All three guidance files share the same core technical information.

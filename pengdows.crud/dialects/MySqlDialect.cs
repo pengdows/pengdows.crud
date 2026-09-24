@@ -9,11 +9,12 @@
 //   * Parameter marker: @ (at sign)
 //   * Identifier quoting: "name" (with ANSI_QUOTES mode)
 //   * Max parameters: 65535 (theoretical max)
-//   * Prepared statements enabled
+//   * Prepared statements enabled for MySqlConnector only (off for MySql.Data)
 // - Session settings: STRICT_ALL_TABLES, ANSI_QUOTES mode for SQL standard.
 // - MySQL 8.0.20+ uses new alias syntax for ON DUPLICATE KEY UPDATE.
 // - Detects MySqlConnector vs Oracle's MySql.Data provider.
-// - LAST_INSERT_ID() for returning generated IDs.
+// - Generated IDs: MySqlConnector reads LastInsertedId from the INSERT's reader (ReaderInsertedId);
+//   MySql.Data appends SELECT LAST_INSERT_ID() as a compound statement.
 // =============================================================================
 
 using System.Collections.Concurrent;

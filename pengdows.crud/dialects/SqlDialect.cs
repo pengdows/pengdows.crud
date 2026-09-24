@@ -16,9 +16,9 @@
 //   * Pools DbParameter instances to reduce allocations
 //   * Pre-compiled type conversion delegates
 //   * Pooled parameter name generation
-// - Abstract properties for dialect-specific behavior:
-//   * DatabaseType, ParameterMarker, QuotePrefix/Suffix
-// - Session settings application via ApplySessionSettingsAsync().
+// - Abstract property: DatabaseType. ParameterMarker, QuotePrefix/Suffix are virtual
+//   with SQL-92 defaults.
+// - Session settings via GetBaseSessionSettings()/GetFinalSessionSettings().
 // - MERGE/UPSERT SQL generation helpers.
 // =============================================================================
 
@@ -58,14 +58,15 @@ internal enum GuidStorageFormat
     /// <summary>
     /// Convert to <see cref="DbType.String"/> with a 36-character hyphenated UUID string
     /// (<c>"D"</c> format, e.g. <c>550e8400-e29b-41d4-a716-446655440000</c>).
-    /// Used by SQLite, DuckDB, Oracle, and Snowflake.
+    /// Used by SQLite, DuckDB, Oracle, Snowflake, Db2, Informix, SAP HANA, Spanner, and Access
+    /// (and Firebird when configured for string storage).
     /// </summary>
     String,
 
     /// <summary>
-    /// Convert to <see cref="DbType.Binary"/> with the 16-byte <c>ToByteArray()</c>
-    /// representation.  Used by Firebird when the schema stores GUIDs as
-    /// <c>CHAR(16) OCTETS</c>.
+    /// Convert to <see cref="DbType.Binary"/> with a 16-byte representation (base
+    /// <c>ToByteArray()</c> layout unless the dialect overrides SerializeGuidAsBinary).
+    /// Used by Firebird (default) and InterBase, which store GUIDs as <c>CHAR(16) OCTETS</c>.
     /// </summary>
     Binary,
 }
@@ -246,7 +247,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     /// <inheritdoc cref="ISqlDialect.IsEmbeddedSingleWriterEngine"/>
     /// <remarks>
-    /// Defaults to false. Override to true only for SqliteDialect/DuckDbDialect — deliberately not
+    /// Defaults to false. Override to true only for SqliteDialect/DuckDbDialect/AccessDialect — deliberately not
     /// derived from <see cref="IsClientServerDatabase"/> being false, since that's also false for
     /// the unrecognized-database fallback (Sql92Dialect), which is not an embedded engine.
     /// </remarks>
@@ -265,7 +266,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <see cref="DbMode.Best"/> resolves to <see cref="DbMode.Standard"/>, and any explicit
     /// request is honored as-is — every mode is safe on a real client-server database, so there is
     /// nothing to coerce. Override only where an engine has real mode restrictions: embedded
-    /// single-writer engines (SqliteDialect, DuckDbDialect) or a topology-specific requirement like
+    /// single-writer engines (SqliteDialect, DuckDbDialect, AccessDialect) or a topology-specific requirement like
     /// SQL Server LocalDB (SqlServerDialect).
     /// </remarks>
     public virtual (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
@@ -652,7 +653,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // transaction automatically when the connection is closed/disposed — this is purely a
     // SqlContainer connection-cleanup implementation detail, not a caller-observable capability,
     // so it stays off the public interface (see ApplyConnectionSettingsCore for the same pattern).
-    // Firebird overrides this to true — see FirebirdDialect for the full rationale.
+    // Firebird and InterBase override this to true — see FirebirdDialect for the full rationale.
     internal virtual bool RequiresExplicitRollbackAfterFailedWrite => false;
 
     // Internal, not part of ISqlDialect: true when this dialect needs ResetConnectionPoolForDdl
@@ -938,7 +939,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     /// <summary>
     /// Logs session settings detection results in a standardized format.
-    /// Called by dialect overrides after evaluating session settings.
+    /// Available to dialect overrides; no dialect currently calls it (each logs its own result).
     /// </summary>
     protected void LogSessionSettingsResult(in SessionSettingsResult result, string dialectName)
     {
@@ -1354,7 +1355,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // Fast path: well-known primitive CLR types are never registered in AdvancedTypeRegistry.
         // Skip the IsMappedType() ConcurrentDictionary lookup for the common case.
         // PrepareParameterValue is still called — some dialects transform primitives
-        // (e.g. Oracle converts Guid→string and bool→NUMBER via PrepareParameterValue).
+        // (e.g. Oracle converts bool→Int16 via PrepareParameterValue).
         bool handled;
         if (runtimeType != null && s_primitiveClrTypes.Contains(runtimeType))
         {
@@ -1639,7 +1640,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>
     /// Attempts to execute a read-only SQL statement within a transaction context.
     /// Swallows any exceptions and logs them at Debug level.
-    /// Used by Oracle and MariaDB to set read-only session state.
+    /// Used by MySQL/MariaDB, Oracle, Informix, and SAP HANA to set read-only state.
     /// </summary>
     protected void TryExecuteReadOnlySql(ITransactionContext transaction, string sql, string dialectName)
     {
@@ -2650,8 +2651,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// the generated key in the same round-trip as the INSERT, on the same connection.
     /// Example (MySQL): "; SELECT LAST_INSERT_ID()"
     /// Example (SQLite): "; SELECT last_insert_rowid()"
-    /// Note: enabling compound statements requires AllowMultipleStatements=true (MySQL/MariaDB)
-    /// in the connection string; SQLite supports it without any extra option.
+    /// Note: MySql.Data needs "Allow Multiple Statements=true" (MySqlDialect injects it);
+    /// SQLite supports it without any extra option.
     /// </summary>
     public virtual string GetCompoundInsertIdSuffix()
     {
@@ -2708,7 +2709,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     public virtual GeneratedKeyPlan GetGeneratedKeyPlan()
     {
-        // Oracle special case: sequence prefetch is preferred even though it supports RETURNING
+        // Oracle special case: sequence prefetch is preferred even though it supports RETURNING.
+        // Not reached by OracleDialect itself, which overrides this method to return Returning.
         if (DatabaseType == SupportedDatabase.Oracle)
         {
             return GeneratedKeyPlan.PrefetchSequence;
@@ -2856,7 +2858,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             query += $" ORDER BY {WrapObjectName(idColumnName)} DESC";
         }
 
-        // Add LIMIT clause for databases that need one (TOP-based dialects — SQL Server, Sybase —
+        // Add LIMIT clause for databases that need one (TOP-based dialects — SQL Server, Sybase, Access —
         // were already limited above; Oracle uses ROWNUM instead)
         if (DatabaseType == SupportedDatabase.Oracle)
         {
@@ -3258,8 +3260,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
                 // CONFIRMED live: the exact message a real ACE connection opened with
                 // "Mode=Read" (AccessDialect.GetReadOnlyConnectionParameter) returns when a
-                // write is attempted against it — mirrors SqliteDialect/DuckDbDialect's identical
-                // ReadOnlyViolation classification.
+                // write is attempted against it — mirrors SqliteExceptionTranslator/
+                // DuckDbExceptionTranslator's ReadOnlyViolation classification.
                 if (ex.Message.Contains("must use an updateable query", StringComparison.OrdinalIgnoreCase))
                 {
                     category = DbErrorCategory.ReadOnlyViolation;

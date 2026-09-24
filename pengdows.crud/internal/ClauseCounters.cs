@@ -12,7 +12,7 @@
 //   * NextKey() → "k0", "k1", "k2"... (key/ID parameters)
 //   * NextVer() → "v0", "v1", "v2"... (version parameters)
 //   * NextIns() → "i0", "i1", "i2"... (INSERT parameters)
-//   * NextBatch() → "b0", "b1", "b2"... (batch INSERT/UPSERT parameters)
+//   * NextBatch() → "b0", "b1", "b2"... (batch INSERT/UPDATE/UPSERT parameters)
 // - Used by TableGateway and SQL builders for unique parameter naming.
 // - Instance per operation; not shared across contexts.
 // - Static pre-built caches eliminate string interpolation allocations for

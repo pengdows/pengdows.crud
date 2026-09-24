@@ -7,10 +7,10 @@ namespace pengdows.crud.exceptions.translators;
 /// exception hierarchy.
 /// </summary>
 /// <remarks>
-/// Detection order: SQLSTATE (ANSI-standard, primary) → SQLCODE magnitude (fallback,
-/// sign-tolerant since it is not yet confirmed whether IBM.Data.Db2's DB2Exception reports
-/// SQLCODE as its native negative value or an unsigned magnitude — verify against a live
-/// driver exception in Phase 2) → timeout → fallback.
+/// Detection order: connection (SQLSTATE class 08) → SQLSTATE (ANSI-standard, primary) →
+/// SQLCODE magnitude (fallback, sign-tolerant via Math.Abs; note IBM.Data.Db2's DB2Exception
+/// does not expose the SQLCODE as its error code — see the comment on Translate) → timeout →
+/// fallback.
 /// Db2 SQLSTATE/SQLCODE pairs used:
 ///   23505 / -803  unique constraint (index) violation
 ///   23503 / -530, -531, -532  foreign key (referential integrity) violation on insert/update

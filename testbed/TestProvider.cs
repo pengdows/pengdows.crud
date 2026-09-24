@@ -2059,11 +2059,10 @@ INSERT INTO {table} (
     /// <summary>
     /// The documented <c>IDataRecord.GetOrdinal(string)</c> contract is: throw
     /// <see cref="IndexOutOfRangeException"/> when the name is not a valid column name.
-    /// <c>fakeDbDataReader.GetOrdinal</c> instead returns <c>-1</c> for a miss — a real divergence
-    /// from that contract found during a documentation/behavior audit. This probe records what
-    /// every real provider tested here actually does, so that divergence is measured instead of
-    /// assumed, and so a future fix to fakeDb's behavior has real cross-provider evidence behind
-    /// it rather than just the .NET documentation's word for it. Never hard-fails on a provider
+    /// <c>fakeDbDataReader.GetOrdinal</c> follows that contract (it previously returned <c>-1</c>
+    /// for a miss). This probe records what every real provider tested here actually does, so
+    /// fakeDb's behavior is backed by real cross-provider evidence rather than just the .NET
+    /// documentation's word for it. Never hard-fails on a provider
     /// throwing something other than <see cref="IndexOutOfRangeException"/> (or not throwing at
     /// all) — this is a comparison probe, not a spec enforcement; any divergence found is exactly
     /// the point and gets recorded via <see cref="CheckOk"/> either way, with the actual observed

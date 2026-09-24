@@ -9,14 +9,16 @@
 // - Provider-specific optimizations:
 //   * PostgreSQL: NpgsqlDbType for UUID, arrays, JSONB, HStore, ranges via reflection
 //   * SQL Server: GUID, JSON as NVARCHAR(MAX), rowversion optimization
-//   * MySQL/MariaDB: TINYINT for boolean, native JSON type
+//   * MySQL/MariaDB: TINYINT for boolean, JSON bound as DbType.String
 //   * Oracle: NUMBER precision (38), RAW(16) for GUID
 //   * SQLite: TEXT for GUID, flexible typing
 //   * DuckDB: Native UUID and LIST support
 // - ParameterBindingRules: Cross-database binding rules with coercion support.
+// - Only reached via AdvancedTypeRegistry.TryConfigureParameterEnhanced, which nothing in the
+//   library currently calls.
 //   * Rule 1: Always parameterize date/time (never embed literals)
 //   * Rule 2: Boolean normalization (MySQL uses TINYINT)
-//   * Rule 3: Enum handling (PostgreSQL=string, others=int)
+//   * Rule 3: Enum handling (SQL Server/MySQL/MariaDB/Oracle=int, others=string)
 //   * Rule 4: Array binding (PostgreSQL/DuckDB native, others=JSON)
 //   * Rule 5: Large object binding (byte[] over 85,000 bytes wrapped in a MemoryStream; long strings sized MAX)
 // =============================================================================
@@ -223,7 +225,7 @@ internal static class ProviderParameterFactory
         }
         else if (IsJsonType(valueType))
         {
-            // MySQL 5.7+ native JSON type
+            // JSON bound as a plain string
             parameter.DbType = DbType.String;
         }
         else if (valueType == typeof(DateTime) || valueType == typeof(DateTime?))

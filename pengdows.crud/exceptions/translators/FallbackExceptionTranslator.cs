@@ -8,7 +8,7 @@ namespace pengdows.crud.exceptions.translators;
 /// <remarks>
 /// Contract: always produces a <see cref="DatabaseException"/> — never rethrows raw or
 /// returns <see langword="null"/>. Returns <see cref="CommandTimeoutException"/> for
-/// timeout-shaped exceptions; wraps all others in a <see cref="DatabaseException"/>
+/// timeout-shaped exceptions; wraps all others in a <see cref="DatabaseOperationException"/>
 /// via <c>DbExceptionTranslationSupport.CreateFallback</c>.
 /// </remarks>
 internal sealed class FallbackExceptionTranslator : IDbExceptionTranslator

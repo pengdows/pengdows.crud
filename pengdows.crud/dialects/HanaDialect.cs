@@ -29,7 +29,7 @@
 //   shape is CONFIRMED REJECTED. Overridden here with an Oracle/DUAL-shaped
 //   "USING (SELECT ... FROM DUMMY) s" source, which IS accepted.
 // - Batch insert: CONFIRMED live that the ANSI multi-row VALUES clause is rejected — same
-//   limitation as SQLite/MySQL/MariaDB/Firebird/Informix. Falls back to one INSERT per entity.
+//   limitation as Firebird/InterBase/Informix/Access/Sybase ASE. Falls back to one INSERT per entity.
 // - Generated keys: IDENTITY column plus "SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY"
 //   immediately after INSERT on the same connection, CONFIRMED live. Deliberately NOT wired up
 //   as GeneratedKeyPlan.SessionScopedFunction (a session-scoped last-insert-id query is not
@@ -130,7 +130,7 @@ internal sealed class HanaDialect : SqlDialect
     public override bool SupportsMerge => true;
 
     // CONFIRMED live: the ANSI multi-row VALUES clause is rejected. Falls back to one
-    // BuildCreate per entity, the same safe path SQLite/MySQL/MariaDB/Firebird/Informix use.
+    // BuildCreate per entity, the same safe path Firebird/InterBase/Informix/Access/Sybase ASE use.
     public override bool SupportsBatchInsert => false;
 
     // CONFIRMED live: CALL proc(?, ?) with an OUT parameter executes correctly.

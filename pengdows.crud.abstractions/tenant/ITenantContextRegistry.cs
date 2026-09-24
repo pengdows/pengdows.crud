@@ -32,7 +32,8 @@ public interface ITenantContextRegistry
     public ITenantContextLease AcquireLease(string tenant);
 
     /// <summary>
-    /// Disposes and removes the cached context for the specified tenant.
+    /// Removes the cached context for the specified tenant and disposes it — on a background
+    /// thread, and only once every outstanding <see cref="AcquireLease"/> lease has been released.
     /// The next call to <see cref="GetContext"/> for this tenant will create a fresh context
     /// using the configuration currently registered in the tenant connection resolver.
     /// </summary>
@@ -48,7 +49,8 @@ public interface ITenantContextRegistry
     void Invalidate(string tenant);
 
     /// <summary>
-    /// Disposes and removes all cached contexts.
+    /// Removes and disposes all cached contexts, with the same deferred-disposal semantics as
+    /// <see cref="Invalidate"/>.
     /// Subsequent calls to <see cref="GetContext"/> will create fresh contexts for each tenant.
     /// </summary>
     void InvalidateAll();

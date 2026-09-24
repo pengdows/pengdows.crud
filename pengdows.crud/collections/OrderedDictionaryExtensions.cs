@@ -124,7 +124,7 @@ internal static class OrderedDictionaryExtensions
 
     /// <summary>
     /// Adds a DbParameter directly to the dictionary using its ParameterName as key.
-    /// Note: Parameter name prefixes (@, :, ?) are automatically trimmed for clean key storage.
+    /// Note: Parameter name prefixes (@, :, ?, $) are automatically trimmed for clean key storage.
     /// </summary>
     public static void AddDbParameter(this OrderedDictionary<string, DbParameter> dict,
         DbParameter parameter)

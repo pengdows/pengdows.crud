@@ -45,7 +45,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public bool SupportsNativeDataSource { get; set; } = false;
 
     /// <summary>
-    /// TEST-017: when set, every <see cref="FakeDbDataSource"/> this factory creates via
+    /// When set, every <see cref="FakeDbDataSource"/> this factory creates via
     /// <see cref="CreateDataSource"/> has its <see cref="FakeDbDataSource.ThrowOnDispose"/> set to
     /// this exception — lets a test make an INTERNALLY-created data source (one the test never
     /// gets a direct handle to before construction fails) throw during cleanup, to prove the
@@ -83,7 +83,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         new(StringComparer.Ordinal);
 
     /// <summary>
-    /// TEST-017: makes only connections whose exact <see cref="fakeDbConnection.ConnectionString"/>
+    /// Makes only connections whose exact <see cref="fakeDbConnection.ConnectionString"/>
     /// equals <paramref name="connectionString"/> fail on <c>Open()</c>/<c>OpenAsync()</c> — unlike
     /// the factory-wide <see cref="ConnectionFailureMode.FailOnOpen"/>, this lets a test fail one
     /// specific connection-string role (e.g. <c>DatabaseContext</c>'s distinct read-only validation
@@ -194,8 +194,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
         if (ReturnNullConnection)
         {
-            // DbProviderFactory.CreateConnection() is declared non-nullable, matching every real
-            // provider's factory — but ReturnNullConnection exists specifically to test a
+            // This override is declared non-nullable, matching every real provider's factory
+            // — but ReturnNullConnection exists specifically to test a
             // caller's defensive handling of a provider that misbehaves at runtime despite the
             // contract, so the null-forgiving operator here is a deliberate, narrow lie.
             return null!;
@@ -380,7 +380,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     }
 
     /// <summary>
-    /// Creates a factory that produces connections that fail on open
+    /// Creates a factory whose connections fail according to <paramref name="failureMode"/>
     /// </summary>
     public static fakeDbFactory CreateFailingFactory(SupportedDatabase pretendToBe, ConnectionFailureMode failureMode,
         Exception? customException = null, int? failAfterCount = null)
@@ -412,8 +412,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     public override DbConnectionStringBuilder? CreateConnectionStringBuilder()
     {
-        // Return a connection string builder that supports provider-specific keys
-        // based on which database we're emulating
+        // Return a plain (DbConnectionStringBuilder-based) builder, honoring any configured
+        // ConnectionStringBuilderBehavior test hooks
         if (ConnectionStringBuilderBehavior.HasFlag(ConnectionStringBuilderBehavior.ReturnNull))
         {
             return null;

@@ -40,7 +40,7 @@ pengdows.crud supports 23 directly supported database products via the `Supporte
 
 > **Sybase (SAP ASE):** has its own dedicated `SybaseDialect` (not a fork delegating to another dialect) and a real testbed container (`nguoianphu/docker-sybase`), verified live against ASE 16. Notable genuine differences from every other T-SQL/SQL-92-family dialect here, all confirmed live rather than assumed from SQL Server parity: MERGE works but rejects a trailing statement-terminator semicolon (`RequiresMergeStatementTerminator => false`, same mechanism Oracle uses — this branch's Oracle MERGE-terminator fix was added alongside this Sybase support, since Sybase needed the same mechanism); `;` is rejected as a multi-statement batch separator entirely, not just as a trailing terminator (`SupportsSemicolonStatementSeparator => false`); no multi-row `INSERT ... VALUES`, no `VALUES`-derived-table-as-MERGE-source, and no `LIMIT`/`OFFSET` paging (uses `SELECT TOP N` like SQL Server instead); NOT NULL-by-default columns and a non-Unicode default charset. `AdoNetCore.AseClient`'s `AseException` does not derive from `DbException` and `GetSchema()` is unimplemented — both are handled generically via a duck-typed "Errors collection" fallback in `DbExceptionTranslationSupport` rather than Sybase-specific special-casing.
 
-> **IBM Db2 (LUW):** has its own dedicated `Db2Dialect`, verified live against `ibmcom/db2` (Phase 2 testbed validation). Generated-key retrieval wraps the ENTIRE insert statement — `SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...))` — rather than appending a trailing RETURNING/OUTPUT clause; this branch's dialect layer has no per-database "wrap the whole statement" hook (unlike newer branches), so `TableGateway.Core.cs` (`BuildCreateWithReturning`) special-cases `SupportedDatabase.Db2` directly, matching its existing SqlServer/Oracle special cases. Isolation levels (Db2's UR/CS/RS/RR map to ReadUncommitted/ReadCommitted/RepeatableRead/Serializable) are registered in `IsolationResolver`'s central per-database switch, not on the dialect itself — this branch's isolation system predates per-dialect isolation customization. Stored procedures use SQL-standard `CALL` syntax (same wrapping style as MySQL/MariaDB); a bare `SAVEPOINT name` is rejected (`SQL0104N`) — Db2 requires `ON ROLLBACK RETAIN CURSORS`. IBM's `DB2Exception` declares its own all-caps `SQLState` property (ambiguous with the inherited `DbException.SqlState`) and often doesn't populate SqlState via any property at all — both are handled by `DbExceptionTranslationSupport`'s ambiguity-safe reflection scan plus a message-embedded-SQLSTATE regex fallback, not Db2-specific special-casing.
+> **IBM Db2 (LUW):** has its own dedicated `Db2Dialect`, verified live against `ibmcom/db2` (Phase 2 testbed validation; `testbed/Db2/Db2TestContainer.cs` exists, but Db2 is not currently registered in `ParallelTestOrchestrator.GetTestConfigurations()`, so the default testbed run does not exercise it). Generated-key retrieval wraps the ENTIRE insert statement — `SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...))` — rather than appending a trailing RETURNING/OUTPUT clause; this branch's dialect layer has no per-database "wrap the whole statement" hook (unlike newer branches), so `TableGateway.Core.cs` (`BuildCreateWithReturning`) special-cases `SupportedDatabase.Db2` directly, matching its existing SqlServer/Oracle special cases. Isolation levels (Db2's UR/CS/RS/RR map to ReadUncommitted/ReadCommitted/RepeatableRead/Serializable) are registered in `IsolationResolver`'s central per-database switch, not on the dialect itself — this branch's isolation system predates per-dialect isolation customization. Stored procedures use SQL-standard `CALL` syntax (same wrapping style as MySQL/MariaDB); a bare `SAVEPOINT name` is rejected (`SQL0104N`) — Db2 requires `ON ROLLBACK RETAIN CURSORS`. IBM's `DB2Exception` declares its own all-caps `SQLState` property (ambiguous with the inherited `DbException.SqlState`) and often doesn't populate SqlState via any property at all — both are handled by `DbExceptionTranslationSupport`'s ambiguity-safe reflection scan plus a message-embedded-SQLSTATE regex fallback, not Db2-specific special-casing.
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
@@ -83,7 +83,7 @@ What version of each database first enables each major feature:
 | **JSON types** | 2016 (v13) | 9.x | 5.7.8 | — (no native JSON) | 12c | 3.45 | always on | — |
 | **CTEs** | always on | always on | 8.0 | 10.2 | always on | 3.8.3 | always on | 2.0 |
 | **Window functions** | always on | always on | 8.0 | 10.2 | always on | 3.25 | always on | 3.0 |
-| **Savepoints** | always on | always on | always on | always on | always on | — | — | always on |
+| **Savepoints** | always on | always on | always on | always on | always on | always on | — | always on |
 | **DROP TABLE IF EXISTS** | always on | always on | always on | always on | — (PL/SQL only) | always on | always on | always on |
 | **Identity / autoincrement** | always on | always on | always on | always on | 12c | always on | always on | always on |
 
@@ -118,13 +118,13 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 | Database | Connection String | Session SQL | Dual Enforcement | Enforcement Strategy |
 | :--- | :---: | :---: | :---: | :--- |
 | **PostgreSQL** | Yes | Yes | **Yes** | `Options='-c default_transaction_read_only=on'` + `SET ...` |
-| **SQLite** | Yes | Yes | **Yes** | `Mode=ReadOnly` + `PRAGMA query_only = ON` |
-| **DuckDB** | Yes | Yes | **Yes** | `access_mode=READ_ONLY` + `SET access_mode = 'read_only'` |
+| **SQLite** | Yes | No | No | `Mode=ReadOnly` (file opened read-only; not applied to `:memory:` databases) |
+| **DuckDB** | Yes | No | No | `access_mode=READ_ONLY` (file-open attribute; cannot be changed on an open connection) |
 | **SQL Server** | Yes | No | No | `ApplicationIntent=ReadOnly` (Driver-managed) |
 | **MySQL** | No | Yes | No | `SET SESSION transaction_read_only = 1` (5.7.20+) |
 | **MariaDB** | No | Yes | No | `SET SESSION tx_read_only = 1` (10.1+) |
-| **Snowflake** | No | Yes | No | `ALTER SESSION SET TRANSACTION_READ_ONLY = TRUE` |
-| **Oracle** | No | Yes | No | `SET TRANSACTION READ ONLY` |
+| **Snowflake** | No | No | No | None — Snowflake has no session read-only mode; use read-only roles/credentials |
+| **Oracle** | No | Yes | No | `SET TRANSACTION READ ONLY` (issued at read-only transaction start; no persistent session mode) |
 | **Firebird** | No | Yes | No | `SET TRANSACTION READ ONLY` |
 
-> **Dual Enforcement:** For PostgreSQL, SQLite, and DuckDB, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool.
+> **Dual Enforcement:** For PostgreSQL, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool. SQLite and DuckDB rely on the connection-string parameter alone: it is applied when the database file is opened, which is stronger than a session flag any caller could reset.

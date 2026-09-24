@@ -20,7 +20,7 @@
 // - Used by PoolSaturatedException for diagnostic context.
 // - Thread-safe: All values captured atomically from PoolGovernor.
 // - Distinguishes between two timeout sources:
-//     TotalTimeouts          = timed out waiting for a connection slot (semaphore)
+//     TotalSlotTimeouts      = timed out waiting for a connection slot (semaphore)
 //     TotalTurnstileTimeouts = timed out waiting for the fairness turnstile
 // =============================================================================
 

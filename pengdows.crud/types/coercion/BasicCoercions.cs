@@ -8,14 +8,16 @@
 // - Primitive coercions:
 //   * GuidCoercion: Handles Guid, byte[16], string, ReadOnlyMemory<byte>, ArraySegment, char[]
 //   * BooleanCoercion: Handles bool, string (t/f/y/n/1/0), char, all numeric types
-//   * DateTimeCoercion: Always normalizes to UTC, handles DateTime, DateTimeOffset, strings
+//   * DateTimeCoercion: Normalizes reads to UTC, handles DateTime, DateTimeOffset, strings
 //   * DateTimeOffsetCoercion: Handles DateTimeOffset and DateTime conversion
 //   * TimeSpanCoercion: Handles TimeSpan, double (seconds), time strings
 //   * DecimalCoercion: Handles all numeric conversions with CultureInfo.InvariantCulture
-// - Binary: ByteArrayCoercion handles byte[], ReadOnlyMemory<byte>, ArraySegment<byte>
+// - Binary: ByteArrayCoercion handles byte[], ReadOnlyMemory<byte>, ArraySegment<byte>, Stream
 // - Array coercions: IntArrayCoercion, StringArrayCoercion
 // - JSON coercions: JsonValueCoercion, JsonDocumentCoercion, JsonElementCoercion
 // - PostgreSQL-specific: HStoreCoercion, IntRangeCoercion, DateTimeRangeCoercion
+//   (CoercionRegistry registers AdvancedCoercions afterwards, so its Range<int>/Range<DateTime>
+//   coercions replace IntRangeCoercion/DateTimeRangeCoercion in the registry)
 // =============================================================================
 
 using System.Data;
@@ -355,7 +357,7 @@ internal class HStoreCoercion : DbCoercion<HStore>
 }
 
 /// <summary>
-/// Coercion for integer ranges - handles PostgreSQL int4range, int8range.
+/// Coercion for integer ranges - handles PostgreSQL int4range.
 /// </summary>
 internal class IntRangeCoercion : DbCoercion<Range<int>>
 {
@@ -511,7 +513,7 @@ internal class BooleanCoercion : DbCoercion<bool>
 
 /// <summary>
 /// Coercion for DateTime - handles DateTime, DateTimeOffset, and strings.
-/// Always normalizes to UTC.
+/// Reads are normalized to UTC; writes pass the value through unchanged.
 /// </summary>
 internal class DateTimeCoercion : DbCoercion<DateTime>
 {
@@ -604,7 +606,7 @@ internal class DecimalCoercion : DbCoercion<decimal>
 }
 
 /// <summary>
-/// Coercion for byte arrays - handles byte[], ReadOnlyMemory, ArraySegment.
+/// Coercion for byte arrays - handles byte[], ReadOnlyMemory, ArraySegment, and Stream.
 /// </summary>
 internal class ByteArrayCoercion : DbCoercion<byte[]>
 {

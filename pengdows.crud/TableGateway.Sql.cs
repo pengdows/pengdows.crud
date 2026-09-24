@@ -6,14 +6,12 @@
 // - Contains cached SQL template classes:
 //   * CachedSqlTemplates - Pre-built INSERT, UPDATE, DELETE SQL strings + upsert fragments
 //     Fields include: InsertSql, UpsertColumns, UpsertParameterNames, UpsertUpdateFragment,
-//     UpsertOnConflictVersionWhere (PostgreSQL/CockroachDB ON CONFLICT WHERE predicate),
-//     UpsertMergeVersionCondition (MERGE WHEN MATCHED AND condition), VersionIncrementClause,
+//     UpsertOnConflictVersionWhere (ON CONFLICT WHERE version predicate), VersionIncrementClause,
 //     UpdateSqlPrefix/Suffix, IdEqualityWhereBody/Nullable, UpdateColumns/WrappedNames.
 //   * CachedContainerTemplates - Pre-configured SqlContainer instances
-// - SQL templates are cached per dialect (SQL Server, PostgreSQL, etc.).
+// - SQL templates are cached per dialect instance.
 // - Template building methods:
-//   * BuildWrappedTableName() - Schema.Table with proper quoting
-//   * GetOrBuildTemplates() - Lazy template initialization
+//   * GetTemplatesForDialect() / GetContainerTemplatesForDialect() - Lazy template initialization
 // - Helper methods for column lists and parameter naming.
 // - CreateTemplateRowId() - Creates placeholder ID for template building.
 // - Performance: Templates built once per dialect, then cloned for use.
@@ -59,7 +57,7 @@ public partial class TableGateway<TEntity, TRowID>
         public string[] UpdateColumnWrappedNames = null!;
 
         // Pre-built single-ID WHERE body for equality retrieval: e.g., "\"Id\" = @p0"
-        // Dialect-specific — eliminates per-call _queryCache lookup and cross-dialect collision.
+        // Dialect-specific — eliminates a per-call _queryCache lookup.
         // Null when entity has no [Id] column.
         public string? IdEqualityWhereBody;
 
@@ -193,8 +191,7 @@ public partial class TableGateway<TEntity, TRowID>
             updateSqlSuffix = $" WHERE {dialect.WrapSimpleName(idCol.Name)} = ";
         }
 
-        // Pre-build single-ID equality WHERE body — dialect-specific, stored in CachedSqlTemplates
-        // to avoid cross-dialect collision that would occur with a shared _queryCache key.
+        // Pre-build single-ID equality WHERE body — dialect-specific, stored in CachedSqlTemplates.
         string? idEqualityWhereBody = null;
         string? idEqualityNullableWhereBody = null;
         if (idCol != null)
@@ -279,7 +276,7 @@ public partial class TableGateway<TEntity, TRowID>
                 }
                 else
                 {
-                    // ON CONFLICT (PostgreSQL/CockroachDB) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
+                    // ON CONFLICT (e.g. PostgreSQL/CockroachDB/SQLite) or ON DUPLICATE KEY UPDATE (MySQL/MariaDB)
                     try
                     {
                         foreach (var col in updateColumns)
@@ -383,7 +380,7 @@ public partial class TableGateway<TEntity, TRowID>
             // GetById - always use single-parameter equality for minimal per-call overhead
             templates.GetByIdTemplate = BuildRetrieveInternal(CreateTemplateRowIds(1), "", context, false);
 
-            // GetByIds - array parameter (will be updated with actual IDs)
+            // GetByIds - two-ID template (reused for exactly two IDs on non-set-valued dialects)
             templates.GetByIdsTemplate = BuildRetrieveInternal(CreateTemplateRowIds(2), "", context, false);
 
             // Delete by ID - build directly to avoid circular dependency with BuildDelete fast path

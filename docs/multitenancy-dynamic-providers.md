@@ -19,30 +19,48 @@ services.AddKeyedSingleton<DbProviderFactory>("Sqlite", Microsoft.Data.Sqlite.Sq
 services.AddKeyedSingleton<DbProviderFactory>("Postgres", Npgsql.NpgsqlFactory.Instance);
 ```
 
-### Loading providers from configuration (`DbProviderLoader`)
+The key must equal the `ProviderName` in each tenant's `DatabaseContextConfiguration` (step 2):
+`TenantContextRegistry` resolves the factory with
+`GetKeyedService<DbProviderFactory>(config.ProviderName)`.
 
-`DbProviderLoader` (`pengdows.crud/configuration/DbProviderLoader.cs`) loads `DbProviderFactory`
-instances from a `"DatabaseProviders"` configuration section instead of requiring compile-time
-assembly references:
+### Loading providers from configuration
+
+2.0.6 has no public API for loading providers from configuration. `DbProviderLoader`
+(`pengdows.crud/configuration/DbProviderLoader.cs`) exists, but its only constructor is
+`internal` (it takes an `IConfiguration` and an `ILogger<DbProviderLoader>`), so application code
+cannot construct it, and DI cannot activate it either. If you need provider selection driven by
+configuration, resolve the factory yourself and register it as a keyed singleton — for example
+from a `"DatabaseProviders"` section of your own shape:
 
 ```json
 "DatabaseProviders": {
-  "Postgres": { "ProviderName": "Postgres", "AssemblyName": "Npgsql", "FactoryType": "Npgsql.NpgsqlFactory" }
+  "Postgres": { "AssemblyName": "Npgsql", "FactoryType": "Npgsql.NpgsqlFactory" },
+  "Sqlite":   { "AssemblyName": "Microsoft.Data.Sqlite", "FactoryType": "Microsoft.Data.Sqlite.SqliteFactory" }
 }
 ```
 
 ```csharp
-services.AddSingleton<IDbProviderLoader, DbProviderLoader>();
-new DbProviderLoader(configuration).LoadAndRegisterProviders(services);
+using System.Data.Common;
+using System.Reflection;
+
+foreach (var section in configuration.GetSection("DatabaseProviders").GetChildren())
+{
+    var assembly = Assembly.Load(section["AssemblyName"]!);
+    var type = assembly.GetType(section["FactoryType"]!, throwOnError: true)!;
+    var factory = (DbProviderFactory)(
+        type.GetField("Instance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+        ?? type.GetProperty("Instance", BindingFlags.Public | BindingFlags.Static)!.GetValue(null)!);
+
+    // Key = the name tenants use as their ProviderName
+    services.AddKeyedSingleton<DbProviderFactory>(section.Key, factory);
+}
 ```
 
-`LoadProviderFactory` resolves each factory in order: (1) load the assembly from `AssemblyPath`
-(`Assembly.LoadFrom`, cached, thread-safe) or `AssemblyName` (`Assembly.Load`), if given; (2)
-reflect a public static `Instance` property or field off `FactoryType`; (3) fall back to
-`DbProviderFactories.GetFactory(ProviderName)` for providers already registered the legacy way.
-Each resolved factory is registered **both** as a keyed DI singleton under the configuration
-section key and via `DbProviderFactories.RegisterFactory(ProviderName, factory)` for legacy
-compatibility.
+(For reference, the internal `DbProviderLoader` follows the same pattern: it loads the assembly
+from `AssemblyPath` — restricted to the application base directory — or `AssemblyName`, reflects
+a public static `Instance` property or field off `FactoryType`, otherwise falls back to
+`DbProviderFactories.GetFactory(ProviderName)`, and registers the result as a keyed singleton
+under the configuration section key plus via `DbProviderFactories.RegisterFactory`.)
 
 ## 2. Register tenants and wire up multi-tenancy
 
@@ -127,9 +145,12 @@ you're on a newer version.
 ## 5. Lifecycle management
 
 - `registry.Invalidate(tenant)` — evicts and disposes one tenant's cached context (e.g. after
-  rotating its connection string: call `resolver.Register(tenant, newConfig)` then `Invalidate`).
+  rotating its connection string: call `Register(tenant, newConfig)` on the concrete
+  `TenantConnectionResolver` — `ITenantConnectionResolver` itself only exposes
+  `GetDatabaseContextConfiguration` — then `Invalidate`).
 - `registry.InvalidateAll()` — evicts every cached context.
-- Optional `maxTenantCount` constructor argument caps concurrently cached contexts, to guard
+- Optional `maxTenantCount` constructor argument (not settable through `AddMultiTenancy`, which
+  registers the registry with its defaults; construct `TenantContextRegistry` yourself to use it) caps concurrently cached contexts, to guard
   against connection-pool exhaustion with many tenants — `GetContext`/`AcquireLease` throw
   `InvalidOperationException` for a genuinely new tenant once the cap is reached. Admission is
   atomic against the dictionary check-and-add, so concurrent distinct tenants can never exceed
@@ -138,8 +159,8 @@ you're on a newer version.
 - Tenant lookup is case-insensitive (`"acme"`/`"ACME"` resolve to the same cached context),
   matching `ITenantConnectionResolver`'s own case-insensitive comparer.
 
-**Register `ITenantContextRegistry` as a singleton** — same lifetime rule as `DatabaseContext`
-and `TableGateway<T,TId>`.
+**Register `ITenantContextRegistry` as a singleton** (`AddMultiTenancy` already does) — same
+lifetime rule as `DatabaseContext` and `TableGateway<T,TId>`.
 
 ## Reference
 

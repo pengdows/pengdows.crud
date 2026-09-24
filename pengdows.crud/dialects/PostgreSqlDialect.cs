@@ -5,7 +5,7 @@
 // AI SUMMARY:
 // - Supports PostgreSQL 10+ with comprehensive SQL standard compliance.
 // - Key features:
-//   * INSERT ... ON CONFLICT for upserts (supports DO UPDATE and DO NOTHING)
+//   * INSERT ... ON CONFLICT for upserts (supports DO UPDATE and DO NOTHING); MERGE on 15+
 //   * Parameter marker: @ (ADO.NET standard; avoids Npgsql '::' cast lookahead)
 //   * Identifier quoting: "name" (double quotes)
 //   * Max parameters: 32767 (practical limit)
@@ -38,7 +38,7 @@ namespace pengdows.crud.dialects;
 /// Also used for CockroachDB (Postgres-compatible).
 /// </para>
 /// <para>
-/// <strong>UPSERT:</strong> Uses INSERT ... ON CONFLICT (key) DO UPDATE.
+/// <strong>UPSERT:</strong> Uses INSERT ... ON CONFLICT (key) DO UPDATE, or MERGE on PostgreSQL 15+.
 /// </para>
 /// <para>
 /// <strong>Prepared Statements:</strong> Enabled by default for performance.

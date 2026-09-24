@@ -9,8 +9,10 @@
 //   * Optimistic concurrency via [Version] column
 //   * Audit field updates (LastUpdatedBy/On)
 //   * Non-updateable columns (excluded from SET)
-//   * Original value loading for concurrency checks
-// - loadOriginal parameter: If true, loads current DB values for version check.
+//   * Original value loading for change detection
+// - loadOriginal parameter: If true, loads the current row (throws if missing) and only
+//   columns whose values differ are written to SET. The overload without loadOriginal
+//   loads the original only for entities with a [Version] column.
 // - Version column behavior:
 //   * SET version = version + 1
 //   * WHERE version = @currentVersion
@@ -400,7 +402,7 @@ public partial class TableGateway<TEntity, TRowID>
         return false;
     }
 
-    // String-returning overload used by BuildUpdateByKey (upsert-by-key path in Core.cs).
+    // String-returning overload used by BuildUpdateByKey (Core.cs; not currently called).
     // Uses SbLite to avoid heap allocation for the intermediate SET clause string.
     private (string clause, List<DbParameter> parameters) BuildSetClause(TEntity updated, TEntity? original,
         ISqlDialect dialect, ref ClauseCounters counters)
@@ -475,7 +477,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
     }
 
-    // Used by BuildUpdateByKey (upsert-by-key path in Core.cs).
+    // Used by BuildUpdateByKey (Core.cs; not currently called).
     private string GetVersionIncrementClause(ISqlDialect dialect)
     {
         return $", {dialect.WrapObjectName(_versionColumn!.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1";

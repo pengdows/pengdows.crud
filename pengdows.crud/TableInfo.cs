@@ -67,7 +67,7 @@ internal class TableInfo : ITableInfo
 
     /// <inheritdoc />
     /// <remarks>
-    /// The Id column is the pseudo key / row identifier, marked with <see cref="Attributes.IdAttribute"/>.
+    /// The Id column is the pseudo key / row identifier, marked with <see cref="attributes.IdAttribute"/>.
     /// This is distinct from business/primary keys which may be composite.
     /// </remarks>
     public IColumnInfo Id { get; set; } = null!;

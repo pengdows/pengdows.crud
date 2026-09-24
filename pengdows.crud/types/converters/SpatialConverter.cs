@@ -7,7 +7,7 @@
 // - Supports WKB/EWKB, WKT/EWKT, and GeoJSON formats with SRID handling.
 // - ConvertToProvider(): Creates provider-specific spatial objects:
 //   * SQL Server: SqlGeometry/SqlGeography via reflection
-//   * PostgreSQL: byte[] (EWKB) or string (WKT/GeoJSON)
+//   * PostgreSQL/CockroachDB: byte[] (stored WKB/EWKB bytes) or string (WKT/GeoJSON)
 //   * MySQL: byte[] (WKB) or UTF-8 encoded WKT
 //   * Oracle: Requires ProviderValue to be set with SDO_GEOMETRY
 // - TryConvertFromProvider(): Converts database values back to TSpatial:
@@ -47,9 +47,9 @@ namespace pengdows.crud.types.converters;
 /// <item><description>Provider-specific types → Automatic detection and conversion (SqlGeometry, PostGIS types, etc.)</description></item>
 /// </list>
 /// <para><strong>Output formats to database:</strong> Automatically selects optimal format per provider
-/// (EWKB for PostgreSQL, provider types for SQL Server/Oracle, WKB for MySQL).</para>
+/// (stored WKB bytes for PostgreSQL, provider types for SQL Server/Oracle, WKB for MySQL).</para>
 /// <para><strong>SRID handling:</strong> Spatial Reference System Identifier specifies coordinate system.
-/// Default is 0 (unspecified). Common: 4326 (WGS84 lat/lon for GPS), 3857 (Web Mercator).</para>
+/// Default is 0 (unspecified) for Geometry; GeographyConverter defaults to 4326 on read. Common: 4326 (WGS84 lat/lon for GPS), 3857 (Web Mercator).</para>
 /// <para><strong>Thread safety:</strong> Converter instances are thread-safe. Spatial value objects are immutable and thread-safe.</para>
 /// </remarks>
 internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpatial>

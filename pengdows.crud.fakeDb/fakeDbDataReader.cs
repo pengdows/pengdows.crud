@@ -71,7 +71,7 @@ public class fakeDbDataReader : DbDataReader
     /// this directly to determine SaveChanges rows-affected (e.g. Snowflake's
     /// SnowflakeModificationCommandBatch.ConsumeResultSetWithRowsAffectedOnlyAsync reads
     /// reader.DbDataReader.RecordsAffected), rather than reading a row/column value the way
-    /// SQLite's/SQL Server's provider-generated "SELECT changes()" pattern does.
+    /// SQLite's provider-generated "SELECT changes()" pattern does.
     /// </summary>
     public int RecordsAffectedOverride { get; set; }
 

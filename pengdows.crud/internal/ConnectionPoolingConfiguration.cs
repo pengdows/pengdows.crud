@@ -396,7 +396,7 @@ internal static class ConnectionPoolingConfiguration
     }
 
     /// <summary>
-    /// Corrects Min Pool Size in the connection string to a required floor and valid range.
+    /// Corrects Min Pool Size in the connection string to a valid range.
     /// <list type="bullet">
     /// <item>Step 1: clamp to &gt;= 0 (negative values become 0)</item>
     /// <item>Step 2: clamp to &lt;= MaxPoolSize (when MaxPoolSize is known)</item>

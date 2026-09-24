@@ -7,9 +7,10 @@
 // - Singleton pattern: NoOpAsyncLocker.Instance.
 // - All methods are no-ops:
 //   * Lock(): Returns immediately
-//   * LockAsync(): Returns Task.CompletedTask
-//   * TryLockAsync(): Returns Task.FromResult(true)
-// - Used for ephemeral (per-operation) connections in Standard/KeepAlive modes.
+//   * LockAsync(): Returns ValueTask.CompletedTask
+//   * TryLockAsync(): Returns ValueTask.FromResult(true)
+// - Used for ephemeral (per-operation) connections in Standard/KeepAlive modes, and wherever
+//   a gate does not apply (e.g., no serialized open, no single-connection transaction gate).
 // - TrackDisposeState = false: Singleton doesn't need disposal tracking.
 // - Extends SafeAsyncDisposableBase for interface compatibility.
 // - Zero overhead: No semaphore, no allocation, no contention.

@@ -13,7 +13,7 @@
 // - Driver: HCL's Informix.Net.Core-lnx (Linux-native, real .so binaries). Factory type:
 //   Informix.Net.Core.InformixClientFactory. Needs INFORMIXDIR + a generated sqlhosts file +
 //   LD_LIBRARY_PATH set before true process start (a re-exec pattern, not mid-process
-//   SetEnvironmentVariable) — see InformixNativeLibraryBootstrap.cs for the full story.
+//   SetEnvironmentVariable) — see testbed/Informix/InformixNativeLibraryBootstrap.cs for the full story.
 // - Parameters: positional "?" only, no named-parameter support (driver has no name-to-
 //   position mapping — see HCL's .NET Provider Reference Guide).
 // - Identifier quoting: base ANSI double-quote default requires Delimident=true on the
@@ -113,10 +113,10 @@ internal sealed class InformixDialect : SqlDialect
     // CONFIRMED live: Informix rejects the ANSI SQL multi-row VALUES clause outright
     // ("ERROR [42000] ... A syntax error has occurred.") — Informix's INSERT statement only
     // accepts a single row per VALUES clause. Falls back to one BuildCreate per entity, the
-    // same safe path SQLite/MySQL/MariaDB/Firebird already use for the same reason.
+    // same safe path Firebird/InterBase/HANA/Access/Sybase ASE use.
     public override bool SupportsBatchInsert => false;
 
-    // Deliberately NOT overridden — see file-level AI SUMMARY. Do not set this without live
+    // Deliberately left at None — see file-level AI SUMMARY. Do not change this without live
     // verification of the read-vs-write calling convention.
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
@@ -148,8 +148,8 @@ internal sealed class InformixDialect : SqlDialect
     // lives in SqlDialect.cs's private TryClassifyProviderException switch on this branch - 2.0.6
     // predates 3.0's dialect-owned classification refactor, so there is no virtual member here to
     // override. See that switch's SupportedDatabase.Informix case for the same -143/-244 codes
-    // used below in InformixExceptionTranslator.cs, which is what actually determines the
-    // exception TYPE thrown - this method only affects the separate advisory-diagnostics path.
+    // used in InformixExceptionTranslator.cs, which is what actually determines the exception
+    // TYPE thrown - that switch only affects the separate advisory-diagnostics path.
 
     // Informix's own terminology (Dirty Read/Committed Read/Cursor Stability/Repeatable Read)
     // maps to ADO.NET's IsolationLevel — see IsolationResolver.cs's SupportedDatabase.Informix

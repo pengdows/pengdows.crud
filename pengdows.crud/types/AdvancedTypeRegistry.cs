@@ -11,7 +11,8 @@
 // - RegisterMapping<T>(): Associates CLR type with ProviderTypeMapping for a database.
 // - RegisterConverter<T>(): Registers AdvancedTypeConverter for complex transformations.
 // - TryConfigureParameter(): Configures DbParameter with provider-specific type info.
-// - TryConfigureParameterEnhanced(): Tries legacy system, then CoercionRegistry, then ParameterBindingRules.
+// - TryConfigureParameterEnhanced(): Tries legacy system, then ProviderParameterFactory (CoercionRegistry),
+//   then ParameterBindingRules. Not currently called anywhere in the library.
 // - Default mappings: JSON (JSONB, JSON), spatial (Geometry, Geography), arrays, ranges,
 //   network types (inet, cidr, macaddr), temporal (interval), LOBs, identity/concurrency.
 // - ProviderTypeMapping: Holds DbType + ConfigureParameter action for provider customization.
@@ -738,7 +739,7 @@ internal class AdvancedTypeRegistry
             }
         });
 
-        // SQL Server DateTimeOffset (UTC policy)
+        // SQL Server DateTimeOffset (value passed through unchanged)
         RegisterMapping<DateTimeOffset>(SupportedDatabase.SqlServer, new ProviderTypeMapping
         {
             DbType = DbType.DateTimeOffset,

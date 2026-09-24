@@ -9,7 +9,8 @@
 //   * DetectFromFactory(): Falls back to factory type name matching
 //   * DetectProduct(): Tries connection first, then factory
 // - DetectTopology(): Identifies LocalDB, embedded modes from connection string.
-// - Special handling for FakeDb test infrastructure (EmulatedProduct property).
+// - Special handling for FakeDb test infrastructure (factory PretendToBe property; fake
+//   connections report their EmulatedProduct through GetSchema).
 // - Token matching for:
 //   * Schema products: "sql server", "postgres", "mysql", "oracle", etc.
 //   * Factory types: "npgsql", "sqlclient", "mysqlconnector", etc.
@@ -283,7 +284,7 @@ internal static class DatabaseDetectionService
                 }
             }
 
-            // SELECT version() — safe probe that never throws; used first for PG-family because
+            // SELECT version() — safe probe that does not abort the session; used first for PG-family because
             // function-call probes (aurora_version, aurora_version()) can leave a YugabyteDB YSQL
             // connection in an aborted state, silently swallowing subsequent queries.
             // Run this early so the -YB- / Cockroach / TiDB markers are checked before any

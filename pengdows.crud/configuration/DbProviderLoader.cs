@@ -13,7 +13,8 @@
 //   * As keyed singleton in DI container
 //   * With DbProviderFactories for legacy compatibility
 // - Thread-safe: static assembly cache with locking.
-// - Factory resolution: Looks for static "Instance" property on factory type.
+// - Factory resolution: Looks for static "Instance" property (or field) on FactoryType; requires
+//   an assembly loaded via AssemblyPath/AssemblyName, otherwise falls back to DbProviderFactories.
 // - Comprehensive logging and error handling.
 // =============================================================================
 

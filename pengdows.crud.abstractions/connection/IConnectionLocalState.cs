@@ -44,7 +44,8 @@ public interface IConnectionLocalState
     (bool Added, int Evicted) MarkShapePrepared(string shapeHash);
 
     /// <summary>
-    /// Resets prepare state (e.g., when connection is recycled).
+    /// Clears the prepared-shape cache and the session-settings-applied flag (e.g., when the
+    /// connection is recycled). <see cref="PrepareDisabled"/> persists across resets.
     /// </summary>
     void Reset();
 }

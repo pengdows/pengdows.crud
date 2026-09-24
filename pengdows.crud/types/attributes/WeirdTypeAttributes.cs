@@ -17,6 +17,8 @@
 // - CaseFoldOnReadAttribute: Applies case folding when reading text values.
 // - SpatialTypeAttribute: Configures spatial SRID enforcement and conversion.
 // - CurrencyAttribute: Configures ISO currency code for money types.
+// - NOTE: nothing in pengdows.crud currently reads any of these attributes (or EnumStorage);
+//   they have no runtime effect, and the descriptions below state intended use only.
 // =============================================================================
 
 namespace pengdows.crud.types.attributes;

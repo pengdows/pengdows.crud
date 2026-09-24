@@ -7,11 +7,12 @@
 // - Maps IsolationProfile (semantic intent) to IsolationLevel (ADO.NET).
 // - Profiles:
 //   * SafeNonBlockingReads: Non-blocking reads (Snapshot, RepeatableRead, ReadCommitted)
-//   * StrictConsistency: Serializable everywhere
+//   * StrictConsistency: Serializable where supported (TiDB/Snowflake/Access fall short
+//     and are reported as Degraded)
 //   * FastWithRisks: ReadUncommitted where supported
 // - Database-specific mappings:
-//   * SQL Server: Snapshot (if enabled), else ReadCommitted; supports ReadUncommitted
-//   * PostgreSQL: MVCC-based ReadCommitted; no ReadUncommitted
+//   * SQL Server: Snapshot (if enabled), else ReadCommitted (Degraded); supports ReadUncommitted
+//   * PostgreSQL/YugabyteDB: MVCC-based ReadCommitted; no ReadUncommitted
 //   * MySQL/MariaDB: RepeatableRead for safe reads; has ReadUncommitted
 //   * Oracle: ReadCommitted or Serializable only
 //   * CockroachDB/DuckDB: Serializable only
@@ -19,7 +20,9 @@
 // - ResolveWithDetail(profile): Returns IsolationResolution with degradation info.
 // - Validate(level): Throws if level not supported by database.
 // - ResolveAtLeast(level): Requested level, or the weakest stronger supported one; never weaker.
-// - ResolveForTransaction(profile): Throws rather than return a level below the profile's guarantee.
+// - ResolveForTransaction(profile): Throws TransactionModeNotSupportedException when the
+//   resolution is Degraded (StrictConsistency on TiDB/Snowflake/Access; SafeNonBlockingReads
+//   on SQL Server without snapshot) and for SafeNonBlockingReads on PostgreSQL/YugabyteDB.
 // - GetSupportedLevels(): Returns set of supported levels for current database.
 // - Constructor params: product, readCommittedSnapshotEnabled, allowSnapshotIsolation.
 // =============================================================================
@@ -60,9 +63,11 @@ internal sealed class IsolationResolver : IIsolationResolver
     }
 
     /// <summary>
-    /// Resolves an isolation profile for use when beginning a transaction, applying any
-    /// product-specific rejections that don't belong in the general-purpose <see cref="Resolve"/>.
+    /// Resolves an isolation profile for use when beginning a transaction. Unlike the
+    /// general-purpose <see cref="Resolve"/>, it rejects any Degraded resolution and
+    /// SafeNonBlockingReads on PostgreSQL/YugabyteDB.
     /// </summary>
+    /// <exception cref="TransactionModeNotSupportedException">The profile's guarantee cannot be met on this product.</exception>
     internal IsolationLevel ResolveForTransaction(IsolationProfile profile)
     {
         if (profile == IsolationProfile.SafeNonBlockingReads
@@ -405,7 +410,7 @@ internal sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.TiDb => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable
+                [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable (Degraded)
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             SupportedDatabase.Oracle => new Dictionary<IsolationProfile, IsolationLevel>
@@ -423,7 +428,7 @@ internal sealed class IsolationResolver : IIsolationResolver
             SupportedDatabase.Snowflake => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // Only level Snowflake supports
+                [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // Only level Snowflake supports (Degraded)
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
             SupportedDatabase.Db2 => new Dictionary<IsolationProfile, IsolationLevel>
@@ -463,7 +468,8 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.FastWithRisks] = IsolationLevel.RepeatableRead
             },
             // Serializable is unavailable for Access — ReadCommitted is the strictest level
-            // genuinely accepted (see BuildSupportedIsolationLevels' Access case above).
+            // genuinely accepted (see BuildSupportedIsolationLevels' Access case above), so
+            // StrictConsistency resolves as Degraded and ResolveForTransaction rejects it.
             SupportedDatabase.Access => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,

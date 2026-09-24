@@ -3,18 +3,26 @@
 // PURPOSE: UPSERT operations keyed on [PrimaryKey] columns.
 //
 // AI SUMMARY:
-// - BuildUpsert() - Dispatches to dialect-specific builder; throws if no [PrimaryKey] or no
-//   updateable columns (pure junction table), unless Firebird which supports pure-key upsert.
+// - BuildUpsert() - Dispatches to dialect-specific builder (MERGE, then ON CONFLICT, then
+//   ON DUPLICATE KEY); throws if there are no updateable non-key columns (pure junction
+//   table), unless Firebird which supports pure-key upsert. (The constructor already
+//   rejects entities with no [PrimaryKey].)
 // - UpsertAsync() - Executes BuildUpsert, then post-execute concurrency check:
-//   * 0 rows + [Version] + MERGE/ON CONFLICT dialect → ConcurrencyConflictException
-//   * MySQL/MariaDB ON DUPLICATE KEY and Firebird: conflict not detectable, no exception
-// - Database-specific syntax:
-//   * SQL Server/Oracle/Snowflake: MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
-//   * PostgreSQL/CockroachDB: INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver]
+//   * 0 rows + [Version] + (non-Firebird MERGE dialect or ON CONFLICT ... WHERE dialect)
+//     → ConcurrencyConflictException
+//   * MySQL/MariaDB ON DUPLICATE KEY, ON CONFLICT dialects with SupportsOnConflictWhere=false
+//     (e.g. SQLite), and Firebird:
+//     conflict not detectable, no exception
+// - Database-specific syntax (single-entity):
+//   * MERGE-capable dialects (e.g. SQL Server, Oracle, Snowflake, Db2, PostgreSQL 15+,
+//     DuckDB 1.4+): MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
+//   * ON CONFLICT dialects without MERGE (e.g. PostgreSQL < 15, CockroachDB, SQLite):
+//     INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver when supported]
 //   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE (no version guard)
 //   * Firebird: UPDATE OR INSERT ... MATCHING (...)
 // - Batch variants (BuildBatchUpsert, BatchUpsertAsync):
-//   * ON CONFLICT path: multi-row insert with version WHERE predicate from PkTemplates.UpsertOnConflictVersionWhere
+//   * ON CONFLICT path (preferred over MERGE when both are supported): multi-row insert
+//     with version WHERE predicate from PkTemplates.UpsertOnConflictVersionWhere
 //   * ON DUPLICATE KEY: multi-row insert with alias quoting
 //   * MERGE/Firebird: falls back to per-entity BuildUpsert loop
 // - Throws NotSupportedException for fallback/unknown dialects.
@@ -414,9 +422,10 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 .Append(mergeSource)
                 .Append(" ON ")
                 .Append(onClause)
-                // Version check in WHEN MATCHED arm (not in ON clause) ensures a stale-version row
-                // stays unmatched → 0 rows → ConcurrencyConflictException, without triggering the
-                // WHEN NOT MATCHED INSERT arm (which would produce a unique constraint violation).
+                // Version check in WHEN MATCHED arm (not in ON clause): a stale-version row still
+                // matches ON, so the WHEN NOT MATCHED INSERT arm (which would produce a unique
+                // constraint violation) never fires, but the UPDATE is skipped → 0 rows →
+                // ConcurrencyConflictException.
                 .Append(template.UpsertMergeVersionCondition != null
                     ? $" WHEN MATCHED {template.UpsertMergeVersionCondition} THEN UPDATE SET "
                     : " WHEN MATCHED THEN UPDATE SET ");

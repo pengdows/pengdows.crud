@@ -99,9 +99,10 @@ database-agnostic policy decoupled from connection identity — is in
   with an optional reader-fairness turnstile — not a pinned/dedicated connection, which is
   what makes it architecturally distinct from every other single-writer implementation
   found in the competitive research.
-- [`docs/supported-databases.md`](docs/supported-databases.md) — per-database capability
-  matrix (isolation levels, upsert strategy, GUID storage, stored-procedure wrapping style)
-  across all 23 supported products: SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite,
+- [`docs/supported-databases.md`](docs/supported-databases.md) — every `SupportedDatabase`
+  value with its dialect notes, minimum/recommended server versions, feature version thresholds
+  (upsert/`MERGE`, `RETURNING`, savepoints, and similar), provider-vs-practical pool sizes, and the
+  read-only enforcement matrix, across all 23 supported products: SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite,
   DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Db2, Aurora MySQL, Aurora
   PostgreSQL, FlatFile ([pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile)),
   SingleStore, Sybase (SAP ASE), Spanner (PostgreSQL interface), Informix, SAP HANA, and
@@ -114,9 +115,10 @@ database-agnostic policy decoupled from connection identity — is in
   (`SELECT @@memsql_version`) to detect at all. Sybase has its own dedicated `SybaseDialect`
   (not a delegating fork) — see the "SingleStore" and "Sybase" notes in that file.
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
-  profiles, savepoints, and the concurrency contract (which commit/rollback/dispose/cancellation
-  races are safe, which throw, and the one documented residual TOCTOU). Transactions are
-  operation-scoped, never stored as fields.
+  profiles and the "fails up, never down" isolation rule (an unsupported explicit level resolves to
+  the weakest stronger supported level or throws; a profile that can't be met throws
+  `TransactionModeNotSupportedException`), savepoints, disposal, locking, and connection sharing
+  inside a transaction. Transactions are operation-scoped, never stored as fields.
 - [`docs/connection/ownership-and-shutdown.md`](docs/connection/ownership-and-shutdown.md) —
   precisely what the context/transaction/reader/gateway/sentinel/registry each own, `PoolGovernor`'s
   close/drain/dispose lifecycle, `DatabaseContext`'s exact shutdown sequence, and which operations
@@ -311,3 +313,7 @@ for that entry point, the loader's resolution order, the `Instance` property-vs-
   `TableGateway` at all), full public API surface list.
 - [`AGENTS.md`](AGENTS.md) / [`GEMINI.md`](GEMINI.md) — the same core technical reference as
   `CLAUDE.md`, for other AI coding assistants.
+- [`pengdows.crud.IntegrationTests/README.md`](pengdows.crud.IntegrationTests/README.md) — the
+  real-database integration suite and `testbed` matrix: how to run them (Docker, per target
+  framework), and the opt-in databases (Snowflake, SAP HANA, InterBase, Access) with their
+  prerequisites.

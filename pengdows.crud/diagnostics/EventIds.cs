@@ -37,7 +37,7 @@ internal static class EventIds
     /// <list type="bullet">
     ///   <item>SingleConnection mode with client-server databases (SQL Server, PostgreSQL)</item>
     ///   <item>SingleWriter mode with databases that support full concurrency</item>
-    ///   <item>Standard mode with file-based SQLite (without WAL) causing lock contention</item>
+    ///   <item>Standard mode with a file-based embedded single-writer engine (e.g., Access)</item>
     /// </list>
     /// </remarks>
     public static readonly EventId ModeMismatch = new(1001, "ConnectionModeMismatch");
@@ -46,12 +46,12 @@ internal static class EventIds
     /// Connection mode was automatically coerced to a different mode for correctness or safety.
     /// </summary>
     /// <remarks>
-    /// Logged when the requested mode is incompatible with the database or would cause
-    /// correctness issues. Examples:
+    /// Logged when an explicitly requested mode is incompatible with the database or would cause
+    /// correctness issues (<c>DbMode.Best</c> resolution is logged at Information
+    /// level without this event ID). Examples:
     /// <list type="bullet">
     ///   <item>Standard mode coerced to SingleConnection for SQLite :memory:</item>
     ///   <item>Standard mode coerced to SingleWriter for SQLite file databases</item>
-    ///   <item>Best mode resolved to optimal mode for database type</item>
     /// </list>
     /// </remarks>
     public static readonly EventId ModeCoerced = new(1002, "ConnectionModeCoerced");

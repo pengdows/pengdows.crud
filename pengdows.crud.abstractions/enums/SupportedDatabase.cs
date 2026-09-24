@@ -71,8 +71,9 @@ public enum SupportedDatabase
     SqlServer = 1 << 1,
 
     /// <summary>
-    /// Oracle Database. Largely standard SQL with long-standing legacy quirks — <c>ROWNUM</c>
-    /// paging, PL/SQL anonymous-block stored-procedure calls, no boolean type.
+    /// Oracle Database. Largely standard SQL with long-standing legacy quirks — PL/SQL
+    /// anonymous-block stored-procedure calls, no boolean type before 23ai. Paging uses 12c+
+    /// <c>OFFSET</c>/<c>FETCH</c>.
     /// </summary>
     Oracle = 1 << 2,
 

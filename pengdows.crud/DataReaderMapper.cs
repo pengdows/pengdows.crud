@@ -11,7 +11,8 @@
 //   * Instance - Singleton for typical use
 // - Performance optimizations:
 //   * Caches execution plans per (Type, schema shape, options) tuple
-//   * Caches compiled setters per (Type, PropertyInfo) tuple
+//   * Caches compiled setters per (Type, PropertyInfo, field type, coercion, enum mode,
+//     ordinal) key
 //   * Bounded LRU caches prevent unbounded memory growth
 //   * BuildSchemaHash returns a long computed via pure arithmetic — zero string
 //     or AssemblyQualifiedName allocations on the hot path
@@ -21,8 +22,10 @@
 //   * By default matches columns to properties by name (case-insensitive)
 //   * With ColumnsOnly=true, only maps [Column]-attributed properties
 // - Type coercion: Uses TypeCoercionHelper for automatic type conversion.
-// - Enum handling: Configurable via MapperOptions.EnumParseFailureMode.
-// - Null handling: Nullable properties receive null; non-nullable get defaults.
+// - Enum handling: Configurable via MapperOptions.EnumMode (EnumParseFailureMode).
+// - Null handling: DBNull leaves nullable/reference-type properties unset (null). For
+//   non-nullable value types the typed getter throws: DataMappingException when Strict,
+//   otherwise a logged warning and the property keeps its default.
 // - Thread-safe: All caches use thread-safe data structures.
 // =============================================================================
 
@@ -80,7 +83,7 @@ internal sealed class DataReaderMapper : IDataReaderMapper
     public static readonly IDataReaderMapper Instance = new DataReaderMapper();
 
     // Cache capacity limits to prevent unbounded memory growth with varied query shapes.
-    // These are LRU-ish bounded caches that evict oldest entries when capacity is exceeded.
+    // These are bounded LRU caches that evict least-recently-used entries when capacity is exceeded.
     private const int MaxPlanCacheSize = 128;
     private const int MaxSetterCacheSize = 512;
     private const int MaxPropertyLookupCacheSize = 64;
@@ -430,7 +433,7 @@ internal sealed class DataReaderMapper : IDataReaderMapper
                 properties.Add(prop);
                 // Non-nullable value types cannot hold null at the .NET level. Skip the IsDBNull
                 // guard for these columns — if the DB returns NULL for a non-nullable property,
-                // the typed getter will throw, which is the correct loud failure.
+                // the typed getter throws (DataMappingException when Strict; otherwise logged).
                 var propType = prop.PropertyType;
                 skipNullChecks.Add(propType.IsValueType && Nullable.GetUnderlyingType(propType) == null);
             }

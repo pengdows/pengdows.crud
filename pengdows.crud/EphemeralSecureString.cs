@@ -5,8 +5,9 @@
 //
 // AI SUMMARY:
 // - This class encrypts sensitive strings in memory using AES encryption.
-// - The plaintext is only decrypted when Reveal() is called and is
-//   automatically cleared from memory after 750ms (TTL_MS).
+// - The plaintext is only decrypted when Reveal() is called; the cached
+//   plaintext bytes are zeroed 750ms (TTL_MS) after the first Reveal(). The
+//   string returned by Reveal() is an ordinary managed string and is not cleared.
 // - Designed to minimize the window during which sensitive data is exposed
 //   in plaintext in process memory.
 // - Uses CryptographicOperations.ZeroMemory to securely clear byte arrays.
@@ -40,7 +41,7 @@ namespace pengdows.crud;
 /// <item><description>The input string is immediately encrypted using a randomly generated AES key.</description></item>
 /// <item><description>The key and IV are stored in memory (protected by runtime only).</description></item>
 /// <item><description>When <see cref="Reveal"/> is called, the plaintext is decrypted and cached.</description></item>
-/// <item><description>The plaintext cache is automatically cleared after 750ms.</description></item>
+/// <item><description>The plaintext cache is automatically cleared 750ms after the first reveal (returned strings are not).</description></item>
 /// <item><description>On disposal, all byte arrays are securely zeroed.</description></item>
 /// </list>
 /// <para>
@@ -59,7 +60,7 @@ namespace pengdows.crud;
 /// {
 ///     connectionStringBuilder.Password = password;
 /// });
-/// // Password is cleared from memory after 750ms
+/// // The cached plaintext bytes are zeroed 750ms after the first reveal
 /// </code>
 /// </example>
 /// <seealso cref="IEphemeralSecureString"/>

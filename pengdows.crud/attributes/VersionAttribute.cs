@@ -6,9 +6,10 @@
 // - The version column is automatically incremented on each UPDATE.
 // - UPDATE includes WHERE version = @currentVersion for conflict detection.
 // - If UPDATE returns 0 rows, another process modified the row (conflict).
-// - Typically used with an int or long property.
-// - On CREATE: If null/0, automatically set to 1.
-// - On UPDATE: SET version = version + 1.
+// - Typically used with an int or long property; byte[] and RowVersion are also accepted.
+//   byte[] columns are database-maintained (TableGateway does not increment them).
+// - On CREATE: If null/0, automatically set to 1 (numeric versions).
+// - On UPDATE: SET version = version + 1 (every type except byte[]).
 // =============================================================================
 
 namespace pengdows.crud.attributes;

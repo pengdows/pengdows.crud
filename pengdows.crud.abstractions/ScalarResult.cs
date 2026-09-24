@@ -8,7 +8,6 @@
 // - ScalarResult<T>: Readonly record struct wrapping status + value.
 //   * HasValue: true only when Status == Value.
 //   * Required: returns value or throws with clear message.
-//   * Implicit conversion to T? for convenience.
 // =============================================================================
 
 namespace pengdows.crud;

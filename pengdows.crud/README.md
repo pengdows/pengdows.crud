@@ -1,7 +1,7 @@
 # pengdows.crud
 
 [![NuGet](https://img.shields.io/nuget/v/pengdows.crud.svg)](https://www.nuget.org/packages/pengdows.crud)
-[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](../LICENSE)
 [![Build](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml/badge.svg)](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml)
 
 `pengdows.crud` is a SQL-first data access library for .NET 8+. It favors explicit SQL, inspectable command builders, and provider-aware execution over ORM-style query generation.
@@ -27,7 +27,7 @@ No LINQ. No tracking. No hidden unit of work.
 - Audit field population via `IAuditValueResolver`
 - JSON, enum, GUID, binary, UTC date/time, and advanced provider-specific type mappings
 - Metrics snapshots via `IDatabaseContext.Metrics` and live updates via `MetricsUpdated`
-- `DbMode` strategies: `Standard`, `KeepAlive`, `SingleWriter`, `SingleConnection`, and `Best`
+- `DbMode` strategies: `Standard`, `PreventDatabaseUnload`, `SingleWriter`, `SingleConnection`, and `Best`
 - Typed exception hierarchy: provider `DbException` is translated to structured subtypes (`ConcurrencyConflictException`, `UniqueConstraintViolationException`, `DeadlockException`, etc.)
 
 ## Supported Products
@@ -48,6 +48,15 @@ The repository contains concrete support for:
 - YugabyteDB
 - TiDB
 - Snowflake
+- SingleStore (detected at runtime; uses the MySQL dialect)
+- IBM Db2
+- SAP (Sybase) ASE
+- IBM Informix
+- SAP HANA
+- InterBase
+- Google Spanner (PostgreSQL interface)
+- Microsoft Access
+- pengdows.flatfile (partial dialect over CSV/delimited/fixed-width/NDJSON files)
 
 When product detection cannot identify the connected database, the library falls back to a conservative SQL-92 dialect.
 
@@ -86,6 +95,10 @@ await tx.CommitAsync();
 ### Constructor Variants
 
 ```csharp
+using Npgsql;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
+
 // Minimal: connection string + factory
 var ctx = new DatabaseContext(connectionString, SqlClientFactory.Instance);
 
@@ -129,6 +142,8 @@ DatabaseException (abstract — carries Database, SqlState, ErrorCode, Constrain
   │    ├─ ConcurrencyConflictException    ← [Version] column mismatch on UpdateAsync
   │    ├─ CommandTimeoutException         ← IsTransient = true
   │    ├─ ConnectionException
+  │    │    └─ FileLockContentionException ← embedded-engine file lock held by another process; IsTransient = false
+  │    ├─ ReadOnlyViolationException      ← write reached a read-only SQLite/DuckDB connection
   │    ├─ TransactionException
   │    ├─ TransientWriteConflictException ← IsTransient = true
   │    │    ├─ DeadlockException
@@ -143,13 +158,15 @@ DatabaseException (abstract — carries Database, SqlState, ErrorCode, Constrain
 ```
 
 Non-`DatabaseException` subtypes thrown by the infrastructure:
-- `ModeContentionException : TimeoutException` — SingleWriter/SingleConnection lock timed out
-- `PoolSaturatedException : TimeoutException` — internal connection pool exhausted
-- `PoolForbiddenException : InvalidOperationException` — write attempted on read-only context
-- `TransactionModeNotSupportedException : NotSupportedException` — savepoint or read-only tx on unsupported dialect
+- `ModeContentionException : TimeoutException` — shared-connection mode lock (e.g. SingleConnection) or transaction-completion lock exceeded `ModeLockTimeout`
+- `PoolSaturatedException : TimeoutException` — no governor slot became available within `PoolAcquireTimeout` (includes SingleWriter write-slot waits)
+- `PoolForbiddenException : InvalidOperationException` — connection requested from a pool configured to reject all requests (e.g. the write pool of a `ReadOnly` context)
+- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation or on PostgreSQL/YugabyteDB). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
 - `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
 
 ```csharp
+using pengdows.crud.exceptions;
+
 try
 {
     await gateway.UpdateAsync(entity);
@@ -188,7 +205,7 @@ if (result.Status == ScalarStatus.None)    { /* no rows returned */ }
 
 ## Documentation
 
-- Repo docs: [docs/](./docs)
+- Repo docs: [docs/](../docs)
 - Wiki: https://github.com/pengdows/pengdows.crud/wiki
 
 ## Support

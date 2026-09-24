@@ -68,7 +68,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
     public async ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default)
     {
-        // See the 2-arg UpdateAsync overload above for why this exists.
+        // See the UpdateAsync overload above for why the audit snapshot exists.
         var auditSnapshot = SnapshotAuditFields(objectToUpdate);
         try
         {

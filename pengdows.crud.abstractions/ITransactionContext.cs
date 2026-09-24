@@ -57,7 +57,8 @@ public interface ITransactionContext : IDatabaseContext
     ValueTask RollbackAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Creates a named savepoint within the transaction scope.
+    /// Creates a named savepoint within the transaction scope. Throws
+    /// <see cref="NotSupportedException"/> if the dialect does not support savepoints.
     /// </summary>
     /// <param name="name">Savepoint identifier.</param>
     ValueTask SavepointAsync(string name);
@@ -74,7 +75,8 @@ public interface ITransactionContext : IDatabaseContext
     }
 
     /// <summary>
-    /// Rolls back the transaction to the specified savepoint.
+    /// Rolls back the transaction to the specified savepoint. Throws
+    /// <see cref="NotSupportedException"/> if the dialect does not support savepoints.
     /// </summary>
     /// <param name="name">Savepoint identifier.</param>
     ValueTask RollbackToSavepointAsync(string name);

@@ -31,8 +31,8 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
    - Re-entrancy can deadlock or corrupt expectations.
 
 7. **DbMode.Best can coerce unsafe choices.**
-   - SQLite/DuckDB `:memory:` must be SingleConnection.
-   - SQLite file defaults to SingleWriter (WAL-friendly).
+   - SQLite/DuckDB isolated `:memory:` must be SingleConnection.
+   - SQLite/DuckDB file databases resolve to SingleWriter (WAL-friendly); an explicit Standard/PreventDatabaseUnload request is coerced to SingleWriter.
    - SQL Server LocalDB coerces to PreventDatabaseUnload.
 
 8. **fakeDb is control-flow, not database semantics.**
@@ -60,12 +60,12 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 ## Design Boundaries to Preserve
 
 - **DatabaseContext is orchestration, not state.** Mostly immutable configuration + atomic metrics; avoid adding shared mutable state (ProcWrappingStyle is a rare exception).
-- **TransactionContext pins a single connection for its lifetime.** Its user lock serializes operations; the connection lock is still acquired per operation/reader.
+- **TransactionContext pins a single connection for its lifetime.** Its user lock serializes operations on that connection (the connection is requested with `isShared=false`, so no redundant second lock is layered on in ephemeral modes); in SingleConnection mode it also holds the context's single-connection transaction gate until commit/rollback.
 - **SqlContainer owns SQL + parameters; it does not track entity state.**
 - **Dialect selection is immutable post-initialization.**
-- **MySQL/MariaDB upserts depend on the `incoming` alias when the server supports it.**
-  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it (MySQL/MariaDB do for modern versions).
-  - `TableGateway` only injects `AS incoming` when the alias is provided so keep the property around even if you don’t use it.
+- **MySQL upserts depend on the `incoming` alias when the server supports it.**
+  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it: MySQL returns `"incoming"` on 8.0.20+ (`null` below that); MariaDB explicitly returns `null` (it does not support `INSERT ... AS alias`); Snowflake returns `"src"`.
+  - `TableGateway`/`PrimaryKeyTableGateway` only inject `AS <alias>` before `ON DUPLICATE KEY UPDATE` when the alias is provided, so keep the property around even if you don’t use it.
   - Tests should cover both alias-enabled and legacy (fallback to `VALUES(...)`) behaviors.
 
 ## Safe Change Checklist

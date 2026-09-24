@@ -115,8 +115,9 @@ public interface IDatabaseContextConfiguration
     TimeSpan PoolAcquireTimeout { get; set; }
 
     /// <summary>
-    /// Timeout for internal mode locks used in <see cref="enums.DbMode.SingleWriter"/> and
-    /// <see cref="enums.DbMode.SingleConnection"/> modes.
+    /// Timeout for the internal mode lock used in <see cref="enums.DbMode.SingleConnection"/> mode
+    /// and for transaction completion locks (Commit / Rollback). <see cref="enums.DbMode.SingleWriter"/>
+    /// write serialization uses governor permits bounded by <see cref="PoolAcquireTimeout"/> instead.
     /// <c>null</c> means wait indefinitely.
     /// </summary>
     /// <remarks>
@@ -124,7 +125,7 @@ public interface IDatabaseContextConfiguration
     /// This timeout governs a different bottleneck than <see cref="PoolAcquireTimeout"/>:
     /// <list type="bullet">
     ///   <item><see cref="PoolAcquireTimeout"/> — waiting for a governor permit (pool admission, default 5 s)</item>
-    ///   <item><see cref="ModeLockTimeout"/> — waiting for a shared-connection write lock (default 30 s)</item>
+    ///   <item><see cref="ModeLockTimeout"/> — waiting for the shared-connection lock (default 30 s)</item>
     /// </list>
     /// </para>
     /// <para>
@@ -145,7 +146,9 @@ public interface IDatabaseContextConfiguration
     /// When true, enables the writer-preference turnstile in <see cref="enums.DbMode.SingleWriter"/> mode.
     /// </summary>
     /// <remarks>
-    /// <b>This setting has no effect in any mode other than <see cref="enums.DbMode.SingleWriter"/>.</b>
+    /// <b>This setting has no effect in any mode other than <see cref="enums.DbMode.SingleWriter"/>,</b>
+    /// and none when a separate <see cref="ReadOnlyConnectionString"/> is supplied (readers and
+    /// writers then do not share a turnstile). Defaults to true.
     /// <para>
     /// In SingleWriter mode the governor limits concurrent writes to one. When contention occurs
     /// (multiple callers racing for the single write slot), the turnstile gives the waiting writer
@@ -171,7 +174,7 @@ public interface IDatabaseContextConfiguration
     /// </summary>
     /// <remarks>
     /// Does not affect the separate, transaction-level read-only enforcement mechanism used by
-    /// MySQL, MariaDB, and Oracle, which remains best-effort regardless of this setting.
+    /// MySQL, MariaDB, Oracle, SAP HANA, and Informix, which remains best-effort regardless of this setting.
     /// </remarks>
     SessionInitializationFailureMode SessionInitializationFailureMode { get; set; }
 

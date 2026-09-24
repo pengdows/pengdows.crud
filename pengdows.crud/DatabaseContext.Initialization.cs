@@ -7,6 +7,7 @@
 //   * (connectionString, providerName) - Uses DbProviderFactories
 //   * (connectionString, DbProviderFactory) - Direct factory
 //   * (IDatabaseContextConfiguration, factory) - Full configuration object
+//   * (IDatabaseContextConfiguration, DbDataSource, factory) - Provider DataSource
 // - Initialization flow:
 //   1. Parse connection string for pool settings and mode hints
 //   2. Detect database product (SQL Server, PostgreSQL, etc.)
@@ -419,8 +420,6 @@ public partial class DatabaseContext
             }
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
-
-            // Connection strategy is created in InitializeInternals(finally) via ConnectionStrategyFactory
         }
         catch (Exception e)
         {
@@ -568,7 +567,8 @@ public partial class DatabaseContext
 
             if (initConn != null && config.DbMode == DbMode.Standard)
             {
-                // Only do inline detection for Standard mode; SingleWriter mode will detect via main constructor
+                // Only do inline detection for an explicitly requested Standard mode; every other
+                // requested mode (including Best) detects via the main constructor
                 _dataSourceInfo = DataSourceInformation.Create(initConn, _factory, _loggerFactory);
                 _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
                 Name = _dataSourceInfo.DatabaseProductName;
@@ -610,7 +610,8 @@ public partial class DatabaseContext
 
             // 7) Isolation resolver is created in the outer constructor after RCSI/Snapshot detection.
 
-            // 8) Return the open initConn only for Standard (caller disposes). For persistent modes we returned null.
+            // 8) Return the open initConn for non-persistent modes (Standard, SingleWriter; caller
+            // disposes). For persistent modes it was handed to the context and null is returned.
             return initConn;
         }
         catch (Exception ex)
@@ -832,8 +833,8 @@ public partial class DatabaseContext
         // Strip pooling from the reader connection string only when writes are active.
         // SingleWriter + ReadOnly is functionally identical to Standard + ReadOnly (no writers
         // at all), so the reader should use normal pooled connections in that case.
-        // SingleConnection + ReadOnly is rejected earlier in the constructor, so that path
-        // is never reached here.
+        // SingleConnection always strips reader pooling (in-memory SingleConnection + ReadOnly
+        // is rejected earlier, in InitializeInternals).
         if (ConnectionMode == DbMode.SingleConnection ||
             (ConnectionMode == DbMode.SingleWriter && _isWriteConnection))
         {
@@ -893,7 +894,7 @@ public partial class DatabaseContext
         else
         {
             // Standard/PreventDatabaseUnload: reader and writer always use separate ADO.NET pools
-            // (differentiated via ApplicationName suffix or Connection Timeout delta).
+            // (differentiated via ApplicationName suffix or a dialect-specific pool-discriminator setting).
             // Stamp the resolved write size so the governor and the provider pool agree.
             // Configuration wins over connection-string, which wins over the dialect default.
             var writeMax = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString);
@@ -1027,7 +1028,7 @@ public partial class DatabaseContext
 
     /// <summary>
     /// Resolves the effective max-pool-size for a connection string following the
-    /// priority chain: explicit value already in the CS → context configuration →
+    /// priority chain: context configuration → explicit value already in the CS →
     /// dialect default.
     /// </summary>
     private int ResolveEffectiveMaxPoolSize(int? configuredMax, string connectionString)
@@ -1774,7 +1775,7 @@ public partial class DatabaseContext
 
     private void WarnOnModeMismatch(DbMode resolved, SupportedDatabase product, bool wasCoerced)
     {
-        // Don't warn if we auto-coerced (already logged that with EventIds.ModeCoerced)
+        // Don't warn if we auto-coerced (already logged by LogModeOverride)
         if (wasCoerced)
         {
             return;
@@ -1841,8 +1842,8 @@ public partial class DatabaseContext
     private InMemoryKind DetectInMemoryKind(SupportedDatabase product, string? connectionString)
     {
         // Delegates to the dialect's own ISqlDialect.DetectInMemoryKind instead of maintaining a
-        // second per-product connection-string parser here. Only SQLite/DuckDB override the
-        // base (always-None) behavior.
+        // second per-product connection-string parser here. Only SQLite, DuckDB, and Access
+        // override the base (always-None) behavior.
         return SqlDialectFactory.CreateDialectForType(product, _factory, _logger).DetectInMemoryKind(connectionString);
     }
 

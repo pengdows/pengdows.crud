@@ -14,7 +14,8 @@ public enum GeneratedKeyPlan
     None = 0,
 
     /// <summary>
-    /// Use inline RETURNING clause (PostgreSQL, Firebird, DuckDB, SQLite 3.35+).
+    /// Use inline RETURNING clause (e.g. PostgreSQL, Oracle, Firebird, DuckDB, SQLite 3.35+; Db2 uses
+    /// the equivalent <c>SELECT ... FROM FINAL TABLE (INSERT ...)</c>).
     /// Best option: atomic, single round-trip, race-free.
     /// Example: INSERT ... RETURNING id
     /// </summary>
@@ -28,14 +29,17 @@ public enum GeneratedKeyPlan
     OutputInserted = 2,
 
     /// <summary>
-    /// Use session-scoped last insert ID functions (MySQL, MariaDB, SQLite &lt;3.35, SQL Server fallback).
-    /// Safe when used on the same connection immediately after INSERT.
+    /// Use a session-scoped last insert ID function in a follow-up query. Selected by the default
+    /// plan logic for a dialect with no inline RETURNING/OUTPUT support but a session-scoped
+    /// function; the built-in MySQL, MariaDB, SQLite, and Sybase ASE dialects select
+    /// <see cref="CompoundStatement"/> or <see cref="ReaderInsertedId"/> instead.
+    /// Safe only when used on the same connection immediately after INSERT.
     /// Examples: LAST_INSERT_ID(), last_insert_rowid(), SCOPE_IDENTITY()
     /// </summary>
     SessionScopedFunction = 3,
 
     /// <summary>
-    /// Pre-fetch the ID from a sequence before INSERT (Oracle preferred approach).
+    /// Pre-fetch the ID from a sequence/generator before INSERT (used by InterBase).
     /// Excellent option: you know the ID before inserting, no lookup needed.
     /// Example: SELECT seq.NEXTVAL → INSERT with known ID
     /// </summary>
@@ -59,9 +63,9 @@ public enum GeneratedKeyPlan
     /// Execute INSERT and session-scoped ID function as a single compound statement.
     /// Example: INSERT ... ; SELECT LAST_INSERT_ID()
     /// Requires multi-statement support enabled in the provider connection string.
-    /// Fixes the two-lease correctness hazard of SessionScopedFunction for databases
-    /// (MySQL, MariaDB, SQLite pre-3.35) where connection pool may assign a different
-    /// physical connection for the follow-up scalar query.
+    /// Avoids the two-lease correctness hazard of SessionScopedFunction, where the connection
+    /// pool may assign a different physical connection for the follow-up scalar query.
+    /// Used by MySQL (MySql.Data provider), SQLite before 3.35, and Sybase ASE.
     /// </summary>
     CompoundStatement = 7,
 
@@ -69,7 +73,8 @@ public enum GeneratedKeyPlan
     /// Execute INSERT as a reader and read the generated key from the provider-specific
     /// DbDataReader property (e.g. MySqlDataReader.LastInsertedId) populated from the
     /// database OK packet. No second round-trip and no multi-statement support required.
-    /// Used by MySqlConnector, which deliberately does not support AllowMultipleStatements.
+    /// Used by MariaDB and by MySQL on MySqlConnector, which deliberately does not support
+    /// AllowMultipleStatements.
     /// </summary>
     ReaderInsertedId = 8
 }

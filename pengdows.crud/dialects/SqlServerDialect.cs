@@ -8,7 +8,8 @@
 //   * MERGE statement support for upserts
 //   * Parameter marker: @ (supports named parameters)
 //   * Identifier quoting: "name" (ANSI double-quotes, NOT brackets)
-//     QUOTED_IDENTIFIER is forced ON via session settings; the base-class
+//     QUOTED_IDENTIFIER is ON (driver login default at modern compatibility
+//     levels, otherwise SET via session settings); the base-class
 //     default of " is intentionally kept.  Do not add QuotePrefix/QuoteSuffix
 //     overrides here.
 //   * Max parameters: 2100 (sp_executesql limit)
@@ -145,8 +146,9 @@ internal class SqlServerDialect : SqlDialect
     }
 
     // DO NOT override QuotePrefix / QuoteSuffix here.
-    // We enforce SET QUOTED_IDENTIFIER ON (see SessionSettingsDef) on every
-    // connection, so identifiers are quoted with ANSI double-quotes ("name").
+    // QUOTED_IDENTIFIER is ON for every connection (driver login default at modern
+    // compatibility levels; otherwise SET via SessionSettingsDef), so identifiers are
+    // quoted with ANSI double-quotes ("name").
     // The base-class defaults (" / ") are exactly what we want.
     // SQL Server also accepts [...] brackets, but this codebase deliberately
     // uses the ANSI style for consistency across all dialects.
@@ -333,7 +335,7 @@ internal class SqlServerDialect : SqlDialect
         // checkout) — safe default is the full baseline. An empty string, by contrast, is a
         // DELIBERATE outcome of GetSqlServerSessionSettings' live compatibility-level check
         // (modern engine confirmed, no SET script needed) and must be honored as-is here, not
-        // coerced back to the baseline — see SessionSettingsDef's investigation trail comment.
+        // coerced back to the baseline.
         // SQL Server uses ApplicationIntent=ReadOnly in the connection string for read-only.
         return _sessionSettings ?? DefaultSessionSettings;
     }
@@ -394,7 +396,7 @@ internal class SqlServerDialect : SqlDialect
     }
 
     // Threshold below which ANSI_WARNINGS ON no longer implicitly promotes ARITHABORT to
-    // effectively ON (see SessionSettingsDef's investigation trail comment above). Unreachable on
+    // effectively ON. Unreachable on
     // any SQL Server version this dialect targets — kept only as the gate for the defensive
     // fallback below.
     private const int MinimumCompatibilityLevelForImplicitArithAbort = 90;
@@ -411,8 +413,8 @@ internal class SqlServerDialect : SqlDialect
                 var compatibilityLevel = TryGetCompatibilityLevel(conn);
 
                 // Modern compatibility level: the driver's login sequence and
-                // sp_reset_connection already guarantee everything this baseline would assert —
-                // see the investigation trail above SessionSettingsDef. No SET script needed.
+                // sp_reset_connection already guarantee everything this baseline would assert.
+                // No SET script needed.
                 if (compatibilityLevel is >= MinimumCompatibilityLevelForImplicitArithAbort)
                 {
                     return new SessionSettingsResult(string.Empty, ExpectedSessionSettings, false);

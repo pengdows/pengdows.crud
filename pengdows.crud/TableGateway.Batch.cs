@@ -1,12 +1,14 @@
 // =============================================================================
 // FILE: TableGateway.Batch.cs
-// PURPOSE: Batch INSERT and UPSERT operations with multi-row VALUES syntax.
+// PURPOSE: Batch INSERT, UPDATE, and UPSERT operations with multi-row VALUES syntax.
 //
 // AI SUMMARY:
 // - BuildBatchCreate() - Generates multi-row INSERT INTO t (cols) VALUES (...), (...)
 // - BatchCreateAsync() - Executes batch insert, returns total affected rows
-// - BuildBatchUpsert() - Generates dialect-specific batch upsert:
-//   * PostgreSQL/CockroachDB: multi-row INSERT ... ON CONFLICT DO UPDATE [WHERE ver = EXCLUDED.ver]
+// - BuildBatchUpdate() - Dialect-built multi-row UPDATE, or per-entity BuildUpdate fallback
+// - BuildBatchUpsert() - Generates dialect-specific batch upsert (ON CONFLICT preferred over MERGE):
+//   * ON CONFLICT dialects (e.g. PostgreSQL/CockroachDB/SQLite): multi-row INSERT ... ON CONFLICT
+//     DO UPDATE [WHERE ver = EXCLUDED.ver when supported]
 //   * MySQL/MariaDB: multi-row INSERT ... ON DUPLICATE KEY UPDATE
 //   * SQL Server/Oracle/Firebird: falls back to individual BuildUpsert per entity
 // - Optimistic concurrency: ON CONFLICT batch path appends CachedSqlTemplates.UpsertOnConflictVersionWhere

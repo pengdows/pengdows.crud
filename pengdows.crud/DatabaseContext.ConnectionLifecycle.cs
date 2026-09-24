@@ -198,7 +198,7 @@ public partial class DatabaseContext
 
     /// <summary>
     /// Executes session settings on the given connection as a single command.
-    /// Skips execution if detection has not completed or dialect is null.
+    /// Skips execution if session-settings detection has not completed.
     /// </summary>
     internal void ExecuteSessionSettings(IDbConnection connection, bool readOnly)
     {
@@ -230,7 +230,7 @@ public partial class DatabaseContext
                 // Oracle enforces read-only at the transaction level via SET TRANSACTION READ ONLY,
                 // not at the connection level. A consumer who configures a read-only context for
                 // Oracle will not get connection-level enforcement — the intent must be honoured
-                // by always beginning transactions with readOnly: true.
+                // by beginning transactions with ExecutionType.Read.
                 _logger.LogDebug(
                     "Dialect {Dialect} does not emit session-level read-only SQL; " +
                     "read-only intent must be enforced at the transaction level for {Name}.",
@@ -259,8 +259,9 @@ public partial class DatabaseContext
         }
         catch (Exception ex)
         {
-            // Best-effort: log the failure and return the connection without marking settings
-            // applied. The connection proceeds in an unknown session state.
+            // Default (SessionInitializationFailureMode.BestEffort): log the failure and return the
+            // connection without marking settings applied. The connection proceeds in an unknown
+            // session state. FailClosed throws ConnectionException instead (below).
             //
             // Intentional trade-off: failing hard here would surface every transient SET
             // failure (e.g., a momentary DB hiccup) as a connection acquisition exception.

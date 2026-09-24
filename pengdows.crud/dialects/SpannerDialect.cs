@@ -96,10 +96,10 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     // native Guid/UUID wire support (Sqlite/Oracle/Snowflake/Db2/DuckDB/Firebird).
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
-    // Spanner returns SqlState "P0001" (a generic raise-exception code) for EVERY constraint
-    // violation, not the ANSI class-23 codes real PostgreSQL uses — verified live against a real
-    // Spanner Omni + PGAdapter instance. Inheriting PostgreSqlDialect's pure SqlState-based checks
-    // is therefore useless here; message-pattern matching is the only reliable signal, the same
+    // Spanner returns SqlState "P0001" (a generic raise-exception code) for NotNull/Check and
+    // delete-side ForeignKey violations, not the ANSI class-23 codes real PostgreSQL uses —
+    // verified live against a real Spanner Omni + PGAdapter instance. Inheriting PostgreSqlDialect's
+    // pure SqlState-based checks misses those shapes; message-pattern matching is the only reliable signal, the same
     // approach Sqlite/Firebird already use for their own non-standard-SqlState shapes.
     public override bool IsNotNullViolation(DbException ex) =>
         ex.Message.Contains("must not be NULL", StringComparison.OrdinalIgnoreCase);

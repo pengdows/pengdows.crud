@@ -7,7 +7,7 @@
 ## Reviewer Checklist
 <!-- Use this as a guide for self-review before asking for a merge -->
 
-- [ ] **I have reviewed [REVIEW_POLICY.md](REVIEW_POLICY.md)** and my changes comply.
+- [ ] **I have reviewed [REVIEW_POLICY.md](../REVIEW_POLICY.md)** and my changes comply.
 - [ ] **No `TransactionScope`** (use `ctx.BeginTransaction()`).
 - [ ] **No String Interpolation in SQL** (use `SqlContainer`).
 - [ ] **Braces everywhere** (even single-line `if` blocks).

@@ -123,7 +123,8 @@ public interface IDataSourceInformation
 
     /// <summary>
     /// Indicates whether stored procedure parameter names must match the declared names in the database.
-    /// This is true for Oracle, PostgreSQL, and CockroachDB when using named binding.
+    /// This is true for Oracle and the PostgreSQL-family dialects (PostgreSQL, CockroachDB, YugabyteDB,
+    /// Aurora PostgreSQL, Spanner) when using named binding.
     /// </summary>
     bool RequiresStoredProcParameterNameMatch { get; }
 

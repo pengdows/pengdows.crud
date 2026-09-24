@@ -17,7 +17,8 @@ namespace pengdows.crud.threading;
 public interface ILockerAsync : IDisposable, IAsyncDisposable
 {
     /// <summary>
-    /// Acquires the lock synchronously, blocking until the lock is available.
+    /// Acquires the lock synchronously, blocking until the lock is available. A locker created with
+    /// a timeout (e.g. from <c>ModeLockTimeout</c>) throws <c>ModeContentionException</c> when it elapses.
     /// </summary>
     /// <remarks>
     /// Use this method in synchronous code paths such as constructors or
@@ -27,7 +28,8 @@ public interface ILockerAsync : IDisposable, IAsyncDisposable
     void Lock();
 
     /// <summary>
-    /// Acquires the lock asynchronously, awaiting if necessary.
+    /// Acquires the lock asynchronously, awaiting if necessary. A locker created with a timeout
+    /// throws <c>ModeContentionException</c> when it elapses.
     /// </summary>
     /// <remarks>
     /// Returns <see cref="ValueTask.CompletedTask"/> immediately when there is no contention,

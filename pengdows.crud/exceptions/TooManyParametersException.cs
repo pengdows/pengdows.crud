@@ -4,7 +4,8 @@
 //
 // AI SUMMARY:
 // - Thrown when adding parameters would exceed database provider limits.
-// - MaxAllowed property: returns the context's maximum parameter limit.
+// - MaxAllowed property: the limit that was exceeded (the container's dialect
+//   MaxParameterLimit, or the context's MaxParameterLimit).
 // - Database limits vary: SQL Server ~2100, PostgreSQL ~32767, etc.
 // - Commonly occurs with large IN clauses or batch operations.
 // - Suggests batching or using table-valued parameters as alternatives.

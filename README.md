@@ -49,6 +49,15 @@ The repository contains concrete support for:
 - YugabyteDB
 - TiDB
 - Snowflake
+- SingleStore (detected at runtime; uses the MySQL dialect)
+- IBM Db2
+- SAP (Sybase) ASE
+- IBM Informix
+- SAP HANA
+- InterBase
+- Google Spanner (PostgreSQL interface)
+- Microsoft Access
+- pengdows.flatfile (partial dialect over CSV/delimited/fixed-width/NDJSON files)
 
 When product detection cannot identify the connected database, the library falls back to a conservative SQL-92 dialect.
 
@@ -91,6 +100,10 @@ await tx.CommitAsync();
 ### Constructor Variants
 
 ```csharp
+using Npgsql;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
+
 // Minimal: connection string + factory
 var ctx = new DatabaseContext(connectionString, SqlClientFactory.Instance);
 
@@ -123,7 +136,10 @@ var ctx = new DatabaseContext(configuration, dataSource, NpgsqlFactory.Instance)
 
 Current rules include:
 
+- `PGC001`: pengdows.crud components must be registered as singletons (flags `AddScoped`/`AddTransient`)
 - `PGC008`: do not inject raw values into SQL predicates or joins; parameterize the value instead
+- `PGC025`: public/protected gateway methods that execute database work must accept an `IDatabaseContext`/`ITransactionContext` parameter and route execution through `ctx = context ?? Context`
+- `PGC026`: use `WrapObjectName("alias.column")` instead of `WrapObjectName("alias") + "." + WrapObjectName("column")`
 
 ```csharp
 // Bad
@@ -157,6 +173,8 @@ DatabaseException (abstract — carries Database, SqlState, ErrorCode, Constrain
   │    ├─ ConcurrencyConflictException    ← [Version] column mismatch on UpdateAsync
   │    ├─ CommandTimeoutException         ← IsTransient = true
   │    ├─ ConnectionException
+  │    │    └─ FileLockContentionException ← embedded-engine file lock held by another process; IsTransient = false
+  │    ├─ ReadOnlyViolationException      ← write reached a read-only SQLite/DuckDB connection
   │    ├─ TransactionException
   │    ├─ TransientWriteConflictException ← IsTransient = true
   │    │    ├─ DeadlockException
@@ -171,13 +189,15 @@ DatabaseException (abstract — carries Database, SqlState, ErrorCode, Constrain
 ```
 
 Non-`DatabaseException` subtypes thrown by the infrastructure:
-- `ModeContentionException : TimeoutException` — SingleWriter/SingleConnection lock timed out
-- `PoolSaturatedException : TimeoutException` — internal connection pool exhausted
-- `PoolForbiddenException : InvalidOperationException` — write attempted on read-only context
-- `TransactionModeNotSupportedException : NotSupportedException` — savepoint or read-only tx on unsupported dialect
+- `ModeContentionException : TimeoutException` — shared-connection mode lock (e.g. SingleConnection) or transaction-completion lock exceeded `ModeLockTimeout`
+- `PoolSaturatedException : TimeoutException` — no governor slot became available within `PoolAcquireTimeout` (includes SingleWriter write-slot waits)
+- `PoolForbiddenException : InvalidOperationException` — connection requested from a pool configured to reject all requests (e.g. the write pool of a `ReadOnly` context)
+- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation or on PostgreSQL/YugabyteDB). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
 - `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
 
 ```csharp
+using pengdows.crud.exceptions;
+
 try
 {
     await gateway.UpdateAsync(entity);

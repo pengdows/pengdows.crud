@@ -4,7 +4,7 @@
 //
 // AI SUMMARY:
 // - This is a testing utility that provides a fixed user ID for audit columns.
-// - Constructor is internal to encourage use via factory methods or DI.
+// - The class and constructor are internal (test projects reach it via InternalsVisibleTo).
 // - Always returns the same userId that was passed to the constructor.
 // - UtcNow is set to DateTime.UtcNow at the moment Resolve() is called.
 // - Use in unit tests when you need predictable audit values:
@@ -22,16 +22,12 @@ namespace pengdows.crud;
 /// <remarks>
 /// <para>
 /// This class provides a minimal implementation of <see cref="AuditValueResolver"/>
-/// that always returns the same user ID. It's useful for:
+/// that always returns the same user ID. It is internal and intended for this repository's
+/// unit and integration tests, where predictable audit values are needed.
 /// </para>
-/// <list type="bullet">
-/// <item><description>Unit tests where you need predictable audit values</description></item>
-/// <item><description>Integration tests with known test user identities</description></item>
-/// <item><description>Console applications or batch jobs with a fixed service account</description></item>
-/// </list>
 /// <para>
-/// <strong>Not recommended for production web applications.</strong> Instead, implement
-/// a resolver that extracts the current user from your authentication context.
+/// For production, implement a resolver that extracts the current user from your
+/// authentication context.
 /// </para>
 /// </remarks>
 /// <example>
@@ -46,7 +42,6 @@ namespace pengdows.crud;
 /// </code>
 /// </example>
 /// <seealso cref="AuditValueResolver"/>
-/// <seealso cref="OidcAuditFieldResolver"/>
 internal class StubAuditValueResolver : AuditValueResolver
 {
     private readonly object _userId;
@@ -55,10 +50,6 @@ internal class StubAuditValueResolver : AuditValueResolver
     /// Initializes a new instance with the specified user ID.
     /// </summary>
     /// <param name="userId">The user ID to return from <see cref="Resolve"/>.</param>
-    /// <remarks>
-    /// Constructor is internal. In production, this might be exposed through
-    /// a factory method or created directly in test code.
-    /// </remarks>
     internal StubAuditValueResolver(object userId)
     {
         _userId = userId;

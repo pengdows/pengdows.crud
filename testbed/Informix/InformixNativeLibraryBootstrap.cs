@@ -31,10 +31,9 @@ namespace testbed.Informix;
 /// after explicitly pre-loading <c>libifgls.so</c> itself via <c>NativeLibrary.Load</c> — that
 /// didn't help either). The SAME load succeeded immediately once <c>LD_LIBRARY_PATH</c> was set
 /// in the shell BEFORE <c>dotnet run</c> even started. <c>Db2NativeLibraryBootstrap</c>'s own
-/// claim that its mid-process <c>SetEnvironmentVariable</c> call is sufficient is therefore
-/// unverified/likely accidental — Db2's dependencies are probably resolved via a baked-in
-/// RPATH instead, not LD_LIBRARY_PATH. Do not copy that pattern for a new database without
-/// checking this exact failure mode first.
+/// mid-process <c>SetEnvironmentVariable</c> call is therefore likely not what resolves Db2's
+/// dependencies — probably a baked-in RPATH instead, not LD_LIBRARY_PATH. Do not copy that
+/// pattern for a new database without checking this exact failure mode first.
 /// </para>
 /// <para>
 /// The fix: if <c>LD_LIBRARY_PATH</c> doesn't already contain the native lib directory when

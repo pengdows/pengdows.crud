@@ -10,7 +10,7 @@
 //   * PostgreSQL: PostGIS GEOGRAPHY (WGS84 SRID 4326 default)
 //   * MySQL: No native geography; use GEOMETRY with SRID 4326
 //   * Oracle: SDO_GEOMETRY with geodetic coordinate system
-// - SRID defaults to 4326 (WGS84) when unspecified - standard for GPS/GeoJSON.
+// - SRID defaults to 4326 (WGS84) when a database value carries none - standard for GPS/GeoJSON.
 // - FromBinary(): Converts WKB/EWKB to Geography (defaults SRID to 4326).
 // - FromTextInternal(): Converts WKT/EWKT (defaults SRID to 4326).
 // - FromGeoJsonInternal(): Converts GeoJSON (defaults SRID to 4326).
@@ -42,7 +42,7 @@ namespace pengdows.crud.types.converters;
 /// <para><strong>Geometry vs Geography:</strong> Use Geography for latitude/longitude coordinates
 /// representing locations on Earth (GPS coordinates, addresses, etc.). Measurements use geodetic
 /// distance (great circle). Use Geometry for planar/projected coordinates.</para>
-/// <para><strong>SRID default:</strong> Geography defaults to SRID 4326 (WGS84) when no SRID is specified,
+/// <para><strong>SRID default:</strong> When reading a database value that carries no SRID, the converter defaults to SRID 4326 (WGS84),
 /// since most geographic data uses this standard (GPS, GeoJSON, etc.).</para>
 /// <para><strong>Supported geography types:</strong></para>
 /// <list type="bullet">
@@ -71,8 +71,7 @@ namespace pengdows.crud.types.converters;
 /// // Create with GPS coordinates (New York City)
 /// var store = new Store
 /// {
-///     Location = Geography.FromWellKnownText("POINT(-74.0060 40.7128)") // Lon, Lat
-///     // SRID 4326 (WGS84) is applied automatically
+///     Location = Geography.FromWellKnownText("POINT(-74.0060 40.7128)", srid: 4326) // Lon, Lat
 /// };
 /// await helper.CreateAsync(store);
 ///
@@ -87,7 +86,7 @@ namespace pengdows.crud.types.converters;
 /// // Create from GeoJSON
 /// var store3 = new Store
 /// {
-///     Location = Geography.FromGeoJson(@"{""type"":""Point"",""coordinates"":[-0.1276,51.5074]}")
+///     Location = Geography.FromGeoJson(@"{""type"":""Point"",""coordinates"":[-0.1276,51.5074]}", srid: 4326)
 ///     // London - GeoJSON is [longitude, latitude]
 /// };
 /// await helper.CreateAsync(store3);

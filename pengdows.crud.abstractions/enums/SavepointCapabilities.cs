@@ -10,7 +10,7 @@ namespace pengdows.crud.enums;
 /// </summary>
 /// <remarks>
 /// Additive alongside <c>SupportsSavepoints</c>, not a replacement for it — that member is
-/// already published and every existing dialect already overrides it.
+/// already published and dialects already override it.
 /// </remarks>
 [Flags]
 public enum SavepointCapabilities
@@ -27,7 +27,7 @@ public enum SavepointCapabilities
     /// <summary>
     /// The dialect can explicitly release a savepoint (<c>ReleaseSavepointAsync</c>) before the
     /// transaction ends. Not universal even among dialects that support Create/Rollback — T-SQL
-    /// (SQL Server, Sybase) has no equivalent statement.
+    /// (SQL Server, Sybase) and Oracle have no equivalent statement.
     /// </summary>
     Release = 4
 }

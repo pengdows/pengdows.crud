@@ -2,7 +2,7 @@
 
 ## Starting a transaction
 
-`TransactionContext` drives every explicit `BeginTransactionAsync` call. The factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, DuckDB prefers the provider default, and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only). A dedicated `SemaphoreSlim` (`RealAsyncLocker`) guards the logical user lock so the caller can still buffer async work inside the transaction without racing commit/rollback.
+`TransactionContext` drives every explicit `BeginTransactionAsync` call. The factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, DuckDB begins with the provider default (its ADO.NET provider rejects explicit levels; the resolved level is still reported), and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only; requesting `ExecutionType.Read` on a write-only context throws `InvalidOperationException`). A dedicated `SemaphoreSlim` user lock (wrapped by `ReusableAsyncLocker`) serializes operations on the pinned connection, and a separate completion `SemaphoreSlim` serializes commit/rollback.
 
 ### Async signatures (all return ValueTask)
 
@@ -20,7 +20,7 @@ await using var tx = await context.BeginTransactionAsync(
     cancellationToken);
 ```
 
-`ExecutionType` is required: pass `ExecutionType.Write` for mutating transactions and `ExecutionType.Read` for read-only transactions. In `SingleWriter` mode this determines whether the write-slot governor is acquired.
+`ExecutionType` defaults to `ExecutionType.Write` on every overload (and `IsolationLevel?` defaults to `null`): pass `ExecutionType.Read` explicitly for read-only transactions. In `SingleWriter` mode this determines whether the write-slot governor is acquired. Synchronous `BeginTransaction(...)` overloads with the same parameters (minus the token) also exist.
 
 ## ITransactionContext properties and methods
 
@@ -32,8 +32,8 @@ await using var tx = await context.BeginTransactionAsync(
 | `IsolationLevel` | The `IsolationLevel` active for this transaction. |
 | `CommitAsync(CancellationToken)` | Commits the transaction. Returns `ValueTask`. |
 | `RollbackAsync(CancellationToken)` | Rolls back the transaction. Returns `ValueTask`. |
-| `SavepointAsync(string name, CancellationToken)` | Creates a named savepoint. Throws `NotSupportedException` if the dialect's `SavepointCapabilities` lacks `Create`. Returns `ValueTask`. |
-| `RollbackToSavepointAsync(string name, CancellationToken)` | Rolls back to a named savepoint without ending the transaction. Throws `NotSupportedException` if the dialect's `SavepointCapabilities` lacks `Rollback`. Returns `ValueTask`. |
+| `SavepointAsync(string name, CancellationToken)` | Creates a named savepoint. Throws `NotSupportedException` if the dialect does not support savepoints (`SupportsSavepoints == false`, i.e. `SavepointCapabilities` lacks `Create`). Returns `ValueTask`. |
+| `RollbackToSavepointAsync(string name, CancellationToken)` | Rolls back to a named savepoint without ending the transaction. Throws `NotSupportedException` if the dialect does not support savepoints (`SupportsSavepoints == false`). Returns `ValueTask`. |
 | `ReleaseSavepointAsync(string name, CancellationToken)` | Explicitly releases a savepoint before the transaction ends. Throws `NotSupportedException` if the dialect's `SavepointCapabilities` lacks `Release` (SQL Server, Sybase, Oracle — none have an explicit release statement). Returns `ValueTask`. |
 
 ## Error handling — TransactionException
@@ -59,11 +59,11 @@ catch (TransactionException ex)
 
 ## Committing, rolling back, and savepoints
 
-`CommitAsync`/`RollbackAsync` route through `CompleteTransactionWithWaitAsync`, which serializes completion behind a semaphore so commits/rollbacks never overlap. `SavepointAsync`, `RollbackToSavepointAsync`, and `ReleaseSavepointAsync` each fail fast with `NotSupportedException` the moment the dialect's `SavepointCapabilities` lacks the corresponding flag, rather than silently doing nothing — a caller only discovers non-support once, at the first unsupported call, instead of after later destructive work it believed was protected. When the capability IS present, the dialect's SQL is executed on the same transaction so you can create, roll back to, or explicitly release a savepoint without leaving the context. Every completion closes the tracked connection and notifies the metrics collector (`TransactionCompleted`) so telemetry stays accurate.
+`CommitAsync`/`RollbackAsync` (and the sync `Commit`/`Rollback`, which block on them) route through `CompleteTransactionWithWaitAsync`, which serializes completion behind a semaphore (bounded by `ModeLockTimeout`; `null` waits indefinitely) so commits/rollbacks never overlap; a second completion throws `InvalidOperationException`. `SavepointAsync` and `RollbackToSavepointAsync` fail fast with `NotSupportedException` when the dialect's `SupportsSavepoints` is `false`, and `ReleaseSavepointAsync` does the same when `SavepointCapabilities` lacks `Release`, rather than silently doing nothing — a caller only discovers non-support once, at the first unsupported call, instead of after later destructive work it believed was protected. When the capability IS present, the dialect's SQL is executed on the same transaction so you can create, roll back to, or explicitly release a savepoint without leaving the context. Every completion closes the tracked connection and notifies the metrics collector (`TransactionCommitted` or `TransactionRolledBack`; a commit/rollback that throws is counted as neither) so telemetry stays accurate.
 
 ## Disposal and cleanup
 
-`TransactionContext` guards against forgotten commits. `DisposeAsync` attempts to grab the completion lock, roll back the transaction if it is still open, and log errors if it cannot acquire the lock within a brief window. Every path calls `CompleteTransactionMetrics` to ensure the metrics delta is recorded even when the transaction rolls back automatically. The transaction object and both semaphores are disposed once the work finishes.
+`TransactionContext` guards against forgotten commits. `Dispose`/`DisposeAsync` try to grab the completion lock without waiting, roll back the transaction if it is still open, and log an error (skipping the explicit rollback) if another thread currently holds the lock. Every path calls `CompleteTransactionMetrics` to ensure the metrics delta is recorded even when the transaction rolls back automatically. The transaction object and the user-lock semaphore are disposed once the work finishes; the completion semaphore is disposed too unless another thread still holds it.
 
 ## Usage patterns
 
@@ -80,7 +80,10 @@ try
 }
 catch
 {
-    await tx.RollbackAsync(ct);
+    if (!tx.IsCompleted) // after a failed commit the transaction is already completed
+    {
+        await tx.RollbackAsync(ct);
+    }
     throw;
 }
 
@@ -97,13 +100,20 @@ await tx.ReleaseSavepointAsync("checkpoint1", ct);
 
 ## Isolation profiles (portable)
 
-`IsolationProfile` maps to the safest available `IsolationLevel` for each database:
+`IsolationProfile` maps to a per-database `IsolationLevel` (see `pengdows.crud/isolation/IsolationResolver.cs`):
 
 | Profile | Intent |
 |---------|--------|
-| `SafeNonBlockingReads` | Snapshot / repeatable-read equivalent where possible |
+| `SafeNonBlockingReads` | MVCC/snapshot-style reads without dirty reads (Snapshot, RepeatableRead, or ReadCommitted depending on the database) |
 | `StrictConsistency` | Serializable |
-| `ReadCommitted` | Read committed |
+| `FastWithRisks` | ReadUncommitted (dirty reads) where supported — almost never recommended |
+
+Isolation **fails up, never down**:
+
+- **Explicit `IsolationLevel`:** used as-is if the database supports it; otherwise the weakest supported level that is at least as strong is used (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot sits above ReadCommitted and is satisfied only by Snapshot or Serializable; RepeatableRead is satisfied only by Serializable). For example, `ReadCommitted` on CockroachDB or DuckDB runs as `Serializable`. If nothing at or above the requested level exists (e.g. `Serializable` on TiDB or Snowflake), `BeginTransaction` throws `InvalidOperationException`.
+- **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, or Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation enabled; `SafeNonBlockingReads` on PostgreSQL/YugabyteDB.
+- **Read-only `BeginTransaction` with no level and no profile** (`ExecutionType.Read`, `isolationLevel: null`): uses the `SafeNonBlockingReads` mapping and logs a warning if that mapping is degraded — it never throws for that.
+- **Write `BeginTransaction` with no level:** `ReadCommitted` if supported, else `Serializable`.
 
 ## Connection sharing inside transactions
 

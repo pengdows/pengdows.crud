@@ -7,7 +7,8 @@
 // - REQUIRES AuditValueResolver to be configured on TableGateway.
 // - Never modified after initial creation (non-updateable).
 // - User ID comes from IAuditValues.UserId (string, int, Guid, etc.).
-// - Throws InvalidOperationException if no resolver and this column exists.
+// - Create/Update throw InvalidOperationException if no resolver and this column exists
+//   (the TableGateway constructor only logs a warning).
 // =============================================================================
 
 namespace pengdows.crud.attributes;

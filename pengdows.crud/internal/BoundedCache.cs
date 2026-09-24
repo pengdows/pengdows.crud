@@ -13,7 +13,7 @@
 // - Lazy<TValue> with ExecutionAndPublication ensures the value factory executes
 //   exactly once per key, even when multiple threads race on the same missing key.
 // - Eviction is a linear scan for the entry with the lowest access timestamp;
-//   cache sizes are 32-512, so this is sub-microsecond.
+//   default cache sizes are 32-512 (reader-plan size is configurable), so this is cheap.
 // - Used internally for caching compiled accessors, type info, reader plans, etc.
 // =============================================================================
 
@@ -105,7 +105,7 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
 
     /// <summary>
     /// Scans all entries for the one with the lowest LastAccess timestamp and removes it.
-    /// Cache sizes are small (32-512), so a linear scan is faster than maintaining a
+    /// Default cache sizes are small (32-512), so a linear scan is faster than maintaining a
     /// secondary data structure.
     /// </summary>
     /// <returns>True if an entry was successfully removed.</returns>

@@ -1,14 +1,11 @@
 // =============================================================================
 // FILE: RecordsetFieldArrayPool.cs
-// PURPOSE: Shared ArrayPool<string>/ArrayPool<Type> rent/return helpers for building a
-//          lookup-only RecordsetShape without allocating on the hot (cache-hit) path.
+// PURPOSE: ArrayPool<string>/ArrayPool<Type> rent/return helpers for reading a recordset's
+//          field names/types without allocating on the hot (cache-hit) path.
 //
 // AI SUMMARY:
-// - Previously duplicated byte-for-byte between BaseTableGateway.Reader.cs and
-//   DataReaderMapper.cs (same constants, same two ArrayPool<T> instances, same four
-//   Rent/Return methods) — extracted here so the pooling policy (bucket size, max
-//   pooled array length) has exactly one place to tune, next to the RecordsetShape type
-//   both callers already share.
+// - Used by BaseTableGateway.Reader.cs; keeps the pooling policy (bucket size, max pooled
+//   array length) in one place.
 // - Arrays sized above FieldPoolMaxLength fall back to ArrayPool<T>.Shared rather than
 //   this pool's fixed-size buckets.
 // =============================================================================

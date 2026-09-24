@@ -44,7 +44,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// Overrides the table GetSchema()/GetSchema(string) return, bypassing the embedded
     /// per-SupportedDatabase XML resource lookup entirely — lets a test fabricate an arbitrary
     /// schema (e.g. a specific DataSourceProductName/Version pair) that doesn't correspond to any
-    /// real emulated product.
+    /// real emulated product. Ignored for products in <see cref="ProductsWithoutSchemaSupport"/>,
+    /// whose GetSchema overloads always throw.
     /// </summary>
     public DataTable? SchemaTable
     {
@@ -88,8 +89,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// <summary>
     /// Command text for every ExecuteScalar/ExecuteScalarAsync call this connection instance has
     /// run — the scalar-path equivalent of <see cref="ExecutedNonQueryTexts"/>/<see cref="ExecutedReaderTexts"/>,
-    /// which the scalar path lacked until TEST-010's connection-affinity investigation needed it to
-    /// prove which physical connection instance actually ran a given scalar query.
+    /// e.g. to prove which physical connection instance actually ran a given scalar query.
     /// </summary>
     public readonly List<string> ExecutedScalarTexts = new();
 
@@ -424,7 +424,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
-    /// Sets the connection to fail on the next Open() or OpenAsync() call
+    /// Sets the connection to fail on Open()/OpenAsync() calls until reset
     /// </summary>
     public void SetFailOnOpen(bool shouldFail = true, bool skipFirstOpen = false)
     {
@@ -681,9 +681,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             SupportedDatabase.CockroachDb => "v23.1.0",
             SupportedDatabase.DuckDB => "DuckDB 0.9.2",
             SupportedDatabase.Db2 => "DB2 11.05.0800",
-            // Access intentionally excluded: SupportedDatabase.Access's bit value is reserved
-            // but not defined on this branch (see SupportedDatabase.cs) - no Access dialect is
-            // enabled on 2.0.6 yet, so there is no case to add here.
+            // Products without a case here (e.g. SybaseASE, Access, Informix, SapHana, InterBase)
+            // report the generic "1.0"; use SetServerVersion when a test needs a specific version.
             _ => "1.0"
         };
     }
@@ -1067,7 +1066,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
-    /// Configure the connection to throw an exception on Close/Dispose.
+    /// Configure the connection to throw an exception on Close/CloseAsync. Dispose/DisposeAsync
+    /// swallow it.
     /// </summary>
     public void SetFailOnClose(Exception? exception)
     {

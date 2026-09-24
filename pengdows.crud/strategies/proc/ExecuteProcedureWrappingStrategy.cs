@@ -1,11 +1,12 @@
 // =============================================================================
 // FILE: ExecuteProcedureWrappingStrategy.cs
-// PURPOSE: Stored procedure wrapping for Firebird using EXECUTE PROCEDURE syntax.
+// PURPOSE: Stored procedure wrapping for Firebird/InterBase using EXECUTE PROCEDURE syntax.
 //
 // AI SUMMARY:
-// - Firebird-specific stored procedure invocation strategy.
+// - Stored procedure invocation strategy for Firebird and InterBase.
 // - Read operations: "SELECT * FROM proc_name(args)" - treats proc as table function.
 // - Write operations: "EXECUTE PROCEDURE proc_name(args)" - standard Firebird syntax.
+// - Parentheses are omitted when there are no args.
 // - ExecutionType IS significant - determines which syntax is used.
 // - Validates procedure name is not null/empty.
 // - Uses wrapObjectName callback for proper identifier quoting if provided.
@@ -17,7 +18,7 @@ using pengdows.crud.infrastructure;
 namespace pengdows.crud.strategies.proc;
 
 /// <summary>
-/// Wraps stored procedure calls using Firebird's EXECUTE PROCEDURE syntax.
+/// Wraps stored procedure calls using Firebird's EXECUTE PROCEDURE syntax (also used for InterBase).
 /// </summary>
 /// <remarks>
 /// <para>

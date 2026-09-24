@@ -76,7 +76,8 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     int MaxOutputParameters { get; }
 
     /// <summary>
-    /// Current number of open connections. Usually 0 for DbMode.Standard, 1 otherwise.
+    /// Current number of open connections. Usually 0 when idle in DbMode.Standard/SingleWriter,
+    /// and 1 when idle in DbMode.SingleConnection/PreventDatabaseUnload (the persistent connection).
     /// </summary>
     long NumberOfOpenConnections { get; }
 
@@ -88,11 +89,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Gets a snapshot of connection pool statistics for the specified pool role.
     /// Returns a disabled snapshot (all zeros, <c>Disabled = true</c>) when no pool
-    /// governor is active for that role (e.g., metrics disabled or disabled mode).
+    /// governor is active for that role (e.g., the pool governor is disabled).
     /// </summary>
     /// <remarks>
     /// The default implementation returns a disabled snapshot. Override in concrete
-    /// contexts that have pool governors (i.e., <see cref="DatabaseContext"/>).
+    /// contexts that have pool governors (i.e., <c>DatabaseContext</c>).
     /// </remarks>
     PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label) =>
         new(label, string.Empty, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, true, false);
@@ -191,7 +192,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string MakeParameterName(string parameterName);
 
     /// <summary>
-    /// Indicates whether this context supports read operations.
+    /// True when this context is read-only (readable but not writable).
     /// </summary>
     bool IsReadOnlyConnection { get; }
 
@@ -248,6 +249,17 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Not portable across all providers.
     /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
+    /// <remarks>
+    /// A level the database does not support is resolved to the weakest supported level that is
+    /// at least as strong, never a weaker one. When <paramref name="isolationLevel"/> is null, read
+    /// transactions use <see cref="IsolationProfile.SafeNonBlockingReads"/>'s mapping (logging a
+    /// warning if it degrades) and write transactions use ReadCommitted, else Serializable, else
+    /// the first supported level.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">No supported level is at least as strong as
+    /// <paramref name="isolationLevel"/>, or a read transaction was requested on a context that is
+    /// not readable.</exception>
+    /// <exception cref="NotSupportedException">A write transaction was requested on a read-only context.</exception>
     ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
         ExecutionType executionType = ExecutionType.Write);
@@ -256,13 +268,19 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Begins a transaction using a portable IsolationProfile abstraction.
     /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
+    /// <remarks>
+    /// Never runs below the profile's guarantee: throws <c>TransactionModeNotSupportedException</c>
+    /// when the database cannot provide it (StrictConsistency on TiDB, Snowflake, or Access;
+    /// SafeNonBlockingReads on SQL Server without snapshot isolation, or on PostgreSQL/YugabyteDB).
+    /// </remarks>
     ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
         ExecutionType executionType = ExecutionType.Write);
 
     /// <summary>
     /// Begins a transaction asynchronously using the native ADO.NET IsolationLevel.
-    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction. Isolation resolution and
+    /// exceptions match <see cref="BeginTransaction(IsolationLevel?,ExecutionType)"/>.
     /// </summary>
     ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationLevel? isolationLevel = null,
@@ -271,7 +289,9 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
 
     /// <summary>
     /// Begins a transaction asynchronously using a portable IsolationProfile abstraction.
-    /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
+    /// <see cref="ExecutionType.Read"/> creates a read-only transaction. Throws
+    /// <c>TransactionModeNotSupportedException</c> under the same conditions as
+    /// <see cref="BeginTransaction(IsolationProfile,ExecutionType)"/>.
     /// </summary>
     ValueTask<ITransactionContext> BeginTransactionAsync(
         IsolationProfile isolationProfile,

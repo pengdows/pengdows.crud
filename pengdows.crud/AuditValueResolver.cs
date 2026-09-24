@@ -11,7 +11,7 @@
 //   Create and Update operations to populate audit columns.
 // - Implementations should return an IAuditValues instance containing the
 //   current timestamp and user identifier.
-// - See OidcAuditFieldResolver for an example OIDC-based implementation.
+// - See docs/OidcAuditFieldResolver-example.cs for an example OIDC-based implementation.
 // - See StubAuditValueResolver for a testing stub implementation.
 // =============================================================================
 
@@ -27,7 +27,7 @@ namespace pengdows.crud;
 /// </para>
 /// <para>
 /// <strong>Usage:</strong> Pass an instance of your implementation to
-/// <see cref="TableGateway{TEntity,TRowID}"/> or <see cref="TableGateway{TEntity,TRowID}"/>
+/// <see cref="TableGateway{TEntity,TRowID}"/> or <see cref="PrimaryKeyTableGateway{TEntity}"/>
 /// constructor when working with entities that have audit columns.
 /// </para>
 /// <example>

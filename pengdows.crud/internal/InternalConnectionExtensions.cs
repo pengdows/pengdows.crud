@@ -4,11 +4,12 @@
 //
 // AI SUMMARY:
 // - Extension method for IDatabaseContext to access connection internals.
-// - GetConnection(): Casts context to IInternalConnectionProvider and calls it.
+// - GetConnection(), GetLock(), CloseAndDisposeConnection(Async)(): cast context to
+//   IInternalConnectionProvider and forward the call.
 // - Throws InvalidOperationException if context doesn't implement provider.
 // - Allows internal components to get connections via IDatabaseContext interface.
 // - Keeps implementation details hidden from public API consumers.
-// - Used by SqlContainer, TableGateway for connection acquisition.
+// - Used by SqlContainer for connection acquisition.
 // =============================================================================
 
 using System.Threading.Tasks;

@@ -5,7 +5,8 @@
 // AI SUMMARY:
 // - Implements ILockerAsync with real SemaphoreSlim-based locking.
 // - Designed for TransactionContext where the same SemaphoreSlim is locked/unlocked
-//   repeatedly across many operations within a single transaction.
+//   repeatedly across many operations within a single transaction. Also used by
+//   DatabaseContext for the DuckDB serialized-open gate.
 // - TrackDisposeState = false: Survives await using without being permanently disposed.
 //   DisposeAsync merely releases the held lock, readying the instance for reuse.
 // - Single allocation in TransactionContext constructor; GetLock() returns the same instance.

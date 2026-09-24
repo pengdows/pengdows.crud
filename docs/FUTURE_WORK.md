@@ -529,15 +529,14 @@ cleanly in two:
   SQL text/metadata — no `DbParameter` construction happens in them. Every property they read is
   either constant per `DatabaseType` or a pure function of `ProductInfo.ParsedVersion` (verified
   exhaustively, including the exact `MySqlDialect`/`TiDbDialect` `>= 8.0.20` upsert-alias
-  threshold). These four are **now fingerprint-keyed**: `IInternalSqlDialect.CacheFingerprint`
-  (default impl on `SqlDialect`: `"{DatabaseType}|{ParsedVersion}"`) replaces the dialect instance
-  as the key, via `ConcurrentDictionary<string, ...>` instead of
-  `ConditionalWeakTable<ISqlDialect, ...>`. Many same-version tenants now share one entry; cache
-  cardinality is bounded by distinct engine+version combinations ever seen, not tenant count.
-  Covered by `TableGatewayMultiTenantDialectCacheTests.BuildUpsert_TwoTenantsOnSameMySqlVersion_ShareOneCacheEntry`
-  (two distinct dialect instances, same version → one cache entry) alongside the original
-  different-version correctness tests (still passing, now against the fingerprint
-  implementation).
+  threshold). These four are therefore safe to fingerprint-key, and the fingerprint itself exists
+  on this branch — `IInternalSqlDialect.CacheFingerprint` (default impl on `SqlDialect`:
+  `"{DatabaseType}|{ParsedVersion}"`) — but on 2.0.6 they are **still identity-keyed**
+  (`ConditionalWeakTable<ISqlDialect, ...>`), so same-version tenants do not yet share entries and
+  cache cardinality still follows the number of live dialect instances. Switching them to
+  `ConcurrentDictionary<string, ...>` keyed by the fingerprint is not done on this branch. The
+  different-version correctness tests in `TableGatewayMultiTenantDialectCacheTests` cover the
+  current identity-keyed behavior.
 - `_containersByDialect` and the three binder caches (`_insertBinders`/`_upsertBinders`/
   `_updateBinders`) all bake actual `DbParameter` construction permanently into the cached
   artifact — `CompiledBinderFactory` closes over the dialect instance itself via
@@ -554,8 +553,8 @@ cleanly in two:
      — not exposed anywhere on `ISqlDialect`, so no fingerprint built from today's interface
      surface can verify "same driver package" even in principle.
 
-  These four caches are **still identity-keyed** (`ConditionalWeakTable<ISqlDialect, ...>`,
-  unchanged from the first fix) rather than fingerprint-keyed — no live bug exists today, since
+  These four caches are also identity-keyed (`ConditionalWeakTable<ISqlDialect, ...>`,
+  unchanged from the first fix) and must stay that way rather than be fingerprint-keyed — no live bug exists today, since
   distinct dialect instances never collide regardless of `GuidStorageMode` while they stay
   identity-keyed. Converting them to fingerprint-keying is not planned/decided.
 

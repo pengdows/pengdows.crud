@@ -7,9 +7,10 @@
 // - Extends TimeoutException with additional diagnostic properties.
 // - Properties:
 //   * Mode: DbMode that caused contention (SingleWriter, SingleConnection)
-//   * Snapshot: ModeContentionSnapshot with waiter count and queue state
-//   * Timeout: TimeSpan that was exceeded
-// - Occurs in SingleWriter mode when write connection is held too long.
+//   * Snapshot: ModeContentionSnapshot with current/peak waiters, wait and timeout totals
+//   * Timeout: TimeSpan that was exceeded (ModeLockTimeout)
+// - Occurs when a shared connection's lock (SingleWriter/SingleConnection) or the
+//   SingleConnection transaction gate is held longer than ModeLockTimeout.
 // - Indicates need for shorter transactions or different DbMode.
 // - Message includes waiter count and timeout duration for diagnostics.
 // =============================================================================

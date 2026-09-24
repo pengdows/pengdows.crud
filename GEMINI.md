@@ -43,8 +43,8 @@ The framework provides intelligent, adaptive connection strategies to ensure opt
 - **`SingleConnection` Mode:** A dedicated mode for handling thread-safe access to a single, persistent connection, designed specifically for ephemeral `:memory:` databases, which is invaluable for testing.
 - **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string:
     - `:memory:` SQLite/DuckDB → `SingleConnection`
-    - File-based SQLite/DuckDB → `SingleWriter`
-    - SQL Server LocalDB → `KeepAlive`
+    - File-based SQLite/DuckDB (and shared-cache in-memory SQLite) and Microsoft Access → `SingleWriter`
+    - SQL Server LocalDB → `PreventDatabaseUnload` (forced for LocalDB regardless of the requested mode; `KeepAlive` is an `[Obsolete]` alias)
     - Everything else → `Standard`
 - **`ModeLockTimeout`:** Configurable timeout (`TimeSpan?`) for internal mode locks and transaction completion locks; `null` means wait indefinitely.
 
@@ -57,6 +57,7 @@ A powerful abstraction layer that makes application code portable across differe
 - **Native `DbDataSource` support:** `DatabaseContext` now accepts a `DbDataSource` directly (e.g., `NpgsqlDataSource`), providing shared prepared-statement caching — a significant throughput win for PostgreSQL.
 - **Stored Procedure Wrapping (`ProcWrappingStyle`):** Automatically wraps stored procedure calls in the correct, vendor-specific syntax (`EXEC`, `CALL`, `BEGIN/END`, etc.).
 - **`IsolationProfile`:** Portable transaction isolation profiles that map to the safest and most optimal `System.Data.IsolationLevel` for the target database (e.g., `SafeNonBlockingReads`, `StrictConsistency`, `FastWithRisks`).
+- **Isolation never silently weakens ("fails up"):** an explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (e.g. `ReadCommitted` on CockroachDB/DuckDB → `Serializable`); `InvalidOperationException` if nothing at or above it exists (e.g. `Serializable` on TiDB/Snowflake). A profile throws `TransactionModeNotSupportedException` rather than run below its guarantee — `StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation and on PostgreSQL/YugabyteDB. A read-only `BeginTransaction(executionType: ExecutionType.Read)` with no level/profile only logs a warning if degraded.
 - **`ISqlDialect`** is accessible directly via `context.Dialect` on any `IDatabaseContext` — no internal casts required.
 
 ### 3. Advanced Type System
@@ -76,17 +77,17 @@ A multi-layered, high-performance, and extensible type coercion system.
 
 - **Resource Safety:** The strict use of `IAsyncDisposable` on `TransactionContext` and `SqlContainer` makes accidental connection leaks virtually impossible.
 - **Audit Handling:** An `IAuditValueResolver` interface allows for easy, decoupled, and automatic population of audit columns. **Both `CreatedBy/On` AND `LastUpdatedBy/On` are set on CREATE** — this is intentional design allowing "last modified" queries without checking if the entity was ever updated.
-- **Read-only enforcement:** Dual-layer enforcement for supported databases (PostgreSQL, SQLite, DuckDB) using both connection-string-level and session SQL settings to guarantee data integrity.
+- **Read-only enforcement:** PostgreSQL is dual-layer (connection-string `Options='-c default_transaction_read_only=on'` plus session `SET`); SQLite (`Mode=ReadOnly`) and DuckDB (`access_mode=READ_ONLY`) enforce at file-open via the connection string only; other dialects use read-only session settings and/or connection-string hints where the database offers them (SQL Server's `ApplicationIntent=ReadOnly` is only a routing hint).
 - **Multi-Tenancy:** First-class support for the robust **database-per-tenant** model via `ITenantContextRegistry` — no WHERE tenant_id filtering, physical database separation.
-- **NEVER use `TransactionScope`** — incompatible with the "open late, close early" philosophy. Use `context.BeginTransaction()` which pins the connection for the transaction's lifetime. 2.0 adds support for **Transaction Savepoints** on supported databases.
+- **NEVER use `TransactionScope`** — incompatible with the "open late, close early" philosophy. Use `context.BeginTransaction()` which pins the connection for the transaction's lifetime. 2.0 adds support for **Transaction Savepoints** on supported databases (`SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync` throw `NotSupportedException` on dialects without them).
 
 ### 6. Comprehensive Metrics
 
-Provides deep operational visibility by tracking 36 detailed metrics for connections, contention (from the `PoolGovernor`), command timings, transactions, and more. Metrics are collected inside the execution pipeline, providing precise observability into every connection open, slot acquisition, and command dispatch.
+Provides deep operational visibility via `DatabaseMetrics` (35 top-level metrics plus separate `Read`/`Write` role breakdowns) for connections, contention (from the `PoolGovernor`), command timings, transactions, and more. Metrics are collected inside the execution pipeline, providing precise observability into every connection open, slot acquisition, and command dispatch.
 
 ## Coding Style & Naming
 
-- C# 12 on `net8.0`; `Nullable` and `ImplicitUsings` enabled.
+- Projects multi-target `net8.0;net10.0` (the analyzers project targets `netstandard2.0`); keep code valid for C# 12 (the `net8.0` default language version). `Nullable` and `ImplicitUsings` enabled.
 - File-scoped namespaces; lowercase namespaces (`pengdows.crud.*`).
 - Indentation: 4 spaces; `WarningsAsErrors=true`.
 - Prefer factory/DI creation where possible. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate/documented.
@@ -134,7 +135,7 @@ int affected = await BatchCreate/Update/Upsert/DeleteAsync(entities);
 
 ## Three-Tier API (PrimaryKeyTableGateway)
 
-`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `SqlGenerationException` at construction if entity has no `[PrimaryKey]`.
+`PrimaryKeyTableGateway<TEntity>` is for entities with **no surrogate `[Id]` column** — all ops keyed on `[PrimaryKey]` columns. Throws `InvalidOperationException` at construction if entity has no `[PrimaryKey]`.
 
 ```csharp
 // Tier 1 — Build
@@ -267,22 +268,27 @@ pengdows.crud uses **context-per-tenant** (not query filtering):
 ```csharp
 public interface IOrderGateway : ITableGateway<Order, long>
 {
-    Task<List<Order>> GetCustomerOrdersAsync(long customerId);
+    Task<List<Order>> GetCustomerOrdersAsync(long customerId, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default);
 }
 
 public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 {
     public OrderGateway(IDatabaseContext context, IAuditValueResolver resolver) : base(context, resolver) { }
 
-    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId)
+    // Accept an optional context and resolve ctx = context ?? Context so the method works inside
+    // transactions and per-tenant contexts (enforced by analyzer rule PGC025).
+    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
-        var sc = BuildBaseRetrieve("o");
+        var ctx = context ?? Context;
+        await using var sc = BuildBaseRetrieve("o", ctx);
         sc.Query.Append(" WHERE ");
         sc.Query.Append(sc.WrapObjectName("o.customer_id"));
         sc.Query.Append(" = ");
         var p = sc.AddParameterWithValue("cid", DbType.Int64, customerId);
         sc.Query.Append(sc.MakeParameterName(p));
-        return await LoadListAsync(sc);
+        return await LoadListAsync(sc, cancellationToken);
     }
 }
 ```
@@ -296,7 +302,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite = SingleWriter
+8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB = SingleWriter, LocalDB = PreventDatabaseUnload; unsafe explicit modes are coerced (e.g., SQLite/DuckDB `Standard` → `SingleWriter`)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** — incompatible with connection management, use `context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations
@@ -307,7 +313,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 - Never commit secrets or real connection strings; use environment variables and user-secrets.
 - Do not hardcode identifier quoting — use `WrapObjectName(...)` and `CompositeIdentifierSeparator`.
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
-- `pengdows.crud.analyzers` now enforces raw predicate/join value injection as `PGC008`; `IS NULL` / `IS NOT NULL` are the normal exceptions.
+- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), and `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call).
 
 ## Project Mandates
 
@@ -340,7 +346,7 @@ dotnet build pengdows.crud.sln -c Release
 dotnet test -c Release --results-directory TestResults --logger trx
 
 # Run specific test
-dotnet test --filter "MethodName=TestMethodName"
+dotnet test --filter "FullyQualifiedName~TestMethodName"
 
 # Test with coverage (CI-like)
 dotnet test -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
@@ -378,7 +384,7 @@ dotnet run -f net10.0 --project benchmarks/CrudBenchmarks -- --filter '*MyBenchm
 ## Related Projects
 
 - **`pengdows.poco.mint`:** A code generation tool that inspects a database schema and generates C# POCOs with the correct `[Table]`, `[Column]`, `[Id]`, and `[PrimaryKey]` attributes for use with `pengdows.crud`.
-- **`pengdows.crud.fakeDb`:** A powerful, standalone NuGet package that provides a fake ADO.NET provider. It is essential for writing fast, isolated unit tests for any data access logic based on ADO.NET interfaces, including code that uses `pengdows.crud` or Dapper.
+- **`pengdows.crud.fakeDb`:** A powerful, standalone NuGet package (ships `net8.0` and `net10.0`) that provides a fake ADO.NET provider. It is essential for writing fast, isolated unit tests for any data access logic based on ADO.NET interfaces, including code that uses `pengdows.crud` or Dapper.
 
 ## AI Agent Files
 
@@ -388,5 +394,6 @@ This repository contains guidance files for multiple AI coding assistants:
 - `GEMINI.md` — Google Gemini (this file)
 - `skills/claude/` — Claude Code skills (slash commands)
 - `skills/codex/` — Codex agent references
+- `skills/gemini/` — Gemini agent references
 
 All three guidance files share the same core technical information.

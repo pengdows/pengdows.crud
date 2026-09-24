@@ -10,7 +10,7 @@
 // - TryRead(): Convert database value to .NET type (returns success bool).
 // - TryWrite(): Configure DbParameter from .NET value.
 // - Designed for high performance and AOT compatibility.
-// - Implementations: GuidCoercion, BooleanCoercion, DateTimeCoercion, JsonCoercion, etc.
+// - Implementations: GuidCoercion, BooleanCoercion, DateTimeCoercion, JsonValueCoercion, etc.
 // =============================================================================
 
 using System.Data.Common;

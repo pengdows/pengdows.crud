@@ -1,12 +1,10 @@
 // =============================================================================
 // FILE: TooManyColumns.cs
-// PURPOSE: Exception when entity has more columns than provider supports.
+// PURPOSE: Exception when an entity declares more than one of a single-instance column marker.
 //
 // AI SUMMARY:
-// - Thrown when entity mapping exceeds database column limits.
-// - Database limits: SQL Server 1024 (non-wide) or 30000 (wide tables).
-// - Typically indicates design issue or auto-generated entities.
-// - Consider splitting into multiple tables or using JSON columns.
+// - Thrown when an entity has multiple [Id], [Version], or [CorrelationToken] columns.
+// - Each of those markers may appear on at most one property per entity.
 // - Validation during TypeMapRegistry entity registration.
 // =============================================================================
 

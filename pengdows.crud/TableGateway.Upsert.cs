@@ -9,15 +9,18 @@
 //   1. [PrimaryKey] columns if any exist
 //   2. [Id] column if writable ([Id(true)] or [Id])
 //   3. Error if neither available
-// - Database-specific syntax:
-//   * SQL Server/Oracle/Snowflake: MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
-//   * PostgreSQL/CockroachDB: INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver]
+// - Database-specific syntax (single-entity; MERGE preferred when supported):
+//   * MERGE-capable dialects (e.g. SQL Server, Oracle, Snowflake, Db2, PostgreSQL 15+,
+//     DuckDB 1.4+): MERGE ... WHEN MATCHED [AND t.ver = s.ver] THEN UPDATE
+//   * ON CONFLICT dialects without MERGE (e.g. PostgreSQL < 15, CockroachDB, SQLite):
+//     INSERT ... ON CONFLICT DO UPDATE [WHERE table.ver = EXCLUDED.ver when supported]
 //   * MySQL/MariaDB: INSERT ... ON DUPLICATE KEY UPDATE (no version guard possible in this syntax)
 //   * Firebird: UPDATE OR INSERT ... MATCHING (...)
 // - Optimistic concurrency:
 //   * MERGE dialects: WHEN MATCHED AND t.ver = s.ver guard; 0 rows = version mismatch → ConcurrencyConflictException
-//   * ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB): DO UPDATE WHERE predicate; 0 rows = DO NOTHING → exception
-//   * ON DUPLICATE KEY (MySQL/MariaDB) and Firebird: cannot detect conflicts — no exception thrown
+//   * ON CONFLICT WHERE dialects (PostgreSQL family): DO UPDATE WHERE predicate; 0 rows = DO NOTHING → exception
+//   * ON DUPLICATE KEY (MySQL/MariaDB), ON CONFLICT without WHERE support (e.g. SQLite), and
+//     Firebird: cannot detect conflicts — no exception thrown
 // - Handles audit columns and version columns appropriately.
 // - Throws NotSupportedException for fallback/unknown dialects.
 // - Returns affected row count (typically 1 for single-entity upsert).
@@ -59,8 +62,8 @@ public partial class TableGateway<TEntity, TRowID>
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
 
             // Optimistic concurrency: throw only when the dialect enforced a version predicate in the SQL.
-            // MERGE dialects (SQL Server/Oracle/Snowflake) use WHEN MATCHED AND t.ver=s.ver → 0 rows on mismatch.
-            // ON CONFLICT WHERE dialects (PostgreSQL/CockroachDB) use DO UPDATE WHERE → DO NOTHING on mismatch.
+            // MERGE dialects (e.g. SQL Server/Oracle/Snowflake) use WHEN MATCHED AND t.ver=s.ver → 0 rows on mismatch.
+            // ON CONFLICT WHERE dialects (PostgreSQL family) use DO UPDATE WHERE → DO NOTHING on mismatch.
             // Firebird UPDATE OR INSERT, MySQL ON DUPLICATE KEY, and non-WHERE ON CONFLICT (SQLite/DuckDB)
             // cannot detect version conflicts — do NOT throw for those dialects.
             if (rowsAffected == 0)

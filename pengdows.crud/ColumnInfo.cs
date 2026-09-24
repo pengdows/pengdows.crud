@@ -16,7 +16,8 @@
 //   * Handle optimistic concurrency ([Version] columns)
 // - MakeParameterValueFromField() extracts a property value and converts it
 //   to the appropriate database format (enum conversion, JSON serialization).
-// - Ordinal is the column index from entity reflection order.
+// - Ordinal is the 1-based column position: ColumnAttribute.Ordinal when set, otherwise
+//   assigned by TypeMapRegistry in property declaration order.
 // =============================================================================
 
 #region
@@ -111,8 +112,8 @@ internal class ColumnInfo : IColumnInfo
     /// <summary>
     /// Builds a compiled delegate for enum-to-string conversion for the given enum type.
     /// The compiled delegate unboxes the object to the concrete enum type then calls
-    /// <see cref="EnumStringCache{TEnum}.GetOrAdd"/> directly — no per-call reflection.
-    /// Called once per entity type during TypeMapRegistry initialization.
+    /// <c>EnumLiteralCache&lt;TEnum&gt;.GetOrAdd</c> directly — no per-call reflection.
+    /// Called once per string-stored enum column during TypeMapRegistry initialization.
     /// </summary>
     internal static Func<object, string> BuildEnumStringConverter(Type enumType)
     {
@@ -158,7 +159,7 @@ internal class ColumnInfo : IColumnInfo
     public Type? EnumType { get; set; }
 
     /// <summary>
-    /// Gets the database column name as specified in the <see cref="Attributes.ColumnAttribute"/>.
+    /// Gets the database column name as specified in the <see cref="ColumnAttribute"/>.
     /// </summary>
     public string Name { get; set; } = null!;
 
@@ -171,7 +172,7 @@ internal class ColumnInfo : IColumnInfo
     /// Gets a value indicating whether this column is the entity's row identifier (pseudo key).
     /// </summary>
     /// <remarks>
-    /// Marked with <see cref="Attributes.IdAttribute"/>. Used by TableGateway for
+    /// Marked with <see cref="IdAttribute"/>. Used by TableGateway for
     /// single-entity operations like RetrieveOneAsync(TRowID) and DeleteAsync(TRowID).
     /// </remarks>
     public bool IsId { get; set; } = false;
@@ -185,8 +186,8 @@ internal class ColumnInfo : IColumnInfo
     /// Gets or sets whether this column is excluded from UPDATE statements.
     /// </summary>
     /// <remarks>
-    /// Set by <see cref="Attributes.NonUpdateableAttribute"/> or implicitly for
-    /// CreatedBy/CreatedOn audit columns.
+    /// Set by <see cref="NonUpdateableAttribute"/> or implicitly for
+    /// the <c>[Id]</c> column.
     /// </remarks>
     public bool IsNonUpdateable { get; set; }
 
@@ -194,7 +195,7 @@ internal class ColumnInfo : IColumnInfo
     /// Gets or sets whether this column is excluded from INSERT statements.
     /// </summary>
     /// <remarks>
-    /// Set by <see cref="Attributes.NonInsertableAttribute"/> or implicitly for
+    /// Set by <see cref="NonInsertableAttribute"/> or implicitly for
     /// auto-increment ID columns (<c>[Id(false)]</c>).
     /// </remarks>
     public bool IsNonInsertable { get; set; }
@@ -207,7 +208,7 @@ internal class ColumnInfo : IColumnInfo
     /// <summary>
     /// Gets or sets whether this column should be serialized as JSON.
     /// </summary>
-    /// <remarks>Marked with <see cref="Attributes.JsonAttribute"/>.</remarks>
+    /// <remarks>Marked with <see cref="JsonAttribute"/>, or inferred for JSON document/node/value property types.</remarks>
     public bool IsJsonType { get; set; }
 
     /// <summary>
@@ -228,8 +229,8 @@ internal class ColumnInfo : IColumnInfo
     /// Gets or sets whether the ID column accepts client-provided values.
     /// </summary>
     /// <remarks>
-    /// True for <c>[Id]</c> or <c>[Id(true)]</c>. False for <c>[Id(false)]</c>
-    /// (database-generated like IDENTITY/SERIAL).
+    /// True for <c>[Id]</c> or <c>[Id(true)]</c> without <c>[NonInsertable]</c>. False for
+    /// <c>[Id(false)]</c> (database-generated like IDENTITY/SERIAL) and for non-Id columns.
     /// </remarks>
     public bool IsIdWritable { get; set; }
 
@@ -237,7 +238,7 @@ internal class ColumnInfo : IColumnInfo
     /// Gets or sets whether this column is part of the entity's business/primary key.
     /// </summary>
     /// <remarks>
-    /// Marked with <see cref="Attributes.PrimaryKeyAttribute"/>. Can be composite
+    /// Marked with <see cref="PrimaryKeyAttribute"/>. Can be composite
     /// (multiple columns). Used for upsert conflict detection and RetrieveOneAsync(TEntity).
     /// </remarks>
     public bool IsPrimaryKey { get; set; } = false;
@@ -256,7 +257,7 @@ internal class ColumnInfo : IColumnInfo
     /// Gets or sets whether this is an optimistic concurrency version column.
     /// </summary>
     /// <remarks>
-    /// Marked with <see cref="Attributes.VersionAttribute"/>. Auto-incremented on update,
+    /// Marked with <see cref="VersionAttribute"/>. Auto-incremented on update,
     /// included in WHERE clause for concurrency checking.
     /// </remarks>
     public bool IsVersion { get; set; }
@@ -282,7 +283,7 @@ internal class ColumnInfo : IColumnInfo
     public bool IsLastUpdatedOn { get; set; }
 
     /// <summary>
-    /// Gets or sets the zero-based ordinal index of this column in the entity's column list.
+    /// Gets or sets the 1-based ordinal position of this column in the entity's column list.
     /// </summary>
     public int Ordinal { get; set; }
 
@@ -295,7 +296,8 @@ internal class ColumnInfo : IColumnInfo
     /// Gets or sets whether the enum should be stored as its string name rather than numeric value.
     /// </summary>
     /// <remarks>
-    /// Determined by whether <see cref="DbType"/> is <see cref="System.Data.DbType.String"/>.
+    /// True when <see cref="DbType"/> is a string DbType (String, AnsiString, StringFixedLength,
+    /// AnsiStringFixedLength).
     /// </remarks>
     public bool EnumAsString { get; set; }
 

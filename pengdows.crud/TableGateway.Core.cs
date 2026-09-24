@@ -5,19 +5,18 @@
 //
 // AI SUMMARY:
 // - TableGateway<TEntity, TRowID> is the main API for entity CRUD operations.
-// - Replaces the older TableGateway<> name (which is now a compatibility shim).
+// - Derives from BaseTableGateway<TEntity>, which holds the shared fields (context,
+//   dialect, tableInfo, caches), audit handling, and DataReader mapping.
 // - This partial contains:
 //   * Static initialization and TRowID type validation
-//   * Constructor that takes DatabaseContext and optional AuditValueResolver
-//   * Core field declarations (context, dialect, tableInfo, caches)
-//   * BoundedCache instances for query templates and column lists
+//   * Constructor that takes IDatabaseContext and optional IAuditValueResolver
+//   * Per-dialect ConditionalWeakTable caches for binders, SQL templates, and containers
+//   * Create, Retrieve-by-id, and Delete operations
 // - Partial class structure:
-//   * Core.cs - This file (initialization, fields)
-//   * Audit.cs - Audit column handling
-//   * Caching.cs - Template caching
-//   * Reader.cs - DataReader mapping
+//   * Core.cs - This file
+//   * Batch.cs - Batch create/update/upsert operations
 //   * Retrieve.cs - SELECT operations
-//   * Sql.cs - SQL generation helpers
+//   * Sql.cs - SQL generation helpers and templates
 //   * Update.cs - UPDATE operations
 //   * Upsert.cs - UPSERT operations
 // - TRowID validation: Must be primitive integer, Guid, or string.
@@ -58,8 +57,8 @@ namespace pengdows.crud;
 /// <typeparam name="TRowID">The row ID type (must be primitive integer, Guid, or string).</typeparam>
 /// <remarks>
 /// <para>
-/// This is the primary table gateway API. The legacy <c>TableGateway&lt;TEntity, TRowID&gt;</c>
-/// type remains as a compatibility shim that inherits from this class.
+/// This is the primary table gateway API for entities with an <c>[Id]</c> row identifier.
+/// Use <see cref="PrimaryKeyTableGateway{TEntity}"/> for entities keyed only by <c>[PrimaryKey]</c>.
 /// </para>
 /// </remarks>
 public partial class TableGateway<TEntity, TRowID> :
@@ -118,7 +117,7 @@ public partial class TableGateway<TEntity, TRowID> :
         ILogger? logger = null)
         : base(databaseContext, auditValueResolver, enumParseBehavior, logger)
     {
-        // Id-specific initialization: locate the [Id] column after base Initialize()
+        // Id-specific initialization: locate the [Id] column after the base constructor ran
         _idColumn = _tableInfo.Columns.Values.FirstOrDefault(itm => itm.IsId);
     }
 
@@ -156,7 +155,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var dialect = GetDialect(ctx);
         var plan = dialect.GetGeneratedKeyPlan();
 
-        // 1. Handle PREFETCH plans (Oracle)
+        // 1. Handle PREFETCH plans (InterBase)
         //
         // Only prefetch (and overwrite the entity's Id) when the column is NOT client-writable —
         // mirrors branch 2's own IsIdWritable check below. CONFIRMED live via InterBase (the first
@@ -359,7 +358,7 @@ public partial class TableGateway<TEntity, TRowID> :
         var dialect = GetDialect(ctx);
         var plan = dialect.GetGeneratedKeyPlan();
 
-        // 1. Handle PREFETCH plans (Oracle)
+        // 1. Handle PREFETCH plans (InterBase)
         //
         // Only prefetch (and overwrite the entity's Id) when the column is NOT client-writable —
         // see the sibling CreateAsync(TEntity, IDatabaseContext?) overload above for the full
@@ -893,7 +892,6 @@ public partial class TableGateway<TEntity, TRowID> :
         return sc;
     }
 
-    // moved to TableGateway.Retrieve.cs
 
     /// <inheritdoc/>
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)
@@ -1383,16 +1381,11 @@ public partial class TableGateway<TEntity, TRowID> :
 
     // CheckParameterLimit moved to BaseTableGateway.Core.cs
 
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
-
-    // moved to TableGateway.Retrieve.cs
 
 
-    // moved to TableGateway.Update.cs
 
-    // moved to TableGateway.Update.cs
+
+
 
     /// <inheritdoc/>
     public ValueTask<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
@@ -1446,13 +1439,9 @@ public partial class TableGateway<TEntity, TRowID> :
         }
     }
 
-    // moved to TableGateway.Upsert.cs
 
-    // moved to TableGateway.Upsert.cs
 
-    // moved to TableGateway.Upsert.cs
 
-    // moved to TableGateway.Upsert.cs
 
     private (string sql, List<DbParameter> parameters) BuildUpdateByKey(TEntity updated,
         IReadOnlyList<IColumnInfo> keyCols, ISqlDialect dialect)
@@ -1526,25 +1515,14 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
 
-    // moved to TableGateway.Update.cs
-
-    // moved to TableGateway.Update.cs
-
-    // moved to TableGateway.Update.cs
-
-    // moved to TableGateway.Update.cs
-
-    // moved to TableGateway.Upsert.cs
 
 
-    // moved to TableGateway.Retrieve.cs
 
-    /// <summary>
-    /// Type-safe coercion for audit field values (handles string to Guid, etc.)
-    /// </summary>
-    // moved to TableGateway.Audit.cs
 
-    // moved to TableGateway.Audit.cs
+
+
+
+
 
     private static bool IsDefaultId(object? value)
     {

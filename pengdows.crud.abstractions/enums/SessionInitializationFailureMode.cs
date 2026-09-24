@@ -6,7 +6,7 @@ namespace pengdows.crud.enums;
 /// </summary>
 /// <remarks>
 /// This does not affect the separate, transaction-level read-only enforcement mechanism used by
-/// MySQL, MariaDB, and Oracle (<c>TryEnterReadOnlyTransactionAsync</c>), which remains
+/// MySQL, MariaDB, Oracle, SAP HANA, and Informix (<c>TryEnterReadOnlyTransactionAsync</c>), which remains
 /// best-effort regardless of this setting.
 /// </remarks>
 public enum SessionInitializationFailureMode
@@ -18,7 +18,7 @@ public enum SessionInitializationFailureMode
     BestEffort = 0,
 
     /// <summary>
-    /// Throw a <see cref="pengdows.crud.exceptions.ConnectionException"/> and reject the
+    /// Throw a <c>pengdows.crud.exceptions.ConnectionException</c> and reject the
     /// connection when session settings fail to apply.
     /// </summary>
     FailClosed = 1

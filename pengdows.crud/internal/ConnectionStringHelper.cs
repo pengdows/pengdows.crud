@@ -9,8 +9,10 @@
 // - Handles provider-specific builders that may reject certain string formats.
 // - Fallback strategy:
 //   1. Try provider's strongly-typed builder
-//   2. If that fails, fall back to generic DbConnectionStringBuilder
-//   3. For unparseable strings (like ":memory:"), stores as Data Source
+//   2. If the provider builder rejects the string, return a generic DbConnectionStringBuilder
+//      holding the raw value as Data Source
+//   3. With no provider builder, parse into a generic DbConnectionStringBuilder; unparseable
+//      strings (like ":memory:") are stored as Data Source
 // - TryApply(): Safely sets ConnectionString property, catches exceptions.
 // - TrySetRawDataSource(): Sets raw value as Data Source for file paths.
 // - Used during DatabaseContext initialization for connection string parsing.

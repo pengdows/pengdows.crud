@@ -61,7 +61,7 @@ namespace pengdows.crud;
 /// The <see cref="EnumParseFailureMode"/> parameter controls behavior when parsing fails.
 /// </para>
 /// <para>
-/// <strong>JSON Handling:</strong> Columns marked with <see cref="Attributes.JsonAttribute"/>
+/// <strong>JSON Handling:</strong> Columns marked with <see cref="attributes.JsonAttribute"/>
 /// are deserialized from JSON strings or <see cref="JsonDocument"/> to the target type.
 /// </para>
 /// </remarks>
@@ -609,9 +609,10 @@ internal static class TypeCoercionHelper
     }
 
     /// <summary>
-    /// Typed DateTime parser for string source — used by compiled expression trees in
-    /// <see cref="DataReaderMapper"/> to avoid boxing the DateTime return value.
+    /// Typed DateTime parser for string source that avoids boxing the DateTime return value.
     /// Applies the same UTC normalization as <see cref="CoerceDateTime"/> for the string case.
+    /// (<see cref="DataReaderMapper"/>'s compiled string→DateTime path uses
+    /// <c>IDataRecord.GetDateTime</c> + <see cref="NormalizeDateTime"/> instead.)
     /// </summary>
     internal static DateTime CoerceDateTimeFromString(string s)
     {
@@ -993,8 +994,8 @@ internal static class TypeCoercionHelper
     }
 
     /// <summary>
-    /// Optimized byte reader for compiled mappers. Uses a small stack buffer for small reads
-    /// and falls back to heap only for large binary data.
+    /// Byte reader for compiled mappers. Values of 256 bytes or less are read into a pooled
+    /// buffer and copied to an exact-size array; larger values are read directly into a new array.
     /// </summary>
     public static byte[] ReadBytes(IDataRecord reader, int ordinal)
     {

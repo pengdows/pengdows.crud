@@ -45,7 +45,6 @@ namespace pengdows.crud.strategies.connection;
 /// - Initialization and dialect detection should be handled by the strategy, not DatabaseContext
 ///
 /// FUTURE ARCHITECTURAL DIRECTION:
-/// - Strategies should handle their own dialect detection logic
 /// - Connection disposal decisions should be entirely encapsulated in ReleaseConnection
 /// - DatabaseContext should delegate all connection policy decisions to the active strategy
 /// </summary>
@@ -85,7 +84,7 @@ internal interface IConnectionStrategy
     /// Returns (dialect, dataSourceInfo) or (null, null) if fallback SQL-92 should be used.
     /// </summary>
     /// <param name="initConnection">Optional connection for dialect detection</param>
-    /// <param name="factory">Optional factory for creating connections. Null when using DbDataSource.</param>
+    /// <param name="factory">Provider factory used to create the dialect; when null, detection is skipped (SQL-92 fallback).</param>
     /// <param name="loggerFactory">Logger factory for diagnostic output</param>
     (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,

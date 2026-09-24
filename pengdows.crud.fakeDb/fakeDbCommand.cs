@@ -361,7 +361,7 @@ public class fakeDbCommand : DbCommand
         }
 
         // Propagate persistent scalar exception through the reader path as well,
-        // since ExecuteScalarCore now uses ExecuteReaderAsync internally.
+        // since SqlContainer's scalar methods (ExecuteScalarCore) execute via ExecuteReaderAsync.
         if (conn?.PersistentScalarException != null)
         {
             throw conn.PersistentScalarException;

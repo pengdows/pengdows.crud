@@ -80,7 +80,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         catch (NullReferenceException ex) when (ShouldSuppressMySqlDataDisposeNullReference(ex))
         {
             // MySql.Data can also null-ref while disposing a prepared MySqlCommand
-            // after EOF. Treat that provider bug as successful cleanup on async paths.
+            // after EOF. Treat that provider bug as successful cleanup.
         }
 
         if (_shouldCloseConnection)

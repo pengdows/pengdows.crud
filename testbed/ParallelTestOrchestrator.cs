@@ -209,8 +209,9 @@ public class ParallelTestOrchestrator
     }
 
     // POLICY: Every new SupportedDatabase value requires an entry in this list.
-    // Only Snowflake may be opt-in (requires cloud credentials; no Docker image).
-    // All other databases must appear unconditionally. See CLAUDE.md "Adding a New Database".
+    // Only databases that cannot run in a standard Docker container / CI runner may be opt-in
+    // (currently Snowflake, SAP HANA, InterBase, Access — see below). All other databases must
+    // appear unconditionally. See CLAUDE.md "Adding a New Database".
     private List<TestConfiguration> GetTestConfigurations()
     {
         var configurations = new List<TestConfiguration>
@@ -219,7 +220,7 @@ public class ParallelTestOrchestrator
             {
                 ContainerName = "SQLite",
                 DatabaseProvider = "SQLite",
-                Container = new SqliteTestContainer(), // We'll need to create this
+                Container = new SqliteTestContainer(),
                 TestProviderFactory = (db, sp) => new TestProvider(db, sp)
             },
             new()

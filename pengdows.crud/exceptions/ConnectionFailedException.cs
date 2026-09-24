@@ -3,11 +3,12 @@
 // PURPOSE: Exception for database connection failures.
 //
 // AI SUMMARY:
-// - Thrown when database connection cannot be established.
+// - Thrown during DatabaseContext initialization when a connection cannot be opened:
+//   the initial connect (Phase "InitConnect") or read-only connection validation
+//   (Phase "ReadOnlyValidation").
 // - Use cases: network issues, invalid credentials, server unavailable.
-// - Extends Exception directly with message-only constructor.
-// - Typically wraps underlying provider exceptions with context.
-// - Connection strategies may throw this after retry attempts exhausted.
+// - Extends Exception directly; message and message+inner-exception constructors.
+// - Wraps the underlying provider exception as InnerException.
 // =============================================================================
 
 namespace pengdows.crud.exceptions;

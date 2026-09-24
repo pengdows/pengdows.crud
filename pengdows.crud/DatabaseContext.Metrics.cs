@@ -14,8 +14,8 @@
 // - IMPORTANT: MetricsUpdated handlers must NOT call back into the context.
 //   They are observer notifications only - log, update UI, send to monitoring,
 //   but don't execute queries or transactions.
-// - Pool statistics available via GetPoolStatistics().
-// - Attribution tracking for caller identification.
+// - Pool statistics available via GetPoolStatisticsSnapshot(PoolLabel).
+// - Attribution tracking of read/write request counts and governor/mode waits.
 // =============================================================================
 
 using Microsoft.Extensions.Logging;
@@ -51,7 +51,7 @@ public partial class DatabaseContext
     /// Do <b>NOT</b> call back into this DatabaseContext instance from event handlers. This includes:
     /// </para>
     /// <list type="bullet">
-    ///   <item><description>Executing queries (LoadAsync, ExecuteScalarAsync, etc.)</description></item>
+    ///   <item><description>Executing queries (LoadListAsync, ExecuteScalarRequiredAsync, etc.)</description></item>
     ///   <item><description>Starting transactions (BeginTransaction)</description></item>
     ///   <item><description>Getting connections (GetConnection)</description></item>
     ///   <item><description>Any operation that acquires locks or uses the context</description></item>

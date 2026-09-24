@@ -70,8 +70,8 @@ public interface ITableGateway<TEntity, TRowID>
 
     /// <summary>
     /// Inserts a list of entities using the most efficient path for the current dialect.
-    /// Delegates to <see cref="BatchCreateAsync"/> — the dialect automatically handles
-    /// multi-row VALUES, EXECUTE BLOCK, or per-row fallback as appropriate.
+    /// Delegates to <see cref="BatchCreateAsync"/> — the dialect automatically uses
+    /// multi-row VALUES or a per-row fallback as appropriate.
     /// </summary>
     /// <param name="entities">Entities to insert. Empty list returns 0.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
@@ -202,8 +202,9 @@ public interface ITableGateway<TEntity, TRowID>
     /// Builds an UPDATE statement asynchronously.
     /// </summary>
     /// <remarks>
-    /// Generates SQL using the current values on <paramref name="objectToUpdate"/>
-    /// without consulting the original database state. The returned container is
+    /// Generates SQL using the current values on <paramref name="objectToUpdate"/>. The original
+    /// row is reloaded first only when the entity has a <c>[Version]</c> column (equivalent to
+    /// <c>loadOriginal: true</c>); otherwise the database is not consulted. The returned container is
     /// not executed automatically, giving callers a chance to adjust the command
     /// before issuing it. Override <paramref name="context"/> only for execution
     /// within a transaction derived from the parent context.
@@ -211,6 +212,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the build operation.</param>
+    /// <exception cref="InvalidOperationException">No changed columns were found, or the original
+    /// row could not be reloaded.</exception>
     /// <example>
     /// <code>
     /// var sc = await helper.BuildUpdateAsync(entity);
@@ -415,8 +418,9 @@ public interface ITableGateway<TEntity, TRowID>
     /// Returns 0 when no changes are detected.
     /// </summary>
     /// <remarks>
-    /// Executes an UPDATE using the values currently on
-    /// <paramref name="objectToUpdate"/> without reloading the original entity.
+    /// Executes an UPDATE using the values currently on <paramref name="objectToUpdate"/>. The
+    /// original row is reloaded first only when the entity has a <c>[Version]</c> column; for
+    /// versioned entities, 0 rows affected throws <c>ConcurrencyConflictException</c>.
     /// </remarks>
     /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
@@ -450,6 +454,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// <remarks>
     /// Setting <paramref name="loadOriginal"/> to <c>true</c> reloads the
     /// original row so that differences can be detected before executing the update.
+    /// For versioned entities, 0 rows affected throws <c>ConcurrencyConflictException</c>.
     /// </remarks>
     /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
     /// <param name="loadOriginal">When true, reloads the original row before building the update.</param>
@@ -569,8 +574,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// Loads a list of objects using the provided SQL container.
     /// </summary>
     /// <remarks>
-    /// Executes <paramref name="sc"/> and materializes each row via
-    /// <see cref="MapReaderToObject"/>. Serves as the lower-level counterpart
+    /// Executes <paramref name="sc"/> and materializes each row into a
+    /// <typeparamref name="TEntity"/>. Serves as the lower-level counterpart
     /// to <see cref="RetrieveAsync"/> when a custom query is required.
     /// </remarks>
     /// <example>
@@ -674,7 +679,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// Executes a batch INSERT for the given entities and returns the total number of affected rows.
     /// </summary>
     /// <remarks>
-    /// Empty lists return 0. Single-entity lists delegate to <see cref="CreateAsync(TEntity, IDatabaseContext)"/>.
+    /// Empty lists return 0. Single-entity lists delegate to <see cref="CreateAsync(TEntity, IDatabaseContext?, CancellationToken)"/>.
     /// Multiple entities are chunked and executed sequentially.
     /// </remarks>
     /// <param name="entities">The entities to insert. Must not be null.</param>
@@ -719,9 +724,9 @@ public interface ITableGateway<TEntity, TRowID>
     /// SQL generated depends on the database dialect:
     /// </para>
     /// <list type="bullet">
-    /// <item><description>PostgreSQL/CockroachDB: Multi-row <c>INSERT ... ON CONFLICT DO UPDATE</c></description></item>
-    /// <item><description>MySQL/MariaDB: Multi-row <c>INSERT ... ON DUPLICATE KEY UPDATE</c></description></item>
-    /// <item><description>SQL Server/Oracle/Firebird: Falls back to individual <see cref="BuildUpsert"/> per entity</description></item>
+    /// <item><description>PostgreSQL family, SQLite, DuckDB: Multi-row <c>INSERT ... ON CONFLICT DO UPDATE</c></description></item>
+    /// <item><description>MySQL family: Multi-row <c>INSERT ... ON DUPLICATE KEY UPDATE</c></description></item>
+    /// <item><description>Other dialects (e.g. SQL Server, Oracle, Firebird): Falls back to individual <see cref="BuildUpsert"/> per entity</description></item>
     /// </list>
     /// <para>
     /// Requires either <c>[PrimaryKey]</c> columns or a writable <c>[Id]</c> attribute for conflict detection.
@@ -744,7 +749,9 @@ public interface ITableGateway<TEntity, TRowID>
         CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Appends a WHERE ... IN (...) clause to the SQL container for the given column.
+    /// Appends a WHERE (or AND, when <see cref="ISqlContainer.HasWhereAppended"/> is set) filter matching any of the given
+    /// IDs on the given column — an IN list, <c>=</c> for a single ID, or a set-valued parameter
+    /// where the dialect supports one. A null ID renders as <c>IS NULL</c>; duplicates are removed.
     /// </summary>
     /// <remarks>
     /// Useful for extending a custom <see cref="ISqlContainer"/> with an IN filter.
@@ -800,7 +807,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Returns <c>SELECT COUNT(*)</c> where <paramref name="column"/> equals <paramref name="value"/>,
     /// optionally combined with an IS NULL or IS NOT NULL check on a second column.
-    /// Exactly one of <paramref name="andWhereNull"/> or <paramref name="andWhereNotNull"/> may be set.
+    /// At most one of <paramref name="andWhereNull"/> or <paramref name="andWhereNotNull"/> is applied;
+    /// if both are set, <paramref name="andWhereNull"/> takes precedence.
     /// </summary>
     ValueTask<long> CountWhereEqualsAsync(string column, string value,
         string? andWhereNull = null, string? andWhereNotNull = null,

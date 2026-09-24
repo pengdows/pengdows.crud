@@ -16,9 +16,8 @@ public class Db2TestContainer : TestContainer
 
     static Db2TestContainer()
     {
-        // Idempotent — Program.cs already calls this before DbProviderFactoryFinder.FindAllFactories()
-        // touches DB2Factory.Instance, but registering again here is harmless and keeps this type
-        // safe to use standalone (e.g. from pengdows.crud.IntegrationTests via CreateContainerAsync).
+        // Idempotent. Program.cs does not call this, so registering here keeps this type safe to
+        // use standalone (e.g. constructed directly by pengdows.crud.IntegrationTests).
         Db2NativeLibraryBootstrap.Register();
     }
 

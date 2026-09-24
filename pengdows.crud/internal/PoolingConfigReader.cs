@@ -4,11 +4,11 @@
 //
 // AI SUMMARY:
 // - Determines effective pool configuration from multiple sources.
-// - PoolConfigSource enum: ConnectionString, DialectDefault, PoolingDisabled.
+// - PoolConfigSource enum: ConnectionString, DialectDefault.
 // - PoolConfig record: PoolingEnabled, MinPoolSize, MaxPoolSize, Source.
 // - GetEffectivePoolConfig(): Combines dialect defaults with connection string settings.
 // - Priority: Explicit connection string values > dialect defaults.
-// - Returns null for max pool size when pooling is disabled.
+// - When pooling is disabled: min is null and max is the explicit value (no dialect default).
 // - Parses common variants: true/false, 1/0, integer values.
 // - Uses dialect properties for setting names (e.g., "Max Pool Size").
 // - Falls back to dialect defaults when connection string is empty/invalid.
@@ -92,8 +92,8 @@ internal static class PoolingConfigReader
             ? TryGetInt(b, dialect.MinPoolSizeSettingName!)
             : null;
 
-        // If pooling is explicitly disabled, retain explicit max/min if provided but do not
-        // fall back to dialect defaults (callers use null to mean "no pool size constraint").
+        // If pooling is explicitly disabled, retain an explicit max if provided (min is dropped) but
+        // do not fall back to dialect defaults (callers use null to mean "no pool size constraint").
         // Note: ApplyPoolingDefaults will have already thrown for Standard/KeepAlive/SingleWriter
         // modes, so this path is reached only for informational reads or SingleConnection mode.
         if (poolingEnabled == false)

@@ -14,7 +14,7 @@
 //   * Parse(): Validates and creates from JSON string
 //   * FromObject<T>(): Serializes any object to JsonValue
 // - ToObject<T>(): Deserializes JsonValue back to typed object.
-// - Implicit conversions to/from string, JsonDocument, JsonElement.
+// - Implicit conversions from string, JsonDocument, JsonElement, and to string.
 // - Optimized for PostgreSQL jsonb, MySQL JSON, SQL Server JSON support.
 // - Thread-safe and immutable (though JsonDocument needs care with disposal).
 // =============================================================================

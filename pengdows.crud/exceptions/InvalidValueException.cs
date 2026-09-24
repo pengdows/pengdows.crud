@@ -5,8 +5,8 @@
 // AI SUMMARY:
 // - Thrown when a value cannot be converted or is invalid for the context.
 // - Use cases: type mismatches, out-of-range values, null where not allowed.
-// - Extends Exception directly with message-only constructor.
-// - Commonly thrown during DataReader mapping or parameter creation.
+// - Extends Exception directly; message and message+inner-exception constructors.
+// - Thrown during DataReader mapping (compiled mapper setters, GUID-from-binary coercion).
 // =============================================================================
 
 namespace pengdows.crud.exceptions;

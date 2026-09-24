@@ -304,7 +304,7 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
         var contextIdTag = activity.GetTagItem("pengdows.context_id") as string;
         if (contextIdTag == null || !Guid.TryParse(contextIdTag, out var rootId) || !_contexts.ContainsKey(rootId))
         {
-            return; // not a Track()ed context — do not record (see class-level note on isolation)
+            return; // not a Track()ed context — do not record (see the ActivityListener note in the constructor)
         }
 
         var dbSystemTag = activity.GetTagItem("db.system") as string;

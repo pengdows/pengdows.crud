@@ -36,14 +36,15 @@ public enum Uuid7ClockMode
 {
     /// <summary>
     /// PTP/PHC disciplined clocks (±0.1–1.0 ms accuracy).
-    /// Tight skew tolerance, shorter spin waits, prefer fail-fast on burst.
+    /// Tight skew tolerance, shorter spin waits (default options set FailFastOnBurst, which
+    /// generation does not currently consult).
     /// Ideal for: PTP-synced clusters (EKS Nitro, on-prem PTP).
     /// </summary>
     PtpSynced,
 
     /// <summary>
     /// Standard NTP synchronization (±1–10 ms accuracy).
-    /// Conservative skew tolerance, longer spin waits, blocking on burst.
+    /// Conservative skew tolerance, longer spin waits.
     /// Ideal for: Most cloud environments with good NTP.
     /// </summary>
     NtpSynced,
@@ -63,7 +64,8 @@ public enum Uuid7ClockMode
 /// <param name="MaxNegativeSkewMs">Maximum backward clock drift tolerated before using logical clock (ms)</param>
 /// <param name="MaxSpinCount">Maximum spin-wait cycles before sleeping on counter overflow</param>
 /// <param name="SleepMs">Sleep duration when spin limit exceeded (ms)</param>
-/// <param name="FailFastOnBurst">If true, TryNewUuid7 returns false on counter overflow instead of blocking</param>
+/// <param name="FailFastOnBurst">Stored but not currently consulted: <c>TryNewUuid7</c> always returns false on counter
+/// overflow and <c>NewUuid7</c> always waits for the next millisecond, regardless of this value</param>
 public sealed record Uuid7Options(
     Uuid7ClockMode Mode = Uuid7ClockMode.NtpSynced,
     int MaxNegativeSkewMs = 5,
@@ -80,10 +82,11 @@ public sealed record Uuid7Options(
 /// - Thread-local counters to eliminate CAS contention
 /// - Buffered randomness to reduce syscall overhead
 /// - Bounded clock drift handling
-/// - Monotonic ordering within process scope (up to 4096 IDs/ms per thread)
+/// - Monotonic ordering per thread (up to 4096 IDs/ms per thread)
 /// - Configurable clock modes (PTP, NTP, SingleInstance) for different deployment scenarios
 ///
-/// Monotonicity scope: Within a process, per logical clock. Not guaranteed across machines.
+/// Monotonicity scope: Per thread. IDs from different threads within the same millisecond are not
+/// ordered relative to each other, and ordering is not guaranteed across machines.
 /// Throughput limit: 4096 IDs/ms per thread. Multiple threads can each generate 4096 IDs/ms independently.
 /// If multiple threads exhaust counters simultaneously, each waits independently.
 /// Clock rollback: Bounded drift with logical clock fallback.
@@ -96,7 +99,7 @@ public static partial class Uuid7Optimized
     private sealed class V7ThreadState
     {
         public long LastMs;
-        public int Counter; // 0..4095
+        public int Counter; // 0..4096 (4096 = exhausted for this millisecond)
         public ushort RandA; // 12-bit rand_a
         public ulong RandB; // 62-bit rand_b
         public readonly byte[] RandomBuffer = new byte[1024]; // Buffered random bytes - larger buffer for fewer refills
@@ -298,7 +301,7 @@ public static partial class Uuid7Optimized
     }
 
     /// <summary>
-    /// Generate a UUIDv7 directly to a byte span (avoids Guid allocation in .NET 8+).
+    /// Generate a UUIDv7 and write it to a byte span.
     /// Writes in .NET Guid byte order (mixed-endian), not RFC/network order.
     /// </summary>
     /// <param name="dest">16-byte destination span</param>

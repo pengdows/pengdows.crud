@@ -22,7 +22,7 @@
 //   * DatabaseContext.cs - Core properties and disposal
 //   * DatabaseContext.Initialization.cs - Constructor and setup
 //   * DatabaseContext.ConnectionLifecycle.cs - Connection acquisition/release
-//   * DatabaseContext.Commands.cs - SqlContainer creation
+//   * DatabaseContext.Commands.cs - SqlContainer logger hook (creation lives in ContextBase)
 //   * DatabaseContext.Transactions.cs - Transaction handling
 //   * DatabaseContext.Metrics.cs - Performance metrics
 // =============================================================================
@@ -225,7 +225,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     public string Name { get; private set; }
 
-    // Expose original requested mode for internal strategy decisions
     /// <inheritdoc/>
     public string ConnectionString => _redactedConnectionString;
 
@@ -356,9 +355,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     /// <remarks>
     /// Write-once, set from the detected dialect's real ProcWrappingStyle after DB detection
-    /// completes (DatabaseContext.Initialization.cs assigns the backing field directly at each
-    /// of its detection call sites - Standard/SingleWriter, sync/async - never through this
-    /// setter). The setter is internal, not private, purely so test fixtures that construct a
+    /// completes (DatabaseContext.Initialization.cs assigns the backing field directly at both
+    /// of its detection sites - the inline Standard-mode detection and the main constructor -
+    /// never through this setter). The setter is internal, not private, purely so test fixtures that construct a
     /// context against a fake dialect (or reflectively swap the dialect post-construction) can
     /// force a specific style without going through real detection - never intended for use by
     /// real callers, which is why IDatabaseContext.ProcWrappingStyle itself is get-only.

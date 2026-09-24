@@ -3,16 +3,12 @@
 // PURPOSE: SELECT query building and entity retrieval operations.
 //
 // AI SUMMARY:
-// - BuildBaseRetrieve() - Creates SELECT with all columns, no WHERE clause.
-// - BuildRetrieve() - SELECT with WHERE id IN (...) clause.
-// - RetrieveAsync() - Loads multiple entities by their row IDs.
-// - RetrieveOneAsync(TRowID) - Loads single entity by row ID.
-// - RetrieveOneAsync(TEntity) - Loads entity by primary key values.
-// - LoadListAsync() - Executes query and maps all rows to entities.
-// - LoadSingleAsync() - Executes query and maps first row or null.
-// - SQL caching by alias and database product for performance.
+// - BuildRetrieve(ids) - SELECT with WHERE id = / IN (...) / = ANY(...) clause.
+// - BuildWhere() - Appends the row-ID WHERE clause (dedup, NULL handling, IN-list bucketing).
+// - BuildBaseRetrieve, entity/primary-key BuildRetrieve, and LoadSingle/List/StreamAsync
+//   live in BaseTableGateway; RetrieveAsync/RetrieveOneAsync live in TableGateway.Core.cs.
+// - SQL fragments are cached per dialect instance for performance.
 // - Uses dialect-specific identifier quoting and parameter formatting.
-// - Primary key lookup uses [PrimaryKey] columns, not [Id].
 // =============================================================================
 
 using System.Data;
@@ -119,10 +115,8 @@ public partial class TableGateway<TEntity, TRowID>
             var dialect1 = ((ISqlDialectProvider)sqlContainer).Dialect;
             CheckParameterLimit(sqlContainer, 1);
 
-            // Use CachedSqlTemplates (keyed per dialect) instead of _queryCache to avoid
-            // cross-dialect collision: wrappedColumnName is identical for dialects that share
-            // the same quote style (e.g. SQLite and PostgreSQL both use '"'), so a shared
-            // _queryCache key would embed the wrong parameter marker for the second dialect.
+            // Reuse the per-dialect CachedSqlTemplates' prebuilt Id-equality WHERE body when
+            // the column is the unaliased Id column.
             var template1 = GetTemplatesForDialect(dialect1);
             AppendWherePrefix(sqlContainer);
             var wrappedIdName = dialect1.WrapSimpleName(_idColumn!.Name);
@@ -184,7 +178,7 @@ public partial class TableGateway<TEntity, TRowID>
         // Single non-null value = equality (optionally OR IS NULL when hasNull)
         // Reached when: deduplication reduced multiple inputs to 1 unique ID, or
         // the caller used a non-IReadOnlyCollection enumerable.
-        // Use CachedSqlTemplates (dialect-keyed) to avoid cross-dialect collision in _queryCache.
+        // Uses the per-dialect CachedSqlTemplates' prebuilt Id-equality WHERE bodies.
         if (nonNullIds.Count == 1)
         {
             var template2 = GetTemplatesForDialect(dialect);

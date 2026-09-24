@@ -55,8 +55,8 @@ internal sealed class AccessExceptionTranslator : IDbExceptionTranslator
 
         // CONFIRMED live: the exact message a real ACE connection opened with "Mode=Read"
         // (AccessDialect.GetReadOnlyConnectionParameter) returns when a write is attempted
-        // against it — mirrors SqliteDialect/DuckDbDialect's identical ReadOnlyViolation
-        // classification.
+        // against it — mirrors SqliteExceptionTranslator/DuckDbExceptionTranslator's
+        // ReadOnlyViolation classification.
         if (message.Contains("must use an updateable query", StringComparison.OrdinalIgnoreCase))
         {
             return DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind);

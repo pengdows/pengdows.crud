@@ -73,7 +73,7 @@ namespace pengdows.crud.types.converters;
 ///
 /// // Retrieve and use
 /// var retrieved = await helper.RetrieveOneAsync(device.Id);
-/// Console.WriteLine($"MAC: {retrieved.MacAddress}");  // "08:00:2b:01:02:03"
+/// Console.WriteLine($"MAC: {retrieved.MacAddress}");  // "08:00:2B:01:02:03"
 /// </code>
 /// </example>
 internal sealed class MacAddressConverter : AdvancedTypeConverter<MacAddress>

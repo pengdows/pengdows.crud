@@ -24,7 +24,7 @@ public sealed class ConnectionLocalState : IConnectionLocalState
     private const int _maxPrepared = 32;
 
     /// <summary>
-    /// Computes a hash of the command's SQL text and parameter types for shape caching
+    /// Returns the shape key for prepare caching: the command's SQL text (not a hash; parameter types are not included)
     /// </summary>
     public static string ComputeShapeHash(DbCommand cmd)
     {
@@ -32,7 +32,7 @@ public sealed class ConnectionLocalState : IConnectionLocalState
     }
 
     /// <summary>
-    /// Checks if the command shape matches the last prepared shape
+    /// Checks whether the shape is among the shapes prepared on this connection (bounded, oldest evicted first)
     /// </summary>
     public bool IsAlreadyPreparedForShape(string shapeHash)
     {

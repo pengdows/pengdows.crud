@@ -7,7 +7,7 @@ namespace pengdows.crud.exceptions.translators;
 /// </summary>
 /// <remarks>
 /// Detection order: SQLSTATE (23505/23503/23502/23514/25006) → message patterns
-/// (constraint violations, then read-only) → timeout → fallback.
+/// (constraint violations, read-only, write-write conflict, file lock) → timeout → fallback.
 /// SQLSTATE and message patterns are checked first because DuckDB error messages include
 /// the violating row values, which may contain user data such as "timeout" and would
 /// otherwise trigger a false-positive timeout classification.

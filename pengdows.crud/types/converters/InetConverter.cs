@@ -74,7 +74,7 @@ namespace pengdows.crud.types.converters;
 /// // Retrieve and use
 /// var retrieved = await helper.RetrieveOneAsync(server.Id);
 /// Console.WriteLine($"IP: {retrieved.IpAddress}");  // "192.168.1.100/24"
-/// Console.WriteLine($"Prefix: {retrieved.IpAddress.Prefix}");  // 24
+/// Console.WriteLine($"Prefix: {retrieved.IpAddress.PrefixLength}");  // 24
 /// </code>
 /// </example>
 internal sealed class InetConverter : AdvancedTypeConverter<Inet>

@@ -6,13 +6,13 @@
 // - Creates IConnectionStrategy implementations based on DbMode:
 //   * Standard - Ephemeral connections with provider pooling (default)
 //   * PreventDatabaseUnload - Standard + sentinel connection to prevent unload
-//   * SingleWriter - Standard lifecycle with governor-enforced single writer (file SQLite)
-//   * SingleConnection - All work on one connection (:memory: SQLite)
-// - Database-to-strategy mapping based on connection string/provider:
-//   * SQL Server/PostgreSQL/MySQL -> Standard
-//   * LocalDB -> PreventDatabaseUnload
-//   * SQLite file -> SingleWriter
-//   * SQLite :memory: -> SingleConnection
+//   * SingleWriter - Standard lifecycle with governor-enforced single writer (file SQLite/DuckDB/Access)
+//   * SingleConnection - All work on one connection (isolated :memory: SQLite/DuckDB)
+// - The mode itself is resolved beforehand by ISqlDialect.CoerceConnectionMode (DbMode.Best):
+//   * Client-server databases -> Standard
+//   * SQL Server LocalDB -> PreventDatabaseUnload
+//   * SQLite/DuckDB/Access file (and shared in-memory) -> SingleWriter
+//   * Isolated SQLite/DuckDB :memory: -> SingleConnection
 // =============================================================================
 
 using pengdows.crud.enums;
@@ -32,10 +32,10 @@ namespace pengdows.crud.strategies.connection;
 ///    └─ In-memory databases where connection loss = data loss
 ///
 /// 2. SingleWriter - StandardConnectionStrategy + governor (write slot = 1)
-///    └─ Databases with single-writer file-based limitations (SQLite, DuckDB)
+///    └─ Databases with single-writer file-based limitations (SQLite, DuckDB, Access)
 ///
 /// 3. PreventDatabaseUnload - Standard + one unused sentinel connection
-///    └─ Embedded databases that benefit from staying loaded
+///    └─ SQL Server LocalDB, which otherwise unloads when its last connection closes
 ///
 /// 4. Standard - Pure ephemeral connections with provider pooling
 ///    └─ Production databases with proper connection pooling
@@ -43,13 +43,11 @@ namespace pengdows.crud.strategies.connection;
 /// DATABASE-TO-STRATEGY MAPPING:
 /// - SQLite/DuckDB isolated :memory: → SingleConnection (each connection owns its own database)
 /// - SQLite/DuckDB shared in-memory (Mode=Memory;Cache=Shared) → SingleWriter (governed writer)
-/// - File SQLite → SingleWriter (write-serialized via governor)
+/// - File SQLite/DuckDB/Access → SingleWriter (write-serialized via governor)
 /// - LocalDB → PreventDatabaseUnload (prevent shutdown between operations)
-/// - SQL Server/PostgreSQL/MySQL → Standard (connection pooling)
-///
-/// FUTURE ARCHITECTURAL DIRECTION:
-/// Each strategy should eventually handle its own dialect detection and initialization,
-/// removing this logic from DatabaseContext constructor.
+/// - Client-server databases → Standard (connection pooling)
+/// (This factory only maps an already-resolved DbMode; the mapping above is applied by
+/// ISqlDialect.CoerceConnectionMode.)
 ///
 /// DO NOT MODIFY: This factory determines connection behavior for all database operations
 /// </summary>

@@ -8,12 +8,12 @@
 //   * INSERT ... ON CONFLICT for upserts (no MERGE support)
 //   * Parameter marker: @ (at sign)
 //   * Identifier quoting: "name" (double quotes)
-//   * Max parameters: 999 (SQLITE_MAX_VARIABLE_NUMBER default)
+//   * Max parameters: 999, or 32766 on 3.32+ (SQLITE_MAX_VARIABLE_NUMBER defaults)
 //   * Prepared statements enabled
 // - Connection mode detection:
-//   * :memory: -> SingleConnection mode
+//   * Isolated :memory: -> SingleConnection mode
 //   * File mode -> SingleWriter mode
-//   * Shared cache -> appropriate mode
+//   * Shared-cache in-memory -> SingleWriter mode
 // - Detects System.Data.SQLite vs Microsoft.Data.Sqlite provider.
 // - RETURNING clause for getting generated IDs (SQLite 3.35+).
 // - Savepoint support for nested transaction semantics.

@@ -6,7 +6,8 @@
 // - Inherits from PostgreSqlDialect for high compatibility.
 // - Supports CockroachDB's distributed SQL features.
 // - Identifies itself via the "Cockroach" string in the version information.
-// - Enables native UPSERT support and distributed transaction tuning.
+// - Upserts use the inherited INSERT ... ON CONFLICT path (MERGE is disabled for CockroachDB);
+//   adds client_encoding/lock_timeout session settings and startup options.
 // =============================================================================
 
 using System.Collections.Generic;

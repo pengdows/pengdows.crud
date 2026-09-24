@@ -6,7 +6,7 @@
 // - Designates a column used to uniquely identify a row after insertion.
 // - Used by TableGateway when the database doesn't support RETURNING/OUTPUT
 //   and session-scoped identity functions are unreliable.
-// - TableGateway generates a unique value (Guid or string), inserts it,
+// - TableGateway generates a unique string token (Guid.NewGuid().ToString("N")), inserts it,
 //   then performs a secondary lookup to retrieve the generated identity.
 // =============================================================================
 

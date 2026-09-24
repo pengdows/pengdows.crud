@@ -3,7 +3,9 @@
 // PURPOSE: Marks a property as the "created on" timestamp audit field.
 //
 // AI SUMMARY:
-// - Set automatically during CreateAsync to DateTime.UtcNow.
+// - Set automatically during CreateAsync to the audit timestamp (the resolver's value when an
+//   AuditValueResolver is configured, otherwise DateTime.UtcNow). Under the default
+//   AuditCreationPolicy an existing non-default value is preserved.
 // - Does NOT require AuditValueResolver (timestamp only, not user-based).
 // - Never modified after initial creation (non-updateable).
 // - Typically a DateTime or DateTimeOffset property.
@@ -20,7 +22,7 @@ namespace pengdows.crud.attributes;
 /// </para>
 /// <para>
 /// <strong>No AuditValueResolver Required:</strong> Unlike <see cref="CreatedByAttribute"/>,
-/// this attribute works without an audit resolver (uses <see cref="DateTime.UtcNow"/>).
+/// this attribute works without an audit resolver (falls back to <see cref="DateTime.UtcNow"/>).
 /// </para>
 /// <para>
 /// <strong>Behavior:</strong> Set on CREATE, never modified on UPDATE.

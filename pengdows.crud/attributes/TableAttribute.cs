@@ -3,7 +3,7 @@
 // PURPOSE: Marks a class as an entity mapped to a database table.
 //
 // AI SUMMARY:
-// - Required on all entity classes used with TableGateway/TableGateway.
+// - Required on all entity classes used with TableGateway/PrimaryKeyTableGateway.
 // - Specifies the database table name and optional schema.
 // - TypeMapRegistry reads this to build TableInfo metadata.
 // - Example: [Table("orders", "dbo")] maps to dbo.orders

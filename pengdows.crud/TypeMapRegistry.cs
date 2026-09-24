@@ -11,8 +11,7 @@
 //   * Register<T>() - Explicitly pre-register (optional, for early validation)
 //   * Clear() - Clears cache (mainly for testing)
 // - Thread-safe: uses ConcurrentDictionary for caching.
-// - Instance property provides singleton access, but instances can be created
-//   for isolated testing scenarios.
+// - No singleton: each DatabaseContext creates its own instance.
 // - Build process:
 //   1. Reads [Table] attribute for table name and schema
 //   2. Scans public properties for [Column] attributes
@@ -51,8 +50,9 @@ namespace pengdows.crud;
 /// <see cref="DataReaderMapper"/> for efficient operations.
 /// </para>
 /// <para>
-/// <strong>Thread Safety:</strong> This class is fully thread-safe. Concurrent calls to
-/// <see cref="GetTableInfo{T}"/> are safe and will not duplicate metadata building.
+/// <strong>Thread Safety:</strong> This class is thread-safe. Concurrent first calls to
+/// <see cref="GetTableInfo{T}"/> for the same type may each build metadata, but only one
+/// result is cached and returned to all callers.
 /// </para>
 /// <para>
 /// <strong>Instance scope:</strong> Create a new <see cref="TypeMapRegistry"/> per <see cref="IDatabaseContext"/>
@@ -306,14 +306,14 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
 
         if (ci.EnumAsString)
         {
-            // Pre-compile a delegate that unboxes object → TEnum and calls EnumStringCache<TEnum>.GetOrAdd()
+            // Pre-compile a delegate that unboxes object → TEnum and calls EnumLiteralCache<TEnum>.GetOrAdd()
             // directly (JIT-level call, no reflection overhead per row).
             ci.EnumStringConverter = ColumnInfo.BuildEnumStringConverter(ci.EnumType);
         }
 
         if (ci.EnumAsString)
         {
-            // Pre-compile a delegate that unboxes object → TEnum and calls EnumStringCache<TEnum>.GetOrAdd()
+            // Pre-compile a delegate that unboxes object → TEnum and calls EnumLiteralCache<TEnum>.GetOrAdd()
             // directly (JIT-level call, no reflection overhead per row).
             ci.EnumStringConverter = ColumnInfo.BuildEnumStringConverter(ci.EnumType);
         }

@@ -11,7 +11,7 @@
 //   * Others: Raw Range<T> value
 // - ConvertToProvider(): Returns bracket notation string for PostgreSQL.
 // - TryConvertFromProvider(): Handles Range<T>, string, NpgsqlRange<T>, Tuple<T?,T?>.
-// - Parse(): Parses "[1,10)", "(,100]", "[5,]", "empty" formats.
+// - Parse(): Parses "[1,10)", "(,100]", "[5,]" formats (the literal "empty" is not supported).
 // - Common types: int4range, int8range, numrange, daterange, tsrange, tstzrange.
 // - Thread-safe and immutable value objects.
 // =============================================================================
@@ -39,7 +39,7 @@ namespace pengdows.crud.types.converters;
 /// <para><strong>Supported conversions from database:</strong></para>
 /// <list type="bullet">
 /// <item><description>Range&lt;T&gt; → Range&lt;T&gt; (pass-through)</description></item>
-/// <item><description>string → Range&lt;T&gt; (parses "[1,10)", "(,100]", "[5,]", "empty", etc.)</description></item>
+/// <item><description>string → Range&lt;T&gt; (parses "[1,10)", "(,100]", "[5,]", etc.; the literal "empty" is not supported)</description></item>
 /// <item><description>NpgsqlRange&lt;T&gt; → Range&lt;T&gt; (converts Npgsql provider-specific type via reflection)</description></item>
 /// <item><description>Tuple&lt;T?, T?&gt; → Range&lt;T&gt; (simple min/max tuple)</description></item>
 /// </list>
@@ -51,7 +51,6 @@ namespace pengdows.crud.types.converters;
 /// <item><description>(lower,upper] - Lower exclusive, upper inclusive</description></item>
 /// <item><description>[lower,] - Lower bound only (upper infinite)</description></item>
 /// <item><description>(,upper] - Upper bound only (lower infinite)</description></item>
-/// <item><description>empty - Empty range (no values)</description></item>
 /// </list>
 /// <para><strong>Common PostgreSQL range types:</strong></para>
 /// <list type="bullet">

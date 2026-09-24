@@ -40,15 +40,15 @@
 // - MERGE: CONFIRMED REJECTED outright at the MERGE keyword itself (SQLCODE -104, "Token unknown
 //   ... MERGE"). SupportsMerge left at the base class's default false — no override needed.
 // - Batch insert: CONFIRMED REJECTED — the ANSI multi-row VALUES clause fails with SQLCODE -104
-//   at the comma. Falls back to one INSERT per entity, same as SQLite/MySQL/MariaDB/Firebird/
-//   Informix/HANA.
+//   at the comma. Falls back to one INSERT per entity, same as Firebird/Informix/HANA/Access/
+//   Sybase ASE.
 // - Generated keys: no IDENTITY columns (CONFIRMED REJECTED, SQLCODE -104 at GENERATED), no
 //   CREATE SEQUENCE / NEXT VALUE FOR (CONFIRMED REJECTED, SQLCODE -104 at SEQUENCE), no INSERT ...
 //   RETURNING (CONFIRMED REJECTED, SQLCODE -104 at RETURNING) — this is the classic pre-Firebird
 //   InterBase 6 generator model throughout. The working mechanism is the original
-//   "CREATE GENERATOR name" + "GEN_ID(name, 1)" pair, CONFIRMED live. GeneratedKeyPlan.
-//   PrefetchSequence already has real production usage on this branch (OracleDialect uses it
-//   too), so this is a proven, not experimental, mechanism here.
+//   "CREATE GENERATOR name" + "GEN_ID(name, 1)" pair, CONFIRMED live, via GeneratedKeyPlan.
+//   PrefetchSequence (InterBase is the only dialect on this branch that resolves to it;
+//   OracleDialect overrides GetGeneratedKeyPlan to Returning).
 // - Procedures: SELECT * FROM proc(args) (read) / EXECUTE PROCEDURE proc(args) (write), both
 //   CONFIRMED live against a real SUSPEND-based selectable procedure — matches
 //   ProcWrappingStyle.ExecuteProcedure (Firebird's own style).
@@ -148,8 +148,8 @@ internal sealed class InterBaseDialect : SqlDialect
     public override bool SupportsLimitOffset => false;
 
     // CONFIRMED live: the ANSI multi-row VALUES clause is rejected (SQLCODE -104 at the comma).
-    // Falls back to one BuildCreate per entity, same safe path SQLite/MySQL/MariaDB/Firebird/
-    // Informix/HANA use for the same reason.
+    // Falls back to one BuildCreate per entity, same safe path Firebird/Informix/HANA/Access/
+    // Sybase ASE use.
     public override bool SupportsBatchInsert => false;
 
     // CONFIRMED live: "SELECT * FROM proc(args)" (read) / "EXECUTE PROCEDURE proc(args)" (write)
@@ -262,9 +262,8 @@ internal sealed class InterBaseDialect : SqlDialect
     /// (all CONFIRMED REJECTED live — see file-level AI SUMMARY) — the base class's
     /// SupportsInsertReturning/HasSessionScopedLastIdFunction-driven default would otherwise fall
     /// all the way through to CorrelationToken. InterBase's real, working mechanism is the classic
-    /// InterBase 6 "CREATE GENERATOR name" + "GEN_ID(name, 1)" pair (CONFIRMED live), which
-    /// GeneratedKeyPlan.PrefetchSequence already has real production usage for on this branch
-    /// (OracleDialect uses the same plan).
+    /// InterBase 6 "CREATE GENERATOR name" + "GEN_ID(name, 1)" pair (CONFIRMED live), via
+    /// GeneratedKeyPlan.PrefetchSequence.
     /// </summary>
     public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.PrefetchSequence;
 

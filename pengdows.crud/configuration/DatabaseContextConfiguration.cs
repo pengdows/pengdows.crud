@@ -11,10 +11,11 @@
 //   * DbMode: Best (auto-detect), Standard, PreventDatabaseUnload, SingleWriter, SingleConnection
 //   * ReadWriteMode: ReadWrite, ReadOnly (WriteOnly converted to ReadWrite)
 // - Statement preparation:
-//   * ForceManualPrepare, DisablePrepare: Override provider defaults
+//   * PrepareMode (CommandPrepareMode Auto/Always/Never): Override provider defaults
 // - Connection governor (admission control — NOT ADO.NET pool sizing):
 //   * MaxConcurrentWrites: Governor slot limit for write connections
 //   * MaxConcurrentReads: Governor slot limit for read connections
+//   * MaxQueuedWrites / MaxQueuedReads: Bound on callers waiting for a governor slot
 //   * PoolAcquireTimeout: How long to wait for a governor slot
 //   NOTE: These do NOT set ADO.NET Max Pool Size. Configure ADO.NET pool size
 //         in the connection string and keep these values aligned with it.

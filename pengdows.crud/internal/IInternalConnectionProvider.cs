@@ -4,10 +4,12 @@
 //
 // AI SUMMARY:
 // - Internal interface hiding connection management implementation details.
-// - Single method: GetConnection(ExecutionType, isShared).
+// - Methods: GetConnection/GetConnectionAsync(ExecutionType, isShared), GetLock(),
+//   CloseAndDisposeConnection/CloseAndDisposeConnectionAsync.
 // - ExecutionType: Read or Write determines connection selection.
-// - isShared: Hints connection may be shared (affects pooling behavior).
-// - Implemented by DatabaseContext, used by SqlContainer and TableGateway.
+// - isShared: marks the connection as shared (TrackedConnection then hands out a real lock).
+// - Implemented by DatabaseContext and TransactionContext, used by SqlContainer
+//   (directly and via InternalConnectionExtensions).
 // - Keeps IDatabaseContext public API clean of connection management.
 // - Returns ITrackedConnection with locking and lifecycle tracking.
 // =============================================================================

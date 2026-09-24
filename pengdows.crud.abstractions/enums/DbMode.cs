@@ -15,12 +15,11 @@ namespace pengdows.crud.enums;
 /// </para>
 /// <para>
 /// <b>Mode/Database Matching:</b> Using a mode that doesn't match your database characteristics
-/// is safe for correctness but may cause performance issues. For example:
-/// <list type="bullet">
-///   <item><description>SQL Server with SingleConnection: Safe but serializes all operations (poor throughput)</description></item>
-///   <item><description>SQLite file with Standard: Safe but may cause SQLITE_BUSY errors under write contention</description></item>
-/// </list>
-/// pengdows.crud will log warnings when detecting mode/database mismatches.
+/// is safe for correctness but may cause performance issues — for example, SQL Server with
+/// SingleConnection is safe but serializes all operations (poor throughput). Where a requested mode
+/// is unsafe for the database (e.g. Standard on SQLite/DuckDB, any mode on an isolated in-memory
+/// database, any mode on SQL Server LocalDB), it is coerced to a safe mode instead.
+/// pengdows.crud logs a warning when it coerces a mode or detects a mode/database mismatch.
 /// </para>
 /// </remarks>
 public enum DbMode
@@ -51,7 +50,7 @@ public enum DbMode
     /// </list>
     /// <para><b>⚠️ Warnings:</b></para>
     /// <list type="bullet">
-    ///   <item><description>SQLite file databases without WAL: May experience SQLITE_BUSY errors under write contention. Consider <see cref="SingleWriter"/> mode or enable WAL (PRAGMA journal_mode=WAL).</description></item>
+    ///   <item><description>SQLite and DuckDB: an explicit Standard request is coerced to <see cref="SingleWriter"/> (or <see cref="SingleConnection"/> for isolated in-memory). Access honors an explicit Standard request but logs a warning, since concurrent writers there fail with lock conflicts.</description></item>
     /// </list>
     /// </remarks>
     Standard = 0,
@@ -71,8 +70,11 @@ public enum DbMode
     /// <para><b>Best For:</b></para>
     /// <list type="bullet">
     ///   <item><description>SQL Server Express LocalDB (prevents automatic database unload)</description></item>
-    ///   <item><description>Development environments with embedded databases</description></item>
-    ///   <item><description>Any database where keeping it "loaded" improves startup latency</description></item>
+    ///   <item><description>Any client-server database where keeping it "loaded" improves startup latency</description></item>
+    /// </list>
+    /// <para><b>Not honored for:</b></para>
+    /// <list type="bullet">
+    ///   <item><description>SQLite, DuckDB, and Access: coerced to <see cref="SingleWriter"/> (or <see cref="SingleConnection"/> for isolated in-memory)</description></item>
     /// </list>
     /// <para><b>Operational Characteristics:</b></para>
     /// <list type="bullet">
@@ -91,7 +93,7 @@ public enum DbMode
 
     /// <summary>
     /// Serializes writes via a pool governor (WriteSlots=1); both reads and writes use ephemeral connections.
-    /// Designed for databases with single-writer constraints (e.g., file-based SQLite, DuckDB).
+    /// Designed for databases with single-writer constraints (e.g., file-based SQLite, DuckDB, Access).
     /// </summary>
     /// <remarks>
     /// <para><b>Behavior:</b></para>
@@ -106,11 +108,12 @@ public enum DbMode
     /// <list type="bullet">
     ///   <item><description>File-based SQLite databases (including those with WAL mode enabled)</description></item>
     ///   <item><description>DuckDB file databases</description></item>
+    ///   <item><description>Microsoft Access (.accdb/.mdb) files</description></item>
     ///   <item><description>Named in-memory databases with shared cache (e.g., SQLite "mode=memory;cache=shared")</description></item>
     /// </list>
     /// <para><b>Operational Characteristics:</b></para>
     /// <list type="bullet">
-    ///   <item><description>Avoids SQLITE_BUSY errors by coordinating writes through one connection</description></item>
+    ///   <item><description>Avoids SQLITE_BUSY/lock-conflict errors by admitting one writer at a time through the governor</description></item>
     ///   <item><description>Write throughput is serialized (one write at a time)</description></item>
     ///   <item><description>Read throughput is concurrent (multiple simultaneous reads)</description></item>
     ///   <item><description>WAL mode note: SQLite with WAL allows many readers + one writer, NOT multiple concurrent writers</description></item>
@@ -167,7 +170,8 @@ public enum DbMode
     ///   <item><description>SQLite file or "mode=memory;cache=shared" → <see cref="SingleWriter"/> (single-writer database)</description></item>
     ///   <item><description>DuckDB :memory: → <see cref="SingleConnection"/></description></item>
     ///   <item><description>DuckDB file → <see cref="SingleWriter"/></description></item>
-    ///   <item><description>SQL Server LocalDB → <see cref="PreventDatabaseUnload"/> (prevents unload)</description></item>
+    ///   <item><description>Access → <see cref="SingleWriter"/></description></item>
+    ///   <item><description>SQL Server LocalDB → <see cref="PreventDatabaseUnload"/> (prevents unload; forced for LocalDB whatever mode is requested)</description></item>
     ///   <item><description>All other databases → <see cref="Standard"/> (client-server databases)</description></item>
     /// </list>
     /// <para><b>Benefits:</b></para>

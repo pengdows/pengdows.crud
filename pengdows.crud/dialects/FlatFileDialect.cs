@@ -75,7 +75,7 @@ internal class FlatFileDialect : SqlDialect
     /// pengdows.flatfile has no stored-procedure/trigger/control-flow support at all (confirmed:
     /// its README lists this under "Not supported"). <see cref="ProcWrappingStyle.None"/> is the
     /// base default already, but this override documents that the value was verified, not left
-    /// unexamined — see CLAUDE.md checklist item 12 on why an unexamined <c>None</c> is dangerous.
+    /// unexamined.
     /// </summary>
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 

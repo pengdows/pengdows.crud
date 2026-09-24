@@ -7,8 +7,8 @@
 //
 // AI SUMMARY:
 // - Shared fields: context, dialect, tableInfo, caches, audit setters.
-// - protected constructor: accepts IDatabaseContext + optional audit resolver.
-// - Initialize(): sets up all shared state (no [Id]-specific logic).
+// - protected constructor: accepts IDatabaseContext + optional audit resolver and
+//   sets up all shared state (no [Id]-specific logic).
 // - LoadSingleAsync, LoadListAsync, LoadStreamAsync: execute ISqlContainer + map rows.
 // - BuildWrappedTableName, GetDialect: shared SQL helpers.
 // - GetCachedInsertableColumns, ChunkList, CheckParameterLimit: shared batch helpers.
@@ -82,7 +82,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     internal IColumnInfo? _versionColumn;
     private TypeCoercionOptions _coercionOptions = TypeCoercionOptions.Default;
 
-    // Cached compiled setters for audit fields — initialized once in Initialize()
+    // Cached compiled setters for audit fields — initialized once in the constructor
     private Action<object, object?>? _auditLastUpdatedOnSetter;
     private Action<object, object?>? _auditLastUpdatedBySetter;
     private Action<object, object?>? _auditCreatedOnSetter;
@@ -148,7 +148,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     /// <summary>
     /// Base constructor: stores audit resolver, optionally updates static logger,
-    /// then calls <see cref="Initialize"/>.
+    /// then resolves the dialect, table metadata, wrapped table name, and audit setters.
     /// </summary>
     protected BaseTableGateway(
         IDatabaseContext databaseContext,
@@ -222,10 +222,6 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             }
         }
     }
-
-    // =========================================================================
-    // Initialization (Internal helpers only)
-    // =========================================================================
 
     // =========================================================================
     // Load methods

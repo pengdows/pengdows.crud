@@ -76,13 +76,16 @@ public interface IPrimaryKeyTableGateway<TEntity>
         IDatabaseContext? context = null);
 
     /// <summary>
-    /// Builds a SELECT … WHERE [PrimaryKey] IN (…) for the given entity list.
+    /// Builds a SELECT … WHERE (pk1 = … AND pk2 = …) OR … over the <c>[PrimaryKey]</c> values of
+    /// the given entity list. Throws <see cref="ArgumentException"/> if the list is null or empty.
     /// </summary>
     ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects, string alias,
         IDatabaseContext? context = null);
 
     /// <summary>
-    /// Builds a SELECT … WHERE [PrimaryKey] IN (…) for the given entity list, without alias.
+    /// Builds a SELECT … WHERE (pk1 = … AND pk2 = …) OR … over the <c>[PrimaryKey]</c> values of
+    /// the given entity list, without alias. Throws <see cref="ArgumentException"/> if the list is
+    /// null or empty.
     /// </summary>
     ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? listOfObjects,
         IDatabaseContext? context = null);
@@ -230,7 +233,8 @@ public interface IPrimaryKeyTableGateway<TEntity>
 
     /// <summary>
     /// Appends a WHERE clause to <paramref name="sc"/> using <c>[PrimaryKey]</c> column values
-    /// from each entity in <paramref name="listOfObjects"/>.
+    /// from each entity in <paramref name="listOfObjects"/> (one AND-ed key clause per entity,
+    /// OR-ed together). Throws <see cref="ArgumentException"/> if the list is null or empty.
     /// </summary>
     void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? listOfObjects, ISqlContainer sc,
         string alias = "");
@@ -256,7 +260,8 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <summary>
     /// Returns <c>SELECT COUNT(*)</c> where <paramref name="column"/> equals <paramref name="value"/>,
     /// optionally combined with an IS NULL or IS NOT NULL check on a second column.
-    /// Exactly one of <paramref name="andWhereNull"/> or <paramref name="andWhereNotNull"/> may be set.
+    /// At most one of <paramref name="andWhereNull"/> or <paramref name="andWhereNotNull"/> is applied;
+    /// if both are set, <paramref name="andWhereNull"/> takes precedence.
     /// </summary>
     ValueTask<long> CountWhereEqualsAsync(string column, string value,
         string? andWhereNull = null, string? andWhereNotNull = null,

@@ -26,12 +26,12 @@ Traditional classifications place data access tools on a 1D spectrum from **Heav
 2. **NOT a Micro-ORM / Mapper like Dapper**: While it offers zero-overhead mapping, it provides full **execution lifecycle governance** (`PoolGovernor`, adaptive `DbMode` coercion, turnstiles, ANSI session normalization, dialect capability synthesis, and audit rollback) that Dapper completely ignores.
 3. **NOT a Query Builder like jOOQ / SqlKata**: `ISqlContainer` allows SQL building, but its primary duty is binding SQL, parameters, and intent to a governed connection lifecycle and transaction lease.
 4. **Core Thesis**: `DatabaseContext` is a **singleton execution coordinator** that acts as the single execution authority for pools, admission, dialects, transactions, and metrics.
-5. **Canonical Comparison Reference**: See [`docs/DAL_TAXONOMY_AND_COMPARISON.md`](./docs/DAL_TAXONOMY_AND_COMPARISON.md) for full comparisons across .NET, Java, Go, Rust, and Python.
+5. **Canonical Comparison Reference**: See [`docs/positioning/dal-taxonomy-and-comparison.md`](./docs/positioning/dal-taxonomy-and-comparison.md) for full comparisons across .NET, Java, Go, Rust, and Python.
 
 ## Project Overview
 
 
-pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8. The project consists of multiple components:
+pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8 and .NET 10 (every project in `pengdows.crud.sln` targets `net8.0;net10.0` except `tools/pengdows.crud.analyzers`, which targets `netstandard2.0`). The project consists of multiple components:
 
 - `pengdows.crud` - Core library with TableGateway, DatabaseContext, and SQL dialects
 - `pengdows.crud.abstractions` - Interfaces and enums (all public APIs live here)
@@ -40,7 +40,7 @@ pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for
 - `pengdows.crud.IntegrationTests` - Database-specific integration tests
 - `testbed` - Integration testing with real databases via Testcontainers
 - `benchmarks/CrudBenchmarks/` - BenchmarkDotNet suite for performance validation
-- `tools/` - Utilities (interface-api-check, verify-novendor, run-tests-in-container.sh)
+- `tools/` - Utilities (interface-api-check, verify-novendor, pengdows.crud.analyzers, run-tests-in-container.sh)
 
 ## Breaking Changes from 1.0
 
@@ -98,7 +98,7 @@ IAsyncEnumerable<TEntity> stream = RetrieveStreamAsync(ids);
 
 `PrimaryKeyTableGateway<TEntity>` (`IPrimaryKeyTableGateway<TEntity>`) is for entities identified **solely by `[PrimaryKey]` columns** with **no surrogate `[Id]` column**. Use it for junction tables, legacy schemas, and DBA-owned tables with natural keys.
 
-**Throws `SqlGenerationException` at construction** if the entity has no `[PrimaryKey]` columns.
+**Throws `InvalidOperationException` at construction** if the entity has no `[PrimaryKey]` columns.
 
 **Tier 1 — Build methods:**
 ```csharp
@@ -165,7 +165,7 @@ await gateway.BatchDeleteAsync(new[] { item });
 - Program to interfaces; concrete types satisfy contracts in `pengdows.crud.abstractions`
 - Entities use attributes for table/column mapping (`[Table]`, `[Column]`, `[Id]`, `[PrimaryKey]`)
 - Audit fields via `[CreatedBy]`/`[CreatedOn]`, `[LastUpdatedBy]`/`[LastUpdatedOn]` attributes
-- SQL dialect abstraction supports 15 databases (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, Aurora PostgreSQL, TimescaleDB)
+- SQL dialect abstraction covers every `SupportedDatabase` value (SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, Aurora PostgreSQL, SingleStore, Db2, FlatFile, SybaseASE, Spanner, Informix, SapHana, InterBase, Access); PostgreSQL-compatible forks such as TimescaleDB use `PostgreSql` — see `docs/supported-databases.md`
 - Connection strategies: Standard, PreventDatabaseUnload, SingleWriter, SingleConnection
 - Multi-tenancy via context-per-tenant (not query filtering)
 
@@ -182,18 +182,20 @@ dotnet build pengdows.crud.sln -c Release
 dotnet test -c Release --results-directory TestResults --logger trx
 
 # Run specific test by name
-dotnet test --filter "MethodName=TestMethodName"
+dotnet test --filter "FullyQualifiedName~TestMethodName"
 
 # Run tests for specific class
-dotnet test --filter "ClassName=TableGatewayTests"
+dotnet test --filter "FullyQualifiedName~TableGatewayCoreBehaviorTests"
 
 # Test with coverage (CI-like)
-dotnet test -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
+dotnet test -c Release --filter "FullyQualifiedName!~pengdows.crud.IntegrationTests" \
+  --collect:"XPlat Code Coverage" --results-directory TestResults --settings coverage.runsettings
 
 # Run integration suite (requires Docker)
 dotnet run -c Release -f net10.0 --project testbed
 
-# Verify API baseline (run after any interface changes)
+# Regenerate API baseline (run after intentional interface changes; the abstractions build
+# and CI run the same tool with --verify instead of --generate)
 dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Release -- \
   --generate \
   --baseline pengdows.crud.abstractions/ApiBaseline/interfaces.txt \
@@ -213,7 +215,7 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 
 ## Coding Style & Naming Conventions
 
-- C# 12 on `net8.0`; `Nullable` and `ImplicitUsings` enabled.
+- Targets `net8.0;net10.0` with the SDK-default language version per target (no `LangVersion` override); `Nullable` and `ImplicitUsings` enabled.
 - File-scoped namespaces; keep lowercase namespaces (`pengdows.crud.*`).
 - Indentation: 4 spaces; follow existing brace style; prefer expression-bodied members when clearer.
 - Minimize public APIs; make types/members `internal` when possible. `WarningsAsErrors=true`.
@@ -295,9 +297,9 @@ public int Version { get; set; }
 **`PrimaryKeyTableGateway<T>`** — always uses `[PrimaryKey]` columns as the conflict key. Throws `NotSupportedException` if the entity has no updateable non-key columns (pure junction table with only PK columns), unless the dialect supports pure-key upsert (Firebird).
 
 **SQL generated depends on database:**
-- SQL Server/Oracle: `MERGE`
-- PostgreSQL: `INSERT ... ON CONFLICT`
-- MySQL/MariaDB: `INSERT ... ON DUPLICATE KEY UPDATE`
+- `MERGE` when the dialect's `SupportsMerge` is true (SQL Server, Oracle, PostgreSQL 15+, DuckDB 1.4+, …)
+- otherwise `INSERT ... ON CONFLICT` (PostgreSQL < 15, YugabyteDB, CockroachDB, SQLite, …)
+- otherwise `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB)
 
 ## CRITICAL: Audit Field Behavior
 
@@ -370,7 +372,7 @@ Enum storage format is determined by `DbType` in the `[Column]` attribute:
 
 `RetrieveOneAsync(TEntity)` uses `[PrimaryKey]` columns to find the row.
 
-**If no `[PrimaryKey]` defined:** Throws `"No primary keys found for type {TypeName}"`
+**If no `[PrimaryKey]` defined:** Throws `InvalidOperationException` `"No primary keys found for type {TypeName}"`
 
 Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
 
@@ -394,7 +396,7 @@ Use `RetrieveOneAsync(TRowID id)` for lookup by pseudo key instead.
 - `AddParameter(DbParameter parameter)` - Add pre-constructed parameter
 
 **Query Building:**
-- `Query` property - StringBuilder for building SQL
+- `Query` property - `ISqlQueryBuilder` (fluent `Append`/`AppendLine`/`AppendFormat`/`Replace`/`Clear`) for building SQL
 - `HasWhereAppended` - Indicates if WHERE clause already exists
 - `WrapObjectName(string name)` - Quote identifiers safely (handles schema and alias prefixes)
 - `MakeParameterName(DbParameter dbParameter)` - Format parameter name per dialect
@@ -423,8 +425,9 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 ### DatabaseContext Key Methods
 
 **Transaction Management:**
-- `BeginTransaction(IsolationLevel? isolationLevel = null, ...)` - Start transaction with native isolation level
-- `BeginTransaction(IsolationProfile isolationProfile, ...)` - Start transaction with portable isolation profile
+- `BeginTransaction(IsolationLevel? isolationLevel = null, ExecutionType executionType = ExecutionType.Write)` - Start transaction with native isolation level; an unsupported level is raised to the weakest supported stronger level, never lowered (throws `InvalidOperationException` if none exists)
+- `BeginTransaction(IsolationProfile isolationProfile, ExecutionType executionType = ExecutionType.Write)` - Start transaction with portable isolation profile; throws `TransactionModeNotSupportedException` if the database can't meet the profile's guarantee
+- `BeginTransactionAsync(...)` - Same overloads plus `CancellationToken`, returning `ValueTask<ITransactionContext>`
 
 **SQL Container Creation:**
 - `CreateSqlContainer(string? query = null)` - Create new SQL builder
@@ -476,11 +479,15 @@ try
 }
 catch
 {
-    txn.Rollback();
+    if (!txn.IsCompleted) // a failed Commit() has already completed the transaction
+    {
+        txn.Rollback();
+    }
     throw;
 }
 
-// Portable isolation profile
+// Portable isolation profile (throws TransactionModeNotSupportedException where the
+// database can't honor it — e.g. SafeNonBlockingReads on PostgreSQL/YugabyteDB)
 using var txn = Context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
 
 // Savepoints
@@ -497,6 +504,8 @@ await txn.RollbackToSavepointAsync("checkpoint1");
 
 Always use `Context.BeginTransaction()` which pins the connection for the transaction's lifetime.
 
+**Isolation fails up, never down.** An explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot is above ReadCommitted and satisfied only by Snapshot/Serializable; RepeatableRead only by Serializable) — e.g. `ReadCommitted` on CockroachDB/DuckDB runs as `Serializable`; if nothing at or above exists (e.g. `Serializable` on TiDB/Snowflake) it throws `InvalidOperationException`. An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation, and on PostgreSQL/YugabyteDB). A read-only `BeginTransaction` with neither a level nor a profile uses the `SafeNonBlockingReads` mapping and only logs a warning if degraded. See `docs/transactions.md`.
+
 ## Exception Hierarchy
 
 All database and framework errors surface as typed `DatabaseException` subclasses:
@@ -511,12 +520,14 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 │   │   ├── ForeignKeyViolationException
 │   │   ├── NotNullViolationException
 │   │   └── CheckConstraintViolationException
-│   ├── TransientWriteConflictException (abstract, IsTransient = true)
+│   ├── TransientWriteConflictException     (IsTransient = true)
 │   │   ├── DeadlockException
 │   │   └── SerializationConflictException
 │   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure
+│   │   └── FileLockContentionException     — embedded-file lock contention (IsTransient = false)
+│   ├── ReadOnlyViolationException          — write attempted on read-only connection
 │   └── TransactionException               — begin/commit/rollback failure
 ├── SqlGenerationException                  — entity metadata programmer error
 └── DataMappingException                    — strict-mode coercion failure
@@ -525,10 +536,12 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 **Throw sites:**
 - `SqlGenerationException` — thrown by `TypeMapRegistry` for entity metadata errors: missing `[Table]`, empty column name, enum `DbType` not string/numeric, duplicate column names, no `[Id]`/`[PrimaryKey]`, `[PrimaryKey]` order errors, invalid `[Version]` or audit field types. Uses `SupportedDatabase.Unknown`. Fires at registration/gateway construction, never during query execution.
 - `DataMappingException` — thrown by `DataReaderMapper` in strict mode when column→property coercion fails. Uses `SupportedDatabase.Unknown`. Fires during `LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync`.
-- `ConnectionException` — thrown by provider translators for connection-level failures (SQL Server error codes 10053/10054/10060/233/10061, Postgres SQLSTATE 08xx, MySQL codes 1040–1044, SQLite codes 14/26).
+- `ConnectionException` — thrown by provider translators for connection-level failures (SQL Server error codes 10053/10054/10060/233/10061, Postgres SQLSTATE 08xx, MySQL codes 1040/1042/1043/1044, SQLite codes 14/26).
 - `TransactionException` — thrown by `TransactionContext` when begin/commit/rollback fails. After failure, `IsCompleted = true` (connection already released); `Dispose` will not attempt a second rollback.
 
 `OperationCanceledException` is **never** wrapped — cancellation propagates as-is.
+
+`TransactionModeNotSupportedException` (namespace `pengdows.crud.exceptions`) derives from `NotSupportedException`, not `DatabaseException` — thrown by `BeginTransaction(IsolationProfile, ...)` when the profile's guarantee can't be met.
 
 **Audit field validation** still throws `InvalidOperationException` (not `SqlGenerationException`) — this is a configuration/runtime guard, not an entity metadata error.
 
@@ -571,22 +584,27 @@ if (info.ConstraintKind == DbConstraintKind.ForeignKey) { /* 409 response */ }
 ```csharp
 public interface IOrderGateway : ITableGateway<Order, long>
 {
-    Task<List<Order>> GetCustomerOrdersAsync(long customerId);
+    Task<List<Order>> GetCustomerOrdersAsync(long customerId, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default);
 }
 
 public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 {
     public OrderGateway(IDatabaseContext context, IAuditValueResolver resolver) : base(context, resolver) { }
 
-    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId)
+    // Accept an optional context and resolve ctx = context ?? Context so the method works inside
+    // transactions and per-tenant contexts (enforced by analyzer rule PGC025, severity Error).
+    public async Task<List<Order>> GetCustomerOrdersAsync(long customerId, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
-        var sc = BuildBaseRetrieve("o");
+        var ctx = context ?? Context;
+        await using var sc = BuildBaseRetrieve("o", ctx);
         sc.Query.Append(" WHERE ");
         sc.Query.Append(sc.WrapObjectName("o.customer_id"));
         sc.Query.Append(" = ");
         var p = sc.AddParameterWithValue("cid", DbType.Int64, customerId);
         sc.Query.Append(sc.MakeParameterName(p));
-        return await LoadListAsync(sc);
+        return await LoadListAsync(sc, cancellationToken);
     }
 }
 ```
@@ -598,22 +616,25 @@ Same inheritance pattern as `TableGateway` — inherit to add custom query metho
 ```csharp
 public interface IOrderItemGateway : IPrimaryKeyTableGateway<OrderItem>
 {
-    Task<List<OrderItem>> GetByOrderAsync(int orderId);
+    Task<List<OrderItem>> GetByOrderAsync(int orderId, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default);
 }
 
 public class OrderItemGateway : PrimaryKeyTableGateway<OrderItem>, IOrderItemGateway
 {
     public OrderItemGateway(IDatabaseContext context) : base(context) { }
 
-    public async Task<List<OrderItem>> GetByOrderAsync(int orderId)
+    public async Task<List<OrderItem>> GetByOrderAsync(int orderId, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
-        var sc = BuildBaseRetrieve("oi");
+        var ctx = context ?? Context; // PGC025
+        await using var sc = BuildBaseRetrieve("oi", ctx);
         sc.Query.Append(" WHERE ");
         sc.Query.Append(sc.WrapObjectName("oi.order_id"));
         sc.Query.Append(" = ");
         var p = sc.AddParameterWithValue("oid", DbType.Int32, orderId);
         sc.Query.Append(sc.MakeParameterName(p));
-        return await LoadListAsync(sc);
+        return await LoadListAsync(sc, cancellationToken);
     }
 }
 ```
@@ -673,7 +694,7 @@ var results = await helper.LoadListAsync(sc);
 ### Testing Infrastructure
 - Framework: xUnit; mocks: Moq. Name files `*Tests.cs` and mirror source namespaces.
 - Prefer `pengdows.crud.fakeDb` for unit tests; avoid real DBs. Use `testbed/` for integration via Testcontainers.
-- Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage.cobertura.xml`.
+- Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage*.cobertura.xml`.
 - The entire unit-test suite currently finishes in under 30 seconds; if a run approaches three minutes, terminate it and investigate for locking/hanging issues.
 - CI enforces minimum **83% coverage**; target **95%** for new work.
 - Expand `fakeDb` when tests need behaviors it lacks — don't bypass its limitations.
@@ -696,8 +717,8 @@ var results = await helper.LoadListAsync(sc);
 These are places outside the dialect file itself that switch or pattern-match on `SupportedDatabase` explicitly. A new database silently falls through to a `default`/catch-all branch here instead of erroring, so nothing fails loudly — only manual review catches it.
 
 7. **`pengdows.crud/isolation/IsolationResolver.cs`** — add the new database's native isolation-level mapping in both `BuildSupportedIsolationLevels` and `BuildProfileMapping`. Missing this silently gives the database whatever `IsolationLevel` the `default` case falls back to, which is wrong for any database with non-standard isolation semantics.
-8. **`DatabaseContext.Initialization.cs` → `IsClientServerDatabase()`** — add the new database if it's a real client/server RDBMS (not embedded/in-process). Missing this suppresses the diagnostic warning that's supposed to fire when someone misconfigures `SingleConnection`/`SingleWriter` mode against it.
-9. **`DatabaseContext.Initialization.cs` → `CoerceMode()`** — add the new database to the explicit "full server databases" case list. If it falls to `default` instead, the *behavior* is often still correct (defaults to `Standard`), but the logged mode-override message will misleadingly say "unknown provider" for a fully-supported database.
+8. **`ISqlDialect.IsClientServerDatabase`** (`SqlDialect` default `true`) — override to `false` in the new dialect if it's embedded/in-process (as SQLite, DuckDB, Access, FlatFile do). `DatabaseContext.Initialization.cs` reads it to decide whether to warn about `SingleConnection`/`SingleWriter` misconfiguration.
+9. **`ISqlDialect.CoerceConnectionMode(...)`** — `DatabaseContext.Initialization.cs`'s `CoerceMode()` delegates all mode policy to the dialect. A client/server database needs nothing (the base implementation is correct); an embedded engine or one with real mode restrictions must override it (see `SqliteDialect`/`DuckDbDialect` via `CoerceEmbeddedSingleWriterMode`, and `SqlServerDialect` for LocalDB).
 10. **`pengdows.crud/dialects/SqlDialect.cs` → `GetNaturalKeyLookupQuery()` and any other pagination/"first row only" fallback** — check whether the new database's syntax actually matches the generic `LIMIT 1` fallback. It doesn't for Oracle (`ROWNUM = 1`), and it doesn't for Db2 (`FETCH FIRST 1 ROWS ONLY`). Grep `SqlDialect.cs` for `DatabaseType ==`/`DatabaseType !=` checks and verify each one explicitly for the new database rather than assuming the catch-all branch is correct.
 11. **Exception classification (two independent systems, both need entries)** — `IDbExceptionTranslator`/`DbExceptionTranslatorRegistry` (produces the typed `DatabaseException` subclass) and `SqlDialect.TryClassifyProviderException`/`IsUniqueViolation`/`IsForeignKeyViolation`/`IsNotNullViolation`/`IsCheckConstraintViolation` (produces `DbErrorCategory`) are maintained separately and can disagree if only one is updated.
 
@@ -705,8 +726,11 @@ These are places outside the dialect file itself that switch or pattern-match on
 
 ### Opt-in exceptions (require env var)
 
-Only databases that **cannot run in a standard Docker container** may remain opt-in:
+Only databases that **cannot run in a standard Docker container / CI runner** may remain opt-in (see `ParallelTestOrchestrator.GetTestConfigurations()`):
 - `INCLUDE_SNOWFLAKE=true` — cloud-only, requires credentials
+- `INCLUDE_SAPHANA=true` — Docker image needs 16-32GB RAM
+- `INCLUDE_INTERBASE=true` — personal, node-locked Developer Edition license
+- `INCLUDE_ACCESS=true` — Windows-only, no Docker image
 
 All other databases must run automatically with no env var gating.
 
@@ -741,7 +765,7 @@ MySQL/PostgreSQL suites.
   ```
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
 - `pengdows.crud.analyzers` now enforces raw predicate/join value injection as `PGC008`; `IS NULL` / `IS NOT NULL` are the normal exceptions.
-- `WrapObjectName` behavior by database: SQL Server `[name]`, PostgreSQL `"name"`, MySQL `` `name` ``, Oracle `"name"`.
+- `WrapObjectName` behavior by database: ANSI double quotes (`"name"`) for every dialect except Access (`[name]`) — including SQL Server (session forces `QUOTED_IDENTIFIER ON`) and MySQL/MariaDB (session `sql_mode` includes `ANSI_QUOTES`), not brackets/backticks.
 
 ## Commit & Pull Request Guidelines
 
@@ -760,13 +784,13 @@ MySQL/PostgreSQL suites.
 ### SQL Generation
 - Database-agnostic SQL with dialect-specific optimizations
 - Automatic parameterization prevents SQL injection
-- Provider-specific UPSERT: MERGE (SQL Server/Oracle), ON CONFLICT (PostgreSQL), ON DUPLICATE KEY (MySQL/MariaDB)
+- Provider-specific UPSERT: MERGE where supported (SQL Server/Oracle/PostgreSQL 15+), else ON CONFLICT (e.g. PostgreSQL < 15, SQLite), else ON DUPLICATE KEY (MySQL/MariaDB)
 - Schema-aware operations with proper object name quoting
 - Dialect is accessible via `context.Dialect` (`ISqlDialect`) from any `IDatabaseContext`
 
 ### Advanced Features
 - **Intelligent Dialect System**: Portable upsert, optimized prepared statements per database, proc wrapping per vendor
-- **IsolationProfile**: Portable transaction isolation (maps to safest level for target DB)
+- **IsolationProfile**: Portable transaction isolation (maps to a per-database level; throws rather than run below the profile's guarantee)
 - **Uuid7Optimized**: Built-in RFC 9562-compliant UUIDv7 generator for time-ordered, index-friendly surrogate keys
 - **Comprehensive Metrics**: Connection counts, timings, pool contention, attribution stats
 

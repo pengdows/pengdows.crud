@@ -9,7 +9,8 @@
 //   * WellKnownText: Text format (WKT/EWKT) - human-readable (e.g., "POINT(1 2)")
 //   * GeoJson: JSON format - web-friendly, interoperable
 // - Used by SpatialValue.Format to track original data format.
-// - Converters use this to determine optimal output format per provider.
+// - Also used by SpatialValue.ToString(); converters pick output from whichever representation
+//   (WKB/WKT/GeoJSON) is populated, not from this enum.
 // =============================================================================
 
 namespace pengdows.crud.types.valueobjects;

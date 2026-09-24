@@ -30,15 +30,15 @@ public interface ISqlDialect
 
     /// <summary>
     /// True for a real client-server RDBMS with full write concurrency (the default for every
-    /// engine); false only for embedded, single-writer engines (SQLite, DuckDB) and the
-    /// unrecognized-database fallback. This is the single source of truth for that distinction —
+    /// engine); false only for embedded, single-writer engines (SQLite, DuckDB, Access), the
+    /// FlatFile provider, and the unrecognized-database fallback. This is the single source of truth for that distinction —
     /// callers that need it (mode-mismatch diagnostics, mode coercion) should consult this property
     /// instead of maintaining their own SupportedDatabase switch.
     /// </summary>
     bool IsClientServerDatabase { get; }
 
     /// <summary>
-    /// True only for SQLite/DuckDB-like embedded, single-writer engines. Deliberately narrower than
+    /// True only for embedded, single-writer engines (SQLite, DuckDB, Access). Deliberately narrower than
     /// <c>!IsClientServerDatabase</c>, which is also false for the unrecognized-database fallback —
     /// diagnostics that are specifically about embedded single-writer behavior (e.g. file-based
     /// lock-contention warnings) should consult this instead, so they don't fire for an unknown
@@ -106,7 +106,8 @@ public interface ISqlDialect
 
     /// <summary>
     /// Maximum number of rows allowed in a single multi-row INSERT statement.
-    /// SQL Server: 1000; most others: no specific row limit beyond parameter count.
+    /// Defaults to 1000 (including SQL Server); SQLite has no row limit beyond parameter count,
+    /// and Snowflake allows 16384.
     /// </summary>
     int MaxRowsPerBatch { get; }
 
@@ -188,7 +189,7 @@ public interface ISqlDialect
     /// True when the dialect has permanently disabled prepare at runtime due to a server-level
     /// exhaustion error (e.g. MySQL error 1461 — <c>max_prepared_stmt_count</c> reached).
     /// Unlike <see cref="PrepareStatements"/>, this veto overrides
-    /// <see cref="IDatabaseContext.ForceManualPrepare"/> because retrying after exhaustion
+    /// <see cref="CommandPrepareMode.Always"/> because retrying after exhaustion
     /// would only compound the problem. Default implementation returns <see langword="false"/>.
     /// </summary>
     bool IsPrepareExhausted => false;
@@ -251,7 +252,7 @@ public interface ISqlDialect
 
     /// <summary>
     /// The lowest isolation level that is semantically equivalent to READ COMMITTED for this database.
-    /// CockroachDB and DuckDB only support SERIALIZABLE; all others support READ COMMITTED.
+    /// SERIALIZABLE for CockroachDB, DuckDB, and Spanner; READ COMMITTED for all others.
     /// </summary>
     IsolationLevel ReadCommittedCompatibleIsolationLevel { get; }
 
@@ -263,7 +264,7 @@ public interface ISqlDialect
 
     /// <summary>
     /// True when the database enforces foreign key constraints at runtime.
-    /// SQLite and TiDB do not enforce FK constraints by default.
+    /// SQLite and TiDB do not enforce FK constraints by default; Snowflake never does.
     /// </summary>
     bool EnforcesForeignKeyConstraints { get; }
 
@@ -352,7 +353,7 @@ public interface ISqlDialect
 
     /// <summary>
     /// True when the ON CONFLICT DO UPDATE clause supports a WHERE predicate for optimistic
-    /// concurrency checks (PostgreSQL 9.5+, CockroachDB). False for SQLite, DuckDB, and all
+    /// concurrency checks (PostgreSQL 9.5+ and the dialects built on it, e.g. CockroachDB). False for SQLite, DuckDB, and all
     /// dialects that use MERGE or ON DUPLICATE KEY UPDATE instead.
     /// </summary>
     bool SupportsOnConflictWhere => false;
@@ -396,7 +397,7 @@ public interface ISqlDialect
     /// <summary>
     /// Gets the SQL statement to explicitly release a savepoint with the given name. Only called
     /// when <see cref="SavepointCapabilities"/> includes <see cref="pengdows.crud.enums.SavepointCapabilities.Release"/> —
-    /// dialects without release support (SQL Server, Sybase) never need to implement this.
+    /// dialects without release support (SQL Server, Sybase, Oracle) never need to implement this.
     /// </summary>
     /// <param name="name">The savepoint name.</param>
     /// <returns>The SQL statement (e.g., "RELEASE SAVEPOINT name").</returns>
@@ -639,7 +640,8 @@ public interface ISqlDialect
     /// <summary>
     /// Gets the database-specific query for retrieving the last inserted identity value.
     /// </summary>
-    /// <returns>SQL query to get the last inserted identity value, or empty string if not supported.</returns>
+    /// <returns>SQL query to get the last inserted identity value.</returns>
+    /// <exception cref="NotSupportedException">The dialect has no last-inserted-id query (default implementation).</exception>
     string GetLastInsertedIdQuery();
 
     /// <summary>
@@ -658,7 +660,8 @@ public interface ISqlDialect
     /// <returns>
     /// Dialect-specific SQL fragment ready for direct concatenation into an INSERT statement,
     /// for example <c>" RETURNING &quot;id&quot;"</c> or <c>"OUTPUT INSERTED.[id]"</c>.
-    /// Returns an empty string when <see cref="SupportsInsertReturning"/> is false.
+    /// Returns an empty string when <see cref="SupportsInsertReturning"/> is false, and for dialects
+    /// with no trailing-clause form (e.g. Db2, whose <c>FINAL TABLE</c> wrapping is done by the gateway).
     /// </returns>
     string RenderInsertReturningClause(string idColumnWrapped);
 
@@ -764,15 +767,17 @@ public interface ISqlDialect
 
     /// <summary>
     /// Appends dialect-appropriate paging SQL to the supplied query builder.
-    /// Uses <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c> when <see cref="SupportsOffsetFetch"/>
-    /// is true, otherwise falls back to <c>LIMIT m OFFSET n</c>.
+    /// By default uses <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c> when <see cref="SupportsOffsetFetch"/>
+    /// is true, otherwise <c>LIMIT m OFFSET n</c>; some dialects override this with their own syntax.
     /// </summary>
     /// <param name="query">The <see cref="ISqlQueryBuilder"/> to append to.</param>
     /// <param name="offset">Number of rows to skip (0 = no skip, limit-only).</param>
     /// <param name="limit">Maximum number of rows to return.</param>
     /// <remarks>
     /// SQL Server requires an ORDER BY clause before OFFSET/FETCH — callers are responsible
-    /// for appending ORDER BY before calling this method.
+    /// for appending ORDER BY before calling this method (SQL Server throws
+    /// <see cref="InvalidOperationException"/> otherwise). Sybase ASE has no appendable paging
+    /// syntax and throws <see cref="NotSupportedException"/>.
     /// When <paramref name="offset"/> is 0 and the dialect uses LIMIT/OFFSET, the OFFSET
     /// clause is omitted from the generated SQL.
     /// </remarks>

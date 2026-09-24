@@ -12,14 +12,17 @@
 //   * ExecuteNonQueryAsync/ExecuteScalarRequiredAsync/ExecuteScalarOrNullAsync/TryExecuteScalarAsync/ExecuteReaderAsync
 //   * WrapObjectName for dialect-specific identifier quoting
 //   * MakeParameterName for dialect-specific parameter naming (@p, :p, ?)
-// - Manages parameter ordering for positional parameter databases (Oracle, ODBC).
-// - Uses StringBuilderLite for efficient SQL construction with zero allocations.
+// - Manages parameter ordering for positional-parameter databases (e.g. ODBC/Access,
+//   Informix, HANA) and renames repeated placeholders for Oracle, which does not allow
+//   the same named parameter twice.
+// - Query is a pooled (ArrayPool-backed) SqlQueryBuilder for low-allocation SQL construction.
 // - Implements IDisposable/IAsyncDisposable for cleanup.
-// - Thread-safe for building (not for concurrent modification).
+// - Not thread-safe: do not build or execute one container from multiple threads concurrently.
 // - Internally uses dialects (ISqlDialect) for database-specific SQL generation.
 // - Stored procedure wrapping via IProcWrappingStrategy for cross-database compat.
 // - Tracks whether WHERE clause was appended (HasWhereAppended) for convenience.
-// - Limits max parameters per query (MaxParameterLimit) to prevent SQL errors.
+// - CreateCommand() rejects queries exceeding MaxParameterLimit; gateway builders check the
+//   limit via CheckParameterLimit before executing.
 // =============================================================================
 
 #region
@@ -78,7 +81,7 @@ namespace pengdows.crud;
 /// </para>
 /// <para>
 /// <strong>Identifier Quoting:</strong> Use <see cref="WrapObjectName"/> to quote table/column names
-/// appropriately for the target database ("name" for most, [name] for SQL Server).
+/// appropriately for the target database ("name" for most, [name] for Access).
 /// </para>
 /// </remarks>
 /// <example>
@@ -287,8 +290,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     /// <summary>
     /// Scans <paramref name="sql"/> for <c>{P}NAME</c> placeholders and replaces each with
-    /// the dialect's parameter marker (e.g. <c>@NAME</c> for SQLite/SQL Server, <c>:NAME</c>
-    /// for PostgreSQL, <c>?</c> for positional providers).
+    /// the dialect's parameter marker (e.g. <c>@NAME</c> for SQL Server/PostgreSQL/SQLite,
+    /// <c>:NAME</c> for Snowflake, <c>?</c> for positional providers).
     /// Used for all dialects that allow the same named parameter to appear multiple times
     /// in one statement (virtually all except Oracle).
     /// Avoids Regex overhead: no Match/Group allocations, no per-match string.Concat.
@@ -1551,11 +1554,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // transaction can't complete until code after the read commits it). The absorption/
             // rollback risk this gate exists for is write-specific (see ExecuteNonQueryAsync) — a
             // read has no side effect to lose.
-            //
-            // if this is our single connection to the database, for a transaction
-            //or sqlCe mode, or single connection mode, we will NOT close the connection.
-            // otherwise, we will have the connection set to autoclose so that we
-            //close the underlying connection when the DbDataReader is closed;
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, 0);
             Interlocked.Increment(ref _activeReaders);
@@ -1749,8 +1747,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             cmdText = _query.ToString();
 
             // For non-stored-proc queries, render parameter placeholders
-            // This is CRITICAL for positional-parameter providers (MySQL, SQLite, etc.)
-            // RenderParams() populates ParamSequence and replaces {P}name with ? or @name
+            // This is CRITICAL for positional-parameter providers (e.g. ODBC/Access, Informix)
+            // RenderParams() populates ParamSequence and replaces {P}name with the dialect marker
+            // (? for positional providers, @name/:name for named ones)
             if (cmdText.Contains("{P}"))
             {
                 cmdText = RenderParams(cmdText);
@@ -1928,9 +1927,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     }
 
     // TEST-001 discovery: PoolSaturatedException and ModeContentionException are deliberately
-    // NOT part of the DatabaseException hierarchy (see CLAUDE.md's exception-hierarchy docs —
-    // "a catch (DatabaseException) will not catch it") and must propagate to the caller as
-    // themselves. Both extend TimeoutException directly, so without this exclusion the
+    // NOT part of the DatabaseException hierarchy (a catch (DatabaseException) will not catch
+    // them) and must propagate to the caller as themselves. Both extend TimeoutException directly, so without this exclusion the
     // ex is not DatabaseException && IsTimeout(ex) catch clause below treats them as a raw
     // provider timeout and silently translates them into CommandTimeoutException whenever they
     // originate from inside an actual command execution (as opposed to, e.g., BeginTransaction,
@@ -2232,13 +2230,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // Route the clone's creation through the target context's own CreateSqlContainer()
         // entrypoint, rather than constructing a SqlContainer directly, so any context-specific
         // behavior tied to that entrypoint fires for a clone exactly as it would for a container
-        // built the normal way. Ported from 3.0 (docs/planning/retry-context-design.md): a
-        // direct-construction Clone() there was the root cause of every RetryContext-queued
-        // entity command silently never executing on any provider. 2.0 has no RetryContext yet,
-        // so this is a zero-behavior-change consistency fix today (ContextBase.CreateSqlContainer()
-        // has no side effects beyond what direct construction already did) - but the bypass would
-        // resurface the same way here the moment any context with stateful container creation is
-        // added.
+        // built the normal way. Today ContextBase.CreateSqlContainer() has no side effects beyond
+        // what direct construction would do, so this is a consistency measure: it keeps Clone()
+        // correct if a context with stateful container creation is ever added.
         var clone = (SqlContainer)targetContext.CreateSqlContainer();
 
         // OPTIMIZATION: Share cached command text instead of re-rendering
@@ -2319,7 +2313,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// <summary>
     /// Internal method to reset execution state for container reuse.
     /// Preserves query and parameters but clears execution-specific state.
-    /// Used for high-performance pooling scenarios.
+    /// Not currently called by library code.
     /// </summary>
     internal void Reset()
     {

@@ -65,7 +65,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             var ordinalExpr = Expression.Constant(i);
             var notDbNull = Expression.Not(Expression.Call(readerParam, IsDbNullMethod, ordinalExpr));
 
-            // Define the assignment logic first so we can wrap it in a try-catch
+            // Build the value-read expression; the JSON, byte[] and lenient-enum branches wrap it in
+            // their own try-catch.
             Expression valueReadExpr;
             // Set to true in the else branch for non-nullable value types to skip the
             // IsDBNull guard — see comment near the end of the else block below.

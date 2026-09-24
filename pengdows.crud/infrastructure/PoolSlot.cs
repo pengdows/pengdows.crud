@@ -8,7 +8,7 @@
 // - Dispose(): Releases permit back to governor (once only).
 // - PoolSlotToken: Inner class ensuring single release via Interlocked.
 // - Usage: using var slot = await governor.AcquireAsync();
-// - Struct design: efficient, stack-allocated, no heap pressure.
+// - Struct wrapper; each real acquisition allocates one PoolSlotToken.
 // - Null token (default struct) is valid no-op for disabled governors.
 // =============================================================================
 

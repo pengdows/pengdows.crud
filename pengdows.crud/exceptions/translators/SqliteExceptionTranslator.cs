@@ -8,7 +8,7 @@ namespace pengdows.crud.exceptions.translators;
 /// <remarks>
 /// Detection order: timeout → connection (SQLITE_CANTOPEN/SQLITE_NOTADB) →
 /// read-only violation (SQLITE_READONLY = 8) →
-/// unique/PK constraint → check constraint → not-null → foreign-key → fallback.
+/// unique/PK constraint → foreign-key → not-null → check constraint → fallback.
 /// Error codes are extracted via reflection on the <c>SqliteException.SqliteErrorCode</c>
 /// property (Microsoft.Data.Sqlite), so this translator works without a hard reference
 /// to the SQLite driver assembly.

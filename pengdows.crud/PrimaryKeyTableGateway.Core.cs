@@ -50,13 +50,13 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         /// <summary>"UPDATE {table} SET " prefix.</summary>
         public string UpdateSqlPrefix = null!;
 
-        /// <summary>", version = version + 1" or null when no version column.</summary>
+        /// <summary>", version = version + 1" or null when there is no integer (non-byte[]) version column.</summary>
         public string? VersionIncrementClause;
 
         /// <summary>ON CONFLICT / MERGE / ON DUPLICATE KEY UPDATE fragment, or null when upsert not applicable.</summary>
         public string? UpsertUpdateFragment;
 
-        /// <summary>"AND t.\"ver\" = s.\"ver\"" appended to WHEN MATCHED arm; null when no [Version] column.</summary>
+        /// <summary>"AND t.\"ver\" = s.\"ver\"" appended to WHEN MATCHED arm; null when there is no integer (non-byte[]) [Version] column.</summary>
         public string? UpsertMergeVersionCondition;
 
         /// <summary>"WHERE \"table\".\"ver\" = EXCLUDED.\"ver\"" for ON CONFLICT WHERE; null when not applicable.</summary>

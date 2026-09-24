@@ -86,7 +86,7 @@ internal class FirebirdDialect : SqlDialect
     // DatabaseContext-level special case (serializing every read/write through one pinned
     // connection). That was based on incorrect assumptions about embedded Firebird's concurrency
     // model — real testing showed it behaves like an ordinary client-server database and does not
-    // need to be pinned to a single connection. KeepAlive remains available as a fully-supported,
+    // need to be pinned to a single connection. PreventDatabaseUnload remains available as a fully-supported,
     // explicitly-honored KNOB (never an auto-selected default) for deployments that specifically
     // want to avoid Firebird's idle-unload reconnect cost — the operator decides that tradeoff,
     // not this dialect.
@@ -97,8 +97,8 @@ internal class FirebirdDialect : SqlDialect
     // working property on FirebirdSql.Data.FirebirdClient.FbConnectionStringBuilder — round-trips
     // to "application name=..." in the connection string, and a live connection with it set
     // succeeds normally. Without this set, reader/writer connection strings would be identical
-    // and collapse into one shared pool — the same bug class Access/Db2/Sybase/InterBase/
-    // Informix's ApplicationNameSettingName fixes addressed.
+    // and collapse into one shared pool — the same bug class Db2/Sybase's ApplicationNameSettingName
+    // and Access/InterBase/Informix/HANA's ReadOnlyPoolDiscriminatorSettingName fixes addressed.
     public override string? ApplicationNameSettingName => "Application Name";
 
     public override bool SupportsSavepoints => true;
@@ -178,9 +178,8 @@ internal class FirebirdDialect : SqlDialect
     // idle in ANY ADO.NET pool referencing the table's current metadata generation, regardless of
     // which DatabaseContext instance (or connection string) that connection came from.
     // FbConnection.ClearPool(connectionString) — this method's original implementation — only
-    // clears the ONE pool keyed by that exact string, which is sufficient for the issuing
-    // context's own reader/writer pools (SqlContainer.cs resets both when they differ) but cannot
-    // reach a genuinely DIFFERENT DatabaseContext instance's pools, e.g. a second, independent
+    // clears the ONE pool keyed by that exact string (SqlContainer.cs passes the context's raw
+    // connection string), which cannot reach a genuinely DIFFERENT DatabaseContext instance's pools, e.g. a second, independent
     // context created to simulate a concurrent client. Confirmed live: a concurrent-update
     // conflict test doing exactly that still hit "object TABLE ... is in use" under load even
     // after both of the issuing context's own pools were being reset correctly.

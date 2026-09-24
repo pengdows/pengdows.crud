@@ -11,7 +11,8 @@ using pengdows.crud.enums;
 //   * AcquireAsync(ct): Async permit acquisition with timeout (uses WaitAsync throughout)
 //   * Release(): Returns permit to pool (called by PoolSlot)
 //   * GetSnapshot(): Returns current pool statistics
-// - Throws PoolSaturatedException when timeout expires waiting for slot.
+// - Throws PoolSaturatedException when timeout expires waiting for slot, or immediately when
+//   the wait queue (semaphore or turnstile) is already at MaxQueueDepth.
 // - Tracks: inUse, peakInUse, queued, totalAcquired, totalSlotTimeouts, totalTurnstileTimeouts.
 //   * TotalTimeouts in snapshot = semaphore (slot) acquisition timeouts.
 //   * TotalTurnstileTimeouts in snapshot = turnstile acquisition timeouts.

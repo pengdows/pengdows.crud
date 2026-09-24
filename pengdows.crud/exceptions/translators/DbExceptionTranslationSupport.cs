@@ -134,7 +134,7 @@ internal static partial class DbExceptionTranslationSupport
         // Case-insensitive, ambiguity-safe lookup: IBM's DB2Exception declares its OWN
         // "SQLState" (all-caps SQL) property alongside the inherited DbException.SqlState —
         // a plain GetProperty(name, IgnoreCase) throws AmbiguousMatchException in that shape.
-        // Confirmed against a live ibmcom/db2 container during Phase 2 testbed validation.
+        // Confirmed against a live ibmcom/db2 container.
         foreach (var property in exception.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance))
         {
             if (property.PropertyType == typeof(string) &&

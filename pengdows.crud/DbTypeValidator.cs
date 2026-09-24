@@ -48,7 +48,7 @@ internal static class DbTypeValidator
 
     // Maps each DbType to the set of CLR types that are directly compatible.
     // Numeric types are validated as a group (any numeric CLR → any numeric DbType).
-    // Enums are accepted for all integer and string DbTypes.
+    // Enums are accepted for all numeric and string DbTypes.
     // FrozenSet values ensure the per-DbType sets are fully immutable.
     private static readonly FrozenDictionary<DbType, FrozenSet<Type>> AcceptableTypes =
         new Dictionary<DbType, FrozenSet<Type>>
@@ -80,9 +80,9 @@ internal static class DbTypeValidator
     /// <paramref name="dbType"/>. Throws <see cref="ArgumentException"/> on mismatch.
     /// </summary>
     /// <remarks>
-    /// Pass the result of <c>ResolveClrType&lt;T&gt;(value)</c> — the type must already be
+    /// Pass the result of <c>SqlDialect.ResolveClrType&lt;T&gt;(value)</c> — the type must already be
     /// nullable-unwrapped. A null <paramref name="clrType"/> (i.e. value was null) is always
-    /// accepted. Enum types are accepted for all integer and string DbTypes.
+    /// accepted. Enum types are accepted for all numeric and string DbTypes.
     /// DbType.Object accepts any type. Unknown DbTypes are passed through without validation.
     /// </remarks>
     internal static void Validate(DbType dbType, Type? clrType)
@@ -151,7 +151,7 @@ internal static class DbTypeValidator
     /// on mismatch.
     /// </summary>
     /// <remarks>
-    /// Null/DBNull values are always accepted. Enum values are accepted for all integer DbTypes.
+    /// Null/DBNull values are always accepted. Enum values are accepted for all numeric and string DbTypes.
     /// DbType.Object accepts any type. Unknown DbTypes are passed through without validation.
     /// </remarks>
     internal static void Validate(DbType dbType, object? value)
@@ -166,7 +166,7 @@ internal static class DbTypeValidator
         // Unwrap nullable
         clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
 
-        // Enums are compatible with all integer and string DbTypes
+        // Enums are compatible with all numeric and string DbTypes
         if (clrType.IsEnum)
         {
             if (NumericDbTypes.Contains(dbType) || StringDbTypes.Contains(dbType) || dbType == DbType.Object)

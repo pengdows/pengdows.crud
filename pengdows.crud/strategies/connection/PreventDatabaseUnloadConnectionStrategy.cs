@@ -6,7 +6,8 @@
 // - Extends StandardConnectionStrategy with one additional persistent "sentinel" connection.
 // - Sentinel connection is NEVER used for operations - exists only to keep DB engine loaded.
 // - All actual work uses ephemeral connections (identical to Standard behavior).
-// - Prevents costly shutdown/reload cycles in embedded databases (LocalDB, SQLite WAL).
+// - Prevents costly shutdown/reload cycles (e.g. SQL Server LocalDB). SQLite/DuckDB/Access
+//   never reach this strategy: their dialects coerce PreventDatabaseUnload to SingleWriter.
 // - PostInitialize() stores the sentinel connection on DatabaseContext.
 // - ReleaseConnection() skips disposal if connection is the sentinel.
 // - HandleDialectDetection() can use sentinel or create throwaway for detection.
@@ -39,7 +40,6 @@ namespace pengdows.crud.strategies.connection;
 /// - All working connections are disposed immediately when released (like Standard)
 ///
 /// SPECIFIC USE CASES:
-/// - SQLite databases where you want to prevent WAL mode cleanup between operations
 /// - LocalDB instances that might shut down when no connections are active
 /// - Embedded databases that have expensive startup costs
 /// - File-based databases where keeping the engine loaded improves performance

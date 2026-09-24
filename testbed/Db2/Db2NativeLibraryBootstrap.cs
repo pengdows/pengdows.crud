@@ -30,9 +30,10 @@ internal static class Db2NativeLibraryBootstrap
         // fails with DllNotFoundException before ever reaching an OS-level dlopen() that would
         // honor the environment variable. The reliable fix is a custom DllImportResolver that
         // loads libdb2.so from its absolute path directly, bypassing that probing entirely.
-        // LD_LIBRARY_PATH is still set so libdb2.so's OWN transitive dependencies (ICU/SSL libs
-        // in clidriver/lib/icc) resolve correctly — that inner resolution IS a genuine OS-level
-        // dlopen() and does honor the environment variable.
+        // LD_LIBRARY_PATH is still set for libdb2.so's OWN transitive dependencies (ICU/SSL libs
+        // in clidriver/lib/icc), but glibc reads it only at process start (see
+        // InformixNativeLibraryBootstrap's remarks), so setting it here likely has no effect on
+        // that resolution in this process.
         var baseDir = AppContext.BaseDirectory;
         var clidriverLib = Path.Combine(baseDir, "clidriver", "lib");
         var clidriverIcc = Path.Combine(clidriverLib, "icc");
