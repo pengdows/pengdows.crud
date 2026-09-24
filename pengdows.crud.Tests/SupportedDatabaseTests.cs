@@ -60,7 +60,7 @@ public class SupportedDatabaseTests
                 "Db2",
                 "FlatFile",
                 "SingleStore",
-                "Sybase",
+                "SybaseASE",
                 "Spanner",
                 "Informix",
                 "SapHana",
@@ -86,7 +86,7 @@ public class SupportedDatabaseTests
     [InlineData(SupportedDatabase.Db2, 16384)]
     [InlineData(SupportedDatabase.FlatFile, 32768)]
     [InlineData(SupportedDatabase.SingleStore, 65536)]
-    [InlineData(SupportedDatabase.Sybase, 131072)]
+    [InlineData(SupportedDatabase.SybaseASE, 131072)]
     [InlineData(SupportedDatabase.Spanner, 262144)]
     [InlineData(SupportedDatabase.Informix, 524288)]
     [InlineData(SupportedDatabase.SapHana, 1048576)]
@@ -106,5 +106,12 @@ public class SupportedDatabaseTests
         // bit 22) comfortably fits well within `int`'s 31 usable flag bits, so there is no need
         // to widen the type to add these 5 databases.
         Assert.Equal(typeof(int), Enum.GetUnderlyingType(typeof(SupportedDatabase)));
+    }
+
+    [Fact]
+    public void SybaseASE_MatchesThe3_0MemberName()
+    {
+        Assert.Equal(131072, (int)SupportedDatabase.SybaseASE);
+        Assert.Equal(SupportedDatabase.SybaseASE, Enum.Parse<SupportedDatabase>("SybaseASE"));
     }
 }

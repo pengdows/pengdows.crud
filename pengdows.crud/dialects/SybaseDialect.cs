@@ -42,7 +42,7 @@ internal class SybaseDialect : SqlDialect
     {
     }
 
-    public override SupportedDatabase DatabaseType => SupportedDatabase.Sybase;
+    public override SupportedDatabase DatabaseType => SupportedDatabase.SybaseASE;
 
     // Confirmed via reflection against AdoNetCore.AseClient.Internal.ConnectionParameters (the
     // driver's real connection-string parser — its public AseConnectionStringBuilder is a thin

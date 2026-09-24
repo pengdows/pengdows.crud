@@ -100,7 +100,7 @@ internal static class SqlDialectFactory
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, logger),
             SupportedDatabase.AuroraPostgreSql => new PostgreSqlDialect(factory, logger, SupportedDatabase.AuroraPostgreSql),
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, logger),
-            SupportedDatabase.Sybase => new SybaseDialect(factory, logger),
+            SupportedDatabase.SybaseASE => new SybaseDialect(factory, logger),
             SupportedDatabase.Db2 => new Db2Dialect(factory, logger),
             SupportedDatabase.Informix => new InformixDialect(factory, logger),
             SupportedDatabase.SapHana => new HanaDialect(factory, logger),

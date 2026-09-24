@@ -18,7 +18,7 @@ public class SqlDialectBranchTests
     [InlineData(SupportedDatabase.MariaDb, true)]
     [InlineData(SupportedDatabase.Sqlite, true)]
     [InlineData(SupportedDatabase.SqlServer, true)]
-    [InlineData(SupportedDatabase.Sybase, true)]
+    [InlineData(SupportedDatabase.SybaseASE, true)]
     [InlineData(SupportedDatabase.PostgreSql, false)]
     [InlineData(SupportedDatabase.DuckDB, false)]
     [InlineData(SupportedDatabase.Oracle, false)]

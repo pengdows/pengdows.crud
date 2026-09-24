@@ -2746,7 +2746,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             SupportedDatabase.MariaDb => true, // LAST_INSERT_ID() is per-connection safe
             SupportedDatabase.Sqlite => true, // last_insert_rowid() is per-connection safe
             SupportedDatabase.SqlServer => true, // SCOPE_IDENTITY() is per-batch/scope safe
-            SupportedDatabase.Sybase => true, // @@IDENTITY is per-connection safe (verified live)
+            SupportedDatabase.SybaseASE => true, // @@IDENTITY is per-connection safe (verified live)
             SupportedDatabase.PostgreSql => false, // lastval() can point at wrong sequence
             SupportedDatabase.DuckDB => false, // prefer RETURNING over lastval()
             _ => false
@@ -2842,7 +2842,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             // Access: CONFIRMED live (see AccessDialect.cs's file-level AI SUMMARY) — SELECT TOP
             // n, mirroring SqlServer/Sybase, not the generic LIMIT-based fallback below.
-            SupportedDatabase.SqlServer or SupportedDatabase.Sybase or SupportedDatabase.Access =>
+            SupportedDatabase.SqlServer or SupportedDatabase.SybaseASE or SupportedDatabase.Access =>
                 $"SELECT TOP 1 {WrapObjectName(idColumnName)}",
             _ => $"SELECT {WrapObjectName(idColumnName)}"
         };
@@ -2875,7 +2875,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             // 3.0; inlined here since that hook doesn't exist on this branch.
             query += " ROWS 1";
         }
-        else if (DatabaseType != SupportedDatabase.SqlServer && DatabaseType != SupportedDatabase.Sybase &&
+        else if (DatabaseType != SupportedDatabase.SqlServer && DatabaseType != SupportedDatabase.SybaseASE &&
                  DatabaseType != SupportedDatabase.Access)
         {
             query += " LIMIT 1";

@@ -24,7 +24,7 @@ internal sealed class DbExceptionTranslatorRegistry : IDbExceptionTranslatorRegi
         return database switch
         {
             SupportedDatabase.SqlServer => SqlServer,
-            SupportedDatabase.Sybase => Sybase,
+            SupportedDatabase.SybaseASE => Sybase,
             SupportedDatabase.Db2 => Db2,
             SupportedDatabase.Informix => Informix,
             SupportedDatabase.SapHana => SapHana,

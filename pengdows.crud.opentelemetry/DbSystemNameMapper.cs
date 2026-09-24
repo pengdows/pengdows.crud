@@ -42,7 +42,7 @@ internal static class DbSystemNameMapper
         SupportedDatabase.InterBase => "interbase",
         SupportedDatabase.Spanner => "gcp.spanner",
         // Not present in the OTel registry as of this writing; best-effort custom values.
-        SupportedDatabase.Sybase => "sap.ase",
+        SupportedDatabase.SybaseASE => "sap.ase",
         SupportedDatabase.SingleStore => "singlestore",
         SupportedDatabase.FlatFile => "flatfile",
         // Not present in the OTel registry as of this writing; best-effort custom value,

@@ -61,38 +61,38 @@ public enum SupportedDatabase
     /// <see cref="SupportedDatabase"/> value or dialect class of their own — connect to them as
     /// plain <see cref="PostgreSql"/>.
     /// </remarks>
-    PostgreSql = 1,
+    PostgreSql = 1 << 0,
 
     /// <summary>
     /// Microsoft SQL Server. Strong SQL standard compliance with T-SQL-specific extensions
     /// (<c>MERGE</c>, <c>OUTPUT</c>, <c>TOP</c>, bracket identifier quoting normalized to ANSI
     /// double-quotes via <c>QUOTED_IDENTIFIER ON</c>).
     /// </summary>
-    SqlServer = 2,
+    SqlServer = 1 << 1,
 
     /// <summary>
     /// Oracle Database. Largely standard SQL with long-standing legacy quirks — <c>ROWNUM</c>
     /// paging, PL/SQL anonymous-block stored-procedure calls, no boolean type.
     /// </summary>
-    Oracle = 4,
+    Oracle = 1 << 2,
 
     /// <summary>
     /// Firebird. Good standard SQL adherence with a smaller ecosystem than the mainstream
     /// engines; open-source descendant of <see cref="InterBase"/>.
     /// </summary>
-    Firebird = 8,
+    Firebird = 1 << 3,
 
     /// <summary>
     /// CockroachDB. Modern distributed SQL database using the PostgreSQL wire protocol and
     /// dialect family, with reasonable standard compliance.
     /// </summary>
-    CockroachDb = 16,
+    CockroachDb = 1 << 4,
 
     /// <summary>
     /// MariaDB. A MySQL-compatible fork with generally better standards adherence than
     /// <see cref="MySql"/> itself, while remaining MySQL-rooted.
     /// </summary>
-    MariaDb = 32,
+    MariaDb = 1 << 5,
 
     /// <summary>
     /// MySQL. Historically the least standards-compliant of the mainstream relational databases,
@@ -103,99 +103,99 @@ public enum SupportedDatabase
     /// <see cref="SupportedDatabase"/> value or dialect class of its own — connect to it as plain
     /// <see cref="MySql"/>.
     /// </remarks>
-    MySql = 64,
+    MySql = 1 << 6,
 
     /// <summary>
     /// SQLite. Embedded, file-based (or in-memory) database with a minimal subset of SQL —
     /// useful and ubiquitous, but not standard-compliant. Coerced to <c>SingleWriter</c> (file)
     /// or <c>SingleConnection</c> (<c>:memory:</c>) connection modes to match its concurrency model.
     /// </summary>
-    Sqlite = 128,
+    Sqlite = 1 << 7,
 
     /// <summary>
     /// DuckDB. Embedded analytical (OLAP) database with excellent SQL:2016 compliance; shares
     /// SQLite's embedded connection-mode coercion rules.
     /// </summary>
-    DuckDB = 256,
+    DuckDB = 1 << 8,
 
     /// <summary>
     /// YugabyteDB. Distributed SQL database, PostgreSQL wire- and dialect-compatible.
     /// </summary>
-    YugabyteDb = 512,
+    YugabyteDb = 1 << 9,
 
     /// <summary>
     /// TiDB. Distributed SQL database, MySQL wire- and dialect-compatible.
     /// </summary>
-    TiDb = 1024,
+    TiDb = 1 << 10,
 
     /// <summary>
     /// Snowflake. Cloud data warehouse with strong SQL:2016 compliance. Opt-in in the integration
     /// test matrix (<c>INCLUDE_SNOWFLAKE=true</c>) since it requires live cloud credentials rather
     /// than running in a standard Docker container.
     /// </summary>
-    Snowflake = 2048,
+    Snowflake = 1 << 11,
 
     /// <summary>
     /// AWS Aurora MySQL. A managed AWS service with no Docker image, detected at runtime via
     /// version-string probing and routed to the <see cref="MySql"/> dialect — there is no
     /// separate Aurora MySQL dialect class.
     /// </summary>
-    AuroraMySql = 4096,
+    AuroraMySql = 1 << 12,
 
     /// <summary>
     /// AWS Aurora PostgreSQL. A managed AWS service with no Docker image, detected at runtime via
     /// version-string probing and routed to the <see cref="PostgreSql"/> dialect — there is no
     /// separate Aurora PostgreSQL dialect class.
     /// </summary>
-    AuroraPostgreSql = 8192,
+    AuroraPostgreSql = 1 << 13,
 
     /// <summary>
     /// IBM Db2 (LUW). Enterprise RDBMS with strong SQL standard compliance
     /// (<c>FETCH FIRST n ROWS ONLY</c> paging, <c>CALL</c>-style stored procedures).
     /// </summary>
-    Db2 = 16384,
+    Db2 = 1 << 14,
 
     /// <summary>
     /// <c>pengdows.flatfile</c>'s embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/
     /// NDJSON files — not a traditional RDBMS, but exposed as a dialect for the same
     /// SQL-generation pipeline.
     /// </summary>
-    FlatFile = 32768,
+    FlatFile = 1 << 15,
 
     /// <summary>
     /// SingleStore (formerly MemSQL). Distributed, MySQL-wire-compatible database. Gets its own
     /// enum value (for detection/telemetry), but reuses <see cref="MySql"/>'s dialect class —
     /// there is no dedicated SingleStore dialect.
     /// </summary>
-    SingleStore = 65536,
+    SingleStore = 1 << 16,
 
     /// <summary>
-    /// Sybase (SAP) Adaptive Server Enterprise — T-SQL family, legacy SAP database. Named
-    /// <c>Sybase</c>, not <c>SybaseASE</c>, on this branch — matches 3.0's naming/bit value, but
-    /// this branch deliberately keeps the pre-3.0 name since the rename is a breaking API change
-    /// this patch line does not make.
+    /// Sybase (SAP) Adaptive Server Enterprise. T-SQL-family legacy database with its own
+    /// distinct-error-code exception classification (kept separate from the shared
+    /// <see cref="pengdows.crud.dialects.ISqlDialect"/>-delegated classification other dialects use).
     /// </summary>
-    Sybase = 131072,
+    SybaseASE = 1 << 17,
+
 
     /// <summary>
     /// Google Cloud Spanner, accessed via its PostgreSQL interface (including Spanner Omni
     /// through the PGAdapter proxy). pengdows.crud has no support for Spanner's native GoogleSQL
     /// dialect — only the PostgreSQL-compatible interface.
     /// </summary>
-    Spanner = 262144,
+    Spanner = 1 << 18,
 
     /// <summary>
     /// IBM Informix Dynamic Server (IDS). Owner-qualified schemas and positional (<c>?</c>)
     /// parameters.
     /// </summary>
-    Informix = 524288,
+    Informix = 1 << 19,
 
     /// <summary>
     /// SAP HANA. Column-store, in-memory RDBMS with positional (<c>?</c>) parameters and MVCC
     /// isolation. Opt-in in the integration test matrix (<c>INCLUDE_SAPHANA=true</c>) — a real
     /// Docker image exists, but needs 16-32GB RAM, beyond a standard CI runner.
     /// </summary>
-    SapHana = 1048576,
+    SapHana = 1 << 20,
 
     /// <summary>
     /// Embarcadero InterBase — <see cref="Firebird"/>'s proprietary commercial ancestor. Named
@@ -203,7 +203,7 @@ public enum SupportedDatabase
     /// Opt-in in the integration test matrix (<c>INCLUDE_INTERBASE=true</c>) — requires a
     /// personal, node-locked Developer Edition license and a native <c>libgds.so</c> on the host.
     /// </summary>
-    InterBase = 2097152,
+    InterBase = 1 << 21,
 
     /// <summary>
     /// Microsoft Access (Jet/ACE), via <c>System.Data.OleDb</c> and the Microsoft Access Database
@@ -212,5 +212,5 @@ public enum SupportedDatabase
     /// Opt-in in the integration test matrix (<c>INCLUDE_ACCESS=true</c>) — Windows-only and
     /// COM-interop-dependent (ADOX), with no Docker image at all.
     /// </summary>
-    Access = 4194304
+    Access = 1 << 22
 }

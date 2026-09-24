@@ -132,7 +132,7 @@ public class SqlDialectHelperTests
     public void GetNaturalKeyLookupQuery_IncludesTopClauseForSybase()
     {
         // ASE has no LIMIT clause but does support TOP N (verified live) — same shape as SQL Server.
-        var dialect = CreateNaturalKeyDialect(SupportedDatabase.Sybase, true);
+        var dialect = CreateNaturalKeyDialect(SupportedDatabase.SybaseASE, true);
         var sql = dialect.GetNaturalKeyLookupQuery("orders", "id", new[] { "name" }, new[] { ":name" });
 
         Assert.Contains("SELECT TOP 1", sql, StringComparison.OrdinalIgnoreCase);
