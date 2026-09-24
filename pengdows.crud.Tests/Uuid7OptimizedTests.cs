@@ -4,6 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("Uuid7StaticStateSerial")]
 public class Uuid7OptimizedTests
 {
     // Reset configuration to default before each test to ensure isolation
@@ -469,5 +470,113 @@ public class Uuid7OptimizedTests
             rfc[15];
 
         return ((UInt128)randA << 62) | randB;
+    }
+
+    [Fact]
+    public void NewUuid7_ThrowsWhenCounterExhausted_AndFailFastOnBurstIsTrue()
+    {
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.SingleInstance, FailFastOnBurst: true));
+
+        Uuid7Optimized.NewUuid7();
+        var field = typeof(Uuid7Optimized).GetField("_threadState", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var threadLocal = field.GetValue(null)!;
+        var valueProp = threadLocal.GetType().GetProperty("Value")!;
+        var state = valueProp.GetValue(threadLocal)!;
+        var counterField = state.GetType().GetField("Counter")!;
+        var lastMsField = state.GetType().GetField("LastMs")!;
+
+        var originalCounter = (int)counterField.GetValue(state)!;
+        var originalLastMs = (long)lastMsField.GetValue(state)!;
+
+        try
+        {
+            // Pin LastMs a minute ahead so the call stays in the "same millisecond, counter
+            // exhausted" branch even if the wall clock ticks during the test.
+            counterField.SetValue(state, 4096);
+            lastMsField.SetValue(state, originalLastMs + 60_000);
+
+            var ex = Assert.Throws<InvalidOperationException>(() => Uuid7Optimized.NewUuid7());
+            Assert.Contains("FailFastOnBurst", ex.Message);
+        }
+        finally
+        {
+            counterField.SetValue(state, originalCounter);
+            lastMsField.SetValue(state, originalLastMs);
+            // Static config: don't leak FailFastOnBurst into other tests.
+            Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.NtpSynced));
+        }
+    }
+
+    [Fact]
+    public void NewUuid7RfcBytes_ThrowsWhenCounterExhausted_AndFailFastOnBurstIsTrue()
+    {
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.SingleInstance, FailFastOnBurst: true));
+
+        Span<byte> warmup = stackalloc byte[16];
+        Uuid7Optimized.NewUuid7RfcBytes(warmup);
+        var field = typeof(Uuid7Optimized).GetField("_threadState", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var threadLocal = field.GetValue(null)!;
+        var valueProp = threadLocal.GetType().GetProperty("Value")!;
+        var state = valueProp.GetValue(threadLocal)!;
+        var counterField = state.GetType().GetField("Counter")!;
+        var lastMsField = state.GetType().GetField("LastMs")!;
+
+        var originalCounter = (int)counterField.GetValue(state)!;
+        var originalLastMs = (long)lastMsField.GetValue(state)!;
+
+        try
+        {
+            // Pin LastMs a minute ahead so the call stays in the "same millisecond, counter
+            // exhausted" branch even if the wall clock ticks during the test.
+            counterField.SetValue(state, 4096);
+            lastMsField.SetValue(state, originalLastMs + 60_000);
+
+            Assert.Throws<InvalidOperationException>(() =>
+            {
+                Span<byte> local = stackalloc byte[16];
+                Uuid7Optimized.NewUuid7RfcBytes(local);
+            });
+        }
+        finally
+        {
+            counterField.SetValue(state, originalCounter);
+            lastMsField.SetValue(state, originalLastMs);
+            // Static config: don't leak FailFastOnBurst into other tests.
+            Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.NtpSynced));
+        }
+    }
+
+    // Regression guard: the default (FailFastOnBurst=false) must keep blocking, not throwing.
+    [Fact]
+    public void NewUuid7_StillBlocksOnExhaustion_WhenFailFastOnBurstIsFalse()
+    {
+        Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.NtpSynced));
+
+        Uuid7Optimized.NewUuid7();
+        var field = typeof(Uuid7Optimized).GetField("_threadState", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var threadLocal = field.GetValue(null)!;
+        var valueProp = threadLocal.GetType().GetProperty("Value")!;
+        var state = valueProp.GetValue(threadLocal)!;
+        var counterField = state.GetType().GetField("Counter")!;
+        var lastMsField = state.GetType().GetField("LastMs")!;
+
+        var originalCounter = (int)counterField.GetValue(state)!;
+        var originalLastMs = (long)lastMsField.GetValue(state)!;
+
+        try
+        {
+            counterField.SetValue(state, 4096);
+            lastMsField.SetValue(state, originalLastMs);
+
+            var ex = Record.Exception(() => Uuid7Optimized.NewUuid7());
+            Assert.Null(ex);
+        }
+        finally
+        {
+            counterField.SetValue(state, originalCounter);
+            lastMsField.SetValue(state, originalLastMs);
+            // Static config: don't leak FailFastOnBurst into other tests.
+            Uuid7Optimized.Configure(new Uuid7Options(Uuid7ClockMode.NtpSynced));
+        }
     }
 }

@@ -20,6 +20,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("Uuid7StaticStateSerial")]
 public class CoverageQuickWinsAdditionalTests
 {
     [Fact]

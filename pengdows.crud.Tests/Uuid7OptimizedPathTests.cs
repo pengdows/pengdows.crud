@@ -4,6 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("Uuid7StaticStateSerial")]
 public sealed class Uuid7OptimizedPathTests
 {
     private static readonly BindingFlags NonPublicStatic = BindingFlags.NonPublic | BindingFlags.Static;

@@ -18,7 +18,7 @@ This is the detail most likely to surprise someone reasoning about ordering guar
 
 Each thread can generate up to 4096 IDs/ms (a 12-bit counter) independently of other threads. Exceeding that within one thread makes `NewUuid7()` (and `NewUuid7Bytes`/`NewUuid7RfcBytes`) **block** until the next millisecond (bounded spin, then `Thread.Sleep(SleepMs)`).
 
-`TryNewUuid7(out Guid result)` never blocks — it returns `false` on counter overflow, for latency-sensitive call sites that would rather skip/retry than wait. This is the only non-blocking path: `Uuid7Options.FailFastOnBurst` is accepted and stored by `Configure`, but no generation method currently consults it, so setting it does not make `NewUuid7()` throw or return early.
+`TryNewUuid7(out Guid result)` never blocks — it returns `false` on counter overflow, for latency-sensitive call sites that would rather skip/retry than wait. With `Uuid7Options.FailFastOnBurst` set, `NewUuid7()`/`NewUuid7Bytes`/`NewUuid7RfcBytes` throw `InvalidOperationException` on overflow instead of blocking.
 
 ## Clock drift handling
 
@@ -39,13 +39,13 @@ Uuid7Optimized.Configure(new Uuid7Options(
 
 | `Uuid7ClockMode` | Accuracy assumption | Behavior | Use when |
 |---|---|---|---|
-| `PtpSynced` | ±0.1–1.0ms | Tight skew tolerance, shorter spin waits | PTP-disciplined clusters (EKS Nitro, on-prem PTP) |
+| `PtpSynced` | ±0.1–1.0ms | Tight skew tolerance, shorter spin waits; mode defaults turn `FailFastOnBurst` on (throw instead of block) | PTP-disciplined clusters (EKS Nitro, on-prem PTP) |
 | `NtpSynced` (default) | ±1–10ms | Conservative skew tolerance, longer spin waits, blocks on burst | Most cloud environments with ordinary NTP |
 | `SingleInstance` | N/A | Generous skew tolerance, no cross-node ordering concerns | Single-writer services, embedded systems |
 
-`Uuid7Options` fields: `Mode`, `MaxNegativeSkewMs` (default 5), `MaxSpinCount` (default 128, spin-wait cycles before sleeping on counter overflow), `SleepMs` (default 1), `FailFastOnBurst` (default `false`; currently not consulted — see above).
+`Uuid7Options` fields: `Mode`, `MaxNegativeSkewMs` (default 5), `MaxSpinCount` (default 128, spin-wait cycles before sleeping on counter overflow), `SleepMs` (default 1), `FailFastOnBurst` (default `false`; when true, the blocking generators throw on burst exhaustion — see above).
 
-If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
+If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults — for `PtpSynced` that includes `FailFastOnBurst = true`. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
 
 ## Other entry points
 

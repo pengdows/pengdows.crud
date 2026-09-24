@@ -36,8 +36,8 @@ public enum Uuid7ClockMode
 {
     /// <summary>
     /// PTP/PHC disciplined clocks (±0.1–1.0 ms accuracy).
-    /// Tight skew tolerance, shorter spin waits (default options set FailFastOnBurst, which
-    /// generation does not currently consult).
+    /// Tight skew tolerance, shorter spin waits, and FailFastOnBurst on: NewUuid7 throws on burst
+    /// exhaustion instead of blocking.
     /// Ideal for: PTP-synced clusters (EKS Nitro, on-prem PTP).
     /// </summary>
     PtpSynced,
@@ -64,8 +64,9 @@ public enum Uuid7ClockMode
 /// <param name="MaxNegativeSkewMs">Maximum backward clock drift tolerated before using logical clock (ms)</param>
 /// <param name="MaxSpinCount">Maximum spin-wait cycles before sleeping on counter overflow</param>
 /// <param name="SleepMs">Sleep duration when spin limit exceeded (ms)</param>
-/// <param name="FailFastOnBurst">Stored but not currently consulted: <c>TryNewUuid7</c> always returns false on counter
-/// overflow and <c>NewUuid7</c> always waits for the next millisecond, regardless of this value</param>
+/// <param name="FailFastOnBurst">If true, NewUuid7/NewUuid7RfcBytes throw InvalidOperationException
+/// on counter overflow instead of blocking for the next millisecond. TryNewUuid7 always returns
+/// false on overflow regardless of this setting — it never blocks in the first place.</param>
 public sealed record Uuid7Options(
     Uuid7ClockMode Mode = Uuid7ClockMode.NtpSynced,
     int MaxNegativeSkewMs = 5,
@@ -240,6 +241,8 @@ public static partial class Uuid7Optimized
         // Check counter overflow
         if (tls.Counter > CounterMax)
         {
+            ThrowIfFailFastOnBurst();
+
             // Counter exhausted: wait for next millisecond
             usedMs = BoundedWaitNextMs(usedMs);
             tls.LastMs = usedMs;
@@ -345,6 +348,8 @@ public static partial class Uuid7Optimized
 
         if (tls.Counter > CounterMax)
         {
+            ThrowIfFailFastOnBurst();
+
             usedMs = BoundedWaitNextMs(usedMs);
             tls.LastMs = usedMs;
             tls.Counter = 0;
@@ -384,6 +389,18 @@ public static partial class Uuid7Optimized
 
         // Small drift: pin to last known time
         return lastMs;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ThrowIfFailFastOnBurst()
+    {
+        if (_opts.FailFastOnBurst)
+        {
+            throw new InvalidOperationException(
+                "UUIDv7 generation burst exhausted (4096 IDs already generated in the current " +
+                "millisecond on this thread) and FailFastOnBurst is enabled. Use TryNewUuid7 for " +
+                "non-throwing backoff, or disable FailFastOnBurst to block until the next millisecond.");
+        }
     }
 
     private static long BoundedWaitNextMs(long currentMs)

@@ -260,8 +260,10 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <summary>
     /// Returns <c>SELECT COUNT(*)</c> where <paramref name="column"/> equals <paramref name="value"/>,
     /// optionally combined with an IS NULL or IS NOT NULL check on a second column.
-    /// At most one of <paramref name="andWhereNull"/> or <paramref name="andWhereNotNull"/> is applied;
-    /// if both are set, <paramref name="andWhereNull"/> takes precedence.
+    /// At most one of <paramref name="andWhereNull"/> or <paramref name="andWhereNotNull"/> may be set.
+    /// <exception cref="ArgumentException">
+    /// Both <paramref name="andWhereNull"/> and <paramref name="andWhereNotNull"/> were supplied.
+    /// </exception>
     /// </summary>
     ValueTask<long> CountWhereEqualsAsync(string column, string value,
         string? andWhereNull = null, string? andWhereNotNull = null,

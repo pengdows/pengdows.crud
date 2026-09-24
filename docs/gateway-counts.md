@@ -104,15 +104,13 @@ var pending = await gateway.CountWhereEqualsAsync("queue", "default", andWhereNu
 var fetched = await gateway.CountWhereEqualsAsync("queue", "default", andWhereNotNull: "fetched_at");
 ```
 
-**`andWhereNull` and `andWhereNotNull` are mutually exclusive — but not enforced.** Supplying
+**`andWhereNull` and `andWhereNotNull` are mutually exclusive, and that is enforced.** Supplying
 neither is fine (falls back to the plain equality count shown above); supplying exactly one applies
-that null-state check as documented. Supplying both does **not** throw: `andWhereNull` takes
-precedence and `andWhereNotNull` is silently ignored, so the call below counts only the
-`IS NULL` shape. Pass at most one.
+that null-state check. Supplying both throws `ArgumentException` (`paramName: "andWhereNotNull"`)
+before any SQL is built.
 
 ```csharp
-// Does NOT throw — produces WHERE "queue" = @v AND "fetched_at" IS NULL;
-// the andWhereNotNull argument is ignored.
+// Throws ArgumentException — at most one null-state check is supported.
 await gateway.CountWhereEqualsAsync("queue", "default",
     andWhereNull: "fetched_at", andWhereNotNull: "fetched_at");
 ```
