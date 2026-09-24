@@ -135,9 +135,7 @@ public class FrameworkMiscellaneousEdgeCaseTests
         // Act & Assert
         Assert.True(context.TotalConnectionFailures >= 0);
         Assert.True(context.TotalConnectionsCreated >= 0);
-        Assert.True(context.TotalConnectionsReused >= 0);
         Assert.True(context.TotalConnectionTimeoutFailures >= 0);
-        Assert.True(context.ConnectionPoolEfficiency >= 0.0 && context.ConnectionPoolEfficiency <= 1.0);
     }
 
     [Theory]
@@ -242,38 +240,17 @@ public class FrameworkMiscellaneousEdgeCaseTests
         // Act - Access all statistics properties
         var failures = context.TotalConnectionFailures;
         var created = context.TotalConnectionsCreated;
-        var reused = context.TotalConnectionsReused;
         var timeouts = context.TotalConnectionTimeoutFailures;
-        var efficiency = context.ConnectionPoolEfficiency;
 
         // Assert - All should be valid values
         Assert.True(failures >= 0);
         Assert.True(created >= 0);
-        Assert.True(reused >= 0);
         Assert.True(timeouts >= 0);
-        Assert.True(efficiency >= 0.0 && efficiency <= 1.0);
 
         // Test that tracking methods update the counters
         var initialFailures = failures;
         context.TrackConnectionFailure(new TimeoutException());
         Assert.True(context.TotalConnectionFailures > initialFailures);
-    }
-
-    [Fact]
-    public void DatabaseContext_TrackConnectionReuse_IncrementsCounter()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=test", factory);
-        var initial = context.TotalConnectionsReused;
-
-        // Act - Use reflection to call internal TrackConnectionReuse
-        var method = typeof(DatabaseContext).GetMethod("TrackConnectionReuse",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        method?.Invoke(context, null);
-
-        // Assert
-        Assert.True(context.TotalConnectionsReused > initial);
     }
 
     [Fact]

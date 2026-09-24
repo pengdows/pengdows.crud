@@ -83,7 +83,6 @@ public class DatabaseContextLifecycleCoverageTests
         };
 
         using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-        context.TrackConnectionReuse();
         context.TrackConnectionFailure(new TimeoutException("boom"));
 
         var metrics = context.Metrics;

@@ -166,7 +166,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     // Additional performance counters for granular connection pool monitoring
     private long _totalConnectionsCreated;
-    private long _totalConnectionsReused;
     private long _totalConnectionFailures;
     private long _totalConnectionTimeoutFailures;
     private CommandPrepareMode _prepareMode;

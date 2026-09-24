@@ -2361,7 +2361,6 @@ All shared counters use `Interlocked` for thread safety:
 // pengdows.crud/DatabaseContext.cs
 private long _connectionCount;
 private long _totalConnectionsCreated;
-private long _totalConnectionsReused;
 private long _totalConnectionFailures;
 
 public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);

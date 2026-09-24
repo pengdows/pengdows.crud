@@ -96,11 +96,6 @@ public partial class DatabaseContext
     public long TotalConnectionsCreated => Interlocked.Read(ref _totalConnectionsCreated);
 
     /// <summary>
-    /// Gets the total number of connections that were reused from the connection pool.
-    /// </summary>
-    public long TotalConnectionsReused => Interlocked.Read(ref _totalConnectionsReused);
-
-    /// <summary>
     /// Gets the total number of connection failures that occurred.
     /// </summary>
     public long TotalConnectionFailures => Interlocked.Read(ref _totalConnectionFailures);
@@ -110,18 +105,6 @@ public partial class DatabaseContext
     /// </summary>
     public long TotalConnectionTimeoutFailures => Interlocked.Read(ref _totalConnectionTimeoutFailures);
 
-    /// <summary>
-    /// Gets the connection pool efficiency ratio (reused / total created).
-    /// Returns 0 if no connections have been created.
-    /// </summary>
-    public double ConnectionPoolEfficiency
-    {
-        get
-        {
-            var total = TotalConnectionsCreated;
-            return total == 0 ? 0.0 : (double)TotalConnectionsReused / total;
-        }
-    }
 
     /// <summary>
     /// Exposes the internal MetricsCollector for infrastructure use.
@@ -179,14 +162,6 @@ public partial class DatabaseContext
         }
 
         _logger.LogWarning(exception, "Connection failure tracked: {ExceptionType}", exception.GetType().Name);
-    }
-
-    /// <summary>
-    /// Tracks a connection reuse for monitoring purposes.
-    /// </summary>
-    internal void TrackConnectionReuse()
-    {
-        Interlocked.Increment(ref _totalConnectionsReused);
     }
 
     private static bool IsTimeoutException(Exception exception)

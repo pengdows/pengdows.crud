@@ -325,20 +325,6 @@ public class DataReaderMappingAndCoercionSupplementalTests
     }
 
     [Fact]
-    public void DatabaseContext_ConnectionPoolEfficiency_WithZeroConnections_ReturnsZero()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act
-        var efficiency = context.ConnectionPoolEfficiency;
-
-        // Assert
-        Assert.Equal(0.0, efficiency);
-    }
-
-    [Fact]
     public void DatabaseContext_WithConfiguration_InitializesCorrectly()
     {
         // Arrange
