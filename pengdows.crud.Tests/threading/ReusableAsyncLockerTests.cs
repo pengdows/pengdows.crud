@@ -87,7 +87,9 @@ public class ReusableAsyncLockerTests
     [Fact]
     public async Task LockAsync_Contended_WaitsUntilReleased()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        // A safety net, not a measurement: under the full suite on two frameworks at once,
+        // thread-pool continuations were observed delayed past 5s.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(60));
         var semaphore = new SemaphoreSlim(1, 1);
         var locker = new ReusableAsyncLocker(semaphore);
 

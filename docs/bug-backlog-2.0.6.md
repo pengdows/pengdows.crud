@@ -235,6 +235,13 @@ These are the rules the code is being brought in line with.
   `IsEmpty` unchanged (still true for unbounded). Live: `PostgreSqlRangeRoundTripTests` on
   PostgreSQL + YugabyteDB.)* *Release note:* `Range<T>.Empty` no longer equals `default`/`(,)`.
   **3.0:** still writes `Empty` as unbounded ("all values").
+- [x] **Other intermittent failures under the combined net8.0+net10.0 run** — captured on 3.0:
+  `PoolGovernorAsyncAcquireGapTests…ReaderWaitsOutBusyTurnstile…` failed with the test's own 10s
+  `WaitAsync` timing out *before* the reader's equal 10s acquire deadline surfaced, i.e. thread-pool
+  continuations were delayed past 10s — starvation from two test hosts on 8 cores, not a lost
+  wakeup. That test and `ReusableAsyncLockerTests.LockAsync_Contended_WaitsUntilReleased` (5s)
+  now use 60s safety-net timeouts. The suite doesn't raise `ThreadPool` minimum threads; doing so
+  would cut these flakes but could also mask the next sync-over-async bug, so it is left as is.
 - [x] **Flaky `PoolGovernorTurnstileTests…QueueExceedsMaxQueueDepth`** — test race: the occupier's 2s
   timeout could expire before a starved polling loop saw it. *(fixed in the test: dedicated thread,
   30s timeout, released at the end.)* 16 loaded combined runs: the other timing tests didn't fail.

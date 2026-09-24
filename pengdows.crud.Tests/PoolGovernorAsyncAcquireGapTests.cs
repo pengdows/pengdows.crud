@@ -109,8 +109,12 @@ public sealed class PoolGovernorAsyncAcquireGapTests
         using var turnstile = new SemaphoreSlim(1, 1);
         using var writer = new PoolGovernor(PoolLabel.Writer, "async-slow-path-w", 1,
             TimeSpan.FromSeconds(30), turnstile: turnstile, holdTurnstile: true);
+        // Generous margins: under the full suite running on two frameworks at once, thread-pool
+        // continuations were observed to be delayed past 10s (the test's own WaitAsync timed out
+        // before the reader's equal 10s acquire deadline could even surface), so neither timeout
+        // here is what the test measures — only that the reader gets in once the writer releases.
         using var reader = new PoolGovernor(PoolLabel.Reader, "async-slow-path-r", 5,
-            TimeSpan.FromSeconds(10), trackMetrics: true, turnstile: turnstile, holdTurnstile: false);
+            TimeSpan.FromSeconds(60), trackMetrics: true, turnstile: turnstile, holdTurnstile: false);
 
         var writerSlot = await writer.AcquireAsync();
 
@@ -121,7 +125,7 @@ public sealed class PoolGovernorAsyncAcquireGapTests
 
         await writerSlot.DisposeAsync();
 
-        var readerSlot = await readerTask.WaitAsync(TimeSpan.FromSeconds(10));
+        var readerSlot = await readerTask.WaitAsync(TimeSpan.FromSeconds(60));
 
         try
         {
