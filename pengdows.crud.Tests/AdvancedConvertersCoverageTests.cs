@@ -118,16 +118,11 @@ public class AdvancedConvertersCoverageTests
     [Fact]
     public void PostgreSqlIntervalConverter_FormatsIso_ForPostgres()
     {
-        // Ported from the 2.0 branch. Production behavior differs from 2.0: ConvertToProvider for
-        // PostgreSQL/CockroachDb/YugabyteDb now returns a plain TimeSpan (via
-        // PostgreSqlInterval.ToTimeSpan()) rather than an ISO 8601 string — Npgsql binds PostgreSQL
-        // INTERVAL values from TimeSpan directly (see PostgreSqlIntervalConverter.cs remarks).
-        // FromProviderValue still parses ISO text regardless of provider.
         var converter = new PostgreSqlIntervalConverter();
         var interval = new PostgreSqlInterval(0, 1, 0);
 
         var providerValue = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
-        Assert.Equal(TimeSpan.FromDays(1), providerValue);
+        Assert.Equal("P1D", providerValue);
 
         var parsed = (PostgreSqlInterval?)converter.FromProviderValue("P2D", SupportedDatabase.PostgreSql);
         Assert.NotNull(parsed);

@@ -32,7 +32,10 @@ public class SpatialConverterSqlServerBranchTests
         EnsureSqlServerTypesLoaded();
 
         var converter = new GeometryConverter();
-        var value = Geometry.FromWellKnownBinary(new byte[] { 1, 2, 3, 4 }, 4326);
+        // Real WKB for POINT(1 2): the real Microsoft.SqlServer.Types parser rejects arbitrary bytes.
+        var wkb = Microsoft.SqlServer.Types.SqlGeometry.STGeomFromText(
+            new System.Data.SqlTypes.SqlChars("POINT(1 2)".ToCharArray()), 4326).STAsBinary().Value;
+        var value = Geometry.FromWellKnownBinary(wkb, 4326);
 
         var providerValue = converter.ToProviderValue(value, SupportedDatabase.SqlServer);
 
@@ -99,7 +102,7 @@ public class SpatialConverterSqlServerBranchTests
         });
 
         var ex = Assert.Throws<InvalidOperationException>(() => converter.ToProviderValue(invalid, SupportedDatabase.SqlServer));
-        Assert.Contains("must contain WKB or WKT", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("require WKB or WKT", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     private static void EnsureSqlServerTypesLoaded()
@@ -211,6 +214,11 @@ public class SpatialConverterSqlServerBranchTests
         protected override Geometry WrapWithProvider(Geometry spatial, object providerValue)
         {
             return spatial.WithProviderValue(providerValue);
+        }
+
+        protected override Geometry FromBinaryWithSrid(ReadOnlySpan<byte> wkb, int srid, object providerValue)
+        {
+            return Geometry.FromWellKnownBinary(wkb, srid, providerValue);
         }
     }
 }

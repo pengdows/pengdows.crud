@@ -633,7 +633,9 @@ public class TypesAndConvertersEdgeCaseTests
 
         var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-        Assert.Equal(interval.ToTimeSpan(), result);
+        Assert.IsType<string>(result);
+        var text = (string)result!;
+        Assert.StartsWith("P", text);
     }
 
     [Fact]
@@ -644,7 +646,8 @@ public class TypesAndConvertersEdgeCaseTests
 
         var result = converter.ToProviderValue(interval, SupportedDatabase.CockroachDb);
 
-        Assert.Equal(interval.ToTimeSpan(), result);
+        Assert.IsType<string>(result);
+        Assert.Equal("P3M", (string)result!);
     }
 
     [Fact]
@@ -653,9 +656,9 @@ public class TypesAndConvertersEdgeCaseTests
         var converter = new PostgreSqlIntervalConverter();
         var interval = new PostgreSqlInterval(6, 0, 0);
 
-        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
 
-        Assert.Equal(TimeSpan.Zero, result);
+        Assert.Equal("P6M", result);
     }
 
     [Fact]
@@ -664,9 +667,9 @@ public class TypesAndConvertersEdgeCaseTests
         var converter = new PostgreSqlIntervalConverter();
         var interval = new PostgreSqlInterval(0, 15, 0);
 
-        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
 
-        Assert.Equal(TimeSpan.FromDays(15), result);
+        Assert.Equal("P15D", result);
     }
 
     [Fact]
@@ -677,9 +680,11 @@ public class TypesAndConvertersEdgeCaseTests
         var microseconds = (2L * 3600 + 30 * 60) * 1_000_000;
         var interval = new PostgreSqlInterval(0, 0, microseconds);
 
-        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
 
-        Assert.Equal(TimeSpan.FromHours(2.5), result);
+        Assert.Contains("T", result);
+        Assert.Contains("2H", result);
+        Assert.Contains("30M", result);
     }
 
     [Fact]
@@ -690,9 +695,10 @@ public class TypesAndConvertersEdgeCaseTests
         var microseconds = 45L * 1_000_000;
         var interval = new PostgreSqlInterval(0, 0, microseconds);
 
-        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
 
-        Assert.Equal(TimeSpan.FromSeconds(45), result);
+        Assert.Contains("T", result);
+        Assert.Contains("45S", result);
     }
 
     [Fact]
@@ -701,9 +707,9 @@ public class TypesAndConvertersEdgeCaseTests
         var converter = new PostgreSqlIntervalConverter();
         var interval = new PostgreSqlInterval(0, 0, 0);
 
-        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
 
-        Assert.Equal(TimeSpan.Zero, result);
+        Assert.Equal("P0D", result);
     }
 
     [Fact]
@@ -785,9 +791,13 @@ public class TypesAndConvertersEdgeCaseTests
         // 1 hour = 3600 * 1_000_000 microseconds
         var interval = new PostgreSqlInterval(2, 3, 3_600_000_000);
 
-        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
 
-        Assert.Equal(TimeSpan.FromDays(3) + TimeSpan.FromHours(1), result);
+        Assert.StartsWith("P", result);
+        Assert.Contains("2M", result);
+        Assert.Contains("3D", result);
+        Assert.Contains("T", result);
+        Assert.Contains("1H", result);
     }
 
     #endregion

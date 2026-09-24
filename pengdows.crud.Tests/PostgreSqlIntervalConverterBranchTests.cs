@@ -28,7 +28,7 @@ namespace pengdows.crud.Tests
 
             var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
 
-            Assert.Equal(TimeSpan.Zero, result);
+            Assert.Equal("P0D", result);
         }
 
         [Fact]

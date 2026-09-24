@@ -107,7 +107,7 @@ public class AdvancedConvertersTests
         var interval = new PostgreSqlInterval(0, 1, 0);
 
         var providerValue = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
-        Assert.Equal(TimeSpan.FromDays(1), providerValue);
+        Assert.Equal("P1D", providerValue);
 
         var parsed = (PostgreSqlInterval?)converter.FromProviderValue("P2D", SupportedDatabase.PostgreSql);
         Assert.NotNull(parsed);

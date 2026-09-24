@@ -291,7 +291,7 @@ public class AdvancedTypeConverterTests
         var success = converter.TryConvertFromProvider(iso, SupportedDatabase.PostgreSql, out var result);
 
         Assert.True(success);
-        Assert.Equal(2, result.Months);
+        Assert.Equal(14, result.Months); // 1 year + 2 months
         Assert.Equal(3, result.Days);
         Assert.True(result.Microseconds > 0);
     }

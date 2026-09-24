@@ -76,4 +76,20 @@ public class JsonValueTests
         Assert.True(original.Equals((object)clone));
         Assert.Equal(original.GetHashCode(), clone.GetHashCode());
     }
+
+    // A JsonValue built from a caller's JsonDocument must not dispose that document: AsElement()
+    // used to wrap it in a using, so later AsString()/ToObject() (and the caller) hit a disposed document.
+    [Fact]
+    public void AsElement_FromDocument_DoesNotDisposeCallersDocument()
+    {
+        using var document = JsonDocument.Parse("{\"name\":\"widget\",\"qty\":3}");
+        var value = new JsonValue(document);
+
+        var element = value.AsElement();
+
+        Assert.Equal("widget", element.GetProperty("name").GetString());
+        Assert.Contains("widget", value.AsString());
+        Assert.Equal(3, value.ToObject<JsonElement>().GetProperty("qty").GetInt32());
+        Assert.Equal(JsonValueKind.Object, document.RootElement.ValueKind);
+    }
 }

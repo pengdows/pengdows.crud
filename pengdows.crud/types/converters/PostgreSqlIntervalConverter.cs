@@ -6,16 +6,22 @@
 // - Converts between database interval values and PostgreSqlInterval value objects.
 // - Supports years, months, days, hours, minutes, seconds, and microseconds.
 // - Provider-specific:
-//   * PostgreSQL/CockroachDB: INTERVAL type with ISO 8601 output
+//   * PostgreSQL/CockroachDB/YugabyteDB: INTERVAL, written as Npgsql's NpgsqlInterval
 //   * Others: Raw value (application-level storage)
-// - ConvertToProvider(): Returns ISO 8601 format (P3Y6M4DT12H30M5S) for PostgreSQL.
-// - TryConvertFromProvider(): Handles PostgreSqlInterval, TimeSpan, string, NpgsqlTimeSpan.
-// - Parse(): Handles ISO 8601 duration and PostgreSQL text format.
+// - ConvertToProvider(): For the PostgreSQL family returns NpgsqlTypes.NpgsqlInterval (months,
+//   days, microseconds — the only Npgsql write type that keeps months; resolved by name). Falls
+//   back to ISO 8601-style text only when Npgsql isn't loaded.
+// - TryConvertFromProvider(): Handles PostgreSqlInterval, NpgsqlInterval, TimeSpan, string,
+//   NpgsqlTimeSpan. Hydration reads interval columns as NpgsqlInterval (IntervalFieldReader), so
+//   months and the stored days/time split round-trip.
+// - Parse(): Handles ISO 8601-style durations (Y/M/W/D date part — years fold into months, weeks
+//   into days — and H/M/S time part); PostgreSQL's verbose text format ("1 year 2 mons") is not supported.
 // - Components: Months (includes years), Days, Microseconds (sub-day time).
 // - Thread-safe and immutable value objects.
 // =============================================================================
 
 using System.Globalization;
+using System.Reflection;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -38,11 +44,13 @@ namespace pengdows.crud.types.converters;
 /// <list type="bullet">
 /// <item><description>PostgreSqlInterval → PostgreSqlInterval (pass-through)</description></item>
 /// <item><description>TimeSpan → PostgreSqlInterval (converts via PostgreSqlInterval.FromTimeSpan)</description></item>
-/// <item><description>string → PostgreSqlInterval (parses ISO 8601 duration or PostgreSQL interval format)</description></item>
+/// <item><description>string → PostgreSqlInterval (parses ISO 8601-style durations with Y/M/W/D and H/M/S components)</description></item>
 /// <item><description>NpgsqlTimeSpan → PostgreSqlInterval (converts Npgsql provider-specific type via reflection)</description></item>
 /// </list>
-/// <para><strong>Format:</strong> Supports ISO 8601 duration format (P3Y6M4DT12H30M5S) and PostgreSQL text format.
-/// Output format is ISO 8601 for PostgreSQL/CockroachDB providers.</para>
+/// <para><strong>Format:</strong> Reads ISO 8601-style durations such as "P3Y6M4DT12H30M5S" (years fold into
+/// months, weeks into days; PostgreSQL's verbose text format is not parsed). For PostgreSQL/CockroachDB/YugabyteDB
+/// the value is written as Npgsql's <c>NpgsqlInterval</c>, which keeps months; ISO 8601 text is only a fallback
+/// when Npgsql isn't loaded.</para>
 /// <para><strong>Components:</strong> PostgreSqlInterval has three fields: Months (includes years), Days, and Microseconds (sub-day time).
 /// This matches PostgreSQL's internal representation.</para>
 /// <para><strong>Thread safety:</strong> Converter instances are thread-safe. PostgreSqlInterval value objects are immutable and thread-safe.</para>
@@ -83,20 +91,29 @@ namespace pengdows.crud.types.converters;
 /// </example>
 internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<PostgreSqlInterval>
 {
+    // NpgsqlTypes.NpgsqlInterval(int months, int days, long time) — resolved by name so pengdows.crud
+    // takes no dependency on Npgsql. It is the only Npgsql write type that keeps months; a string
+    // is rejected for NpgsqlDbType.Interval, and TimeSpan cannot represent months.
+    private static readonly Lazy<ConstructorInfo?> NpgsqlIntervalCtor = new(() =>
+        Type.GetType("NpgsqlTypes.NpgsqlInterval, Npgsql", throwOnError: false)
+            ?.GetConstructor(new[] { typeof(int), typeof(int), typeof(long) }));
+
     protected override object? ConvertToProvider(PostgreSqlInterval value, SupportedDatabase provider)
     {
-        if (provider != SupportedDatabase.PostgreSql && provider != SupportedDatabase.CockroachDb &&
-            provider != SupportedDatabase.YugabyteDb)
+        if (provider is not (SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb
+            or SupportedDatabase.YugabyteDb))
         {
             return value;
         }
 
-        // Npgsql binds PostgreSQL INTERVAL values from TimeSpan. A string
-        // combined with NpgsqlDbType.Interval is rejected during preparation.
-        // PostgreSqlInterval retains month/day/microsecond structure on the
-        // CLR side; the provider's TimeSpan representation preserves the
-        // day/time portion supported by the ADO.NET type.
-        return value.ToTimeSpan();
+        var ctor = NpgsqlIntervalCtor.Value;
+        if (ctor != null)
+        {
+            return ctor.Invoke(new object[] { value.Months, value.Days, value.Microseconds });
+        }
+
+        // Npgsql not loaded (no Npgsql connection is possible): fall back to ISO 8601 text.
+        return FormatIso8601(value);
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out PostgreSqlInterval result)
@@ -117,6 +134,17 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
                 default:
                     {
                         var type = value.GetType();
+                        if (type.FullName == "NpgsqlTypes.NpgsqlInterval")
+                        {
+                            // Npgsql's full-fidelity interval (months, days, microseconds), read by
+                            // IntervalFieldReader so months and the stored days/time split survive.
+                            result = new PostgreSqlInterval(
+                                Convert.ToInt32(type.GetProperty("Months")!.GetValue(value), CultureInfo.InvariantCulture),
+                                Convert.ToInt32(type.GetProperty("Days")!.GetValue(value), CultureInfo.InvariantCulture),
+                                Convert.ToInt64(type.GetProperty("Time")!.GetValue(value), CultureInfo.InvariantCulture));
+                            return true;
+                        }
+
                         if (type.FullName?.Contains("NpgsqlTimeSpan", StringComparison.OrdinalIgnoreCase) == true)
                         {
                             var monthsProp = type.GetProperty("Months");
@@ -164,27 +192,33 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
             builder.Append('D');
         }
 
-        var hasTime = value.Microseconds != 0;
-        if (hasTime)
+        if (value.Microseconds != 0)
         {
-            var time = TimeSpan.FromTicks(value.Microseconds * 10);
+            // Work from total microseconds: TimeSpan's Hours/Seconds components would drop whole
+            // days held in the time part and anything below a millisecond.
+            const long MicrosPerHour = 3_600_000_000L;
+            const long MicrosPerMinute = 60_000_000L;
+            var hours = value.Microseconds / MicrosPerHour;
+            var remainder = value.Microseconds % MicrosPerHour;
+            var minutes = remainder / MicrosPerMinute;
+            remainder %= MicrosPerMinute;
+
             builder.Append('T');
-            if (time.Hours != 0)
+            if (hours != 0)
             {
-                builder.Append(time.Hours);
+                builder.Append(hours);
                 builder.Append('H');
             }
 
-            if (time.Minutes != 0)
+            if (minutes != 0)
             {
-                builder.Append(time.Minutes);
+                builder.Append(minutes);
                 builder.Append('M');
             }
 
-            if (time.Seconds != 0 || time.Milliseconds != 0)
+            if (remainder != 0)
             {
-                var seconds = time.Seconds + time.Milliseconds / 1000.0;
-                builder.Append(seconds.ToString(CultureInfo.InvariantCulture));
+                builder.Append((remainder / 1_000_000m).ToString("0.######", CultureInfo.InvariantCulture));
                 builder.Append('S');
             }
         }
@@ -235,13 +269,24 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
                     continue;
                 }
 
-                if (c == 'M' && number.Length > 0)
+                if (number.Length > 0)
                 {
-                    months = int.Parse(number, CultureInfo.InvariantCulture);
-                }
-                else if (c == 'D' && number.Length > 0)
-                {
-                    days = int.Parse(number, CultureInfo.InvariantCulture);
+                    var n = int.Parse(number, CultureInfo.InvariantCulture);
+                    switch (c)
+                    {
+                        case 'Y':
+                            months += n * 12;
+                            break;
+                        case 'M':
+                            months += n;
+                            break;
+                        case 'W':
+                            days += n * 7;
+                            break;
+                        case 'D':
+                            days += n;
+                            break;
+                    }
                 }
 
                 number = string.Empty;

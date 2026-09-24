@@ -30,6 +30,11 @@ public class SpatialConverterBranchTests
         {
             return spatial.WithProviderValue(providerValue);
         }
+
+        protected override Geometry FromBinaryWithSrid(ReadOnlySpan<byte> wkb, int srid, object providerValue)
+        {
+            return Geometry.FromWellKnownBinary(wkb, srid, providerValue);
+        }
     }
 
     private sealed class SqlGeometryStub

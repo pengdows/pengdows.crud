@@ -424,8 +424,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
-    /// Sets the connection to fail on the next Open() or OpenAsync() call
+    /// Sets the connection to fail on Open()/OpenAsync() calls until reset
     /// </summary>
+    /// <param name="shouldFail">Whether opens fail.</param>
+    /// <param name="skipFirstOpen">When true, the next open succeeds and every open after it fails.</param>
     public void SetFailOnOpen(bool shouldFail = true, bool skipFirstOpen = false)
     {
         _shouldFailOnOpen = shouldFail;
@@ -848,7 +850,12 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         // Check if we should fail on open
         if (_shouldFailOnOpen)
         {
-            if (_factoryRef?.ShouldSkipThisOpen() == true)
+            if (_skipFirstFailOnOpen)
+            {
+                // SetFailOnOpen(skipFirstOpen: true): let this one open through, fail from the next.
+                _skipFirstFailOnOpen = false;
+            }
+            else if (_factoryRef?.ShouldSkipThisOpen() == true)
             {
                 // Skip this open (factory-level first open)
             }
