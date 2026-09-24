@@ -1526,12 +1526,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // DbMode.SingleConnection: a read through the context while a transaction is open on
             // the shared connection is rejected (it would run outside that transaction, or be
             // silently enlisted in it). Otherwise the reader holds the gate for its lifetime, so
-            // a transaction can't begin underneath it; writes through this path wait their turn
-            // exactly as ExecuteNonQueryAsync's do.
+            // a transaction can't begin underneath it; writes through this path (e.g. the
+            // compound INSERT ...; SELECT create) wait their turn exactly as ExecuteNonQueryAsync's do.
             singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
             if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
             {
-                if (_context is DatabaseContext singleConnectionContext)
+                if (executionType == ExecutionType.Read && _context is DatabaseContext singleConnectionContext)
                 {
                     singleConnectionContext.ThrowIfSingleConnectionTransactionOpen();
                 }

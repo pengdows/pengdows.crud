@@ -172,4 +172,43 @@ public class SingleConnectionConcurrentTransactionGuardTests
 
         Assert.True(writeCompleted, "Ordinary operation should succeed once the transaction completes.");
     }
+
+    [Fact]
+    public async Task OrdinaryWrite_ViaExecuteReaderAsync_WhileTransactionIsActive_BlocksThenSucceedsOnceTransactionCompletes()
+    {
+        // Regression: TableGateway.Core.cs's compound-statement CreateAsync path (e.g. SQLite's
+        // "INSERT; SELECT last_insert_rowid()") issues its write through ExecuteReaderAsync(Write),
+        // not ExecuteNonQueryAsync — that path must be gated identically, or it silently bypasses
+        // the exact absorption/rollback race this guard exists to close.
+        await using var context = CreateSingleConnectionContext();
+
+        var txStarted = new TaskCompletionSource();
+        var releaseTx = new TaskCompletionSource();
+        var writeCompleted = false;
+
+        var txTask = Task.Run(async () =>
+        {
+            using var tx = context.BeginTransaction();
+            txStarted.SetResult();
+            await releaseTx.Task;
+            tx.Commit();
+        });
+
+        await txStarted.Task;
+
+        var writeTask = Task.Run(async () =>
+        {
+            var sc = context.CreateSqlContainer("UPDATE Foo SET Bar = 1");
+            await using var reader = await sc.ExecuteReaderAsync(ExecutionType.Write);
+            writeCompleted = true;
+        });
+
+        await Task.Delay(200);
+        Assert.False(writeCompleted, "Ordinary ExecuteReaderAsync(Write) operation should still be blocked while the transaction is open.");
+
+        releaseTx.SetResult();
+        await Task.WhenAll(txTask, writeTask);
+
+        Assert.True(writeCompleted, "Ordinary ExecuteReaderAsync(Write) operation should succeed once the transaction completes.");
+    }
 }
