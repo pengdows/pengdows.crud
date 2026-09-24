@@ -1697,211 +1697,60 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return false;
     }
 
+    // Default: generic message-based heuristic. Each dialect with its own real error-code/SQLSTATE
+    // signal overrides this — see PostgreSqlDialect (covers Spanner/CockroachDb/YugabyteDb/
+    // AuroraPostgreSql via inheritance), MySqlDialect (covers MariaDb/TiDb/AuroraMySql), Oracle,
+    // DuckDb, Firebird, Db2, Snowflake, SqlServer dialects. SqliteDialect and SybaseDialect already
+    // had their own pre-existing overrides before this method was a switch, unrelated to this list.
     public virtual bool IsUniqueViolation(DbException ex)
     {
-        var errorCode = TryGetProviderErrorCode(ex);
-        var sqlState = TryGetProviderSqlState(ex);
-
-        switch (DatabaseType)
-        {
-            case SupportedDatabase.SqlServer:
-                return errorCode is 2601 or 2627;
-
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.CockroachDb:
-            case SupportedDatabase.YugabyteDb:
-            case SupportedDatabase.AuroraPostgreSql:
-                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.MySql:
-            case SupportedDatabase.MariaDb:
-            case SupportedDatabase.TiDb:
-            case SupportedDatabase.AuroraMySql:
-                return errorCode == 1062;
-
-            case SupportedDatabase.Oracle:
-                return errorCode == 1;
-
-            case SupportedDatabase.Sqlite:
-                return errorCode == 1555 ||
-                       errorCode == 2067 ||
-                       (errorCode == 19 &&
-                        (ex.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
-                         ex.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase))) ||
-                       ex.Message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase) ||
-                       ex.Message.Contains("PRIMARY KEY constraint failed", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.DuckDB:
-                // DuckDB uses SQLSTATE 23505; fall back to message when driver doesn't populate SqlState
-                return string.Equals(sqlState, "23505", StringComparison.OrdinalIgnoreCase) ||
-                       ex.Message.Contains("Duplicate key", StringComparison.OrdinalIgnoreCase) ||
-                       ex.Message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
-                       ex.Message.Contains("primary key constraint", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.Firebird:
-                // Firebird: "violation of PRIMARY OR UNIQUE KEY constraint <name> on table <table>"
-                return ex.Message.Contains("violation of PRIMARY", StringComparison.OrdinalIgnoreCase) ||
-                       ex.Message.Contains("violation of UNIQUE", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.Db2:
-                // IBM's DB2Exception doesn't populate SqlState via a plain "SqlState" property
-                // lookup (it's "SQLState", all-caps, ambiguous with the inherited
-                // DbException.SqlState) and often doesn't populate it via any property at all —
-                // needs DbExceptionTranslationSupport's fuller ambiguity-safe + message-regex
-                // fallback chain rather than the simpler TryGetProviderSqlState above.
-                return string.Equals(DbExceptionTranslationSupport.TryGetSqlState(ex), "23505",
-                    StringComparison.OrdinalIgnoreCase);
-
-            default:
-                return MessageIndicatesUniqueViolation(ex.Message);
-        }
+        return MessageIndicatesUniqueViolation(ex.Message);
     }
 
+    // Default: generic message-based heuristic. This is also what Firebird relies on (no override
+    // needed — its real message, "violation of FOREIGN KEY constraint...", already matches). Each
+    // dialect with its own real error-code/SQLSTATE signal overrides this — see PostgreSqlDialect
+    // (covers Spanner/CockroachDb/YugabyteDb/AuroraPostgreSql via inheritance), MySqlDialect
+    // (covers MariaDb/TiDb/AuroraMySql), Oracle, Sqlite, DuckDb, Db2, Snowflake, SqlServer dialects.
     public virtual bool IsForeignKeyViolation(DbException ex)
     {
-        var errorCode = TryGetProviderErrorCode(ex);
-        var sqlState = TryGetProviderSqlState(ex);
-        var message = ex.Message;
-
-        switch (DatabaseType)
-        {
-            case SupportedDatabase.SqlServer:
-                return errorCode == 547 &&
-                       message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.CockroachDb:
-            case SupportedDatabase.YugabyteDb:
-            case SupportedDatabase.AuroraPostgreSql:
-                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.MySql:
-            case SupportedDatabase.MariaDb:
-            case SupportedDatabase.TiDb:
-            case SupportedDatabase.AuroraMySql:
-                return errorCode is 1451 or 1452;
-
-            case SupportedDatabase.Oracle:
-                return errorCode is 2291 or 2292;
-
-            case SupportedDatabase.Sqlite:
-                return errorCode == 787 ||
-                       message.Contains("FOREIGN KEY constraint failed", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.DuckDB:
-                // DuckDB uses SQLSTATE 23503; fall back to message when driver doesn't populate SqlState
-                return string.Equals(sqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
-                       message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.Db2:
-                // 23503: insert/update FK violation. 23504: deleting a parent row blocked by a
-                // RESTRICT foreign key — confirmed against a live ibmcom/db2 container.
-                var db2FkSqlState = DbExceptionTranslationSupport.TryGetSqlState(ex);
-                return string.Equals(db2FkSqlState, "23503", StringComparison.OrdinalIgnoreCase) ||
-                       string.Equals(db2FkSqlState, "23504", StringComparison.OrdinalIgnoreCase);
-
-            default:
-                return message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
-        }
+        return ex.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
     }
 
+    // Default: generic message-based heuristic. Each dialect with its own real error-code/SQLSTATE
+    // signal overrides this — see PostgreSqlDialect (covers Spanner/CockroachDb/YugabyteDb/
+    // AuroraPostgreSql via inheritance), MySqlDialect (covers MariaDb/TiDb/AuroraMySql), Oracle,
+    // Sqlite, DuckDb, Firebird, Db2, Snowflake, SqlServer dialects.
     public virtual bool IsNotNullViolation(DbException ex)
     {
-        var errorCode = TryGetProviderErrorCode(ex);
-        var sqlState = TryGetProviderSqlState(ex);
-        var message = ex.Message;
-
-        switch (DatabaseType)
-        {
-            case SupportedDatabase.SqlServer:
-                return errorCode == 515;
-
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.CockroachDb:
-            case SupportedDatabase.YugabyteDb:
-            case SupportedDatabase.AuroraPostgreSql:
-                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.MySql:
-            case SupportedDatabase.MariaDb:
-            case SupportedDatabase.TiDb:
-            case SupportedDatabase.AuroraMySql:
-                return errorCode == 1048;
-
-            case SupportedDatabase.Oracle:
-                return errorCode == 1400;
-
-            case SupportedDatabase.Sqlite:
-                return errorCode == 1299 ||
-                       message.Contains("NOT NULL constraint failed", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.DuckDB:
-                // DuckDB uses SQLSTATE 23502; fall back to message when driver doesn't populate SqlState
-                return string.Equals(sqlState, "23502", StringComparison.OrdinalIgnoreCase) ||
-                       message.Contains("NOT NULL constraint", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.Firebird:
-                // Firebird: "validation error for column X, value \"*** null ***\""
-                return message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
-                       message.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase) ||
-                       message.Contains("not-null", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.Db2:
-                return string.Equals(DbExceptionTranslationSupport.TryGetSqlState(ex), "23502",
-                    StringComparison.OrdinalIgnoreCase);
-
-            default:
-                return message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
-                       message.Contains("not null", StringComparison.OrdinalIgnoreCase);
-        }
+        return ex.Message.Contains("not-null", StringComparison.OrdinalIgnoreCase) ||
+               ex.Message.Contains("not null", StringComparison.OrdinalIgnoreCase);
     }
 
+    // Default: generic message-based heuristic. This is also what Firebird relies on (no override
+    // needed — its real message, "check constraint failed", already matches). Each dialect with
+    // its own real error-code/SQLSTATE signal overrides this — see PostgreSqlDialect (covers
+    // Spanner/CockroachDb/YugabyteDb/AuroraPostgreSql via inheritance), MySqlDialect (covers
+    // MariaDb/TiDb/AuroraMySql), Oracle, Sqlite, DuckDb, Db2, Snowflake, SqlServer dialects.
     public virtual bool IsCheckConstraintViolation(DbException ex)
     {
-        var errorCode = TryGetProviderErrorCode(ex);
-        var sqlState = TryGetProviderSqlState(ex);
-        var message = ex.Message;
-
-        switch (DatabaseType)
-        {
-            case SupportedDatabase.SqlServer:
-                return errorCode == 547 &&
-                       message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.CockroachDb:
-            case SupportedDatabase.YugabyteDb:
-            case SupportedDatabase.AuroraPostgreSql:
-                return string.Equals(sqlState, "23514", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.MySql:
-            case SupportedDatabase.MariaDb:
-            case SupportedDatabase.TiDb:
-            case SupportedDatabase.AuroraMySql:
-                return errorCode is 3819 or 4025;
-
-            case SupportedDatabase.Oracle:
-                return errorCode == 2290;
-
-            case SupportedDatabase.Sqlite:
-                return errorCode == 275 ||
-                       message.Contains("CHECK constraint failed", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.DuckDB:
-                // DuckDB uses SQLSTATE 23514; fall back to message when driver doesn't populate SqlState
-                return string.Equals(sqlState, "23514", StringComparison.OrdinalIgnoreCase) ||
-                       message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
-
-            case SupportedDatabase.Db2:
-                // Db2 uses SQLSTATE 23513 for check constraint violations (Postgres/DuckDB use 23514).
-                return string.Equals(DbExceptionTranslationSupport.TryGetSqlState(ex), "23513",
-                    StringComparison.OrdinalIgnoreCase);
-
-            default:
-                return message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
-        }
+        return ex.Message.Contains("check constraint", StringComparison.OrdinalIgnoreCase);
     }
 
+    // Single source of truth for "what category is this raw provider exception" — consumed by
+    // both this method's own callers (metrics/AnalyzeException) AND, as of the exception-
+    // classification unification, every IDbExceptionTranslator.Translate implementation for
+    // Deadlock/SerializationFailure/Timeout/ReadOnlyViolation/AmbiguousResult dispatch, the same
+    // way constraint-kind (Unique/FK/NotNull/Check) was already unified via IsXxxViolation
+    // delegation (see CLAUDE.md "Adding a New Database" checklist item 11). Previously,
+    // TryClassifyProviderException and each translator's own hardcoded SqlState/error-code
+    // switch were two independently hand-maintained lists for the same raw-exception → category
+    // question — the same kind of drift risk that already bit the constraint-kind system once
+    // (SqliteExceptionTranslator's old bare message check disagreeing with SqliteDialect.
+    // IsUniqueViolation). Constraint-kind is checked first here (via the same IsXxxViolation
+    // predicates the translators already delegate to) so a dialect's TryClassifyProviderException
+    // override no longer needs its own redundant SqlState-range check for "is this some kind of
+    // constraint violation" — see each dialect's override, simplified accordingly.
     public virtual DbErrorCategory ClassifyException(Exception exception)
     {
         if (exception is OperationCanceledException)
@@ -1909,10 +1758,27 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return DbErrorCategory.None;
         }
 
-        if (exception is DbException dbEx &&
-            TryClassifyProviderException(dbEx, out var providerCategory))
+        if (exception is DbException dbEx)
         {
-            return providerCategory;
+            if (IsUniqueViolation(dbEx) || IsForeignKeyViolation(dbEx) || IsNotNullViolation(dbEx) ||
+                IsCheckConstraintViolation(dbEx))
+            {
+                return DbErrorCategory.ConstraintViolation;
+            }
+
+            if (TryClassifyProviderException(dbEx, out var providerCategory))
+            {
+                return providerCategory;
+            }
+        }
+
+        // DbExceptionTranslationSupport.LooksLikeTimeout walks the InnerException chain and checks
+        // the exception's real type (not just its own message) — strictly more capable than a bare
+        // message.Contains("timeout") here, and it's what every translator already uses, so this
+        // fallback now agrees with them instead of independently under-detecting timeouts.
+        if (pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.LooksLikeTimeout(exception))
+        {
+            return DbErrorCategory.Timeout;
         }
 
         var message = exception.Message;
@@ -1935,12 +1801,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
             message.Contains("violates", StringComparison.OrdinalIgnoreCase))
         {
             return DbErrorCategory.ConstraintViolation;
-        }
-
-        if (message.Contains("timeout", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("timed out", StringComparison.OrdinalIgnoreCase))
-        {
-            return DbErrorCategory.Timeout;
         }
 
         return DbErrorCategory.Unknown;
@@ -2981,313 +2841,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return false;
     }
 
-    private bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    // Default: no provider-specific classification. Each dialect with real error-code/SQLSTATE
+    // signals overrides this — see PostgreSqlDialect (covers CockroachDb/YugabyteDb/
+    // AuroraPostgreSql via inheritance; Spanner has its own), MySqlDialect (covers
+    // MariaDb/TiDb/AuroraMySql), Oracle, Sqlite, DuckDb, Firebird, Db2, Informix, Hana, Access and
+    // SqlServer dialects. Promoted from a private, non-virtual switch(DatabaseType) block to this
+    // protected virtual hook; the translators reach it through ClassifyException (CLAUDE.md
+    // "Adding a New Database" checklist item 11).
+    protected virtual bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
-        var errorCode = TryGetProviderErrorCode(ex);
-        var sqlState = TryGetProviderSqlState(ex);
-
-        switch (DatabaseType)
-        {
-            case SupportedDatabase.SqlServer:
-                if (errorCode == 1205)
-                {
-                    category = DbErrorCategory.Deadlock;
-                    return true;
-                }
-
-                if (errorCode == 3960)
-                {
-                    category = DbErrorCategory.SerializationFailure;
-                    return true;
-                }
-
-                if (errorCode == -2)
-                {
-                    category = DbErrorCategory.Timeout;
-                    return true;
-                }
-
-                if (errorCode is 515 or 547 or 2601 or 2627)
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.PostgreSql:
-            case SupportedDatabase.CockroachDb:
-            case SupportedDatabase.YugabyteDb:
-            case SupportedDatabase.AuroraPostgreSql:
-                if (string.Equals(sqlState, "40P01", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.Deadlock;
-                    return true;
-                }
-
-                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.SerializationFailure;
-                    return true;
-                }
-
-                if (string.Equals(sqlState, "55P03", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(sqlState, "57014", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.Timeout;
-                    return true;
-                }
-
-                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.MySql:
-            case SupportedDatabase.MariaDb:
-            case SupportedDatabase.TiDb:
-            case SupportedDatabase.AuroraMySql:
-                if (errorCode == 1213)
-                {
-                    category = DbErrorCategory.Deadlock;
-                    return true;
-                }
-
-                if (errorCode == 1205)
-                {
-                    category = DbErrorCategory.Timeout;
-                    return true;
-                }
-
-                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.SerializationFailure;
-                    return true;
-                }
-
-                if (errorCode is 1048 or 1062 or 1451 or 1452 or 3819 or 4025)
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.Oracle:
-                if (errorCode == 60)
-                {
-                    category = DbErrorCategory.Deadlock;
-                    return true;
-                }
-
-                if (errorCode == 8177)
-                {
-                    category = DbErrorCategory.SerializationFailure;
-                    return true;
-                }
-
-                if (errorCode is 1 or 1400 or 2290 or 2291 or 2292)
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.Sqlite:
-                if (errorCode == 19 ||
-                    errorCode == 1555 ||
-                    errorCode == 2067 ||
-                    (errorCode is not null && (errorCode.Value & 0xFF) == 19))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.DuckDB:
-                // DuckDB uses ANSI SQLSTATE codes; class 23 = constraint violations
-                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                // Message fallback: DuckDB drivers may not always populate SqlState
-                if (ex.Message.Contains("Constraint Error", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.Firebird:
-                // Firebird cannot distinguish a true lock-cycle deadlock from an optimistic update
-                // conflict — confirmed against a live container, both scenarios produce the
-                // identical SQLSTATE 40001 / "update conflicts with concurrent update" signature.
-                // Classified as SerializationFailure here, matching the same ambiguous-40001
-                // precedent used for Db2 below.
-                if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) ||
-                    ex.Message.Contains("update conflicts with concurrent update", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.SerializationFailure;
-                    return true;
-                }
-
-                // Firebird 3+ uses SQLSTATE class 23 for all integrity constraint violations
-                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                // Message fallback for drivers that do not populate SqlState
-                if (ex.Message.Contains("violation of", StringComparison.OrdinalIgnoreCase) ||
-                    ex.Message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase) ||
-                    ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.Db2:
-                // IBM's DB2Exception doesn't populate SqlState via the simple property lookup
-                // used above (see IsUniqueViolation's Db2 case) — use the ambiguity-safe +
-                // message-regex fallback chain instead. SQLSTATE 40001 cannot by itself
-                // distinguish deadlock from lock timeout on Db2 (SQLCODE -911 vs -913); treated
-                // as SerializationFailure here, matching Db2ExceptionTranslator's classification.
-                var db2SqlState = DbExceptionTranslationSupport.TryGetSqlState(ex);
-
-                if (string.Equals(db2SqlState, "40001", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.SerializationFailure;
-                    return true;
-                }
-
-                if (!string.IsNullOrWhiteSpace(db2SqlState) && db2SqlState.StartsWith("23", StringComparison.Ordinal))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.Informix:
-                // -143: deadlock (IBM performance-tuning docs). -244: "Could not do a
-                // physical-order read to fetch next row" - the closest documented analog to a
-                // serialization/lock conflict under Repeatable Read isolation (UNVERIFIED: no
-                // distinct SQLSTATE found, category assignment not confirmed live). Matches
-                // InformixExceptionTranslator's classification.
-                var informixCode = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
-
-                if (informixCode == 143)
-                {
-                    category = DbErrorCategory.Deadlock;
-                    return true;
-                }
-
-                if (informixCode == 244)
-                {
-                    category = DbErrorCategory.SerializationFailure;
-                    return true;
-                }
-
-                if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.SapHana:
-                // All three codes captured live from a real Sap.Data.Hana.HanaException.
-                // HanaException.ErrorCode is always the generic COM HRESULT -2147467259
-                // regardless of violation kind, and SqlState is empty for these three - the only
-                // reliable discriminator is HanaException.NativeError, which the local
-                // TryGetProviderErrorCode(ex) above does NOT probe for (it only checks "Number"
-                // then DbException.ErrorCode) - use DbExceptionTranslationSupport's fuller
-                // reflection-based extraction instead, same reasoning as the Db2 case above.
-                // 133: "transaction rolled back by detected deadlock" (SAP KBA 1999998/2658020,
-                // not live-reproduced - requires two contending sessions). 131: "transaction
-                // rolled back by lock wait timeout" (same KBA, not live-reproduced). 129:
-                // "cannot change this transaction's access mode from read-only to update
-                // directly" - CONFIRMED LIVE as the exact NativeError a write attempt gets when
-                // the current (or a stuck-sticky prior - see HanaDialect.GetBaseSessionSettings)
-                // transaction is marked SET TRANSACTION READ ONLY.
-                var hanaNativeError = DbExceptionTranslationSupport.TryGetErrorCode(ex);
-
-                if (hanaNativeError == 133)
-                {
-                    category = DbErrorCategory.Deadlock;
-                    return true;
-                }
-
-                if (hanaNativeError == 131)
-                {
-                    category = DbErrorCategory.Timeout;
-                    return true;
-                }
-
-                if (hanaNativeError == 129)
-                {
-                    category = DbErrorCategory.ReadOnlyViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.Spanner:
-                // ClassifyException's own generic message-keyword fallback only recognizes a
-                // constraint violation via keywords like "constraint"/"violates" — Spanner's real
-                // NotNull message ("... must not be NULL in table ...") contains neither, so
-                // without this case it would silently classify as Unknown even though
-                // IsNotNullViolation below already correctly recognizes it. Reuses the same four
-                // predicates the constraint-kind checks use (virtual dispatch resolves to
-                // SpannerDialect's own overrides), so this can't drift from them - verified live
-                // against a real Spanner Omni + PGAdapter instance.
-                if (IsUniqueViolation(ex) || IsForeignKeyViolation(ex) || IsNotNullViolation(ex) ||
-                    IsCheckConstraintViolation(ex))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-
-            case SupportedDatabase.Access:
-                // CONFIRMED live against a real .accdb (see AccessDialect.cs's file-level AI
-                // SUMMARY): a second connection writing to a row/page held by another
-                // connection's open transaction blocks, then fails outright with this exact
-                // message once contention resolves — a genuine lock-WAIT scenario, not a detected
-                // circular-wait deadlock.
-                if (ex.Message.Contains("currently locked", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.Timeout;
-                    return true;
-                }
-
-                // CONFIRMED live: the exact message a real ACE connection opened with
-                // "Mode=Read" (AccessDialect.GetReadOnlyConnectionParameter) returns when a
-                // write is attempted against it — mirrors SqliteExceptionTranslator/
-                // DuckDbExceptionTranslator's ReadOnlyViolation classification.
-                if (ex.Message.Contains("must use an updateable query", StringComparison.OrdinalIgnoreCase))
-                {
-                    category = DbErrorCategory.ReadOnlyViolation;
-                    return true;
-                }
-
-                // ClassifyException's own generic message-keyword fallback only recognizes a
-                // constraint violation via keywords like "constraint"/"unique "/"foreign
-                // key"/"not-null"/"violates" — none of Access's real constraint messages contain
-                // any of those (e.g. "...create duplicate values in the index, primary key, or
-                // relationship."), so without this case it would silently classify as Unknown even
-                // though the four IsXxxViolation overrides below already correctly recognize them.
-                // Same fix as the Spanner case above; reuses the same four predicates so this
-                // can't drift from them.
-                if (IsUniqueViolation(ex) || IsForeignKeyViolation(ex) || IsNotNullViolation(ex) ||
-                    IsCheckConstraintViolation(ex))
-                {
-                    category = DbErrorCategory.ConstraintViolation;
-                    return true;
-                }
-                break;
-        }
-
         category = DbErrorCategory.Unknown;
         return false;
     }
@@ -3306,28 +2868,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
                message.Contains("UNIQUE constraint failed", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static int? TryGetProviderErrorCode(Exception ex)
+    // Delegates to DbExceptionTranslationSupport rather than maintaining a parallel
+    // reflection-based extraction here — that implementation is the more complete one
+    // (also checks "SqliteErrorCode"/"NativeError" properties and falls back to an
+    // "Errors" collection for provider exceptions, e.g. AdoNetCore.AseClient's
+    // AseException for Sybase, that aren't DbException at all). Architecture-cleanup
+    // session: this used to be an independent, weaker duplicate that silently returned
+    // null for exactly those shapes — see SqlDialectEdgeCaseTests.cs's
+    // TryGetProviderErrorCode/TryGetProviderSqlState "OnlyErrorsCollection" tests.
+    protected static int? TryGetProviderErrorCode(Exception ex)
     {
-        var numberProperty = ex.GetType().GetProperty("Number");
-        if (numberProperty?.PropertyType == typeof(int) && numberProperty.GetValue(ex) is int number)
-        {
-            return number;
-        }
-
-        return ex is DbException dbEx ? dbEx.ErrorCode : null;
+        return pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.TryGetErrorCode(ex);
     }
 
-    private static string? TryGetProviderSqlState(Exception ex)
+    protected static string? TryGetProviderSqlState(Exception ex)
     {
-        var sqlStateProperty = ex.GetType().GetProperty("SqlState");
-        if (sqlStateProperty?.PropertyType == typeof(string) &&
-            sqlStateProperty.GetValue(ex) is string sqlState &&
-            !string.IsNullOrWhiteSpace(sqlState))
-        {
-            return sqlState;
-        }
-
-        return ex is DbException dbEx ? dbEx.SqlState : null;
+        return pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.TryGetSqlState(ex);
     }
 
     // These helpers are intentionally private to match historical usage in tests via reflection.

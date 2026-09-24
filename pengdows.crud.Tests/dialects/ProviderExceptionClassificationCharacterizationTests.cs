@@ -47,6 +47,7 @@ public class ProviderExceptionClassificationCharacterizationTests
     private static FirebirdDialect Firebird() => new(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger.Instance);
     private static Db2Dialect Db2() => new(new fakeDbFactory(SupportedDatabase.Db2), NullLogger.Instance);
     private static SnowflakeDialect Snowflake() => new(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger.Instance);
+    private static SpannerDialect Spanner() => new(new fakeDbFactory(SupportedDatabase.Spanner), NullLogger.Instance);
 
     // ---------- SqlServer ----------
     [Fact] public void SqlServer_Deadlock() => Assert.Equal(DbErrorCategory.Deadlock, SqlServer().ClassifyException(new NumberedDbException(1205)));
@@ -57,6 +58,7 @@ public class ProviderExceptionClassificationCharacterizationTests
     // ---------- Postgres family ----------
     [Fact] public void Postgres_Deadlock() => Assert.Equal(DbErrorCategory.Deadlock, Postgres().ClassifyException(new SqlStateDbException("40P01")));
     [Fact] public void Postgres_Serialization() => Assert.Equal(DbErrorCategory.SerializationFailure, Postgres().ClassifyException(new SqlStateDbException("40001")));
+    [Fact] public void Postgres_AmbiguousResult() => Assert.Equal(DbErrorCategory.AmbiguousResult, Postgres().ClassifyException(new SqlStateDbException("40003")));
     [Fact] public void Postgres_Timeout_LockNotAvailable() => Assert.Equal(DbErrorCategory.Timeout, Postgres().ClassifyException(new SqlStateDbException("55P03")));
     [Fact] public void Postgres_Timeout_QueryCanceled() => Assert.Equal(DbErrorCategory.Timeout, Postgres().ClassifyException(new SqlStateDbException("57014")));
     [Fact] public void Postgres_Constraint_Class23() => Assert.Equal(DbErrorCategory.ConstraintViolation, Postgres().ClassifyException(new SqlStateDbException("23505")));
@@ -73,6 +75,7 @@ public class ProviderExceptionClassificationCharacterizationTests
     [Fact] public void Oracle_Constraint() => Assert.Equal(DbErrorCategory.ConstraintViolation, Oracle().ClassifyException(new NumberedDbException(1)));
 
     // ---------- Sqlite ----------
+    [Fact] public void Sqlite_ReadOnly() => Assert.Equal(DbErrorCategory.ReadOnlyViolation, Sqlite().ClassifyException(new NumberedDbException(8)));
     [Fact] public void Sqlite_Constraint_ByCode19() => Assert.Equal(DbErrorCategory.ConstraintViolation, Sqlite().ClassifyException(new NumberedDbException(19)));
     [Fact] public void Sqlite_Constraint_ByCode1555() => Assert.Equal(DbErrorCategory.ConstraintViolation, Sqlite().ClassifyException(new NumberedDbException(1555)));
     [Fact] public void Sqlite_Constraint_ByExtendedCode() => Assert.Equal(DbErrorCategory.ConstraintViolation, Sqlite().ClassifyException(new NumberedDbException(2067)));
@@ -82,8 +85,11 @@ public class ProviderExceptionClassificationCharacterizationTests
     // ---------- DuckDB ----------
     [Fact] public void DuckDb_Constraint_BySqlState() => Assert.Equal(DbErrorCategory.ConstraintViolation, DuckDb().ClassifyException(new SqlStateDbException("23505")));
     [Fact] public void DuckDb_Constraint_ByMessage() => Assert.Equal(DbErrorCategory.ConstraintViolation, DuckDb().ClassifyException(new MessageOnlyDbException("Constraint Error: duplicate key")));
+    [Fact] public void DuckDb_Serialization_ByMessage() => Assert.Equal(DbErrorCategory.SerializationFailure, DuckDb().ClassifyException(new MessageOnlyDbException("Conflict on update")));
 
     // ---------- Firebird ----------
+    [Fact] public void Firebird_Serialization_BySqlState() => Assert.Equal(DbErrorCategory.SerializationFailure, Firebird().ClassifyException(new SqlStateDbException("40001")));
+    [Fact] public void Firebird_Serialization_ByMessage() => Assert.Equal(DbErrorCategory.SerializationFailure, Firebird().ClassifyException(new MessageOnlyDbException("update conflicts with concurrent update")));
     [Fact] public void Firebird_Constraint_BySqlState() => Assert.Equal(DbErrorCategory.ConstraintViolation, Firebird().ClassifyException(new SqlStateDbException("23000")));
     [Fact] public void Firebird_Constraint_ByMessage() => Assert.Equal(DbErrorCategory.ConstraintViolation, Firebird().ClassifyException(new MessageOnlyDbException("violation of PRIMARY OR UNIQUE KEY constraint")));
 
@@ -92,8 +98,24 @@ public class ProviderExceptionClassificationCharacterizationTests
     [Fact] public void Db2_Constraint() => Assert.Equal(DbErrorCategory.ConstraintViolation, Db2().ClassifyException(new SqlStateDbException("23505")));
 
     // ---------- Snowflake ----------
+    [Fact] public void Snowflake_Constraint_BySqlState() => Assert.Equal(DbErrorCategory.ConstraintViolation, Snowflake().ClassifyException(new SqlStateDbException("23502")));
+    [Fact] public void Snowflake_Constraint_ByMessage() => Assert.Equal(DbErrorCategory.ConstraintViolation, Snowflake().ClassifyException(new MessageOnlyDbException("NULL result in a non-nullable column")));
 
     // ---------- Generic message-based fallback (no provider-specific match) ----------
     [Fact] public void Fallback_Deadlock_ByMessage() => Assert.Equal(DbErrorCategory.Deadlock, SqlServer().ClassifyException(new MessageOnlyDbException("a deadlock was detected")));
     [Fact] public void Fallback_Unknown_ForUnrelatedMessage() => Assert.Equal(DbErrorCategory.Unknown, SqlServer().ClassifyException(new MessageOnlyDbException("something else entirely")));
+
+    // ---------- Spanner ----------
+    // Live-verified: Spanner's NotNull/Check violation messages ("... must not be NULL in table
+    // ...", "Check constraint `t`.`c` is violated for key (...)") don't contain any of
+    // ClassifyException's generic fallback keywords ("constraint", "unique ", "foreign key",
+    // "not-null", "violates" — note "is violated" != "violates"), so without a dedicated
+    // TryClassifyProviderException override this fell through to Unknown even after
+    // IsNotNullViolation/IsCheckConstraintViolation were fixed to recognize these messages.
+    [Fact] public void Spanner_NotNull_ClassifiesAsConstraintViolation() =>
+        Assert.Equal(DbErrorCategory.ConstraintViolation, Spanner().ClassifyException(new MessageOnlyDbException("P0001: name must not be NULL in table test_table.")));
+    [Fact] public void Spanner_Check_ClassifiesAsConstraintViolation() =>
+        Assert.Equal(DbErrorCategory.ConstraintViolation, Spanner().ClassifyException(new MessageOnlyDbException("P0001: Check constraint `test_table`.`chk_value_positive` is violated for key (1)")));
+    [Fact] public void Spanner_Unique_ClassifiesAsConstraintViolation() =>
+        Assert.Equal(DbErrorCategory.ConstraintViolation, Spanner().ClassifyException(new SqlStateDbException("23505")));
 }

@@ -275,26 +275,66 @@ internal sealed class HanaDialect : SqlDialect
     // in IsolationResolver.cs's SupportedDatabase.SapHana cases on this branch instead.
 
     // All four codes below were captured live from a real Sap.Data.Hana.HanaException thrown
-    // against a real saplabs/hanaexpress container (see file-level AI SUMMARY).
-    // DbExceptionTranslationSupport.TryGetErrorCode already finds HanaException.NativeError via
-    // reflection — SqlState/ErrorCode are both unusable for classification via this driver.
+    // against a real saplabs/hanaexpress container (see file-level AI SUMMARY). TryGetProviderErrorCode
+    // already finds HanaException.NativeError via reflection — SqlState/ErrorCode are both
+    // unusable for classification via this driver.
     public override bool IsUniqueViolation(DbException ex) =>
-        DbExceptionTranslationSupport.TryGetErrorCode(ex) == 301;
+        TryGetProviderErrorCode(ex) == 301;
 
     // 461: insert/update references a parent row that does not exist.
     // 462: delete/update blocked because a dependent child row still exists.
     public override bool IsForeignKeyViolation(DbException ex) =>
-        DbExceptionTranslationSupport.TryGetErrorCode(ex) is 461 or 462;
+        TryGetProviderErrorCode(ex) is 461 or 462;
 
     public override bool IsNotNullViolation(DbException ex) =>
-        DbExceptionTranslationSupport.TryGetErrorCode(ex) == 287;
+        TryGetProviderErrorCode(ex) == 287;
 
     public override bool IsCheckConstraintViolation(DbException ex) =>
-        DbExceptionTranslationSupport.TryGetErrorCode(ex) == 677;
+        TryGetProviderErrorCode(ex) == 677;
 
     // Advisory-level category classification (ISqlDialect.AnalyzeException/ClassifyException,
     // codes 133/131/129) lives in SqlDialect.cs's private TryClassifyProviderException switch on
     // this branch - 2.0.6 predates 3.0's dialect-owned classification refactor, so there is no
     // virtual member here to override. The exception TYPE actually thrown is determined by
     // HanaExceptionTranslator, not this advisory path.
+
+    // ConstraintViolation is deliberately not re-checked here — SqlDialect.ClassifyException
+    // already checks IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/
+    // IsCheckConstraintViolation before ever calling this method (see Oracle's identical
+    // rationale comment).
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var code = TryGetProviderErrorCode(ex);
+
+        // 133: "transaction rolled back by detected deadlock" (SAP KBA 1999998 / 2658020).
+        // NOT live-reproduced this session — requires two contending sessions.
+        if (code == 133)
+        {
+            category = DbErrorCategory.Deadlock;
+            return true;
+        }
+
+        // 131: "transaction rolled back by lock wait timeout" (SAP KBA 1999998 / 2658020).
+        // NOT live-reproduced this session.
+        if (code == 131)
+        {
+            category = DbErrorCategory.Timeout;
+            return true;
+        }
+
+        // 129: "cannot change this transaction's access mode from read-only to update directly"
+        // — CONFIRMED LIVE (2026-09-19, real container) as the exact NativeError a write attempt
+        // gets when the current transaction (or a stuck-sticky prior one — see
+        // GetBaseSessionSettings' remarks) is marked SET TRANSACTION READ ONLY. Feeds
+        // HanaExceptionTranslator's shared TryCreateFromCategory path into a real
+        // ReadOnlyViolationException, mirroring Access/Sqlite/DuckDb's identical classification.
+        if (code == 129)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

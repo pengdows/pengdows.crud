@@ -125,24 +125,24 @@ internal sealed class InformixDialect : SqlDialect
     // the SAME condition depending on database logging mode, not alternates for different
     // constraint kinds. Source: IBM support "SQL state X23000:-239".
     public override bool IsUniqueViolation(DbException ex) =>
-        string.Equals(DbExceptionTranslationSupport.TryGetSqlState(ex), "23000", StringComparison.OrdinalIgnoreCase) ||
-        Math.Abs(DbExceptionTranslationSupport.TryGetErrorCode(ex) ?? 0) is 268 or 239;
+        string.Equals(TryGetProviderSqlState(ex), "23000", StringComparison.OrdinalIgnoreCase) ||
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) is 268 or 239;
 
     // -691: insert violates a foreign key (parent row missing). -692: delete/update blocked
     // because a child row still references this row. Both documented on oninit.com's
     // Informix error-code reference (community-maintained but consistent with IBM's own
     // numbering scheme elsewhere).
     public override bool IsForeignKeyViolation(DbException ex) =>
-        Math.Abs(DbExceptionTranslationSupport.TryGetErrorCode(ex) ?? 0) is 691 or 692;
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) is 691 or 692;
 
     // -391: "Cannot insert null into column" (IIUG community reference, consistent with
     // Informix's numbering).
     public override bool IsNotNullViolation(DbException ex) =>
-        Math.Abs(DbExceptionTranslationSupport.TryGetErrorCode(ex) ?? 0) == 391;
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 391;
 
     // -530: CHECK constraint violation.
     public override bool IsCheckConstraintViolation(DbException ex) =>
-        Math.Abs(DbExceptionTranslationSupport.TryGetErrorCode(ex) ?? 0) == 530;
+        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 530;
 
     // Advisory-level category classification (ISqlDialect.AnalyzeException/ClassifyException)
     // lives in SqlDialect.cs's private TryClassifyProviderException switch on this branch - 2.0.6
@@ -196,4 +196,44 @@ internal sealed class InformixDialect : SqlDialect
     // that no real caller is expected to ever set it themselves.
     internal override string? ReadOnlyPoolDiscriminatorSettingName => "LeaveTrailingSpaces";
     internal override string? ReadOnlyPoolDiscriminatorSettingValue => "False";
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var code = TryGetProviderErrorCode(ex) is { } raw ? Math.Abs(raw) : (int?)null;
+
+        // -143: deadlock (IBM performance-tuning docs).
+        if (code == 143)
+        {
+            category = DbErrorCategory.Deadlock;
+            return true;
+        }
+
+        // -244: "Could not do a physical-order read to fetch next row" - the closest
+        // documented analog to a serialization/lock conflict under Repeatable Read isolation.
+        // UNVERIFIED: no distinct SQLSTATE was found for this condition, and this category
+        // assignment (SerializationFailure vs. a generic conflict) has not been confirmed
+        // against a live server.
+        if (code == 244)
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        // -908 (SQLSTATE 08004) and -27001/-27002: connection/communication failure.
+        if (code is 908 or 27001 or 27002)
+        {
+            category = DbErrorCategory.Unknown;
+            return true;
+        }
+
+        var sqlState = TryGetProviderSqlState(ex);
+        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

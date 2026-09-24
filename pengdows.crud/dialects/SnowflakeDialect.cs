@@ -337,4 +337,25 @@ internal class SnowflakeDialect : SqlDialect
     public override string? MinPoolSizeSettingName => "minPoolSize";
     public override string? MaxPoolSizeSettingName => "maxPoolSize";
     public override string? ApplicationNameSettingName => "application";
+
+    // Snowflake parses UNIQUE/PRIMARY KEY constraint DDL but never enforces it at runtime
+    // (SupportsUniqueConstraints = false) — this exception category structurally cannot occur, so
+    // explicit false instead of falling through to the generic message-based default.
+    public override bool IsUniqueViolation(DbException ex) => false;
+
+    // Snowflake parses FOREIGN KEY constraint DDL but never enforces it at runtime
+    // (EnforcesForeignKeyConstraints = false) — this exception category structurally cannot occur.
+    public override bool IsForeignKeyViolation(DbException ex) => false;
+
+    // NOT NULL is the one constraint Snowflake actually enforces at runtime (error 100072,
+    // SQLSTATE 23502). Message wording is "NULL result in a non-nullable column" — the generic
+    // default's "not null"/"not-null" check does not match "non-nullable", so this needs its own
+    // override.
+    public override bool IsNotNullViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("non-nullable", StringComparison.OrdinalIgnoreCase);
+
+    // Snowflake parses CHECK constraint DDL but never enforces it at runtime
+    // (SupportsCheckConstraints = false) — this exception category structurally cannot occur.
+    public override bool IsCheckConstraintViolation(DbException ex) => false;
 }

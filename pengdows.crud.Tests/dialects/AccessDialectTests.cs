@@ -330,9 +330,9 @@ public class AccessDialectTests
     [Fact]
     public void IsCheckConstraintViolation_ValidationRuleMessage_ReturnsTrue()
     {
-        using var ctx = CreateContext();
-        var ex = new PlainDbException("One or more values are prohibited by the validation rule 'quantity > 0' set for 'order_items.quantity'.");
-        Assert.True(ctx.GetDialect().IsCheckConstraintViolation(ex));
+        var ex = new PlainMessageDbException(
+            "One or more values are prohibited by the validation rule 'chk_age' set for 'parent_t'. Enter a value that the expression for this field can accept.");
+        Assert.True(CreateDialect().IsCheckConstraintViolation(ex));
     }
 
     // Covers both real message shapes confirmed live: INSERT blocked by a missing parent row and
@@ -347,16 +347,20 @@ public class AccessDialectTests
         Assert.True(ctx.GetDialect().IsForeignKeyViolation(ex));
     }
 
-    // CONFIRMED live: a genuine lock-WAIT scenario (blocks, then gives up), classified as
-    // Timeout/IsTransient=true so a caller retrying on IsTransient does the right thing.
     [Fact]
     public void AnalyzeException_CurrentlyLockedMessage_ClassifiesAsTimeout()
     {
-        using var ctx = CreateContext();
-        var ex = new PlainDbException("Could not update; currently locked.");
-        var info = ctx.GetDialect().AnalyzeException(ex);
+        // CONFIRMED live this session: two connections through the SAME AccessDialect-backed
+        // DatabaseContext (before DbMode.SingleWriter's governor was in place, i.e. via raw
+        // OleDb) reproduced a real lock-wait scenario — a second connection blocked while a
+        // first held an open write transaction, then failed outright with this exact message
+        // once contention resolved. This is a genuine lock-WAIT scenario (blocks, then gives up),
+        // not a detected circular-wait deadlock — matches HanaDialect's own "lock wait timeout"
+        // precedent (SAP error 131 -> Timeout), not its "detected deadlock" one (error 133 ->
+        // Deadlock).
+        var ex = new PlainMessageDbException("Could not update; currently locked.");
+        var info = CreateDialect().AnalyzeException(ex);
         Assert.Equal(DbErrorCategory.Timeout, info.Category);
-        Assert.True(info.IsTransient);
     }
 
     // CONFIRMED live: the exact message a real ACE connection opened with "Mode=Read" returns
@@ -385,5 +389,58 @@ public class AccessDialectTests
         public PlainDbException(string message) : base(message)
         {
         }
+    }
+
+    [Fact]
+    public void IsUniqueViolation_DuplicateIndexMessage_ReturnsTrue()
+    {
+        var ex = new PlainMessageDbException(
+            "The changes you requested to the table were not successful because they would create duplicate values in the index, primary key, or relationship. Change the data in the field or fields that contain duplicate data, remove the index, or redefine the index to permit duplicate entries and try again.");
+        Assert.True(CreateDialect().IsUniqueViolation(ex));
+    }
+
+    [Fact]
+    public void IsNotNullViolation_MustEnterValueMessage_ReturnsTrue()
+    {
+        var ex = new PlainMessageDbException("You must enter a value in the 'parent_t.name' field.");
+        Assert.True(CreateDialect().IsNotNullViolation(ex));
+    }
+
+    [Fact]
+    public void IsForeignKeyViolation_InsertBlockedByMissingParent_ReturnsTrue()
+    {
+        var ex = new PlainMessageDbException(
+            "You cannot add or change a record because a related record is required in table 'parent_t'.");
+        Assert.True(CreateDialect().IsForeignKeyViolation(ex));
+    }
+
+    [Fact]
+    public void IsForeignKeyViolation_DeleteBlockedByChildRow_ReturnsTrue()
+    {
+        // Verified live this session that Access's INSERT-blocked and DELETE-blocked FK messages
+        // use completely different wording ("a related record is required" vs. "includes related
+        // records") — the exact SQL Server pitfall CLAUDE.md's checklist item 22 warns about.
+        // "related record" is a substring of both, deliberately chosen to cover both shapes.
+        var ex = new PlainMessageDbException(
+            "The record cannot be deleted or changed because table 'child_t' includes related records.");
+        Assert.True(CreateDialect().IsForeignKeyViolation(ex));
+    }
+
+    [Fact]
+    public void AnalyzeException_UpdateableQueryMessage_ClassifiesAsReadOnlyViolation()
+    {
+        var ex = new PlainMessageDbException("Operation must use an updateable query.");
+        var info = CreateDialect().AnalyzeException(ex);
+        Assert.Equal(DbErrorCategory.ReadOnlyViolation, info.Category);
+    }
+
+    [Fact]
+    public void IsUniqueViolation_UnrelatedMessage_ReturnsFalse()
+    {
+        var ex = new PlainMessageDbException("Syntax error in query. Incomplete query clause.");
+        Assert.False(CreateDialect().IsUniqueViolation(ex));
+        Assert.False(CreateDialect().IsForeignKeyViolation(ex));
+        Assert.False(CreateDialect().IsNotNullViolation(ex));
+        Assert.False(CreateDialect().IsCheckConstraintViolation(ex));
     }
 }

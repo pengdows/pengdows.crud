@@ -523,6 +523,7 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 │   ├── TransientWriteConflictException     (IsTransient = true)
 │   │   ├── DeadlockException
 │   │   └── SerializationConflictException
+│   ├── AmbiguousResultException            — commit outcome unknown (e.g. CockroachDB 40003; IsTransient = false)
 │   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure
@@ -559,9 +560,9 @@ if (info.ConstraintKind == DbConstraintKind.ForeignKey) { /* 409 response */ }
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `Category` | `DbErrorCategory` | High-level category (ConstraintViolation, Deadlock, Timeout, …) |
+| `Category` | `DbErrorCategory` | High-level category (ConstraintViolation, Deadlock, Timeout, AmbiguousResult, …) |
 | `ConstraintKind` | `DbConstraintKind` | Specific constraint: None, Unique, ForeignKey, NotNull, Check, Unknown |
-| `IsTransient` | `bool` | True for deadlock, serialization failure, timeout |
+| `IsTransient` | `bool` | True for deadlock, serialization failure, timeout (not for AmbiguousResult) |
 | `IsRetryable` | `bool` | True when the caller should generally retry |
 | `ProviderErrorCode` | `int?` | Provider-specific numeric error code when available |
 | `SqlState` | `string?` | SQLSTATE code when available |
@@ -720,7 +721,7 @@ These are places outside the dialect file itself that switch or pattern-match on
 8. **`ISqlDialect.IsClientServerDatabase`** (`SqlDialect` default `true`) — override to `false` in the new dialect if it's embedded/in-process (as SQLite, DuckDB, Access, FlatFile do). `DatabaseContext.Initialization.cs` reads it to decide whether to warn about `SingleConnection`/`SingleWriter` misconfiguration.
 9. **`ISqlDialect.CoerceConnectionMode(...)`** — `DatabaseContext.Initialization.cs`'s `CoerceMode()` delegates all mode policy to the dialect. A client/server database needs nothing (the base implementation is correct); an embedded engine or one with real mode restrictions must override it (see `SqliteDialect`/`DuckDbDialect` via `CoerceEmbeddedSingleWriterMode`, and `SqlServerDialect` for LocalDB).
 10. **`pengdows.crud/dialects/SqlDialect.cs` → `GetNaturalKeyLookupQuery()` and any other pagination/"first row only" fallback** — check whether the new database's syntax actually matches the generic `LIMIT 1` fallback. It doesn't for Oracle (`ROWNUM = 1`), and it doesn't for Db2 (`FETCH FIRST 1 ROWS ONLY`). Grep `SqlDialect.cs` for `DatabaseType ==`/`DatabaseType !=` checks and verify each one explicitly for the new database rather than assuming the catch-all branch is correct.
-11. **Exception classification (two independent systems, both need entries)** — `IDbExceptionTranslator`/`DbExceptionTranslatorRegistry` (produces the typed `DatabaseException` subclass) and `SqlDialect.TryClassifyProviderException`/`IsUniqueViolation`/`IsForeignKeyViolation`/`IsNotNullViolation`/`IsCheckConstraintViolation` (produces `DbErrorCategory`) are maintained separately and can disagree if only one is updated.
+11. **Exception classification lives on the dialect** — override `IsUniqueViolation`/`IsForeignKeyViolation`/`IsNotNullViolation`/`IsCheckConstraintViolation` for constraint kinds and the protected `TryClassifyProviderException` for Deadlock/SerializationFailure/Timeout/ReadOnlyViolation/AmbiguousResult. `IDbExceptionTranslator.Translate(ISqlDialect, ...)` delegates to both (via `DbExceptionTranslationSupport.TryCreateFromCategory`), so the thrown type and `AnalyzeException` agree by construction; a translator adds only non-category cases such as connection failures. Exception: Sybase's `AseException` isn't a `DbException`, so `SybaseExceptionTranslator` classifies on its own. Register the translator in `DbExceptionTranslatorRegistry`.
 
 **Next candidate: SAP HANA.** Flag its isolation-level set (HANA's default is effectively snapshot-based, not lock-based like most of the above) and its pagination syntax (`LIMIT`/`OFFSET` are supported directly, unlike Db2 — don't assume it needs a Db2-style special case, but don't assume it matches SQL Server either) for explicit research rather than copying an existing dialect's assumptions.
 

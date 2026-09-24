@@ -442,4 +442,40 @@ internal class OracleDialect : SqlDialect
 
         return base.PrepareParameterValue(value, dbType);
     }
+
+    public override bool IsUniqueViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 1;
+
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) is 2291 or 2292;
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 1400;
+
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == 2290;
+
+    // ConstraintViolation is deliberately not checked here — SqlDialect.ClassifyException already
+    // checks IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/IsCheckConstraintViolation
+    // before ever calling this method, so a redundant error-code-list re-check here would just be
+    // a second, independently-maintained copy of the same "is this a constraint violation" signal.
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var errorCode = TryGetProviderErrorCode(ex);
+
+        if (errorCode == 60)
+        {
+            category = DbErrorCategory.Deadlock;
+            return true;
+        }
+
+        if (errorCode == 8177)
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

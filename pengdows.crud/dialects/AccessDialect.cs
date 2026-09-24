@@ -424,4 +424,36 @@ internal sealed class AccessDialect : SqlDialect
     // in SqlDialect.TryClassifyProviderException on this branch, alongside the same-shaped
     // Informix/SapHana/Spanner cases already there — 2.0.6's TryClassifyProviderException is a
     // single centralized (and non-overridable) method, unlike 3.0's per-dialect virtual one.
+
+    // CONFIRMED live this session: a second connection writing to a row/page held by another
+    // connection's open transaction blocks, then fails outright with this exact message once
+    // contention resolves — a genuine lock-WAIT scenario (blocks, then gives up), not a detected
+    // circular-wait deadlock. Matches HanaDialect's own "lock wait timeout" precedent (SAP error
+    // 131 -> Timeout), not its "detected deadlock" one (error 133 -> Deadlock). Feeds both the
+    // advisory AnalyzeException API and, via AccessExceptionTranslator's
+    // DbExceptionTranslationSupport.TryCreateFromCategory call, the actual thrown exception type
+    // (CommandTimeoutException, IsTransient = true) — so a caller retrying on IsTransient does
+    // the right thing instead of this falling through to a generic DatabaseOperationException.
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        if (ex.Message.Contains("currently locked", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.Timeout;
+            return true;
+        }
+
+        // CONFIRMED live: the exact message a real ACE connection opened with "Mode=Read"
+        // (GetReadOnlyConnectionParameter above) returns when a write is attempted against it.
+        // Feeds both the advisory AnalyzeException API and, via AccessExceptionTranslator's
+        // TryCreateFromCategory call, the actual thrown ReadOnlyViolationException — mirroring
+        // SqliteDialect/DuckDbDialect's identical ReadOnlyViolation classification.
+        if (ex.Message.Contains("must use an updateable query", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

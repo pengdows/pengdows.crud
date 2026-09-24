@@ -54,6 +54,7 @@ public class ViolationClassificationCharacterizationTests
     private static Db2Dialect Db2() => new(new fakeDbFactory(SupportedDatabase.Db2), NullLogger.Instance);
     private static SnowflakeDialect Snowflake() => new(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger.Instance);
     private static SybaseDialect Sybase() => new(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLogger.Instance);
+    private static SpannerDialect Spanner() => new(new fakeDbFactory(SupportedDatabase.Spanner), NullLogger.Instance);
 
     // ---------- IsUniqueViolation ----------
 
@@ -61,6 +62,7 @@ public class ViolationClassificationCharacterizationTests
     [Fact] public void Unique_SqlServer_OtherCode() => Assert.True(SqlServer().IsUniqueViolation(new NumberedDbException(2601)));
     [Fact] public void Unique_Postgres() => Assert.True(Postgres().IsUniqueViolation(new SqlStateDbException("23505")));
     [Fact] public void Unique_MySql() => Assert.True(MySql().IsUniqueViolation(new NumberedDbException(1062)));
+    [Fact] public void Unique_MySql_DupUnique() => Assert.True(MySql().IsUniqueViolation(new NumberedDbException(1169)));
     [Fact] public void Unique_Oracle() => Assert.True(Oracle().IsUniqueViolation(new NumberedDbException(1)));
     [Fact] public void Unique_Sqlite_ByCode() => Assert.True(Sqlite().IsUniqueViolation(new NumberedDbException(1555)));
     [Fact] public void Unique_Sqlite_ByMessage() => Assert.True(Sqlite().IsUniqueViolation(new MessageOnlyDbException("UNIQUE constraint failed: t.id")));
@@ -68,6 +70,7 @@ public class ViolationClassificationCharacterizationTests
     [Fact] public void Unique_Firebird() => Assert.True(Firebird().IsUniqueViolation(new MessageOnlyDbException("violation of PRIMARY OR UNIQUE KEY constraint")));
     [Fact] public void Unique_Db2() => Assert.True(Db2().IsUniqueViolation(new SqlStateDbException("23505")));
     // See ForeignKey_Db2_ByNumericSqlCode_NoSqlState below — same numeric-SQLCODE-fallback gap.
+    [Fact] public void Unique_Db2_ByNumericSqlCode_NoSqlState() => Assert.True(Db2().IsUniqueViolation(new NumberedDbException(803)));
     [Fact] public void Unique_Snowflake_AlwaysFalse() => Assert.False(Snowflake().IsUniqueViolation(new SqlStateDbException("23505")));
 
     // ---------- IsForeignKeyViolation ----------
@@ -79,7 +82,12 @@ public class ViolationClassificationCharacterizationTests
     // a parent row: "The DELETE statement conflicted with the REFERENCE constraint
     // "FK__test_rela__..."". Only INSERT/UPDATE-blocked-by-missing-parent uses "FOREIGN KEY
     // constraint" wording. Expected RED until IsForeignKeyViolation also matches this phrasing.
+    [Fact] public void ForeignKey_SqlServer_DeleteBlockedByChild_ReferenceConstraintWording() =>
+        Assert.True(SqlServer().IsForeignKeyViolation(new NumberedDbException(547,
+            "The DELETE statement conflicted with the REFERENCE constraint \"FK__test_rela__test___6B24EA82\". " +
+            "The conflict occurred in database \"testdb\", table \"dbo.test_related\", column 'test_table_id'.")));
     [Fact] public void ForeignKey_Postgres() => Assert.True(Postgres().IsForeignKeyViolation(new SqlStateDbException("23503")));
+    [Fact] public void ForeignKey_MySql() => Assert.True(MySql().IsForeignKeyViolation(new NumberedDbException(1216)));
     [Fact] public void ForeignKey_MySql_OnDeleteRestrict() => Assert.True(MySql().IsForeignKeyViolation(new NumberedDbException(1451)));
     [Fact] public void ForeignKey_Oracle() => Assert.True(Oracle().IsForeignKeyViolation(new NumberedDbException(2291)));
     // Message-only case, on its own, would also pass via the generic base-class default (it
@@ -94,6 +102,7 @@ public class ViolationClassificationCharacterizationTests
     // magnitude (530/531/532) when no SqlState is available at all — IBM.Data.Db2's DB2Exception
     // often doesn't populate SqlState, per Db2ExceptionTranslator.cs's own doc comment. Expected
     // RED until Db2Dialect.IsForeignKeyViolation widens to match that same fallback.
+    [Fact] public void ForeignKey_Db2_ByNumericSqlCode_NoSqlState() => Assert.True(Db2().IsForeignKeyViolation(new NumberedDbException(532)));
     [Fact] public void ForeignKey_Snowflake_AlwaysFalse() => Assert.False(Snowflake().IsForeignKeyViolation(new SqlStateDbException("23503")));
     [Fact] public void ForeignKey_Firebird_ViaDefaultMessageCheck() => Assert.True(Firebird().IsForeignKeyViolation(new MessageOnlyDbException("violation of FOREIGN KEY constraint")));
 
@@ -109,6 +118,15 @@ public class ViolationClassificationCharacterizationTests
     [Fact] public void NotNull_Firebird() => Assert.True(Firebird().IsNotNullViolation(new MessageOnlyDbException("validation error for column X, value \"*** null ***\"")));
     [Fact] public void NotNull_Db2() => Assert.True(Db2().IsNotNullViolation(new SqlStateDbException("23502")));
     // See ForeignKey_Db2_ByNumericSqlCode_NoSqlState above — same numeric-SQLCODE-fallback gap.
+    [Fact] public void NotNull_Db2_ByNumericSqlCode_NoSqlState() => Assert.True(Db2().IsNotNullViolation(new NumberedDbException(407)));
+    [Fact] public void NotNull_Snowflake_ByState() => Assert.True(Snowflake().IsNotNullViolation(new SqlStateDbException("23502")));
+    [Fact] public void NotNull_Snowflake_ByMessage() => Assert.True(Snowflake().IsNotNullViolation(new MessageOnlyDbException("NULL result in a non-nullable column")));
+    // Verified live against a real Spanner Omni + PGAdapter instance: Spanner returns SqlState
+    // "P0001" (a generic raise-exception code) for EVERY constraint violation, not the ANSI
+    // class-23 codes real PostgreSQL uses — inheriting PostgreSqlDialect's pure SqlState-based
+    // check is therefore useless here; message-pattern matching (like Sqlite/Firebird) is the only
+    // reliable signal. Real captured message: "P0001: name must not be NULL in table test_table."
+    [Fact] public void NotNull_Spanner_ByMessage() => Assert.True(Spanner().IsNotNullViolation(new MessageOnlyDbException("P0001: name must not be NULL in table test_table.")));
 
     // ---------- IsCheckConstraintViolation ----------
 
@@ -120,14 +138,20 @@ public class ViolationClassificationCharacterizationTests
     // message pattern ("constraint" + "failed for") when no numeric error code is present at
     // all (see MySqlTranslatorTests.MessagePattern_ConstraintFailedFor_MapsTo_CheckConstraintViolationException).
     // Expected RED until MySqlDialect.IsCheckConstraintViolation widens to match.
+    [Fact] public void Check_MySql_ByMessagePattern_NoErrorCode() => Assert.True(MySql().IsCheckConstraintViolation(new MessageOnlyDbException("constraint failed for `orders`")));
     [Fact] public void Check_Oracle() => Assert.True(Oracle().IsCheckConstraintViolation(new NumberedDbException(2290)));
     [Fact] public void Check_Sqlite_ByMessage() => Assert.True(Sqlite().IsCheckConstraintViolation(new MessageOnlyDbException("CHECK constraint failed")));
     [Fact] public void Check_Sqlite_ByCode() => Assert.True(Sqlite().IsCheckConstraintViolation(new NumberedDbException(275, "unrelated message")));
     [Fact] public void Check_DuckDb() => Assert.True(DuckDb().IsCheckConstraintViolation(new SqlStateDbException("23514")));
     [Fact] public void Check_Db2() => Assert.True(Db2().IsCheckConstraintViolation(new SqlStateDbException("23513")));
     // See ForeignKey_Db2_ByNumericSqlCode_NoSqlState above — same numeric-SQLCODE-fallback gap.
+    [Fact] public void Check_Db2_ByNumericSqlCode_NoSqlState() => Assert.True(Db2().IsCheckConstraintViolation(new NumberedDbException(545)));
     [Fact] public void Check_Snowflake_AlwaysFalse() => Assert.False(Snowflake().IsCheckConstraintViolation(new SqlStateDbException("23514")));
     [Fact] public void Check_Firebird_ViaDefaultMessageCheck() => Assert.True(Firebird().IsCheckConstraintViolation(new MessageOnlyDbException("check constraint failed")));
+    // See NotNull_Spanner_ByMessage above — same SqlState "P0001"-for-everything gap. Real
+    // captured message: "P0001: Check constraint `test_table`.`chk_value_positive` is violated
+    // for key (1)".
+    [Fact] public void Check_Spanner_ByMessage() => Assert.True(Spanner().IsCheckConstraintViolation(new MessageOnlyDbException("P0001: Check constraint `test_table`.`chk_value_positive` is violated for key (1)")));
 
     // ---------- HasSessionScopedLastIdFunction ----------
 

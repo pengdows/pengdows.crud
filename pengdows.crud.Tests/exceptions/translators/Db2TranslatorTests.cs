@@ -1,8 +1,11 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using System;
 using System.Data.Common;
 using pengdows.crud.enums;
+using pengdows.crud.dialects;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -10,6 +13,8 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class Db2TranslatorTests
 {
     private readonly Db2ExceptionTranslator _translator = new();
+    private static ISqlDialect TestDialect(SupportedDatabase database) =>
+        SqlDialectFactory.CreateDialectForType(database, new fakeDbFactory(database), NullLogger.Instance);
 
     // ── SQLSTATE-based classification (properly-cased SqlState property) ───────
 
@@ -18,7 +23,7 @@ public class Db2TranslatorTests
     {
         var raw = new SqlStateDbException("23505", "duplicate key value violates unique constraint");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -28,7 +33,7 @@ public class Db2TranslatorTests
     {
         var raw = new SqlStateDbException("23503", "insert or update violates foreign key constraint");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -42,7 +47,7 @@ public class Db2TranslatorTests
         var raw = new SqlStateDbException("23504",
             "a parent row cannot be deleted because the relationship restricts the deletion");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Delete);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Delete);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -52,7 +57,7 @@ public class Db2TranslatorTests
     {
         var raw = new SqlStateDbException("23502", "null value violates not-null constraint");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -63,7 +68,7 @@ public class Db2TranslatorTests
         // Note: Db2 uses 23513 for check-constraint violations — NOT 23514 like Postgres/DuckDB.
         var raw = new SqlStateDbException("23513", "new row violates check constraint");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -73,7 +78,7 @@ public class Db2TranslatorTests
     {
         var raw = new SqlStateDbException("40001", "deadlock or timeout");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Update);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Update);
 
         Assert.IsType<SerializationConflictException>(result);
     }
@@ -86,7 +91,7 @@ public class Db2TranslatorTests
         // connection-exception class 08).
         var raw = new SqlStateDbException("08001", "A communication error has been detected.");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
     }
@@ -98,7 +103,7 @@ public class Db2TranslatorTests
             "ERROR [08001] [IBM] SQL30081N  A communication error has been detected. " +
             "Communication protocol being used: \"TCP/IP\".  SQLSTATE=08001");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
     }
@@ -108,7 +113,7 @@ public class Db2TranslatorTests
     {
         var raw = new SqlStateDbException("58004", "internal error");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Query);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<UniqueConstraintViolationException>(result);
@@ -119,7 +124,7 @@ public class Db2TranslatorTests
     {
         var raw = new TimeoutException("query timed out");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Query);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Query);
 
         Assert.IsType<CommandTimeoutException>(result);
     }
@@ -137,7 +142,7 @@ public class Db2TranslatorTests
     {
         var raw = new AllCapsSqlStateDbException("23505", "IBM-style exception");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -150,7 +155,7 @@ public class Db2TranslatorTests
         var raw = new PlainMessageDbException(
             "ERROR [23505] [IBM][DB2/LINUXX8664] SQL0803N  duplicate key.  SQLSTATE=23505");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -166,7 +171,7 @@ public class Db2TranslatorTests
             "ERROR [23502] [IBM][DB2/LINUXX8664] SQL0407N  Assignment of a NULL value to a " +
             "NOT NULL column \"TBSPACEID=2, TABLEID=4, COLNO=1\" is not allowed.");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -181,7 +186,7 @@ public class Db2TranslatorTests
         var raw = new PlainMessageDbException(
             "CLI0125E  Some wrapping driver message with no bracket form. SQLSTATE=23503");
 
-        var result = _translator.Translate(SupportedDatabase.Db2, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }

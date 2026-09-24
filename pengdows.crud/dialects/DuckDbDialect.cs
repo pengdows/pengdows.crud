@@ -384,4 +384,80 @@ internal class DuckDbDialect : SqlDialect
     public override string? MinPoolSizeSettingName => null;
     public override string? MaxPoolSizeSettingName => null;
     internal override int DefaultMaxPoolSize => int.MaxValue;
+
+    // DuckDB uses standard SQLSTATE codes; fall back to message when the driver doesn't
+    // populate SqlState.
+    public override bool IsUniqueViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("Duplicate key", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("primary key constraint", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsNotNullViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("NOT NULL constraint", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsCheckConstraintViolation(DbException ex) =>
+        string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase) ||
+        ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var sqlState = TryGetProviderSqlState(ex);
+
+        // 25006 = READ_ONLY_SQL_TRANSACTION: write attempted on a read-only connection.
+        if (sqlState == "25006")
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
+        // DuckDB enforces read-only at the connection/binder level and rejects writes before
+        // execution, with no SqlState populated for this shape — confirmed live: "Binder Error:
+        // Cannot execute statement of type "INSERT" on database "..." which is attached in
+        // read-only mode!"
+        if (ex.Message.Contains("read-only", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("read only", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
+        // Confirmed against a real concurrent-write conflict: DuckDBException.ErrorType reports
+        // "Transaction" (not "Serialization") with this message shape across all three mutation
+        // kinds ("Conflict on insert!"/"Conflict on update!"/"Conflict on tuple deletion!") — match
+        // the shared "Conflict on" prefix rather than "Conflict on update" alone so all three are
+        // covered, matching DuckDbExceptionTranslator's own check.
+        if (ex.Message.Contains("Conflict on", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        // DuckDB uses ANSI SQLSTATE class 23 for constraint violations, with a message fallback
+        // for drivers that don't populate SqlState. Checked as a generic category-level fallback,
+        // distinct from IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/
+        // IsCheckConstraintViolation (already checked earlier in SqlDialect.ClassifyException,
+        // before this method is ever called) — those four each need to positively identify ONE
+        // specific kind, so a constraint signal too generic for any of them individually still
+        // needs to register as a constraint violation at the category level.
+        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        if (ex.Message.Contains("Constraint Error", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ConstraintViolation;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

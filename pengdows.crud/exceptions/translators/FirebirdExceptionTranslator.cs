@@ -1,3 +1,5 @@
+using System.Data.Common;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -18,17 +20,18 @@ namespace pengdows.crud.exceptions.translators;
 /// Serialization/deadlock: confirmed against a live container that Firebird CANNOT distinguish
 /// a true lock-cycle deadlock from an optimistic update conflict — BOTH a reversed-lock-order
 /// two-connection scenario and a snapshot-read-then-conflicting-write scenario produced the
-/// IDENTICAL signature: SQLSTATE "40001" and message "deadlock\nupdate conflicts with concurrent
-/// update\nconcurrent transaction number is N". Since there is no reliable signal to tell them
-/// apart, both are classified as SerializationConflictException here — matching the same
-/// "SQLSTATE 40001 can't disambiguate" precedent already used for Db2 (see
-/// Db2ExceptionTranslator/SqlDialect.TryClassifyProviderException).
+/// IDENTICAL signature: SQLSTATE "40001", ISC error code 335544336, and message
+/// "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is N".
+/// Since there is no reliable signal to tell them apart, both are classified as
+/// SerializationConflictException here — matching the same "SQLSTATE 40001 can't disambiguate"
+/// precedent already used for Db2 (see Db2ExceptionTranslator/SqlDialect.TryClassifyProviderException).
 /// </para>
 /// </remarks>
 internal sealed class FirebirdExceptionTranslator : IDbExceptionTranslator
 {
-    public DatabaseException Translate(SupportedDatabase database, Exception exception, DbOperationKind operationKind)
+    public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
+        var database = dialect.DatabaseType;
         var message = exception.Message;
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
         var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
@@ -41,48 +44,54 @@ internal sealed class FirebirdExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
-        // Checked before constraint-kind so the ambiguous-40001 case isn't shadowed by a
-        // coincidental constraint message match.
-        if (string.Equals(sqlState, "40001", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("update conflicts with concurrent update", StringComparison.OrdinalIgnoreCase))
+        // Deadlock/SerializationFailure/Timeout classification is delegated to the dialect's
+        // single ClassifyException/TryClassifyProviderException source — see
+        // DbExceptionTranslationSupport.TryCreateFromCategory's doc comment. FirebirdDialect's
+        // override checks the identical SqlState-or-message signals this translator used to check
+        // directly, so this is a behavior-preserving delegation, not a narrowing. Checked before
+        // constraint-kind so the ambiguous-40001 case isn't shadowed by a coincidental constraint
+        // message match.
+        if (DbExceptionTranslationSupport.TryCreateFromCategory(
+                dialect.ClassifyException(exception), database, exception, operationKind) is { } classified)
         {
-            return new SerializationConflictException(
-                $"{operationKind} encountered a serialization conflict on {database}: {message}",
-                database, exception, errorCode: errorCode);
+            return classified;
         }
 
-        // Check constraint violations BEFORE LooksLikeTimeout: Firebird embeds the failed
-        // key value in the exception message, and key values may contain "timeout" (e.g.
-        // distributed lock resource names like "lock-timeout-{guid}"), which would otherwise
-        // cause the timeout heuristic to fire and swallow a legitimate PK violation.
-        if (message.Contains("violation of PRIMARY", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("violation of UNIQUE", StringComparison.OrdinalIgnoreCase))
+        // Constraint-kind classification (Unique/FK/NotNull/Check) is delegated to the dialect
+        // (see IDbExceptionTranslator.Translate's doc comment) and checked BEFORE
+        // LooksLikeTimeout: Firebird embeds the failed key value in the exception message, and
+        // key values may contain "timeout" (e.g. distributed lock resource names like
+        // "lock-timeout-{guid}"), which would otherwise cause the timeout heuristic to fire and
+        // swallow a legitimate PK violation.
+        if (exception is DbException dbEx)
         {
-            return new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
+            if (dialect.IsUniqueViolation(dbEx))
+            {
+                return new UniqueConstraintViolationException(
+                    $"{operationKind} violated a unique constraint on {database}: {message}",
+                    database, exception, errorCode: errorCode);
+            }
 
-        if (message.Contains("FOREIGN KEY", StringComparison.OrdinalIgnoreCase))
-        {
-            return new ForeignKeyViolationException(
-                $"{operationKind} violated a foreign key constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
+            if (dialect.IsForeignKeyViolation(dbEx))
+            {
+                return new ForeignKeyViolationException(
+                    $"{operationKind} violated a foreign key constraint on {database}: {message}",
+                    database, exception, errorCode: errorCode);
+            }
 
-        if (message.Contains("NOT NULL", StringComparison.OrdinalIgnoreCase) ||
-            message.Contains("*** null ***", StringComparison.OrdinalIgnoreCase))
-        {
-            return new NotNullViolationException(
-                $"{operationKind} violated a not-null constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
-        }
+            if (dialect.IsNotNullViolation(dbEx))
+            {
+                return new NotNullViolationException(
+                    $"{operationKind} violated a not-null constraint on {database}: {message}",
+                    database, exception, errorCode: errorCode);
+            }
 
-        if (message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase))
-        {
-            return new CheckConstraintViolationException(
-                $"{operationKind} violated a check constraint on {database}: {message}",
-                database, exception, errorCode: errorCode);
+            if (dialect.IsCheckConstraintViolation(dbEx))
+            {
+                return new CheckConstraintViolationException(
+                    $"{operationKind} violated a check constraint on {database}: {message}",
+                    database, exception, errorCode: errorCode);
+            }
         }
 
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))

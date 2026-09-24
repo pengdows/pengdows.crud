@@ -1,6 +1,9 @@
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
+using pengdows.crud.fakeDb;
 using Xunit;
 
 namespace pengdows.crud.Tests.exceptions.translators;
@@ -8,6 +11,7 @@ namespace pengdows.crud.Tests.exceptions.translators;
 public class SqliteTranslatorTests
 {
     private readonly SqliteExceptionTranslator _translator = new();
+    private static SqliteDialect Dialect() => new(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger.Instance);
 
     [Theory]
     [InlineData("UNIQUE constraint failed")]
@@ -16,7 +20,7 @@ public class SqliteTranslatorTests
     {
         var raw = new SqliteMessageDbException(message);
 
-        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(Dialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<UniqueConstraintViolationException>(result);
     }
@@ -26,7 +30,7 @@ public class SqliteTranslatorTests
     {
         var raw = new SqliteMessageDbException("FOREIGN KEY constraint failed");
 
-        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(Dialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<ForeignKeyViolationException>(result);
     }
@@ -36,7 +40,7 @@ public class SqliteTranslatorTests
     {
         var raw = new SqliteMessageDbException("NOT NULL constraint failed: jobs.name");
 
-        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(Dialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<NotNullViolationException>(result);
     }
@@ -46,7 +50,7 @@ public class SqliteTranslatorTests
     {
         var raw = new SqliteMessageDbException("CHECK constraint failed: jobs");
 
-        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(Dialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<CheckConstraintViolationException>(result);
     }
@@ -56,7 +60,7 @@ public class SqliteTranslatorTests
     {
         var raw = new SqliteMessageDbException("constraint failed");
 
-        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(Dialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<DatabaseOperationException>(result);
         Assert.IsNotType<ConcurrencyConflictException>(result);
@@ -69,7 +73,7 @@ public class SqliteTranslatorTests
     {
         var raw = new NumberedDbException(errorCode, "unable to open database file");
 
-        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Query);
+        var result = _translator.Translate(Dialect(), raw, DbOperationKind.Query);
 
         Assert.IsType<ConnectionException>(result);
         Assert.Equal(SupportedDatabase.Sqlite, result.Database);
@@ -81,7 +85,7 @@ public class SqliteTranslatorTests
     {
         var raw = new NumberedDbException(8, "SQLite Error 8: 'attempt to write a readonly database'");
 
-        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(Dialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
         Assert.Equal(SupportedDatabase.Sqlite, result.Database);
@@ -93,9 +97,33 @@ public class SqliteTranslatorTests
     {
         var raw = new NumberedDbException(8, "attempt to write a readonly database");
 
-        var result = _translator.Translate(SupportedDatabase.Sqlite, raw, DbOperationKind.Insert);
+        var result = _translator.Translate(Dialect(), raw, DbOperationKind.Insert);
 
         Assert.IsType<ReadOnlyViolationException>(result);
         Assert.Equal(false, result.IsTransient);
+    }
+
+    // =========================================================================
+    // Architecture-cleanup characterization: proves SqliteExceptionTranslator's
+    // classification and SqliteDialect.IsUniqueViolation's classification can
+    // disagree today, because they check different signals (bare message
+    // substring vs. SQLite extended result codes + a narrower message phrase).
+    // A message that mentions "UNIQUE" incidentally (e.g. an index-creation
+    // error, not a real constraint violation) has no real constraint-violation
+    // error code and doesn't match the dialect's narrower phrasing — the
+    // translator's bare Contains("UNIQUE") still fires, the dialect correctly
+    // does not. Expected RED until the translator delegates to the dialect.
+    // =========================================================================
+    [Fact]
+    public void MessageWithIncidentalUniqueSubstring_AgreesWithDialectClassification()
+    {
+        var raw = new SqliteMessageDbException("cannot create UNIQUE INDEX on table 'jobs': index already exists");
+
+        var translatedAsUnique = _translator.Translate(Dialect(), raw, DbOperationKind.Insert)
+            is UniqueConstraintViolationException;
+        var dialectSaysUnique = Dialect().IsUniqueViolation(raw);
+
+        Assert.False(dialectSaysUnique, "fixture must not match the dialect's own unique-violation signal");
+        Assert.Equal(dialectSaysUnique, translatedAsUnique);
     }
 }

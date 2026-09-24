@@ -80,20 +80,11 @@ public class ExecutionTranslationTests : SqlLiteContextTestBase
         Assert.Null(ex.ConstraintName);
     }
 
-    // ── Connection-open failures must be translated too, not just command-execute failures ────
-    //
-    // TrackedConnection.Open()/OpenAsync() call the raw ADO.NET connection's Open()/OpenAsync()
-    // directly (only wrapped in timing/metrics, not exception translation). SqlContainer's
-    // execution paths call conn.OpenAsync() themselves (see OpenConnectionAsync) with no
-    // try/catch around it either. So a failure at connection-open time -- e.g. bad credentials,
-    // host unreachable, or (the concrete motivating case) DuckDB's cross-process file lock
-    // ("IO Error: Could not set lock on file ...: Conflicting lock is held in <pid>", confirmed
-    // empirically against DuckDB.NET.Data.Full 1.4.1 when a second process opens the same
-    // DuckDB file for read-write while a first still holds it open -- exactly the shape of a
-    // Hangfire worker and a web request both touching the same DuckDB-backed tenant) -- currently
-    // bypasses ExceptionTranslatorRegistry entirely and leaks the raw provider exception,
-    // contradicting the documented invariant that all database errors surface as typed
-    // DatabaseException subclasses.
+    // Connection-open failures (as opposed to command-execute failures, covered above) go through
+    // the same broad catch in SqlContainer's execution paths and so are translated the same way —
+    // this proves it end to end rather than just at the translator-unit level (see
+    // DuckDbTranslatorTests.FileLockMessage_Maps_FileLockContentionException_AndIsNotTransient for
+    // the DuckDB-specific message-classification test).
     [Fact]
     public async Task ExecuteReaderAsync_WrapsProviderException_WhenConnectionOpenFails()
     {
