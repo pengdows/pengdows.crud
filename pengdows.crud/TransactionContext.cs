@@ -241,6 +241,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         {
             gate.Dispose();
             context.CloseAndDisposeConnection(connection);
+            if (ex is OperationCanceledException)
+            {
+                // Cancellation is never wrapped.
+                throw;
+            }
+
             throw new TransactionException(
                 $"Failed to begin transaction on {context.Product}: {ex.Message}",
                 context.Product, ex);
@@ -1128,6 +1134,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         {
             await gate.DisposeAsync().ConfigureAwait(false);
             await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
+            if (ex is OperationCanceledException)
+            {
+                // Cancellation is never wrapped.
+                throw;
+            }
+
             throw new TransactionException(
                 $"Failed to begin transaction on {context.Product}: {ex.Message}",
                 context.Product, ex);

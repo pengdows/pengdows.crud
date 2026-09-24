@@ -248,6 +248,12 @@ These are the rules the code is being brought in line with.
   symmetry but is always ignored"); the interface docs promised a reload. *(docs and TODO fixed,
   pinned by a test.)* Implementing it would change behavior for callers passing `true` — 3.0 decision.
 
+- [x] **Cancellation during BeginTransaction was wrapped in `TransactionException`** — breaks the
+  "`OperationCanceledException` is never wrapped" rule; found as an intermittent 3.0 failure
+  (`RetryContextTransactionalExecutionTests…CancellationDuringBackoff…`), timing-dependent. *(fixed on
+  both begin paths: gate and connection are still released, then the cancellation is rethrown as-is.
+  Test: `TransactionBeginCancellationTests`.)* **3.0:** same bug, fixed there too.
+
 ## Decisions needed (found while investigating)
 
 - [x] **D06 — `DbMode.SingleConnection`: a plain read during another task's open transaction fails on
