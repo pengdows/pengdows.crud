@@ -119,9 +119,10 @@ private int _rolledBack;      // Atomic, no locks needed
 await using var reader = await container.ExecuteReaderAsync();
 // Holds _userLock for reader lifetime
 
-// Thread B (concurrent attempt)
+// Thread B (concurrent attempt), or Thread A itself before disposing the reader
 await container.ExecuteNonQueryAsync();
-// BLOCKS on _userLock until reader disposed
+// Throws InvalidOperationException ("...while a reader opened on it is still active...")
+// Commit/Rollback and savepoints throw the same way until the reader is disposed
 ```
 
 **Result**: No overlap, no provider misuse, no corruption, deterministic behavior. This is the only correct behavior for a single database transaction.

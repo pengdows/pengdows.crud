@@ -29,6 +29,9 @@ These are the rules the code is being brought in line with.
 ## Done
 
 - [x] **Isolation fail-up** — explicit levels resolve up; profiles throw instead of degrading. (`b88cea6`)
+  The testbed `[InvalidTxType]` check still expected every unsupported level to be rejected; it
+  now checks that the level fails up (PostgreSQL, Firebird, SQLite, YugabyteDB, Oracle,
+  CockroachDB, DuckDB) and is rejected only where nothing stronger exists (TiDB, Snowflake).
 - [x] **Enum names for every string column type** — `ColumnInfo.MakeParameterValueFromField` only
   checked `DbType.String`, so `AnsiString`/fixed-length enum columns stored the number. *Release
   note:* rows written before the fix keep their numeric text; reads accept both. 3.0 has the same
@@ -43,7 +46,7 @@ These are the rules the code is being brought in line with.
   cultures emit U+2212 for negatives. The library's own paging goes through `Append(int)`.
   **Fix:** `CultureInfo.InvariantCulture`; update the `ISqlQueryBuilder` XML docs, which currently
   state "current culture". **3.0:** same bug.
-- [x] **B02 — Aurora PostgreSQL and Spanner lose generated keys.** *(fixed; live Spanner check pending)* `dialects/SqlDialect.cs:2895-2911`
+- [x] **B02 — Aurora PostgreSQL and Spanner lose generated keys.** *(fixed; no live coverage yet — Spanner isn't in `InsertReturningTests` or the integration suite's default databases, and the testbed's table uses a client-supplied `[Id]`, so nothing exercises Spanner's generated-key path. Aurora PostgreSQL needs AWS.)* `dialects/SqlDialect.cs:2895-2911`
   `RenderInsertReturningClause` has no arm for `AuroraPostgreSql`/`Spanner`, but both inherit
   `SupportsInsertReturning = true`, so the INSERT goes out without `RETURNING` and the gateway falls
   back to `SELECT lastval()` on a different pooled connection (error, or a stale id). **Fix:** port
@@ -81,24 +84,26 @@ These are the rules the code is being brought in line with.
   read-only key/value, application name and suffix that shape the cached value. **Fix:** port 3.0's
   SHA-256-keyed 256-entry `BoundedCache`, and fold those parameters into the key. **3.0:** fixed
   (`c5083b0`, CORE-012) except the key-parameter issue.
-- [ ] **B09 — `JsonValue.AsElement` disposes the caller's document.**
+- [x] **B09 — `JsonValue.AsElement` disposes the caller's document.** *(fixed)*
   `types/valueobjects/JsonValue.cs:97-106`: `using var doc = AsDocument()` disposes the caller-owned
   `JsonDocument`; later `AsString()`/`ToObject()` throw `ObjectDisposedException`. **Fix:** return
   `_document.RootElement.Clone()`. **3.0:** same bug.
-- [ ] **B10 — SQL Server spatial: SRID lost on read, GeoJSON sent to `STGeomFromText`.**
+- [x] **B10 — SQL Server spatial: SRID lost on read, GeoJSON sent to `STGeomFromText`.** *(fixed and unit-tested against the real Microsoft.SqlServer.Types 160 API — writes never worked before: the converter looked up `SqlBytes`/`SqlChars` in the wrong namespace and passed a `SqlInt32` SRID. Live SQL Server round-trip still pending: needs the package in the integration project and `UdtTypeName` on the parameter.)*
   `types/converters/SpatialConverter.cs:240-256` computes `STSrid` and never uses it (and
   `Convert.ToInt32(SqlInt32)` would throw; `STAsBinary()` returns `SqlBytes`). `:156-167` passes
   GeoJSON text to `STGeomFromText`; `SqlBytes`/`SqlChars` are looked up in the wrong namespace
   (`:136-137`, unverified). **Fix:** use the SRID; WKT/WKB only for SQL Server, clear error for
   GeoJSON-only values; fix the type lookups. **3.0:** same bugs.
-- [ ] **B11 — Range literal `empty` doesn't parse.** `types/converters/PostgreSqlRangeConverter.cs:188`
+- [x] **B11 — Range literal `empty` doesn't parse.** *(fixed)* `types/converters/PostgreSqlRangeConverter.cs:188`
   and `Range<T>.Parse`: PostgreSQL's canonical empty range throws. **Fix:** special-case `empty`.
   **3.0:** same bug. (Low severity.)
-- [ ] **B12 — fakeDb `SetFailOnOpen(skipFirstOpen: true)` ignored.** `fakeDbConnection.cs:68, 428-433`:
+- [x] **B12 — fakeDb `SetFailOnOpen(skipFirstOpen: true)` ignored.** *(fixed, sync and async)* `fakeDbConnection.cs:68, 428-433`:
   `_skipFirstFailOnOpen` is stored and never read. **Fix:** honor it in `Open`. **3.0:** same.
-- [ ] **B13 — `_singleConnectionTransactionGate` never disposed.** `DatabaseContext.cs:131`; its sibling
-  gates are disposed. **Fix:** dispose in both dispose paths; the transaction release path already
-  tolerates `ObjectDisposedException`. **3.0:** same. (Hygiene.)
+- [x] **B13 — `_singleConnectionTransactionGate` never disposed.** *(closed, no change — not a leak.
+  `SemaphoreSlim` only holds an unmanaged handle once `AvailableWaitHandle` is used, which nothing
+  here does, so `Dispose()` frees nothing. Disposing it would add a failure mode instead:
+  `RealAsyncLocker.ReleaseIfHeld()` releases the semaphore unguarded, so a transaction completing
+  after its context is disposed would throw `ObjectDisposedException` from `Commit`/`Dispose`.)*
 
 ## Fix — changes observable behavior (decide first)
 
@@ -111,17 +116,17 @@ These are the rules the code is being brought in line with.
   (3) throw `ConcurrencyConflictException` when a versioned row isn't updated — **breaks callers:
   yes** (silent data loss becomes an exception, which is the documented `[Version]` contract).
   **3.0:** fixed (`5e6b244`, `21ccbca`, `91225cd`).
-- [ ] **B21 — `CountWhereEqualsAsync` silently ignores `andWhereNotNull` when both flags are set.**
+- [x] **B21 — `CountWhereEqualsAsync` silently ignores `andWhereNotNull` when both flags are set.** *(ported 3.0's throw, `7ca59ba`. **Release note:** passing both now throws `ArgumentException`.)*
   `BaseTableGateway.Count.cs:82-85`; the audit wrote the precedence into the `ITableGateway` /
   `IPrimaryKeyTableGateway` docs. **Options:** throw `ArgumentException` like 3.0 (**breaks callers
   who pass both**, whose counts are already wrong) or apply both predicates (no break). Either way,
   restore the "at most one may be set" doc. **3.0:** throws (`7ca59ba`).
-- [ ] **B22 — `Uuid7Options.FailFastOnBurst` has no effect.** `Uuid7Optimized.cs:67-74, 220-258`:
+- [x] **B22 — `Uuid7Options.FailFastOnBurst` has no effect.** *(ported 3.0 as-is, `fb11369`. **Release note:** with `FailFastOnBurst` set — including `Configure(new Uuid7Options(Uuid7ClockMode.PtpSynced))`, whose mode defaults set it — `NewUuid7` throws `InvalidOperationException` after 4096 IDs/ms on one thread instead of blocking.)* `Uuid7Optimized.cs:67-74, 220-258`:
   `NewUuid7` always blocks on burst exhaustion. **Proposed:** honor it only when set explicitly —
   `DefaultsFor(PtpSynced)` currently turns it on, so honoring the default would make PtpSynced users
   start seeing exceptions (**breaks callers: yes** unless the default is changed). **3.0:** throws
   `InvalidOperationException` (`fb11369`).
-- [ ] **B23 — Command on a transaction while its own reader is open hangs.**
+- [x] **B23 — Command on a transaction while its own reader is open hangs.** *(ported from 3.0 `d5b24e3`/`c5083b0`: `ReusableAsyncLocker.MarkHeldByActiveReader` fails any contended lock fast; commit/rollback (sync and async) and all three savepoint calls go through the same lock, before `_completedState` flips so a failed attempt is retryable; the provider transaction is now disposed in the completion path (from `5e6b244`), and `_userLock` is only disposed when not held; `TrackedReader` releases the context lock even if releasing the connection lock throws. Tests: `ReusableAsyncLockerTests`, `TransactionReaderLockLifetimeTests`, `TransactionCompletionReaderGuardTests`, `TrackedReaderBranchTests`. Known, as in 3.0: `Dispose()` of a transaction while its reader is open skips the rollback and leaves the transaction to the GC. *Release note:* a command, commit, rollback or savepoint on a transaction while a reader opened on it is still open now throws `InvalidOperationException` instead of waiting; code that shared one transaction across concurrent tasks must serialize its own calls.)*
   `SqlContainer.cs:1523-1575` + `ReusableAsyncLocker`: the reader holds the transaction's lock and any
   further command/commit/rollback on that transaction waits with no timeout. **Proposed:** port 3.0's
   fail-fast (`InvalidOperationException` "…while a reader opened on it is still active…").
@@ -156,22 +161,22 @@ These are the rules the code is being brought in line with.
 
 ## Comment-only corrections
 
-- [ ] **C01 — `CommandPrepareMode`:** restore the caveat the audit dropped — a connection whose
+- [x] **C01 — `CommandPrepareMode`:** restore the caveat the audit dropped — a connection whose
   `Prepare()` fails stops preparing, for both `Auto` and `Always` (`SqlContainer.cs:1857-1899`).
-- [ ] **C02 — `DecimalHelpers.cs:25`:** the new "not currently called by library code" is false
+- [x] **C02 — `DecimalHelpers.cs:25`:** the new "not currently called by library code" is false
   (`SqlDialect.cs:1441`, `AdvancedTypeRegistry.cs:384, 417`); revert to the old remark.
 - [ ] **C03 — `VersionAttribute`:** says `RowVersion` is accepted; resolve together with D05.
 
 ## Testbed and tooling
 
-- [ ] **T01 — Db2 not in the testbed.** `testbed/ParallelTestOrchestrator.cs` has no Db2 entry in
+- [x] **T01 — Db2 not in the testbed.** *(fixed; stale duplicate container deleted. First live testbed run found the shared stored-proc check had no Db2 case — added, using 3.0's live-verified SQL PL. Db2: 23 passed, 0 failed, 5 skipped; also runs inside `IntegrationMatrixTests`.)* `testbed/ParallelTestOrchestrator.cs` has no Db2 entry in
   `CreateContainerAsync` or `GetTestConfigurations`, against its own POLICY comment; delete the stale
   duplicate `testbed/Db2TestContainer.cs`. **3.0:** wired.
-- [ ] **T02 — `Db2NativeLibraryBootstrap.Register()` never called.** `testbed/Program.cs` must call it
+- [x] **T02 — `Db2NativeLibraryBootstrap.Register()` never called.** *(fixed)* `testbed/Program.cs` must call it
   before `DbProviderFactoryFinder.FindAllFactories()`. **3.0:** calls it.
-- [ ] **T03 — Testbed registers `IAuditValueResolver` as scoped.** `testbed/Program.cs:30`; CLAUDE.md
+- [x] **T03 — Testbed registers `IAuditValueResolver` as scoped.** *(fixed there and in two integration-test hosts with the same registration)* `testbed/Program.cs:30`; CLAUDE.md
   requires singleton, and it's resolved from the root provider. **3.0:** same bug.
-- [ ] **T04 — `verify-novendor --allow`:** the usage text (`Program.cs:56`) shows `--allow "x;y"`, which
+- [x] **T04 — `verify-novendor --allow`:** *(fixed; both forms accepted)* the usage text (`Program.cs:56`) shows `--allow "x;y"`, which
   the parser silently ignores (it only reads `--allow=`). Accept both forms. **3.0:** same.
 
 ## To investigate
@@ -181,6 +186,7 @@ These are the rules the code is being brought in line with.
   and `PoolGovernorSyncAcquireTests.Acquire_SlotBusyThenReleasedWithinTimeout_SucceedsViaTimedSemaphoreWait`
   each failed once in a combined run and passed alone and in later full runs. Capture the failure
   message next time; likely timing margins under double load.
+- **`PoolGovernorTurnstileTests.Acquire_TurnstileQueueExceedsMaxQueueDepth_FailsFastInsteadOfWaitingFullTimeout`** also failed once (net8.0, combined run) — same timing pattern.
 - **`PostgreSqlIntervalCoercion.TryWrite` writes `value.ToTimeSpan()`**, dropping months, for any
   provider without an `AdvancedTypeRegistry` interval mapping (the PostgreSQL family has one, so it
   isn't affected).
@@ -196,6 +202,8 @@ These are the rules the code is being brought in line with.
   (TODO at `PrimaryKeyTableGateway.Update.cs:31-38`) although the interface exposes it.
 - **Batch update keys on `[PrimaryKey]`, single-row update on `[Id]`.** 3.0 changed this (`bbb2ef8`);
   changing it on 2.0.6 would break callers — leave unless a bug report forces it.
+- **`Range<T>.Empty` is `default`, the same value as an unbounded `(,)` range**, so the model can't
+  distinguish PostgreSQL's `empty` from "all values". Needs a real empty flag to fix.
 - **Dead code** (candidates for removal on 3.0, not 2.0.6): `ProviderParameterFactory`'s
   `NpgsqlDbType` numbers are wrong and its Oracle Guid branch is broken, but nothing on 2.0.6 calls
   it (it is **live and still wrong on 3.0** — fix there urgently); `TableGateway.BuildUpdateByKey`
@@ -215,6 +223,9 @@ These are the rules the code is being brought in line with.
   value-object columns (use `DbType.Object`).
 - `ConnectionStringNormalizationCache` on 3.0 hashes only the connection string, not the
   read-only key/value, application name and suffix that shape the cached map — port B08's key.
+- 3.0's `Uuid7OptimizedTests.NewUuid7*_ThrowsWhenCounterExhausted_*` are racy: a millisecond tick between
+  setup and the call resets the counter so nothing throws. 2.0.6 pins `LastMs` a minute ahead; also put the
+  `Uuid7Optimized` static-state test classes in one serial collection (`Uuid7StaticStateSerial`).
 - `TotalConnectionsReused`: remove. `ConnectionPoolEfficiency` is computed from it (reused ÷
   created), so it is always 0 on both branches too — decide whether it goes with it.
 - Stale comments that 2.0.6 has corrected but 3.0 still carries: the Oracle, PostgreSQL,

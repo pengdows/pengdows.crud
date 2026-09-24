@@ -574,4 +574,82 @@ public class ReusableAsyncLockerTests
         sem.Release();
         Assert.Equal(1, sem.CurrentCount);
     }
+
+    // ---------------------------------------------------------------
+    // MarkHeldByActiveReader: fail-fast instead of self-deadlock (or an
+    // unsafe wait) when ANY caller tries to reuse the transaction lock while
+    // a reader opened on it is still active — e.g. a nested write while
+    // streaming reads. A reader left open means nothing can safely use the
+    // underlying connection until it's disposed, regardless of who's asking.
+    // ---------------------------------------------------------------
+
+    [Fact]
+    public async Task LockAsync_HeldByActiveReaderOnSameFlow_ThrowsImmediately_InsteadOfHanging()
+    {
+        using var sem = new SemaphoreSlim(1, 1);
+        var locker = new ReusableAsyncLocker(sem);
+
+        await locker.LockAsync();
+        locker.MarkHeldByActiveReader();
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => locker.LockAsync().AsTask());
+        Assert.Contains("reader", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Lock_HeldByActiveReaderOnSameFlow_ThrowsImmediately_InsteadOfHanging()
+    {
+        using var sem = new SemaphoreSlim(1, 1);
+        var locker = new ReusableAsyncLocker(sem);
+
+        locker.Lock();
+        locker.MarkHeldByActiveReader();
+
+        var ex = Assert.Throws<InvalidOperationException>(() => locker.Lock());
+        Assert.Contains("reader", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task TryLockAsync_HeldByActiveReaderOnSameFlow_ThrowsImmediately_InsteadOfTimingOut()
+    {
+        using var sem = new SemaphoreSlim(1, 1);
+        var locker = new ReusableAsyncLocker(sem);
+
+        await locker.LockAsync();
+        locker.MarkHeldByActiveReader();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => locker.TryLockAsync(TimeSpan.FromSeconds(30)).AsTask());
+    }
+
+    [Fact]
+    public async Task LockAsync_HeldByActiveReaderFromAnotherThread_ThrowsImmediately_InsteadOfWaiting()
+    {
+        using var sem = new SemaphoreSlim(1, 1);
+        var locker = new ReusableAsyncLocker(sem);
+
+        await locker.LockAsync();
+        locker.MarkHeldByActiveReader();
+
+        // A genuinely unrelated caller (different thread, different logical flow) must also
+        // fail fast rather than wait — a reader left open on the connection means nobody can
+        // safely use it until the reader is disposed, regardless of who's asking.
+        var ex = await Task.Run(() => Assert.ThrowsAsync<InvalidOperationException>(
+            () => locker.TryLockAsync(TimeSpan.FromSeconds(30)).AsTask()));
+        Assert.Contains("reader", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task LockAsync_AfterActiveReaderMarkReleased_SucceedsNormally()
+    {
+        using var sem = new SemaphoreSlim(1, 1);
+        var locker = new ReusableAsyncLocker(sem);
+
+        await locker.LockAsync();
+        locker.MarkHeldByActiveReader();
+        await locker.DisposeAsync(); // releases the lock and clears the active-reader mark
+
+        await locker.LockAsync(); // must succeed without throwing
+        Assert.Equal(0, sem.CurrentCount);
+    }
 }

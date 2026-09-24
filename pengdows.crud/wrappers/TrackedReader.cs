@@ -88,8 +88,15 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             _connection.Dispose();
         }
 
-        DisposeLockerSynchronously(_connectionLocker);
-        DisposeLockerSynchronously(_contextLocker);
+        try
+        {
+            DisposeLockerSynchronously(_connectionLocker);
+        }
+        finally
+        {
+            DisposeLockerSynchronously(_contextLocker);
+        }
+
         _lifetimeListener?.OnReaderDisposed();
     }
 
@@ -289,10 +296,16 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             }
         }
 
-        await _connectionLocker.DisposeAsync().ConfigureAwait(false);
-        if (_contextLocker != null)
+        try
         {
-            await _contextLocker.DisposeAsync().ConfigureAwait(false);
+            await _connectionLocker.DisposeAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            if (_contextLocker != null)
+            {
+                await _contextLocker.DisposeAsync().ConfigureAwait(false);
+            }
         }
 
         _lifetimeListener?.OnReaderDisposed();

@@ -2235,9 +2235,10 @@ private int _rolledBack;      // Atomic, no locks needed
 await using var reader = await container.ExecuteReaderAsync();
 // Holds _userLock for reader lifetime
 
-// Thread B (concurrent attempt)
+// Thread B (concurrent attempt), or Thread A itself before disposing the reader
 await container.ExecuteNonQueryAsync();
-// BLOCKS on _userLock until reader disposed
+// Throws InvalidOperationException ("...while a reader opened on it is still active...")
+// Commit/Rollback and savepoints throw the same way until the reader is disposed
 ```
 
 **Result**: No overlap, no provider misuse, no corruption, deterministic behavior. This is the only correct behavior for a single database transaction.
@@ -3115,7 +3116,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 
 **Enforcement**: TrackedReader.cs:70-94 and 256-298 (sync/async disposal logic)
 
-**On a transaction specifically, this blocks — it does not fail fast.** A reader opened on an `ITransactionContext` holds the transaction's user lock (`ReusableAsyncLocker` over `_userLock`, a `SemaphoreSlim(1,1)`) until the reader is disposed, and `ReusableAsyncLocker.Lock()`/`LockAsync()` wait on that semaphore with no timeout. Any further command on the same transaction therefore waits until the reader closes. If that further command comes from the same logical flow that would eventually dispose the reader — e.g. writing while still streaming a `LoadStreamAsync` result from the same `ITransactionContext` — it waits forever: a self-deadlock, not an exception. Fully consume or dispose the reader before issuing the next command on that transaction.
+**On a transaction specifically, this fails fast — it does not block.** A reader opened on an `ITransactionContext` holds the transaction's user lock (`ReusableAsyncLocker` over `_userLock`) until the reader is disposed, and `ReusableAsyncLocker.MarkHeldByActiveReader()` marks that hold as owned by the reader. While it is marked, *any* further lock attempt on the transaction — another command, `Commit`/`Rollback` (sync or async), `SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync`, from the same logical flow or another thread — throws `InvalidOperationException("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active...")` immediately. Blocking would deadlock when the waiter is the flow that must dispose the reader (e.g. writing while still streaming a `LoadStreamAsync` result from the same transaction). A failed `Commit`/`Rollback` leaves the transaction uncompleted, so dispose the reader and retry. `Dispose()` of the transaction does not throw here, but skips the rollback and leaves the transaction and connection to the reader; dispose the reader first.
 
 ### RealAsyncLocker is not reentrant
 
@@ -4668,9 +4669,11 @@ catch (TransactionException ex)
 
 `CommitAsync`/`RollbackAsync` (and the sync `Commit`/`Rollback`, which block on them) route through `CompleteTransactionWithWaitAsync`, which serializes completion behind a semaphore (bounded by `ModeLockTimeout`; `null` waits indefinitely) so commits/rollbacks never overlap; a second completion throws `InvalidOperationException`. `SavepointAsync` and `RollbackToSavepointAsync` fail fast with `NotSupportedException` when the dialect's `SupportsSavepoints` is `false`, and `ReleaseSavepointAsync` does the same when `SavepointCapabilities` lacks `Release`, rather than silently doing nothing — a caller only discovers non-support once, at the first unsupported call, instead of after later destructive work it believed was protected. When the capability IS present, the dialect's SQL is executed on the same transaction so you can create, roll back to, or explicitly release a savepoint without leaving the context. Every completion closes the tracked connection and notifies the metrics collector (`TransactionCommitted` or `TransactionRolledBack`; a commit/rollback that throws is counted as neither) so telemetry stays accurate.
 
+**Open readers block nothing — they make the next call fail fast.** A reader opened on the transaction (`ExecuteReaderAsync`, `LoadStreamAsync`, `RetrieveStreamAsync`) holds the transaction's user lock until it is disposed. While it is open, another command, `Commit`/`Rollback` (sync or async), or any savepoint call on the same transaction throws `InvalidOperationException` ("…while a reader opened on it is still active…") instead of waiting — waiting would deadlock whenever the caller is the code that must dispose the reader. A `Commit`/`Rollback` that fails this way leaves the transaction uncompleted (`IsCompleted` stays `false`), so dispose the reader and call it again.
+
 ## Disposal and cleanup
 
-`TransactionContext` guards against forgotten commits. `Dispose`/`DisposeAsync` try to grab the completion lock without waiting, roll back the transaction if it is still open, and log an error (skipping the explicit rollback) if another thread currently holds the lock. Every path calls `CompleteTransactionMetrics` to ensure the metrics delta is recorded even when the transaction rolls back automatically. The transaction object and the user-lock semaphore are disposed once the work finishes; the completion semaphore is disposed too unless another thread still holds it.
+`TransactionContext` guards against forgotten commits. `Dispose`/`DisposeAsync` try to grab the completion lock without waiting, roll back the transaction if it is still open, and log an error (skipping the explicit rollback) if another thread currently holds the lock. Every path calls `CompleteTransactionMetrics` to ensure the metrics delta is recorded even when the transaction rolls back automatically. The provider transaction is disposed by whichever call completes it (commit, rollback or the automatic rollback), exactly once. The user-lock semaphore is disposed unless a reader still holds it, and the completion semaphore is disposed unless another thread still holds it. If a reader opened on the transaction is still open, `Dispose` does not throw but cannot roll back either (the reader owns the connection), so dispose readers before the transaction.
 
 ## Usage patterns
 
@@ -6646,15 +6649,13 @@ var pending = await gateway.CountWhereEqualsAsync("queue", "default", andWhereNu
 var fetched = await gateway.CountWhereEqualsAsync("queue", "default", andWhereNotNull: "fetched_at");
 ```
 
-**`andWhereNull` and `andWhereNotNull` are mutually exclusive — but not enforced.** Supplying
+**`andWhereNull` and `andWhereNotNull` are mutually exclusive, and that is enforced.** Supplying
 neither is fine (falls back to the plain equality count shown above); supplying exactly one applies
-that null-state check as documented. Supplying both does **not** throw: `andWhereNull` takes
-precedence and `andWhereNotNull` is silently ignored, so the call below counts only the
-`IS NULL` shape. Pass at most one.
+that null-state check. Supplying both throws `ArgumentException` (`paramName: "andWhereNotNull"`)
+before any SQL is built.
 
 ```csharp
-// Does NOT throw — produces WHERE "queue" = @v AND "fetched_at" IS NULL;
-// the andWhereNotNull argument is ignored.
+// Throws ArgumentException — at most one null-state check is supported.
 await gateway.CountWhereEqualsAsync("queue", "default",
     andWhereNull: "fetched_at", andWhereNotNull: "fetched_at");
 ```
@@ -7939,7 +7940,7 @@ This is the detail most likely to surprise someone reasoning about ordering guar
 
 Each thread can generate up to 4096 IDs/ms (a 12-bit counter) independently of other threads. Exceeding that within one thread makes `NewUuid7()` (and `NewUuid7Bytes`/`NewUuid7RfcBytes`) **block** until the next millisecond (bounded spin, then `Thread.Sleep(SleepMs)`).
 
-`TryNewUuid7(out Guid result)` never blocks — it returns `false` on counter overflow, for latency-sensitive call sites that would rather skip/retry than wait. This is the only non-blocking path: `Uuid7Options.FailFastOnBurst` is accepted and stored by `Configure`, but no generation method currently consults it, so setting it does not make `NewUuid7()` throw or return early.
+`TryNewUuid7(out Guid result)` never blocks — it returns `false` on counter overflow, for latency-sensitive call sites that would rather skip/retry than wait. With `Uuid7Options.FailFastOnBurst` set, `NewUuid7()`/`NewUuid7Bytes`/`NewUuid7RfcBytes` throw `InvalidOperationException` on overflow instead of blocking.
 
 ## Clock drift handling
 
@@ -7960,13 +7961,13 @@ Uuid7Optimized.Configure(new Uuid7Options(
 
 | `Uuid7ClockMode` | Accuracy assumption | Behavior | Use when |
 |---|---|---|---|
-| `PtpSynced` | ±0.1–1.0ms | Tight skew tolerance, shorter spin waits | PTP-disciplined clusters (EKS Nitro, on-prem PTP) |
+| `PtpSynced` | ±0.1–1.0ms | Tight skew tolerance, shorter spin waits; mode defaults turn `FailFastOnBurst` on (throw instead of block) | PTP-disciplined clusters (EKS Nitro, on-prem PTP) |
 | `NtpSynced` (default) | ±1–10ms | Conservative skew tolerance, longer spin waits, blocks on burst | Most cloud environments with ordinary NTP |
 | `SingleInstance` | N/A | Generous skew tolerance, no cross-node ordering concerns | Single-writer services, embedded systems |
 
-`Uuid7Options` fields: `Mode`, `MaxNegativeSkewMs` (default 5), `MaxSpinCount` (default 128, spin-wait cycles before sleeping on counter overflow), `SleepMs` (default 1), `FailFastOnBurst` (default `false`; currently not consulted — see above).
+`Uuid7Options` fields: `Mode`, `MaxNegativeSkewMs` (default 5), `MaxSpinCount` (default 128, spin-wait cycles before sleeping on counter overflow), `SleepMs` (default 1), `FailFastOnBurst` (default `false`; when true, the blocking generators throw on burst exhaustion — see above).
 
-If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
+If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults — for `PtpSynced` that includes `FailFastOnBurst = true`. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
 
 ## Other entry points
 

@@ -125,9 +125,10 @@ private int _rolledBack;      // Atomic, no locks needed
 await using var reader = await container.ExecuteReaderAsync();
 // Holds _userLock for reader lifetime
 
-// Thread B (concurrent attempt)
+// Thread B (concurrent attempt), or Thread A itself before disposing the reader
 await container.ExecuteNonQueryAsync();
-// BLOCKS on _userLock until reader disposed
+// Throws InvalidOperationException ("...while a reader opened on it is still active...")
+// Commit/Rollback and savepoints throw the same way until the reader is disposed
 ```
 
 **Result**: No overlap, no provider misuse, no corruption, deterministic behavior. This is the only correct behavior for a single database transaction.
@@ -1005,7 +1006,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 
 **Enforcement**: TrackedReader.cs:70-94 and 256-298 (sync/async disposal logic)
 
-**On a transaction specifically, this blocks — it does not fail fast.** A reader opened on an `ITransactionContext` holds the transaction's user lock (`ReusableAsyncLocker` over `_userLock`, a `SemaphoreSlim(1,1)`) until the reader is disposed, and `ReusableAsyncLocker.Lock()`/`LockAsync()` wait on that semaphore with no timeout. Any further command on the same transaction therefore waits until the reader closes. If that further command comes from the same logical flow that would eventually dispose the reader — e.g. writing while still streaming a `LoadStreamAsync` result from the same `ITransactionContext` — it waits forever: a self-deadlock, not an exception. Fully consume or dispose the reader before issuing the next command on that transaction.
+**On a transaction specifically, this fails fast — it does not block.** A reader opened on an `ITransactionContext` holds the transaction's user lock (`ReusableAsyncLocker` over `_userLock`) until the reader is disposed, and `ReusableAsyncLocker.MarkHeldByActiveReader()` marks that hold as owned by the reader. While it is marked, *any* further lock attempt on the transaction — another command, `Commit`/`Rollback` (sync or async), `SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync`, from the same logical flow or another thread — throws `InvalidOperationException("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active...")` immediately. Blocking would deadlock when the waiter is the flow that must dispose the reader (e.g. writing while still streaming a `LoadStreamAsync` result from the same transaction). A failed `Commit`/`Rollback` leaves the transaction uncompleted, so dispose the reader and retry. `Dispose()` of the transaction does not throw here, but skips the rollback and leaves the transaction and connection to the reader; dispose the reader first.
 
 ### RealAsyncLocker is not reentrant
 

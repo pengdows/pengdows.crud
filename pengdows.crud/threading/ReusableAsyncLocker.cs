@@ -14,6 +14,9 @@
 // - No contention stats or timeout — TransactionContext serializes by design,
 //   so contention only happens if the caller misuses the API (concurrent access
 //   on a single TransactionContext), which is already documented as unsupported.
+// - MarkHeldByActiveReader(): while set, ANY contended lock attempt fails fast with
+//   InvalidOperationException instead of blocking — a reader still open on the connection means
+//   nothing can safely use it until the reader is disposed. Cleared when the hold is released.
 // =============================================================================
 
 using System.Runtime.CompilerServices;
@@ -26,6 +29,7 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
 {
     private readonly SemaphoreSlim _semaphore;
     private int _lockState; // 0 = not held, 1 = held
+    private volatile bool _heldByActiveReader;
 
     public ReusableAsyncLocker(SemaphoreSlim semaphore)
     {
@@ -37,6 +41,17 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
     /// </summary>
     protected override bool TrackDisposeState => false;
 
+    /// <summary>
+    /// Marks the current hold as owned by a reader that stays open while the caller iterates it.
+    /// Until the hold is released, any contended lock attempt throws instead of waiting: a nested
+    /// command from the flow that owns the reader would otherwise wait forever, and any other
+    /// caller would reach the provider while a reader is still open on the same connection.
+    /// </summary>
+    internal void MarkHeldByActiveReader()
+    {
+        _heldByActiveReader = true;
+    }
+
     /// <inheritdoc />
     public void Lock()
     {
@@ -45,6 +60,8 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
             SetHeld();
             return;
         }
+
+        ThrowIfBlockedBehindActiveReader();
 
         // No timeout or cancellation: TransactionContext is single-threaded by design.
         // Contention here means the caller is misusing the API (concurrent ops on one
@@ -68,6 +85,7 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
             return ValueTask.CompletedTask;
         }
 
+        ThrowIfBlockedBehindActiveReader();
         return LockAsyncSlow(cancellationToken);
     }
 
@@ -91,6 +109,7 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
             return ValueTask.FromResult(true);
         }
 
+        ThrowIfBlockedBehindActiveReader();
         return TryLockAsyncSlow(timeout, cancellationToken);
     }
 
@@ -111,10 +130,22 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
         Volatile.Write(ref _lockState, 1);
     }
 
+    private void ThrowIfBlockedBehindActiveReader()
+    {
+        if (_heldByActiveReader)
+        {
+            throw new InvalidOperationException(
+                "Cannot execute another command, or commit/roll back this transaction, while a " +
+                "reader opened on it is still active. Dispose the reader (or finish consuming it) " +
+                "first.");
+        }
+    }
+
     private void ReleaseIfHeld()
     {
         if (Interlocked.CompareExchange(ref _lockState, 0, 1) == 1)
         {
+            _heldByActiveReader = false;
             _semaphore.Release();
         }
     }

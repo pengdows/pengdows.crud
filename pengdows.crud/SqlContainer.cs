@@ -1569,6 +1569,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             cmd = null;
             lockTransferred = true; // TrackedReader now owns both the connection and context locks
 
+            // A transaction's context lock now guards a reader that stays open for as long as
+            // the caller iterates it. Mark it so any further command, commit or rollback on the
+            // transaction fails fast instead of deadlocking (see ReusableAsyncLocker.MarkHeldByActiveReader).
+            if (contextLocker is ReusableAsyncLocker readerAwareLocker)
+            {
+                readerAwareLocker.MarkHeldByActiveReader();
+            }
+
             if (activity != null)
             {
                 activity.SetStatus(ActivityStatusCode.Ok);
