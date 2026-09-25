@@ -1502,6 +1502,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var operationKind = commandType == CommandType.StoredProcedure ? DbOperationKind.Unknown : DbOperationKind.Query;
         if (executionType == ExecutionType.Write)
         {
+            // A write that returns a result set (generated-key retrieval) is still a write: reject
+            // it on a read-only context with the same exception type as every other write path.
+            if (_context.ReadWriteMode == ReadWriteMode.ReadOnly)
+            {
+                throw new NotSupportedException("Write operations are not supported in read-only mode.");
+            }
+
             _context.AssertIsWriteConnection();
         }
         else

@@ -135,9 +135,10 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        // ExecuteReaderAsync goes through AssertIsWriteConnection rather than the
-        // ReadWriteMode guard, so the exception type is InvalidOperationException.
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        // BP-208: the reader write path rejects a read-only context with the same exception type
+        // as every other write path (it used to fall through to AssertIsWriteConnection's
+        // InvalidOperationException).
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
             await container.ExecuteReaderAsync(ExecutionType.Write));
     }
 
