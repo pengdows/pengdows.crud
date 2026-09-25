@@ -165,7 +165,18 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // OPTIMIZATION: For most common primitive types where source and target match,
                 // bypass BuildConversionExpression's potential boxing/Coerce paths.
                 var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
-                if (fieldType == underlyingTarget && rawValue.Type == fieldType)
+                if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(fieldType))
+                {
+                    // DuckDB returns BLOBs as UnmanagedMemoryStream instances backed by the
+                    // active reader. Do not let that reader-bound stream escape the mapper;
+                    // copy it while it is valid.
+                    valueReadExpr = Expression.Convert(
+                        Expression.Call(
+                            typeof(ProviderStreamMaterializer).GetMethod(nameof(ProviderStreamMaterializer.Materialize))!,
+                            Expression.Convert(rawValue, typeof(object))),
+                        targetType);
+                }
+                else if (fieldType == underlyingTarget && rawValue.Type == fieldType)
                 {
                     // Fast path: reader returned the native type — no unboxing needed.
                     if (underlyingTarget == typeof(DateTime))

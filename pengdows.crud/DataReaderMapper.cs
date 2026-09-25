@@ -506,6 +506,15 @@ internal sealed class DataReaderMapper : IDataReaderMapper
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
+        else if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(key.FieldType))
+        {
+            // DuckDB returns BLOBs as UnmanagedMemoryStream instances backed by the active reader;
+            // copy them while the reader is valid instead of assigning the provider stream.
+            var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
+            var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
+            var materialize = typeof(ProviderStreamMaterializer).GetMethod(nameof(ProviderStreamMaterializer.Materialize))!;
+            valueExpression = Expression.Convert(Expression.Call(materialize, rawValue), targetType);
+        }
         else if (key.RequiresCoercion)
         {
             if (!TryBuildDirectReadExpression(key, readerParam, targetType, underlyingTarget, out valueExpression))

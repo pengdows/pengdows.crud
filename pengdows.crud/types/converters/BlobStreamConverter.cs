@@ -19,6 +19,7 @@
 
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 
 namespace pengdows.crud.types.converters;
 
@@ -96,7 +97,8 @@ internal sealed class BlobStreamConverter : AdvancedTypeConverter<Stream>
                         stream.Seek(0, SeekOrigin.Begin);
                     }
 
-                    result = stream;
+                    // DuckDB's reader-owned UnmanagedMemoryStream must not escape the reader.
+                    result = ProviderStreamMaterializer.Materialize(stream);
                     return true;
                 }
                 catch

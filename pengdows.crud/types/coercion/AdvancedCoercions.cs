@@ -30,6 +30,7 @@ using System.Net.NetworkInformation;
 using System.Text;
 using System.Diagnostics.CodeAnalysis;
 using pengdows.crud.enums;
+using pengdows.crud.@internal;
 using pengdows.crud.types.converters;
 using pengdows.crud.types.valueobjects;
 
@@ -761,7 +762,8 @@ internal class BlobStreamCoercion : DbCoercion<Stream>
                     stream.Seek(0, SeekOrigin.Begin);
                 }
 
-                value = stream;
+                // DuckDB's reader-owned UnmanagedMemoryStream must not escape the reader.
+                value = ProviderStreamMaterializer.Materialize(stream);
                 return true;
             case byte[] bytes:
                 value = new MemoryStream(bytes, false);
