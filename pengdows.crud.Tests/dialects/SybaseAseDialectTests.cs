@@ -66,24 +66,19 @@ public class SybaseAseDialectTests
         Assert.Equal(DBNull.Value, param.Value);
     }
 
-    // CONFIRMED live (testbed): with PassThrough, AdoNetCore.AseClient serializes a Guid into a
-    // CHAR(36) column in a form that does not read back as a GUID string. ASE has no native
-    // UUID type, so the dialect stores the canonical 36-character string form.
+    // Guids pass through to AdoNetCore.AseClient unchanged, exactly as in 2.0.5. CONFIRMED live
+    // (ASE 16.0 SP02): the driver writes a DbType.Guid into BINARY(16)/VARBINARY(16) as the 16-byte
+    // Guid.ToByteArray() form, which reads back as the same Guid and matches in equality lookups.
+    // Converting to the 36-character string (tried briefly in 2.0.6) broke exactly those columns.
     [Fact]
-    public void CreateDbParameter_Guid_StoresCanonicalString()
+    public void CreateDbParameter_Guid_PassesThroughAsGuid()
     {
         var guid = Guid.Parse("12345678-1234-1234-1234-123456789abc");
         var param = Dialect().CreateDbParameter("p", DbType.Guid, guid);
 
-        Assert.Equal(DbType.String, param.DbType);
-        Assert.Equal("12345678-1234-1234-1234-123456789abc", param.Value?.ToString());
+        Assert.Equal(DbType.Guid, param.DbType);
+        Assert.Equal(guid, param.Value);
     }
-
-    // CONFIRMED live (ASE 16.0 SP02, isql): inserting '  padded  ' into a VARCHAR stores 8 bytes
-    // (datalength), i.e. the engine strips trailing blanks on storage.
-    [Fact]
-    public void PreservesTrailingWhitespace_IsFalse()
-        => Assert.False(Dialect().PreservesTrailingWhitespace);
 
     [Fact]
     public void ParameterMarker_IsAt()

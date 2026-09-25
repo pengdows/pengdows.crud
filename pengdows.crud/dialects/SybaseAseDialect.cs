@@ -112,10 +112,12 @@ internal class SybaseAseDialect : SqlDialect
     // storage ('  padded  ' is stored as 8 bytes), so they cannot round-trip.
     public override bool PreservesTrailingWhitespace => false;
 
-    // ASE has no native UUID type; store the canonical 36-character string form. Verified live
-    // (testbed): PassThrough let AdoNetCore.AseClient serialize the Guid into CHAR(36) in a form
-    // that does not read back as a GUID.
-    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+    // Guids pass through to AdoNetCore.AseClient (the SqlDialect default), as in 2.0.5. Verified
+    // live (ASE 16.0 SP02): the driver writes DbType.Guid into BINARY(16)/VARBINARY(16) as
+    // Guid.ToByteArray(), which reads back as the same Guid and matches in equality lookups - use
+    // BINARY(16) columns for Guids on ASE. (Into a CHAR(36) column the driver writes those 16 bytes
+    // as characters, which do not read back as a Guid; a string format was tried and reverted
+    // because it broke the BINARY(16) columns 2.0.5 already handled correctly.)
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {

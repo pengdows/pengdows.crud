@@ -560,6 +560,8 @@ CREATE TABLE {tableName} (
             SupportedDatabase.DuckDB => "UUID",
             SupportedDatabase.Firebird => "CHAR(16) CHARACTER SET OCTETS",
             SupportedDatabase.InterBase => "CHAR(16) CHARACTER SET OCTETS",
+            // AdoNetCore.AseClient writes DbType.Guid as 16 bytes; BINARY(16) round-trips it.
+            SupportedDatabase.SybaseASE => "BINARY(16)",
             _ => GetTextType(product, 36)
         };
     }
@@ -1776,6 +1778,8 @@ INSERT INTO {table} (
             {
                 Guid g => g,
                 string s => Guid.Parse(s),
+                // Raw reader value from a 16-byte binary Guid column (e.g. Sybase ASE BINARY(16)).
+                byte[] { Length: 16 } bytes => new Guid(bytes),
                 _ => throw new Exception($"[RoundTrip] Guid type unexpected: {value?.GetType().Name}")
             };
         }
