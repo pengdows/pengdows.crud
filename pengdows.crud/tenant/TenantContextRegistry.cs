@@ -23,10 +23,12 @@
 //   (_admissionLock), closing a TOCTOU race that could otherwise let concurrent distinct
 //   tenants exceed the cap.
 // - Extends SafeAsyncDisposableBase for proper cleanup.
-// - DisposeManaged/Async: disposes every already-created context inline; an entry still under
+// - DisposeManaged: disposes every already-created context inline; an entry still under
 //   construction (in flight on another thread) is handed to a background work item that blocks
-//   on Lazy<IDatabaseContext>.Value exactly like any other racing caller would, then disposes
-//   the result — never left unreachable/leaked, and never blocks Dispose()/DisposeAsync() itself.
+//   on Lazy<IDatabaseContext>.Value, then disposes the result — never leaked, and never blocks
+//   Dispose() itself.
+// - DisposeManagedAsync: same, except an in-flight construction is awaited (via the entry's
+//   non-blocking completion signal, not Lazy.Value) and disposed before DisposeAsync completes.
 // =============================================================================
 
 using System.Collections.Concurrent;
@@ -109,9 +111,34 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         public Lazy<IDatabaseContext> LazyContext { get; }
 
+        // Completed (never faulted) when the factory finishes: the context on success, null on
+        // failure. Lets DisposeManagedAsync await an in-flight construction without blocking any
+        // thread on Lazy<T>.Value (which blocks synchronously while another thread evaluates it).
+        private readonly TaskCompletionSource<IDatabaseContext?> _constructed =
+            new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _constructionStarted;
+
+        public Task<IDatabaseContext?> Constructed => _constructed.Task;
+
+        public bool ConstructionStarted => Volatile.Read(ref _constructionStarted) != 0;
+
         public TenantContextEntry(Func<IDatabaseContext> factory)
         {
-            LazyContext = new Lazy<IDatabaseContext>(factory, LazyThreadSafetyMode.ExecutionAndPublication);
+            LazyContext = new Lazy<IDatabaseContext>(() =>
+            {
+                Interlocked.Exchange(ref _constructionStarted, 1);
+                try
+                {
+                    var context = factory();
+                    _constructed.TrySetResult(context);
+                    return context;
+                }
+                catch
+                {
+                    _constructed.TrySetResult(null);
+                    throw;
+                }
+            }, LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
         /// <summary>
@@ -438,7 +465,11 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         }
     }
 
-    /// <inheritdoc cref="DisposeManaged"/>
+    /// <summary>
+    /// Async counterpart of <see cref="DisposeManaged"/>. Unlike the sync path, an entry still
+    /// under construction is awaited (without blocking a thread) and its context disposed before
+    /// this method completes, so no tenant context outlives <c>DisposeAsync</c>.
+    /// </summary>
     protected override async ValueTask DisposeManagedAsync()
     {
         var entries = _contexts.Values.ToArray();
@@ -455,7 +486,36 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
             }
             else
             {
-                ScheduleBackgroundShutdownDisposal(entry, useAsyncDisposal: true);
+                // DisposeManagedAsync is already asynchronous, so it awaits in-flight construction
+                // and disposes inline instead of fire-and-forgetting it — preserving
+                // IAsyncDisposable's "resources are released by the time DisposeAsync returns"
+                // guarantee. It awaits the entry's completion signal rather than touching
+                // LazyContext.Value, whose getter blocks synchronously while another thread is
+                // mid-construction; no thread (pool or caller) is parked waiting.
+                if (!entry.ConstructionStarted)
+                {
+                    // Nobody has begun evaluating yet (the admitting caller is between
+                    // GetOrCreateEntry and ResolveEntry). Start it on the pool so the signal is
+                    // guaranteed to complete; if a caller starts it first, this simply observes
+                    // that caller's result.
+                    _ = Task.Run(() =>
+                    {
+                        try
+                        {
+                            _ = entry.LazyContext.Value;
+                        }
+                        catch
+                        {
+                            // Construction failed — the completion signal reports null.
+                        }
+                    });
+                }
+
+                var completedContext = await entry.Constructed.ConfigureAwait(false);
+                if (completedContext != null && entry.TryClaimDisposal())
+                {
+                    await DisposeShutdownContextAsync(completedContext).ConfigureAwait(false);
+                }
             }
         }
     }

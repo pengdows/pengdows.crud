@@ -534,4 +534,79 @@ public class TenantTests
         Assert.False(isUsable,
             "A context constructed while racing registry disposal must eventually be disposed, not leaked untracked.");
     }
+
+    // Async counterpart of the sibling test above, with a stricter contract: DisposeManagedAsync is
+    // already asynchronous, so unlike the sync path (which cannot block its caller on someone
+    // else's in-flight construction and hands it to a background work item) it must await the
+    // in-flight construction and dispose inline. Previously it used the same fire-and-forget
+    // background hand-off, so `await registry.DisposeAsync()` could return before the orphaned
+    // context was disposed — weakening IAsyncDisposable's "released by the time DisposeAsync
+    // returns" contract.
+    //
+    // Deterministic, independent of thread-pool timing: construction runs on a dedicated thread
+    // (not the pool) and is held by a semaphore, so a correct DisposeAsync cannot possibly have
+    // completed before the semaphore is released — checked immediately, with no delay. The
+    // pre-fix implementation returns synchronously, so it is observably complete at that point.
+    [Fact]
+    public async Task DisposeAsync_RacingWithInFlightCreate_DisposesTheOrphanedContextBeforeReturning()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+
+        var creationStarted = new SemaphoreSlim(0);
+        var proceedWithCreation = new SemaphoreSlim(0);
+        var factory = new RecordingBlockingContextFactory(creationStarted, proceedWithCreation);
+
+        var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            factory,
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var getContextDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var constructingThread = new Thread(() =>
+        {
+            try
+            {
+                registry.GetContext("dispose-async-race-tenant-orphan");
+            }
+            catch (ObjectDisposedException)
+            {
+                // Acceptable — already covered by the sync sibling test; not this test's concern.
+            }
+            finally
+            {
+                getContextDone.TrySetResult();
+            }
+        }) { IsBackground = true };
+        constructingThread.Start();
+
+        await creationStarted.WaitAsync();
+
+        var disposeTask = registry.DisposeAsync().AsTask();
+        Assert.False(disposeTask.IsCompleted,
+            "DisposeAsync must wait for in-flight tenant construction to finish before returning, " +
+            "not fire-and-forget it to a background thread.");
+
+        proceedWithCreation.Release();
+        await disposeTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var created = factory.CreatedContext;
+        Assert.NotNull(created);
+        Assert.True(created!.IsDisposed,
+            "A context constructed while racing async registry disposal must already be disposed " +
+            "by the time DisposeAsync returns.");
+
+        await getContextDone.Task.WaitAsync(TimeSpan.FromSeconds(10));
+    }
 }

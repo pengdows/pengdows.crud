@@ -55,8 +55,8 @@ state independent of `SafeAsyncDisposableBase.IsDisposed`:
 `DisposeManaged()`/`DisposeManagedAsync()` (sync/async disposal share this structure):
 
 1. Unsubscribe from the metrics collector's own change event.
-2. Dispose the persistent connection, if any (`SingleConnection` pinned connection /
-   `PreventDatabaseUnload` sentinel).
+2. Dispose the persistent connections, if any (`SingleConnection` pinned connection /
+   every `PreventDatabaseUnload` sentinel — one per enabled pool).
 3. Dispose the connection-open coordination primitives (`_connectionOpenLocker`/`_connectionOpenGate`).
 4. **Drain each governor (writer first, then reader) with `PoolAcquireTimeout` as the drain
    timeout, then dispose it** — a *different* use from ordinary slot acquisition, but the same

@@ -125,4 +125,9 @@ individual tenant context is torn down, and `GetContext`/`AcquireLease` call `Th
 on entry — so a call that *starts* after shutdown begins reliably observes
 `ObjectDisposedException`. A call that had already passed that check and is blocked on an
 in-flight construction is the creation-race case described above: it may still receive a context
-that the shutdown path disposes as soon as construction completes.
+that the shutdown path disposes as soon as construction completes. `Dispose()` hands that
+in-flight construction to a background work item (it never blocks on someone else's
+construction), so the orphaned context is disposed shortly *after* `Dispose()` returns.
+`DisposeAsync()` instead awaits the in-flight construction — without blocking any thread — and
+disposes the resulting context before it completes, so after `await registry.DisposeAsync()` no
+tenant context the registry created is left undisposed.
