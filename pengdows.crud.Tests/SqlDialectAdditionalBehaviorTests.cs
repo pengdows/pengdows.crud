@@ -215,6 +215,40 @@ public class SqlDialectAdditionalBehaviorTests
         Assert.Null(dialect.ParseVersion("invalid version"));
     }
 
+    // BP-108 (3.0 5d80b5c): System.Version supports at most 4 components, so Oracle's 5-part
+    // "23.26.2.0.0" failed Version.TryParse and fell through to the single-digit fallback, which
+    // grabbed "26" from the unrelated "26ai" branding token instead of the real major version 23.
+    [Fact]
+    public void ParseVersion_FivePartVersionString_TruncatesToFourComponentsInsteadOfFailing()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
+
+        var parsed = dialect.ParseVersion(
+            "Oracle AI Database 26ai Free Release 23.26.2.0.0 - Develop, Learn, and Run for Free");
+
+        Assert.NotNull(parsed);
+        Assert.Equal(23, parsed!.Major);
+        Assert.Equal(26, parsed.Minor);
+        Assert.Equal(2, parsed.Build);
+        Assert.Equal(0, parsed.Revision);
+    }
+
+    [Fact]
+    public void ParseVersion_FivePartVersionString_NoMisleadingBrandingPrefix_StillParsesCorrectly()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
+
+        var parsed = dialect.ParseVersion("Oracle Database Release 21.3.0.0.0");
+
+        Assert.NotNull(parsed);
+        Assert.Equal(21, parsed!.Major);
+        Assert.Equal(3, parsed.Minor);
+        Assert.Equal(0, parsed.Build);
+        Assert.Equal(0, parsed.Revision);
+    }
+
     // Found via a live Oracle 23ai/26ai container during a FEAT-008 driver-matrix investigation:
     // System.Version.TryParse supports at most 4 dot-separated components (Major.Minor.Build.
     // Revision), but Oracle's version scheme is a 5-part "23.26.2.0.0". The main regex match
