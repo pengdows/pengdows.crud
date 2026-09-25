@@ -137,6 +137,7 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <remarks>
     /// For entities with a <c>[Version]</c> column, 0 rows affected (version mismatch or row
     /// deleted) throws <c>ConcurrencyConflictException</c>.
+    /// On success, a numeric <c>[Version]</c> is written back into the entity as the incremented value.
     /// </remarks>
     ValueTask<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
@@ -148,6 +149,7 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <remarks>
     /// For entities with a <c>[Version]</c> column, 0 rows affected (version mismatch or row
     /// deleted) throws <c>ConcurrencyConflictException</c>.
+    /// On success, a numeric <c>[Version]</c> is written back into the entity as the incremented value.
     /// </remarks>
     ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
@@ -248,7 +250,8 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// For entities with a <c>[Version]</c> column, an entity whose UPDATE affects 0 rows (version
     /// mismatch or row deleted) throws <c>ConcurrencyConflictException</c>. Entities processed
     /// before the conflicting one have already been written; run the batch inside a transaction to
-    /// make it all-or-nothing.
+    /// make it all-or-nothing. Each successfully updated entity gets its incremented
+    /// <c>[Version]</c> written back.
     /// </remarks>
     ValueTask<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);

@@ -114,6 +114,9 @@ is stale, the same as single-entity `UpdateAsync`:
 - Entities processed before the conflicting one have already been written. Wrap the batch in
   `BeginTransaction()` when it must be all-or-nothing.
 - Unversioned entities never throw; a 0 in the total just means nothing matched.
+- Each successfully updated entity gets its new numeric version written back (`current + 1`), so
+  the same instances can go through another `BatchUpdateAsync`. When a conflict throws, entities
+  updated before it carry their new version and the conflicting entity keeps the one it had.
 
 ### Batch upsert and `[Version]` conflicts
 

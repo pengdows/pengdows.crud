@@ -63,6 +63,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
                     ctx.Product);
             }
 
+            if (rowsAffected != 0)
+            {
+                WriteBackIncrementedVersion(objectToUpdate);
+            }
+
             return rowsAffected;
         }
         catch
@@ -90,6 +95,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 throw new ConcurrencyConflictException(
                     $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
                     ctx.Product);
+            }
+
+            if (rowsAffected != 0)
+            {
+                WriteBackIncrementedVersion(objectToUpdate);
             }
 
             return rowsAffected;
@@ -186,6 +196,15 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 {
                     throw new ConcurrencyConflictException(
                         BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                }
+
+                // This container's UPDATE succeeded, so its [Version] increment took effect.
+                if (affected != 0 && _batchContainerEntities.TryGetValue(sc, out var updatedEntities))
+                {
+                    foreach (var entity in updatedEntities)
+                    {
+                        WriteBackIncrementedVersion(entity);
+                    }
                 }
 
                 total += affected;

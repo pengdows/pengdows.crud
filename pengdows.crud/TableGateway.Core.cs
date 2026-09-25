@@ -1456,6 +1456,12 @@ public partial class TableGateway<TEntity, TRowID> :
                         ctx.Product);
                 }
             }
+            else
+            {
+                // The SET clause incremented [Version] server-side; mirror it on the entity so the
+                // same instance can be updated again.
+                WriteBackIncrementedVersion(objectToUpdate);
+            }
 
             return rowsAffected;
         }

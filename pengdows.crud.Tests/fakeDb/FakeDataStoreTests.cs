@@ -149,6 +149,35 @@ public class FakeDataStoreTests
         Assert.Equal("new", reader["name"]?.ToString());
     }
 
+    // The [Version] increment every gateway UPDATE emits ("version" = "version" + 1) used to be
+    // stored as the literal expression text, so the next version-checked UPDATE or a retrieve of
+    // that row could never see the real incremented number.
+    [Fact]
+    public async Task Update_WithSelfIncrementExpression_StoresIncrementedNumber()
+    {
+        using var conn = MakeConnection();
+
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO versioned (\"id\", \"version\") VALUES (1, 1)";
+        await insertCmd.ExecuteNonQueryAsync();
+
+        using var updateCmd = conn.CreateCommand();
+        updateCmd.CommandText =
+            "UPDATE \"versioned\" SET \"version\" = \"version\" + 1 WHERE \"id\" = 1 AND \"version\" = 1";
+        Assert.Equal(1, await updateCmd.ExecuteNonQueryAsync());
+
+        using var staleCmd = conn.CreateCommand();
+        staleCmd.CommandText =
+            "UPDATE \"versioned\" SET \"version\" = \"version\" + 1 WHERE \"id\" = 1 AND \"version\" = 1";
+        Assert.Equal(0, await staleCmd.ExecuteNonQueryAsync());
+
+        using var selectCmd = conn.CreateCommand();
+        selectCmd.CommandText = "SELECT * FROM versioned";
+        using var reader = await selectCmd.ExecuteReaderAsync();
+        Assert.True(reader.Read());
+        Assert.Equal(2L, Convert.ToInt64(reader["version"]));
+    }
+
     // ── DELETE ────────────────────────────────────────────────────────────────
 
     [Fact]

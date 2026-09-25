@@ -439,6 +439,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// Executes an UPDATE using the values currently on <paramref name="objectToUpdate"/>. The
     /// original row is reloaded first only when the entity has a <c>[Version]</c> column; for
     /// versioned entities, 0 rows affected throws <c>ConcurrencyConflictException</c>.
+    /// On success, a numeric <c>[Version]</c> is written back into the entity as the incremented value.
     /// </remarks>
     /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
@@ -473,6 +474,7 @@ public interface ITableGateway<TEntity, TRowID>
     /// Setting <paramref name="loadOriginal"/> to <c>true</c> reloads the
     /// original row so that differences can be detected before executing the update.
     /// For versioned entities, 0 rows affected throws <c>ConcurrencyConflictException</c>.
+    /// On success, a numeric <c>[Version]</c> is written back into the entity as the incremented value.
     /// </remarks>
     /// <param name="objectToUpdate">The entity whose current values generate the UPDATE.</param>
     /// <param name="loadOriginal">When true, reloads the original row before building the update.</param>
@@ -727,6 +729,11 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Executes a batch UPDATE for the given entities and returns the total affected rows.
     /// </summary>
+    /// <remarks>
+    /// Versioned entities are updated one by one: an entity whose UPDATE affects 0 rows throws
+    /// <c>ConcurrencyConflictException</c>, and each successfully updated entity gets its incremented
+    /// <c>[Version]</c> written back.
+    /// </remarks>
     /// <param name="entities">The entities to update. Must not be null.</param>
     /// <param name="context">Optional database context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Optional token to cancel the operation.</param>

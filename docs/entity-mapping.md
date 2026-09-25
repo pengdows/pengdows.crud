@@ -141,7 +141,12 @@ database assigns it; see `docs/advanced-types.md`.
   `version = @currentVersion` — on **both** `TableGateway<T,TId>` and `PrimaryKeyTableGateway<T>`.
   What happens when that predicate matches zero rows (stale version or the row was deleted)
   is the same on both gateways: `UpdateAsync` and `BatchUpdateAsync` throw
-  `ConcurrencyConflictException`. (`UpsertAsync` and `BatchUpsertAsync` on both gateways throw `ConcurrencyConflictException` on a version
+  `ConcurrencyConflictException`. After a successful update, both gateways write the new numeric
+  version (`current + 1`) back into the entity, so reusing the same instance for another update
+  works; a failed or conflicting update leaves the entity's version untouched. Opaque
+  `byte[]`/`RowVersion` versions are DB-generated and are not written back — re-read the row to
+  get the new token. `UpsertAsync`/`BatchUpsertAsync` don't write back (rows affected can't tell
+  an insert from an update). (`UpsertAsync` and `BatchUpsertAsync` on both gateways throw `ConcurrencyConflictException` on a version
   mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
   ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY
   UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites — see

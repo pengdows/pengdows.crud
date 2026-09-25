@@ -242,7 +242,7 @@ Everything above answers with canned/queued data. Setting `EnableDataPersistence
 factory or a connection) switches to a genuine, if intentionally limited, in-memory SQL engine:
 real `CREATE TABLE`, `INSERT` (single and multi-row `VALUES`, auto-assigning `Id` when omitted,
 trimming trailing `ON CONFLICT`/`RETURNING`/`OUTPUT`/`ON DUPLICATE KEY` clauses), `UPDATE` (quoted or bare
-column names in `SET`)/`DELETE` with a real `WHERE` evaluator (`AND`, `IS [NOT] NULL`, `LIKE` with `%`/`_` wildcards, `IN (...)`,
+column names in `SET`, including `col = col + n` / `col - n` arithmetic such as the `[Version]` increment)/`DELETE` with a real `WHERE` evaluator (`AND`, `IS [NOT] NULL`, `LIKE` with `%`/`_` wildcards, `IN (...)`,
 comparisons), and `SELECT` (`*`, column lists with aliasing, `COUNT(...)`, literal no-`FROM`
 selects). Tables persist for the lifetime of one `FakeDataStore` instance (`Clear()` resets); by
 default every connection from one factory shares a single store.

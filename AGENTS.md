@@ -219,9 +219,11 @@ The `[Version]` attribute enables optimistic concurrency control:
 | Operation | Behavior |
 |-----------|----------|
 | **Create** | If version is null/0, automatically set to 1 |
-| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
+| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion`; on success writes the new value (`current + 1`) back into the entity |
 
-**Conflict detection:** `UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process).
+**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE` and Firebird `UPDATE OR INSERT` cannot detect a stale version.
+
+**Write-back:** after a successful `UpdateAsync`/`BatchUpdateAsync` the entity's numeric `[Version]` is set to the incremented value, so the same instance can be updated again. Opaque `byte[]`/`RowVersion` versions are DB-generated and are not written back; `UpsertAsync` doesn't write back either (rows affected can't tell an insert from an update).
 
 ## Upsert Behavior
 
