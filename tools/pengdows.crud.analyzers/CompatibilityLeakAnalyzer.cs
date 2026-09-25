@@ -59,6 +59,14 @@ public sealed class CompatibilityLeakAnalyzer : DiagnosticAnalyzer
         "pengdows.crud.dialects.ISqlDialect.MaxSupportedStandard"
     ];
 
+    // Fixed at construction: readable, but their setters are public only for 2.0.5 binary
+    // compatibility and do nothing (3.0 makes them init-only), so any assignment is a caller bug.
+    private static readonly ImmutableHashSet<string> WriteBlockedProperties =
+    [
+        "pengdows.crud.DatabaseContext.ReadWriteMode",
+        "pengdows.crud.DatabaseContext.ProcWrappingStyle"
+    ];
+
     public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics => ImmutableArray.Create(Rule);
 
     public override void Initialize(AnalysisContext context)
@@ -81,7 +89,7 @@ public sealed class CompatibilityLeakAnalyzer : DiagnosticAnalyzer
         }
 
         var symbol = context.SemanticModel.GetSymbolInfo(identifier, context.CancellationToken).Symbol;
-        var blockedName = GetBlockedName(symbol);
+        var blockedName = GetBlockedName(symbol) ?? GetBlockedWriteName(symbol, identifier);
         if (blockedName == null || IsDeclarationName(identifier, symbol))
         {
             return;
@@ -111,6 +119,27 @@ public sealed class CompatibilityLeakAnalyzer : DiagnosticAnalyzer
 
         var qualifiedName = GetQualifiedName(type);
         return BlockedTypes.Contains(qualifiedName) ? type.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat) : null;
+    }
+
+    // Name of a write-blocked property when this identifier is the target of an assignment
+    // (context.ReadWriteMode = x, or ReadWriteMode = x in an object initializer); reads return null.
+    private static string? GetBlockedWriteName(ISymbol? symbol, IdentifierNameSyntax identifier)
+    {
+        if (symbol is not IPropertySymbol property
+            || !WriteBlockedProperties.Contains(GetQualifiedName(property.ContainingType) + "." + property.Name))
+        {
+            return null;
+        }
+
+        ExpressionSyntax target = identifier;
+        if (identifier.Parent is MemberAccessExpressionSyntax memberAccess && memberAccess.Name == identifier)
+        {
+            target = memberAccess;
+        }
+
+        return target.Parent is AssignmentExpressionSyntax assignment && assignment.Left == target
+            ? $"the setter of {property.ToDisplayString(SymbolDisplayFormat.CSharpErrorMessageFormat)} (fixed at construction; assigning it has no effect)"
+            : null;
     }
 
     private static string GetQualifiedName(INamedTypeSymbol type)

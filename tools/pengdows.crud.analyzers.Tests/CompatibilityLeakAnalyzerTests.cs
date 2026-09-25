@@ -64,6 +64,88 @@ public sealed class CompatibilityLeakAnalyzerTests
             expectedCount: 0);
     }
 
+    // DatabaseContext.ReadWriteMode / ProcWrappingStyle are fixed at construction. Their setters are
+    // public only so 2.0.5 binaries keep loading, and they do nothing, so an assignment is always a
+    // caller bug; reading the properties is fine.
+    [Fact]
+    public async Task FixedAtConstructionProperties_WritesAreReported_ReadsAreNot()
+    {
+        var source = """
+            namespace pengdows.crud.enums
+            {
+                public enum ReadWriteMode { ReadOnly, ReadWrite }
+                public enum ProcWrappingStyle { None, Exec }
+            }
+
+            namespace pengdows.crud
+            {
+                using pengdows.crud.enums;
+
+                public class DatabaseContext
+                {
+                    public ReadWriteMode ReadWriteMode { get; set; }
+                    public ProcWrappingStyle ProcWrappingStyle { get; set; }
+                }
+            }
+
+            namespace Consumer
+            {
+                using pengdows.crud;
+                using pengdows.crud.enums;
+
+                public sealed class ConsumerType
+                {
+                    public bool Reads(DatabaseContext context)
+                    {
+                        var mode = context.ReadWriteMode;
+                        return mode == ReadWriteMode.ReadOnly && context.ProcWrappingStyle == ProcWrappingStyle.Exec;
+                    }
+
+                    public void Writes(DatabaseContext context)
+                    {
+                        context.ReadWriteMode = ReadWriteMode.ReadWrite;
+                        context.ProcWrappingStyle = ProcWrappingStyle.None;
+                        var created = new DatabaseContext { ReadWriteMode = ReadWriteMode.ReadOnly };
+                    }
+                }
+            }
+            """;
+
+        await CSharpAnalyzerVerifier<CompatibilityLeakAnalyzer>.VerifyDiagnosticCountAsync(
+            source,
+            CompatibilityLeakAnalyzer.DiagnosticId,
+            expectedCount: 3);
+    }
+
+    // A using-alias must not sidestep PGC027: the alias directive itself names the blocked type, and
+    // an identifier bound through the alias resolves to the aliased type.
+    [Fact]
+    public async Task AliasedBlockedType_IsReportedAtTheAliasAndAtEachUse()
+    {
+        var source = """
+            using Bad = pengdows.crud.TypeCoercionOptions;
+
+            namespace pengdows.crud
+            {
+                public sealed class TypeCoercionOptions { }
+            }
+
+            namespace Consumer
+            {
+                public sealed class ConsumerType
+                {
+                    private Bad? _options;
+                    public Bad Create() => new Bad();
+                }
+            }
+            """;
+
+        await CSharpAnalyzerVerifier<CompatibilityLeakAnalyzer>.VerifyDiagnosticCountAsync(
+            source,
+            CompatibilityLeakAnalyzer.DiagnosticId,
+            expectedCount: 4);
+    }
+
     [Fact]
     public async Task LegacyTypesAndAttributes_ProduceOneDiagnosticPerUse()
     {
