@@ -600,10 +600,22 @@ internal sealed class MetricsCollector
 
     private sealed class PercentileRing
     {
+        // DatabaseContext.OnMetricsCollectorUpdated calls MetricsCollector.CreateSnapshot() (and
+        // therefore this type's CreateSnapshot()) synchronously on every metrics-changing event
+        // whenever a MetricsUpdated subscriber is attached (e.g. pengdows.crud.opentelemetry's
+        // PengdowsMetricsObserver). Sorting the full window on every one of those calls meant a
+        // sort per database operation for a P95/P99 read far less often. Recomputing only every
+        // RecomputeInterval-th call amortizes the O(n log n) sort; the bounded staleness (at most
+        // RecomputeInterval-1 calls old) is negligible next to the sliding window's own.
+        private const long RecomputeInterval = 32;
+
         private readonly double[] _buffer;
         private readonly int _mask;
+        private readonly object _snapshotLock = new();
         private long _index;
         private long _count;
+        private long _snapshotCallCount;
+        private PercentileSnapshot _cachedSnapshot = PercentileSnapshot.Empty;
 
         internal PercentileRing(int size)
         {
@@ -633,6 +645,26 @@ internal sealed class MetricsCollector
         }
 
         internal PercentileSnapshot CreateSnapshot()
+        {
+            var call = Interlocked.Increment(ref _snapshotCallCount);
+            if (call % RecomputeInterval != 1)
+            {
+                lock (_snapshotLock)
+                {
+                    return _cachedSnapshot;
+                }
+            }
+
+            var computed = ComputeSnapshot();
+            lock (_snapshotLock)
+            {
+                _cachedSnapshot = computed;
+            }
+
+            return computed;
+        }
+
+        private PercentileSnapshot ComputeSnapshot()
         {
             var count = (int)Math.Min(Volatile.Read(ref _count), _buffer.Length);
             if (count == 0)

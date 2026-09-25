@@ -88,6 +88,59 @@ public class MetricsCollectorTests
         Assert.True(snapshot.P99CommandMs >= snapshot.P95CommandMs);
     }
 
+    // BP-122 (3.0 d0bc060): DatabaseContext.OnMetricsCollectorUpdated calls CreateSnapshot()
+    // synchronously on every metrics-changing event whenever a MetricsUpdated subscriber is
+    // attached (as PengdowsMetricsObserver is). Each call sorted the full percentile window.
+    // The snapshot must be memoized across rapid repeated calls rather than re-sorted each time.
+    [Fact]
+    public void PercentileSnapshot_RapidRepeatedCalls_ReturnsMemoizedValueInstantly()
+    {
+        var collector = new MetricsCollector(new MetricsOptions
+        {
+            EnableApproxPercentiles = true,
+            PercentileWindowSize = 8
+        });
+
+        collector.CommandSucceeded(CreateStartTimestamp(10d), 0);
+        var first = collector.CreateSnapshot();
+
+        // If CreateSnapshot recomputed (re-sorted) on every call, P95 would jump immediately.
+        collector.CommandSucceeded(CreateStartTimestamp(10_000d), 0);
+        var second = collector.CreateSnapshot();
+        var third = collector.CreateSnapshot();
+
+        Assert.Equal(first.P95CommandMs, second.P95CommandMs);
+        Assert.Equal(first.P95CommandMs, third.P95CommandMs);
+    }
+
+    [Fact]
+    public void PercentileSnapshot_EventuallyRecomputesAfterEnoughCalls()
+    {
+        // Memoization must bound staleness, not make it permanent.
+        var collector = new MetricsCollector(new MetricsOptions
+        {
+            EnableApproxPercentiles = true,
+            PercentileWindowSize = 8
+        });
+
+        collector.CommandSucceeded(CreateStartTimestamp(10d), 0);
+        var baseline = collector.CreateSnapshot();
+
+        collector.CommandSucceeded(CreateStartTimestamp(10_000d), 0);
+
+        var recomputed = false;
+        for (var i = 0; i < 64; i++)
+        {
+            if (collector.CreateSnapshot().P95CommandMs > baseline.P95CommandMs)
+            {
+                recomputed = true;
+                break;
+            }
+        }
+
+        Assert.True(recomputed, "Percentile snapshot never reflected newly recorded data within 64 calls.");
+    }
+
     [Fact]
     public void TransactionCommitted_IncrementsCommittedCounter()
     {
