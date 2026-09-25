@@ -4,7 +4,8 @@
 //
 // AI SUMMARY:
 // - MapReaderToObject() - Converts current DataReader row to TEntity using a compiled plan.
-// - Caches plans by recordset shape hash (long).
+// - Caches plans by recordset shape (RecordsetShape: field names/types with structural
+//   equality), not a bare hash, so a hash collision can never reuse the wrong mapper.
 // - Shared by all gateway variants.
 // =============================================================================
 
@@ -24,7 +25,7 @@ public abstract partial class BaseTableGateway<TEntity>
 {
     // Hot path cache: most recently used plan to avoid hash/dictionary overhead
     private HybridRecordsetPlan? _hotPlan;
-    private long _hotHash;
+    private RecordsetShape _hotShape;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TEntity MapReaderToObject(ITrackedReader reader)
@@ -48,28 +49,24 @@ public abstract partial class BaseTableGateway<TEntity>
 
         try
         {
-            var hashBuilder = new HashCode();
-            hashBuilder.Add(fieldCount);
-
             for (var i = 0; i < fieldCount; i++)
             {
                 names[i] = reader.GetName(i);
                 fieldTypes[i] = reader.GetFieldType(i);
-                hashBuilder.Add(names[i], StringComparer.OrdinalIgnoreCase);
-                hashBuilder.Add(fieldTypes[i]);
             }
 
-            var hash = (long)hashBuilder.ToHashCode();
+            // Lookup-only: backed by the rented arrays above, never stored as a dictionary key.
+            var lookupShape = new RecordsetShape(names, fieldTypes, fieldCount);
 
             var hotPlan = Volatile.Read(ref _hotPlan);
-            if (hotPlan != null && hash == _hotHash)
+            if (hotPlan != null && _hotShape.Equals(lookupShape))
             {
                 return hotPlan;
             }
 
-            if (_readerPlans.TryGet(hash, out var existingPlan))
+            if (_readerPlans.TryGet(lookupShape, out var existingPlan))
             {
-                _hotHash = hash;
+                _hotShape = lookupShape.Persist();
                 Volatile.Write(ref _hotPlan, existingPlan);
                 return existingPlan;
             }
@@ -77,8 +74,11 @@ public abstract partial class BaseTableGateway<TEntity>
             var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes);
             var plan = new HybridRecordsetPlan(compiledMapper);
 
-            var added = _readerPlans.GetOrAdd(hash, _ => plan);
-            _hotHash = hash;
+            // The key must outlive this call (the rented arrays are returned below), so persist
+            // a copy before inserting.
+            var persistedShape = lookupShape.Persist();
+            var added = _readerPlans.GetOrAdd(persistedShape, _ => plan);
+            _hotShape = persistedShape;
             Volatile.Write(ref _hotPlan, added);
 
             return added;

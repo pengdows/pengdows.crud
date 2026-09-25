@@ -334,7 +334,7 @@ public class DataReaderMapperTests
         Assert.Single(result);
         Assert.Equal(37, result[0].Age);
         // IsDBNull is no longer called for non-nullable value types (int), so GetValueCallCount
-        // is 1 (BuildSchemaHash → GetFieldType → GetValue), not 2.
+        // is 1 (BuildSchemaShape → GetFieldType → GetValue), not 2.
         Assert.Equal(1, reader.GetValueCallCount);
         Assert.Equal(1, reader.GetFieldValueCallCount);
     }
@@ -355,7 +355,7 @@ public class DataReaderMapperTests
         Assert.Single(result);
         Assert.Equal(58, result[0].Age);
         // IsDBNull is no longer called for non-nullable value types (int), so the minimum
-        // is 2 (BuildSchemaHash → GetFieldType → GetValue, coercion setter → GetValue).
+        // is 2 (BuildSchemaShape → GetFieldType → GetValue, coercion setter → GetValue).
         Assert.True(reader.GetValueCallCount >= 2);
         Assert.Equal(0, reader.GetFieldValueCallCount);
     }
@@ -623,12 +623,12 @@ public class DataReaderMapperTests
 
     private static object BuildPlanCacheKey<T>(DbDataReader templateReader, MapperOptions options)
     {
-        var schemaHashMethod = typeof(DataReaderMapper).GetMethod(
-                                   "BuildSchemaHash",
-                                   BindingFlags.NonPublic | BindingFlags.Static)
-                               ?? throw new InvalidOperationException("BuildSchemaHash not found");
+        var schemaShapeMethod = typeof(DataReaderMapper).GetMethod(
+                                     "BuildSchemaShape",
+                                     BindingFlags.NonPublic | BindingFlags.Static)
+                                 ?? throw new InvalidOperationException("BuildSchemaShape not found");
 
-        var schemaHash = (long)schemaHashMethod.Invoke(null, new object[] { templateReader, options })!;
+        var shape = schemaShapeMethod.Invoke(null, new object[] { templateReader, options })!;
 
         var planKeyType = typeof(DataReaderMapper)
                               .GetNestedType("PlanCacheKey", BindingFlags.NonPublic)
@@ -636,7 +636,7 @@ public class DataReaderMapperTests
 
         return Activator.CreateInstance(
             planKeyType,
-            new object[] { typeof(T), schemaHash, options.ColumnsOnly, options.EnumMode })!;
+            new object[] { typeof(T), shape, options.ColumnsOnly, options.EnumMode })!;
     }
 
     private static object? GetPlanEntry(object planCacheKey)

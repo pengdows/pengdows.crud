@@ -107,8 +107,9 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     // Cache for wrapped table names per dialect instance (same leak-safety rationale as above)
     private readonly ConditionalWeakTable<ISqlDialect, string> _wrappedTableNameCache = new();
 
-    // Thread-safe cache for hybrid reader plans by recordset shape hash
-    private BoundedCache<long, HybridRecordsetPlan> _readerPlans =
+    // Thread-safe cache for hybrid reader plans by structural recordset shape (not a bare hash,
+    // so a hash collision between two shapes can never reuse the wrong compiled mapper)
+    private BoundedCache<RecordsetShape, HybridRecordsetPlan> _readerPlans =
         new(DefaultReaderPlanCapacity);
 
     // =========================================================================
@@ -172,7 +173,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
         _dialect = databaseContext.GetDialect();
         _coercionOptions = _coercionOptions with { Provider = _dialect.DatabaseType };
-        _readerPlans = new BoundedCache<long, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
+        _readerPlans = new BoundedCache<RecordsetShape, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
 
         _tableInfo = accessor.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");
