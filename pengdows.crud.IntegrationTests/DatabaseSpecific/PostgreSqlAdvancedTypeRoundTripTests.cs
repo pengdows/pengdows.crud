@@ -92,6 +92,20 @@ public sealed class PostgreSqlAdvancedTypeRoundTripTests : DatabaseTestBase
             context.CloseAndDisposeConnection(borrowed);
         }
 
+        // Still intermittent after the connection reload + ClearPool above when other PostgreSQL
+        // tests ran first: DatabaseContext opens connections through an NpgsqlDataSource, which
+        // keeps its own type catalog independent of the per-connection one. Reload it on the
+        // context's writer and reader data sources as well.
+        foreach (var fieldName in new[] { "_dataSource", "_readerDataSource" })
+        {
+            var field = typeof(DatabaseContext).GetField(fieldName,
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+            if (context is DatabaseContext && field?.GetValue(context) is NpgsqlDataSource dataSource)
+            {
+                await dataSource.ReloadTypesAsync();
+            }
+        }
+
         await using var table = context.CreateSqlContainer($"""
             CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(context, "advanced_type_roundtrip")} (
                 id              INTEGER PRIMARY KEY,
