@@ -35,7 +35,7 @@ public interface ISqlDialect
     /// callers that need it (mode-mismatch diagnostics, mode coercion) should consult this property
     /// instead of maintaining their own SupportedDatabase switch.
     /// </summary>
-    bool IsClientServerDatabase { get; }
+    bool IsClientServerDatabase => true;
 
     /// <summary>
     /// True only for embedded, single-writer engines (SQLite, DuckDB, Access). Deliberately narrower than
@@ -44,7 +44,7 @@ public interface ISqlDialect
     /// lock-contention warnings) should consult this instead, so they don't fire for an unknown
     /// database that merely isn't confirmed client-server either.
     /// </summary>
-    bool IsEmbeddedSingleWriterEngine { get; }
+    bool IsEmbeddedSingleWriterEngine => false;
 
     /// <summary>
     /// Classifies whether <paramref name="connectionString"/> targets an in-memory database
@@ -53,7 +53,7 @@ public interface ISqlDialect
     /// always returns <see cref="InMemoryKind.None"/>. Single source of truth — callers should
     /// consult this instead of parsing the connection string themselves.
     /// </summary>
-    InMemoryKind DetectInMemoryKind(string? connectionString);
+    InMemoryKind DetectInMemoryKind(string? connectionString) => InMemoryKind.None;
 
     /// <summary>
     /// Resolves the actual <see cref="DbMode"/> a connection should use, given what the caller
@@ -67,7 +67,18 @@ public interface ISqlDialect
     /// <param name="connectionString">The connection string, for engines whose decision depends on
     /// in-memory detection (see <see cref="DetectInMemoryKind"/>).</param>
     /// <param name="isLocalDb">True when topology detection identified this as SQL Server LocalDB.</param>
-    (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString, bool isLocalDb);
+    (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString, bool isLocalDb)
+    {
+        if (requested == DbMode.Best)
+        {
+            var reason = IsClientServerDatabase
+                ? "Full server: Best selects Standard"
+                : "Unknown provider: Best defaults to Standard";
+            return (DbMode.Standard, reason);
+        }
+
+        return (requested, string.Empty);
+    }
 
     /// <summary>
     /// Marker prefix used for positional parameters.
@@ -373,7 +384,9 @@ public interface ISqlDialect
     /// Which savepoint operations this dialect actually supports — more granular than
     /// <see cref="SupportsSavepoints"/>. See <see cref="SavepointCapabilities"/>.
     /// </summary>
-    SavepointCapabilities SavepointCapabilities { get; }
+    SavepointCapabilities SavepointCapabilities => SupportsSavepoints
+        ? SavepointCapabilities.Create | SavepointCapabilities.Rollback | SavepointCapabilities.Release
+        : SavepointCapabilities.None;
 
     /// <summary>
     /// True when the database supports DROP TABLE IF EXISTS syntax.
@@ -402,7 +415,7 @@ public interface ISqlDialect
     /// </summary>
     /// <param name="name">The savepoint name.</param>
     /// <returns>The SQL statement (e.g., "RELEASE SAVEPOINT name").</returns>
-    string GetReleaseSavepointSql(string name);
+    string GetReleaseSavepointSql(string name) => $"RELEASE SAVEPOINT {WrapObjectName(name)}";
 
     /// <summary>
     /// Indicates whether stored procedure parameter names must match exactly.
@@ -434,7 +447,7 @@ public interface ISqlDialect
     /// ("Incorrect syntax near ';'"), so multi-statement batches must be newline-separated with
     /// no terminator at all instead.
     /// </summary>
-    bool SupportsSemicolonStatementSeparator { get; }
+    bool SupportsSemicolonStatementSeparator => true;
 
     /// <summary>
     /// True when the dialect supports namespaces or schemas.
@@ -765,6 +778,7 @@ public interface ISqlDialect
     /// SQL Server and Oracle do not support this syntax.
     /// </summary>
     bool SupportsLimitOffset { get; }
+
 
     /// <summary>
     /// Appends dialect-appropriate paging SQL to the supplied query builder.

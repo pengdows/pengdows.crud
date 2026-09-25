@@ -29,7 +29,10 @@ public interface ITenantContextRegistry
     /// <param name="tenant">Tenant identifier.</param>
     /// <returns>A lease wrapping the tenant's context. Dispose it when done.</returns>
     /// <exception cref="ObjectDisposedException">Thrown if the registry has been disposed.</exception>
-    public ITenantContextLease AcquireLease(string tenant);
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    // It provides no protection against concurrent invalidation; TenantContextRegistry overrides it
+    // with a real reference-counted lease.
+    public ITenantContextLease AcquireLease(string tenant) => new UnprotectedTenantContextLease(GetContext(tenant));
 
     /// <summary>
     /// Removes the cached context for the specified tenant and disposes it — on a background

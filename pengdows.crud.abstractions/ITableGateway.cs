@@ -35,7 +35,19 @@ public interface ITableGateway<TEntity, TRowID>
     /// Controls how <c>CreatedBy</c>/<c>CreatedOn</c> audit fields treat an entity's existing
     /// values on create. Defaults to <see cref="AuditCreationPolicy.PreserveExplicitValues"/>.
     /// </summary>
-    AuditCreationPolicy AuditCreationPolicy { get; set; }
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    AuditCreationPolicy AuditCreationPolicy
+    {
+        get => AuditCreationPolicy.PreserveExplicitValues;
+        set
+        {
+            if (value != AuditCreationPolicy.PreserveExplicitValues)
+            {
+                throw new NotSupportedException(
+                    $"{GetType().Name} does not support {nameof(AuditCreationPolicy)}.{value}.");
+            }
+        }
+    }
 
     /// <summary>
     /// Builds a SQL INSERT for the given object.

@@ -5,6 +5,16 @@ namespace pengdows.crud.analyzers.Tests;
 public sealed class CompatibilityLeakAnalyzerTests
 {
     [Fact]
+    public void Rule_DefaultSeverity_IsError()
+    {
+        // Deliberately Error: every flagged symbol either does nothing or should never have been
+        // public. They stay public only for binary compatibility; application use is rejected.
+        var descriptor = Assert.Single(new CompatibilityLeakAnalyzer().SupportedDiagnostics);
+
+        Assert.Equal(Microsoft.CodeAnalysis.DiagnosticSeverity.Error, descriptor.DefaultSeverity);
+    }
+
+    [Fact]
     public async Task DataSourcePropertyReference_ProducesDiagnostic()
     {
         var source = """

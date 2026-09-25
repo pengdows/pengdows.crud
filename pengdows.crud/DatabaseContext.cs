@@ -29,6 +29,7 @@
 
 #region
 
+using System.ComponentModel;
 using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
@@ -200,25 +201,33 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <inheritdoc/>
     /// <remarks>
     /// Write-once, set from <see cref="configuration.DatabaseContextConfiguration.ReadWriteMode"/>
-    /// during construction (see Initialization.cs) - deliberately not settable after that.
+    /// during construction (see Initialization.cs) - deliberately not changeable after that.
     /// _isReadConnection/_isWriteConnection are baked into the connection string, pool sizing,
     /// and connection-strategy selection at construction (Initialization.cs), none of which
-    /// re-run on a later change, so allowing one here would desync those from this flag rather
-    /// than actually reconfigure anything.
+    /// re-run on a later change, so honoring one here would desync those from this flag rather
+    /// than actually reconfigure anything. The public setter shipped in 2.0.5 and is retained only
+    /// for binary compatibility: it does nothing once the value has been set at construction.
     /// </remarks>
     public ReadWriteMode ReadWriteMode
     {
         get => _readWriteMode;
-        private set
+        [Obsolete("ReadWriteMode is fixed at construction; set DatabaseContextConfiguration.ReadWriteMode instead. Assigning it after construction has no effect.", false)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        set
         {
-            _readWriteMode = value == ReadWriteMode.WriteOnly ? ReadWriteMode.ReadWrite : value;
-            _isReadConnection = (_readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
-            _isWriteConnection = (_readWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
-            if (_isWriteConnection)
-            {
-                //write connection implies read connection
-                _isReadConnection = true;
-            }
+            // Intentionally ignored: the value was already set during construction.
+        }
+    }
+
+    private void InitializeReadWriteMode(ReadWriteMode value)
+    {
+        _readWriteMode = value == ReadWriteMode.WriteOnly ? ReadWriteMode.ReadWrite : value;
+        _isReadConnection = (_readWriteMode & ReadWriteMode.ReadOnly) == ReadWriteMode.ReadOnly;
+        _isWriteConnection = (_readWriteMode & ReadWriteMode.WriteOnly) == ReadWriteMode.WriteOnly;
+        if (_isWriteConnection)
+        {
+            //write connection implies read connection
+            _isReadConnection = true;
         }
     }
 
@@ -357,20 +366,27 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// <remarks>
     /// Write-once, set from the detected dialect's real ProcWrappingStyle after DB detection
     /// completes (DatabaseContext.Initialization.cs assigns the backing field directly at both
-    /// of its detection sites - the inline Standard-mode detection and the main constructor -
-    /// never through this setter). The setter is internal, not private, purely so test fixtures that construct a
-    /// context against a fake dialect (or reflectively swap the dialect post-construction) can
-    /// force a specific style without going through real detection - never intended for use by
-    /// real callers, which is why IDatabaseContext.ProcWrappingStyle itself is get-only.
+    /// of its detection sites - the inline Standard-mode detection and the main constructor).
+    /// IDatabaseContext.ProcWrappingStyle is get-only. The public setter shipped in 2.0.5 and is
+    /// retained only for binary compatibility: it does nothing once the value has been set at
+    /// construction. Test fixtures that need to force a style without real detection use
+    /// <see cref="OverrideProcWrappingStyle"/>.
     /// </remarks>
     public ProcWrappingStyle ProcWrappingStyle
     {
         get => _procWrappingStyle;
-        internal set
+        [Obsolete("ProcWrappingStyle is detected from the database at construction. Assigning it after construction has no effect.", false)]
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        set
         {
-            _procWrappingStyle = value;
-            _procWrappingStrategy = ProcWrappingStrategyFactory.Create(value);
+            // Intentionally ignored: the value was already set during construction.
         }
+    }
+
+    internal void OverrideProcWrappingStyle(ProcWrappingStyle value)
+    {
+        _procWrappingStyle = value;
+        _procWrappingStrategy = ProcWrappingStrategyFactory.Create(value);
     }
 
     internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;

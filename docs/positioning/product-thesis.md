@@ -361,11 +361,10 @@ imposes, not a pengdows-specific gap.
 
 The public execution boundary does not expose the underlying `DbConnection` either: callers
 execute through governed containers, readers, and transaction leases rather than acquiring
-provider connections directly. The one exception on the public surface is
-`IDatabaseContext.DataSource` (a `DbDataSource?`), which hands back the provider data source the
-context was built with; a connection created from it is outside the governed system entirely —
-see [`implementation-evidence.md`](./implementation-evidence.md) for details. Treat it as an
-interop escape hatch, not an execution path.
+provider connections directly. The obsolete compatibility-only `IDatabaseContext.DataSource`
+property hands back the provider data source the context was built with; a connection created from
+it is outside the governed system entirely. `PGC027` rejects application use; use the context
+execution APIs instead.
 
 Two things sometimes get raised as counterexamples to this and are worth naming as out of
 scope rather than caveats, because neither is a gap in pengdows.crud's API: reaching an

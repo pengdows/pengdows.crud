@@ -99,7 +99,10 @@ public interface ITransactionContext : IDatabaseContext
     /// Sybase, Oracle — none of which have an explicit release statement).
     /// </summary>
     /// <param name="name">Savepoint identifier.</param>
-    ValueTask ReleaseSavepointAsync(string name);
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    ValueTask ReleaseSavepointAsync(string name) =>
+        ValueTask.FromException(new NotSupportedException(
+            $"{GetType().Name} does not implement {nameof(ReleaseSavepointAsync)}."));
 
     /// <summary>
     /// Explicitly releases a savepoint, discarding it before the transaction ends.

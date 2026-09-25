@@ -28,4 +28,14 @@
         <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
         <FileVersion>$(VersionPrefix).0</FileVersion>
     </PropertyGroup>
+
+    <!--
+      SemVer guard for the 2.0.x line: `dotnet pack` runs ApiCompat against the last published
+      2.0.x package and fails on any binary-breaking change (removed members, new non-default
+      interface members, etc.). Bump the baseline after each 2.0.x release ships.
+    -->
+    <PropertyGroup Condition="'$(MSBuildProjectName)' == 'pengdows.crud' Or '$(MSBuildProjectName)' == 'pengdows.crud.abstractions' Or '$(MSBuildProjectName)' == 'pengdows.crud.fakeDb'">
+        <EnablePackageValidation>true</EnablePackageValidation>
+        <PackageValidationBaselineVersion>2.0.5</PackageValidationBaselineVersion>
+    </PropertyGroup>
 </Project>

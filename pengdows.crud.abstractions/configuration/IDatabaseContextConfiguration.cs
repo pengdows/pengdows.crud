@@ -176,7 +176,19 @@ public interface IDatabaseContextConfiguration
     /// Does not affect the separate, transaction-level read-only enforcement mechanism used by
     /// MySQL, MariaDB, Oracle, SAP HANA, and Informix, which remains best-effort regardless of this setting.
     /// </remarks>
-    SessionInitializationFailureMode SessionInitializationFailureMode { get; set; }
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    SessionInitializationFailureMode SessionInitializationFailureMode
+    {
+        get => SessionInitializationFailureMode.BestEffort;
+        set
+        {
+            if (value != SessionInitializationFailureMode.BestEffort)
+            {
+                throw new NotSupportedException(
+                    $"{GetType().Name} does not support setting {nameof(SessionInitializationFailureMode)}.");
+            }
+        }
+    }
 
     /// <summary>
     /// Maximum number of callers allowed to queue for a write-governor slot before further
@@ -184,7 +196,19 @@ public interface IDatabaseContextConfiguration
     /// out the full <see cref="PoolAcquireTimeout"/>. <c>null</c> (default) uses the governor's
     /// built-in default (proportional to <see cref="MaxConcurrentWrites"/>).
     /// </summary>
-    int? MaxQueuedWrites { get; set; }
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    int? MaxQueuedWrites
+    {
+        get => null;
+        set
+        {
+            if (value != null)
+            {
+                throw new NotSupportedException(
+                    $"{GetType().Name} does not support setting {nameof(MaxQueuedWrites)}.");
+            }
+        }
+    }
 
     /// <summary>
     /// Maximum number of callers allowed to queue for a read-governor slot before further
@@ -192,5 +216,17 @@ public interface IDatabaseContextConfiguration
     /// out the full <see cref="PoolAcquireTimeout"/>. <c>null</c> (default) uses the governor's
     /// built-in default (proportional to <see cref="MaxConcurrentReads"/>).
     /// </summary>
-    int? MaxQueuedReads { get; set; }
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    int? MaxQueuedReads
+    {
+        get => null;
+        set
+        {
+            if (value != null)
+            {
+                throw new NotSupportedException(
+                    $"{GetType().Name} does not support setting {nameof(MaxQueuedReads)}.");
+            }
+        }
+    }
 }

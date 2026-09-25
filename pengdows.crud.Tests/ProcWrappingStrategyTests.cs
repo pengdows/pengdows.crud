@@ -2,6 +2,7 @@
 
 using System;
 using System.Data;
+using System.Reflection;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using Xunit;
@@ -16,8 +17,34 @@ public class ProcWrappingStrategyTests
     {
         var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=SqlServer",
             new fakeDbFactory(SupportedDatabase.SqlServer));
-        ctx.ProcWrappingStyle = style;
+        ctx.OverrideProcWrappingStyle(style);
         return ctx;
+    }
+
+    [Fact]
+    public void ProcWrappingStyle_PublicSetter_IsRetainedForBinaryCompatibilityAndObsolete()
+    {
+        var property = typeof(DatabaseContext).GetProperty(nameof(DatabaseContext.ProcWrappingStyle));
+        Assert.NotNull(property);
+        Assert.True(property!.SetMethod?.IsPublic ?? false,
+            "ProcWrappingStyle.set shipped publicly in 2.0.5; removing it breaks binary compatibility.");
+        Assert.NotNull(property.SetMethod!.GetCustomAttribute<ObsoleteAttribute>());
+        Assert.Null(property.GetMethod!.GetCustomAttribute<ObsoleteAttribute>());
+    }
+
+    [Fact]
+    public void ProcWrappingStyle_PublicSetter_IsIgnoredAfterConstruction()
+    {
+        using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=SqlServer",
+            new fakeDbFactory(SupportedDatabase.SqlServer));
+        var detected = ctx.ProcWrappingStyle;
+        Assert.NotEqual(ProcWrappingStyle.Oracle, detected);
+
+        ctx.ProcWrappingStyle = ProcWrappingStyle.Oracle;
+
+        Assert.Equal(detected, ctx.ProcWrappingStyle);
+        using var sc = CreateContainer(ctx);
+        Assert.StartsWith("EXEC ", sc.WrapForStoredProc(ExecutionType.Read, true));
     }
 
     private SqlContainer CreateContainer(DatabaseContext ctx)

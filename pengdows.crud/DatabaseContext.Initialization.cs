@@ -196,7 +196,7 @@ public partial class DatabaseContext
                 ref normalizedReadPoolSize,
                 ref normalizedWritePoolSize);
 
-            ReadWriteMode = normalizedReadWriteMode;
+            InitializeReadWriteMode(normalizedReadWriteMode);
             TypeMapRegistry = typeMapRegistry ?? throw new ArgumentNullException(nameof(typeMapRegistry));
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
