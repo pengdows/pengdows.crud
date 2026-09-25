@@ -351,6 +351,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var dialect = GetDialect(context);
+        ThrowIfVersionedMergeUpsertUnsupported(dialect);
         PrepareForPkUpsert(entity);
 
         var insertableColumns = GetCachedInsertableColumns();

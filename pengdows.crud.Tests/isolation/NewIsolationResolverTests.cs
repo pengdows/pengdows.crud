@@ -61,7 +61,7 @@ public class NewIsolationResolverTests
     [Fact]
     public void Resolve_Sybase_Mappings()
     {
-        // Verified live against ASE 16.0 SP02 (session cited in SybaseDialect.cs): AseConnection
+        // Verified live against ASE 16.0 SP02 (session cited in SybaseAseDialect.cs): AseConnection
         // .BeginTransaction accepts all four standard IsolationLevel values, and a subsequent
         // "SELECT @@isolation" inside each transaction confirms the server genuinely applied it —
         // 0/1/2/3 map exactly to ReadUncommitted/ReadCommitted/RepeatableRead/Serializable, not

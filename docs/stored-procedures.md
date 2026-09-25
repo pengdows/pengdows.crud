@@ -60,8 +60,9 @@ write selects genuinely different syntax.
 | `Exec` | SQL Server, Sybase ASE | `EXEC proc_name arg1, arg2` — **space-separated, not parenthesized**; output-capable parameters get an ` OUTPUT` suffix appended per-argument (`WrapForStoredProc`'s `BuildProcedureArguments`, only for `ParameterDirection.Output`/`InputOutput`) | same |
 | `Oracle` | Oracle | `BEGIN\n\tproc_name(arg1, arg2);\nEND;` — a PL/SQL anonymous block, parentheses omitted entirely when there are no arguments | same |
 | `PostgreSQL` | PostgreSQL, CockroachDB, YugabyteDB, Aurora PostgreSQL | `CALL proc_name(arg1, arg2)` (requires PostgreSQL 11+; earlier versions only support functions, use `Read` for everything) | `SELECT * FROM func_name(arg1, arg2)` |
+| `Informix` | Informix | `EXECUTE PROCEDURE proc_name(arg1, arg2)` — parentheses always, even with no arguments. Informix documents `EXECUTE PROCEDURE`/`EXECUTE FUNCTION` as the stand-alone statements (`CALL` is documented as SPL-only); confirmed live on 15.0 for procedures with and without `RETURNING` and for `CREATE FUNCTION` routines, with any returned value coming back as a result row | same (`SELECT * FROM proc_name(...)` is a syntax error on Informix) |
 | `ExecuteProcedure` | Firebird, InterBase | `EXECUTE PROCEDURE proc_name(arg1, arg2)` | `SELECT * FROM proc_name(arg1, arg2)` — both disallow empty `()`, omitted entirely when there are no arguments. InterBase confirmed live against a real SUSPEND-based selectable procedure, independently of Firebird's own confirmation. |
-| `None` | SQLite, DuckDB, Access, TiDB, Informix, Spanner, FlatFile | `WrapForStoredProc` throws `NotSupportedException` unconditionally (`"Stored procedures are not supported for {product}."`) | — |
+| `None` | SQLite, DuckDB, Access, TiDB, Spanner, FlatFile | `WrapForStoredProc` throws `NotSupportedException` unconditionally (`"Stored procedures are not supported for {product}."`) | — |
 
 `RequiresStoredProcParameterNameMatch` and `MaxOutputParameters` (cataloged in
 [`capability-discovery.md`](./capability-discovery.md)) further constrain what a given dialect
@@ -123,7 +124,7 @@ await writeSc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.StoredProced
   unbounded connection lease. A procedure that returns more than one result set can only have its
   first result set consumed through the normal reader/load path.
 - **SQLite, DuckDB, and Access don't support stored procedures at all** (`ProcWrappingStyle.None`)
-  — this is a real engine limitation, not a gap in this library (TiDB, Informix, Spanner, and
+  — this is a real engine limitation, not a gap in this library (TiDB, Spanner, and
   FlatFile also report `None` on this release); `WrapForStoredProc` throws
   `NotSupportedException` immediately rather than attempting anything. For Access specifically,
   confirmed live that there is no session-SQL surface at all either — this isn't just "procedures

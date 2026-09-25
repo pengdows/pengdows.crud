@@ -35,7 +35,10 @@ public class TestProvider : IAsyncTestProvider
 
     protected void CheckSkip(string message)
     {
-        Console.WriteLine(message);
+        // Prefixed with the product so every skip in a parallel run is attributable; a skip is
+        // only legitimate when the engine genuinely lacks the capability (docs/FUTURE_WORK.md,
+        // "Testbed skip audit").
+        Console.WriteLine($"  [SKIP:{_context.Product}] {message.Trim()}");
         _checksSkipped++;
     }
 
@@ -474,6 +477,11 @@ CREATE TABLE {tableName} (
             // for this column kind) was also confirmed to fail as DDL text the same way; only
             // LONGBINARY works via a text CREATE TABLE statement.
             SupportedDatabase.Access => "LONGBINARY",
+            // CONFIRMED live (Informix 15.0.1.0.3, Informix.Net.Core): a BYTE column binds a plain
+            // DbType.Binary parameter and reads back byte-for-byte. A BLOB (smart large object)
+            // column rejects it ("Illegal attempt to use Text/Byte host variable") and also needs an
+            // sbspace the developer image does not configure.
+            SupportedDatabase.Informix => "BYTE",
             _ => "BLOB"
         };
     }
@@ -515,36 +523,6 @@ CREATE TABLE {tableName} (
         return bytes;
     }
 
-    private static bool SupportsGuidBinding(SupportedDatabase product)
-    {
-        return product switch
-        {
-            SupportedDatabase.SqlServer => true,
-            SupportedDatabase.PostgreSql => true,
-            SupportedDatabase.CockroachDb => true,
-            SupportedDatabase.YugabyteDb => true,
-            SupportedDatabase.DuckDB => true,
-            SupportedDatabase.Sqlite => true,
-            SupportedDatabase.Oracle => true,
-            SupportedDatabase.Firebird => true,
-            _ => false
-        };
-    }
-
-    private static bool SupportsDateTimeOffsetBinding(SupportedDatabase product)
-    {
-        return product switch
-        {
-            SupportedDatabase.SqlServer => true,
-            SupportedDatabase.PostgreSql => true,
-            SupportedDatabase.CockroachDb => true,
-            SupportedDatabase.YugabyteDb => true,
-            SupportedDatabase.DuckDB => true,
-            SupportedDatabase.Oracle => true,
-            _ => false
-        };
-    }
-
     // CONFIRMED live: InterBase rejects "WHERE blob_col = ?" outright ("BLOB and array data types
     // are not supported for compare operation") — a genuine restriction on InterBase's BLOB type
     // specifically, NOT shared by Firebird despite both calling the column type BLOB.
@@ -553,19 +531,21 @@ CREATE TABLE {tableName} (
     // ("general error: = Cannot compare BLocator and BLocator") — HANA's BLOB column is backed
     // by a LOB locator, and locators can't be compared with a plain "=" any more than InterBase's
     // BLOB can, even though the two databases fail for unrelated underlying reasons.
+    //
+    // CONFIRMED live: Informix rejects "WHERE byte_col = ?" too ("Blobs are not allowed in this
+    // expression") - BYTE values cannot be compared at all.
     private static bool SupportsBinaryEquality(SupportedDatabase product)
     {
-        return product != SupportedDatabase.InterBase && product != SupportedDatabase.SapHana;
+        return product != SupportedDatabase.InterBase && product != SupportedDatabase.SapHana
+            && product != SupportedDatabase.Informix;
     }
 
 
-    private static string GetGuidType(SupportedDatabase product, bool supportsGuid)
+    // Column type used to store a Guid in the testbed schema. Engines with a native UUID type use
+    // it; every other engine stores the dialect's GuidStorageFormat (String => 36-char text,
+    // Binary => 16 octets), since pengdows.crud owns Guid serialization there.
+    private static string GetGuidType(SupportedDatabase product)
     {
-        if (!supportsGuid)
-        {
-            return GetTextType(product, 36);
-        }
-
         return product switch
         {
             SupportedDatabase.SqlServer => "UNIQUEIDENTIFIER",
@@ -573,28 +553,33 @@ CREATE TABLE {tableName} (
             SupportedDatabase.CockroachDb => "UUID",
             SupportedDatabase.YugabyteDb => "UUID",
             SupportedDatabase.DuckDB => "UUID",
-            SupportedDatabase.Oracle => "VARCHAR2(36)",
-            SupportedDatabase.Sqlite => "TEXT",
             SupportedDatabase.Firebird => "CHAR(16) CHARACTER SET OCTETS",
-            _ => "UUID"
+            SupportedDatabase.InterBase => "CHAR(16) CHARACTER SET OCTETS",
+            _ => GetTextType(product, 36)
         };
     }
 
-    private static string GetDateTimeOffsetType(SupportedDatabase product, bool supportsDateTimeOffset)
+    // Column type used to store a DateTimeOffset. Engines without an offset-aware type store the
+    // UTC instant; the round-trip checks compare instants in UTC, so no offset fidelity is needed.
+    private static string GetDateTimeOffsetType(SupportedDatabase product)
     {
-        if (!supportsDateTimeOffset)
-        {
-            return GetTextType(product, 64);
-        }
-
         return product switch
         {
             SupportedDatabase.SqlServer => "DATETIMEOFFSET(7)",
-            SupportedDatabase.PostgreSql => "TIMESTAMP WITH TIME ZONE",
-            SupportedDatabase.CockroachDb => "TIMESTAMP WITH TIME ZONE",
-            SupportedDatabase.YugabyteDb => "TIMESTAMP WITH TIME ZONE",
-            SupportedDatabase.DuckDB => "TIMESTAMP WITH TIME ZONE",
-            SupportedDatabase.Oracle => "TIMESTAMP WITH TIME ZONE",
+            SupportedDatabase.MySql => "DATETIME(6)",
+            SupportedDatabase.MariaDb => "DATETIME(6)",
+            SupportedDatabase.TiDb => "DATETIME(6)",
+            SupportedDatabase.Db2 => "TIMESTAMP(6)",
+            // FirebirdDialect stores DateTimeOffset as a UTC DateTime (see its CreateDbParameter);
+            // binding that into TIMESTAMP WITH TIME ZONE fails in the driver ("Incorrect time zone value").
+            SupportedDatabase.Firebird => "TIMESTAMP",
+            SupportedDatabase.SybaseASE => "BIGDATETIME",
+            SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
+            SupportedDatabase.Sqlite => "TEXT",
+            SupportedDatabase.Snowflake => "TIMESTAMP_TZ",
+            SupportedDatabase.SapHana => "TIMESTAMP",
+            SupportedDatabase.Access => "DATETIME",
+            SupportedDatabase.InterBase => "TIMESTAMP",
             _ => "TIMESTAMP WITH TIME ZONE"
         };
     }
@@ -1038,6 +1023,40 @@ CREATE TABLE {tableName} (
                     break;
                 }
 
+            case SupportedDatabase.Informix:
+                {
+                    var informixProcName = _context.WrapObjectName("sp_pengdows_test");
+                    // SPL procedure returning a value: the Informix style renders
+                    // EXECUTE PROCEDURE "sp_pengdows_test"(?), which returns the RETURNING value as a
+                    // one-row result (verified live).
+                    sc.Query.Append(
+                        $"CREATE PROCEDURE {informixProcName}(a INT) RETURNING INT;\n" +
+                        "  RETURN a + 41;\n" +
+                        "END PROCEDURE");
+                    await sc.ExecuteNonQueryAsync();
+
+                    foreach (var executionType in new[] { ExecutionType.Read, ExecutionType.Write })
+                    {
+                        sc.Clear();
+                        sc.Query.Append("sp_pengdows_test");
+                        sc.AddParameterWithValue("a", DbType.Int32, 1);
+                        var informixWrapped = sc.WrapForStoredProc(executionType);
+                        sc.Query.Clear();
+                        sc.Query.Append(informixWrapped);
+                        var informixResult = await sc.ExecuteScalarOrNullAsync<int>();
+                        if (informixResult != 42)
+                        {
+                            throw new Exception(
+                                $"[Informix proc] {executionType}: expected 42 but got {informixResult} ({informixWrapped})");
+                        }
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append($"DROP PROCEDURE {informixProcName}");
+                    await sc.ExecuteNonQueryAsync();
+                    break;
+                }
+
             default:
                 throw new Exception(
                     $"[StoredProc] Unhandled database {_context.Product} in stored proc test — add a case or override ProcWrappingStyle.None.");
@@ -1139,16 +1158,6 @@ CREATE TABLE {tableName} (
             await CleanupTestRow(id);
         }
 
-        // CONFIRMED live: Informix's ODBC driver rejects binding its own TEXT/BYTE-backed LVARCHAR
-        // column values as regular host-variable parameters outright ("Illegal attempt to use
-        // Text/Byte host variable") - direct BLOB/TEXT/BYTE parameter binding needs IDS's
-        // locator-based binding protocol instead, not a fakeDb-detectable gap.
-        if (_context.Product == SupportedDatabase.Informix)
-        {
-            CheckSkip("  [ParamBinding] Type matrix: Informix rejects TEXT/BYTE host-variable binding — skip");
-            return;
-        }
-
         await TestTypeBindingMatrix();
     }
 
@@ -1167,9 +1176,6 @@ CREATE TABLE {tableName} (
 
     private async Task TestTypeBindingMatrix()
     {
-        var supportsGuid = SupportsGuidBinding(_context.Product);
-        var supportsDto = SupportsDateTimeOffsetBinding(_context.Product);
-
         await DropTableIfExistsAsync("binding_matrix");
 
         var table = _context.WrapObjectName("binding_matrix");
@@ -1182,8 +1188,8 @@ CREATE TABLE {table} (
     {_context.WrapObjectName("dec_val")} {GetDecimalType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("bool_val")} {GetBooleanType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("text_val")} {GetTextType(_context.Product, 200)} NOT NULL,
-    {_context.WrapObjectName("dto_val")} {GetDateTimeOffsetType(_context.Product, supportsDto)},
-    {_context.WrapObjectName("guid_val")} {GetGuidType(_context.Product, supportsGuid)},
+    {_context.WrapObjectName("dto_val")} {GetDateTimeOffsetType(_context.Product)},
+    {_context.WrapObjectName("guid_val")} {GetGuidType(_context.Product)},
     {_context.WrapObjectName("bin_val")} {GetBinaryType(_context.Product)},
     PRIMARY KEY ({_context.WrapObjectName("id")})
 )");
@@ -1204,7 +1210,7 @@ CREATE TABLE {table} (
         var guidVal = Uuid7Optimized.NewUuid7();
         var binVal = BuildBinaryPayload(64);
 
-        if (supportsDto && dtoWrite.Offset != dtoVal.Offset)
+        if (dtoWrite.Offset != dtoVal.Offset)
         {
             Console.WriteLine(
                 $"  [ParamBinding] DateTimeOffset normalized to UTC for {_context.Product}");
@@ -1239,23 +1245,9 @@ INSERT INTO {table} (
         sc.AddParameterWithValue("p3", DbType.Decimal, decVal);
         sc.AddParameterWithValue("p4", DbType.Boolean, boolVal);
         sc.AddParameterWithValue("p5", DbType.String, textVal);
-        if (supportsDto)
-        {
-            sc.AddParameterWithValue("p6", DbType.DateTimeOffset, dtoWrite);
-        }
-        else
-        {
-            sc.AddParameterWithValue("p6", DbType.String, dtoWrite.ToString("O"));
-        }
+        sc.AddParameterWithValue("p6", DbType.DateTimeOffset, dtoWrite);
 
-        if (supportsGuid)
-        {
-            sc.AddParameterWithValue("p7", DbType.Guid, guidVal);
-        }
-        else
-        {
-            sc.AddParameterWithValue("p7", DbType.String, guidVal.ToString());
-        }
+        sc.AddParameterWithValue("p7", DbType.Guid, guidVal);
 
         sc.AddParameterWithValue("p8", DbType.Binary, binVal);
         await sc.ExecuteNonQueryAsync();
@@ -1268,23 +1260,9 @@ INSERT INTO {table} (
             await AssertBindingCount("bool_val", DbType.Boolean, boolVal);
             await AssertBindingCount("text_val", DbType.String, textVal);
 
-            if (supportsDto)
-            {
-                await AssertBindingCount("dto_val", DbType.DateTimeOffset, dtoWrite);
-            }
-            else
-            {
-                CheckSkip($"  [ParamBinding] DateTimeOffset binding: not supported by {_context.Product} — skip");
-            }
+            await AssertBindingCount("dto_val", DbType.DateTimeOffset, dtoWrite);
 
-            if (supportsGuid)
-            {
-                await AssertBindingCount("guid_val", DbType.Guid, guidVal);
-            }
-            else
-            {
-                CheckSkip($"  [ParamBinding] Guid binding: not supported by {_context.Product} — skip");
-            }
+            await AssertBindingCount("guid_val", DbType.Guid, guidVal);
 
             if (SupportsBinaryEquality(_context.Product))
             {
@@ -1319,26 +1297,55 @@ INSERT INTO {table} (
         }
     }
 
+    // One logical parameter used twice, written with the portable {P}name token at each use. The
+    // container renders it per dialect: named providers that resolve repeats bind it once, Oracle
+    // gets a deduplicated name per use, and positional providers (Informix) get one "?" and one
+    // bound copy of the value per occurrence. Runs on every database.
     protected virtual async Task TestDuplicateParameter()
     {
-        if (!_context.SupportsRepeatedNamedParameters)
+        var marker = await CreateDuplicateParameterRowAsync();
+        try
         {
-            CheckSkip("  [ParamBinding] Duplicate param: provider does not support repeated named parameters — skip");
-            return;
+            var sc = _context.CreateSqlContainer();
+            sc.Query.AppendFormat(
+                "SELECT COUNT(*) FROM {0} WHERE {1} = {{P}}p0 OR {2} = {{P}}p0",
+                _helper.WrappedTableName,
+                _context.WrapObjectName("created_by"),
+                _context.WrapObjectName("updated_by"));
+            sc.AddParameterWithValue("p0", DbType.String, marker.Value);
+            var count = await sc.ExecuteScalarOrNullAsync<int>();
+            if (count != 1)
+                throw new Exception($"[ParamBinding] Duplicate param: expected 1 row matched, got {count}");
+            CheckOk("  [ParamBinding] Duplicate param (same logical parameter twice): OK (1 row matched)");
         }
+        finally
+        {
+            await CleanupTestRow(marker.Id);
+        }
+    }
+
+    // A row whose updated_by (but not created_by) holds a unique marker, so the duplicate-parameter
+    // query only matches it through the second occurrence of the parameter.
+    private async Task<(long Id, string Value)> CreateDuplicateParameterRowAsync()
+    {
+        var id = Interlocked.Increment(ref _nextId);
+        var value = $"dup-{id}";
+        await _helper.CreateAsync(new TestTable
+        {
+            Id = id,
+            Name = NameEnum.Test,
+            Description = "duplicate-param",
+            Value = 0,
+            IsActive = true
+        }, _context);
 
         var sc = _context.CreateSqlContainer();
-        sc.Query.AppendFormat(
-            "SELECT COUNT(*) FROM {0} WHERE {1} = {2} OR {3} = {2}",
-            _helper.WrappedTableName,
-            _context.WrapObjectName("created_by"),
-            sc.MakeParameterName("p0"),
-            _context.WrapObjectName("updated_by"));
-        sc.AddParameterWithValue("p0", DbType.String, "__nonexistent_user_xyzzy__");
-        var count = await sc.ExecuteScalarOrNullAsync<int>();
-        if (count < 0)
-            throw new Exception($"[ParamBinding] Duplicate param returned invalid count: {count}");
-        CheckOk($"  [ParamBinding] Duplicate param (same logical parameter twice): OK ({count} rows matched)");
+        sc.Query.AppendFormat("UPDATE {0} SET {1} = {{P}}v WHERE {2} = {{P}}id",
+            _helper.WrappedTableName, _context.WrapObjectName("updated_by"), _context.WrapObjectName("id"));
+        sc.AddParameterWithValue("v", DbType.String, value);
+        sc.AddParameterWithValue("id", DbType.Int64, id);
+        await sc.ExecuteNonQueryAsync();
+        return (id, value);
     }
 
     // -------------------------------------------------------------------------
@@ -1420,17 +1427,6 @@ INSERT INTO {table} (
             await CleanupTestRow(id);
         }
 
-        // CONFIRMED live: same root cause as TestTypeBindingMatrix's skip above — Informix
-        // rejects binding a BLOB/BYTE-mapped host variable as a regular parameter outright
-        // ("Illegal attempt to use Text/Byte host variable"), and this method's bin_value column
-        // is NOT NULL (no way to omit it). Needs IDS's locator-based binding protocol instead,
-        // not a fakeDb-detectable gap.
-        if (_context.Product == SupportedDatabase.Informix)
-        {
-            CheckSkip("  [RoundTrip] Fidelity: Informix rejects TEXT/BYTE host-variable binding — skip");
-            return;
-        }
-
         await TestRowRoundTripFidelity();
     }
 
@@ -1444,9 +1440,6 @@ INSERT INTO {table} (
 
     protected virtual async Task TestRowRoundTripFidelity()
     {
-        var supportsGuid = SupportsGuidBinding(_context.Product);
-        var supportsDto = SupportsDateTimeOffsetBinding(_context.Product);
-
         await DropTableIfExistsAsync("fidelity_test");
 
         var table = _context.WrapObjectName("fidelity_test");
@@ -1461,8 +1454,8 @@ CREATE TABLE {table} (
     {_context.WrapObjectName("decimal_value")} {GetDecimalType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("decimal_edge")} {GetDecimalType(_context.Product)} NOT NULL,
     {_context.WrapObjectName("is_active")} {GetBooleanType(_context.Product)} NOT NULL,
-    {_context.WrapObjectName("dto_value")} {GetDateTimeOffsetType(_context.Product, supportsDto)},
-    {_context.WrapObjectName("guid_value")} {GetGuidType(_context.Product, supportsGuid)},
+    {_context.WrapObjectName("dto_value")} {GetDateTimeOffsetType(_context.Product)},
+    {_context.WrapObjectName("guid_value")} {GetGuidType(_context.Product)},
     {_context.WrapObjectName("bin_value")} {GetBinaryType(_context.Product)} NOT NULL,
     PRIMARY KEY ({_context.WrapObjectName("id")})
 )");
@@ -1480,7 +1473,7 @@ CREATE TABLE {table} (
         var guidValue = Uuid7Optimized.NewUuid7();
         var binValue = BuildBinaryPayload(64);
 
-        if (supportsDto && dtoWrite.Offset != dtoValue.Offset)
+        if (dtoWrite.Offset != dtoValue.Offset)
         {
             Console.WriteLine(
                 $"  [RoundTrip] DateTimeOffset normalized to UTC for {_context.Product}");
@@ -1521,23 +1514,9 @@ INSERT INTO {table} (
         sc.AddParameterWithValue("p5", DbType.Decimal, decimalValue);
         sc.AddParameterWithValue("p6", DbType.Decimal, decimalEdge);
         sc.AddParameterWithValue("p7", DbType.Boolean, isActive);
-        if (supportsDto)
-        {
-            sc.AddParameterWithValue("p8", DbType.DateTimeOffset, dtoWrite);
-        }
-        else
-        {
-            sc.AddParameterWithValue("p8", DbType.String, dtoWrite.ToString("O"));
-        }
+        sc.AddParameterWithValue("p8", DbType.DateTimeOffset, dtoWrite);
 
-        if (supportsGuid)
-        {
-            sc.AddParameterWithValue("p9", DbType.Guid, guidValue);
-        }
-        else
-        {
-            sc.AddParameterWithValue("p9", DbType.String, guidValue.ToString());
-        }
+        sc.AddParameterWithValue("p9", DbType.Guid, guidValue);
 
         sc.AddParameterWithValue("p10", DbType.Binary, binValue);
         await sc.ExecuteNonQueryAsync();
@@ -1600,10 +1579,15 @@ INSERT INTO {table} (
                 }
                 if (!actualNullIsDbNull)
                     throw new Exception("[RoundTrip] Null string mismatch: expected NULL");
-                if (actualPadded != paddedText &&
-                    !(_context.Product == SupportedDatabase.SybaseASE && actualPadded == paddedText.TrimEnd()))
+                // Engines/providers that cannot round-trip trailing blanks (Sybase ASE strips them on
+                // storage; the Informix .NET provider trims them on read) report it through
+                // PreservesTrailingWhitespace; leading blanks must still survive.
+                var expectedPadded = _context.Dialect.PreservesTrailingWhitespace ? paddedText : paddedText.TrimEnd();
+                if (actualPadded != expectedPadded)
                     throw new Exception(
-                        $"[RoundTrip] Padded string mismatch: expected '{paddedText}', got '{actualPadded}'");
+                        $"[RoundTrip] Padded string mismatch: expected '{expectedPadded}', got '{actualPadded}'");
+                if (!_context.Dialect.PreservesTrailingWhitespace)
+                    CheckSkip($"  [RoundTrip] Trailing whitespace: {_context.Product} does not preserve trailing blanks (PreservesTrailingWhitespace = false); leading blanks verified");
                 if (actualDecimal != decimalValue)
                     throw new Exception($"[RoundTrip] Decimal mismatch: expected {decimalValue}, got {actualDecimal}");
                 if (actualDecimalEdge != decimalEdge)
@@ -1627,32 +1611,18 @@ INSERT INTO {table} (
                     throw new Exception("[RoundTrip] Binary mismatch");
                 }
 
-                if (supportsGuid)
-                {
-                    var actualGuid = CoerceGuid(guidObj);
-                    if (actualGuid != guidValue)
-                        throw new Exception($"[RoundTrip] Guid mismatch: expected {guidValue}, got {actualGuid}");
-                }
-                else
-                {
-                    CheckSkip($"  [RoundTrip] Guid not supported by {_context.Product} — skip");
-                }
+                var actualGuid = CoerceGuid(guidObj);
+                if (actualGuid != guidValue)
+                    throw new Exception($"[RoundTrip] Guid mismatch: expected {guidValue}, got {actualGuid}");
 
-                if (supportsDto)
+                var actualDto = CoerceDateTimeOffset(dtoObj);
+                var driftMs =
+                    Math.Abs((actualDto.ToUniversalTime() - dtoWrite.ToUniversalTime()).TotalMilliseconds);
+                var toleranceMs = GetDateTimeOffsetToleranceSeconds() * 1000.0;
+                if (driftMs > toleranceMs)
                 {
-                    var actualDto = CoerceDateTimeOffset(dtoObj);
-                    var driftMs =
-                        Math.Abs((actualDto.ToUniversalTime() - dtoWrite.ToUniversalTime()).TotalMilliseconds);
-                    var toleranceMs = GetDateTimeOffsetToleranceSeconds() * 1000.0;
-                    if (driftMs > toleranceMs)
-                    {
-                        throw new Exception(
-                            $"[RoundTrip] DateTimeOffset drift {driftMs:F1}ms exceeds tolerance {toleranceMs:F1}ms");
-                    }
-                }
-                else
-                {
-                    CheckSkip($"  [RoundTrip] DateTimeOffset not supported by {_context.Product} — skip");
+                    throw new Exception(
+                        $"[RoundTrip] DateTimeOffset drift {driftMs:F1}ms exceeds tolerance {toleranceMs:F1}ms");
                 }
             }
 
@@ -1848,52 +1818,43 @@ INSERT INTO {table} (
             CheckOk("  [InvalidTxType] Chaos isolation level rejected: OK");
         }
 
-        // Database-specific: pick one level this database doesn't support natively. Isolation
-        // fails up, never down: a level with a stronger supported level above it runs at that
-        // stronger level; one with nothing at or above it is rejected.
-        (IsolationLevel Level, bool Rejected)? unsupported = _context.Product switch
+        // Every standard level the database doesn't support natively must follow the documented
+        // contract: isolation fails up, never down. It runs at the weakest supported level that is
+        // at least as strong, or is rejected when no such level exists. Derived from the context's
+        // own supported set rather than a per-database list; skipped only when the engine supports
+        // every level (nothing unsupported to test).
+        var supported = _context.GetSupportedIsolationLevels();
+        var unsupported = StandardIsolationLevels.Where(l => !supported.Contains(l)).ToList();
+        if (unsupported.Count == 0)
         {
-            SupportedDatabase.PostgreSql
-                or SupportedDatabase.Firebird
-                or SupportedDatabase.Sqlite
-                or SupportedDatabase.YugabyteDb => (IsolationLevel.ReadUncommitted, false),
-            SupportedDatabase.Oracle => (IsolationLevel.RepeatableRead, false),
-            SupportedDatabase.CockroachDb
-                or SupportedDatabase.DuckDB => (IsolationLevel.ReadCommitted, false),
-            SupportedDatabase.TiDb => (IsolationLevel.Serializable, true),
-            SupportedDatabase.Snowflake => (IsolationLevel.RepeatableRead, true),
-            _ => null
-        };
-
-        if (unsupported is null)
-        {
-            CheckSkip($"  [InvalidTxType] No database-specific unsupported level test for {_context.Product}");
+            CheckSkip($"  [InvalidTxType] {_context.Product} supports every standard isolation level; no unsupported level to test");
             return Task.CompletedTask;
         }
 
-        var (level, rejected) = unsupported.Value;
-        if (rejected)
+        foreach (var level in unsupported)
         {
-            try
+            var expected = StrongerIsolationLevels(level).FirstOrDefault(supported.Contains);
+            if (expected == default)
             {
-                _context.BeginTransaction(level).Dispose();
-                throw new Exception(
-                    $"[InvalidTxType] {level} isolation on {_context.Product} should have been rejected");
-            }
-            catch (InvalidOperationException)
-            {
-                CheckOk($"  [InvalidTxType] {level} isolation level rejected for {_context.Product}: OK");
+                try
+                {
+                    _context.BeginTransaction(level).Dispose();
+                    throw new Exception(
+                        $"[InvalidTxType] {level} isolation on {_context.Product} should have been rejected");
+                }
+                catch (InvalidOperationException)
+                {
+                    CheckOk($"  [InvalidTxType] {level} isolation level rejected for {_context.Product}: OK");
+                }
+
+                continue;
             }
 
-            return Task.CompletedTask;
-        }
-
-        using (var tx = _context.BeginTransaction(level))
-        {
-            if (tx.IsolationLevel == level || tx.IsolationLevel < level)
+            using var tx = _context.BeginTransaction(level);
+            if (tx.IsolationLevel != expected)
             {
                 throw new Exception(
-                    $"[InvalidTxType] {level} isolation on {_context.Product} ran at {tx.IsolationLevel}; expected a stronger level");
+                    $"[InvalidTxType] {level} isolation on {_context.Product} ran at {tx.IsolationLevel}; expected {expected}");
             }
 
             tx.Rollback();
@@ -1902,6 +1863,29 @@ INSERT INTO {table} (
 
         return Task.CompletedTask;
     }
+
+    private static readonly IsolationLevel[] StandardIsolationLevels =
+    [
+        IsolationLevel.ReadUncommitted, IsolationLevel.ReadCommitted, IsolationLevel.RepeatableRead,
+        IsolationLevel.Snapshot, IsolationLevel.Serializable
+    ];
+
+    // The documented fail-up order (CLAUDE.md "Isolation fails up, never down"): levels that
+    // satisfy at least the requested guarantees, weakest first. Snapshot does not satisfy
+    // RepeatableRead.
+    private static IsolationLevel[] StrongerIsolationLevels(IsolationLevel requested) => requested switch
+    {
+        IsolationLevel.ReadUncommitted =>
+        [
+            IsolationLevel.ReadCommitted, IsolationLevel.RepeatableRead, IsolationLevel.Snapshot,
+            IsolationLevel.Serializable
+        ],
+        IsolationLevel.ReadCommitted =>
+            [IsolationLevel.RepeatableRead, IsolationLevel.Snapshot, IsolationLevel.Serializable],
+        IsolationLevel.RepeatableRead => [IsolationLevel.Serializable],
+        IsolationLevel.Snapshot => [IsolationLevel.Serializable],
+        _ => []
+    };
 
     private async Task TestRollbackOnException()
     {
@@ -2282,7 +2266,7 @@ INSERT INTO {table} (
 
     protected virtual async Task TestPagingCapability()
     {
-        if (!_context.Dialect.SupportsOffsetFetch && !_context.Dialect.SupportsLimitOffset)
+        if (!_context.Dialect.SupportsPaging)
         {
             CheckSkip($"  [Capabilities] Paging is not supported by {_context.Product}");
             return;
@@ -2469,26 +2453,19 @@ INSERT INTO {table} (
             if (val != 42)
                 throw new Exception($"[Quoting] Expected 42 for 'order' column, got {val}");
 
-            // CONFIRMED live: Informix's USER is a special register (like CURRENT/TODAY), not a
-            // plain reserved word — quoting it ("user") does not make it resolve to the ordinary
-            // column of that name the way SQL Server/PostgreSQL/etc. do; it still returns the
-            // session's actual database username (a string), not the column's int value.
-            if (_context.Product == SupportedDatabase.Informix)
-            {
-                CheckSkip("  [Quoting] 'user' column: Informix's USER is a special register, not a plain reserved word — skip");
-            }
-            else
-            {
-                sc.Clear();
-                sc.Query.AppendFormat(
-                    "SELECT {0} FROM {1} WHERE {2} = {3}",
-                    wrappedUser, wrappedTable, wrappedId,
-                    sc.MakeParameterName("p0"));
-                sc.AddParameterWithValue("p0", DbType.Int32, 1);
-                var userVal = await sc.ExecuteScalarOrNullAsync<int>();
-                if (userVal != 7)
-                    throw new Exception($"[Quoting] Expected 7 for 'user' column, got {userVal}");
-            }
+            // The reserved-word column is selected alias-qualified ("q"."user"). CONFIRMED live on
+            // Informix: an unqualified quoted "user" still resolves to the USER special register
+            // (the session's username), while the qualified form resolves to the column, so the
+            // qualified form is the portable way to reference it.
+            sc.Clear();
+            sc.Query.AppendFormat(
+                "SELECT {0} FROM {1} {2} WHERE {3} = {4}",
+                _context.WrapObjectName("q.user"), wrappedTable, _context.WrapObjectName("q"),
+                _context.WrapObjectName("q.id"), sc.MakeParameterName("p0"));
+            sc.AddParameterWithValue("p0", DbType.Int32, 1);
+            var userVal = await sc.ExecuteScalarOrNullAsync<int>();
+            if (userVal != 7)
+                throw new Exception($"[Quoting] Expected 7 for 'user' column, got {userVal}");
 
             sc.Clear();
             sc.Query.AppendFormat(

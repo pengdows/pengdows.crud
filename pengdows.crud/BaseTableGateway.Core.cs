@@ -468,4 +468,21 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
         return chunks;
     }
+
+    /// <summary>
+    /// Refuses a MERGE upsert of a [Version] entity on a dialect whose MERGE cannot express the
+    /// optimistic-concurrency check (see <see cref="IInternalSqlDialect.SupportsMergeMatchedCondition"/>).
+    /// Called before any audit/version field is mutated.
+    /// </summary>
+    private protected void ThrowIfVersionedMergeUpsertUnsupported(ISqlDialect dialect)
+    {
+        if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn()
+            && !dialect.SupportsMergeMatchedCondition())
+        {
+            throw new NotSupportedException(
+                $"Upsert of '{typeof(TEntity).Name}' is not supported on {dialect.DatabaseType}: its MERGE has no " +
+                $"conditional matched clause, so the [Version] column '{_versionColumn.Name}' optimistic-concurrency " +
+                "check cannot be expressed. Use CreateAsync/UpdateAsync instead.");
+        }
+    }
 }

@@ -27,6 +27,8 @@ public class SemVerCompatibilityDefaultMemberTests
         { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.SavepointCapabilities) },
         { typeof(ISqlDialect), nameof(ISqlDialect.GetReleaseSavepointSql) },
         { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.SupportsSemicolonStatementSeparator) },
+        { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.SupportsPaging) },
+        { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.PreservesTrailingWhitespace) },
         { typeof(IDatabaseContextConfiguration), "get_" + nameof(IDatabaseContextConfiguration.SessionInitializationFailureMode) },
         { typeof(IDatabaseContextConfiguration), "set_" + nameof(IDatabaseContextConfiguration.SessionInitializationFailureMode) },
         { typeof(IDatabaseContextConfiguration), "get_" + nameof(IDatabaseContextConfiguration.MaxQueuedReads) },
@@ -67,7 +69,22 @@ public class SemVerCompatibilityDefaultMemberTests
         Assert.False(dialect.Object.IsEmbeddedSingleWriterEngine);
         Assert.Equal(InMemoryKind.None, dialect.Object.DetectInMemoryKind("Data Source=:memory:"));
         Assert.True(dialect.Object.SupportsSemicolonStatementSeparator);
+        Assert.True(dialect.Object.PreservesTrailingWhitespace);
         Assert.Equal("RELEASE SAVEPOINT \"sp1\"", dialect.Object.GetReleaseSavepointSql("sp1"));
+    }
+
+    [Theory]
+    [InlineData(true, false, true)]
+    [InlineData(false, true, true)]
+    [InlineData(false, false, false)]
+    public void ISqlDialect_SupportsPaging_Default_FollowsPagingSyntaxFlags(bool offsetFetch, bool limitOffset,
+        bool expected)
+    {
+        var dialect = new Mock<ISqlDialect> { CallBase = true };
+        dialect.SetupGet(d => d.SupportsOffsetFetch).Returns(offsetFetch);
+        dialect.SetupGet(d => d.SupportsLimitOffset).Returns(limitOffset);
+
+        Assert.Equal(expected, dialect.Object.SupportsPaging);
     }
 
     [Fact]

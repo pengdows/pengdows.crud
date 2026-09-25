@@ -588,6 +588,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     /// <inheritdoc cref="IInternalSqlDialect.MergeMatchedConditionAsUpdateWhere"/>
     public virtual bool MergeMatchedConditionAsUpdateWhere => false;
+
+    /// <inheritdoc cref="IInternalSqlDialect.SupportsMergeMatchedCondition"/>
+    public virtual bool SupportsMergeMatchedCondition => true;
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
 
@@ -1710,7 +1713,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Default: generic message-based heuristic. Each dialect with its own real error-code/SQLSTATE
     // signal overrides this — see PostgreSqlDialect (covers Spanner/CockroachDb/YugabyteDb/
     // AuroraPostgreSql via inheritance), MySqlDialect (covers MariaDb/TiDb/AuroraMySql), Oracle,
-    // DuckDb, Firebird, Db2, Snowflake, SqlServer dialects. SqliteDialect and SybaseDialect already
+    // DuckDb, Firebird, Db2, Snowflake, SqlServer dialects. SqliteDialect and SybaseAseDialect already
     // had their own pre-existing overrides before this method was a switch, unrelated to this list.
     public virtual bool IsUniqueViolation(DbException ex)
     {
@@ -2649,6 +2652,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     /// <inheritdoc/>
     public virtual bool SupportsLimitOffset => true;
+
+    /// <inheritdoc/>
+    public virtual bool SupportsPaging => SupportsOffsetFetch || SupportsLimitOffset;
+
+    /// <inheritdoc/>
+    public virtual bool PreservesTrailingWhitespace => true;
 
     /// <inheritdoc/>
     public virtual void AppendPaging(ISqlQueryBuilder query, int offset, int limit)

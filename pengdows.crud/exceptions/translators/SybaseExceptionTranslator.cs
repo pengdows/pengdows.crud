@@ -15,7 +15,7 @@ namespace pengdows.crud.exceptions.translators;
 /// foreign-key and check violations separate numbers, so no message-text discrimination is needed here.
 /// <para>
 /// Deliberately NOT delegated to <see cref="ISqlDialect"/>'s constraint-kind checks (unlike every other
-/// translator — see <see cref="IDbExceptionTranslator"/>'s doc comment): <c>SybaseDialect</c> only
+/// translator — see <see cref="IDbExceptionTranslator"/>'s doc comment): <c>SybaseAseDialect</c> only
 /// overrides the <c>Exception</c>-typed <c>IsUniqueViolation</c> override, not
 /// <c>IsForeignKeyViolation</c>/<c>IsNotNullViolation</c>/<c>IsCheckConstraintViolation</c> (which would
 /// silently fall back to <see cref="ISqlDialect"/>'s <c>false</c>-returning defaults since

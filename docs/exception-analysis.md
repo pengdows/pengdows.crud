@@ -75,7 +75,7 @@ never wrapped into a `DatabaseException` (see CLAUDE.md's Exception Hierarchy se
    category, else `Unknown`.
 
 `PostgreSqlDialect` covers CockroachDB, YugabyteDB, Aurora PostgreSQL and Spanner by
-inheritance; `MySqlDialect` covers MariaDB, TiDB, Aurora MySQL and SingleStore. `SybaseDialect`
+inheritance; `MySqlDialect` covers MariaDB, TiDB, Aurora MySQL and SingleStore. `SybaseAseDialect`
 overrides `ClassifyException` itself (it classifies off `AseException`'s message number).
 Concrete examples from the current mapping:
 

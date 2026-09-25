@@ -1,5 +1,5 @@
 // =============================================================================
-// FILE: SybaseDialect.cs
+// FILE: SybaseAseDialect.cs
 // PURPOSE: Sybase (SAP) Adaptive Server Enterprise dialect implementation.
 //
 // AI SUMMARY:
@@ -23,6 +23,7 @@
 //   ones in the base class can never fire for AseException).
 // =============================================================================
 
+using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -35,9 +36,9 @@ namespace pengdows.crud.dialects;
 /// <summary>
 /// Sybase (SAP) Adaptive Server Enterprise dialect.
 /// </summary>
-internal class SybaseDialect : SqlDialect
+internal class SybaseAseDialect : SqlDialect
 {
-    internal SybaseDialect(DbProviderFactory factory, ILogger logger)
+    internal SybaseAseDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
     }
@@ -105,6 +106,33 @@ internal class SybaseDialect : SqlDialect
 
         select.Append(") AS s");
         return select.ToString();
+    }
+
+    // Verified live (ASE 16.0 SP02): the engine strips trailing blanks from VARCHAR values on
+    // storage ('  padded  ' is stored as 8 bytes), so they cannot round-trip.
+    public override bool PreservesTrailingWhitespace => false;
+
+    // ASE has no native UUID type; store the canonical 36-character string form. Verified live
+    // (testbed): PassThrough let AdoNetCore.AseClient serialize the Guid into CHAR(36) in a form
+    // that does not read back as a GUID.
+    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        // Verified live (testbed): AdoNetCore.AseClient rejects a DateTimeOffset parameter
+        // outright ("Unsupported .net type System.DateTimeOffset"), and ASE has no offset-aware
+        // temporal type. Store the UTC instant as a plain DateTime, matching Db2/Firebird/
+        // InterBase. Null is remapped too: the driver rejects DbType.DateTimeOffset regardless
+        // of the value.
+        if (type == DbType.DateTimeOffset)
+        {
+            object coerced = value is DateTimeOffset dto
+                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
+                : DBNull.Value;
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+        }
+
+        return base.CreateDbParameter(name, type, value);
     }
 
     // Verified live: this ASE build rejects the multi-row VALUES clause the base

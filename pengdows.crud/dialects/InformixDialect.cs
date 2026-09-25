@@ -22,16 +22,13 @@
 //   still can't be selected via its quoted identifier — even with Delimident=true, Informix
 //   treats USER as a special register (like CURRENT/TODAY), not a plain reserved word quoting
 //   can disambiguate.
-// - Pagination: CONFIRMED live to be broken as originally set up — both the base
-//   SupportsOffsetFetch (SQL:2008 OFFSET/FETCH) rendering and MySQL-style LIMIT/OFFSET are
-//   rejected outright ("A syntax error has occurred."). Informix's real native paging idiom is
-//   "SELECT SKIP n FIRST m ..." which must appear immediately after SELECT, structurally
-//   incompatible with AppendPaging's append-at-end-of-query design — needs a dedicated
-//   query-generation-time override, not attempted in this pass. Both capabilities disabled.
-// - MERGE: the MERGE INTO ... WHEN MATCHED/WHEN NOT MATCHED statement itself is documented, but
-//   CONFIRMED live that the base RenderMergeSource's "USING (VALUES (...)) AS s (...)"
-//   derived-table shape is rejected ("A syntax error has occurred."). The real accepted
-//   USING-clause shape was not identified — disabled rather than guessing.
+// - Pagination: CONFIRMED live that OFFSET/FETCH and LIMIT m OFFSET n are both rejected, so
+//   neither syntax flag is claimed. AppendPaging inserts the native "SKIP n FIRST m" directly
+//   after the leading SELECT (SupportsPaging = true).
+// - MERGE: CONFIRMED live with a one-row "USING (SELECT ... FROM sysmaster:sysdual) s" source
+//   (the base "USING (VALUES (...)) AS s (...)" shape is rejected). Informix MERGE has no
+//   conditional matched clause, so upsert of a [Version] entity is refused.
+// - Savepoints: CONFIRMED live (SAVEPOINT / ROLLBACK TO SAVEPOINT / RELEASE SAVEPOINT).
 // - Batch insert: CONFIRMED live that the ANSI multi-row VALUES clause
 //   ("INSERT INTO t (...) VALUES (...), (...)") is rejected — Informix only accepts one row per
 //   VALUES clause. Falls back to one INSERT per entity (SupportsBatchInsert = false).
@@ -40,9 +37,9 @@
 //   Text/Byte host variable.") — a long-documented Informix ESQL/CLI restriction requiring an
 //   INSERT cursor or locator-based (data-at-execution) binding, which pengdows.crud's parameter
 //   binding doesn't implement.
-// - ProcWrappingStyle: deliberately None — EXECUTE PROCEDURE proc(args) is confirmed for
-//   invoking stored procedures, but whether Informix also needs a distinct SELECT-based form for
-//   read-executed/function-returning calls was not confirmed. Do not guess a style.
+// - ProcWrappingStyle: Informix -> "EXECUTE PROCEDURE proc(args)", the documented stand-alone form
+//   (CALL is documented as SPL-only). CONFIRMED live for procedures with and without RETURNING and
+//   for CREATE FUNCTION routines, for reads and writes alike.
 // - Read-only transaction enforcement: CONFIRMED LIVE against a real
 //   icr.io/informix/informix-developer-database container. "SET TRANSACTION READ ONLY" issued
 //   inside an active transaction (BEGIN WORK, or a real ADO.NET conn.BeginTransaction() —
@@ -59,6 +56,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions.translators;
@@ -93,22 +91,133 @@ internal sealed class InformixDialect : SqlDialect
     // uppercase, quoted owner names are case-sensitive (IBM docs: "Owner name", 14.10).
     public override bool SupportsNamespaces => true;
 
-    // CONFIRMED live: rejected outright — "ERROR [42000] ... A syntax error has occurred."
-    // MERGE INTO ... WHEN MATCHED/WHEN NOT MATCHED itself is documented (HCL Informix 14.10 SQL
-    // Statements guide; developerWorks MERGE article), but the base RenderMergeSource's
-    // `USING (VALUES (...)) AS s (col1, col2, ...)` derived-table shape does not parse against a
-    // real server. The real accepted USING-clause shape was not identified in this pass; left
-    // disabled rather than guessing at syntax.
-    public override bool SupportsMerge => false;
+    // CONFIRMED live (15.0.1.0.3): MERGE INTO t USING (SELECT ... FROM sysmaster:sysdual) s
+    // ON t.k = s.k WHEN MATCHED THEN UPDATE SET ... WHEN NOT MATCHED THEN INSERT ... works. The base
+    // "USING (VALUES (...)) AS s (...)" derived table is a syntax error, so RenderMergeSource uses a
+    // one-row SELECT from sysmaster:sysdual (Informix's DUAL). Informix MERGE has no conditional
+    // matched clause (neither "WHEN MATCHED AND" nor "UPDATE ... WHERE" parses), so
+    // SupportsMergeMatchedCondition is false and upsert of a [Version] entity is refused.
+    public override bool SupportsMerge => true;
+    public override bool SupportsMergeMatchedCondition => false;
 
-    // CONFIRMED live: the base class's standard "OFFSET n ROWS FETCH NEXT m ROWS ONLY" text
-    // (SqlDialect.AppendPaging) is rejected — "ERROR [42000] ... A syntax error has occurred."
-    // Informix's real native paging idiom (SKIP n FIRST m) must appear immediately after SELECT,
-    // structurally incompatible with AppendPaging's append-at-end-of-query design — needs a
-    // dedicated query-generation-time override, out of scope for this pass. Both offset-style
-    // capabilities disabled rather than emitting known-broken SQL.
+    public override string UpsertIncomingColumn(string columnName)
+    {
+        return $"s.{WrapObjectName(columnName)}";
+    }
+
+    public override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns,
+        IReadOnlyList<string> parameterNames)
+    {
+        if (columns == null)
+        {
+            throw new ArgumentNullException(nameof(columns));
+        }
+
+        if (parameterNames == null)
+        {
+            throw new ArgumentNullException(nameof(parameterNames));
+        }
+
+        if (columns.Count != parameterNames.Count)
+        {
+            throw new ArgumentException("Column and parameter counts must match.");
+        }
+
+        var select = new System.Text.StringBuilder("USING (SELECT ");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                select.Append(", ");
+            }
+
+            var placeholder = MakeParameterName(parameterNames[i]);
+            if (columns[i].IsJsonType)
+            {
+                placeholder = RenderJsonArgument(placeholder, columns[i]);
+            }
+
+            select.Append("CAST(").Append(placeholder).Append(" AS ")
+                .Append(GetMergeSourceCastType(columns[i].IsJsonType ? DbType.String : columns[i].DbType))
+                .Append(") AS ").Append(WrapObjectName(columns[i].Name));
+        }
+
+        select.Append(" FROM sysmaster:sysdual) s");
+        return select.ToString();
+    }
+
+    // CONFIRMED live (15.0.1.0.3, Informix.Net.Core): an untyped "? AS col" in the MERGE source's
+    // select list is a syntax error; each placeholder needs "CAST(? AS type)". Every mapping here
+    // was round-tripped through MERGE insert + update. Booleans are bound as Int16 on this
+    // positional dialect (common conversions), hence SMALLINT. Types not verified live throw
+    // rather than guess (binary cannot be bound as an ordinary parameter on Informix at all).
+    internal static string GetMergeSourceCastType(DbType dbType) => dbType switch
+    {
+        DbType.Int64 => "BIGINT",
+        DbType.Int32 => "INT",
+        DbType.Int16 or DbType.Boolean => "SMALLINT",
+        DbType.String or DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength
+            or DbType.Guid => "LVARCHAR(32739)",
+        DbType.Decimal => "DECIMAL(32)",
+        DbType.Double => "FLOAT",
+        DbType.Single => "SMALLFLOAT",
+        DbType.DateTime or DbType.DateTime2 or DbType.DateTimeOffset => "DATETIME YEAR TO FRACTION(5)",
+        DbType.Date => "DATE",
+        _ => throw new NotSupportedException(
+            $"Informix MERGE upsert does not support a {dbType} column in the source row.")
+    };
+
+    // CONFIRMED live (15.0.1.0.3): both "OFFSET n ROWS FETCH NEXT m ROWS ONLY" and
+    // "LIMIT m OFFSET n" are syntax errors, so neither syntax flag is claimed. Informix pages with
+    // its native "SELECT SKIP n FIRST m ..." (also confirmed live, including ahead of DISTINCT),
+    // which AppendPaging inserts directly after the leading SELECT keyword.
     public override bool SupportsOffsetFetch => false;
     public override bool SupportsLimitOffset => false;
+    public override bool SupportsPaging => true;
+
+    // CONFIRMED live: the server stores trailing blanks (OCTET_LENGTH counts them), but
+    // Informix.Net.Core trims them from every VARCHAR/NVARCHAR/LVARCHAR value it returns,
+    // regardless of LeaveTrailingSpaces. IBM APAR IC63704: no option exists to disable it.
+    public override bool PreservesTrailingWhitespace => false;
+
+    public override void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
+    {
+        if (offset < 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(offset), offset, "Must be >= 0.");
+        }
+
+        if (limit <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
+        }
+
+        var sql = query.ToString();
+        var start = 0;
+        while (start < sql.Length && char.IsWhiteSpace(sql[start]))
+        {
+            start++;
+        }
+
+        const string select = "SELECT";
+        var afterSelect = start + select.Length;
+        if (string.Compare(sql, start, select, 0, select.Length, StringComparison.OrdinalIgnoreCase) != 0
+            || afterSelect >= sql.Length || !char.IsWhiteSpace(sql[afterSelect]))
+        {
+            throw new NotSupportedException(
+                "Informix paging (SKIP/FIRST) must follow the query's leading SELECT keyword; " +
+                "the query does not start with SELECT.");
+        }
+
+        var clause = offset > 0
+            ? string.Create(CultureInfo.InvariantCulture, $" SKIP {offset} FIRST {limit}")
+            : string.Create(CultureInfo.InvariantCulture, $" FIRST {limit}");
+        query.Clear().Append(sql.AsSpan(0, afterSelect)).Append(clause).Append(sql.AsSpan(afterSelect));
+    }
+
+    // CONFIRMED live (15.0.1.0.3, logged database): SAVEPOINT, ROLLBACK TO SAVEPOINT and
+    // RELEASE SAVEPOINT all work with quoted names, i.e. the base SqlDialect SQL unchanged.
+    public override bool SupportsSavepoints => true;
 
     // CONFIRMED live: Informix rejects the ANSI SQL multi-row VALUES clause outright
     // ("ERROR [42000] ... A syntax error has occurred.") — Informix's INSERT statement only
@@ -116,9 +225,10 @@ internal sealed class InformixDialect : SqlDialect
     // same safe path Firebird/InterBase/HANA/Access/Sybase ASE use.
     public override bool SupportsBatchInsert => false;
 
-    // Deliberately left at None — see file-level AI SUMMARY. Do not change this without live
-    // verification of the read-vs-write calling convention.
-    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
+    // EXECUTE PROCEDURE name(args): Informix's documented stand-alone statement (CALL is only valid
+    // inside an SPL routine per the 12.10/14.10 docs, even though 15.0 happens to accept it). See
+    // InformixProcWrappingStrategy for the live-verified details.
+    public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Informix;
 
     // ANSI SQLSTATE 23000, or Informix's own numeric error codes for duplicate key: -268
     // (logged database) / -239 (unlogged database). Both are documented, distinct codes for
@@ -154,6 +264,24 @@ internal sealed class InformixDialect : SqlDialect
     // Informix's own terminology (Dirty Read/Committed Read/Cursor Stability/Repeatable Read)
     // maps to ADO.NET's IsolationLevel — see IsolationResolver.cs's SupportedDatabase.Informix
     // cases (2.0.6 resolves isolation through a central switch, not a dialect-owned override).
+
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        // CONFIRMED live (testbed): Informix.Net.Core has no DbType.DateTimeOffset mapping
+        // ("No mapping exists from DbType DateTimeOffset to a known IfxType", thrown from
+        // IfxParameter.set_DbType before any later conversion can run), and Informix has no
+        // offset-aware temporal type. Store the UTC instant as a plain DateTime, matching
+        // Db2/Sybase/Firebird/InterBase. Null is remapped too: the driver rejects the DbType itself.
+        if (type == DbType.DateTimeOffset)
+        {
+            object coerced = value is DateTimeOffset dto
+                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
+                : DBNull.Value;
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
 
     // SERIAL/SERIAL8/BIGSERIAL are Informix's idiomatic auto-increment types (IBM docs,
     // "SERIAL(n) data type", 14.10) - GUIDs are stored as client-generated strings, matching

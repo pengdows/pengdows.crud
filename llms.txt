@@ -112,7 +112,7 @@ database-agnostic policy decoupled from connection identity — is in
   live against real containers (see the "Verified PostgreSQL/MySQL-compatible forks" note in
   that file). SingleStore *is* a distinct `SupportedDatabase` value (unlike those five) because
   it reports a generic, indistinguishable MySQL version string and needs its own runtime probe
-  (`SELECT @@memsql_version`) to detect at all. Sybase has its own dedicated `SybaseDialect`
+  (`SELECT @@memsql_version`) to detect at all. Sybase has its own dedicated `SybaseAseDialect`
   (not a delegating fork) — see the "SingleStore" and "Sybase" notes in that file.
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
   profiles and the "fails up, never down" isolation rule (an unsupported explicit level resolves to
@@ -190,8 +190,8 @@ database-agnostic policy decoupled from connection identity — is in
   `Clone(IDatabaseContext)`: what's deep-copied vs. shared, the singleton-gateway template
   pattern, transaction/tenant/cross-dialect use, and disposal independence.
 - [`docs/stored-procedures.md`](docs/stored-procedures.md) — calling stored procedures through the
-  same `ISqlContainer` as ordinary SQL: the six `ProcWrappingStyle` values (`Call`/`Exec`/
-  `Oracle`/`PostgreSQL`/`ExecuteProcedure`/`None`) and exactly what each generates, OUT/INOUT
+  same `ISqlContainer` as ordinary SQL: the seven `ProcWrappingStyle` values (`Call`/`Exec`/
+  `Oracle`/`PostgreSQL`/`ExecuteProcedure`/`Informix`/`None`) and exactly what each generates, OUT/INOUT
   parameter binding, return-value capture for the `Exec`-style dialects (SQL Server, Sybase ASE)
   via `WrapForStoredProc(..., captureReturn: true)`, and
   the no-multi-result-set-traversal limit (`ITrackedReader` rejects `NextResult()`).

@@ -98,7 +98,7 @@ public static class DataSourceTestData
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger.Instance),
             SupportedDatabase.FlatFile => new FlatFileDialect(factory, NullLogger.Instance),
-            SupportedDatabase.SybaseASE => new SybaseDialect(factory, NullLogger.Instance),
+            SupportedDatabase.SybaseASE => new SybaseAseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
             SupportedDatabase.Informix => new InformixDialect(factory, NullLogger.Instance),
             SupportedDatabase.SapHana => new HanaDialect(factory, NullLogger.Instance),
@@ -208,7 +208,8 @@ public class DataSourceInformationTests
                        || (db == SupportedDatabase.YugabyteDb && info.ParsedVersion?.Major > 14)
                        || db == SupportedDatabase.SybaseASE
                        || db == SupportedDatabase.Db2
-                       || db == SupportedDatabase.SapHana;
+                       || db == SupportedDatabase.SapHana
+                       || db == SupportedDatabase.Informix;
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
@@ -250,6 +251,7 @@ public class DataSourceInformationTests
                 or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
                 or SupportedDatabase.SingleStore or SupportedDatabase.Db2
                 or SupportedDatabase.SapHana => ProcWrappingStyle.Call,
+            SupportedDatabase.Informix => ProcWrappingStyle.Informix,
             SupportedDatabase.TiDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,

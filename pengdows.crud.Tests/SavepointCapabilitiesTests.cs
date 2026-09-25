@@ -74,7 +74,7 @@ public class SavepointCapabilitiesTests
             SupportedDatabase.Firebird => new FirebirdDialect(factory, NullLogger.Instance),
             SupportedDatabase.Db2 => new Db2Dialect(factory, NullLogger.Instance),
             SupportedDatabase.SqlServer => new SqlServerDialect(factory, NullLogger.Instance),
-            SupportedDatabase.SybaseASE => new SybaseDialect(factory, NullLogger.Instance),
+            SupportedDatabase.SybaseASE => new SybaseAseDialect(factory, NullLogger.Instance),
             SupportedDatabase.Oracle => new OracleDialect(factory, NullLogger.Instance),
             SupportedDatabase.DuckDB => new DuckDbDialect(factory, NullLogger.Instance),
             SupportedDatabase.Snowflake => new SnowflakeDialect(factory, NullLogger.Instance),

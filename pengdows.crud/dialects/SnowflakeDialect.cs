@@ -339,6 +339,10 @@ internal class SnowflakeDialect : SqlDialect
     public override string? MaxPoolSizeSettingName => "maxPoolSize";
     public override string? ApplicationNameSettingName => "application";
 
+    // Snowflake.Data 4.x defaults maxPoolSize to 10. Keep pengdows.crud aligned
+    // with the provider unless the caller explicitly configures a different limit.
+    internal override int DefaultMaxPoolSize => 10;
+
     // Snowflake parses UNIQUE/PRIMARY KEY constraint DDL but never enforces it at runtime
     // (SupportsUniqueConstraints = false) — this exception category structurally cannot occur, so
     // explicit false instead of falling through to the generic message-based default.

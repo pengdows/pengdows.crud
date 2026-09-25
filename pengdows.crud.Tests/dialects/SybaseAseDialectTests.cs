@@ -13,10 +13,10 @@ using Xunit;
 
 namespace pengdows.crud.Tests.dialects;
 
-public class SybaseDialectTests
+public class SybaseAseDialectTests
 {
-    private static SybaseDialect Dialect() =>
-        new(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLogger<SybaseDialect>.Instance);
+    private static SybaseAseDialect Dialect() =>
+        new(new fakeDbFactory(SupportedDatabase.SybaseASE), NullLogger<SybaseAseDialect>.Instance);
 
     [Fact]
     public void ApplicationNameSettingName_IsSybasesRealKeyword()
@@ -30,7 +30,7 @@ public class SybaseDialectTests
     }
 
     [Fact]
-    public void CreateDialectForType_Sybase_ReturnsSybaseDialect()
+    public void CreateDialectForType_SybaseASE_ReturnsSybaseAseDialect()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SybaseASE);
         var dialect = SqlDialectFactory.CreateDialectForType(
@@ -38,9 +38,52 @@ public class SybaseDialectTests
             factory,
             NullLogger<SqlDialect>.Instance);
 
-        Assert.IsType<SybaseDialect>(dialect);
+        Assert.IsType<SybaseAseDialect>(dialect);
         Assert.Equal(SupportedDatabase.SybaseASE, dialect.DatabaseType);
     }
+
+    // CONFIRMED live (testbed, AdoNetCore.AseClient): the driver rejects a DateTimeOffset
+    // parameter outright ("Unsupported .net type System.DateTimeOffset") and ASE has no
+    // offset-aware temporal type, so the dialect stores the UTC instant as a plain DateTime.
+    [Fact]
+    public void CreateDbParameter_NonNullDateTimeOffset_CoercesToUnspecifiedUtcDateTime()
+    {
+        var dto = new DateTimeOffset(2026, 2, 21, 12, 34, 56, TimeSpan.FromHours(-5));
+        var param = Dialect().CreateDbParameter<DateTimeOffset?>("p", DbType.DateTimeOffset, dto);
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+        var stored = Assert.IsType<DateTime>(param.Value);
+        Assert.Equal(DateTimeKind.Unspecified, stored.Kind);
+        Assert.Equal(dto.UtcDateTime, DateTime.SpecifyKind(stored, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public void CreateDbParameter_NullDateTimeOffset_CoercesToDbTypeDateTimeWithDbNull()
+    {
+        var param = Dialect().CreateDbParameter<DateTimeOffset?>("p", DbType.DateTimeOffset, null);
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+        Assert.Equal(DBNull.Value, param.Value);
+    }
+
+    // CONFIRMED live (testbed): with PassThrough, AdoNetCore.AseClient serializes a Guid into a
+    // CHAR(36) column in a form that does not read back as a GUID string. ASE has no native
+    // UUID type, so the dialect stores the canonical 36-character string form.
+    [Fact]
+    public void CreateDbParameter_Guid_StoresCanonicalString()
+    {
+        var guid = Guid.Parse("12345678-1234-1234-1234-123456789abc");
+        var param = Dialect().CreateDbParameter("p", DbType.Guid, guid);
+
+        Assert.Equal(DbType.String, param.DbType);
+        Assert.Equal("12345678-1234-1234-1234-123456789abc", param.Value?.ToString());
+    }
+
+    // CONFIRMED live (ASE 16.0 SP02, isql): inserting '  padded  ' into a VARCHAR stores 8 bytes
+    // (datalength), i.e. the engine strips trailing blanks on storage.
+    [Fact]
+    public void PreservesTrailingWhitespace_IsFalse()
+        => Assert.False(Dialect().PreservesTrailingWhitespace);
 
     [Fact]
     public void ParameterMarker_IsAt()
@@ -159,7 +202,7 @@ public class SybaseDialectTests
 
     // -------------------------------------------------------------------------
     // Exception analysis — AseException does not derive from DbException, so these
-    // exercise the SybaseDialect overrides of the Exception-typed entry points.
+    // exercise the SybaseAseDialect overrides of the Exception-typed entry points.
     // -------------------------------------------------------------------------
 
     private static AseException Ase(int messageNumber, string message)

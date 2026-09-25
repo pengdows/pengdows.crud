@@ -38,6 +38,7 @@ internal static class ProcWrappingStrategyFactory
             [ProcWrappingStyle.PostgreSQL] = new PostgresProcWrappingStrategy(),
             [ProcWrappingStyle.Oracle] = new OracleProcWrappingStrategy(),
             [ProcWrappingStyle.ExecuteProcedure] = new ExecuteProcedureWrappingStrategy(),
+            [ProcWrappingStyle.Informix] = new InformixProcWrappingStrategy(),
             [ProcWrappingStyle.None] = new UnsupportedProcWrappingStrategy()
         };
 

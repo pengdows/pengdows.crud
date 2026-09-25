@@ -6,6 +6,51 @@ is not lost and can be picked up when the need arises.
 
 ---
 
+## Testbed skip audit (2026-09-25, branch 2.0.6)
+
+**Rule:** a testbed skip is legitimate **only** when the database genuinely lacks the
+capability being tested (e.g. no stored procedures, no savepoints). Anything else — a hardcoded
+per-database list, a driver quirk the library could work around, a dialect flag that under-reports
+what the engine can do, or "no test written for X" — is a gap to fix, not a skip.
+
+Every skip must be gated on a real capability (an `ISqlDialect` / `IDataSourceInformation`
+property or the isolation resolver), never on a `SupportedDatabase` switch in the testbed.
+
+Baseline run (net8.0 and net10.0 identical): 19/19 databases, 378 checks passed, 0 failed,
+**56 skipped**. After SKIP-001/002: **24 skipped**. After all items: **414 checks, 0 failed, 10 skipped** (net8.0 and net10.0), every one a capability skip. Skip output is now prefixed `[SKIP:<Product>]` so every skip is attributable. Work each item TDD-first (unit test red → fix → testbed re-run), then mark it
+done here with the commit.
+
+### Legitimate capability skips (keep)
+
+| Skip | Databases | Why legitimate |
+|---|---|---|
+| `[StoredProc]` | SQLite, DuckDB, TiDB, Spanner | Engines have no stored procedures |
+| `[Capabilities] Paging` | Sybase ASE | Engine has no row-skipping paging form (SKIP-012) |
+| `[ParamBinding] Binary equality` | InterBase, SAP HANA, Informix | Engines cannot compare BLOB/BYTE values |
+| `[RoundTrip] Trailing whitespace` | Sybase ASE, Informix | `PreservesTrailingWhitespace = false` (engine strips / provider trims; SKIP-006) |
+| `[ExtendedTx] Savepoints` | Spanner, DuckDB | Engines have no savepoints (DuckDB verified live, SKIP-010) |
+
+### Items to fix
+
+| ID | Skip(s) | Databases | Problem | Planned fix | Status |
+|---|---|---|---|---|---|
+| SKIP-001 | `[ParamBinding] Guid binding`, `[RoundTrip] Guid` | MySQL (+Percona), MariaDB, TiDB, Db2, Sybase ASE, Spanner | Gated on a hardcoded `SupportsGuidBinding(product)` list; the library owns GUID storage, so not a capability. | Removed the list; every database now runs both checks with a real column type (`GetGuidType`). Exposed a real bug: `SybaseAseDialect` was `PassThrough`, and AdoNetCore.AseClient wrote a Guid into `CHAR(36)` that did not read back → now `GuidStorageFormat.String` (unit-tested). | **Done** (live: all databases pass) |
+| SKIP-002 | `[ParamBinding] DateTimeOffset binding`, `[RoundTrip] DateTimeOffset` | MySQL (+Percona), MariaDB, TiDB, Db2, Sybase ASE, Spanner, SQLite, Firebird | Gated on a hardcoded `SupportsDateTimeOffsetBinding(product)` list. | Removed the list; every database now runs both checks (`GetDateTimeOffsetType`, UTC-instant storage where the engine has no offset type). Exposed a real bug: `SybaseAseDialect` passed `DateTimeOffset` straight to AseClient, which rejects it → now coerced to a UTC `DateTime` like Db2/Firebird/InterBase (unit-tested). | **Done** (live: all databases pass) |
+| SKIP-003 | `[StoredProc]` | Informix | Dialect reported `ProcWrappingStyle.None`. | New `ProcWrappingStyle.Informix` (`InformixProcWrappingStrategy`): `EXECUTE PROCEDURE name(args)`, parentheses always, reads and writes alike. Informix documents `EXECUTE PROCEDURE`/`EXECUTE FUNCTION` as the stand-alone statements and `CALL` as SPL-only; a first pass used the existing `Call` style because 15.0 happens to accept a top-level `CALL`, and was corrected to the documented form. Verified live (15.0.1.0.3): `EXECUTE PROCEDURE` runs procedures with and without `RETURNING` and `CREATE FUNCTION` routines; `EXECUTE FUNCTION` cannot run a no-return procedure; `SELECT * FROM name(args)` and a parenthesis-less `EXECUTE PROCEDURE name` are syntax errors. The testbed creates and calls an Informix SPL procedure (read and write, one positional arg). | **Done** (live) |
+| SKIP-004 | `[Capabilities] Upsert` | Informix | `SupportsMerge => false`. | Verified live: `MERGE INTO t USING (SELECT CAST(? AS type) AS c, ... FROM sysmaster:sysdual) s ON ... ` works; the `USING (VALUES ...)` shape and untyped `? AS c` are syntax errors. Added `RenderMergeSource` + a live-verified `DbType`→cast map (`GetMergeSourceCastType`; unverified types throw), `UpsertIncomingColumn`. Informix MERGE has no conditional matched clause (`WHEN MATCHED AND`/`UPDATE ... WHERE` both fail), so upsert of a `[Version]` entity now throws `NotSupportedException` in both gateways (new internal `SupportsMergeMatchedCondition`). | **Done** (live) |
+| SKIP-005 | `[Capabilities] Paging` | Informix | Dialect claimed no paging. | Verified live: `SELECT SKIP n FIRST m` (and `FIRST m`, ahead of `DISTINCT`) works; OFFSET/FETCH and `LIMIT m OFFSET n` fail. `AppendPaging` override inserts SKIP/FIRST after the leading SELECT. New `ISqlDialect.SupportsPaging` (default `SupportsOffsetFetch \|\| SupportsLimitOffset`, binary compatible) gates the testbed check. | **Done** (live) |
+| SKIP-006 | `[ParamBinding] Type matrix`, `[RoundTrip] Fidelity` | Informix | Skipped wholesale, blamed on TEXT/BYTE binding. | Verified live: the testbed's binary column fell through to `BLOB` (smart LOB: rejects a plain binary parameter and needs an sbspace); a `BYTE` column binds `DbType.Binary` and round-trips byte-for-byte. Both checks now run. They exposed a real library bug: Informix.Net.Core has no `DbType.DateTimeOffset` mapping, so `InformixDialect` now coerces to a UTC `DateTime` (unit-tested). Remaining genuine limits, now narrow capability skips: `BYTE` values cannot be compared (`WHERE b = ?`: "Blobs are not allowed in this expression"), and trailing blanks don't round-trip (new `ISqlDialect.PreservesTrailingWhitespace`: false for Informix, whose .NET provider trims them on read with no option to stop, per IBM APAR IC63704; and for Sybase ASE, whose engine strips them on storage. Sybase used to be exempted silently by a product check). | **Done** (live) |
+| SKIP-007 | `[Quoting] 'user' column` | Informix | Hardcoded product skip. | Verified live: unqualified `"user"` resolves to the USER special register, but alias-qualified `"q"."user"` resolves to the column. The check now uses the qualified form on every database; no skip. | **Done** (live) |
+| SKIP-008 | ~~`[ExtendedTx] Savepoints`~~ | ~~Sybase ASE~~ | Misattributed in the first pass: `SybaseAseDialect` already has `SupportsSavepoints => true`, and Sybase runs the savepoint checks. The savepoint skips are DuckDB (SKIP-010), Spanner (legitimate) and Informix (SKIP-013). | — | **Void** |
+| SKIP-009 | `[ParamBinding] Duplicate param` | Informix (not Sybase; misattributed in the first pass) | The check used `MakeParameterName()` twice, which is a bare `?` on positional providers, so it could only work where the driver resolves repeated names. | The library already supports a repeated logical parameter portably via the `{P}name` token (one marker + one bound copy per use on positional providers, deduplicated names on Oracle). The check now uses `{P}name` with a row reachable only through the second use, and runs on every database; Oracle's override (which used two different names and recorded no check) was removed. Pinned by a unit test; documented in `docs/parameter-naming-convention.md`, CLAUDE.md, llms-full.txt and all three skill trees. | **Done** (live: 19/19) |
+| SKIP-010 | `[ExtendedTx] Savepoints` | DuckDB | The dialect comment gave a driver-reliability reason. | Verified live on DuckDB 1.3.2 and 1.5.5: `SAVEPOINT`/`ROLLBACK TO SAVEPOINT`/`RELEASE SAVEPOINT` are parser errors, so the engine lacks the capability. Comment corrected. | **Legitimate** |
+| SKIP-011 | `[InvalidTxType]` | MySQL, MariaDB, SQL Server, Sybase ASE, Informix, Db2, Spanner | Gated on a hardcoded `_context.Product switch` of known-unsupported levels. | Replaced with `GetSupportedIsolationLevels()`: every unsupported standard level is now checked against the documented fail-up contract (weakest supported level at least as strong, else rejected). Skips only if the engine supports every level. | **Done** (live: 0 `[InvalidTxType]` skips; 406 checks, 16 skipped) |
+| SKIP-012 | `[Capabilities] Paging` | Sybase ASE | Dialect reports no paging. | Verified live on ASE 16.0 SP02: `LIMIT/OFFSET`, `OFFSET ... FETCH`, `ROWS LIMIT` and `ROW_NUMBER() OVER` are all syntax errors; only `TOP n` exists, which cannot skip rows. | **Legitimate** |
+| SKIP-013 | `[ExtendedTx] Savepoints` | Informix | Inherited `SupportsSavepoints => false`. | Verified live: base `SAVEPOINT`/`ROLLBACK TO SAVEPOINT`/`RELEASE SAVEPOINT` SQL works with quoted names. `SupportsSavepoints => true`. | **Done** (live) |
+| SKIP-014 | (not a skip; found while fixing SKIP-002) | Firebird 4+ | `FirebirdDialect` always coerces `DateTimeOffset` to a UTC `DateTime`, so a Firebird 4+ `TIMESTAMP WITH TIME ZONE` column cannot be written through the library (driver: "Incorrect time zone value"). The testbed stores Firebird DTOs in `TIMESTAMP` to match the dialect's contract. | Decide whether Firebird 4+ should pass `DateTimeOffset` through to TZ columns; that is a behavior change for existing `TIMESTAMP` users. | Open (needs decision) |
+| SKIP-015 | (not a skip; found while fixing SKIP-007) | Informix | Library-generated SQL that references a column named `user` **unqualified** (e.g. an `UPDATE ... WHERE "user" = ?` or `SET` target) would resolve to the USER special register on Informix, not the column. | Audit gateway SQL generation for unqualified column references on Informix; qualify or document. | Open |
+| SKIP-016 | `[Spanner.GeneratedAlwaysIdentity]` | Spanner | Skipped because Spanner has no `GENERATED ALWAYS` (so no `OVERRIDING SYSTEM VALUE` path). | The caller-facing behavior (upsert with a client-supplied id into an identity column, then update by upsert) is now tested against Spanner's `GENERATED BY DEFAULT` identity instead. | **Done** (live) |
+
 ## Batch Operations
 
 The current batch implementation (`TableGateway.Batch.cs`) handles chunked multi-row INSERT,

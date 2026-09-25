@@ -357,6 +357,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var dialect = GetDialect(ctx);
+        ThrowIfVersionedMergeUpsertUnsupported(dialect);
 
         PrepareForInsertOrUpsert(entity);
 

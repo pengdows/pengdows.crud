@@ -17,6 +17,13 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool MergeMatchedConditionAsUpdateWhere => false;
 
     /// <summary>
+    /// False when the dialect's MERGE has no conditional matched clause in any form (neither
+    /// "WHEN MATCHED AND condition" nor a WHERE on the UPDATE branch; e.g. Informix), so an
+    /// optimistic-concurrency version check cannot be expressed in a MERGE upsert at all.
+    /// </summary>
+    bool SupportsMergeMatchedCondition => true;
+
+    /// <summary>
     /// Renders provider-specific JSON casts for parameter placeholders.
     /// </summary>
     string RenderJsonArgument(string parameterMarker, IColumnInfo column);

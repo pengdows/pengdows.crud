@@ -63,6 +63,12 @@ public class SqlDialectBranchTests
     [Theory]
     [InlineData(SupportedDatabase.SqlServer, "USING (VALUES (@i0, @i1)) AS s (\"id\", \"name\")")]
     [InlineData(SupportedDatabase.Oracle, "USING (SELECT :i0 AS \"id\", :i1 AS \"name\" FROM DUAL) s")]
+    // CONFIRMED live (Informix 15.0.1.0.3, Informix.Net.Core): a one-row SELECT from
+    // sysmaster:sysdual is the MERGE source Informix accepts (the base "USING (VALUES ...)" derived
+    // table is a syntax error), and each placeholder must be typed: a bare "? AS col" in the
+    // select list is a syntax error, "CAST(? AS type) AS col" works.
+    [InlineData(SupportedDatabase.Informix,
+        "USING (SELECT CAST(? AS INT) AS \"id\", CAST(? AS LVARCHAR(32739)) AS \"name\" FROM sysmaster:sysdual) s")]
     public void RenderMergeSource_UsesProviderSyntax(SupportedDatabase db, string expected)
     {
         var dialect = CreateDialect(db);

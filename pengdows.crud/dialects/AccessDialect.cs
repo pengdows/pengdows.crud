@@ -167,7 +167,7 @@
 //   Access has not been verified live and is NOT registered — do not assume the DateTime fix
 //   generalizes to it without testing first.
 // - Natural-key lookup: Access uses SELECT TOP n (confirmed live), not the base class's generic
-//   LIMIT-based fallback — mirrors SybaseDialect's GetNaturalKeySelectClause override (on 3.0;
+//   LIMIT-based fallback — mirrors SybaseAseDialect's GetNaturalKeySelectClause override (on 3.0;
 //   this branch inlines the equivalent case directly in SqlDialect.GetNaturalKeyLookupQuery).
 // - Exception classification: OleDbException DOES derive from DbException (unlike Sybase's
 //   AseException), so the DbException-typed IsXxxViolation overrides below apply directly.
@@ -359,7 +359,7 @@ internal sealed class AccessDialect : SqlDialect
     // GetGeneratedKeyPlan() directly).
 
     // Natural-key-lookup SELECT clause (CONFIRMED live: SELECT TOP n, not the base class's
-    // generic LIMIT-based fallback — mirrors SybaseDialect's own handling) is an inline
+    // generic LIMIT-based fallback — mirrors SybaseAseDialect's own handling) is an inline
     // SupportedDatabase.Access case in SqlDialect.GetNaturalKeyLookupQuery on this branch, since
     // the GetNaturalKeySelectClause/GetNaturalKeyFirstRowOnlyClause hooks 3.0 uses don't exist
     // here yet (same reasoning as the isolation-data note above).

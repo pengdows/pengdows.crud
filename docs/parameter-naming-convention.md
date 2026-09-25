@@ -203,6 +203,33 @@ correct database-specific prefix before the name is embedded in SQL:
 
 The base name (without prefix) is always what you pass to `SetParameterValue()`.
 
+## Using one parameter more than once
+
+`MakeParameterName()` returns the dialect's marker, which is a bare `?` on positional providers
+(Informix, Access, SAP HANA). A second `MakeParameterName("p0")` therefore can't say "the same
+value again", and Oracle doesn't allow a repeated `:p0` either (`SupportsRepeatedNamedParameters`
+is false for both). To reference one logical parameter at several points in portable SQL, write
+the `{P}name` token at each use and add the parameter once:
+
+```csharp
+sc.Query.Append("SELECT COUNT(*) FROM ")
+    .Append(sc.WrapObjectName("orders"))
+    .Append(" WHERE ").Append(sc.WrapObjectName("created_by")).Append(" = {P}user")
+    .Append(" OR ").Append(sc.WrapObjectName("updated_by")).Append(" = {P}user");
+sc.AddParameterWithValue("user", DbType.String, userName);
+```
+
+The container renders the tokens for the target dialect when the command is built:
+
+| Provider kind | Rendered SQL | Parameters bound |
+|---|---|---|
+| Named, repeats allowed (SQL Server, PostgreSQL, SQLite, …) | `@user … @user` | one |
+| Oracle | `:user … :user_1` style (deduplicated names) | one per use |
+| Positional (Informix, Access, SAP HANA) | `? … ?` | one per use, same value, in order |
+
+Verified live on every testbed database (`[ParamBinding] Duplicate param`), and pinned by
+`SqlContainerCreateCommandTests.CreateCommand_RepeatedPlaceholder_PositionalProvider_BindsOneParameterPerOccurrence`.
+
 ## Implementation: ClauseCounters
 
 All counter state lives in a `ClauseCounters` struct (value type, no heap allocation). Each

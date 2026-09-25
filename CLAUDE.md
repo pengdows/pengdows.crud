@@ -419,6 +419,7 @@ Critical distinctions for `SetParameterValue()` reuse:
 - `BuildDelete` id slot → `"k0"`
 - `BuildUpdateAsync`: SET params are `s0`…`sN`; WHERE id is `k0` (key counter, independent of set counter)
 - Always pass base name without database prefix: `"w0"` not `"@w0"`
+- One value used more than once in custom SQL: write `{P}name` at each use and add the parameter once. `MakeParameterName()` yields a bare `?` on positional providers (Informix/Access/HANA) and Oracle rejects a repeated `:name`, so a second `MakeParameterName()` call isn't portable
 
 See `docs/parameter-naming-convention.md` for full per-operation detail.
 

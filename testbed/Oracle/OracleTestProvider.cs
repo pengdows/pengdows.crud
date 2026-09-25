@@ -113,28 +113,6 @@ END;", triggerName, tableName, idColumn, sequenceName);
     }
 
     /// <summary>
-    /// Oracle does not support reusing the same named parameter twice in one predicate.
-    /// Use two distinct parameter names instead and verify same result.
-    /// </summary>
-    protected override async Task TestDuplicateParameter()
-    {
-        var sc = context.CreateSqlContainer();
-        sc.Query.AppendFormat(
-            "SELECT COUNT(*) FROM {0} WHERE {1} = {2} OR {3} = {4}",
-            _helper.WrappedTableName,
-            context.WrapObjectName("created_by"),
-            sc.MakeParameterName("p0"),
-            context.WrapObjectName("updated_by"),
-            sc.MakeParameterName("p1"));
-        sc.AddParameterWithValue("p0", DbType.String, "__nonexistent_user_xyzzy__");
-        sc.AddParameterWithValue("p1", DbType.String, "__nonexistent_user_xyzzy__");
-        var count = await sc.ExecuteScalarOrNullAsync<int>();
-        if (count < 0)
-            throw new Exception($"[ParamBinding] Oracle 2-param duplicate: invalid count {count}");
-        Console.WriteLine($"  [ParamBinding] Duplicate param (Oracle 2-param workaround): OK ({count} rows)");
-    }
-
-    /// <summary>
     /// Validates that Oracle reader and writer connections draw from separate ODP.NET pools.
     /// Uses Max Pool Size=1 so any pool sharing causes an immediate timeout,
     /// while separate pools allow both connections to open concurrently.

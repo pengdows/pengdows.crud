@@ -55,6 +55,21 @@ sc.Query.Append(sc.MakeParameterName(param));
 var outParam = sc.AddParameterWithValue("result", DbType.Int32, 0, ParameterDirection.Output);
 ```
 
+### Reusing one parameter in the same statement
+
+`MakeParameterName()` yields a bare `?` on positional providers (Informix, Access, SAP HANA), and
+Oracle rejects a repeated `:name`. For a value used more than once, write the `{P}name` token at
+each use and add the parameter once; the container renders one marker (and, where needed, one bound
+copy) per use:
+
+```csharp
+sc.Query.Append(" WHERE ").Append(sc.WrapObjectName("created_by")).Append(" = {P}user")
+    .Append(" OR ").Append(sc.WrapObjectName("updated_by")).Append(" = {P}user");
+sc.AddParameterWithValue("user", DbType.String, userName);
+```
+
+See `docs/parameter-naming-convention.md` ("Using one parameter more than once").
+
 ## Execution Methods
 
 All execution methods return `ValueTask` (not `Task`) for reduced allocations. All have `CancellationToken` overloads and `ExecutionType` overloads for explicit read/write pool routing.
