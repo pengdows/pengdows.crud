@@ -135,6 +135,17 @@ public sealed class PoolMaxMinValidationTests
         Assert.False(snapshot.Disabled);
     }
 
+    [Fact]
+    public void MaxConcurrentWrites_Zero_PromotesStandardContextToReadOnly()
+    {
+        var config = SqlServerConfig(maxWrites: 0);
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        Assert.Equal(ReadWriteMode.ReadOnly, ctx.ReadWriteMode);
+        Assert.True(ctx.GetPoolStatisticsSnapshot(PoolLabel.Writer).Forbidden);
+    }
+
     // =========================================================================
     // ReadOnly context: write pool is forbidden
     // =========================================================================

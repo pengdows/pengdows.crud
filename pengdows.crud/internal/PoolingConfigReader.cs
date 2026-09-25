@@ -118,6 +118,26 @@ internal static class PoolingConfigReader
             PoolConfigSource.DialectDefault);
     }
 
+    internal static int? GetExplicitMaxPoolSize(SqlDialect dialect, string connectionString)
+    {
+        if (!dialect.SupportsExternalPooling ||
+            string.IsNullOrWhiteSpace(dialect.MaxPoolSizeSettingName) ||
+            string.IsNullOrWhiteSpace(connectionString))
+        {
+            return null;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            return TryGetInt(builder, dialect.MaxPoolSizeSettingName!);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     private static bool? TryGetBool(DbConnectionStringBuilder b, string key)
     {
         foreach (var candidate in GetKeyCandidates(key))

@@ -729,20 +729,34 @@ public partial class DatabaseContext
                 "Read pool MaxPoolSize must be >= 0. Use 0 to forbid read connections.");
         }
 
-        // Silently clamp MinPoolSize to [0, MaxPoolSize] so the driver receives valid values.
-        var minPoolSizeKey = _dialect?.MinPoolSizeSettingName;
-        _connectionString = ConnectionPoolingConfiguration.ClampMinPoolSize(
-            _connectionString, minPoolSizeKey, writerConfig.MinPoolSize, rawWriterMax);
-        if (!string.IsNullOrWhiteSpace(_readerConnectionString))
-        {
-            _readerConnectionString = ConnectionPoolingConfiguration.ClampMinPoolSize(
-                _readerConnectionString, minPoolSizeKey, readerConfig.MinPoolSize, rawReaderMax);
-        }
-
-        // ReadOnly context: the write pool is forbidden — no write connections permitted.
+        // ReadOnly contexts have no writer pool. Apply this before minimum enforcement so the
+        // disabled writer is not accidentally given a provider minimum or a sentinel.
         if (!_isWriteConnection)
         {
             rawWriterMax = 0;
+        }
+
+        // PreventDatabaseUnload needs one permit for its sentinel and one for useful work.
+        // Raise an enabled pool below that floor so the sentinel cannot consume all capacity.
+        if (ConnectionMode == DbMode.PreventDatabaseUnload)
+        {
+            rawWriterMax = EnsurePreventUnloadCapacity(rawWriterMax, "writer");
+            rawReaderMax = EnsurePreventUnloadCapacity(rawReaderMax, "reader");
+        }
+
+        // Caller-supplied minimums are clamped to [0, MaxPoolSize] for every mode.
+        // PreventDatabaseUnload additionally raises the provider minimum to two so the
+        // sentinel's permit doesn't starve ordinary work of the one remaining slot. Other
+        // modes never inject an implicit minimum.
+        var minPoolSizeKey = _dialect?.MinPoolSizeSettingName;
+        var writerMinimum = ConnectionMode == DbMode.PreventDatabaseUnload && rawWriterMax != 0 ? 2 : 0;
+        _connectionString = ConnectionPoolingConfiguration.EnsureMinimumPoolSize(
+            _connectionString, minPoolSizeKey, writerConfig.MinPoolSize, rawWriterMax, writerMinimum);
+        if (!string.IsNullOrWhiteSpace(_readerConnectionString))
+        {
+            var readerMinimum = ConnectionMode == DbMode.PreventDatabaseUnload && rawReaderMax != 0 ? 2 : 0;
+            _readerConnectionString = ConnectionPoolingConfiguration.EnsureMinimumPoolSize(
+                _readerConnectionString, minPoolSizeKey, readerConfig.MinPoolSize, rawReaderMax, readerMinimum);
         }
 
         var writerKey = ComputePoolKeyHash(writerConnectionString);
@@ -873,7 +887,7 @@ public partial class DatabaseContext
         if (_dialect != null &&
             !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
         {
-            var readMaxPoolSize = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _readerConnectionString);
+            var readMaxPoolSize = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _readerConnectionString, "reader");
             var readerBuilder = GetFactoryConnectionStringBuilder(_readerConnectionString);
             _readerConnectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
                 _readerConnectionString,
@@ -902,7 +916,7 @@ public partial class DatabaseContext
             // equal strings. When a separate read connection string exists this stamps
             // the read size onto the write string too, which is harmless and keeps it
             // validated and normalized.
-            var readPoolSizeForWriter = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _connectionString);
+            var readPoolSizeForWriter = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _connectionString, "reader");
             _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
                 _connectionString, readPoolSizeForWriter, _dialect?.MaxPoolSizeSettingName,
                 overrideExisting: true, writerBuilder);
@@ -922,7 +936,7 @@ public partial class DatabaseContext
             // (differentiated via ApplicationName suffix or a dialect-specific pool-discriminator setting).
             // Stamp the resolved write size so the governor and the provider pool agree.
             // Configuration wins over connection-string, which wins over the dialect default.
-            var writeMax = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString);
+            var writeMax = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString, "writer");
             _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
                 _connectionString, writeMax, _dialect?.MaxPoolSizeSettingName,
                 overrideExisting: true, writerBuilder);
@@ -1053,15 +1067,28 @@ public partial class DatabaseContext
 
     /// <summary>
     /// Resolves the effective max-pool-size for a connection string following the
-    /// priority chain: context configuration → explicit value already in the CS →
-    /// dialect default.
+    /// priority chain: context configuration → explicit value already in the connection
+    /// string → dialect default. A mismatch is logged and the context configuration wins.
     /// </summary>
-    private int ResolveEffectiveMaxPoolSize(int? configuredMax, string connectionString)
+    private int ResolveEffectiveMaxPoolSize(int? configuredMax, string connectionString, string poolLabel)
     {
         // 1. Caller-supplied configuration — highest priority; wins over anything in the connection string.
         if (configuredMax.HasValue && configuredMax.Value > 0)
         {
-            return configuredMax.Value;
+            var connectionStringMax = PoolingConfigReader.GetExplicitMaxPoolSize(_dialect!, connectionString);
+            if (connectionStringMax.HasValue && connectionStringMax.Value != configuredMax.Value)
+            {
+                _logger.LogWarning(
+                    "Pool size mismatch for {Pool} pool: {ConfigurationSetting}={Configured} overrides connection-string {ConnectionStringSetting}={ConnectionStringValue}; effective governor and provider Max Pool Size is {Effective}.",
+                    poolLabel,
+                    poolLabel == "reader" ? nameof(DatabaseContextConfiguration.MaxConcurrentReads) : nameof(DatabaseContextConfiguration.MaxConcurrentWrites),
+                    configuredMax.Value,
+                    _dialect!.MaxPoolSizeSettingName,
+                    connectionStringMax.Value,
+                    configuredMax.Value);
+            }
+
+            return EnsurePreventUnloadCapacity(configuredMax.Value, poolLabel) ?? configuredMax.Value;
         }
 
         // 2. Already present in the connection string.
@@ -1084,9 +1111,10 @@ public partial class DatabaseContext
                     return _dialect.DefaultMaxPoolSize;
                 }
 
-                return ApplyAbsolutePoolLimit(
+                var limited = ApplyAbsolutePoolLimit(
                     csMaxPoolSize,
                     "connection string");
+                return EnsurePreventUnloadCapacity(limited, poolLabel) ?? limited;
             }
         }
 
@@ -1094,6 +1122,20 @@ public partial class DatabaseContext
         return ApplyAbsolutePoolLimit(
             _dialect?.DefaultMaxPoolSize ?? SqlDialect.FallbackMaxPoolSize,
             "dialect default");
+    }
+
+    private int? EnsurePreventUnloadCapacity(int? maxPoolSize, string poolLabel)
+    {
+        if (ConnectionMode != DbMode.PreventDatabaseUnload ||
+            !maxPoolSize.HasValue || maxPoolSize.Value == 0 || maxPoolSize.Value >= 2)
+        {
+            return maxPoolSize;
+        }
+
+        _logger.LogWarning(
+            "PreventDatabaseUnload raised the {Pool} pool maximum from {Requested} to 2 so one sentinel permit and one working permit remain available.",
+            poolLabel, maxPoolSize.Value);
+        return 2;
     }
 
     private void NormalizePoolLimitConfiguration(
@@ -1123,12 +1165,10 @@ public partial class DatabaseContext
             return;
         }
 
-        if (mode == DbMode.SingleWriter &&
-            configuredWritePoolSize.HasValue &&
-            configuredWritePoolSize.Value == 0)
+        if (configuredWritePoolSize.HasValue && configuredWritePoolSize.Value == 0)
         {
             _logger.LogWarning(
-                "SingleWriter with {Setting}=0 promotes the context to ReadOnly mode.",
+                "{Setting}=0 promotes the context to ReadOnly mode; writes remain forbidden.",
                 nameof(DatabaseContextConfiguration.MaxConcurrentWrites));
             readWriteMode = ReadWriteMode.ReadOnly;
             configuredWritePoolSize = 0;

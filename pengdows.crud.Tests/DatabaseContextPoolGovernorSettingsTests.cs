@@ -175,6 +175,28 @@ public sealed class DatabaseContextPoolGovernorSettingsTests
     }
 
     [Fact]
+    public void MaxConcurrentWrites_MismatchWithConnectionString_LogsWinner()
+    {
+        var logs = new ListLoggerProvider();
+        using var loggerFactory = new LoggerFactory(new[] { logs });
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer;Max Pool Size=200",
+            DbMode = DbMode.Standard,
+            MaxConcurrentWrites = 20
+        };
+
+        using var context = new DatabaseContext(config,
+            new fakeDbFactory(SupportedDatabase.SqlServer), loggerFactory);
+
+        Assert.Contains(logs.Entries, entry =>
+            entry.Level == LogLevel.Warning &&
+            entry.Message.Contains("MaxConcurrentWrites=20", StringComparison.Ordinal) &&
+            entry.Message.Contains("Max Pool Size=200", StringComparison.Ordinal) &&
+            entry.Message.Contains("effective governor and provider Max Pool Size is 20", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void MaxConcurrentReads_OverridesConnectionStringMaxPoolSize_InReaderConnectionString()
     {
         // Connection string claims Max Pool Size=200; MaxConcurrentReads=15 must win.
