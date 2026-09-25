@@ -36,6 +36,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         var enabledProviders = IntegrationTestConfiguration.EnabledProviders;
         var contexts = new Dictionary<SupportedDatabase, IDatabaseContext>();
         var skipReasons = new List<string>();
+        var failureReasons = new List<string>();
 
         foreach (var provider in requestedProviders)
         {
@@ -61,23 +62,12 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             catch (Exception ex)
             {
                 Output.WriteLine(
-                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] ⚠️ {provider} is not available for testing: {ex.Message}");
-                skipReasons.Add($"{provider}: {ex.Message}");
+                    $"[{DateTime.UtcNow:HH:mm:ss.fff}] ❌ {provider} failed to initialize: {ex.Message}");
+                failureReasons.Add($"{provider}: {ex.Message}");
             }
         }
 
-        if (!contexts.Any())
-        {
-            var testClass = GetType().Name;
-            var requested = requestedProviders.Count == 0
-                ? "none (check INTEGRATION_ONLY env var or GetSupportedProviders override)"
-                : string.Join(", ", requestedProviders);
-            var reasonDetail = skipReasons.Count > 0
-                ? $" Skipped because: {string.Join("; ", skipReasons)}."
-                : string.Empty;
-            throw new Xunit.SkipException(
-                $"{testClass} requires [{requested}] but none could be initialized.{reasonDetail}");
-        }
+        EnsureProvidersInitialized(GetType().Name, requestedProviders, contexts.Count, skipReasons, failureReasons);
 
         DatabaseContexts = contexts;
 
@@ -101,6 +91,36 @@ public abstract class DatabaseTestBase : IAsyncLifetime
 
         Output.WriteLine(
             $"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ All initialization complete (total: {(DateTime.UtcNow - totalStart).TotalMilliseconds:F0}ms)");
+    }
+
+    /// <summary>
+    /// Decides the outcome once every requested provider has been tried. A provider that is enabled
+    /// for this run but failed to initialize fails the test: turning it into a skip (or silently
+    /// testing only the providers that did start) would hide a broken database. Only when every
+    /// requested provider was excluded by configuration (INTEGRATION_ONLY, an opt-in provider that
+    /// is not enabled) is the test skipped.
+    /// </summary>
+    internal static void EnsureProvidersInitialized(string testClass, IReadOnlyList<SupportedDatabase> requested,
+        int initializedCount, IReadOnlyList<string> exclusionReasons, IReadOnlyList<string> failureReasons)
+    {
+        if (failureReasons.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"{testClass}: {failureReasons.Count} enabled provider(s) failed to initialize: " +
+                $"{string.Join("; ", failureReasons)}.");
+        }
+
+        if (initializedCount == 0)
+        {
+            var requestedText = requested.Count == 0
+                ? "none (check INTEGRATION_ONLY env var or GetSupportedProviders override)"
+                : string.Join(", ", requested);
+            var reasonDetail = exclusionReasons.Count > 0
+                ? $" Excluded by configuration: {string.Join("; ", exclusionReasons)}."
+                : string.Empty;
+            throw new Xunit.SkipException(
+                $"{testClass} requires [{requestedText}] but none is enabled for this run.{reasonDetail}");
+        }
     }
 
     public virtual Task DisposeAsync()

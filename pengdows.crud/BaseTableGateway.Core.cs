@@ -485,4 +485,41 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
                 "check cannot be expressed. Use CreateAsync/UpdateAsync instead.");
         }
     }
+
+    /// <summary>
+    /// A column reference for use inside an expression of an unaliased statement (UPDATE/DELETE
+    /// predicate, SET right-hand side, unaliased SELECT): table-qualified where the dialect requires
+    /// it (<see cref="IInternalSqlDialect.QualifiesColumnReferences"/>), otherwise the bare column.
+    /// </summary>
+    private protected string WrapColumnReference(ISqlDialect dialect, string columnName)
+    {
+        return ColumnReferencePrefix(string.Empty, dialect) + dialect.WrapSimpleName(columnName);
+    }
+
+    /// <summary>
+    /// Prefix for column references: the wrapped alias when one is given; with no alias, the
+    /// wrapped table name where the dialect requires qualified references, otherwise empty.
+    /// </summary>
+    private protected string ColumnReferencePrefix(string alias, ISqlDialect dialect)
+    {
+        if (!string.IsNullOrWhiteSpace(alias))
+        {
+            return dialect.WrapSimpleName(alias) + dialect.CompositeIdentifierSeparator;
+        }
+
+        return dialect.QualifiesColumnReferences()
+            ? BuildWrappedTableName(dialect) + dialect.CompositeIdentifierSeparator
+            : string.Empty;
+    }
+
+    /// <summary>
+    /// A caller-supplied column name (count helpers) wrapped for a WHERE predicate: left as given
+    /// when already qualified, table-qualified when the dialect requires it.
+    /// </summary>
+    private protected string WrapCallerColumnReference(ISqlDialect dialect, string column)
+    {
+        return column.Contains('.') || !dialect.QualifiesColumnReferences()
+            ? dialect.WrapObjectName(column)
+            : BuildWrappedTableName(dialect) + dialect.CompositeIdentifierSeparator + dialect.WrapObjectName(column);
+    }
 }

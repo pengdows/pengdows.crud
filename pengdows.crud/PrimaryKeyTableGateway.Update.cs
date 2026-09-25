@@ -269,7 +269,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             var pkValue = pk.MakeParameterValueFromField(entity);
             var pkName = counters.NextKey();
 
-            sc.Query.Append(dialect.WrapSimpleName(pk.Name));
+            sc.Query.Append(WrapColumnReference(dialect, pk.Name));
 
             if (Utils.IsNullOrDbNull(pkValue))
             {
@@ -313,7 +313,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         if (versionValue == null)
         {
             sc.Query.Append(SqlFragments.And)
-                .Append(sc.WrapObjectName(_versionColumn!.Name))
+                .Append(WrapColumnReference(dialect, _versionColumn!.Name))
                 .Append(" IS NULL");
             return null;
         }
@@ -321,7 +321,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         var name = counters.NextVer();
         var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
         sc.Query.Append(SqlFragments.And)
-            .Append(sc.WrapObjectName(_versionColumn.Name))
+            .Append(WrapColumnReference(dialect, _versionColumn.Name))
             .Append(" = ");
         if (dialect.SupportsNamedParameters)
         {

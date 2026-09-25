@@ -40,6 +40,7 @@ namespace pengdows.crud.IntegrationTests.Core;
 /// docs/planning/future-work.md for the full recommendation.
 /// </para>
 /// </summary>
+[Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public class MultiTenantDialectVersionTests : IAsyncLifetime
 {
     // Straddles the MySqlDialect.UpsertAliasVersionThreshold = new Version(8, 0, 20):

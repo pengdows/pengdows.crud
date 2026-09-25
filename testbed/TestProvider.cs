@@ -193,6 +193,11 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Identifier quoting: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running register-named columns through gateways");
+            await TestRegisterNamedColumnsThroughGateways();
+            Console.WriteLine($"  Register-named columns: {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running pool isolation");
             await TestPoolIsolation();
             Console.WriteLine($"  Pool isolation: {stepSw.ElapsedMilliseconds}ms");
@@ -570,9 +575,6 @@ CREATE TABLE {tableName} (
             SupportedDatabase.MariaDb => "DATETIME(6)",
             SupportedDatabase.TiDb => "DATETIME(6)",
             SupportedDatabase.Db2 => "TIMESTAMP(6)",
-            // FirebirdDialect stores DateTimeOffset as a UTC DateTime (see its CreateDbParameter);
-            // binding that into TIMESTAMP WITH TIME ZONE fails in the driver ("Incorrect time zone value").
-            SupportedDatabase.Firebird => "TIMESTAMP",
             SupportedDatabase.SybaseASE => "BIGDATETIME",
             SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
             SupportedDatabase.Sqlite => "TEXT",
@@ -1783,6 +1785,10 @@ INSERT INTO {table} (
             return value switch
             {
                 DateTimeOffset dto => dto,
+                // Raw reader value from a Firebird TIMESTAMP WITH TIME ZONE column (the provider type;
+                // mapped entity reads get a DateTimeOffset from pengdows.crud's coercion instead).
+                FirebirdSql.Data.Types.FbZonedDateTime zoned =>
+                    new DateTimeOffset(DateTime.SpecifyKind(zoned.DateTime, DateTimeKind.Utc)),
                 DateTime dt => dt.Kind == DateTimeKind.Unspecified
                     ? new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc), TimeSpan.Zero)
                     : new DateTimeOffset(dt.ToUniversalTime(), TimeSpan.Zero),
@@ -2527,6 +2533,76 @@ INSERT INTO {table} (
     /// Drops a table, handling the case where it may not exist.
     /// Uses IF EXISTS when supported; falls back to plain DROP TABLE with exception suppression.
     /// </summary>
+    // Columns named after Informix special registers ("user", "current"), driven through both
+    // gateways. CONFIRMED live on Informix: an unqualified "user" in an expression resolves to the
+    // session user name, so an unqualified retrieve returned the user name instead of the column and
+    // an unqualified DELETE ... WHERE "user" = ? compared the register (and could delete every row).
+    // Every database must round-trip these columns and touch only the targeted rows.
+    private async Task TestRegisterNamedColumnsThroughGateways()
+    {
+        await DropTableIfExistsAsync("register_columns");
+        var sc = _context.CreateSqlContainer();
+        sc.Query.Append($"CREATE TABLE {_context.WrapObjectName("register_columns")} (" +
+                        $"{_context.WrapObjectName("id")} {GetLongType(_context.Product)} NOT NULL, " +
+                        $"{_context.WrapObjectName("user")} {GetTextType(_context.Product, 50)} NOT NULL, " +
+                        $"{_context.WrapObjectName("current")} {GetIntType(_context.Product)} NOT NULL, " +
+                        $"PRIMARY KEY ({_context.WrapObjectName("id")}))");
+        await sc.ExecuteNonQueryAsync();
+
+        try
+        {
+            var gateway = new TableGateway<RegisterColumnsRow, long>(_context);
+            var keyed = new PrimaryKeyTableGateway<RegisterColumnsRow>(_context);
+            var first = new RegisterColumnsRow { Id = 1, User = "row-a" };
+            var second = new RegisterColumnsRow { Id = 2, User = "row-b" };
+            await gateway.CreateAsync(first, _context);
+            await gateway.CreateAsync(second, _context);
+
+            var loaded = await gateway.RetrieveOneAsync(1L, _context);
+            if (loaded?.User != "row-a")
+                throw new Exception($"[RegisterColumns] RetrieveOne: expected user 'row-a', got '{loaded?.User}'");
+
+            var versionBefore = loaded.Current;
+            loaded.User = "row-a2";
+            var updated = await gateway.UpdateAsync(loaded, _context);
+            var reloaded = await gateway.RetrieveOneAsync(1L, _context);
+            if (updated != 1 || reloaded?.User != "row-a2" || reloaded.Current != versionBefore + 1)
+                throw new Exception(
+                    $"[RegisterColumns] Update: affected {updated}, user '{reloaded?.User}', version {reloaded?.Current} (expected {versionBefore + 1})");
+
+            var matching = await gateway.CountWhereEqualsAsync("user", "row-b", context: _context);
+            if (matching != 1)
+                throw new Exception($"[RegisterColumns] CountWhereEquals(user): expected 1, got {matching}");
+
+            var deleted = await keyed.BatchDeleteAsync(new[] { second }, _context);
+            var remaining = await gateway.CountAllAsync(_context);
+            if (deleted != 1 || remaining != 1)
+                throw new Exception($"[RegisterColumns] Delete by user: deleted {deleted}, {remaining} rows remain (expected 1, 1)");
+
+            CheckOk("  [Quoting] Register-named columns (user/current) through both gateways: OK");
+        }
+        finally
+        {
+            await DropTableIfExistsAsync("register_columns");
+        }
+    }
+
+    [pengdows.crud.attributes.Table("register_columns")]
+    private class RegisterColumnsRow
+    {
+        [pengdows.crud.attributes.Id(true)]
+        [pengdows.crud.attributes.Column("id", DbType.Int64)]
+        public long Id { get; set; }
+
+        [pengdows.crud.attributes.PrimaryKey(1)]
+        [pengdows.crud.attributes.Column("user", DbType.String)]
+        public string User { get; set; } = string.Empty;
+
+        [pengdows.crud.attributes.Version]
+        [pengdows.crud.attributes.Column("current", DbType.Int32)]
+        public int Current { get; set; }
+    }
+
     protected virtual async Task DropTableIfExistsAsync(string tableName)
     {
         var sc = _context.CreateSqlContainer();

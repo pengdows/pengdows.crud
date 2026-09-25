@@ -526,6 +526,14 @@ internal class FirebirdDialect : SqlDialect
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        // An already-zoned value (a DateTimeOffset converted below, now being re-created by
+        // SqlContainer.CloneParameter) keeps its Object type: CONFIRMED live, FirebirdClient reports
+        // such a parameter's DbType as Binary, which would otherwise be re-requested here.
+        if (FirebirdZonedDateTimeInterop.IsZoned(value))
+        {
+            return base.CreateDbParameter<object?>(name, DbType.Object, value);
+        }
+
         // Intercept unsupported types before they reach the provider parameter's set_DbType
         var targetType = type;
         object? targetValue = value;
@@ -540,12 +548,32 @@ internal class FirebirdDialect : SqlDialect
         }
         else if (type == DbType.DateTimeOffset)
         {
-            // Firebird does not support DateTimeOffset; coerce to UTC DateTime
-            targetType = DbType.DateTime;
-            if (value is DateTimeOffset dto)
+            // FirebirdClient rejects DbType.DateTimeOffset outright ("Invalid data type: 27").
+            // Firebird 4+ (TIMESTAMP WITH TIME ZONE exists): send the UTC instant as an
+            // FbZonedDateTime in zone "UTC". CONFIRMED live (5.0.4 / FirebirdClient 10.3.3): the driver
+            // encodes it against the server-described column type, so a TIMESTAMP WITH TIME ZONE
+            // column stores the instant and a plain TIMESTAMP column stores the UTC wall time -
+            // exactly what the UTC-DateTime coercion below stores, under any session time zone.
+            // Firebird 3 (no zoned types), before detection, or without the driver type: coerce to a
+            // UTC DateTime (Unspecified kind prevents provider-side time-zone adjustment).
+            object? zoned = null;
+            if (value is DateTimeOffset zonedSource && IsInitialized && ProductInfo.ParsedVersion?.Major >= 4)
             {
-                // Use Unspecified kind to prevent provider-side timezone adjustments
-                targetValue = DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified);
+                zoned = FirebirdZonedDateTimeInterop.CreateUtc(zonedSource, Factory.GetType().Assembly);
+            }
+
+            if (zoned != null)
+            {
+                targetType = DbType.Object;
+                targetValue = zoned;
+            }
+            else
+            {
+                targetType = DbType.DateTime;
+                if (value is DateTimeOffset dto)
+                {
+                    targetValue = DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified);
+                }
             }
         }
 

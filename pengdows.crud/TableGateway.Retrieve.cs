@@ -48,13 +48,7 @@ public partial class TableGateway<TEntity, TRowID>
 
         var sc = BuildBaseRetrieve(alias, ctx);
         var dialect = ((ISqlDialectProvider)sc).Dialect;
-        var wrappedAlias = "";
-        if (!string.IsNullOrWhiteSpace(alias))
-        {
-            wrappedAlias = dialect.WrapSimpleName(alias) + dialect.CompositeIdentifierSeparator;
-        }
-
-        var wrappedColumnName = wrappedAlias + dialect.WrapSimpleName(_idColumn.Name);
+        var wrappedColumnName = ColumnReferencePrefix(alias, dialect) + dialect.WrapSimpleName(_idColumn.Name);
 
         if (listOfIds == null || listOfIds.Count == 0)
         {

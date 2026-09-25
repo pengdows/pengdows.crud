@@ -180,6 +180,12 @@ internal sealed class InformixDialect : SqlDialect
     // regardless of LeaveTrailingSpaces. IBM APAR IC63704: no option exists to disable it.
     public override bool PreservesTrailingWhitespace => false;
 
+    // CONFIRMED live (15.0.1.0.3, DELIMIDENT): an unqualified quoted "user", "today", "current",
+    // "sitename", "dbservername" or "current_user" in an expression resolves to the special
+    // register, not the column - DELETE FROM "t" WHERE "user" = 'informix' deleted every row. The
+    // table-qualified "t"."user" resolves to the column, so the gateways qualify every reference.
+    public override bool QualifiesColumnReferences => true;
+
     public override void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
     {
         if (offset < 0)

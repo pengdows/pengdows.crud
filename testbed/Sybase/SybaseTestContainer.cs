@@ -119,7 +119,7 @@ public class SybaseTestContainer : TestContainer, ITestContainer
         }
 
         await Exec("DISK INIT NAME='testdata', PHYSNAME='/opt/sybase/data/testdata.dat', SIZE='60M'");
-        await Exec($"CREATE DATABASE {Database} ON testdata = '50M'");
+        await CreateDatabaseWhenModelAvailableAsync(() => Exec($"CREATE DATABASE {Database} ON testdata = '50M'"));
 
         // ASE defaults new columns to NOT NULL when a CREATE TABLE statement omits an explicit
         // NULL/NOT NULL keyword (the opposite default from every other dialect this testbed
@@ -135,6 +135,38 @@ public class SybaseTestContainer : TestContainer, ITestContainer
         await using var checkpointCmd = dbConn.CreateCommand();
         checkpointCmd.CommandText = "CHECKPOINT";
         await checkpointCmd.ExecuteNonQueryAsync();
+    }
+
+    /// <summary>
+    /// ASE rebuilds tempdb by copying the model database on every boot, and <see cref="StartAsync"/>
+    /// restarts the server (the SIGSEGV workaround) right before this runs. A connection to master
+    /// can succeed while that copy is still in progress, and CREATE DATABASE (which also copies
+    /// model) then fails with "The model database is unavailable. It is being used to create a new
+    /// database." Verified live, intermittently, in both the testbed matrix and the integration
+    /// suite. Retry only that statement while the server reports model busy, up to a deadline.
+    /// </summary>
+    private static async Task CreateDatabaseWhenModelAvailableAsync(Func<Task> createDatabase)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(120);
+        while (true)
+        {
+            try
+            {
+                await createDatabase();
+                return;
+            }
+            catch (AseException ex) when (IsModelDatabaseBusy(ex) && DateTime.UtcNow < deadline)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2));
+            }
+        }
+    }
+
+    private static bool IsModelDatabaseBusy(AseException ex)
+    {
+        return ex.Message.Contains("model database is unavailable", StringComparison.OrdinalIgnoreCase)
+               || ex.Errors.Cast<AseError>().Any(e =>
+                   e.Message.Contains("model database is unavailable", StringComparison.OrdinalIgnoreCase));
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)

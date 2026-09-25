@@ -483,7 +483,7 @@ public partial class TableGateway<TEntity, TRowID>
     // Used by BuildUpdateByKey (Core.cs; not currently called).
     private string GetVersionIncrementClause(ISqlDialect dialect)
     {
-        return $", {dialect.WrapObjectName(_versionColumn!.Name)} = {dialect.WrapObjectName(_versionColumn.Name)} + 1";
+        return $", {dialect.WrapObjectName(_versionColumn!.Name)} = {WrapColumnReference(dialect, _versionColumn.Name)} + 1";
     }
 
     private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect,
@@ -491,13 +491,13 @@ public partial class TableGateway<TEntity, TRowID>
     {
         if (versionValue == null)
         {
-            sc.Query.Append(SqlFragments.And).Append(sc.WrapObjectName(_versionColumn!.Name)).Append(" IS NULL");
+            sc.Query.Append(SqlFragments.And).Append(WrapColumnReference(dialect, _versionColumn!.Name)).Append(" IS NULL");
             return null;
         }
 
         var name = counters.NextVer();
         var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
-        sc.Query.Append(SqlFragments.And).Append(sc.WrapObjectName(_versionColumn.Name)).Append(" = ");
+        sc.Query.Append(SqlFragments.And).Append(WrapColumnReference(dialect, _versionColumn.Name)).Append(" = ");
         if (dialect.SupportsNamedParameters)
         {
             sc.Query.Append(dialect.ParameterMarker);

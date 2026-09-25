@@ -1159,7 +1159,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var dialect = GetDialect(ctx);
-        var wrappedIdColumnName = dialect.WrapSimpleName(_idColumn.Name);
+        var wrappedIdColumnName = WrapColumnReference(dialect, _idColumn.Name);
 
         // Chunk by max parameter limit (with 10% headroom, similar to BatchCreate)
         var chunks = ChunkList(list, 1, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
@@ -1499,7 +1499,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 var name = counters.NextKey();
                 var p = dialect.CreateDbParameter(name, key.DbType, v);
                 parameters.Add(p);
-                where.Append(dialect.WrapSimpleName(key.Name));
+                where.Append(WrapColumnReference(dialect, key.Name));
                 where.Append(" = ");
                 where.Append(dialect.MakeParameterName(name));
             }
@@ -1518,7 +1518,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 var p = dialect.CreateDbParameter(name, _versionColumn.DbType, vv);
                 parameters.Add(p);
                 sqlBuf.Append(" AND ");
-                sqlBuf.Append(dialect.WrapSimpleName(_versionColumn.Name));
+                sqlBuf.Append(WrapColumnReference(dialect, _versionColumn.Name));
                 sqlBuf.Append(" = ");
                 sqlBuf.Append(dialect.MakeParameterName(name));
             }

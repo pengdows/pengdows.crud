@@ -39,7 +39,9 @@ public class SqlServerTestContainer : TestContainer
         var host = _container.IpAddress;
         var tmp =
             $@"Server=localhost,{hostPort};uid={_username};pwd={_password};Initial Catalog=master;TrustServerCertificate=true;Connection Timeout=1";
-        await WaitForDbToStart(SqlClientFactory.Instance, tmp, _container);
+        // SQL Server's first start (system database recovery) intermittently took longer than the
+        // default 60s under full-suite load, in both the testbed and the integration suite.
+        await WaitForDbToStart(SqlClientFactory.Instance, tmp, _container, 180);
         await createNewDb(tmp);
     }
 

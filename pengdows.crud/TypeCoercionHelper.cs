@@ -39,6 +39,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using pengdows.crud.types;
 
 #endregion
@@ -568,6 +569,9 @@ internal static class TypeCoercionHelper
         {
             case DateTimeOffset dto:
                 return dto;
+            case not null when FirebirdZonedDateTimeInterop.TryGetInstant(value, out var zoned):
+                // Firebird TIMESTAMP WITH TIME ZONE columns are returned as FbZonedDateTime.
+                return zoned;
             case DateTime dt:
                 return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
                     ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
@@ -593,6 +597,9 @@ internal static class TypeCoercionHelper
                 return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
             case DateTimeOffset dto:
                 return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
+            case not null when FirebirdZonedDateTimeInterop.TryGetInstant(value, out var zoned):
+                // Firebird TIMESTAMP WITH TIME ZONE columns are returned as FbZonedDateTime.
+                return DateTime.SpecifyKind(zoned.UtcDateTime, DateTimeKind.Utc);
             case string s when string.IsNullOrWhiteSpace(s):
                 // Treat empty/whitespace strings as invalid for DateTime
                 // This handles SQLite returning empty strings for TIMESTAMP columns

@@ -38,6 +38,7 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 /// setting governs lock-wait, not command execution). These are excluded entirely rather than
 /// given a fabricated, untested trigger.
 /// </remarks>
+[Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public class CommandTimeoutTests
 {
     [Fact]
@@ -80,7 +81,9 @@ public class CommandTimeoutTests
         var cs = $"Server=localhost,{container.HostPort};User Id=sa;Password=yourStrong(!)Password;" +
                  "TrustServerCertificate=true;Command Timeout=1;Connect Timeout=30";
 
-        await container.WaitForReadyAsync(Microsoft.Data.SqlClient.SqlClientFactory.Instance, cs, 60);
+        // SQL Server's first start intermittently exceeds 60s under full-suite load; this used to be
+        // hidden because a readiness timeout was reported as a skip.
+        await container.WaitForReadyAsync(Microsoft.Data.SqlClient.SqlClientFactory.Instance, cs, 180);
 
         await using var conn = (DbConnection)Microsoft.Data.SqlClient.SqlClientFactory.Instance.CreateConnection()!;
         conn.ConnectionString = cs;
@@ -133,7 +136,9 @@ public class CommandTimeoutTests
             await process.WaitForExitAsync();
             if (process.ExitCode != 0)
             {
-                throw new Xunit.SkipException(
+                // A container that cannot start is a failure, not a skip (a skip would hide a broken
+                // environment behind a green run).
+                throw new InvalidOperationException(
                     $"Could not start standalone container {image}: {await process.StandardError.ReadToEndAsync()}");
             }
 
@@ -171,7 +176,7 @@ public class CommandTimeoutTests
                 }
             }
 
-            throw new Xunit.SkipException($"Container did not become ready in time: {lastError?.Message}");
+            throw new InvalidOperationException($"Container did not become ready in time: {lastError?.Message}");
         }
 
         private static int GetFreeTcpPort()

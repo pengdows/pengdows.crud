@@ -6,6 +6,7 @@ using Xunit;
 
 namespace pengdows.crud.IntegrationTests;
 
+[Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public sealed class SpannerOmniIntegrationTests : IAsyncLifetime
 {
     private const string OmniImage = "us-docker.pkg.dev/spanner-omni/images/spanner-omni:2026.r2.1-beta";

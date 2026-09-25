@@ -5,6 +5,7 @@ using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests;
 
+[Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public sealed class IntegrationMatrixTests : IAsyncLifetime
 {
     private readonly ITestOutputHelper _output;

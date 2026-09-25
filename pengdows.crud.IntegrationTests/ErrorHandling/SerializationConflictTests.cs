@@ -57,6 +57,7 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 /// specifically to prevent this from being reachable through the public API in practice.</item>
 /// </list>
 /// </remarks>
+[Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public class SerializationConflictTests
 {
     [Fact]
@@ -231,7 +232,9 @@ public class SerializationConflictTests
             await startProcess.WaitForExitAsync();
             if (startProcess.ExitCode != 0)
             {
-                throw new Xunit.SkipException(
+                // A container that cannot start is a failure, not a skip (a skip would hide a broken
+                // environment behind a green run).
+                throw new InvalidOperationException(
                     $"Could not start standalone Firebird container: {await startProcess.StandardError.ReadToEndAsync()}");
             }
         }
@@ -265,7 +268,7 @@ public class SerializationConflictTests
 
             if (lastError != null)
             {
-                throw new Xunit.SkipException($"Firebird did not become ready in time: {lastError.Message}");
+                throw new InvalidOperationException($"Firebird did not become ready in time: {lastError.Message}");
             }
 
             await using (var setup = (FbConnection)factory.CreateConnection()!)

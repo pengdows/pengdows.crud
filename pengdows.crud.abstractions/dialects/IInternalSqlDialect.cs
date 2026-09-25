@@ -24,6 +24,14 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool SupportsMergeMatchedCondition => true;
 
     /// <summary>
+    /// True when an unqualified column reference inside an expression (a SELECT list, a WHERE
+    /// predicate, the right-hand side of SET) can resolve to something other than the column - on
+    /// Informix a quoted "user", "today", "current", ... resolves to the special register - so the
+    /// gateways must table-qualify every such reference. Column lists and SET targets are unaffected.
+    /// </summary>
+    bool QualifiesColumnReferences => false;
+
+    /// <summary>
     /// Renders provider-specific JSON casts for parameter placeholders.
     /// </summary>
     string RenderJsonArgument(string parameterMarker, IColumnInfo column);

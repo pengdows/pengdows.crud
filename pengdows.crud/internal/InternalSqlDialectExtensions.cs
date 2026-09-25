@@ -112,6 +112,15 @@ internal static class InternalSqlDialectExtensions
         return dialect is not IInternalSqlDialect internalDialect || internalDialect.SupportsMergeMatchedCondition;
     }
 
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.QualifiesColumnReferences"/>; false for a dialect that
+    /// isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool QualifiesColumnReferences(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect && internalDialect.QualifiesColumnReferences;
+    }
+
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)
     {
         if (dialect is not IInternalSqlDialect internalDialect)

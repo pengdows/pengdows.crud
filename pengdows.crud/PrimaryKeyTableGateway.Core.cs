@@ -119,7 +119,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
         {
             versionIncrementClause =
-                $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
+                $", {dialect.WrapSimpleName(_versionColumn.Name)} = {WrapColumnReference(dialect, _versionColumn.Name)} + 1";
         }
 
         // Two fragments, because one dialect can need both: PostgreSQL 15+ uses MERGE for a

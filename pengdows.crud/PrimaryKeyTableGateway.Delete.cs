@@ -162,7 +162,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 var pk = pkCols[i];
                 var value = pk.MakeParameterValueFromField(entity);
 
-                sc.Query.Append(dialect.WrapSimpleName(pk.Name));
+                sc.Query.Append(WrapColumnReference(dialect, pk.Name));
 
                 if (Utils.IsNullOrDbNull(value))
                 {

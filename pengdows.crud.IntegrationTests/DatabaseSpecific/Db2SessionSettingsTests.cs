@@ -16,6 +16,7 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 /// <c>GetBaseSessionSettings()</c> was temporarily stubbed to return an empty string, then
 /// confirmed to pass once restored — proving it detects the regression it guards against.
 /// </summary>
+[Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public class Db2SessionSettingsTests
 {
     [Fact]
