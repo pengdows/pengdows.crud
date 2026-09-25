@@ -30,6 +30,33 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public class DbProviderLoaderInvariantNameResolutionTests
 {
+    // BP-120 (3.0 335c5d0): the factory must resolve by the configured invariant ProviderName,
+    // not only by the DatabaseProviders section key.
+    [Fact]
+    public void LoadAndRegisterProviders_ResolvesByInvariantProviderName_NotJustSectionKey()
+    {
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["DatabaseProviders:mypostgres:ProviderName"] = "My.Invariant.ProviderName",
+                ["DatabaseProviders:mypostgres:AssemblyName"] = "pengdows.crud.fakeDb",
+                ["DatabaseProviders:mypostgres:FactoryType"] = "pengdows.crud.fakeDb.fakeDbFactory"
+            })
+            .Build();
+
+        var loader = new DbProviderLoader(config, NullLogger<DbProviderLoader>.Instance);
+        var services = new ServiceCollection();
+        loader.LoadAndRegisterProviders(services);
+        using var provider = services.BuildServiceProvider();
+
+        var byInvariantName = provider.GetKeyedService<DbProviderFactory>("My.Invariant.ProviderName");
+        var bySectionKey = provider.GetKeyedService<DbProviderFactory>("mypostgres");
+
+        Assert.NotNull(byInvariantName);
+        Assert.NotNull(bySectionKey);
+        Assert.Same(bySectionKey, byInvariantName);
+    }
+
     [Fact]
     public void LoadAndRegisterProviders_SectionKeyEqualsProviderName_RegistersOnce()
     {

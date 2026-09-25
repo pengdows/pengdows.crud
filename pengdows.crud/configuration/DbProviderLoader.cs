@@ -59,8 +59,14 @@ public class DbProviderLoader : IDbProviderLoader
 
             var factory = LoadProviderFactory(providerKey, kvp.Value);
 
-            // Register with DI container
+            // Register with DI container under the configuration section's own key AND, when it
+            // differs, under the provider's ADO.NET invariant ProviderName too, so a consumer
+            // (e.g. TenantContextRegistry) resolving by either spelling gets the same factory.
             services.AddKeyedSingleton<DbProviderFactory>(providerKey, factory);
+            if (!string.Equals(kvp.Value.ProviderName, providerKey, StringComparison.Ordinal))
+            {
+                services.AddKeyedSingleton<DbProviderFactory>(kvp.Value.ProviderName, factory);
+            }
 
             // Register with DbProviderFactories for legacy compatibility
             DbProviderFactories.RegisterFactory(kvp.Value.ProviderName, factory);

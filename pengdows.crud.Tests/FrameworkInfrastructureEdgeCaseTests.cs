@@ -198,7 +198,8 @@ public class FrameworkInfrastructureEdgeCaseTests
         var ex = Record.Exception(() => registry.GetContext("tenant-x"));
         if (ex != null)
         {
-            Assert.DoesNotContain("No DbProviderFactory registered", ex.Message, StringComparison.Ordinal);
+            // Matches both "No DbProviderFactory registered" and 2.0.x's "No factory registered".
+            Assert.DoesNotContain("factory registered", ex.Message, StringComparison.OrdinalIgnoreCase);
         }
     }
 
