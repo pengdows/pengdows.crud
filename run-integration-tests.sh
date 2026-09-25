@@ -5,6 +5,18 @@ root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 results="${root}/TestResults/integration"
 mkdir -p "${results}"
 
+# FirebirdEmbeddedConnectionTests run in-process against a real Firebird Embedded engine. Provision
+# the pinned runtime (no system-wide install) unless the caller already did.
+if [[ -z "${FIREBIRD_EMBEDDED_CLIENT_LIBRARY:-}" ]]; then
+  firebird_env="$(mktemp)"
+  GITHUB_ENV="${firebird_env}" "${root}/scripts/install-firebird-embedded.sh"
+  set -a
+  # shellcheck disable=SC1090
+  source "${firebird_env}"
+  set +a
+  rm -f "${firebird_env}"
+fi
+
 dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" \
   -c Release \
   --results-directory "${results}" \
