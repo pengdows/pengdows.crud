@@ -327,10 +327,12 @@ public partial class TableGateway<TEntity, TRowID>
                             frag.Append(", ");
                             frag.Append(wrappedVersion);
                             frag.Append(" = ");
-                            if (dialect.SupportsInsertOnConflict)
+                            if (dialect.SupportsInsertOnConflict ||
+                                !string.IsNullOrEmpty(dialect.UpsertIncomingAlias))
                             {
-                                // EXCLUDED has the same column, so PostgreSQL-family engines reject
-                                // an unqualified reference as ambiguous.
+                                // EXCLUDED (ON CONFLICT) and MySQL 8.0.19+'s "AS incoming" row alias
+                                // both carry the same column, so an unqualified reference is
+                                // rejected as ambiguous.
                                 frag.Append(BuildWrappedTableName(dialect));
                                 frag.Append(".");
                             }

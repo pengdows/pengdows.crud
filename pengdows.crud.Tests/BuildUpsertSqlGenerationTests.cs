@@ -59,7 +59,8 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
         var wrapped = context.WrapObjectName("Version");
-        Assert.Contains($"{wrapped} = {wrapped} + 1", sql);
+        // Qualified with the target table: the "AS incoming" row alias makes a bare reference ambiguous.
+        Assert.Contains($"{wrapped} = {context.WrapObjectName("Test")}.{wrapped} + 1", sql);
     }
 
     [Fact]
@@ -219,13 +220,68 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         });
     }
 
+    // MySQL 8.0.19+ "INSERT ... AS incoming ON DUPLICATE KEY UPDATE" puts the incoming row in scope
+    // under a name, so an unqualified [Version] reference in the increment is ambiguous (MySQL error
+    // 1052, verified live). Every ON DUPLICATE KEY path — single and batch, both gateways — shares
+    // one cached fragment per gateway, so each gateway's single and batch SQL is asserted.
+    [Fact]
+    public void OnDuplicateKeyWithRowAlias_QualifiesVersionIncrement_OnBothGatewaysAndBatch()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<UpsertLiteEntity>();
+        typeMap.Register<UpsertPkVersionEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, typeMap);
+        var dialect = context.GetDialect();
+        Assert.False(string.IsNullOrEmpty(dialect.UpsertIncomingAlias));
+        var version = context.WrapObjectName("Version");
+
+        var gateway = new TableGateway<UpsertLiteEntity, int>(context);
+        var rows = new List<UpsertLiteEntity>
+        {
+            new() { Id = 1, Name = "a", Version = 1 },
+            new() { Id = 2, Name = "b", Version = 1 }
+        };
+        var liteTable = context.WrapObjectName("UpsertLite");
+        Assert.Contains($"{version} = {liteTable}.{version} + 1", gateway.BuildUpsert(rows[0]).Query.ToString());
+        Assert.Contains($"{version} = {liteTable}.{version} + 1",
+            gateway.BuildBatchUpsert(rows)[0].Query.ToString());
+
+        var pkGateway = new PrimaryKeyTableGateway<UpsertPkVersionEntity>(context);
+        var pkRows = new List<UpsertPkVersionEntity>
+        {
+            new() { Code = "a", Name = "a", Version = 1 },
+            new() { Code = "b", Name = "b", Version = 1 }
+        };
+        var pkTable = context.WrapObjectName("UpsertPkVersion");
+        Assert.Contains($"{version} = {pkTable}.{version} + 1", pkGateway.BuildUpsert(pkRows[0]).Query.ToString());
+        Assert.Contains($"{version} = {pkTable}.{version} + 1",
+            pkGateway.BuildBatchUpsert(pkRows)[0].Query.ToString());
+    }
+
+    [Table("UpsertPkVersion")]
+    private class UpsertPkVersionEntity
+    {
+        [PrimaryKey][Column("Code", DbType.String)] public string Code { get; set; } = string.Empty;
+
+        [Column("Name", DbType.String)] public string Name { get; set; } = string.Empty;
+
+        [Version]
+        [Column("Version", DbType.Int32)]
+        public int Version { get; set; }
+    }
+
     private static string BuildConflictUpdateSet(IDatabaseContext context, ISqlDialect dialect)
     {
         var wrappedName = context.WrapObjectName("Name");
         var wrappedVersion = context.WrapObjectName("Version");
-        // ON CONFLICT qualifies the target's version (EXCLUDED has the same column); MySQL's
-        // ON DUPLICATE KEY UPDATE has no such ambiguity.
-        var target = dialect.SupportsInsertOnConflict ? context.WrapObjectName("UpsertLite") + "." : "";
+        // The target's version must be qualified whenever the incoming row is also in scope under a
+        // name: ON CONFLICT's EXCLUDED, and MySQL 8.0.19+'s "INSERT ... AS incoming" row alias.
+        // MySQL rejects the unqualified form there with "Column 'version' in field list is
+        // ambiguous" (verified live).
+        var target = dialect.SupportsInsertOnConflict || !string.IsNullOrEmpty(dialect.UpsertIncomingAlias)
+            ? context.WrapObjectName("UpsertLite") + "."
+            : "";
         return $"{wrappedName} = {dialect.UpsertIncomingColumn("Name")}, " +
                $"{wrappedVersion} = {target}{wrappedVersion} + 1";
     }
