@@ -93,6 +93,82 @@ public class TableGatewayUpsertTests
         Assert.Contains("OVERRIDING SYSTEM VALUE", container.Query.ToString(), StringComparison.Ordinal);
     }
 
+    // BP-117 (3.0 c58cb96 / a7ae9ef PG part). Single-row upsert emitted OVERRIDING SYSTEM VALUE
+    // only for PostgreSql/AuroraPostgreSql via a product switch (YugabyteDB never got it) and the
+    // batch upsert path never emitted it at all, so a GENERATED ALWAYS identity column rejected
+    // the explicit id. PostgreSQL < 10 has no identity columns / OVERRIDING clause.
+    private static DatabaseContext CreateUpsertContext(SupportedDatabase db, string? version = null)
+    {
+        var factory = new fakeDbFactory(db);
+        if (version != null)
+        {
+            var connection = new fakeDbConnection { EmulatedProduct = db };
+            connection.SetServerVersion(version);
+            connection.SetScalarResultForCommand("SELECT version()", version);
+            factory.Connections.Add(connection);
+        }
+
+        return new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=:memory:;EmulatedProduct={db}",
+            DbMode = DbMode.SingleConnection,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        }, factory);
+    }
+
+    private static readonly ExplicitIdentityEntity[] TwoExplicitIds =
+    {
+        new() { Id = 42, Value = "explicit identity 1" },
+        new() { Id = 43, Value = "explicit identity 2" }
+    };
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql, true)]
+    [InlineData(SupportedDatabase.YugabyteDb, true)]
+    [InlineData(SupportedDatabase.CockroachDb, false)]
+    public async Task BuildUpsert_WithWritableId_OverridingSystemValue_PerDialect(SupportedDatabase db, bool expected)
+    {
+        await using var context = CreateUpsertContext(db);
+        var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
+
+        using var container = gateway.BuildUpsert(new ExplicitIdentityEntity { Id = 42, Value = "x" }, context);
+
+        Assert.Equal(expected, container.Query.ToString().Contains("OVERRIDING SYSTEM VALUE", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql, true)]
+    [InlineData(SupportedDatabase.YugabyteDb, true)]
+    [InlineData(SupportedDatabase.CockroachDb, false)]
+    public async Task BuildBatchUpsert_WithWritableId_OverridingSystemValue_PerDialect(SupportedDatabase db, bool expected)
+    {
+        await using var context = CreateUpsertContext(db);
+        var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
+
+        var containers = gateway.BuildBatchUpsert(TwoExplicitIds, context);
+
+        Assert.NotEmpty(containers);
+        Assert.All(containers, c => Assert.Equal(expected,
+            c.Query.ToString().Contains("OVERRIDING SYSTEM VALUE", StringComparison.Ordinal)));
+    }
+
+    [Theory]
+    [InlineData("PostgreSQL 9.6.24 on x86_64-pc-linux-gnu", false)]
+    [InlineData("PostgreSQL 14.10 on x86_64-pc-linux-gnu", true)]
+    public async Task Upsert_PostgreSql_OverridingSystemValue_GatedOnVersion10(string version, bool expected)
+    {
+        await using var context = CreateUpsertContext(SupportedDatabase.PostgreSql, version);
+        Assert.Contains(expected ? "14.10" : "9.6.24", context.DataSourceInfo.DatabaseProductVersion);
+        var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
+
+        using var single = gateway.BuildUpsert(new ExplicitIdentityEntity { Id = 42, Value = "x" }, context);
+        var batch = gateway.BuildBatchUpsert(TwoExplicitIds, context);
+
+        Assert.Equal(expected, single.Query.ToString().Contains("OVERRIDING SYSTEM VALUE", StringComparison.Ordinal));
+        Assert.All(batch, c => Assert.Equal(expected,
+            c.Query.ToString().Contains("OVERRIDING SYSTEM VALUE", StringComparison.Ordinal)));
+    }
+
     [Table("upsert_entities")]
     private class ConflictEntity
     {

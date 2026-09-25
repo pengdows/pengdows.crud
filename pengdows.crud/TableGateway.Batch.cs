@@ -488,11 +488,17 @@ public partial class TableGateway<TEntity, TRowID>
         }
     }
 
+    // A writable [Id] upserted into a GENERATED ALWAYS identity column needs OVERRIDING SYSTEM
+    // VALUE on dialects that support it; single-row and batch upsert share this rule (BP-117).
+    private bool OverridesSystemIdentity(ISqlDialect dialect) =>
+        dialect is SqlDialect { SupportsOverridingSystemValue: true } && _idColumn?.IsIdWritable == true;
+
     private ISqlContainer BuildBatchInsertContainer(
         IReadOnlyList<TEntity> chunk,
         IReadOnlyList<IColumnInfo> insertableColumns,
         IDatabaseContext ctx,
-        ISqlDialect dialect)
+        ISqlDialect dialect,
+        bool overridesSystemIdentity = false)
     {
         var sc = ctx.CreateSqlContainer();
         var counters = new ClauseCounters();
@@ -507,6 +513,13 @@ public partial class TableGateway<TEntity, TRowID>
         // Delegate structure to dialect (ANSI VALUES, Oracle INSERT ALL, etc.)
         dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
             (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]));
+
+        if (overridesSystemIdentity)
+        {
+            // Only reached for PostgreSQL-family dialects, whose (non-overridden) ANSI
+            // BuildBatchInsertSql emits ") VALUES " exactly once, right after the column list.
+            sc.Query.Replace(") VALUES ", ") OVERRIDING SYSTEM VALUE VALUES ");
+        }
 
         // Value binding for each entity
         for (var row = 0; row < chunk.Count; row++)
@@ -567,10 +580,11 @@ public partial class TableGateway<TEntity, TRowID>
 
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
         var result = new List<ISqlContainer>(chunks.Count);
+        var overridesSystemIdentity = OverridesSystemIdentity(dialect);
 
         foreach (var chunk in chunks)
         {
-            var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
+            var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect, overridesSystemIdentity);
 
             // Append ON CONFLICT clause
             sc.Query.Append(" ON CONFLICT (");

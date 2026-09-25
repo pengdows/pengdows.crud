@@ -229,8 +229,7 @@ public partial class TableGateway<TEntity, TRowID>
             binder(entity, parameters);
 
             var conflictCols = ResolveUpsertKey();
-            var overridesSystemIdentity = (dialect.DatabaseType is SupportedDatabase.PostgreSql
-                or SupportedDatabase.AuroraPostgreSql) && (_idColumn?.IsIdWritable == true);
+            var overridesSystemIdentity = OverridesSystemIdentity(dialect);
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("INSERT INTO ")
@@ -431,8 +430,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             var onClause = dialect.RenderMergeOnClause(join.ToString());
-            var overridesSystemIdentity = (dialect.DatabaseType is SupportedDatabase.PostgreSql
-                or SupportedDatabase.AuroraPostgreSql) && (_idColumn?.IsIdWritable == true);
+            var overridesSystemIdentity = OverridesSystemIdentity(dialect);
 
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("MERGE INTO ")

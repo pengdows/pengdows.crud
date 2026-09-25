@@ -32,6 +32,10 @@ internal class CockroachDbDialect : PostgreSqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.CockroachDb;
 
+    // CockroachDB supports GENERATED ALWAYS AS IDENTITY DDL but not the OVERRIDING SYSTEM VALUE
+    // INSERT clause (cockroachdb/cockroach#68201); emitting it is a syntax error.
+    internal override bool SupportsOverridingSystemValue => false;
+
     // CockroachDB only supports SERIALIZABLE isolation; READ COMMITTED is not available.
     public override IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.Serializable;
 

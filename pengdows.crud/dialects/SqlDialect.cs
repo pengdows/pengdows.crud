@@ -593,6 +593,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Database-specific extensions (override as needed)
     public virtual bool SupportsMergeReturning => false;
     public virtual bool SupportsInsertOnConflict => false; // PostgreSQL, SQLite extension
+
+    // Internal (not on ISqlDialect in 2.0.x): true when INSERT may carry the SQL-standard
+    // OVERRIDING SYSTEM VALUE clause so an explicit value reaches a GENERATED ALWAYS AS IDENTITY
+    // column. PostgreSQL 10+ and YugabyteDB only; CockroachDB does not implement the clause.
+    internal virtual bool SupportsOverridingSystemValue => false;
     public virtual bool SupportsOnConflictWhere => false; // e.g. PostgreSQL family, SQLite, DuckDB
 
     /// <inheritdoc cref="IInternalSqlDialect.MergeMatchedConditionAsUpdateWhere"/>

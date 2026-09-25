@@ -246,6 +246,12 @@ internal class PostgreSqlDialect : SqlDialect
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsOnConflictWhere => true; // Supports WHERE predicate on DO UPDATE (9.5+)
     public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
+
+    // Identity columns and OVERRIDING SYSTEM VALUE arrived in PostgreSQL 10. YugabyteDB (YSQL,
+    // PG 11+) supports the clause and inherits this; CockroachDbDialect overrides it to false
+    // (it rejects the clause as a syntax error, cockroachdb/cockroach#68201).
+    internal override bool SupportsOverridingSystemValue =>
+        !IsInitialized || ProductInfo.ParsedVersion == null || IsVersionAtLeast(10);
     public override bool SupportsSavepoints => true;
     public override bool SupportsJsonTypes => IsVersionAtLeast(9);
     public override bool SupportsSqlJsonConstructors => IsVersionAtLeast(18);
