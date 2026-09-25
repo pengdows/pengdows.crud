@@ -25,6 +25,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Runtime.ExceptionServices;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -73,8 +74,25 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     protected override void DisposeManaged()
     {
+        // BP-110 (3.0 CORE-021): every phase below owns a distinct resource (reader, command,
+        // connection — which releases the governor slot, three lock layers, lifetime-listener
+        // notification). An exception from an early phase must not skip the later ones — that
+        // would leak whatever came after the throw. Each phase is attempted regardless of prior
+        // failures; the first exception encountered is preserved and rethrown once everything
+        // has been attempted, matching SafeAsyncDisposableBase's own continue-on-failure principle.
         RecordMetricsOnce();
-        _reader.Dispose();
+
+        Exception? first = null;
+
+        try
+        {
+            _reader.Dispose();
+        }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
+
         // DisposeCommand() handles command disposal (clears params, nulls connection, disposes)
         // Do NOT call _command?.Dispose() directly here - it would double-dispose
         try
@@ -86,29 +104,63 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             // MySql.Data can also null-ref while disposing a prepared MySqlCommand
             // after EOF. Treat that provider bug as successful cleanup.
         }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
 
         if (_shouldCloseConnection)
         {
-            _connection.Dispose();
+            try
+            {
+                _connection.Dispose();
+            }
+            catch (Exception ex)
+            {
+                first ??= ex;
+            }
         }
 
         try
         {
             DisposeLockerSynchronously(_connectionLocker);
         }
-        finally
+        catch (Exception ex)
         {
-            try
-            {
-                DisposeLockerSynchronously(_contextLocker);
-            }
-            finally
-            {
-                DisposeLockerSynchronously(_singleConnectionTransactionGate);
-            }
+            first ??= ex;
         }
 
-        _lifetimeListener?.OnReaderDisposed();
+        try
+        {
+            DisposeLockerSynchronously(_contextLocker);
+        }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
+
+        try
+        {
+            DisposeLockerSynchronously(_singleConnectionTransactionGate);
+        }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
+
+        try
+        {
+            _lifetimeListener?.OnReaderDisposed();
+        }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
+
+        if (first != null)
+        {
+            ExceptionDispatchInfo.Capture(first).Throw();
+        }
     }
 
     /// <summary>
@@ -251,9 +303,15 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     public object this[int i] => _reader[i];
     public object this[string name] => _reader[name];
 
+    /// <summary>
+    /// Releases this reader's full ownership — command, connection (if owned), locks, governor
+    /// slot, and metrics — identically to <see cref="Dispose"/>. IDataReader.Close() carries the
+    /// same "I'm done with this reader" contract as Dispose() for callers that don't use
+    /// using/await using; leaving anything held here would silently leak past the governed pool.
+    /// </summary>
     public void Close()
     {
-        _reader.Close();
+        Dispose();
     }
 
     public DataTable? GetSchemaTable()
@@ -273,7 +331,12 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     protected override async ValueTask DisposeManagedAsync()
     {
+        // BP-110 (3.0 CORE-021): same continue-on-failure structure as DisposeManaged() above —
+        // an exception from an early phase must not skip the later ones.
         RecordMetricsOnce();
+
+        Exception? first = null;
+
         try
         {
             await _reader.DisposeAsync().ConfigureAwait(false);
@@ -283,6 +346,10 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             // MySql.Data can null-ref while asynchronously closing prepared statements
             // after the command/connection have already been torn down. Treat that
             // provider bug as equivalent to successful reader cleanup.
+        }
+        catch (Exception ex)
+        {
+            first ??= ex;
         }
 
         try
@@ -294,16 +361,27 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             // MySql.Data can also null-ref while disposing a prepared MySqlCommand
             // after EOF. Treat that provider bug as successful cleanup on async paths.
         }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
 
         if (_shouldCloseConnection)
         {
-            if (_connection is IAsyncDisposable asyncDisposable)
+            try
             {
-                await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                if (_connection is IAsyncDisposable asyncDisposable)
+                {
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    _connection.Dispose();
+                }
             }
-            else
+            catch (Exception ex)
             {
-                _connection.Dispose();
+                first ??= ex;
             }
         }
 
@@ -311,25 +389,48 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         {
             await _connectionLocker.DisposeAsync().ConfigureAwait(false);
         }
-        finally
+        catch (Exception ex)
         {
-            try
-            {
-                if (_contextLocker != null)
-                {
-                    await _contextLocker.DisposeAsync().ConfigureAwait(false);
-                }
-            }
-            finally
-            {
-                if (_singleConnectionTransactionGate != null)
-                {
-                    await _singleConnectionTransactionGate.DisposeAsync().ConfigureAwait(false);
-                }
-            }
+            first ??= ex;
         }
 
-        _lifetimeListener?.OnReaderDisposed();
+        try
+        {
+            if (_contextLocker != null)
+            {
+                await _contextLocker.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
+
+        try
+        {
+            if (_singleConnectionTransactionGate != null)
+            {
+                await _singleConnectionTransactionGate.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
+
+        try
+        {
+            _lifetimeListener?.OnReaderDisposed();
+        }
+        catch (Exception ex)
+        {
+            first ??= ex;
+        }
+
+        if (first != null)
+        {
+            ExceptionDispatchInfo.Capture(first).Throw();
+        }
     }
 
     private bool ShouldSuppressMySqlDataDisposeNullReference(NullReferenceException ex)

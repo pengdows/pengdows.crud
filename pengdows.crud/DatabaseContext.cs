@@ -391,6 +391,10 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;
 
+    // BP-110 (3.0 CORE-026): set once a governor fails to drain during disposal, so neither
+    // disposal pass tears down data sources an outstanding lease may still depend on.
+    private bool _sharedResourceDisposalDeferred;
+
     private void DisposeOwnedDataSources()
     {
         var primaryOwned = _dataSourceProvided ? null : _dataSource;
@@ -518,8 +522,26 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _connectionOpenGate = null;
         }
 
-        DisposePoolGovernors();
-        DisposeOwnedDataSources();
+        // BP-110 (3.0 CORE-026): if a governor timed out draining, a lease may still be
+        // genuinely outstanding — do not dispose data sources that outstanding work may depend
+        // on. Leaked rather than corrupted is the safe default; the context itself is still
+        // fully disposed either way.
+        //
+        // The deferral is sticky: DisposeManagedAsync ends with base.DisposeManagedAsync(),
+        // whose default implementation re-enters this method. On that second pass the
+        // governors are already null (so they report "drained"), and without the flag the
+        // data sources would be disposed anyway.
+        if (DisposePoolGovernors() && !_sharedResourceDisposalDeferred)
+        {
+            DisposeOwnedDataSources();
+        }
+        else if (!_sharedResourceDisposalDeferred)
+        {
+            _sharedResourceDisposalDeferred = true;
+            _logger.LogWarning(
+                "Deferring data-source disposal: a pool governor did not drain before the " +
+                "disposal timeout, so a lease may still be genuinely outstanding.");
+        }
 
         base.DisposeManaged();
     }
@@ -562,79 +584,112 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _connectionOpenGate = null;
         }
 
-        await DisposePoolGovernorsAsync().ConfigureAwait(false);
-        await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
+        // See DisposeManaged's sync counterpart for why this is conditional.
+        if (await DisposePoolGovernorsAsync().ConfigureAwait(false) && !_sharedResourceDisposalDeferred)
+        {
+            await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
+        }
+        else if (!_sharedResourceDisposalDeferred)
+        {
+            _sharedResourceDisposalDeferred = true;
+            _logger.LogWarning(
+                "Deferring data-source disposal: a pool governor did not drain before the " +
+                "disposal timeout, so a lease may still be genuinely outstanding.");
+        }
 
         await base.DisposeManagedAsync().ConfigureAwait(false);
     }
 
-    private void DisposePoolGovernors()
+    /// <returns>
+    /// True if every governor drained (or was never engaged) within the timeout; false if at
+    /// least one governor timed out — callers must treat that as "do not tear down shared
+    /// resources yet."
+    /// </returns>
+    private bool DisposePoolGovernors()
     {
         var readerGovernor = _readerGovernor;
         var writerGovernor = _writerGovernor;
         _readerGovernor = null;
         _writerGovernor = null;
 
-        DisposeGovernorAfterDrain(writerGovernor);
-        DisposeGovernorAfterDrain(readerGovernor);
+        var writerDrained = DisposeGovernorAfterDrain(writerGovernor);
+        var readerDrained = DisposeGovernorAfterDrain(readerGovernor);
+        return writerDrained && readerDrained;
     }
 
-    private async ValueTask DisposePoolGovernorsAsync()
+    private async ValueTask<bool> DisposePoolGovernorsAsync()
     {
         var readerGovernor = _readerGovernor;
         var writerGovernor = _writerGovernor;
         _readerGovernor = null;
         _writerGovernor = null;
 
-        await DisposeGovernorAfterDrainAsync(writerGovernor).ConfigureAwait(false);
-        await DisposeGovernorAfterDrainAsync(readerGovernor).ConfigureAwait(false);
+        var writerDrained = await DisposeGovernorAfterDrainAsync(writerGovernor).ConfigureAwait(false);
+        var readerDrained = await DisposeGovernorAfterDrainAsync(readerGovernor).ConfigureAwait(false);
+        return writerDrained && readerDrained;
     }
 
-    private void DisposeGovernorAfterDrain(PoolGovernor? governor)
+    private bool DisposeGovernorAfterDrain(PoolGovernor? governor)
     {
         if (governor == null)
         {
-            return;
+            return true;
         }
 
         try
         {
             governor.WaitForDrainAsync(_poolAcquireTimeout).GetAwaiter().GetResult();
             governor.Dispose();
+            return true;
         }
         catch (TimeoutException ex)
         {
             _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
+            return false;
         }
         catch (OperationCanceledException ex)
         {
             _logger.LogWarning(ex, "Canceled while waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
+            return false;
         }
     }
 
-    private async ValueTask DisposeGovernorAfterDrainAsync(PoolGovernor? governor)
+    private async ValueTask<bool> DisposeGovernorAfterDrainAsync(PoolGovernor? governor)
     {
         if (governor == null)
         {
-            return;
+            return true;
         }
 
         try
         {
             await governor.WaitForDrainAsync(_poolAcquireTimeout).ConfigureAwait(false);
             governor.Dispose();
+            return true;
         }
         catch (TimeoutException ex)
         {
             _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
+            return false;
         }
         catch (OperationCanceledException ex)
         {
             _logger.LogWarning(ex, "Canceled while waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
+            return false;
         }
     }
 
     protected override ISqlDialect DialectCore => _dialect;
+
+    /// <summary>
+    /// BP-110 (3.0 CORE-025): rejects container creation on a disposed context as early as
+    /// possible. Execution-time checks (see GetStandardConnectionWithExecutionType) still guard
+    /// the actual connection-acquisition path for a container created before disposal completes.
+    /// </summary>
+    protected override void ValidateCanCreateContainer()
+    {
+        ThrowIfDisposed();
+    }
 
     /// <inheritdoc/>
     public new ISqlDialect Dialect => _dialect;

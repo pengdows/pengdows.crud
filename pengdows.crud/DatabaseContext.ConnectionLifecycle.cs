@@ -238,6 +238,11 @@ public partial class DatabaseContext
     internal ITrackedConnection GetStandardConnectionWithExecutionType(ExecutionType executionType,
         bool isShared = false)
     {
+        // BP-110 (3.0 CORE-025): every connection acquisition path reaches here. Without this
+        // check a disposed context's nulled-out governor fields made AcquireSlot silently return
+        // an ungoverned default slot, letting a container open a fresh physical connection
+        // completely outside admission control.
+        ThrowIfDisposed();
         var slot = AcquireSlot(executionType);
         try
         {
@@ -264,6 +269,11 @@ public partial class DatabaseContext
     internal async ValueTask<ITrackedConnection> GetStandardConnectionWithExecutionTypeAsync(
         ExecutionType executionType, bool isShared = false, CancellationToken cancellationToken = default)
     {
+        // BP-110 (3.0 CORE-025): every connection acquisition path reaches here. Without this
+        // check a disposed context's nulled-out governor fields made AcquireSlot silently return
+        // an ungoverned default slot, letting a container open a fresh physical connection
+        // completely outside admission control.
+        ThrowIfDisposed();
         var slot = await AcquireSlotAsync(executionType, cancellationToken).ConfigureAwait(false);
         try
         {
@@ -596,6 +606,9 @@ public partial class DatabaseContext
         var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
         if (governor == null)
         {
+            ThrowIfGovernorMissingAfterDisposal();
+            // Not yet disposed: the narrow bootstrap window before InitializePoolGovernors()
+            // has run — ungoverned by design, matching pre-existing behavior.
             return default;
         }
 
@@ -628,10 +641,28 @@ public partial class DatabaseContext
         var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
         if (governor == null)
         {
+            ThrowIfGovernorMissingAfterDisposal();
+            // Not yet disposed: the narrow bootstrap window before InitializePoolGovernors()
+            // has run — ungoverned by design, matching pre-existing behavior.
             return default;
         }
 
         return await governor.AcquireAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// BP-110 (3.0 CORE-025): a null governor observed while the context is already disposed
+    /// means DisposePoolGovernors() nulled the field out from under an in-flight acquire —
+    /// silently returning an ungoverned default slot would bypass admission control, so fail
+    /// loudly instead. A null governor while NOT disposed is the legitimate pre-initialization
+    /// bootstrap window, so this only throws for the disposed case.
+    /// </summary>
+    private void ThrowIfGovernorMissingAfterDisposal()
+    {
+        if (IsDisposed)
+        {
+            throw new ObjectDisposedException(nameof(DatabaseContext));
+        }
     }
 
     /// <summary>
