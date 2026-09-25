@@ -118,6 +118,52 @@ public class TransactionExceptionWiringTests
     // -------------------------------------------------------------------------
 
     [Fact]
+    public void Commit_WhenInnerExceptionIsTransient_WrappingExceptionIsAlsoTransient()
+    {
+        // Without this, a genuinely transient commit failure (deadlock, timeout) looks
+        // non-transient once wrapped, and no caller classifying retry-safety via
+        // DatabaseException.IsTransient would ever attempt to retry it.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.SetGlobalTransactionCommitException(
+            new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
+        using var ctx = CreateContext(factory);
+        using var tx = ctx.BeginTransaction();
+
+        var ex = Assert.Throws<TransactionException>(() => tx.Commit());
+
+        Assert.True(ex.IsTransient);
+    }
+
+    [Fact]
+    public async Task CommitAsync_WhenInnerExceptionIsTransient_WrappingExceptionIsAlsoTransient()
+    {
+        // The async completion path builds its TransactionException separately from the sync path.
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.SetGlobalTransactionCommitException(
+            new DeadlockException("simulated deadlock", SupportedDatabase.Sqlite));
+        await using var ctx = CreateContext(factory);
+        await using var tx = await ctx.BeginTransactionAsync();
+
+        var ex = await Assert.ThrowsAsync<TransactionException>(async () => await tx.CommitAsync());
+
+        Assert.True(ex.IsTransient);
+    }
+
+    [Fact]
+    public void Commit_WhenInnerExceptionIsNotDatabaseException_TransienceStaysUnknown()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.SetGlobalTransactionCommitException(
+            new InvalidOperationException("simulated commit failure"));
+        using var ctx = CreateContext(factory);
+        using var tx = ctx.BeginTransaction();
+
+        var ex = Assert.Throws<TransactionException>(() => tx.Commit());
+
+        Assert.Null(ex.IsTransient);
+    }
+
+    [Fact]
     public void AfterCommitFailure_TransactionContext_IsCompleted()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

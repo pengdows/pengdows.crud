@@ -857,7 +857,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
                 throw new TransactionException(
                     $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
-                    _context.Product, ex);
+                    _context.Product, ex,
+                    isTransient: (ex as DatabaseException)?.IsTransient);
             }
             finally
             {
@@ -908,7 +909,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
                 throw new TransactionException(
                     $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
-                    _context.Product, ex);
+                    _context.Product, ex,
+                    isTransient: (ex as DatabaseException)?.IsTransient);
             }
             finally
             {
