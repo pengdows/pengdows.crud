@@ -154,6 +154,23 @@ public class BasicCoercionsBranchTests
     }
 
     [Fact]
+    public void HStoreCoercion_ReadsNpgsqlDictionaryShape()
+    {
+        // Npgsql 9 hydrates a real hstore column as Dictionary<string, string?>, not text.
+        var raw = new System.Collections.Generic.Dictionary<string, string?>
+        {
+            ["role"] = "admin",
+            ["nickname"] = null
+        };
+
+        Assert.True(new HStoreCoercion().TryRead(new DbValue(raw), out var value));
+        Assert.Equal("admin", value["role"]);
+        Assert.True(value.ContainsKey("nickname"));
+        Assert.Null(value["nickname"]);
+        Assert.Equal(2, value.Count);
+    }
+
+    [Fact]
     public void DateTimeCoercion_FallbackStringParse_UsesDateTimeParserPath()
     {
         var coercion = new DateTimeCoercion();

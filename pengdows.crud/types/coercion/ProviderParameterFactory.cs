@@ -179,6 +179,17 @@ internal static class ProviderParameterFactory
             {
                 // NpgsqlDbType.Hstore = 37
                 _cachedNpgsqlDbTypeProperty.SetValue(parameter, 37);
+
+                // HStoreCoercion.TryWrite (already run) stringifies to the canonical "key=>value"
+                // text for portable DbType.String bindings, but once NpgsqlDbType.Hstore is set
+                // Npgsql 9 requires a Dictionary<string,string?> and rejects a string
+                // ("Writing values of 'System.String' is not supported for parameters having
+                // NpgsqlDbType 'Hstore'"). Re-parse the canonical text into that shape.
+                if (parameter.Value is string hstoreText)
+                {
+                    parameter.Value = pengdows.crud.types.valueobjects.HStore.Parse(hstoreText)
+                        .ToDictionary(kv => kv.Key, kv => kv.Value);
+                }
             }
             else if (valueType.IsGenericType && valueType.Name.Contains("Range"))
             {

@@ -53,6 +53,24 @@ public class ProviderParameterFactoryBranchTests
     }
 
     [Fact]
+    public void PostgreSqlOptimizations_HStore_BindsDictionaryValueForNpgsqlHstoreType()
+    {
+        // Npgsql 9 rejects a string value once NpgsqlDbType.Hstore is set; it needs a dictionary.
+        var hstoreParam = new NpgsqlParameterStub();
+        ProviderParameterFactory.TryConfigureParameter(hstoreParam, typeof(HStore),
+            new HStore(new System.Collections.Generic.Dictionary<string, string?>
+            {
+                ["role"] = "admin",
+                ["nickname"] = null
+            }), SupportedDatabase.PostgreSql);
+
+        Assert.Equal(37, hstoreParam.NpgsqlDbType);
+        var dict = Assert.IsAssignableFrom<System.Collections.Generic.IDictionary<string, string?>>(hstoreParam.Value);
+        Assert.Equal("admin", dict["role"]);
+        Assert.Null(dict["nickname"]);
+    }
+
+    [Fact]
     public void SqlServerOptimizations_HandleCommonTypes()
     {
         var guidParam = new fakeDbParameter();

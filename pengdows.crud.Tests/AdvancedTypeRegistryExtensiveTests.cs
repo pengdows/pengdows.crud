@@ -705,6 +705,42 @@ public class AdvancedTypeRegistryExtensiveTests
         Assert.Equal("10.0.0.1", param3.Value);
     }
 
+    [Fact]
+    public void HStore_PostgreSql_ConfiguresHstoreTypeWithDictionaryValue()
+    {
+        // Production write path (SqlDialect.CreateDbParameter -> AdvancedTypeRegistry): an HStore
+        // must reach Npgsql as NpgsqlDbType.Hstore with a Dictionary value. Passing the raw HStore
+        // struct fails live ("Writing values of 'HStore' is not supported ...").
+        var registry = AdvancedTypeRegistry.Shared;
+        var param = new PostgreSqlLikeParameter();
+        var hstore = new HStore(new System.Collections.Generic.Dictionary<string, string?>
+        {
+            ["role"] = "admin",
+            ["nickname"] = null
+        });
+
+        Assert.True(registry.IsMappedType(typeof(HStore)));
+        Assert.True(registry.TryConfigureParameter(param, typeof(HStore), hstore, SupportedDatabase.PostgreSql));
+
+        Assert.Equal(MockNpgsqlDbType.Hstore, param.NpgsqlDbType);
+        var dict = Assert.IsAssignableFrom<System.Collections.Generic.IDictionary<string, string?>>(param.Value);
+        Assert.Equal("admin", dict["role"]);
+        Assert.Null(dict["nickname"]);
+    }
+
+    [Fact]
+    public void HStore_PostgreSqlDialect_CreateDbParameter_BindsDictionaryValue()
+    {
+        var factory = new pengdows.crud.fakeDb.fakeDbFactory(SupportedDatabase.PostgreSql);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
+        var hstore = new HStore(new System.Collections.Generic.Dictionary<string, string?> { ["k"] = "v" });
+
+        var param = context.CreateDbParameter("h", DbType.Object, hstore);
+
+        var dict = Assert.IsAssignableFrom<System.Collections.Generic.IDictionary<string, string?>>(param.Value);
+        Assert.Equal("v", dict["k"]);
+    }
+
     #endregion
 
     #region Mock Parameter Classes for Testing
@@ -754,7 +790,9 @@ public class AdvancedTypeRegistryExtensiveTests
         BigIntRange = 4096,
         MacAddr = 512,
         Jsonb = 1024,
-        JSON = 2048
+        JSON = 2048,
+        Hstore = 8192,
+        MacAddr8 = 16384
     }
 
     private class MySqlLikeParameter : TestDbParameter

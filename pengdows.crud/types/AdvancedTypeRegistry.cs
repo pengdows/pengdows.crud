@@ -110,6 +110,7 @@ internal class AdvancedTypeRegistry
         public const string MacAddr = "MacAddr";
         public const string Interval = "Interval";
         public const string Uuid = "Uuid";
+        public const string Hstore = "Hstore";
     }
 
     private static class OracleNames
@@ -705,6 +706,30 @@ internal class AdvancedTypeRegistry
         RegisterMapping<MacAddress>(SupportedDatabase.PostgreSql, pgMac);
         RegisterMapping<MacAddress>(SupportedDatabase.CockroachDb, pgMac);
         RegisterMapping<MacAddress>(SupportedDatabase.YugabyteDb, pgMac);
+
+        // PostgreSQL hstore. Without a mapping the raw HStore struct reached Npgsql, which rejects
+        // it ("Writing values of 'HStore' is not supported ..."); Npgsql 9's hstore handler needs
+        // NpgsqlDbType.Hstore with a Dictionary<string,string?> value (confirmed live).
+        var pgHStore = new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                if (value is HStore hstore)
+                {
+                    var dict = new Dictionary<string, string?>(hstore.Count, StringComparer.Ordinal);
+                    foreach (var pair in hstore)
+                    {
+                        dict[pair.Key] = pair.Value;
+                    }
+
+                    param.Value = dict;
+                }
+
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Hstore);
+            }
+        };
+        RegisterMapping<HStore>(SupportedDatabase.PostgreSql, pgHStore);
     }
 
     private void RegisterTemporalMappings()
