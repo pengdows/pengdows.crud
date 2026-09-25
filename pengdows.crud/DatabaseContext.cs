@@ -120,10 +120,17 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private readonly bool _dataSourceProvided;
     private readonly ILoggerFactory _loggerFactory;
     private readonly ILogger<IDatabaseContext> _logger;
+
+    /// <summary>Exposes the context's logger to connection strategies in the same assembly.</summary>
+    internal ILogger Logger => _logger;
     private IConnectionStrategy _connectionStrategy = null!;
     private IProcWrappingStrategy _procWrappingStrategy = null!;
     private ProcWrappingStyle _procWrappingStyle;
     private ITrackedConnection? _connection = null;
+    // PreventDatabaseUnload sentinels: one per enabled pool (writer and, when a dedicated reader
+    // connection string exists, reader). Guarded by _sentinelLock; _connection mirrors the first.
+    private readonly List<(ITrackedConnection Connection, ExecutionType ExecutionType)> _sentinels = new();
+    private readonly object _sentinelLock = new();
     private SemaphoreSlim? _connectionOpenGate;
     private ReusableAsyncLocker? _connectionOpenLocker;
     // Only allocated for DbMode.SingleConnection. A transaction holds this for its whole
@@ -495,18 +502,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         }
 
-        try
-        {
-            _connection?.Dispose();
-        }
-        catch
-        {
-            // ignore
-        }
-        finally
-        {
-            _connection = null;
-        }
+        DisposePersistentConnections();
 
         try
         {
@@ -554,21 +550,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             _metricsCollector.MetricsChanged -= OnMetricsCollectorUpdated;
         }
 
-        try
-        {
-            if (_connection is IAsyncDisposable ad)
-            {
-                await ad.DisposeAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                _connection?.Dispose();
-            }
-        }
-        finally
-        {
-            _connection = null;
-        }
+        await DisposePersistentConnectionsAsync().ConfigureAwait(false);
 
         try
         {

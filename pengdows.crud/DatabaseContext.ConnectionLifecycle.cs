@@ -102,6 +102,173 @@ public partial class DatabaseContext
         _connection = connection;
     }
 
+    internal IReadOnlyList<(ITrackedConnection Connection, ExecutionType ExecutionType)> GetSentinelSnapshot()
+    {
+        lock (_sentinelLock)
+        {
+            return _sentinels.ToArray();
+        }
+    }
+
+    /// <summary>
+    /// Registers a PreventDatabaseUnload sentinel for the pool identified by
+    /// <paramref name="executionType"/>. The first sentinel also becomes <see cref="PersistentConnection"/>.
+    /// </summary>
+    internal void RegisterSentinel(ITrackedConnection connection, ExecutionType executionType)
+    {
+        lock (_sentinelLock)
+        {
+            foreach (var existing in _sentinels)
+            {
+                if (ReferenceEquals(existing.Connection, connection))
+                {
+                    return;
+                }
+            }
+
+            // Preserve an already-installed persistent connection when a strategy is
+            // initialized directly (outside the normal constructor path).
+            if (_sentinels.Count == 0 && _connection != null && !ReferenceEquals(_connection, connection))
+            {
+                _sentinels.Add((_connection, executionType));
+            }
+
+            _sentinels.Add((connection, executionType));
+            _connection ??= connection;
+        }
+    }
+
+    /// <summary>
+    /// Compare-and-swap replacement of a broken sentinel. Returns false (and installs nothing)
+    /// when <paramref name="previous"/> is no longer registered or the context is disposed; the
+    /// caller then owns and must dispose <paramref name="replacement"/>.
+    /// </summary>
+    internal bool ReplaceSentinel(ITrackedConnection previous, ITrackedConnection replacement,
+        ExecutionType executionType)
+    {
+        lock (_sentinelLock)
+        {
+            var index = _sentinels.FindIndex(s => ReferenceEquals(s.Connection, previous));
+            if (index < 0 || IsDisposed)
+            {
+                return false;
+            }
+
+            _sentinels[index] = (replacement, executionType);
+            if (ReferenceEquals(_connection, previous))
+            {
+                _connection = replacement;
+            }
+
+            return true;
+        }
+    }
+
+    /// <summary>
+    /// Creates (unopened) a replacement or additional sentinel connection for the given pool,
+    /// holding one permit from that pool's governor — the same accounting the initial sentinel uses.
+    /// </summary>
+    internal ITrackedConnection CreateSentinelConnection(ExecutionType executionType)
+    {
+        var connectionString = executionType == ExecutionType.Read && !string.IsNullOrWhiteSpace(_readerConnectionString)
+            ? _readerConnectionString
+            : _connectionString;
+        var slot = AcquireSentinelSlot(executionType);
+        try
+        {
+            return FactoryCreateConnection(executionType, connectionString, true, slot);
+        }
+        catch
+        {
+            slot.Dispose();
+            throw;
+        }
+    }
+
+    private PoolSlot AcquireSentinelSlot(ExecutionType executionType)
+    {
+        if (!_effectivePoolGovernorEnabled)
+        {
+            return default;
+        }
+
+        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        if (governor == null)
+        {
+            ThrowIfGovernorMissingAfterDisposal();
+            return default;
+        }
+
+        if (governor.Forbidden)
+        {
+            return default;
+        }
+
+        return governor.Acquire();
+    }
+
+    private ITrackedConnection[] TakePersistentConnections()
+    {
+        lock (_sentinelLock)
+        {
+            ITrackedConnection[] connections;
+            if (_sentinels.Count > 0)
+            {
+                connections = new ITrackedConnection[_sentinels.Count];
+                for (var i = 0; i < _sentinels.Count; i++)
+                {
+                    connections[i] = _sentinels[i].Connection;
+                }
+
+                _sentinels.Clear();
+            }
+            else
+            {
+                connections = _connection != null ? new[] { _connection } : Array.Empty<ITrackedConnection>();
+            }
+
+            _connection = null;
+            return connections;
+        }
+    }
+
+    private void DisposePersistentConnections()
+    {
+        foreach (var connection in TakePersistentConnections())
+        {
+            try
+            {
+                connection.Dispose();
+            }
+            catch
+            {
+                // best-effort cleanup during context disposal
+            }
+        }
+    }
+
+    private async ValueTask DisposePersistentConnectionsAsync()
+    {
+        foreach (var connection in TakePersistentConnections())
+        {
+            try
+            {
+                if (connection is IAsyncDisposable asyncConnection)
+                {
+                    await asyncConnection.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    connection.Dispose();
+                }
+            }
+            catch
+            {
+                // best-effort cleanup during context disposal
+            }
+        }
+    }
+
     /// <summary>
     /// Creates a standard (ephemeral) connection from the factory or data source.
     /// </summary>

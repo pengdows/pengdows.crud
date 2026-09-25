@@ -114,9 +114,55 @@ public sealed class FirebirdEmbeddedConnectionTests
         }
     }
 
-    // Not ported from 3.0: FirebirdEmbedded_BestModeUsesPreventDatabaseUnloadAndRealWorkAttachments
-    // needs per-pool PreventDatabaseUnload sentinels (DatabaseContext.GetSentinelSnapshot), which
-    // is backport item BP-206 (Tier 2, pending a decision) in docs/FUTURE_WORK.md.
+    // Ported from 3.0's FirebirdEmbedded_BestModeUsesPreventDatabaseUnloadAndRealWorkAttachments.
+    // That version requested DbMode.Best and asserted PreventDatabaseUnload, but FirebirdDialect
+    // (on both branches) deliberately resolves Best to Standard — PreventDatabaseUnload is an
+    // operator-chosen knob for Firebird, never auto-selected (docs/connection/connection-modes.md).
+    // So this port requests the mode explicitly and verifies what BP-206 changed: one sentinel per
+    // pool (Firebird's reader connection string differs by Application Name, so there is a
+    // dedicated reader pool), each on a real embedded attachment, with real work still getting
+    // its own separate attachments.
+    [Fact]
+    [Trait("Category", "FirebirdEmbedded")]
+    public async Task FirebirdEmbedded_PreventDatabaseUnloadUsesPerPoolSentinelsAndRealWorkAttachments()
+    {
+        var path = NewDatabasePath();
+        try
+        {
+            await CreateDatabaseAsync(path);
+            var config = new DatabaseContextConfiguration
+            {
+                ConnectionString = ConnectionString(path, disablePooling: false),
+                ProviderName = SupportedDatabase.Firebird.ToString(),
+                DbMode = DbMode.PreventDatabaseUnload
+            };
+
+            using var context = new DatabaseContext(
+                config,
+                FirebirdClientFactory.Instance,
+                NullLoggerFactory.Instance);
+
+            Assert.Equal(SupportedDatabase.Firebird, context.Product);
+            Assert.Equal(DbMode.PreventDatabaseUnload, context.ConnectionMode);
+            var sentinels = context.GetSentinelSnapshot();
+            Assert.Equal(2, sentinels.Count);
+            Assert.Contains(sentinels, sentinel => sentinel.ExecutionType == ExecutionType.Read);
+            Assert.Contains(sentinels, sentinel => sentinel.ExecutionType == ExecutionType.Write);
+            Assert.All(sentinels, sentinel => Assert.Equal(ConnectionState.Open, sentinel.Connection.State));
+
+            using var read = context.GetConnection(ExecutionType.Read);
+            using var write = context.GetConnection(ExecutionType.Write);
+            Assert.Equal(ConnectionState.Open, read.State);
+            Assert.Equal(ConnectionState.Open, write.State);
+            Assert.NotSame(read, write);
+            Assert.DoesNotContain(sentinels, sentinel => ReferenceEquals(sentinel.Connection, read));
+            Assert.DoesNotContain(sentinels, sentinel => ReferenceEquals(sentinel.Connection, write));
+        }
+        finally
+        {
+            DeleteDatabase(path);
+        }
+    }
 
     private static async Task CreateDatabaseAsync(string path)
     {

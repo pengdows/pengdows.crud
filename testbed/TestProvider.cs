@@ -123,6 +123,13 @@ public class TestProvider : IAsyncTestProvider
             SnowflakeStep($"Scalar UDF: done in {stepSw.ElapsedMilliseconds}ms");
 
             stepSw.Restart();
+            Console.WriteLine("Running DbMode idle-unload probe");
+            SnowflakeStep("DbMode idle-unload probe: start");
+            await TestIdleUnloadProbe();
+            Console.WriteLine($"  DbMode idle-unload probe: {stepSw.ElapsedMilliseconds}ms");
+            SnowflakeStep($"DbMode idle-unload probe: done in {stepSw.ElapsedMilliseconds}ms");
+
+            stepSw.Restart();
             Console.WriteLine("Running parameter binding");
             SnowflakeStep("Parameter binding: start");
             await TestParameterBinding();
@@ -1073,6 +1080,191 @@ CREATE TABLE {tableName} (
     /// where UDF creation and inline invocation is meaningful to exercise.
     /// </summary>
     protected virtual Task TestScalarUdf() => Task.CompletedTask;
+
+    // -------------------------------------------------------------------------
+    // § 10  DbMode.Best empirical capability probes
+    // -------------------------------------------------------------------------
+    //
+    // Rather than trusting documentation/general-knowledge claims about a database's idle-unload
+    // lifecycle (a real Firebird SuperServer default RDB$LINGER=0 behavior confirmed live; a
+    // since-reverted, never-actually-verified Db2 claim taken uncritically from a chat message),
+    // this probe empirically measures whether a real cold-reconnect cost exists, for any database
+    // that exposes a FAST, settable knob to force its normal (often minutes-long, CI-impractical)
+    // idle-unload timeout down to a few seconds. Databases without such a knob report an honest
+    // "not empirically tested" skip rather than guessing — see TryEnableFastIdleUnloadAsync.
+
+    /// <summary>
+    /// Override to set a short, deterministic idle-unload timeout for this database if it exposes
+    /// one natively (e.g. Firebird's <c>ALTER DATABASE SET LINGER TO n</c>). Return false (the
+    /// default) when no such fast knob exists — <see cref="TestIdleUnloadProbe"/> then reports
+    /// "not empirically tested" instead of guessing or waiting out an unknown, likely
+    /// CI-impractical default timeout.
+    /// </summary>
+    protected virtual Task<bool> TryEnableFastIdleUnloadAsync() => Task.FromResult(false);
+
+    /// <summary>
+    /// Override to force the ADO.NET provider's connection pool to release its physical
+    /// connections for this exact connection string (e.g. <c>FbConnection.ClearAllPools()</c>),
+    /// so the probe's post-drain query measures a genuine cold reconnect rather than a warm
+    /// pooled one that never actually left the process.
+    /// </summary>
+    protected virtual void ClearProviderPoolForIdleUnloadProbe()
+    {
+    }
+
+    /// <summary>
+    /// Override to undo whatever database-level setting <see cref="TryEnableFastIdleUnloadAsync"/>
+    /// mutated (e.g. restore Firebird's <c>LINGER</c> or SQL Server's <c>AUTO_CLOSE</c>), so the
+    /// probe doesn't leave a persistent, contaminating setting behind for every later test that
+    /// runs against the same container in this testbed session. Default no-op — correct for any
+    /// override (e.g. Db2's) that doesn't actually mutate persistent database state.
+    /// </summary>
+    protected virtual Task RestoreIdleUnloadKnobAsync() => Task.CompletedTask;
+
+    protected virtual async Task TestIdleUnloadProbe()
+    {
+        var knobEnabled = await TryEnableFastIdleUnloadAsync();
+        if (!knobEnabled)
+        {
+            // Not a library capability gap — the probe has no fast, deterministic knob to force
+            // this engine's idle unload in CI, so nothing is measured or recorded.
+            Console.WriteLine(
+                $"  [DbMode] Idle-unload probe: no known fast idle-unload knob for {_context.Product} — not measured");
+            return;
+        }
+
+        try
+        {
+            // Drain the pool and wait past the fast timeout just configured, then compare the first
+            // (cold, forced-reconnect) round trip against the immediately-following (warm, pooled)
+            // one. Apples-to-apples: same query shape, same connection string, only the pool state
+            // differs between the two measurements.
+            ClearProviderPoolForIdleUnloadProbe();
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            // A trivial "SELECT 1" with no FROM clause isn't universally portable (Firebird and
+            // Oracle both reject it) — count against the already-created test_table instead, which
+            // every dialect supports identically.
+            var probeSql = $"SELECT COUNT(*) FROM {_helper.WrappedTableName}";
+
+            var coldSw = Stopwatch.StartNew();
+            await using (var coldContainer = _context.CreateSqlContainer(probeSql))
+            {
+                await coldContainer.ExecuteScalarOrNullAsync<int>();
+            }
+            coldSw.Stop();
+
+            var warmSw = Stopwatch.StartNew();
+            await using (var warmContainer = _context.CreateSqlContainer(probeSql))
+            {
+                await warmContainer.ExecuteScalarOrNullAsync<int>();
+            }
+            warmSw.Stop();
+
+            var coldMs = coldSw.Elapsed.TotalMilliseconds;
+            var warmMs = Math.Max(warmSw.Elapsed.TotalMilliseconds, 0.01);
+            var ratio = coldMs / warmMs;
+
+            // Generous threshold — this only needs to distinguish "genuinely paid a reconnect/
+            // reactivation cost" from ordinary run-to-run noise, not measure its exact magnitude.
+            var unloadDetected = coldMs - warmMs > 5.0 && ratio > 2.0;
+
+            // Detecting a real cost does NOT mean DbMode.Best should auto-select
+            // PreventDatabaseUnload — that's a separate, deliberate policy call (see CLAUDE.md and
+            // docs/connection/connection-modes.md). A heavily-trafficked deployment may never drain
+            // its pool to zero (the cost never actually materializes), and a deliberately
+            // scale-to-zero/cost-optimized deployment may not want a permanent sentinel forced on it
+            // at all — only the operator knows which applies. This probe's job is to confirm the cost
+            // is real and that PreventDatabaseUnload genuinely mitigates it (see the sentinel
+            // validation below), not to decide the default on the operator's behalf.
+            CheckOk(
+                $"  [DbMode] Idle-unload probe for {_context.Product}: cold={coldMs:F2}ms, warm={warmMs:F2}ms, ratio={ratio:F1}x — " +
+                (unloadDetected
+                    ? "unload/reactivation cost DETECTED (PreventDatabaseUnload available as an explicit opt-in to mitigate it)"
+                    : "no unload cost detected despite the fast knob"));
+
+            if (unloadDetected)
+            {
+                await TestSentinelPreventsDetectedUnloadCostAsync(probeSql, coldMs, warmMs);
+            }
+        }
+        finally
+        {
+            // Undo the fast-timeout knob regardless of outcome, so this probe never leaves a
+            // mutated database-level setting behind for the rest of this testbed run.
+            await RestoreIdleUnloadKnobAsync();
+            ClearProviderPoolForIdleUnloadProbe();
+        }
+    }
+
+    /// <summary>
+    /// Closes the loop on a detected idle-unload cost: does <see cref="DbMode.PreventDatabaseUnload"/>'s
+    /// actual mechanism — one connection held open, never returned to the pool — genuinely prevent
+    /// it? Rather than trusting the design intent, this holds a real open reader (pinning a
+    /// connection exactly the way a PreventDatabaseUnload sentinel does) through the same
+    /// pool-clear-and-wait sequence, then re-measures. <see cref="ClearProviderPoolForIdleUnloadProbe"/>
+    /// only releases connections currently idle IN the pool — a connection actively checked out
+    /// (in use, not yet returned) is untouched by it, so the database should never actually see
+    /// zero attachments this time. The pass bar is relative to this database's own already-measured
+    /// cold/warm gap (recovering at least half of it), not a fixed absolute number — the raw
+    /// magnitude of the cost varies a lot per database (Firebird ~9ms, SQL Server AUTO_CLOSE ~40ms).
+    ///
+    /// PREVIOUSLY A REAL BUG, fixed here: this always called CheckOk regardless of
+    /// <c>sentinelPrevented</c>'s value, so a genuine sentinel-mechanism regression could never
+    /// fail a testbed run — it only ever produced an easy-to-miss "did NOT prevent it" log line.
+    /// Confirmed live against Firebird 3.0.9 (small absolute cold/warm gap, ~10-50ms) that a
+    /// SINGLE sentinel measurement is genuinely noisy: three consecutive runs produced prevented/
+    /// not-prevented/not-prevented. A bare pass-to-fail flip on one sample would have made
+    /// this check flaky. Instead, the sentinel round trip is measured up to 3 times against the
+    /// SAME held-open reader (the whole point is one persistent connection across repeated
+    /// drain-and-wait cycles) and a majority verdict decides pass/fail — smoothing single-sample
+    /// timing noise while still catching a sentinel mechanism that reliably fails to help.
+    /// </summary>
+    private async Task TestSentinelPreventsDetectedUnloadCostAsync(string probeSql, double coldMs, double warmMs)
+    {
+        await using var sentinelContainer = _context.CreateSqlContainer(probeSql);
+        await using var sentinelReader = await sentinelContainer.ExecuteReaderAsync();
+
+        var originalGap = coldMs - warmMs;
+        const int sampleCount = 3;
+        var samples = new List<(double SentinelMs, bool Prevented)>(sampleCount);
+
+        for (var i = 0; i < sampleCount; i++)
+        {
+            ClearProviderPoolForIdleUnloadProbe();
+            await Task.Delay(TimeSpan.FromSeconds(3));
+
+            var sw = Stopwatch.StartNew();
+            await using (var container = _context.CreateSqlContainer(probeSql))
+            {
+                await container.ExecuteScalarOrNullAsync<int>();
+            }
+            sw.Stop();
+
+            var sentinelMs = sw.Elapsed.TotalMilliseconds;
+            var remainingGap = sentinelMs - warmMs;
+            samples.Add((sentinelMs, remainingGap < originalGap / 2.0));
+        }
+
+        var preventedCount = samples.Count(s => s.Prevented);
+        var sentinelPrevented = preventedCount * 2 > sampleCount; // strict majority
+        var sampleSummary = string.Join(", ", samples.Select(s => $"{s.SentinelMs:F2}ms/{(s.Prevented ? "ok" : "fail")}"));
+        var message =
+            $"  [DbMode] Sentinel validation for {_context.Product}: {preventedCount}/{sampleCount} samples prevented " +
+            $"the unload cost (samples: {sampleSummary}; original gap was {originalGap:F2}ms) — " +
+            (sentinelPrevented
+                ? "unload cost PREVENTED (confirms PreventDatabaseUnload's sentinel mechanism actually works here)"
+                : "cost still present — sentinel did NOT reliably prevent it (investigate before trusting PreventDatabaseUnload for this database)");
+
+        if (sentinelPrevented)
+        {
+            CheckOk(message);
+        }
+        else
+        {
+            throw new InvalidOperationException("DbMode.SentinelPreventsUnload failed: " + message.Trim());
+        }
+    }
 
     // -------------------------------------------------------------------------
     // § 5  Parameter binding semantics

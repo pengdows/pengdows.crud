@@ -1,5 +1,6 @@
 #region
 
+using FirebirdSql.Data.FirebirdClient;
 using pengdows.crud;
 
 #endregion
@@ -76,6 +77,40 @@ CREATE TABLE {0} (
     /// store the instant, and a plain TIMESTAMP column must still store the UTC wall time (what the
     /// UTC-DateTime coercion always stored), so existing TIMESTAMP columns are unaffected.
     /// </summary>
+    /// <summary>
+    /// Firebird SuperServer exposes a native, per-database, instantly-effective idle-unload knob:
+    /// RDB$LINGER (default 0/NULL — closes and discards the database's cache immediately after
+    /// the last attachment closes). Set to a short, deterministic value so the probe doesn't need
+    /// to guess or wait out an unknown default.
+    /// </summary>
+    protected override async Task<bool> TryEnableFastIdleUnloadAsync()
+    {
+        await using var sc = context.CreateSqlContainer("ALTER DATABASE SET LINGER TO 1");
+        await sc.ExecuteNonQueryAsync();
+        return true;
+    }
+
+    /// <summary>
+    /// Forces the actual physical connections out of the ADO.NET pool so the probe's post-drain
+    /// query is a genuine cold reconnect, not a warm one served from a still-open pooled
+    /// connection that never actually left the process.
+    /// </summary>
+    protected override void ClearProviderPoolForIdleUnloadProbe()
+    {
+        FbConnection.ClearAllPools();
+    }
+
+    /// <summary>
+    /// Restores LINGER to Firebird's shipped default (60 seconds per firebird.conf's documented
+    /// <c>DatabaseLinger</c> default) so the probe doesn't leave every later test in this testbed
+    /// run against a 1-second-linger database.
+    /// </summary>
+    protected override async Task RestoreIdleUnloadKnobAsync()
+    {
+        await using var sc = context.CreateSqlContainer("ALTER DATABASE SET LINGER TO 60");
+        await sc.ExecuteNonQueryAsync();
+    }
+
     protected override async Task RunAdditionalTestsAsync()
     {
         var table = context.WrapObjectName("fb_tz_columns");

@@ -616,7 +616,14 @@ public partial class DatabaseContext
             {
                 // Note: SingleWriter no longer uses persistent connections - it uses
                 // Standard lifecycle with governor policy (WriteSlots=1 + turnstile fairness)
-                if (ConnectionMode is DbMode.PreventDatabaseUnload or DbMode.SingleConnection)
+                if (ConnectionMode == DbMode.PreventDatabaseUnload)
+                {
+                    // The initialization connection becomes the sentinel for the pool it was
+                    // opened for (reader on a read-only context, writer otherwise).
+                    RegisterSentinel(initConn, IsReadOnlyConnection ? ExecutionType.Read : ExecutionType.Write);
+                    initConn = null; // context owns it now
+                }
+                else if (ConnectionMode == DbMode.SingleConnection)
                 {
                     SetPersistentConnection(initConn);
                     initConn = null; // context owns it now
@@ -831,10 +838,26 @@ public partial class DatabaseContext
             ownsTurnstile: false, // Readers touch-and-release turnstile
             maxQueueDepth: _maxQueuedReads);
 
-        // Attach slot for modes with persistent connections.
+        // PreventDatabaseUnload: every sentinel holds one permit from its own pool's governor, and
+        // a dedicated reader pool gets its own sentinel so it cannot unload independently.
         if (ConnectionMode == DbMode.PreventDatabaseUnload)
         {
-            AttachPinnedSlotIfNeeded();
+            AttachSentinelSlotsIfNeeded();
+
+            if (_isWriteConnection && HasDedicatedReadConnectionString())
+            {
+                var readSentinel = CreateSentinelConnection(ExecutionType.Read);
+                try
+                {
+                    readSentinel.Open();
+                    RegisterSentinel(readSentinel, ExecutionType.Read);
+                }
+                catch
+                {
+                    readSentinel.Dispose();
+                    throw;
+                }
+            }
         }
     }
 
@@ -1388,17 +1411,20 @@ public partial class DatabaseContext
         return readOnly && HasDedicatedReadConnectionString();
     }
 
-    private void AttachPinnedSlotIfNeeded()
+    private void AttachSentinelSlotsIfNeeded()
     {
-        if (!_effectivePoolGovernorEnabled || _writerGovernor == null || _writerGovernor.Forbidden)
+        if (!_effectivePoolGovernorEnabled)
         {
             return;
         }
 
-        if (PersistentConnection is TrackedConnection tracked)
+        foreach (var (connection, executionType) in GetSentinelSnapshot())
         {
-            var slot = _writerGovernor.Acquire();
-            tracked.AttachSlot(slot);
+            if (connection is TrackedConnection tracked)
+            {
+                var slot = AcquireSentinelSlot(executionType);
+                tracked.AttachSlot(slot);
+            }
         }
     }
 

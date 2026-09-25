@@ -117,4 +117,129 @@ public class KeepAliveSentinelReconnectTests
         // repair opened) must end up disposed — none left open and orphaned.
         Assert.All(factory.CreatedConnections, c => Assert.True(c.DisposeCount > 0, $"Connection (State={c.State}) was never disposed."));
     }
+
+    [Fact]
+    public void GetConnection_SentinelBroken_TransparentlyReconnectsBeforeNextOperation()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        using var ctx = CreateKeepAliveContext(factory);
+        Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
+
+        var originalSentinel = ctx.PersistentConnection!;
+        Unwrap(originalSentinel).BreakConnection();
+        Assert.Equal(ConnectionState.Broken, originalSentinel.State);
+
+        var opConnection = ctx.GetConnection(ExecutionType.Read);
+
+        var newSentinel = ctx.PersistentConnection;
+        Assert.NotSame(originalSentinel, newSentinel);
+        Assert.NotNull(newSentinel);
+        Assert.Equal(ConnectionState.Open, newSentinel!.State);
+
+        ctx.CloseAndDisposeConnection(opConnection);
+    }
+
+    [Fact]
+    public async Task GetConnection_ConcurrentCallsRaceBrokenSentinel_AllObserveSameRepairedSentinel()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        using var ctx = CreateKeepAliveContext(factory);
+
+        var originalSentinel = ctx.PersistentConnection!;
+        Unwrap(originalSentinel).BreakConnection();
+
+        var tasks = Enumerable.Range(0, 8)
+            .Select(_ => Task.Run(() => ctx.GetConnection(ExecutionType.Read)))
+            .ToArray();
+        var opConnections = await Task.WhenAll(tasks);
+
+        // No double-repair: every caller observes the exact same replacement sentinel, and it
+        // is healthy.
+        var repairedSentinel = ctx.PersistentConnection;
+        Assert.NotSame(originalSentinel, repairedSentinel);
+        Assert.Equal(ConnectionState.Open, repairedSentinel!.State);
+
+        foreach (var conn in opConnections)
+        {
+            ctx.CloseAndDisposeConnection(conn);
+        }
+    }
+
+    // EnsureSentinelHealthy/RepairSentinel is shared by both GetConnection and GetConnectionAsync,
+    // but RepairSentinel itself only ever called the blocking Connection.Open() — never
+    // OpenAsync() — regardless of which caller triggered the repair. That means an async caller
+    // hitting a broken sentinel blocks a thread-pool thread on the replacement's Open(), exactly
+    // the hazard GetConnectionAsync's own doc comment says this class must avoid. fakeDbConnection
+    // tracks OpenCount (sync Open()) and OpenAsyncCount (OpenAsync()) as genuinely distinct
+    // counters for exactly this kind of regression test (see its OpenCore doc comment).
+    [Fact]
+    public async Task GetConnectionAsync_SentinelBroken_RepairsUsingOpenAsyncNotBlockingOpen()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        using var ctx = CreateKeepAliveContext(factory);
+
+        var originalSentinel = ctx.PersistentConnection!;
+        Unwrap(originalSentinel).BreakConnection();
+        Assert.Equal(ConnectionState.Broken, originalSentinel.State);
+
+        var opConnection = await ctx.GetConnectionAsync(ExecutionType.Read);
+
+        var newSentinel = ctx.PersistentConnection;
+        Assert.NotSame(originalSentinel, newSentinel);
+        Assert.NotNull(newSentinel);
+        Assert.Equal(ConnectionState.Open, newSentinel!.State);
+
+        var replacementFake = Unwrap(newSentinel);
+        Assert.True(replacementFake.OpenAsyncCount > 0,
+            "Sentinel repair triggered from an async caller must open the replacement via OpenAsync, not Open().");
+        Assert.Equal(0, replacementFake.OpenCount);
+
+        await ctx.CloseAndDisposeConnectionAsync(opConnection);
+    }
+
+    // Narrower residual case the test above cannot reach: Dispose() completes after the repair's
+    // post-open disposed-context check but before the replacement is installed. On a ReadOnly
+    // context the sentinel's pool permit path never throws ObjectDisposedException on its own, so
+    // only ReplaceSentinel's disposed-aware compare-and-swap keeps the replacement from leaking
+    // into an already-disposed context. PostDisposedCheckHook fires exactly in that window,
+    // deterministically, without needing real thread interleaving.
+    [Fact]
+    public void GetConnection_ContextDisposedBetweenDisposedCheckAndAttachPinnedSlot_UngovernedContext_DoesNotLeakTheReplacementConnection()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=(localdb)\\mssqllocaldb;Database=TestDb;EmulatedProduct=SqlServer",
+            DbMode = DbMode.KeepAlive,
+            ReadWriteMode = ReadWriteMode.ReadOnly,
+            EnableMetrics = true
+        };
+        var ctx = new DatabaseContext(cfg, factory);
+
+        var originalSentinel = ctx.PersistentConnection!;
+        Unwrap(originalSentinel).BreakConnection();
+
+        PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = () =>
+        {
+            PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = null; // avoid re-entrancy
+            ctx.Dispose();
+        };
+
+        ITrackedConnection? opConnection = null;
+        try
+        {
+            opConnection = ctx.GetConnection(ExecutionType.Read);
+        }
+        catch
+        {
+            // Expected — the context is disposed underneath this call.
+        }
+        finally
+        {
+            PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = null;
+            opConnection?.Dispose();
+        }
+
+        Assert.All(factory.CreatedConnections, c => Assert.True(c.DisposeCount > 0, $"Connection (State={c.State}) was never disposed."));
+    }
 }

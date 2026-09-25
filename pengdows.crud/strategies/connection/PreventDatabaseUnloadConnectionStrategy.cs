@@ -11,12 +11,14 @@
 // - PostInitialize() stores the sentinel connection on DatabaseContext.
 // - ReleaseConnection() skips disposal if connection is the sentinel.
 // - HandleDialectDetection() can use sentinel or create throwaway for detection.
-// - Thread-safe: Sentinel is read-only after initialization.
+// - EnsureSentinelHealthy()/EnsureSentinelHealthyAsync() lazily detect and repair any sentinel
+//   (one per enabled pool) that unexpectedly broke/closed, at the top of every GetConnection.
 // - Test extensions provide async convenience helpers for GetConnectionAsync/CloseConnectionAsync.
 // =============================================================================
 
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -44,7 +46,9 @@ namespace pengdows.crud.strategies.connection;
 /// - Embedded databases that have expensive startup costs
 /// - File-based databases where keeping the engine loaded improves performance
 ///
-/// THREAD SAFETY: Fully thread-safe - sentinel connection is read-only after initialization
+/// THREAD SAFETY: Fully thread-safe. Sentinel references are normally stable after
+/// initialization, but EnsureSentinelHealthy() may lazily replace one (under a lock, with a
+/// re-check and a compare-and-swap install) if it unexpectedly transitions to Broken/Closed.
 ///
 /// IMPORTANT: The sentinel connection is NEVER used for actual operations - it exists purely
 /// to keep the database engine loaded and prevent costly reload cycles.
@@ -53,6 +57,14 @@ namespace pengdows.crud.strategies.connection;
 /// </summary>
 internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrategy
 {
+    private readonly object _sentinelRepairLock = new();
+    private readonly SemaphoreSlim _sentinelRepairAsyncLock = new(1, 1);
+
+    // Test-only hook: fires synchronously right after the post-open disposed-context re-check
+    // inside sentinel repair, before the replacement is installed. Lets a test deterministically
+    // reproduce "Dispose() happens exactly in this window" — mirrors TrackedConnection.OpenTimingHook.
+    internal static Action? PostDisposedCheckHook;
+
     internal PreventDatabaseUnloadConnectionStrategy(DatabaseContext context) : base(context)
     {
     }
@@ -64,11 +76,19 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
 
     public override void PostInitialize(ITrackedConnection? connection)
     {
-        _context.SetPersistentConnection(connection);
+        if (connection != null)
+        {
+            // Normal DatabaseContext construction registers its sentinels before the strategy is
+            // created; this branch only serves a strategy initialized directly with a connection.
+            _context.SetPersistentConnection(connection);
+            _context.RegisterSentinel(connection, ExecutionType.Read);
+        }
     }
 
     public override ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
+        EnsureSentinelHealthy();
+
         // Fail fast on acquisition to match tests that expect factory/open failures
         var conn = base.GetConnection(executionType, isShared);
         try
@@ -92,6 +112,8 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     public override async ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType,
         bool isShared, CancellationToken cancellationToken = default)
     {
+        await EnsureSentinelHealthyAsync(cancellationToken).ConfigureAwait(false);
+
         // Fail fast on acquisition to match tests that expect factory/open failures
         var conn = await base.GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
         try
@@ -112,6 +134,167 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
         return conn;
     }
 
+    /// <summary>
+    /// Detects and repairs a sentinel that unexpectedly transitioned to Broken/Closed (network blip,
+    /// engine restart) rather than via context disposal. Called lazily at the top of every
+    /// GetConnection — the guarantee is "repaired before the next connection-requiring operation",
+    /// not continuous (there is no background monitor). Disposing the dead sentinel releases its
+    /// pool permit; the replacement acquires a fresh one from the same pool, so permit accounting
+    /// stays at exactly one per sentinel.
+    /// </summary>
+    private void EnsureSentinelHealthy()
+    {
+        if (AllSentinelsHealthy())
+        {
+            return;
+        }
+
+        lock (_sentinelRepairLock)
+        {
+            foreach (var (current, executionType) in _context.GetSentinelSnapshot())
+            {
+                if (!IsHealthy(current))
+                {
+                    RepairSentinel(current, executionType);
+                }
+            }
+        }
+    }
+
+    private void RepairSentinel(ITrackedConnection current, ExecutionType executionType)
+    {
+        if (_context.IsDisposed)
+        {
+            return;
+        }
+
+        _context.Logger.LogWarning(
+            "PreventDatabaseUnload sentinel connection was {State}; reconnecting.", current.State);
+        DisposeQuietly(current);
+
+        var replacement = _context.CreateSentinelConnection(executionType);
+        try
+        {
+            replacement.Open();
+            InstallReplacement(current, replacement, executionType);
+        }
+        catch
+        {
+            replacement.Dispose();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Async counterpart of <see cref="EnsureSentinelHealthy"/>: same detect/lock/re-check shape,
+    /// but opens the replacement with OpenAsync under a SemaphoreSlim so an async caller never
+    /// blocks a thread-pool thread. A sync and an async repair racing on the same sentinel is safe:
+    /// <see cref="DatabaseContext.ReplaceSentinel"/> is a compare-and-swap and the loser disposes
+    /// its replacement.
+    /// </summary>
+    private async ValueTask EnsureSentinelHealthyAsync(CancellationToken cancellationToken)
+    {
+        if (AllSentinelsHealthy())
+        {
+            return;
+        }
+
+        await _sentinelRepairAsyncLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            foreach (var (current, executionType) in _context.GetSentinelSnapshot())
+            {
+                if (!IsHealthy(current))
+                {
+                    await RepairSentinelAsync(current, executionType, cancellationToken).ConfigureAwait(false);
+                }
+            }
+        }
+        finally
+        {
+            _sentinelRepairAsyncLock.Release();
+        }
+    }
+
+    private async ValueTask RepairSentinelAsync(ITrackedConnection current, ExecutionType executionType,
+        CancellationToken cancellationToken)
+    {
+        if (_context.IsDisposed)
+        {
+            return;
+        }
+
+        _context.Logger.LogWarning(
+            "PreventDatabaseUnload sentinel connection was {State}; reconnecting.", current.State);
+        DisposeQuietly(current);
+
+        var replacement = _context.CreateSentinelConnection(executionType);
+        try
+        {
+            await replacement.OpenAsync(cancellationToken).ConfigureAwait(false);
+            InstallReplacement(current, replacement, executionType);
+        }
+        catch
+        {
+            replacement.Dispose();
+            throw;
+        }
+    }
+
+    private void InstallReplacement(ITrackedConnection current, ITrackedConnection replacement,
+        ExecutionType executionType)
+    {
+        if (_context.IsDisposed)
+        {
+            replacement.Dispose();
+            return;
+        }
+
+        PostDisposedCheckHook?.Invoke();
+
+        // Compare-and-swap; also refuses once the context is disposed, so a Dispose() that lands
+        // after the check above cannot leave the replacement orphaned.
+        if (!_context.ReplaceSentinel(current, replacement, executionType))
+        {
+            replacement.Dispose();
+        }
+    }
+
+    private bool AllSentinelsHealthy()
+    {
+        foreach (var (connection, _) in _context.GetSentinelSnapshot())
+        {
+            if (!IsHealthy(connection))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsHealthy(ITrackedConnection connection)
+    {
+        return connection.State != ConnectionState.Broken && connection.State != ConnectionState.Closed;
+    }
+
+    private static void DisposeQuietly(ITrackedConnection connection)
+    {
+        try
+        {
+            connection.Dispose();
+        }
+        catch
+        {
+            // Already broken — best-effort cleanup; disposal releases its pool permit.
+        }
+    }
+
+    private bool IsSentinel(ITrackedConnection connection)
+    {
+        return _context.GetSentinelSnapshot().Any(s => ReferenceEquals(s.Connection, connection));
+    }
+
     public override void ReleaseConnection(ITrackedConnection? connection)
     {
         if (connection == null)
@@ -119,9 +302,9 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
             return;
         }
 
-        if (ReferenceEquals(connection, _context.PersistentConnection))
+        if (IsSentinel(connection))
         {
-            return; // keep-alive connection stays open
+            return; // sentinel stays open
         }
 
         connection.Dispose();
@@ -129,7 +312,9 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
 
     public override ValueTask ReleaseConnectionAsync(ITrackedConnection? connection)
     {
-        return ReleaseNonPersistentConnectionAsync(connection, _context.PersistentConnection);
+        return ReleaseNonPersistentConnectionAsync(
+            connection,
+            connection != null && IsSentinel(connection) ? connection : null);
     }
 
     public override (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
@@ -174,6 +359,18 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
                 detectionTarget.Dispose();
             }
         }
+    }
+
+    protected override void DisposeManaged()
+    {
+        _sentinelRepairAsyncLock.Dispose();
+        base.DisposeManaged();
+    }
+
+    protected override ValueTask DisposeManagedAsync()
+    {
+        _sentinelRepairAsyncLock.Dispose();
+        return base.DisposeManagedAsync();
     }
 }
 
