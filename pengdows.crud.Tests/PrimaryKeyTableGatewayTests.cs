@@ -86,6 +86,23 @@ public class PrimaryKeyTableGatewayTests
         public int RightId { get; set; }
     }
 
+    /// <summary>Natural-key entity with a [Version] column, used to verify optimistic-concurrency
+    /// conflict detection and version write-back on the update/upsert paths.</summary>
+    [Table("versioned_pk_entity")]
+    public class VersionedPkEntity
+    {
+        [PrimaryKey]
+        [Column("code", DbType.String)]
+        public string Code { get; set; } = string.Empty;
+
+        [Column("value", DbType.String)]
+        public string Value { get; set; } = string.Empty;
+
+        [Version]
+        [Column("version", DbType.Int32)]
+        public int Version { get; set; }
+    }
+
     /// <summary>Entity with a [LastUpdatedBy] audit column for P0-2 double-audit test.</summary>
     [Table("audited_pk_entity")]
     public class AuditedPkEntity
@@ -396,6 +413,170 @@ public class PrimaryKeyTableGatewayTests
         Assert.Contains("UPDATE", sql);
         Assert.Contains("order_id", sql);
         Assert.Contains("line_number", sql);
+    }
+
+    // =========================================================================
+    // UpdateAsync / BatchUpdateAsync — must throw ConcurrencyConflictException on a
+    // [Version] mismatch, matching TableGateway<T,TId>'s UpdateAsync and this
+    // gateway's own single-row UpsertAsync (BP-201).
+    // =========================================================================
+
+    private static async Task CreateVersionedPkTableAsync(IDatabaseContext ctx)
+    {
+        var qp = ctx.QuotePrefix;
+        var qs = ctx.QuoteSuffix;
+        await ctx.CreateSqlContainer($@"CREATE TABLE IF NOT EXISTS {qp}versioned_pk_entity{qs}(
+            {qp}code{qs} TEXT PRIMARY KEY,
+            {qp}value{qs} TEXT NOT NULL,
+            {qp}version{qs} INTEGER NOT NULL DEFAULT 0
+        )").ExecuteNonQueryAsync();
+    }
+
+    [Fact]
+    public async Task UpdateAsync_StaleVersion_ThrowsConcurrencyConflictException()
+    {
+        using var ctx = MakeContext(SupportedDatabase.Sqlite);
+        await CreateVersionedPkTableAsync(ctx);
+
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+        var entity = new VersionedPkEntity { Code = "abc", Value = "v" };
+        await gw.CreateAsync(entity, ctx);
+        Assert.Equal(1, entity.Version);
+
+        // Stale in-memory copy: the WHERE clause's version condition won't match the persisted
+        // row's version (1), so this must throw rather than silently return 0.
+        entity.Version = 999;
+
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => gw.UpdateAsync(entity, ctx).AsTask());
+    }
+
+    [Fact]
+    public async Task UpdateAsync_LoadOriginalOverload_StaleVersion_ThrowsConcurrencyConflictException()
+    {
+        using var ctx = MakeContext(SupportedDatabase.Sqlite);
+        await CreateVersionedPkTableAsync(ctx);
+
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+        var entity = new VersionedPkEntity { Code = "abc", Value = "v" };
+        await gw.CreateAsync(entity, ctx);
+        entity.Version = 999;
+
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => gw.UpdateAsync(entity, false, ctx).AsTask());
+    }
+
+    [Fact]
+    public async Task BatchUpdateAsync_OneEntityHasStaleVersion_ThrowsConcurrencyConflictException()
+    {
+        using var ctx = MakeContext(SupportedDatabase.Sqlite);
+        await CreateVersionedPkTableAsync(ctx);
+
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+        var a = new VersionedPkEntity { Code = "a", Value = "v1" };
+        var b = new VersionedPkEntity { Code = "b", Value = "v2" };
+        await gw.CreateAsync(a, ctx);
+        await gw.CreateAsync(b, ctx);
+
+        a.Value = "a-updated";
+        b.Value = "b-updated";
+        b.Version = 999; // stale: the WHERE clause won't match for this entity's container.
+
+        var ex = await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => gw.BatchUpdateAsync(new[] { a, b }, ctx).AsTask());
+        Assert.Contains("code=b", ex.Message);
+    }
+
+    [Fact]
+    public async Task BatchUpdateAsync_Unversioned_ZeroAffected_DoesNotThrow()
+    {
+        using var ctx = MakeContext(SupportedDatabase.Sqlite);
+        var gw = new PrimaryKeyTableGateway<OrderLine>(ctx);
+        var lines = new[]
+        {
+            new OrderLine { OrderId = 1, LineNumber = 1, ProductCode = "A", Quantity = 1 },
+            new OrderLine { OrderId = 1, LineNumber = 2, ProductCode = "B", Quantity = 1 }
+        };
+
+        // No version column: 0 affected is a plain "nothing matched", not a conflict.
+        var affected = await gw.BatchUpdateAsync(lines, ctx);
+        Assert.Equal(0, affected);
+    }
+
+    private static DatabaseContext MakeFixedNonQueryContext(SupportedDatabase db, int rowsAffected)
+    {
+        var factory = new fakeDbFactory(db);
+        factory.SetNonQueryResult(rowsAffected);
+        var cs = db switch
+        {
+            SupportedDatabase.PostgreSql => "Host=localhost;EmulatedProduct=PostgreSql",
+            SupportedDatabase.MySql => "Server=localhost;EmulatedProduct=MySql",
+            SupportedDatabase.SqlServer => "Server=localhost;EmulatedProduct=SqlServer",
+            SupportedDatabase.Firebird => "Data Source=test;EmulatedProduct=Firebird",
+            _ => "Data Source=:memory:;EmulatedProduct=Sqlite"
+        };
+        return new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = cs,
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        }, factory);
+    }
+
+    private static VersionedPkEntity[] TwoVersionedPkEntities() =>
+    [
+        new VersionedPkEntity { Code = "a", Value = "v1", Version = 1 },
+        new VersionedPkEntity { Code = "b", Value = "v2", Version = 1 }
+    ];
+
+    [Fact]
+    public async Task BatchUpsertAsync_OnConflictChunk_PartialConflict_ThrowsConcurrencyConflictException()
+    {
+        // PostgreSQL batches the whole chunk into one INSERT ... ON CONFLICT DO UPDATE ... WHERE
+        // version guard. "1 of 2 rows affected" means the guard skipped a stale row.
+        await using var ctx = MakeFixedNonQueryContext(SupportedDatabase.PostgreSql, 1);
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => gw.BatchUpsertAsync(TwoVersionedPkEntities(), ctx).AsTask());
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_PerEntityMerge_StaleEntity_ThrowsConcurrencyConflictException()
+    {
+        // SQL Server has no ON CONFLICT/ON DUPLICATE KEY, so each entity gets its own MERGE with a
+        // WHEN MATCHED AND version guard; 0 affected on a container is a conflict on that entity.
+        await using var ctx = MakeFixedNonQueryContext(SupportedDatabase.SqlServer, 0);
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+
+        var ex = await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => gw.BatchUpsertAsync(TwoVersionedPkEntities(), ctx).AsTask());
+        Assert.Contains("code=a", ex.Message);
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_MySqlOnDuplicateKey_ZeroAffected_DoesNotThrow()
+    {
+        // MySQL/MariaDB ON DUPLICATE KEY UPDATE carries no version guard, and the driver reports
+        // 0 affected for a row whose values didn't change (an ordinary no-op upsert). That must
+        // never be reported as a version conflict.
+        await using var ctx = MakeFixedNonQueryContext(SupportedDatabase.MySql, 0);
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+
+        var affected = await gw.BatchUpsertAsync(TwoVersionedPkEntities(), ctx);
+        Assert.Equal(0, affected);
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_Firebird_ZeroAffected_DoesNotThrow()
+    {
+        // Firebird's upsert emits no version guard (same as single-row UpsertAsync, which also
+        // doesn't throw there), so 0 affected can't be read as a version conflict.
+        await using var ctx = MakeFixedNonQueryContext(SupportedDatabase.Firebird, 0);
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+
+        var affected = await gw.BatchUpsertAsync(TwoVersionedPkEntities(), ctx);
+        Assert.Equal(0, affected);
     }
 
     // =========================================================================

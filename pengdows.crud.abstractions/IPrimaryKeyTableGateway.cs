@@ -134,6 +134,10 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// <summary>
     /// Executes an UPDATE keyed on <c>[PrimaryKey]</c> columns. Returns rows affected.
     /// </summary>
+    /// <remarks>
+    /// For entities with a <c>[Version]</c> column, 0 rows affected (version mismatch or row
+    /// deleted) throws <c>ConcurrencyConflictException</c>.
+    /// </remarks>
     ValueTask<int> UpdateAsync(TEntity objectToUpdate, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -141,6 +145,10 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// Executes an UPDATE. <paramref name="loadOriginal"/> is ignored (see
     /// <see cref="BuildUpdateAsync(TEntity, bool, IDatabaseContext?, CancellationToken)"/>). Returns rows affected.
     /// </summary>
+    /// <remarks>
+    /// For entities with a <c>[Version]</c> column, 0 rows affected (version mismatch or row
+    /// deleted) throws <c>ConcurrencyConflictException</c>.
+    /// </remarks>
     ValueTask<int> UpdateAsync(TEntity objectToUpdate, bool loadOriginal, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -236,6 +244,12 @@ public interface IPrimaryKeyTableGateway<TEntity>
         IDatabaseContext? context = null);
 
     /// <summary>Executes a batch UPDATE keyed on <c>[PrimaryKey]</c>. Returns total rows affected.</summary>
+    /// <remarks>
+    /// For entities with a <c>[Version]</c> column, an entity whose UPDATE affects 0 rows (version
+    /// mismatch or row deleted) throws <c>ConcurrencyConflictException</c>. Entities processed
+    /// before the conflicting one have already been written; run the batch inside a transaction to
+    /// make it all-or-nothing.
+    /// </remarks>
     ValueTask<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 
@@ -244,6 +258,16 @@ public interface IPrimaryKeyTableGateway<TEntity>
         IDatabaseContext? context = null);
 
     /// <summary>Executes a batch UPSERT keyed on <c>[PrimaryKey]</c>. Returns total rows affected.</summary>
+    /// <remarks>
+    /// With a <c>[Version]</c> column, a stale version on an existing row is detected where the
+    /// generated SQL carries a version guard: <c>MERGE</c> dialects (except Firebird) and
+    /// <c>INSERT ... ON CONFLICT DO UPDATE ... WHERE</c> dialects. MySQL/MariaDB-family
+    /// <c>ON DUPLICATE KEY UPDATE</c> and Firebird <c>UPDATE OR INSERT</c> have no version guard and
+    /// cannot detect a stale version: the row is overwritten and no exception is thrown.
+    /// Where it is detected, a statement that affects fewer rows than it contains entities throws
+    /// <c>ConcurrencyConflictException</c>. Statements executed before the conflicting one have
+    /// already been written; run the batch inside a transaction to make it all-or-nothing.
+    /// </remarks>
     ValueTask<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null,
         CancellationToken cancellationToken = default);
 

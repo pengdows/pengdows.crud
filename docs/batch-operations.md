@@ -101,27 +101,41 @@ Convenience overloads delegate to these batch methods:
 - Audit values are resolved once per batch, not once per entity.
 - Version columns are prepared during batch create (null/zero numeric versions are set to `1`). Batch update's version handling depends on the path — see below.
 
-### Batch update does not throw on a version conflict
+### Batch update and `[Version]` conflicts
 
-Unlike single-entity `TableGateway<T,TId>.UpdateAsync`, a multi-entity `BatchUpdateAsync` does
-not throw `ConcurrencyConflictException`. It executes each container and returns the summed
-affected-row count; compare that against `entities.Count` yourself if you need to detect stale
-rows. (A one-entity list takes the single-row fast path, so on `TableGateway<T,TId>` a stale
-version in a one-item batch *does* throw.) How a
-`[Version]` column is treated depends on which path the batch takes:
+`BatchUpdateAsync` on both gateways throws `ConcurrencyConflictException` when a versioned entity
+is stale, the same as single-entity `UpdateAsync`:
 
-- **Per-entity fallback** (`TableGateway<T,TId>` on dialects without `SupportsBatchUpdate`, and
-  every `PrimaryKeyTableGateway<T>` batch update): each container is the ordinary single-row
-  UPDATE, including the `version = version + 1` increment and the `version = @currentVersion`
-  predicate, so a stale entity simply contributes `0` to the total.
-- **Multi-row path** (`TableGateway<T,TId>` on dialects with `SupportsBatchUpdate`): the dialect's
-  `BuildBatchUpdateSql` takes only the key and updateable column lists. The version column is
-  written like any other updateable column, from the entity's current in-memory value — there is
-  no version predicate and no server-side increment. Use the single-entity `UpdateAsync` (or a
-  per-entity loop) when optimistic concurrency matters.
+- A `[Version]` entity is always updated through the per-entity UPDATE, even on dialects with
+  `SupportsBatchUpdate`, because the multi-row form can neither increment nor check a version per
+  row. Each container carries `version = version + 1` in SET and `version = @currentVersion` in
+  WHERE, so a stale (or deleted) row affects 0 rows and throws. On `PrimaryKeyTableGateway<T>` the
+  message names the entity by its `[PrimaryKey]` values.
+- Entities processed before the conflicting one have already been written. Wrap the batch in
+  `BeginTransaction()` when it must be all-or-nothing.
+- Unversioned entities never throw; a 0 in the total just means nothing matched.
 
-Batch operations don't use `RETURNING`/`OUTPUT` (by design, for cross-dialect portability), so on
-the multi-row path a short affected-row count cannot be attributed to specific entities.
+### Batch upsert and `[Version]` conflicts
+
+`PrimaryKeyTableGateway<T>.BatchUpsertAsync` throws `ConcurrencyConflictException` when a
+version-guarded statement affects fewer rows than it contains entities. Only some upsert shapes
+carry a version guard:
+
+| Batch upsert shape | Version guard | Stale `[Version]` on an existing row |
+|---|---|---|
+| Multi-row `INSERT ... ON CONFLICT DO UPDATE ... WHERE` (dialects with `SupportsOnConflictWhere`: PostgreSQL family, SQLite, DuckDB) | yes | row skipped, throws |
+| Per-entity `MERGE` fallback (SQL Server, Oracle, Db2, Snowflake, ...) | yes | row skipped, throws |
+| Multi-row `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL, MariaDB, TiDB, Aurora MySQL) | **no** | **row overwritten, no exception** |
+| Firebird `UPDATE OR INSERT ... MATCHING` | **no** | **row overwritten, no exception** |
+
+The MySQL-family and Firebird rows are a real limitation, not an oversight: `ON DUPLICATE KEY
+UPDATE` has no conditional-update predicate, and MySQL reports 0 affected rows for an upsert that
+changed nothing, so a rows-affected shortfall can't be told apart from an ordinary no-op. On those
+databases, use `UpdateAsync`/`BatchUpdateAsync` (which do check the version) when a stale write
+must be rejected.
+
+A multi-row `ON CONFLICT` chunk can't say which of its entities were stale (no `RETURNING` is used
+for batch operations), so re-read the whole batch before retrying.
 
 ## Architecture
 

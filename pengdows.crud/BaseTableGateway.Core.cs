@@ -406,6 +406,36 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         return ctx.GetDialect();
     }
 
+    /// <summary>
+    /// Whether a rows-affected shortfall from a batch-upsert container reliably means a
+    /// <c>[Version]</c> conflict. Mirrors the SQL shape <c>BuildBatchUpsert</c> picks:
+    /// chunked ON CONFLICT carries a version guard only when the dialect supports
+    /// <c>DO UPDATE ... WHERE</c>; chunked ON DUPLICATE KEY (MySQL family) has no guard and
+    /// reports 0 affected for an unchanged row, so it can't detect a conflict; the per-entity
+    /// fallback uses the same rule as single-entity <c>UpsertAsync</c> (a guarded MERGE, except
+    /// Firebird's UPDATE OR INSERT, which has no guard).
+    /// </summary>
+    private protected bool BatchUpsertCanDetectVersionConflict(IDatabaseContext ctx)
+    {
+        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())
+        {
+            return false;
+        }
+
+        var info = ctx.DataSourceInfo;
+        if (info.SupportsInsertOnConflict)
+        {
+            return GetDialect(ctx).SupportsOnConflictWhere;
+        }
+
+        if (info.SupportsOnDuplicateKey)
+        {
+            return false;
+        }
+
+        return info.SupportsMerge && info.Product != SupportedDatabase.Firebird;
+    }
+
     protected void CheckParameterLimit(ISqlContainer sc, int? toAdd)
     {
         var maxParameterLimit = sc is ISqlDialectProvider dialectProvider

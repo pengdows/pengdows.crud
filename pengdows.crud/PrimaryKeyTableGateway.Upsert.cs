@@ -25,6 +25,9 @@
 //     with version WHERE predicate from PkTemplates.UpsertOnConflictVersionWhere
 //   * ON DUPLICATE KEY: multi-row insert with alias quoting
 //   * MERGE/Firebird: falls back to per-entity BuildUpsert loop
+//   * BatchUpsertAsync throws ConcurrencyConflictException when a guarded container affects
+//     fewer rows than it holds entities (BatchUpsertCanDetectVersionConflict); ON DUPLICATE KEY
+//     and Firebird cannot detect a stale [Version] and never throw for it
 // - Throws NotSupportedException for fallback/unknown dialects.
 // =============================================================================
 
@@ -220,13 +223,25 @@ public partial class PrimaryKeyTableGateway<TEntity>
         var containers = BuildBatchUpsert(entities, ctx);
         var total = 0;
         var completedContainers = 0;
+        var versionConflictDetectionApplies = BatchUpsertCanDetectVersionConflict(ctx);
         try
         {
             foreach (var sc in containers)
             {
                 await using var owned = sc;
                 cancellationToken.ThrowIfCancellationRequested();
-                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+
+                // A guarded upsert that skips a stale row reports it as not affected.
+                if (versionConflictDetectionApplies &&
+                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities) &&
+                    affected < chunkEntities.Count)
+                {
+                    throw new ConcurrencyConflictException(
+                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                }
+
+                total += affected;
                 completedContainers++;
             }
         }

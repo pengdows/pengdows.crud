@@ -140,9 +140,8 @@ database assigns it; see `docs/advanced-types.md`.
 - **UPDATE:** for numeric versions, the SET clause increments it by 1 and the WHERE clause adds
   `version = @currentVersion` — on **both** `TableGateway<T,TId>` and `PrimaryKeyTableGateway<T>`.
   What happens when that predicate matches zero rows (stale version or the row was deleted)
-  differs by gateway: `TableGateway<T,TId>.UpdateAsync` throws `ConcurrencyConflictException`;
-  `PrimaryKeyTableGateway<T>.UpdateAsync` returns `0` without throwing, so check the returned
-  row count. (`UpsertAsync` on both gateways throws `ConcurrencyConflictException` on a version
+  is the same on both gateways: `UpdateAsync` and `BatchUpdateAsync` throw
+  `ConcurrencyConflictException`. (`UpsertAsync` on both gateways throws `ConcurrencyConflictException` on a version
   mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
   ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY
   UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites.)

@@ -6,6 +6,7 @@
 using System.Data;
 using System.Data.Common;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -55,6 +56,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
             await using var sc = await BuildUpdateAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
+            if (rowsAffected == 0 && _versionColumn != null)
+            {
+                throw new ConcurrencyConflictException(
+                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                    ctx.Product);
+            }
+
             return rowsAffected;
         }
         catch
@@ -77,6 +85,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
+            if (rowsAffected == 0 && _versionColumn != null)
+            {
+                throw new ConcurrencyConflictException(
+                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
+                    ctx.Product);
+            }
+
             return rowsAffected;
         }
         catch
@@ -161,7 +176,19 @@ public partial class PrimaryKeyTableGateway<TEntity>
             {
                 await using var owned = sc;
                 cancellationToken.ThrowIfCancellationRequested();
-                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+
+                // BuildBatchUpdate builds one container per entity for this gateway, and an
+                // UPDATE's WHERE clause deterministically matches or doesn't, so 0 affected on a
+                // versioned container is a version conflict (or a deleted row) on that entity.
+                if (_versionColumn != null && affected == 0 &&
+                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities))
+                {
+                    throw new ConcurrencyConflictException(
+                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                }
+
+                total += affected;
                 completedContainers++;
             }
         }
@@ -334,5 +361,30 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         return pVersion;
+    }
+
+    /// <summary>
+    /// Builds the message for a batch version conflict. A single-entity container names the entity
+    /// by its [PrimaryKey] values; a multi-row chunk (batched ON CONFLICT upsert) cannot attribute
+    /// the conflict to a specific entity from the affected-row count alone.
+    /// </summary>
+    private string BuildBatchConflictMessage(IReadOnlyList<TEntity> chunkEntities, int affected)
+    {
+        if (chunkEntities.Count == 1)
+        {
+            return $"Concurrency conflict on {typeof(TEntity).Name} " +
+                   $"({DescribeEntityKeyForConflictMessage(chunkEntities[0])}): version mismatch or row deleted.";
+        }
+
+        return $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) " +
+               $"affected but {affected} succeeded. Which specific entity/entities conflicted cannot be " +
+               "individually identified from this batch SQL shape. Re-read every entity in this batch " +
+               "from the database before retrying; do not assume only some are stale.";
+    }
+
+    private string DescribeEntityKeyForConflictMessage(TEntity entity)
+    {
+        return string.Join(", ",
+            _tableInfo.PrimaryKeys.Select(pk => $"{pk.Name}={pk.MakeParameterValueFromField(entity)}"));
     }
 }
