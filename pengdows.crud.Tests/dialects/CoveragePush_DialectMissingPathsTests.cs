@@ -497,4 +497,24 @@ public class CoveragePush_DialectMissingPathsTests
         [Column("name", DbType.String)]
         public string Name { get; set; } = string.Empty;
     }
+
+    // BP-119 (3.0 3eb997c): MySQL error 1295 "This command is not supported in the prepared
+    // statement protocol yet" must trigger the disable-prepare fallback like 1461 does.
+    [Fact]
+    public void MySql_ShouldDisablePrepareOn_UnsupportedPreparedStatement_ReturnsTrue()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
+
+        Assert.True(dialect.ShouldDisablePrepareOn(
+            new Exception("This command is not supported in the prepared statement protocol yet")));
+        Assert.True(dialect.ShouldDisablePrepareOn(new Bp119MySqlExceptionWithNumber(1295, "error 1295")));
+        Assert.False(dialect.ShouldDisablePrepareOn(new Bp119MySqlExceptionWithNumber(1064, "syntax error")));
+    }
+
+    private sealed class Bp119MySqlExceptionWithNumber : Exception
+    {
+        public int Number { get; }
+        public Bp119MySqlExceptionWithNumber(int number, string message) : base(message) => Number = number;
+    }
 }

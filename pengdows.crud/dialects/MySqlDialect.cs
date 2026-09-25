@@ -83,6 +83,8 @@ internal class MySqlDialect : SqlDialect
 
     private const int MaxPreparedStatementCountErrorCode = 1461;
     private const string MaxPreparedStatementCountToken = "max_prepared_stmt_count";
+    private const int UnsupportedPreparedStatementErrorCode = 1295;
+    private const string UnsupportedPreparedStatementToken = "not supported in the prepared statement protocol";
     private const string PreferredProviderWarning =
         "MySql.Data is supported, but MySqlConnector is the preferred MySQL provider for pengdows.crud. " +
         "MySqlConnector provides better read/write pool separation support and has shown better behavior under high concurrency.";
@@ -254,6 +256,13 @@ internal class MySqlDialect : SqlDialect
             return true;
         }
 
+        // Error 1295: the statement (e.g. a compound CREATE PROCEDURE body) cannot be prepared;
+        // fall back to unprepared execution for it (3.0 3eb997c).
+        if (IsUnsupportedPreparedStatement(ex))
+        {
+            return true;
+        }
+
         if (!IsMaxPreparedStatementLimit(ex))
         {
             return false;
@@ -382,6 +391,24 @@ internal class MySqlDialect : SqlDialect
         {
             return connectionString;
         }
+    }
+
+    private static bool IsUnsupportedPreparedStatement(Exception ex)
+    {
+        for (Exception? current = ex; current != null; current = current.InnerException)
+        {
+            if (current.Message.Contains(UnsupportedPreparedStatementToken, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (TryGetProviderErrorCode(current) == UnsupportedPreparedStatementErrorCode)
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool IsMaxPreparedStatementLimit(Exception ex)

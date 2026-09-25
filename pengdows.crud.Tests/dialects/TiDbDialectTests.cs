@@ -66,6 +66,29 @@ namespace pengdows.crud.Tests.dialects
             Assert.Equal(ProcWrappingStyle.None, dialect.ProcWrappingStyle);
         }
 
+        // BP-119 (3.0 3eb997c): TiDB rejects the MySQL 8.0.20+ "INSERT ... AS incoming" alias
+        // (confirmed live on TiDB v7.5.1: syntax error near "AS incoming"). The alias gate compares
+        // the parsed version against 8.0.20, and TiDB's parsed version is its own release number,
+        // so TiDB v8.x would cross the gate and emit the unsupported alias.
+        [Theory]
+        [InlineData("8.0.11-TiDB-v7.5.1")]
+        [InlineData("8.0.11-TiDB-v8.5.1")]
+        public async System.Threading.Tasks.Task UpsertIncoming_NeverUsesAlias_AnyTiDbVersion(string version)
+        {
+            var factory = new fakeDbFactory(SupportedDatabase.TiDb);
+            var connection = new fakeDbConnection { EmulatedProduct = SupportedDatabase.TiDb };
+            connection.SetServerVersion(version);
+            connection.SetScalarResultForCommand("SELECT VERSION()", version);
+            var tracked = new pengdows.crud.wrappers.TrackedConnection(connection);
+            tracked.Open();
+
+            var dialect = new TiDbDialect(factory, NullLogger.Instance);
+            await dialect.DetectDatabaseInfoAsync(tracked);
+
+            Assert.Null(dialect.UpsertIncomingAlias);
+            Assert.Equal("VALUES(\"col\")", dialect.UpsertIncomingColumn("col"));
+        }
+
         [Fact]
         public void GetBaseSessionSettings_IncludesTiDbPessimisticMode()
         {
