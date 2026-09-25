@@ -194,7 +194,7 @@ public class TransactionTests : DatabaseTestBase
     }
 
     [SkippableFact]
-    public async Task Transaction_ProviderSpecificUnsupportedIsolationLevel_IsRejected()
+    public async Task Transaction_ProviderSpecificUnsupportedIsolationLevel_FailsUpOrIsRejected()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
@@ -236,9 +236,23 @@ public class TransactionTests : DatabaseTestBase
                 return;
             }
 
-            var ex = Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(unsupported.Value));
-            Output.WriteLine($"{provider}: {unsupported.Value} correctly rejected — {ex.Message}");
-            await Task.CompletedTask;
+            // Isolation fails up, never down: an unsupported level runs at the weakest supported
+            // level at least as strong; only when nothing at or above it exists is it rejected.
+            var nothingAtOrAbove = provider is SupportedDatabase.TiDb or SupportedDatabase.Snowflake
+                or SupportedDatabase.Db2;
+            if (nothingAtOrAbove)
+            {
+                var ex = Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(unsupported.Value));
+                Output.WriteLine($"{provider}: {unsupported.Value} correctly rejected — {ex.Message}");
+            }
+            else
+            {
+                await using var tx = context.BeginTransaction(unsupported.Value);
+                Assert.NotEqual(unsupported.Value, tx.IsolationLevel);
+                Assert.Contains(tx.IsolationLevel, context.GetSupportedIsolationLevels());
+                tx.Rollback();
+                Output.WriteLine($"{provider}: {unsupported.Value} failed up to {tx.IsolationLevel}");
+            }
         });
     }
 

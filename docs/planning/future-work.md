@@ -6,6 +6,39 @@ is not lost and can be picked up when the need arises.
 
 ---
 
+## 2.0.6 backports — September 2026
+
+Fixes found and made on the 2.0.6 patch line (see `docs/bug-backlog-2.0.6.md` on that branch)
+and brought here on branch `3.0-backports`, each with its tests red on 3.0 first:
+
+- **Fixed:** versioned upsert (CockroachDB/YugabyteDB ambiguous increment, Oracle `WHEN MATCHED
+  AND`, SQLite/DuckDB conflict detection); `ProviderParameterFactory` NpgsqlDbType numbers (JSONB
+  sent as Path, `int[]` as BigIntRange — now by name, verified against real Npgsql);
+  `Range<T>.Empty` as a real empty range (`IsEmpty` is now empty-only on 3.0); `ReadBytes` partial
+  reads; Oracle `RETURNING … INTO :o0`; D06 (SingleConnection read during an open transaction is
+  rejected; writes still wait); explicit isolation levels fail up (PostgreSQL-family
+  `Serializable` gained `NonBlockingReads`); enum names for every string column type; invariant
+  SQL numbers; full-fidelity intervals; `JsonValue.AsElement`; SQL Server spatial; normalization
+  cache key; fakeDb `skipFirstOpen`; cancellation during `BeginTransaction` unwrapped; Informix
+  -908/-27001/-27002 → `ConnectionException`; `TotalConnectionsReused`/`ConnectionPoolEfficiency`
+  removed; stale comments.
+- **Test de-flaking:** several timing tests failed only when net8.0 and net10.0 ran together —
+  captured evidence showed thread-pool continuations delayed past 5–10s, not product races. Their
+  timeouts are now safety nets. Raising `ThreadPool` min threads for the suite would cut these
+  further but could mask the next sync-over-async defect; deliberately not done.
+
+- [ ] **Decision: should a degraded `IsolationProfile` throw?** 2.0.6 throws
+  `TransactionModeNotSupportedException` (StrictConsistency on TiDB/Snowflake/Access;
+  SafeNonBlockingReads on SQL Server without snapshot and on PostgreSQL/YugabyteDB). 3.0 logs a
+  warning, with `IsolationResolutionPolicy.AllowLower` as the explicit fail-down option. Making
+  3.0 throw needs its per-dialect guarantee flags corrected first: they currently mark
+  SafeNonBlockingReads degraded on MVCC engines (Oracle, MySQL/MariaDB/TiDB/SingleStore, DuckDB,
+  Snowflake, SAP HANA, SQLite), while PostgreSQL/YugabyteDB — which 2.0.6 rejects — are not.
+- [ ] **Difference to keep in mind:** an explicit `Snapshot` request with snapshot isolation off
+  throws on 3.0 (Serializable does not give non-blocking reads) but runs as Serializable on 2.0.6.
+
+---
+
 ## Ad hoc architecture review (own findings, not from an external tool) — 2 fixed, 2 deliberately deferred, 2026-08-30
 
 Asked directly ("are there any spots where we got weird/sloppy with our architecture?") after
