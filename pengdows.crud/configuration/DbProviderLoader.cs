@@ -218,6 +218,23 @@ public class DbProviderLoader : IDbProviderLoader
                 $"Assembly path for provider '{providerKey}' must stay within '{normalizedBaseDirectory}'.");
         }
 
+        // The check above is purely lexical. A symlink whose own path lexically satisfies the
+        // containment check can still point at a target outside the base directory. Resolve the
+        // final link target (links can chain) and re-check containment against it.
+        if (File.Exists(candidatePath))
+        {
+            var linkTarget = File.ResolveLinkTarget(candidatePath, returnFinalTarget: true);
+            if (linkTarget != null)
+            {
+                var resolvedTargetPath = Path.GetFullPath(linkTarget.FullName);
+                if (!resolvedTargetPath.StartsWith(baseWithSeparator, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"Assembly path for provider '{providerKey}' must stay within '{normalizedBaseDirectory}'.");
+                }
+            }
+        }
+
         return candidatePath;
     }
 }

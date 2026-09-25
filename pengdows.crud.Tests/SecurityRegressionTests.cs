@@ -99,6 +99,50 @@ public sealed class SecurityRegressionTests
         Assert.Contains("must stay within", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    // BP-101 (3.0 CORE-015): ResolveAssemblyPath's containment check is purely lexical. A symlink
+    // placed directly under the base directory lexically satisfies "starts with the base
+    // directory" but can point at a target outside it; the target must be resolved and re-checked.
+    [Fact]
+    public void LoadAndRegisterProviders_RejectsSymlinkUnderBaseDirectoryPointingOutside()
+    {
+        var baseDirectory = AppDomain.CurrentDomain.BaseDirectory;
+        var outsideDirectory = Directory.CreateTempSubdirectory("pengdows-bp101-outside-");
+        var outsideTarget = Path.Combine(outsideDirectory.FullName, "outside.dll");
+        File.WriteAllBytes(outsideTarget, new byte[] { 0x00 });
+
+        var linkName = $"pengdows-bp101-escape-{Guid.NewGuid():N}.dll";
+        var linkPath = Path.Combine(baseDirectory, linkName);
+
+        try
+        {
+            File.CreateSymbolicLink(linkPath, outsideTarget);
+
+            var config = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["DatabaseProviders:test:ProviderName"] = "Test.Provider",
+                    ["DatabaseProviders:test:FactoryType"] = "Ignored.Factory",
+                    ["DatabaseProviders:test:AssemblyPath"] = linkName
+                })
+                .Build();
+
+            var loader = new DbProviderLoader(config, NullLogger<DbProviderLoader>.Instance);
+
+            var ex = Assert.Throws<InvalidOperationException>(
+                () => loader.LoadAndRegisterProviders(new ServiceCollection()));
+            Assert.Contains("must stay within", ex.Message, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (File.Exists(linkPath))
+            {
+                File.Delete(linkPath);
+            }
+
+            outsideDirectory.Delete(recursive: true);
+        }
+    }
+
     private sealed class SecurityJsonEntity
     {
         public JsonDocument? Payload { get; set; }
