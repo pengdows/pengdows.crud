@@ -448,7 +448,8 @@ internal class GeometryCoercion : DbCoercion<Geometry>
                     value = geom;
                     return true;
                 case byte[] bytes:
-                    value = Geometry.FromWellKnownBinary(bytes, 0);
+                    GeometryConverter.ExtractSridFromEwkb(bytes, out var srid, out var normalized);
+                    value = Geometry.FromWellKnownBinary(normalized, srid);
                     return true;
                 case string text when text.StartsWith("{"):
                     value = Geometry.FromGeoJson(text, 0);
@@ -479,12 +480,12 @@ internal class GeometryCoercion : DbCoercion<Geometry>
 
         if (!value.WellKnownBinary.IsEmpty)
         {
-            parameter.Value = value.WellKnownBinary.ToArray();
+            parameter.Value = SpatialConverter<Geometry>.AddSridToWkb(value.WellKnownBinary.Span, value.Srid);
             parameter.DbType = DbType.Binary;
         }
         else
         {
-            parameter.Value = value.WellKnownText;
+            parameter.Value = SpatialConverter<Geometry>.AddSridToWkt(value.WellKnownText!, value.Srid);
             parameter.DbType = DbType.String;
         }
 
@@ -513,7 +514,8 @@ internal class GeographyCoercion : DbCoercion<Geography>
                     value = geog;
                     return true;
                 case byte[] bytes:
-                    value = Geography.FromWellKnownBinary(bytes, 4326);
+                    GeographyConverter.ExtractSridFromEwkb(bytes, out var srid, out var normalized);
+                    value = Geography.FromWellKnownBinary(normalized, srid == 0 ? 4326 : srid);
                     return true;
                 case string text when text.StartsWith("{"):
                     value = Geography.FromGeoJson(text, 4326);
@@ -544,12 +546,12 @@ internal class GeographyCoercion : DbCoercion<Geography>
 
         if (!value.WellKnownBinary.IsEmpty)
         {
-            parameter.Value = value.WellKnownBinary.ToArray();
+            parameter.Value = SpatialConverter<Geography>.AddSridToWkb(value.WellKnownBinary.Span, value.Srid);
             parameter.DbType = DbType.Binary;
         }
         else
         {
-            parameter.Value = value.WellKnownText;
+            parameter.Value = SpatialConverter<Geography>.AddSridToWkt(value.WellKnownText!, value.Srid);
             parameter.DbType = DbType.String;
         }
 

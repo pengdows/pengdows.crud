@@ -230,7 +230,7 @@ public partial class TableGateway<TEntity, TRowID> :
         // 3. Handle CORRELATION TOKEN plan
         if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn != null && _idColumn != null)
         {
-            var token = Guid.NewGuid().ToString("N");
+            var token = CreateCorrelationToken();
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
 
             await using var sc = BuildCreate(entity, ctx);
@@ -249,7 +249,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 dialect.MakeParameterName("p1"));
 
             using var lookupSc = ctx.CreateSqlContainer(lookupSql);
-            lookupSc.AddParameterWithValue("p1", DbType.String, token);
+            lookupSc.AddParameterWithValue("p1", _tableInfo.CorrelationColumn.DbType, token);
 
             var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
@@ -428,7 +428,7 @@ public partial class TableGateway<TEntity, TRowID> :
         // 3. Handle CORRELATION TOKEN plan
         if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn != null && _idColumn != null)
         {
-            var token = Guid.NewGuid().ToString("N");
+            var token = CreateCorrelationToken();
             _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
 
             await using var sc = BuildCreate(entity, ctx);
@@ -447,7 +447,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 dialect.MakeParameterName("p1"));
 
             using var lookupSc = ctx.CreateSqlContainer(lookupSql);
-            lookupSc.AddParameterWithValue("p1", DbType.String, token);
+            lookupSc.AddParameterWithValue("p1", _tableInfo.CorrelationColumn.DbType, token);
 
             var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
@@ -522,6 +522,24 @@ public partial class TableGateway<TEntity, TRowID> :
 
             throw;
         }
+    }
+
+    private object CreateCorrelationToken()
+    {
+        var type = Nullable.GetUnderlyingType(_tableInfo.CorrelationColumn!.PropertyInfo.PropertyType)
+            ?? _tableInfo.CorrelationColumn.PropertyInfo.PropertyType;
+        if (type == typeof(string))
+        {
+            return Guid.NewGuid().ToString("N");
+        }
+
+        if (type == typeof(Guid))
+        {
+            return Guid.NewGuid();
+        }
+
+        throw new InvalidOperationException(
+            $"[CorrelationToken] requires a string or Guid property; '{type.Name}' is not supported.");
     }
 
     /// <summary>

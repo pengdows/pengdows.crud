@@ -142,7 +142,7 @@ internal sealed class GeographyConverter : SpatialConverter<Geography>
         return Geography.FromWellKnownBinary(wkb, srid, providerValue);
     }
 
-    private static void ExtractSridFromEwkb(ReadOnlySpan<byte> source, out int srid, out byte[] normalized)
+    internal static void ExtractSridFromEwkb(ReadOnlySpan<byte> source, out int srid, out byte[] normalized)
     {
         if (source.Length < 5)
         {

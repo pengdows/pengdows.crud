@@ -43,6 +43,21 @@ public class GeneratedKeyPlanTests : SqlLiteContextTestBase
         public string Name { get; set; } = string.Empty;
     }
 
+    [Table("guid_correlation_entity")]
+    private sealed class GuidCorrelationEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [CorrelationToken]
+        [Column("token", DbType.Guid)]
+        public Guid Token { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
     [Fact]
     public async Task CreateAsync_UsesCorrelationTokenPlan()
     {
@@ -73,6 +88,30 @@ public class GeneratedKeyPlanTests : SqlLiteContextTestBase
         Assert.True(result);
         Assert.Equal(123, entity.Id);
         Assert.False(string.IsNullOrEmpty(entity.Token)); // Gateway should have generated a token
+    }
+
+    [Fact]
+    public async Task CreateAsync_UsesGuidCorrelationTokenPlan()
+    {
+        var factory = ((DatabaseContext)Context).Factory;
+        var dialect = new TestDialect(factory) { Plan = GeneratedKeyPlan.CorrelationToken };
+        var customContext = new DatabaseContext(Context.ConnectionString, factory, TypeMap, dialect);
+
+        TypeMap.Register<GuidCorrelationEntity>();
+        var gateway = new TableGateway<GuidCorrelationEntity, int>(customContext);
+        var entity = new GuidCorrelationEntity { Name = "Guid token" };
+
+        var tracked = customContext.GetConnection(ExecutionType.Write, false);
+        var conn = (fakeDbConnection)((IInternalConnectionWrapper)tracked).UnderlyingConnection;
+        conn.EnableDataPersistence = false;
+        conn.EmulatedProduct = SupportedDatabase.Unknown;
+        conn.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["Value"] = 123 } });
+
+        var result = await gateway.CreateAsync(entity);
+
+        Assert.True(result);
+        Assert.Equal(123, entity.Id);
+        Assert.NotEqual(Guid.Empty, entity.Token);
     }
 
     [Table("sequence_entity")]

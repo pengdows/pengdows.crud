@@ -28,11 +28,11 @@ public class TableGatewayNegativeTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task BuildUpdateAsync_LoadOriginal_NotFound_Throws()
+    public async Task BuildUpdateAsync_LoadOriginal_NotFound_ThrowsConcurrencyConflict()
     {
         await BuildTestTable();
         var entity = new TestEntity { Id = 123, Name = "missing" };
-        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
             await helper.BuildUpdateAsync(entity, true));
     }
 

@@ -367,7 +367,7 @@ public class SpatialConverterEdgeCaseTests
         var geography = Geography.FromWellKnownText("POINT(1 2)", 4326);
 
         var result = converter.ToProviderValue(geography, SupportedDatabase.PostgreSql);
-        Assert.Equal("POINT(1 2)", result);
+        Assert.Equal("SRID=4326;POINT(1 2)", result);
     }
 
     [Fact]

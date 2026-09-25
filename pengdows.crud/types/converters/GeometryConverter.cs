@@ -116,7 +116,7 @@ internal sealed class GeometryConverter : SpatialConverter<Geometry>
         return Geometry.FromWellKnownBinary(wkb, srid, providerValue);
     }
 
-    private static void ExtractSridFromEwkb(ReadOnlySpan<byte> source, out int srid, out byte[] normalized)
+    internal static void ExtractSridFromEwkb(ReadOnlySpan<byte> source, out int srid, out byte[] normalized)
     {
         if (source.Length < 5)
         {

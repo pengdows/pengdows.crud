@@ -248,7 +248,7 @@ public class AdvancedTypeConverterTests
 
         var providerValue = converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql);
 
-        Assert.Equal(geoJson, providerValue);
+        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(providerValue));
     }
 
     [Fact]
@@ -294,6 +294,22 @@ public class AdvancedTypeConverterTests
         Assert.Equal(14, result.Months); // 1 year + 2 months
         Assert.Equal(3, result.Days);
         Assert.True(result.Microseconds > 0);
+    }
+
+    [Fact]
+    public void PostgreSqlIntervalConverter_ShouldConvertFromPostgreSqlVerboseString()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+
+        var success = converter.TryConvertFromProvider(
+            "1 year 2 mons 3 days 04:05:06.123456",
+            SupportedDatabase.PostgreSql,
+            out var result);
+
+        Assert.True(success);
+        Assert.Equal(14, result.Months);
+        Assert.Equal(3, result.Days);
+        Assert.Equal(14_706_123_456, result.Microseconds);
     }
 
     [Theory]
@@ -383,15 +399,25 @@ public class AdvancedTypeConverterTests
     }
 
     [Fact]
-    public void IntervalConverter_ShouldTreatInvalidStringAsZero()
+    public void IntervalConverter_ShouldRejectInvalidString()
     {
         var converter = new PostgreSqlIntervalConverter();
         var success = converter.TryConvertFromProvider("invalid", SupportedDatabase.PostgreSql, out var result);
 
-        Assert.True(success);
-        Assert.Equal(0, result.Months);
-        Assert.Equal(0, result.Days);
-        Assert.Equal(0, result.Microseconds);
+        Assert.False(success);
+        Assert.Equal(default, result);
+    }
+
+    [Fact]
+    public void IntervalConverter_ShouldRejectMalformedIsoString()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+
+        var success = converter.TryConvertFromProvider("Pnot-an-interval", SupportedDatabase.PostgreSql,
+            out var result);
+
+        Assert.False(success);
+        Assert.Equal(default, result);
     }
 
     #endregion

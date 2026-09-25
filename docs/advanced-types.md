@@ -27,6 +27,13 @@ provider/type combinations listed below and exercised by the unit and provider i
 It does not claim that an arbitrary third-party ADO.NET extension type can be converted without a
 registered implementation.
 
+For PostgreSQL-family spatial values, the CRUD coercion path writes binary values as EWKB when an
+SRID is present and restores that SRID when reading the EWKB payload. WKT writes use EWKT. The
+converter boundary also formats GeoJSON with a `crs` member, but GeoJSON is not a native write
+format for the ordinary gateway coercion path. The current live regression uses PostgreSQL
+`BYTEA` to verify the EWKB wire payload; a PostGIS-extension column test remains provider-image
+specific and is not implied by the ordinary PostgreSQL test.
+
 ## Usage pattern
 
 No special attribute is needed to use these types. Declare the property with the value-object
@@ -76,7 +83,7 @@ public RowVersion Rv { get; set; }
 | `IntervalDaySecond` (`IntervalDaySecond.cs`) | Oracle `INTERVAL DAY TO SECOND` | Oracle only |
 | `HStore` (`HStore.cs`) | PostgreSQL key/value column | Built-in `coercion/` pipeline (`ProviderParameterFactory`/`BasicCoercions`), provider-agnostic at the CLR boundary |
 | `JsonValue` (`JsonValue.cs`) | Lazy string/`JsonDocument`/`JsonElement` JSON wrapper | Same built-in `coercion/` pipeline as `HStore`, provider-agnostic at the CLR boundary |
-| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server (UDT) for both; PostgreSQL/PostGIS for `Geometry` only (WKB via `Binary`) |
+| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server (UDT) for both; PostgreSQL/CockroachDB/YugabyteDB spatial paths for both (binary writes use EWKB when an SRID is present; WKT/GeoJSON retain SRID in EWKT/`crs`) |
 | `RowVersion` (`RowVersion.cs`) | 8-byte optimistic-concurrency token | SQL Server → `rowversion`/`timestamp` |
 
 `JsonDocument` (the BCL type, not `JsonValue`) is also directly mapped in

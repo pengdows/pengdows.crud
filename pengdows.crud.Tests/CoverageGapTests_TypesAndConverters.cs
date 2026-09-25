@@ -996,7 +996,39 @@ public class CoverageGapTests_TypesAndConverters
         var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
 
         Assert.IsType<string>(result);
-        Assert.Equal("POINT(0 0)", result);
+        Assert.Equal("SRID=4326;POINT(0 0)", result);
+    }
+
+    [Fact]
+    public void SpatialConverter_ConvertToProvider_PostgreSql_WKT_PreservesSrid()
+    {
+        var converter = new GeographyConverter();
+        var geog = Geography.FromWellKnownText("POINT(0 0)", 4326);
+
+        var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
+
+        Assert.Equal("SRID=4326;POINT(0 0)", result);
+    }
+
+    [Fact]
+    public void SpatialConverter_ConvertToProvider_PostgreSql_Wkb_PreservesSridAsEwkb()
+    {
+        var converter = new GeometryConverter();
+        var wkb = new byte[] { 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        var geom = Geometry.FromWellKnownBinary(wkb, 4326);
+
+        var result = Assert.IsType<byte[]>(converter.ToProviderValue(geom, SupportedDatabase.PostgreSql));
+
+        Assert.Equal(25, result.Length);
+        Assert.Equal(0x01, result[0]);
+        Assert.Equal(0x01, result[1]);
+        Assert.Equal(0x00, result[2]);
+        Assert.Equal(0x00, result[3]);
+        Assert.Equal(0x20, result[4]);
+        Assert.Equal(0xE6, result[5]);
+        Assert.Equal(0x10, result[6]);
+        Assert.Equal(0x00, result[7]);
+        Assert.Equal(0x00, result[8]);
     }
 
     [Fact]
@@ -1009,7 +1041,7 @@ public class CoverageGapTests_TypesAndConverters
         var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
 
         Assert.IsType<string>(result);
-        Assert.Equal(json, result);
+        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(result));
     }
 
     [Fact]
@@ -1328,7 +1360,7 @@ public class CoverageGapTests_TypesAndConverters
         var result = coercion.TryWrite(geog, parameter);
 
         Assert.True(result);
-        Assert.Equal("POINT(0 0)", parameter.Value);
+        Assert.Equal("SRID=4326;POINT(0 0)", parameter.Value);
         Assert.Equal(DbType.String, parameter.DbType);
     }
 
@@ -1907,7 +1939,7 @@ public class CoverageGapTests_TypesAndConverters
 
         var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
 
-        Assert.Equal(json, result);
+        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(result));
     }
 
     #endregion

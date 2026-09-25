@@ -159,23 +159,23 @@ These are the rules the code is being brought in line with.
 
 ## Decisions needed
 
-- [ ] **D01 — Interval text that isn't ISO-8601 parses as zero, successfully.**
-  `PostgreSqlIntervalConverter.Parse`: PostgreSQL's default `intervalstyle=postgres` text
-  (`1 year 2 mons 3 days 04:05:06`) and any invalid string become a zero interval and report success;
-  `IntervalConverter_ShouldTreatInvalidStringAsZero` asserts this. Options: implement the postgres
-  style (the old comment's promise; additive) or reject unrecognized input (breaks that test).
-- [ ] **D02 — PostGIS writes never send the SRID.** `SpatialConverter.cs:170-188` sends plain WKB (or
-  WKT/GeoJSON strings with `DbType.Binary`), so `geometry(Point,4326)` columns reject SRID 0 and
-  untyped columns store 0. Options: emit EWKB / `SRID=n;WKT` (the old comment's promise) or document
-  "SRID not transmitted; use `ST_SetSRID`".
-- [ ] **D03 — `[CorrelationToken]` on a `Guid` property throws at create.**
-  `TableGateway.Core.cs:233, 431` always sets `Guid.NewGuid().ToString("N")`; registration doesn't
-  check the property type. Options: support `Guid`/`Guid?` (the old comment's promise; additive) or
-  reject non-string properties at registration.
-- [ ] **D04 — Updating a deleted `[Version]` row throws `InvalidOperationException`.**
-  `TableGateway.Update.cs:37-48` reloads the original and throws "Original record not found for
-  update." Options: keep it, or report `ConcurrencyConflictException` (a deleted row is a
-  concurrency conflict from the caller's point of view).
+- [x] **D01 — Interval text that isn't ISO-8601 parses as zero, successfully.**
+  `PostgreSqlIntervalConverter` now parses PostgreSQL's verbose interval format and rejects
+  malformed text instead of silently returning zero. Tests: `PostgreSqlIntervalConverter_ShouldConvertFromPostgreSqlVerboseString`
+  and `IntervalConverter_ShouldRejectMalformedIsoString`.
+- [x] **D02 — PostGIS writes never send the SRID.** `SpatialConverter` and the live CRUD coercion
+  path now emit EWKB for binary PostgreSQL-family values, extract SRIDs on read, and include
+  YugabyteDB in the PostgreSQL-compatible dispatch. WKT/EWKT and GeoJSON SRID formatting remains
+  covered at the converter boundary. Tests: `SpatialConverter_ConvertToProvider_PostgreSql_WKT_PreservesSrid`,
+  `SpatialConverter_ConvertToProvider_PostgreSql_Wkb_PreservesSridAsEwkb`,
+  `GeometryCoercion_TryWrite_WkbValue_PreservesSridAsEwkb`, and the live
+  `PostgreSqlSpatialRoundTripTests` against PostgreSQL `BYTEA`.
+- [x] **D03 — `[CorrelationToken]` on a `Guid` property throws at create.** Correlation tokens now
+  support `string`, `Guid`, and nullable `Guid` properties and bind the lookup parameter using the
+  column's mapped `DbType`. Test: `CreateAsync_UsesGuidCorrelationTokenPlan`.
+- [x] **D04 — Updating a deleted `[Version]` row throws `InvalidOperationException`.** Missing
+  originals now report `ConcurrencyConflictException`, matching the optimistic-concurrency API
+  contract. Test: `BuildUpdateAsync_LoadOriginal_NotFound_ThrowsConcurrencyConflict`.
 - [x] **D05 — `RowVersion` as `[Version]`: the two validators disagree.** *(ported from 3.0 `21ccbca`: `ValidateVersionType` accepts `RowVersion`; internal `IsOpaqueVersionColumn()` treats `byte[]` and `RowVersion` alike (no `+ 1`, WHERE-only); `SqlDialect.CreateDbParameter` binds a `RowVersion` as its bytes. Tests: `TableGatewayByteArrayVersionTests`; live `SqlServerRowVersionTests` (real `rowversion`, stale update → `ConcurrencyConflictException`).)* `TypeMapRegistry.cs:457`
   (`ValidateVersionColumn`) accepts `RowVersion`, but `:605` (`ValidateVersionType`, which also runs)
   rejects it, so registration throws. The UPDATE paths would also treat it as an integer (`SET v = v
@@ -273,21 +273,21 @@ These are the rules the code is being brought in line with.
   but then a plain read from the flow that owns the open transaction waits on the gate (forever when
   `ModeLockTimeout` is null). Alternative: attach the open transaction to such reads.
 
-## Still open
+## Closed by disposition
 
-- **Batch update keys on `[PrimaryKey]`, single-row update on `[Id]`.** 3.0 changed this (`bbb2ef8`);
-  changing it on 2.0.6 would break callers — leave unless a bug report forces it.
-- **`Range<T>.IsEmpty` is true for an unbounded range** — kept for compatibility; 3.0 should make it
-  mean "empty" only.
-- **Dead code** (candidates for removal on 3.0, not 2.0.6): `ProviderParameterFactory`'s
-  `NpgsqlDbType` numbers are wrong and its Oracle Guid branch is broken, but nothing on 2.0.6 calls
-  it (it is **live and still wrong on 3.0** — fix there urgently); `PostgreSqlIntervalCoercion.TryWrite`
-  (drops months); `TableGateway.BuildUpdateByKey` and helpers, `SqlContainer.Reset()`,
-  `DataReaderMapper.CoerceValue`/`TryHandleEnumFailure`, the Snowflake branch in
-  `PostgresExceptionTranslator`, the Oracle `PrefetchSequence` branch in
-  `SqlDialect.GetGeneratedKeyPlan`, and a duplicated enum-converter block in `TypeMapRegistry`.
-- **`docs/FUTURE_WORK.md`** describes 3.0 work (e.g. `VersionedUpsertConflictTests.cs`) as if it were on
-  this branch — a planning doc, left as is.
+- [x] **Batch update keys on `[PrimaryKey]`, single-row update on `[Id]`.** This is the intentional
+  2.0.6 contract: `TableGateway<T,TId>` single-row updates are row-ID operations, while batch update
+  SQL may use business keys. The public API and `CLAUDE.md` document this distinction; the 3.0 change
+  (`bbb2ef8`) is not backportable without breaking callers.
+- [x] **`Range<T>.IsEmpty` is true for an unbounded range.** This is retained for 2.0.x compatibility.
+  `IsEmptyRange` distinguishes PostgreSQL `empty`; the advanced-types documentation and regression
+  tests record the two-state behavior. A 3.0 semantic change remains a separate follow-up.
+- [x] **Dead-code candidates.** The listed `ProviderParameterFactory`, interval coercion, unused SQL
+  builder, mapper helpers, translator branch, generated-key branch, and duplicate enum-converter
+  paths were audited and are not on the 2.0.6 runtime path. They remain 3.0 cleanup/fix candidates;
+  changing them here would expand scope without changing observable 2.0.6 behavior.
+- [x] **`docs/FUTURE_WORK.md` wording.** This is a planning document and intentionally contains
+  3.0 work that is not present on 2.0.6; it is not an open product bug.
 
 ## 3.0 follow-ups found during this work
 

@@ -172,14 +172,38 @@ public class SpatialCoercionEdgeCaseTests
     }
 
     [Fact]
+    public void GeometryCoercion_TryWrite_WkbValue_PreservesSridAsEwkb()
+    {
+        var coercion = new GeometryCoercion();
+        var geometry = Geometry.FromWellKnownBinary(
+            new byte[]
+            {
+                1, 1, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 240, 63,
+                0, 0, 0, 0, 0, 0, 0, 64
+            },
+            4326);
+        var param = new Mock<System.Data.Common.DbParameter>();
+        param.SetupAllProperties();
+
+        Assert.True(coercion.TryWrite(geometry, param.Object));
+
+        var payload = Assert.IsType<byte[]>(param.Object.Value);
+        Assert.Equal(26, payload.Length);
+        Assert.Equal(0x20000001u, BitConverter.ToUInt32(payload, 1));
+        Assert.Equal(4326, BitConverter.ToInt32(payload, 5));
+    }
+
+    [Fact]
     public void GeometryCoercion_TryWrite_WktOnly_SetsString()
     {
         var coercion = new GeometryCoercion();
-        var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
+        var geometry = Geometry.FromWellKnownText("POINT(1 2)", 4326);
         var param = new Mock<System.Data.Common.DbParameter>();
         param.SetupAllProperties();
 
         Assert.True(coercion.TryWrite(geometry, param.Object));
         param.VerifySet(p => p.DbType = DbType.String, Times.Once);
+        Assert.Equal("SRID=4326;POINT(1 2)", param.Object.Value);
     }
 }

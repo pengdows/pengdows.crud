@@ -7,7 +7,7 @@
 // - Supports WKB/EWKB, WKT/EWKT, and GeoJSON formats with SRID handling.
 // - ConvertToProvider(): Creates provider-specific spatial objects:
 //   * SQL Server: SqlGeometry/SqlGeography via reflection
-//   * PostgreSQL/CockroachDB: byte[] (stored WKB/EWKB bytes) or string (WKT/GeoJSON)
+//   * PostgreSQL/CockroachDB/YugabyteDB: byte[] (stored WKB/EWKB bytes) or string (WKT/GeoJSON)
 //   * MySQL: byte[] (WKB) or UTF-8 encoded WKT
 //   * Oracle: Requires ProviderValue to be set with SDO_GEOMETRY
 // - TryConvertFromProvider(): Converts database values back to TSpatial:
@@ -19,8 +19,10 @@
 // - Thread-safe: Converter instances and spatial value objects are immutable.
 // =============================================================================
 
+using System.Buffers.Binary;
 using System.Data.SqlTypes;
 using System.Text;
+using System.Text.Json.Nodes;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -66,7 +68,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         return provider switch
         {
             SupportedDatabase.SqlServer => CreateSqlServerSpatial(value),
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => CreatePostgresSpatial(value),
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+                => CreatePostgresSpatial(value),
             SupportedDatabase.MySql or SupportedDatabase.MariaDb => CreateMySqlSpatial(value),
             SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException(
                 "Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
@@ -154,20 +157,77 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
     {
         if (!value.WellKnownBinary.IsEmpty)
         {
-            return value.WellKnownBinary.ToArray();
+            return AddSridToWkb(value.WellKnownBinary.Span, value.Srid);
         }
 
         if (!string.IsNullOrEmpty(value.WellKnownText))
         {
-            return value.WellKnownText;
+            return AddSridToWkt(value.WellKnownText, value.Srid);
         }
 
         if (!string.IsNullOrEmpty(value.GeoJson))
         {
-            return value.GeoJson;
+            return AddSridToGeoJson(value.GeoJson, value.Srid);
         }
 
         throw new InvalidOperationException("Spatial value did not contain WKB, WKT, or GeoJSON data.");
+    }
+
+    internal static byte[] AddSridToWkb(ReadOnlySpan<byte> wkb, int srid)
+    {
+        if (srid == 0 || wkb.Length < 5)
+        {
+            return wkb.ToArray();
+        }
+
+        var result = new byte[wkb.Length + 4];
+        wkb[..5].CopyTo(result);
+        var littleEndian = wkb[0] == 1;
+        var type = littleEndian
+            ? BinaryPrimitives.ReadUInt32LittleEndian(wkb[1..5])
+            : BinaryPrimitives.ReadUInt32BigEndian(wkb[1..5]);
+        if ((type & 0x20000000) != 0)
+        {
+            return wkb.ToArray();
+        }
+        type |= 0x20000000;
+        if (littleEndian)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(result.AsSpan(1, 4), type);
+            BinaryPrimitives.WriteInt32LittleEndian(result.AsSpan(5, 4), srid);
+        }
+        else
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(result.AsSpan(1, 4), type);
+            BinaryPrimitives.WriteInt32BigEndian(result.AsSpan(5, 4), srid);
+        }
+
+        wkb[5..].CopyTo(result.AsSpan(9));
+        return result;
+    }
+
+    internal static string AddSridToWkt(string wkt, int srid)
+    {
+        return srid == 0 || wkt.StartsWith("SRID=", StringComparison.OrdinalIgnoreCase)
+            ? wkt
+            : $"SRID={srid};{wkt}";
+    }
+
+    private static string AddSridToGeoJson(string geoJson, int srid)
+    {
+        if (srid == 0)
+        {
+            return geoJson;
+        }
+
+        var node = JsonNode.Parse(geoJson) as JsonObject
+            ?? throw new FormatException("Spatial GeoJSON must be a JSON object.");
+        node["crs"] = new JsonObject
+        {
+            ["type"] = "name",
+            ["properties"] = new JsonObject { ["name"] = $"EPSG:{srid}" }
+        };
+        return node.ToJsonString();
     }
 
     private object? CreateMySqlSpatial(SpatialValue value)
