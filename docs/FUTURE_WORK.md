@@ -54,6 +54,7 @@ done here with the commit.
 | HARN-002 | Integration harness | SQL Server | SQL Server could not start within its wait under full-suite load, because six test classes that start their own containers (including `IntegrationMatrixTests`, the whole testbed matrix) had no `[Collection]` and ran in parallel with the fixture's startup. | They now share `StandaloneContainerCollection` (`DisableParallelization = true`), which runs alone after the parallel collections. SQL Server's startup wait was also raised to 180s in the testbed and in `CommandTimeoutTests`. | **Done** |
 | HARN-003 | testbed | Sybase ASE | Intermittent "The model database is unavailable" at setup: ASE rebuilds tempdb from model on boot, and `CREATE DATABASE` could race it right after the SIGSEGV-workaround restart. | `CREATE DATABASE` is retried while model is busy (120s deadline). | **Done** |
 | HARN-004 | CI coverage | all | 2.0.6's `deploy.yml` never runs `pengdows.crud.IntegrationTests`: the unit step filters it out and the integration step runs only the testbed. So integration tests (including the ported Firebird Embedded and live-provider tests) only run locally via `run-integration-tests.sh`. | Decide whether CI should run the integration project (about 11 minutes, Docker) and, if so, add the `scripts/install-firebird-embedded.sh` step before it (3.0 has that step). | Open (decide) |
+| HARN-005 | Integration fixture coverage | Db2, Informix, SybaseASE, SingleStore | `IntegrationTestFixture.BaseProviders` never starts these, so every `pengdows.crud.IntegrationTests` class excludes them by configuration (the testbed does cover them). Only capability skips are legitimate. | Add their containers to the fixture (testbed already has Db2/Informix/Sybase containers; SingleStore needs one). | Open |
 
 ## 3.0 → 2.0.6 backport audit (2026-09-25, branch 2.0.6)
 
@@ -103,21 +104,21 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | BP-108 | `ParseVersion` mis-parses 5-part versions: Oracle "23.26.2.0.0 … 26ai" becomes major 26, breaking version gates (`SqlDialect.cs:2381-2393`) | 5d80b5c | **Done** (4d2db38): on 2.0.6 the parse returned null, not 26; truncates to 4 parts |
 | BP-109 | SingleConnection + `FailClosed`: a session-settings failure during construction leaks the PersistentConnection (`Initialization.cs:409`) | 91225cd | **Done** (870c59f) |
 | BP-110 | `TrackedReader.Close()` doesn't release the lease; reader dispose stops at the first failure; `CreateSqlContainer` after Dispose isn't guarded; data sources are disposed even when a governor fails to drain | c5083b0 | **Done** (ee0f710): 4 sub-bugs, each red first. 2.0.6 has no unique-connection-string registry, so (d) covers data sources only |
-| BP-111 | PostgreSQL HStore round-trip broken on Npgsql 9 (writes a string with `Hstore` type; reads only strings) (`ProviderParameterFactory.cs:142`) | 11c3c6c | Open |
-| BP-112 | PostgreSQL MacAddr8: always sent as `MacAddr`, so 8-byte EUI-64 values fail | 1187d9d + rest of cb8a514 | Open |
-| BP-113 | Firebird DDL resets only the writer pool; reader connections can see stale metadata (`SqlContainer.cs:1168`) | 7e87fad | Open |
-| BP-114 | SingleStore: SAVEPOINT rollback is a silent no-op (data meant to be discarded survives); FK/UNIQUE/CHECK DDL rejected; PREPARE mis-parses (missing `MySqlDialect` SingleStore overrides) | f92350b | Open |
-| BP-115 | TiDB `NO_BACKSLASH_ESCAPES` in session settings corrupts strings/JSON with MySql.Data | 81eef2b | Open |
-| BP-116 | YugabyteDB/CockroachDB inherit PostgreSQL's `ANY(@array)` set-valued parameters (`SupportsSetValuedParameters` should be false); PG set-valued parameters should use a typed Npgsql array | 81eef2b | Open |
-| BP-117 | Batch upsert never emits `OVERRIDING SYSTEM VALUE`; YugabyteDB never gets it (product switch, `Upsert.cs:232`); PG<10 gate missing | c58cb96, a7ae9ef | Open |
-| BP-118 | CockroachDB: `MergeStartupOptions` overwrites a caller's explicit `lock_timeout` (`PostgreSqlDialect.cs:533`) | c58cb96 | Open |
-| BP-119 | MySQL error 1295 ("not supported in prepared statement protocol") doesn't trigger the disable-prepare fallback; CockroachDB inherits PG proc wrapping (should be None); TiDB VALUES() upsert override missing (defensive) | 3eb997c | Open |
+| BP-111 | PostgreSQL HStore round-trip broken on Npgsql 9 (writes a string with `Hstore` type; reads only strings) (`ProviderParameterFactory.cs:142`) | 11c3c6c | **Done** (live PG red→green) |
+| BP-112 | PostgreSQL MacAddr8: always sent as `MacAddr`, so 8-byte EUI-64 values fail | 1187d9d + rest of cb8a514 | **Done** (live PG): every PG MacAddress write failed on 2.0.5/2.0.6, so no format to preserve |
+| BP-113 | Firebird DDL resets only the writer pool; reader connections can see stale metadata (`SqlContainer.cs:1168`) | 7e87fad | **Done**: unit red; the live DDL failure did not reproduce on 2.0.6 |
+| BP-114 | SingleStore: SAVEPOINT rollback is a silent no-op (data meant to be discarded survives); FK/UNIQUE/CHECK DDL rejected; PREPARE mis-parses (missing `MySqlDialect` SingleStore overrides) | f92350b | **Done** (no SingleStore container on 2.0.6) |
+| BP-115 | TiDB `NO_BACKSLASH_ESCAPES` in session settings corrupts strings/JSON with MySql.Data | 81eef2b | **Done** (live): also MySQL/AuroraMySql/MariaDB/SingleStore on MySql.Data (3.0 has the MySQL half of this bug, hidden by its MySqlConnector test container). 2.0.5 had identical flags, so this is a fix, not a format change |
+| BP-116 | YugabyteDB/CockroachDB inherit PostgreSQL's `ANY(@array)` set-valued parameters (`SupportsSetValuedParameters` should be false); PG set-valued parameters should use a typed Npgsql array | 81eef2b | **Done** (live): single-id RetrieveAsync failed on PG/CRDB/YB. `SupportsSetValuedParameters=false` for CRDB/YB not ported: multi-id `= ANY` passed live |
+| BP-117 | Batch upsert never emits `OVERRIDING SYSTEM VALUE`; YugabyteDB never gets it (product switch, `Upsert.cs:232`); PG<10 gate missing | c58cb96, a7ae9ef | **Done** (live PG/YB/CRDB) |
+| BP-118 | CockroachDB: `MergeStartupOptions` overwrites a caller's explicit `lock_timeout` (`PostgreSqlDialect.cs:533`) | c58cb96 | **Done** (live, writer); reader half fixed separately (d35c929) |
+| BP-119 | MySQL error 1295 ("not supported in prepared statement protocol") doesn't trigger the disable-prepare fallback; CockroachDB inherits PG proc wrapping (should be None); TiDB VALUES() upsert override missing (defensive) | 3eb997c | **Done** (1295 fallback unit-only; TiDB VALUES() live). CRDB proc wrapping=None **not** ported: CREATE PROCEDURE/CALL work live on CRDB v25.1 |
 | BP-120 | Provider factory can't be found by its ADO.NET invariant name (`DbProviderLoader.cs:63` registers only the section key) | 335c5d0 | **Done** (d683dac) |
-| BP-121 | FlatFile uses the resolver's default isolation mapping (no ReadUncommitted; SafeNonBlockingReads→ReadCommitted instead of RepeatableRead) | 15feeb2 | Open |
+| BP-121 | FlatFile uses the resolver's default isolation mapping (no ReadUncommitted; SafeNonBlockingReads→ReadCommitted instead of RepeatableRead) | 15feeb2 | **N/A**: pengdows.flatfile is unpublished and 2.0.6 doesn't reference it; its current preview rejects Serializable, so 3.0's mapping would throw |
 | BP-122 | Metrics: percentiles sort up to 2048 doubles on every operation when a `MetricsUpdated` subscriber (the OTel observer) is attached (no memoization) | d0bc060 | **Done** (1a9efc1): recompute every 32nd call |
 | BP-123 | Explicit `ReadOnlyConnectionString` equal to `ConnectionString` disables SingleWriter turnstile sharing | d5b24e3 | **Done** (e1c41fa) |
 | BP-124 | UNSURE, needs a red test first: type-coercion dispatch still gated on `AdvancedTypes.IsMappedType` (`SqlDialect.cs:1387`); `NeedsCommonConversions` opt-in for DuckDB/Firebird/Oracle/Snowflake | ed71269, 81eef2b | **Done** (df02754, c3e01b9): targeted fixes (Stream/TextReader write binding, Oracle interval format/read, template-clone DbType fallback, DuckDB reader-owned BLOB streams on all 4 read paths). 3.0's full coercion-registry rewrite and the `NeedsCommonConversions` opt-ins were **not** ported: a probe showed no mis-conversion on 2.0.6. Live: Oracle interval + DuckDB portable round trips green |
-| BP-125 | UNSURE: FlatFile named `:` parameters and capability flags; depends on which pengdows.flatfile version 2.0.6 targets | 9f0299e | Open (verify) |
+| BP-125 | UNSURE: FlatFile named `:` parameters and capability flags; depends on which pengdows.flatfile version 2.0.6 targets | 9f0299e | **N/A**: same unpublished-package situation |
 
 ### Found during the Tier 1 backport: bugs 3.0 still has
 
@@ -129,6 +130,10 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 - **MySQL + MySql.Data stores `"` as `\"`.** The session `sql_mode` includes `NO_BACKSLASH_ESCAPES`, but
   MySql.Data (no server-side prepare) backslash-escapes text-protocol parameters. 3.0 only removes the flag
   for TiDB, and its MySQL test container switched to MySqlConnector, which hides the bug. Tracked with BP-115 on 2.0.6.
+- **PostgreSQL-family read connections drop the caller's `Options`.** The read-only connection string
+  appended a second `Options=` key, replacing e.g. `-c lock_timeout=120s` on every read connection.
+  Red live on PG/CRDB/YB; fixed on 2.0.6 (d35c929) by merging into the existing Options and forcing
+  `default_transaction_read_only=on`.
 - **DuckDB BLOB → `Stream` reads zeros.** 3.0 fixes the compiled mapper and coercions but not `DataReaderMapper`'s
   own setter path; 2.0.6 covers all four (c3e01b9).
 
@@ -143,8 +148,8 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | BP-205 | DuckDB read-only safety check runs after the explicit `ReadOnlyConnectionString` check (`DatabaseContext.cs:261`); native batch UPDATE keys on `[PrimaryKey]`, not `[Id]` (`TableGateway.Batch.cs:264`) | 5e6b244 | Open (decide) |
 | BP-206 | PreventDatabaseUnload sentinel never repaired when Broken/Closed; no per-pool (reader) sentinel; sentinel replacement and permit accounting | 5e6b244, 61201f6, cd74c28 | Open (decide) |
 | BP-207 | `TenantContextRegistry.DisposeManagedAsync` fire-and-forgets in-flight construction instead of awaiting it (3.0 hit a `Lazy<Task>` deadlock here) | 7743c19 | Open (decide) |
-| BP-208 | Read-only violations throw inconsistent types (`InvalidOperationException` on the reader write path vs `NotSupportedException` elsewhere) | 7db5f4c (with BP-302) | Open (decide) |
-| BP-209 | PostgreSQL/YugabyteDB `SafeNonBlockingReads` throws `TransactionModeNotSupportedException`; 3.0 maps it to RepeatableRead (behavior part of 1cbd073 only; the signature change is 3.0-only) | 1cbd073 | Open (decide) |
+| BP-208 | Read-only violations throw inconsistent types (`InvalidOperationException` on the reader write path vs `NotSupportedException` elsewhere) | 7db5f4c (with BP-302) | **Done** (9eec794): reader-path write on a read-only context now throws `NotSupportedException` like every other write path (3.0 semantics; read-only *transaction* writes keep `InvalidOperationException`, as in 3.0) |
+| BP-209 | PostgreSQL/YugabyteDB `SafeNonBlockingReads` throws `TransactionModeNotSupportedException`; 3.0 maps it to RepeatableRead (behavior part of 1cbd073 only; the signature change is 3.0-only) | 1cbd073 | **Done** (7cedda9): live `SHOW transaction_isolation` = repeatable read on PG/YB |
 
 ### Tier 3: additive public API (minor-bump question)
 
