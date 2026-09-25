@@ -117,8 +117,9 @@ is stale, the same as single-entity `UpdateAsync`:
 
 ### Batch upsert and `[Version]` conflicts
 
-`PrimaryKeyTableGateway<T>.BatchUpsertAsync` throws `ConcurrencyConflictException` when a
-version-guarded statement affects fewer rows than it contains entities. Only some upsert shapes
+`BatchUpsertAsync` on both gateways throws `ConcurrencyConflictException` when a
+version-guarded statement affects fewer rows than it contains entities; statements executed before
+it have already been written. Only some upsert shapes
 carry a version guard:
 
 | Batch upsert shape | Version guard | Stale `[Version]` on an existing row |

@@ -14,6 +14,9 @@
 //   * SQL Server/Oracle/Firebird: falls back to individual BuildUpsert per entity
 // - Optimistic concurrency: ON CONFLICT batch path appends CachedSqlTemplates.UpsertOnConflictVersionWhere
 //   when entity has [Version] column and dialect.SupportsOnConflictWhere — prevents stale-version writes
+// - BatchUpsertAsync throws ConcurrencyConflictException when a version-guarded container affects
+//   fewer rows than it holds entities (BatchUpsertCanDetectVersionConflict); ON DUPLICATE KEY
+//   (MySQL family) and Firebird carry no guard and cannot detect a stale [Version]
 // - Auto-chunks based on dialect's MaxParameterLimit (with 10% headroom)
 // - Sequential parameter naming via ClauseCounters.NextBatch() (b0, b1, b2, ...)
 // - NULL values are inlined as NULL literal (no parameter consumed)
@@ -24,6 +27,7 @@ using System.Data;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -442,6 +446,7 @@ public partial class TableGateway<TEntity, TRowID>
         var containers = BuildBatchUpsert(entities, ctx);
         var totalAffected = 0;
         var completedContainers = 0;
+        var versionConflictDetectionApplies = BatchUpsertCanDetectVersionConflict(ctx);
 
         try
         {
@@ -449,8 +454,20 @@ public partial class TableGateway<TEntity, TRowID>
             {
                 await using var owned = sc;
                 cancellationToken.ThrowIfCancellationRequested();
-                totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
+                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
+
+                // A guarded upsert that skips a stale row reports it as not affected. ON DUPLICATE
+                // KEY (MySQL family) and Firebird carry no guard, so they are excluded.
+                if (versionConflictDetectionApplies &&
+                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities) &&
+                    affected < chunkEntities.Count)
+                {
+                    throw new ConcurrencyConflictException(
+                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                }
+
+                totalAffected += affected;
                 completedContainers++;
             }
         }
@@ -462,6 +479,43 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         return totalAffected;
+    }
+
+    /// <summary>
+    /// Builds the message for a batch version conflict. A single-entity container names the entity
+    /// by its key. A multi-row chunk can't attribute the conflict: no RETURNING/OUTPUT is used for
+    /// batch operations (by design, for cross-dialect portability), so the affected-row count alone
+    /// can't identify which entities were stale.
+    /// </summary>
+    private string BuildBatchConflictMessage(IReadOnlyList<TEntity> chunkEntities, int affected)
+    {
+        if (chunkEntities.Count == 1)
+        {
+            return $"Concurrency conflict on {typeof(TEntity).Name} " +
+                   $"({DescribeEntityKeyForConflictMessage(chunkEntities[0])}): version mismatch or row deleted.";
+        }
+
+        return $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) " +
+               $"affected but {affected} succeeded. Which specific entity/entities conflicted cannot be " +
+               "individually identified from this batch SQL shape — no RETURNING/OUTPUT is used for batch " +
+               "operations, by design, for cross-dialect portability. Re-read every entity in this batch " +
+               "from the database before retrying; do not assume only some are stale.";
+    }
+
+    private string DescribeEntityKeyForConflictMessage(TEntity entity)
+    {
+        if (_idColumn != null)
+        {
+            return $"{_idColumn.Name}={_idColumn.MakeParameterValueFromField(entity)}";
+        }
+
+        if (_tableInfo.PrimaryKeys.Count > 0)
+        {
+            return string.Join(", ",
+                _tableInfo.PrimaryKeys.Select(pk => $"{pk.Name}={pk.MakeParameterValueFromField(entity)}"));
+        }
+
+        return "key unknown";
     }
 
     // =========================================================================

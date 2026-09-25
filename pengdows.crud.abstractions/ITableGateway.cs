@@ -760,6 +760,17 @@ public interface ITableGateway<TEntity, TRowID>
     /// <summary>
     /// Executes a batch UPSERT for the given entities and returns the total number of affected rows.
     /// </summary>
+    /// <remarks>
+    /// With a <c>[Version]</c> column, a stale version on an existing row is detected where the
+    /// generated SQL carries a version guard: <c>MERGE</c> dialects (except Firebird) and
+    /// <c>INSERT ... ON CONFLICT DO UPDATE ... WHERE</c> dialects. There, a statement that affects
+    /// fewer rows than it contains entities throws <c>ConcurrencyConflictException</c>; statements
+    /// executed before it have already been written, so run the batch inside a transaction to make
+    /// it all-or-nothing. MySQL/MariaDB-family <c>ON DUPLICATE KEY UPDATE</c> and Firebird
+    /// <c>UPDATE OR INSERT</c> have no version guard and cannot detect a stale version: the row is
+    /// overwritten and no exception is thrown. Use <see cref="BatchUpdateAsync"/> there when a stale
+    /// write must be rejected.
+    /// </remarks>
     /// <param name="entities">The entities to upsert. Must not be null.</param>
     /// <param name="context">Optional context override for transaction scenarios.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>

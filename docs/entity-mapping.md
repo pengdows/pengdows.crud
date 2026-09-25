@@ -141,10 +141,11 @@ database assigns it; see `docs/advanced-types.md`.
   `version = @currentVersion` — on **both** `TableGateway<T,TId>` and `PrimaryKeyTableGateway<T>`.
   What happens when that predicate matches zero rows (stale version or the row was deleted)
   is the same on both gateways: `UpdateAsync` and `BatchUpdateAsync` throw
-  `ConcurrencyConflictException`. (`UpsertAsync` on both gateways throws `ConcurrencyConflictException` on a version
+  `ConcurrencyConflictException`. (`UpsertAsync` and `BatchUpsertAsync` on both gateways throw `ConcurrencyConflictException` on a version
   mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
   ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY
-  UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites.)
+  UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites — see
+  `docs/batch-operations.md`.)
 - On `TableGateway<T,TId>`, a `[Version]` column also enables `loadOriginal`-by-default
   change-aware updates (see `docs/batch-operations.md` and `BuildUpdateAsync`'s `loadOriginal`
   parameter) — versioned entities re-read the current row before building the UPDATE so only
