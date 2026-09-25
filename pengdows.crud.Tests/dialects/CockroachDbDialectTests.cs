@@ -52,6 +52,33 @@ public class CockroachDbDialectTests
     }
 
     [Fact]
+    public void PrepareConnectionStringForDataSource_CallerSuppliedLockTimeout_IsPreservedNotOverwritten()
+    {
+        // lock_timeout=30s is a safety DEFAULT, not a pooled-connection-hygiene invariant like
+        // standard_conforming_strings/client_min_messages/default_transaction_read_only: a caller
+        // who explicitly configured a longer timeout must not have it silently clobbered (BP-118).
+        var dialect = CreateDialect();
+        var cs = Cs + "Options=-c lock_timeout=120s;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.Contains("lock_timeout=120s", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("lock_timeout=30s", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void PrepareConnectionStringForDataSource_CallerSuppliedHygieneKey_IsStillOverridden()
+    {
+        var dialect = CreateDialect();
+        var cs = Cs + "Options=-c standard_conforming_strings=off;";
+
+        var result = dialect.PrepareConnectionStringForDataSource(cs, readOnly: false);
+
+        Assert.Contains("standard_conforming_strings=on", result, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("standard_conforming_strings=off", result, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
     public void PrepareConnectionStringForDataSource_ReadOnly_BakesReadOnlyFlag()
     {
         var dialect = CreateDialect();

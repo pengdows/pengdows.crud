@@ -47,9 +47,16 @@ public class CockroachDbTestContainer : TestContainer
         await cmd.ExecuteNonQueryAsync();
     }
 
+    /// <summary>
+    /// The real connection string for this running container, for tests that need a second,
+    /// differently-configured DatabaseContext against it.
+    /// </summary>
+    public string ConnectionString =>
+        $"Host=localhost;Port={_sqlPort};Username=root;Database=testdb;SSL Mode=disable;";
+
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
-        var cs = $"Host=localhost;Port={_sqlPort};Username=root;Database=testdb;SSL Mode=disable;";
+        var cs = ConnectionString;
         var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance);
         return Task.FromResult<IDatabaseContext>(ctx);
     }

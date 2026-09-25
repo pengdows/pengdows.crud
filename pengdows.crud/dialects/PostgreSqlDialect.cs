@@ -574,16 +574,37 @@ internal class PostgreSqlDialect : SqlDialect
             tokens.Add((key, value));
         }
 
-        // Apply required settings (overriding any existing values for these keys)
-        var allKeys = new List<(string Key, string Value)>
+        // Required settings are pooled-connection-hygiene invariants and always win over anything
+        // the caller supplied for the same key.
+        var requiredKeys = new List<(string Key, string Value)>
         {
             (StandardConformingStringsSetting, "on"),
             (ClientMinMessagesSetting, "warning"),
             (ReadOnlyTransactionSetting, readOnly ? "on" : "off")
         };
-        allKeys.AddRange(GetAdditionalStartupOptions(readOnly));
 
-        foreach (var (ourKey, ourValue) in allKeys)
+        // Dialect-specific additional options (e.g. CockroachDB's lock_timeout) are safety
+        // DEFAULTS the caller owns: only fill them in when the caller hasn't set that key, never
+        // overwrite an explicit value (BP-118, 3.0 c58cb96).
+        foreach (var (ourKey, ourValue) in GetAdditionalStartupOptions(readOnly))
+        {
+            var alreadyPresent = false;
+            for (var i = 0; i < tokens.Count; i++)
+            {
+                if (string.Equals(tokens[i].Key, ourKey, StringComparison.OrdinalIgnoreCase))
+                {
+                    alreadyPresent = true;
+                    break;
+                }
+            }
+
+            if (!alreadyPresent)
+            {
+                tokens.Add((ourKey, ourValue));
+            }
+        }
+
+        foreach (var (ourKey, ourValue) in requiredKeys)
         {
             var found = false;
             for (var i = 0; i < tokens.Count; i++)
