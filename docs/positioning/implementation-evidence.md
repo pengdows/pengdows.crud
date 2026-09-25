@@ -73,6 +73,10 @@ The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
   parameter (see thesis principle 3).
 - **PGC026** — warns on the split `WrapObjectName("alias") + "." + WrapObjectName("column")`
   pattern in favor of the single-call `WrapObjectName("alias.column")` form.
+- **PGC027** — an error on any use of the API kept public only for 2.x binary compatibility
+  (`DataSource`, the SQL-standard-level heuristics, internal bookkeeping types, the inert type
+  attributes), and on assigning `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are
+  fixed at construction (the setters are no-ops; 3.0 makes them `init`).
 
 ## BenchmarkValidation mechanism (principle 10)
 

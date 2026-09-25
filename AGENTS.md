@@ -447,7 +447,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 - Never commit secrets or real connection strings; use environment variables and user-secrets. Strong-name via `SNK_PATH` (do not commit keys).
 - Do not hardcode identifier quoting. Use `WrapObjectName(...)` and `CompositeIdentifierSeparator` (e.g., `var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");`).
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
-- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), and `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call).
+- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call), and `PGC027` (error: do not use the 2.x binary-compatibility-only API or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle` after construction).
 
 ## Additional Requirements
 
