@@ -1165,7 +1165,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (executionType == ExecutionType.Write && _dialect is SqlDialect ddlDialect &&
                 ddlDialect.RequiresConnectionPoolResetForDdl && IsDdlStatement(Query.ToString()))
             {
-                ddlDialect.ResetConnectionPoolForDdl(InternalConnectionStringAccess.GetRawConnectionString(_context));
+                // A stale idle connection in EITHER pool can block a DDL commit. Reader and writer
+                // are, in general, distinct ADO.NET pools (ApplicationName/pool discriminator), so
+                // clear both. When they share one connection string this is skipped.
+                var writerConnectionString = InternalConnectionStringAccess.GetRawConnectionString(_context);
+                var readerConnectionString = InternalConnectionStringAccess.GetRawReaderConnectionString(_context);
+                ddlDialect.ResetConnectionPoolForDdl(writerConnectionString);
+                if (!string.IsNullOrEmpty(readerConnectionString) &&
+                    !string.Equals(readerConnectionString, writerConnectionString, StringComparison.Ordinal))
+                {
+                    ddlDialect.ResetConnectionPoolForDdl(readerConnectionString);
+                }
             }
 
             var isTransaction = _context is ITransactionContext;

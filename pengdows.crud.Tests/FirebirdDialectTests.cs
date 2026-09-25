@@ -1,7 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
+using System.Data.Common;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -78,6 +81,42 @@ public class FirebirdDialectTests
         var ex = await Record.ExceptionAsync(async () => await container.ExecuteNonQueryAsync());
 
         Assert.Null(ex);
+    }
+
+    private sealed class PoolResetSpyFirebirdDialect : FirebirdDialect
+    {
+        public readonly List<string> ResetCalls = new();
+
+        public PoolResetSpyFirebirdDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
+        {
+        }
+
+        internal override void ResetConnectionPoolForDdl(string connectionString)
+        {
+            ResetCalls.Add(connectionString);
+        }
+    }
+
+    [Fact]
+    public async Task ExecuteNonQueryAsync_DdlStatement_ResetsBothReaderAndWriterPools()
+    {
+        // FirebirdDialect.ApplicationNameSettingName gives reader and writer DISTINCT connection
+        // strings and therefore DISTINCT ADO.NET pools; ResetConnectionPoolForDdl clears exactly
+        // one pool. A stale idle connection in the READER pool can still block a DDL commit on
+        // the WRITER connection ("object TABLE ... is in use"), so both pools must be cleared.
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        var spyDialect = new PoolResetSpyFirebirdDialect(factory, NullLogger.Instance);
+        await using var context = new DatabaseContext(
+            "Data Source=test;EmulatedProduct=Firebird", factory, new TypeMapRegistry(), spyDialect);
+        await using var container = context.CreateSqlContainer("CREATE TABLE \"ddl_probe\" (\"id\" INTEGER)");
+
+        await container.ExecuteNonQueryAsync();
+
+        var readerConnectionString = context.RawReaderConnectionString;
+        var writerConnectionString = context.RawConnectionString;
+        Assert.NotEqual(writerConnectionString, readerConnectionString);
+        Assert.Contains(writerConnectionString, spyDialect.ResetCalls);
+        Assert.Contains(readerConnectionString, spyDialect.ResetCalls);
     }
 
     [Fact]

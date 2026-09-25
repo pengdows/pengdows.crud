@@ -240,6 +240,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     internal string RawConnectionString => _connectionString;
 
+    internal string RawReaderConnectionString => _readerConnectionString;
+
     /// <summary>
     /// Gets the DbDataSource if one was provided (e.g., NpgsqlDataSource).
     /// When available, provides better performance through shared prepared statement caching.

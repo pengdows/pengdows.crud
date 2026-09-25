@@ -359,6 +359,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     internal string RawConnectionString => InternalConnectionStringAccess.GetRawConnectionString(_context);
 
+    internal string RawReaderConnectionString => InternalConnectionStringAccess.GetRawReaderConnectionString(_context);
+
     /// <inheritdoc/>
     public string Name { get; init; }
 
