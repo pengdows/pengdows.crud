@@ -186,6 +186,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
     private bool _explicitReadOnlyConnectionString;
+    private bool _readOnlyConnectionStringTargetsSameDatabase;
     private const string DefaultApplicationName = "pengdows.crud";
     private const string ReadOnlyApplicationNameSuffix = "-ro";
     private const string WriteApplicationNameSuffix = "-rw";
