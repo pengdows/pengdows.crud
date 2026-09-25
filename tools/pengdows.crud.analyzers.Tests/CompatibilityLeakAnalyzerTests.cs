@@ -64,6 +64,29 @@ public sealed class CompatibilityLeakAnalyzerTests
             expectedCount: 0);
     }
 
+    // ITenantConfiguration is an empty public marker nothing implements or consumes (3.0 made it
+    // internal); 2.0.x keeps it only for binary compatibility.
+    [Fact]
+    public async Task TenantConfigurationMarker_IsReported()
+    {
+        var source = """
+            namespace pengdows.crud.tenant
+            {
+                public interface ITenantConfiguration { }
+            }
+
+            namespace Consumer
+            {
+                public sealed class MyTenantConfig : pengdows.crud.tenant.ITenantConfiguration { }
+            }
+            """;
+
+        await CSharpAnalyzerVerifier<CompatibilityLeakAnalyzer>.VerifyDiagnosticCountAsync(
+            source,
+            CompatibilityLeakAnalyzer.DiagnosticId,
+            expectedCount: 1);
+    }
+
     // DatabaseContext.ReadWriteMode / ProcWrappingStyle are fixed at construction. Their setters are
     // public only so 2.0.5 binaries keep loading, and they do nothing, so an assignment is always a
     // caller bug; reading the properties is fine.

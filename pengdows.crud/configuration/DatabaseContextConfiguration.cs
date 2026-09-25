@@ -188,6 +188,5 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public string ApplicationName { get; set; } = string.Empty;
 
     /// <inheritdoc/>
-    public SessionInitializationFailureMode SessionInitializationFailureMode { get; set; } =
-        SessionInitializationFailureMode.BestEffort;
+    public SessionInitializationFailureMode? SessionInitializationFailureMode { get; set; }
 }

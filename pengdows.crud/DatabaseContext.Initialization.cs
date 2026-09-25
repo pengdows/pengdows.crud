@@ -272,7 +272,9 @@ public partial class DatabaseContext
             _poolAcquireTimeout = configuration.PoolAcquireTimeout;
             _modeLockTimeout = configuration.ModeLockTimeout;
             _enableSingleWriterFairness = configuration.EnableSingleWriterFairness;
-            _sessionInitializationFailureMode = configuration.SessionInitializationFailureMode;
+            // null keeps 2.0.5's best-effort behavior for every context on 2.0.x.
+            _sessionInitializationFailureMode =
+                configuration.SessionInitializationFailureMode ?? SessionInitializationFailureMode.BestEffort;
             _maxQueuedWrites = configuration.MaxQueuedWrites;
             _maxQueuedReads = configuration.MaxQueuedReads;
             _configuredReadPoolSize = normalizedReadPoolSize;

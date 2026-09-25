@@ -169,20 +169,23 @@ public interface IDatabaseContextConfiguration
 
     /// <summary>
     /// Controls how a connection is handled when applying session settings fails on first open.
-    /// Defaults to <see cref="SessionInitializationFailureMode.BestEffort"/> — logs and proceeds
-    /// with the connection in an unknown session state (current 2.0 behavior).
+    /// <c>null</c> (the default) means <see cref="SessionInitializationFailureMode.BestEffort"/> on
+    /// 2.0.x — logs and proceeds with the connection in an unknown session state (2.0.5 behavior), for
+    /// read-write and read-only contexts alike. (3.0 resolves <c>null</c> to
+    /// <see cref="SessionInitializationFailureMode.FailClosed"/> for a read-only context; the type
+    /// matches 3.0 so an explicit value carries over unchanged.)
     /// </summary>
     /// <remarks>
     /// Does not affect the separate, transaction-level read-only enforcement mechanism used by
     /// MySQL, MariaDB, Oracle, SAP HANA, and Informix, which remains best-effort regardless of this setting.
     /// </remarks>
     // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
-    SessionInitializationFailureMode SessionInitializationFailureMode
+    SessionInitializationFailureMode? SessionInitializationFailureMode
     {
-        get => SessionInitializationFailureMode.BestEffort;
+        get => null;
         set
         {
-            if (value != SessionInitializationFailureMode.BestEffort)
+            if (value is not (null or enums.SessionInitializationFailureMode.BestEffort))
             {
                 throw new NotSupportedException(
                     $"{GetType().Name} does not support setting {nameof(SessionInitializationFailureMode)}.");

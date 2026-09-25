@@ -133,10 +133,11 @@ public class SemVerCompatibilityDefaultMemberTests
     {
         var config = new Mock<IDatabaseContextConfiguration> { CallBase = true }.Object;
 
-        Assert.Equal(SessionInitializationFailureMode.BestEffort, config.SessionInitializationFailureMode);
+        Assert.Null(config.SessionInitializationFailureMode);
         Assert.Null(config.MaxQueuedReads);
         Assert.Null(config.MaxQueuedWrites);
 
+        config.SessionInitializationFailureMode = null;
         config.SessionInitializationFailureMode = SessionInitializationFailureMode.BestEffort;
         config.MaxQueuedReads = null;
         config.MaxQueuedWrites = null;
@@ -151,20 +152,28 @@ public class SemVerCompatibilityDefaultMemberTests
     public void ITableGateway_AuditCreationPolicy_Default_PreservesAndAcceptsOnlyDefault()
     {
         var gateway = new Mock<ITableGateway<SemVerEntity, int>> { CallBase = true }.Object;
+        // init-only: invoke the default init accessor directly, as an object initializer would.
+        var init = typeof(ITableGateway<SemVerEntity, int>).GetProperty("AuditCreationPolicy")!.SetMethod!;
 
         Assert.Equal(AuditCreationPolicy.PreserveExplicitValues, gateway.AuditCreationPolicy);
-        gateway.AuditCreationPolicy = AuditCreationPolicy.PreserveExplicitValues;
-        Assert.Throws<NotSupportedException>(() => gateway.AuditCreationPolicy = AuditCreationPolicy.Authoritative);
+        init.Invoke(gateway, new object[] { AuditCreationPolicy.PreserveExplicitValues });
+        var ex = Assert.Throws<TargetInvocationException>(() =>
+            init.Invoke(gateway, new object[] { AuditCreationPolicy.Authoritative }));
+        Assert.IsType<NotSupportedException>(ex.InnerException);
     }
 
     [Fact]
     public void IPrimaryKeyTableGateway_AuditCreationPolicy_Default_PreservesAndAcceptsOnlyDefault()
     {
         var gateway = new Mock<IPrimaryKeyTableGateway<SemVerEntity>> { CallBase = true }.Object;
+        // init-only: invoke the default init accessor directly, as an object initializer would.
+        var init = typeof(IPrimaryKeyTableGateway<SemVerEntity>).GetProperty("AuditCreationPolicy")!.SetMethod!;
 
         Assert.Equal(AuditCreationPolicy.PreserveExplicitValues, gateway.AuditCreationPolicy);
-        gateway.AuditCreationPolicy = AuditCreationPolicy.PreserveExplicitValues;
-        Assert.Throws<NotSupportedException>(() => gateway.AuditCreationPolicy = AuditCreationPolicy.Authoritative);
+        init.Invoke(gateway, new object[] { AuditCreationPolicy.PreserveExplicitValues });
+        var ex = Assert.Throws<TargetInvocationException>(() =>
+            init.Invoke(gateway, new object[] { AuditCreationPolicy.Authoritative }));
+        Assert.IsType<NotSupportedException>(ex.InnerException);
     }
 
     [Fact]

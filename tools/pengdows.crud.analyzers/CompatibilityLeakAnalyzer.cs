@@ -33,6 +33,7 @@ public sealed class CompatibilityLeakAnalyzer : DiagnosticAnalyzer
         "pengdows.crud.connection.ConnectionLocalState",
         "pengdows.crud.connection.IConnectionLocalState",
         "pengdows.crud.threading.ILockerAsync",
+        "pengdows.crud.tenant.ITenantConfiguration",
         "pengdows.crud.enums.SqlStandardLevel",
         "pengdows.crud.types.attributes.AllowZeroDateAttribute",
         "pengdows.crud.types.attributes.AsStringAttribute",

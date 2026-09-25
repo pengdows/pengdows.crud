@@ -40,11 +40,17 @@ public interface IPrimaryKeyTableGateway<TEntity>
     /// Controls how <c>CreatedBy</c>/<c>CreatedOn</c> audit fields treat an entity's existing
     /// values on create. Defaults to <see cref="AuditCreationPolicy.PreserveExplicitValues"/>.
     /// </summary>
+    /// <remarks>
+    /// Init-only: set it once when the gateway is constructed (object initializer, e.g.
+    /// <c>new TableGateway&lt;T, TId&gt;(ctx) { AuditCreationPolicy = ... }</c>). A gateway is a
+    /// singleton shared by every caller, so a request-time setter would let one caller change the
+    /// policy for all of them.
+    /// </remarks>
     // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
     AuditCreationPolicy AuditCreationPolicy
     {
         get => AuditCreationPolicy.PreserveExplicitValues;
-        set
+        init
         {
             if (value != AuditCreationPolicy.PreserveExplicitValues)
             {

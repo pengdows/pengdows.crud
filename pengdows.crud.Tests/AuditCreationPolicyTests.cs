@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
@@ -9,6 +10,23 @@ namespace pengdows.crud.Tests;
 
 public class AuditCreationPolicyTests : SqlLiteContextTestBase
 {
+    // A singleton gateway is shared by every tenant/request, so a request-time-settable policy
+    // would let one caller change whether a resolver-supplied CreatedBy can be overridden for every
+    // other caller. Set it once at construction (object initializer). Checked through the CLR's
+    // IsExternalInit modreq, which is how init accessors are encoded, as on 3.0.
+    [Theory]
+    [InlineData(typeof(ITableGateway<,>))]
+    [InlineData(typeof(IPrimaryKeyTableGateway<>))]
+    [InlineData(typeof(BaseTableGateway<>))]
+    public void AuditCreationPolicy_IsInitOnly(Type gatewayType)
+    {
+        var setMethod = gatewayType.GetProperty(nameof(ITableGateway<object, int>.AuditCreationPolicy))?.SetMethod
+                        ?? throw new InvalidOperationException($"{gatewayType.Name}.AuditCreationPolicy has no setter.");
+
+        Assert.Contains(setMethod.ReturnParameter.GetRequiredCustomModifiers(),
+            m => m == typeof(System.Runtime.CompilerServices.IsExternalInit));
+    }
+
     [Table("AuditPolicyUser")]
     private class AuditPolicyUserEntity
     {

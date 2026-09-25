@@ -34,7 +34,7 @@ done here with the commit.
 
 | ID | Skip(s) | Databases | Problem | Planned fix | Status |
 |---|---|---|---|---|---|
-| SKIP-001 | `[ParamBinding] Guid binding`, `[RoundTrip] Guid` | MySQL (+Percona), MariaDB, TiDB, Db2, Sybase ASE, Spanner | Gated on a hardcoded `SupportsGuidBinding(product)` list; the library owns GUID storage, so not a capability. | Removed the list; every database now runs both checks with a real column type (`GetGuidType`). Exposed a real bug: `SybaseAseDialect` was `PassThrough`, and AdoNetCore.AseClient wrote a Guid into `CHAR(36)` that did not read back → now `GuidStorageFormat.String` (unit-tested). | **Done** (live: all databases pass) |
+| SKIP-001 | `[ParamBinding] Guid binding`, `[RoundTrip] Guid` | MySQL (+Percona), MariaDB, TiDB, Db2, Sybase ASE, Spanner | Gated on a hardcoded `SupportsGuidBinding(product)` list; the library owns GUID storage, so not a capability. | Removed the list; every database now runs both checks with a real column type (`GetGuidType`). Sybase ASE: the testbed first used `CHAR(36)`, where AdoNetCore.AseClient writes a `DbType.Guid` as 16 raw bytes-as-characters; switching the dialect to `GuidStorageFormat.String` was then found (live, against 2.0.5 behavior) to **break `BINARY(16)`/`VARBINARY(16)` columns that 2.0.5 handled correctly**, so it was reverted: Sybase stays pass-through and the testbed uses `BINARY(16)`. | **Done** (live: all databases pass) |
 | SKIP-002 | `[ParamBinding] DateTimeOffset binding`, `[RoundTrip] DateTimeOffset` | MySQL (+Percona), MariaDB, TiDB, Db2, Sybase ASE, Spanner, SQLite, Firebird | Gated on a hardcoded `SupportsDateTimeOffsetBinding(product)` list. | Removed the list; every database now runs both checks (`GetDateTimeOffsetType`, UTC-instant storage where the engine has no offset type). Exposed a real bug: `SybaseAseDialect` passed `DateTimeOffset` straight to AseClient, which rejects it → now coerced to a UTC `DateTime` like Db2/Firebird/InterBase (unit-tested). | **Done** (live: all databases pass) |
 | SKIP-003 | `[StoredProc]` | Informix | Dialect reported `ProcWrappingStyle.None`. | New `ProcWrappingStyle.Informix` (`InformixProcWrappingStrategy`): `EXECUTE PROCEDURE name(args)`, parentheses always, reads and writes alike. Informix documents `EXECUTE PROCEDURE`/`EXECUTE FUNCTION` as the stand-alone statements and `CALL` as SPL-only; a first pass used the existing `Call` style because 15.0 happens to accept a top-level `CALL`, and was corrected to the documented form. Verified live (15.0.1.0.3): `EXECUTE PROCEDURE` runs procedures with and without `RETURNING` and `CREATE FUNCTION` routines; `EXECUTE FUNCTION` cannot run a no-return procedure; `SELECT * FROM name(args)` and a parenthesis-less `EXECUTE PROCEDURE name` are syntax errors. The testbed creates and calls an Informix SPL procedure (read and write, one positional arg). | **Done** (live) |
 | SKIP-004 | `[Capabilities] Upsert` | Informix | `SupportsMerge => false`. | Verified live: `MERGE INTO t USING (SELECT CAST(? AS type) AS c, ... FROM sysmaster:sysdual) s ON ... ` works; the `USING (VALUES ...)` shape and untyped `? AS c` are syntax errors. Added `RenderMergeSource` + a live-verified `DbType`→cast map (`GetMergeSourceCastType`; unverified types throw), `UpsertIncomingColumn`. Informix MERGE has no conditional matched clause (`WHEN MATCHED AND`/`UPDATE ... WHERE` both fail), so upsert of a `[Version]` entity now throws `NotSupportedException` in both gateways (new internal `SupportsMergeMatchedCondition`). | **Done** (live) |
@@ -53,6 +53,123 @@ done here with the commit.
 | HARN-001 | Integration harness | all | `DatabaseTestBase` turned an enabled provider that failed to start into skipped tests (all failed) or silently dropped it (some failed), so a broken SQL Server could still report a green run. `CommandTimeoutTests`/`SerializationConflictTests` did the same for their standalone containers. | Enabled-provider failures now fail the test (`EnsureProvidersInitialized`, unit-tested); only configuration exclusions skip. This exposed that SQL Server had been silently dropped from full runs. | **Done** |
 | HARN-002 | Integration harness | SQL Server | SQL Server could not start within its wait under full-suite load, because six test classes that start their own containers (including `IntegrationMatrixTests`, the whole testbed matrix) had no `[Collection]` and ran in parallel with the fixture's startup. | They now share `StandaloneContainerCollection` (`DisableParallelization = true`), which runs alone after the parallel collections. SQL Server's startup wait was also raised to 180s in the testbed and in `CommandTimeoutTests`. | **Done** |
 | HARN-003 | testbed | Sybase ASE | Intermittent "The model database is unavailable" at setup: ASE rebuilds tempdb from model on boot, and `CREATE DATABASE` could race it right after the SIGSEGV-workaround restart. | `CREATE DATABASE` is retried while model is busy (120s deadline). | **Done** |
+
+## 3.0 → 2.0.6 backport audit (2026-09-25, branch 2.0.6)
+
+**Question audited:** does 2.0.6 contain every non-breaking change from `3.0`, and does it enforce
+(rather than remove) everything 3.0 removed as "should never have been public"? **Answer: no, not
+yet.** This section is the work list.
+
+**Method:** `origin/3.0` (f6f56bf) vs `2.0.6` (8adcf3e), forked at 2.0.5 (c883579). 396 commits are
+3.0-only; 196 of them touch shipped code (`pengdows.crud`, `.abstractions`, `.fakeDb`, analyzers).
+Each of the 196 was classified against the actual 2.0.6 code (not commit messages): about 85 are
+already present (cherry-picked or hand-ported), about 45 have no 2.0.6 effect (docs, dead code,
+RetryContext internals, reverted work), about 20 are inherently 3.0-only (breaking), and the rest are
+listed below. The public-API diff was also computed with ApiCompat in both directions.
+
+**Rules for every item:**
+- 2.0.6 must stay binary compatible with 2.0.5. Package validation enforces this on `dotnet pack`.
+  A new interface member needs a default implementation; no public signature may change or disappear.
+- TDD: re-verify the claim with a red test before fixing. The classifications came from triage and
+  are evidence, not proof.
+- Port the matching 3.0 integration/testbed test together with each fix.
+- Before changing any stored/wire format, probe the previous release's behavior live for every
+  natural column type (see the Sybase Guid lesson: a format change broke `BINARY(16)` users and was
+  reverted).
+- RetryContext (4a0d8ec and follow-ups) is **out of scope** for 2.0.x (maintainer decision).
+
+### Enforcement (things 3.0 removed or locked down)
+
+| ID | Item | 3.0 commit | Plan | Status |
+|---|---|---|---|---|
+| BP-E01 | `pengdows.crud.tenant.ITenantConfiguration`: empty public marker, nothing implements or consumes it | b96ea22 (made internal) | Added to PGC027 `BlockedTypes` + `[Obsolete(false)]` (analyzer test `TenantConfigurationMarker_IsReported`) | **Done** |
+| BP-E02 | `AuditCreationPolicy` setter on `ITableGateway`/`IPrimaryKeyTableGateway`/`BaseTableGateway`: mutable shared state on a singleton gateway | 6f01a9a (`init`) | Now `init` on all three (the interfaces keep a default body). New in 2.0.6, so no 2.0.5 impact (package validation clean). Pinned via the `IsExternalInit` modreq test ported from 3.0 | **Done** |
+| BP-E03 | `IDatabaseContextConfiguration.SessionInitializationFailureMode` is non-nullable on 2.0.6, nullable on 3.0 | ba8268f (CORE-039) | Now `SessionInitializationFailureMode?`, default `null`, matching 3.0's type. On 2.0.x `null` still means BestEffort for **every** context (2.0.5 behavior); 3.0's FailClosed-for-read-only default stays 3.0-only (behavior change). Tests pin both | **Done** |
+| — | `TransactionModeNotSupportedException` | f045677 (removed) | **Keep.** Still thrown on 2.0.6 (`IsolationResolver.cs:76,84`), so blocking it would be wrong | Decided |
+| — | DataSource, SqlStandardLevel family, EphemeralSecureString, ConnectionLocalState, ILockerAsync, TypeCoercionOptions, EnumStorage, inert attributes, ReadWriteMode/ProcWrappingStyle setters | various | Already `[Obsolete]` + PGC027 on 2.0.6 | Done |
+
+### Tier 1: bug fixes, no public-API change (low risk)
+
+| ID | Bug on 2.0.6 | 3.0 commit | Status |
+|---|---|---|---|
+| BP-101 | **Security:** `DbProviderLoader` symlink escape: assemblies can be loaded from outside the provider directory (`DbProviderLoader.cs:206-222`) | 4399d3a | Open |
+| BP-102 | Reader plan cache keyed by a bare 64-bit hash, so a collision reuses the wrong mapper (`BaseTableGateway.Core.cs:111`, `DataReaderMapper.cs:142`) | 4399d3a, 350e437 (RecordsetShape key) | Open |
+| BP-103 | `TrackedConnection` dispose retries with an unbounded `WaitAsync()`, so Dispose can hang forever (`TrackedConnection.cs:559`) | bbb2ef8 | Open |
+| BP-104 | `PoolGovernor.TryAcquire/TryAcquireAsync` leak turnstile interest on a pre-cancelled token (no try/catch, `PoolGovernor.cs:410-470`) | 5e6b244 | Open |
+| BP-105 | `TenantContextRegistry`: `Invalidate` racing `Dispose` can double-dispose and double-fire `ContextRemoved` (no `TryClaimDisposal`) | bbb2ef8 | Open |
+| BP-106 | `TransactionException` drops the inner exception's `IsTransient` at commit/rollback (`TransactionContext.cs:858/909`), so a commit deadlock looks non-transient | 923a02b (IsTransient part only; `Phase` would need a new ctor overload) | Open |
+| BP-107 | `CommitAsync`/`RollbackAsync` call the sync `_transaction.Commit()/Rollback()`, ignoring the token and provider async (`TransactionContext.cs:624-647`) | 317d303 (TransactionContext part) | Open |
+| BP-108 | `ParseVersion` mis-parses 5-part versions: Oracle "23.26.2.0.0 … 26ai" becomes major 26, breaking version gates (`SqlDialect.cs:2381-2393`) | 5d80b5c | Open |
+| BP-109 | SingleConnection + `FailClosed`: a session-settings failure during construction leaks the PersistentConnection (`Initialization.cs:409`) | 91225cd | Open |
+| BP-110 | `TrackedReader.Close()` doesn't release the lease; reader dispose stops at the first failure; `CreateSqlContainer` after Dispose isn't guarded; data sources are disposed even when a governor fails to drain | c5083b0 | Open |
+| BP-111 | PostgreSQL HStore round-trip broken on Npgsql 9 (writes a string with `Hstore` type; reads only strings) (`ProviderParameterFactory.cs:142`) | 11c3c6c | Open |
+| BP-112 | PostgreSQL MacAddr8: always sent as `MacAddr`, so 8-byte EUI-64 values fail | 1187d9d + rest of cb8a514 | Open |
+| BP-113 | Firebird DDL resets only the writer pool; reader connections can see stale metadata (`SqlContainer.cs:1168`) | 7e87fad | Open |
+| BP-114 | SingleStore: SAVEPOINT rollback is a silent no-op (data meant to be discarded survives); FK/UNIQUE/CHECK DDL rejected; PREPARE mis-parses (missing `MySqlDialect` SingleStore overrides) | f92350b | Open |
+| BP-115 | TiDB `NO_BACKSLASH_ESCAPES` in session settings corrupts strings/JSON with MySql.Data | 81eef2b | Open |
+| BP-116 | YugabyteDB/CockroachDB inherit PostgreSQL's `ANY(@array)` set-valued parameters (`SupportsSetValuedParameters` should be false); PG set-valued parameters should use a typed Npgsql array | 81eef2b | Open |
+| BP-117 | Batch upsert never emits `OVERRIDING SYSTEM VALUE`; YugabyteDB never gets it (product switch, `Upsert.cs:232`); PG<10 gate missing | c58cb96, a7ae9ef | Open |
+| BP-118 | CockroachDB: `MergeStartupOptions` overwrites a caller's explicit `lock_timeout` (`PostgreSqlDialect.cs:533`) | c58cb96 | Open |
+| BP-119 | MySQL error 1295 ("not supported in prepared statement protocol") doesn't trigger the disable-prepare fallback; CockroachDB inherits PG proc wrapping (should be None); TiDB VALUES() upsert override missing (defensive) | 3eb997c | Open |
+| BP-120 | Provider factory can't be found by its ADO.NET invariant name (`DbProviderLoader.cs:63` registers only the section key) | 335c5d0 | Open |
+| BP-121 | FlatFile uses the resolver's default isolation mapping (no ReadUncommitted; SafeNonBlockingReads→ReadCommitted instead of RepeatableRead) | 15feeb2 | Open |
+| BP-122 | Metrics: percentiles sort up to 2048 doubles on every operation when a `MetricsUpdated` subscriber (the OTel observer) is attached (no memoization) | d0bc060 | Open |
+| BP-123 | Explicit `ReadOnlyConnectionString` equal to `ConnectionString` disables SingleWriter turnstile sharing | d5b24e3 | Open |
+| BP-124 | UNSURE, needs a red test first: type-coercion dispatch still gated on `AdvancedTypes.IsMappedType` (`SqlDialect.cs:1387`); `NeedsCommonConversions` opt-in for DuckDB/Firebird/Oracle/Snowflake | ed71269, 81eef2b | Open (verify) |
+| BP-125 | UNSURE: FlatFile named `:` parameters and capability flags; depends on which pengdows.flatfile version 2.0.6 targets | 9f0299e | Open (verify) |
+
+### Tier 2: fixes that change visible behavior (decide per item)
+
+| ID | Change | 3.0 commit | Status |
+|---|---|---|---|
+| BP-201 | PK gateway `UpdateAsync`/`BatchUpdateAsync`/`BatchUpsertAsync` don't throw `ConcurrencyConflictException` on a `[Version]` mismatch (`PrimaryKeyTableGateway.Update.cs:56/78`) | 5e6b244 | Open (decide) |
+| BP-202 | `BatchUpsertAsync` silently swallows a stale `[Version]` (except the ON DUPLICATE KEY path, which can't detect it) | 21ccbca, 89db70d | Open (decide) |
+| BP-203 | After `UpdateAsync`/`BatchUpdateAsync` the entity keeps the old `[Version]`, so reusing the instance always conflicts (`WriteBackIncrementedVersion`) | 04719e7, 21ccbca | Open (decide) |
+| BP-204 | `MaxConcurrentWrites=0` means read-only only in SingleWriter; PreventDatabaseUnload pool capacity ≥2; config-vs-connection-string mismatch warning | d506a74 | Open (decide) |
+| BP-205 | DuckDB read-only safety check runs after the explicit `ReadOnlyConnectionString` check (`DatabaseContext.cs:261`); native batch UPDATE keys on `[PrimaryKey]`, not `[Id]` (`TableGateway.Batch.cs:264`) | 5e6b244 | Open (decide) |
+| BP-206 | PreventDatabaseUnload sentinel never repaired when Broken/Closed; no per-pool (reader) sentinel; sentinel replacement and permit accounting | 5e6b244, 61201f6, cd74c28 | Open (decide) |
+| BP-207 | `TenantContextRegistry.DisposeManagedAsync` fire-and-forgets in-flight construction instead of awaiting it (3.0 hit a `Lazy<Task>` deadlock here) | 7743c19 | Open (decide) |
+| BP-208 | Read-only violations throw inconsistent types (`InvalidOperationException` on the reader write path vs `NotSupportedException` elsewhere) | 7db5f4c (with BP-302) | Open (decide) |
+| BP-209 | PostgreSQL/YugabyteDB `SafeNonBlockingReads` throws `TransactionModeNotSupportedException`; 3.0 maps it to RepeatableRead (behavior part of 1cbd073 only; the signature change is 3.0-only) | 1cbd073 | Open (decide) |
+
+### Tier 3: additive public API (minor-bump question)
+
+| ID | Feature | 3.0 commit | Status |
+|---|---|---|---|
+| BP-301 | Opt-in `EnforceUniqueConnectionString` + warning on duplicate connection strings + hashed pool key + dispose-on-reject (one package, all or nothing) | 8c2d22b, 5aa33b7, 91225cd, 21ccbca | Open (decide) |
+| BP-302 | `ReadOnlyContextException` / `ReadOnlyAccessException` + `IReadOnlyViolation` (subclasses of the types thrown today) | 28cff9c | Open (decide) |
+| BP-303 | Metrics: percentile-availability and contention-attribution `init` properties on `DatabaseMetrics`/`DatabaseRoleMetrics`, `PoolStatisticsSnapshot.TotalWaits` (additive `init` props only; the positional-record changes are 3.0-only) | c3e61b1, 1a11ce3 | Open (decide) |
+| BP-304 | `AddDbProviderLoading` DI entry point (the loader ctor is internal, so the feature is unreachable today) | ee13db6 | Open (decide) |
+| BP-305 | Public `DataReaderMapper` | be7756b | Open (decide) |
+| BP-306 | `MultiTenantOptions.MaxTenantCount` wired through DI | 4399d3a | Open (decide) |
+| BP-307 | Opt-in multitenancy call-site analyzer. **Needs a new diagnostic ID** (PGC027 is CompatibilityLeakAnalyzer on 2.0.6) | f34d7bf | Open (decide) |
+| BP-308 | `ISqlDialect.JoinParenthesization` (with a default implementation; nothing consumes it yet) | 70d3b99 | Open (decide) |
+| BP-309 | Oracle array-bound `BatchCreate` (ArrayBindCount instead of INSERT ALL) | b30c970 | Open (decide) |
+| BP-310 | Oracle batch UPDATE via MERGE | e639f9a | Open (decide) |
+| BP-311 | Async `DatabaseContext.CreateAsync` + `ITenantContextRegistry.GetContextAsync`/`AcquireLeaseAsync` (+ its review fixes: re-entrancy guard, OperationCanceledException wrapping, logger race). About 1000 lines of init rewrite; high risk | eca20ec, 8693e5f | Open (decide) |
+
+### Integration tests to port with the fixes
+
+3.0 has 81 integration test methods that 2.0.6 lacks, in 19 3.0-only files; 2.0.6 has 14 of its own.
+- **Port with the matching BP item:** `VersionedUpsertConflictTests` (BP-201..203), `TransactionTests` (5 new), `StoredProcedureTests` (4), `MergeConflictTests`, `AuditFieldTests`, `DiagnosticsTests`, `NpgsqlEnumNameLivenessTests`, `PostgreSqlAdvancedTypeRoundTripTests` (BP-111/112), `OraclePoolIsolationAndBooleanDbTypeTests`, `OracleIntervalRoundTripTests`.
+- **Port as coverage for existing 2.0.6 behavior (verify each applies):** `FirebirdEmbeddedConnectionTests`, `SqliteModeIsolationTests`, `TransactionRollbackOnKilledConnectionTests`, `SqlServerOddTypeRoundTripTests`, `PortableAdvancedTypeRoundTripTests`.
+- **Only with their feature:** `RetryContextTests` (out of scope), `CapabilityProbeTests`, `FirebirdPureKeyUpsertTests`.
+- **3.0 harness self-tests (need 3.0 testbed infrastructure first):** `DatabaseTypeCatalogTests`, `ProviderMatrixCompletenessTests`, `ParallelTestOrchestrator*Tests`, `ProcessReexecHelperTests`, `IntegrationTestConfigurationTests` additions.
+- **Testbed:** 3.0 has `DbMode.IdleUnloadProbe` / `DbMode.SentinelPreventsUnload` (pair with BP-206), SingleStore and FlatFile containers, and named per-provider checks (`Db2.FinalTableInsert/Retrieve/TypedMergeParams`, `DuckDb.ReturningClause`, `SqlServer.PagingWithoutOrderBy/TriggerIdentityReturn`, `PostgreSql.GeneratedAlwaysIdentity`). 2.0.6 prints some of these to the console without recording a check.
+
+### Forward-port to 3.0 (2.0.6-only work)
+
+These 2.0.6 changes need to go into `3.0` too (or be consciously dropped). `3.0-backports` already
+carries earlier 2.0.6 → 3.0 ports.
+- Testbed skip audit fixes (SKIP-001..016): Sybase `DateTimeOffset` coercion (Guid stays pass-through),
+  Informix savepoints/SKIP-FIRST paging/typed-CAST MERGE/`EXECUTE PROCEDURE` (`ProcWrappingStyle.Informix`)/`DateTimeOffset`
+  coercion/`QualifiesColumnReferences`, Firebird 4+ `FbZonedDateTime` writes + reads, `ISqlDialect.SupportsPaging`,
+  `PreservesTrailingWhitespace`, the `{P}name` repeated-parameter documentation.
+- Harness: HARN-001..003 (fail instead of skip on provider startup failure, standalone-container
+  collection, SQL Server wait, Sybase model-database retry).
+- 2.0.6's 26-method testbed check suite (parameter binding, round trips, isolation fail-up, paging,
+  upsert, register-named columns, Firebird time zones, ...): 3.0's `TestProvider` no longer has it; confirm
+  where 3.0 covers each check, or port the missing ones.
 
 ## Batch Operations
 
