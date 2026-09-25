@@ -8,7 +8,8 @@
 //   * MERGE statement support for upserts
 //   * Parameter marker: @ (supports named parameters)
 //   * Identifier quoting: "name" (ANSI double-quotes, NOT brackets)
-//     QUOTED_IDENTIFIER is forced ON via session settings; the base-class
+//     QUOTED_IDENTIFIER is ON (driver login default at modern compatibility
+//     levels, otherwise SET via session settings); the base-class
 //     default of " is intentionally kept.  Do not add QuotePrefix/QuoteSuffix
 //     overrides here.
 //   * Max parameters: 2100 (sp_executesql limit)
@@ -209,8 +210,9 @@ internal class SqlServerDialect : SqlDialect
     }
 
     // DO NOT override QuotePrefix / QuoteSuffix here.
-    // We enforce SET QUOTED_IDENTIFIER ON (see SessionSettingsDef) on every
-    // connection, so identifiers are quoted with ANSI double-quotes ("name").
+    // QUOTED_IDENTIFIER is ON for every connection (driver login default at modern
+    // compatibility levels; otherwise SET via SessionSettingsDef — see its investigation trail),
+    // so identifiers are quoted with ANSI double-quotes ("name").
     // The base-class defaults (" / ") are exactly what we want.
     // SQL Server also accepts [...] brackets, but this codebase deliberately
     // uses the ANSI style for consistency across all dialects.

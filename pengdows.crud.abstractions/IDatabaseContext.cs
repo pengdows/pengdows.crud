@@ -86,11 +86,11 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <summary>
     /// Gets a snapshot of connection pool statistics for the specified pool role.
     /// Returns a disabled snapshot (all zeros, <c>Disabled = true</c>) when no pool
-    /// governor is active for that role (e.g., metrics disabled or disabled mode).
+    /// governor is active for that role (e.g., the pool governor is disabled).
     /// </summary>
     /// <remarks>
     /// The default implementation returns a disabled snapshot. Override in concrete
-    /// contexts that have pool governors (i.e., <see cref="DatabaseContext"/>).
+    /// contexts that have pool governors (i.e., <c>DatabaseContext</c>).
     /// </remarks>
     PoolStatisticsSnapshot GetPoolStatisticsSnapshot(PoolLabel label) =>
         new(label, string.Empty, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, true, false);
@@ -189,7 +189,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     string MakeParameterName(string parameterName);
 
     /// <summary>
-    /// Indicates whether this context supports read operations.
+    /// True when this context is read-only (readable but not writable).
     /// </summary>
     bool IsReadOnlyConnection { get; }
 
@@ -246,6 +246,17 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// Not portable across all providers.
     /// <see cref="ExecutionType.Read"/> creates a read-only transaction.
     /// </summary>
+    /// <remarks>
+    /// A level the database does not support is resolved to the weakest supported level that is
+    /// at least as strong, never a weaker one. When <paramref name="isolationLevel"/> is null, read
+    /// transactions use <see cref="IsolationProfile.SafeNonBlockingReads"/>'s mapping (logging a
+    /// warning if it degrades) and write transactions use ReadCommitted, else Serializable, else
+    /// the first supported level.
+    /// </remarks>
+    /// <exception cref="InvalidOperationException">No supported level is at least as strong as
+    /// <paramref name="isolationLevel"/>, or a read transaction was requested on a context that is
+    /// not readable.</exception>
+    /// <exception cref="NotSupportedException">A write transaction was requested on a read-only context.</exception>
     ITransactionContext BeginTransaction(
         IsolationLevel? isolationLevel = null,
         ExecutionType executionType = ExecutionType.Write);

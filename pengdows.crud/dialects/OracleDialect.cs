@@ -5,13 +5,12 @@
 // AI SUMMARY:
 // - Supports Oracle Database 18c+ with enterprise feature support.
 // - Key features:
-//   * MERGE statement for upserts (with RETURNING via dual table)
+//   * MERGE statement for upserts (source row via SELECT ... FROM DUAL)
 //   * Parameter marker: : (colon prefix, ODP.NET standard)
 //   * Identifier quoting: "name" (double quotes)
 //   * Max parameters: 65535 (Oracle's internal 16-bit bind variable slot limit)
-//   * Sequence-based ID generation
 //   * Identity column support (GENERATED AS IDENTITY)
-// - Uses Oracle-specific RETURNING INTO clause via PL/SQL block.
+// - Generated keys via RETURNING ... INTO an output parameter (GeneratedKeyPlan.Returning).
 // - Statement cache preferred over manual prepare.
 // - Stored procedure support via Oracle anonymous blocks.
 // - Parameter name limit: 128 chars.
@@ -32,10 +31,10 @@ namespace pengdows.crud.dialects;
 /// <remarks>
 /// <para>
 /// Supports Oracle Database 18c and later with automatic version detection.
-/// Uses Oracle-specific syntax for sequences, upserts, and returning values.
+/// Uses Oracle-specific syntax for upserts and returning values.
 /// </para>
 /// <para>
-/// <strong>UPSERT:</strong> Uses MERGE statement with optional RETURNING via PL/SQL.
+/// <strong>UPSERT:</strong> Uses MERGE statement with a <c>SELECT ... FROM DUAL</c> source.
 /// </para>
 /// <para>
 /// <strong>Parameters:</strong> Uses colon prefix (:param) with ODP.NET naming.

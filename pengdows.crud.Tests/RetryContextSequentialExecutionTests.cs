@@ -184,8 +184,11 @@ public class RetryContextSequentialExecutionTests
         var options = new RetryContextOptions
         {
             MaxAttempts = 5,
-            BaseDelay = TimeSpan.FromMilliseconds(300),
-            MaxDelay = TimeSpan.FromMilliseconds(300)
+            // Backoff far longer than the 30ms cancellation: with a 300ms backoff, a thread-pool
+            // starved run delayed the cancellation timer past the backoff, the retry succeeded,
+            // and nothing was thrown. The test still normally finishes in ~30ms.
+            BaseDelay = TimeSpan.FromSeconds(30),
+            MaxDelay = TimeSpan.FromSeconds(30)
         };
         var rc = new RetryContext(ctx, RetryContextType.Sequential, options);
 

@@ -8,7 +8,7 @@
 //   * Parameter marker: : (colon prefix, Snowflake.Data standard)
 //   * Identifier quoting: "name" (double-quotes; unquoted identifiers fold to UPPERCASE)
 //   * MERGE statement for upserts (uses src.{col} alias pattern)
-//   * LAST_INSERT_ID() fallback for generated key retrieval (no RETURNING support)
+//   * No RETURNING or LAST_INSERT_ID(); generated keys use the base correlation-token fallback
 //   * Savepoints NOT supported
 //   * No Docker image available; uses credential-based external connection
 // - Uses plain DbType mappings (Snowflake.Data driver, not Npgsql)
