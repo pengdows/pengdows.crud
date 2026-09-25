@@ -59,6 +59,62 @@ public sealed class DatabaseContextReadOnlyConnectionStringTests
     }
 
     [Fact]
+    public void ShouldUseReadOnlyForReadIntent_DuckDB_ExplicitReadOnlyConnectionString_ReturnsFalse()
+    {
+        // DuckDB read-only sessions can lock out concurrent writers sharing the same file.
+        // That safety rule must apply even when the caller supplies an explicit
+        // ReadOnlyConnectionString — it must not be short-circuited by the
+        // explicit-connection-string check running first.
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=file.db;EmulatedProduct=DuckDB",
+            ReadOnlyConnectionString = "Data Source=file.db;EmulatedProduct=DuckDB;ReadOnly=true",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.DuckDB));
+
+        Assert.False(ctx.ShouldUseReadOnlyForReadIntent());
+    }
+
+    [Fact]
+    public void ShouldUseReadOnlyForReadIntent_SqlServer_ExplicitReadOnlyConnectionString_ReturnsTrue()
+    {
+        // Regression guard: the explicit-connection-string case must still return true for
+        // every non-DuckDB database — the DuckDB safety rule is a narrow, product-specific
+        // carve-out, not a change to the general contract.
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=writer;EmulatedProduct=SqlServer",
+            ReadOnlyConnectionString = "Data Source=reader;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        Assert.True(ctx.ShouldUseReadOnlyForReadIntent());
+    }
+
+    [Fact]
+    public void ShouldUseReadOnlyForReadIntent_DuckDB_ExplicitReadOnlyMode_ReturnsTrue()
+    {
+        // The explicit ReadWriteMode.ReadOnly contract is stronger than the DuckDB file-locking
+        // heuristic and must still win even for DuckDB.
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=file.db;EmulatedProduct=DuckDB",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+
+        using var ctx = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.DuckDB));
+
+        Assert.True(ctx.ShouldUseReadOnlyForReadIntent());
+    }
+
+    [Fact]
     public void ReadOnlyConnectionString_GeneratesDefaultApplicationName_WhenMissing()
     {
         var config = new DatabaseContextConfiguration

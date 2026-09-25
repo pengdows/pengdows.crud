@@ -30,3 +30,7 @@ The exact session SQL varies by dialect, but the framework can enforce read inte
 - transaction creation rules that reject write intent on a read-only context
 
 The details live in the dialect and connection-lifecycle code, not in a separate read-only subsystem with its own public API.
+
+### DuckDB exception
+
+On a `ReadWrite` DuckDB context, read-intent operations do not switch to a read-only connection, even when a `ReadOnlyConnectionString` is configured: a DuckDB read-only connection on the same file can lock out concurrent writers. Only an explicit `ReadWriteMode.ReadOnly` context uses read-only DuckDB connections.

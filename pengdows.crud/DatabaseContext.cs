@@ -261,12 +261,10 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             return true;
         }
 
-        if (_explicitReadOnlyConnectionString)
-        {
-            return true;
-        }
-
-        // DuckDB read-only connections can lock out concurrent writers when sharing the same file.
+        // DuckDB read-only connections can lock out concurrent writers when sharing the same
+        // file. This safety rule must be evaluated before any explicit ReadOnlyConnectionString
+        // is honored — an explicit reader connection string does not change DuckDB's
+        // file-locking behavior, so it must not bypass this guard.
         if (_dataSourceInfo?.Product == SupportedDatabase.DuckDB)
         {
             return false;

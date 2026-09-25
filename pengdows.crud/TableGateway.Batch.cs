@@ -265,7 +265,13 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var updateableColumns = GetCachedUpdateableColumns();
-        var keyColumns = _tableInfo.PrimaryKeys.Count > 0 ? _tableInfo.PrimaryKeys : (_idColumn != null ? new List<IColumnInfo> { _idColumn } : throw new InvalidOperationException("Batch update requires an [Id] or [PrimaryKey]."));
+        // Matches single-row UpdateAsync's contract exactly (TableGateway.Update.cs /
+        // TableGateway.Sql.cs): WHERE always keys on [Id], never on [PrimaryKey] — a
+        // [PrimaryKey]-only entity (no [Id]) is not a valid update target for this gateway.
+        var keyColumns = _idColumn != null
+            ? new List<IColumnInfo> { _idColumn }
+            : throw new NotSupportedException(
+                "Single-ID operations require a designated Id column; use composite-key helpers.");
 
         // Resolve audit values once for the whole batch
         var auditValues = _auditValueResolver != null && _hasAuditColumns
@@ -359,8 +365,9 @@ public partial class TableGateway<TEntity, TRowID>
         foreach (var c in _tableInfo.OrderedColumns)
         {
             // Creation audit and the version are never rewritten by a batch UPDATE (the single-row
-            // UPDATE excludes them the same way).
-            if (!c.IsNonUpdateable && !c.IsId && !_tableInfo.PrimaryKeys.Contains(c)
+            // UPDATE excludes them the same way). [PrimaryKey] columns ARE updateable here, as in
+            // the single-row template — WHERE keys exclusively on [Id], never on [PrimaryKey].
+            if (!c.IsNonUpdateable && !c.IsId
                 && !c.IsVersion && !c.IsCreatedBy && !c.IsCreatedOn)
             {
                 updateable.Add(c);
