@@ -92,15 +92,17 @@ public class AdvancedTypeConverterTests
     }
 
     [Fact]
-    public void MacAddressConverter_ToProviderValue_FormatsText()
+    public void MacAddressConverter_ToProviderValue_PostgreSqlReturnsPhysicalAddress()
     {
+        // PostgreSQL now gets the underlying PhysicalAddress like every other provider: Npgsql
+        // rejects a string with NpgsqlDbType.MacAddr (confirmed live, BP-112).
         var converter = new MacAddressConverter();
         var physical = new PhysicalAddress(new byte[] { 0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF });
         var mac = new MacAddress(physical);
 
         var providerValue = converter.ToProviderValue(mac, SupportedDatabase.PostgreSql);
 
-        Assert.Equal("AA:BB:CC:DD:EE:FF", providerValue);
+        Assert.Equal(physical, providerValue);
     }
 
     #endregion

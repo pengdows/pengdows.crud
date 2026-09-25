@@ -15,13 +15,16 @@ namespace pengdows.crud.Tests;
 public class NetworkConverterCoverageTests
 {
     [Fact]
-    public void MacAddressConverter_UsesStringForPostgres()
+    public void MacAddressConverter_UsesPhysicalAddressForPostgres()
     {
+        // PostgreSQL now gets the underlying PhysicalAddress like every other provider: Npgsql
+        // rejects a string with NpgsqlDbType.MacAddr (confirmed live, BP-112).
         var converter = new MacAddressConverter();
         var mac = MacAddress.Parse("08:00:2b:01:02:03");
         var providerValue = converter.ToProviderValue(mac, SupportedDatabase.PostgreSql);
 
-        Assert.Equal("08:00:2B:01:02:03", providerValue);
+        var physical = Assert.IsType<PhysicalAddress>(providerValue);
+        Assert.Equal(mac.Address, physical);
     }
 
     [Fact]

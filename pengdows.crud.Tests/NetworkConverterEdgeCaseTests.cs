@@ -17,14 +17,16 @@ public class NetworkConverterEdgeCaseTests
     // ===== MacAddressConverter =====
 
     [Fact]
-    public void MacAddressConverter_ConvertToProvider_PostgresReturnsString()
+    public void MacAddressConverter_ConvertToProvider_PostgresReturnsPhysicalAddress()
     {
+        // PostgreSQL now gets the underlying PhysicalAddress like every other provider: Npgsql
+        // rejects a string with NpgsqlDbType.MacAddr (confirmed live, BP-112).
         var converter = new MacAddressConverter();
         var mac = MacAddress.Parse("08:00:2B:01:02:03");
 
         var result = converter.ToProviderValue(mac, SupportedDatabase.PostgreSql);
-        Assert.IsType<string>(result);
-        Assert.Equal("08:00:2B:01:02:03", result);
+        Assert.IsType<PhysicalAddress>(result);
+        Assert.Equal(new PhysicalAddress(new byte[] { 8, 0, 43, 1, 2, 3 }), result);
     }
 
     [Fact]

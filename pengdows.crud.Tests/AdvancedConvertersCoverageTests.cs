@@ -61,8 +61,11 @@ public class AdvancedConvertersCoverageTests
         var converter = new MacAddressConverter();
         var mac = MacAddress.Parse("00:11:22:33:44:55");
 
+        // PostgreSQL now gets the underlying PhysicalAddress like every other provider: Npgsql
+        // rejects a string with NpgsqlDbType.MacAddr (confirmed live, BP-112).
         var providerValue = converter.ToProviderValue(mac, SupportedDatabase.PostgreSql);
-        Assert.Equal("00:11:22:33:44:55", providerValue);
+        var providerPhysical = Assert.IsType<PhysicalAddress>(providerValue);
+        Assert.Equal(mac.Address, providerPhysical);
 
         var physical = new PhysicalAddress(new byte[] { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55 });
         var fromPhysical = (MacAddress?)converter.FromProviderValue(physical, SupportedDatabase.Unknown);

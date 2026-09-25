@@ -80,11 +80,17 @@ internal sealed class MacAddressConverter : AdvancedTypeConverter<MacAddress>
 {
     protected override object? ConvertToProvider(MacAddress value, SupportedDatabase provider)
     {
-        return provider switch
+        // default(MacAddress) has no address (TableGateway builds its cached templates from a
+        // default entity); bind it as null rather than dereferencing it.
+        if (value.Address is null)
         {
-            SupportedDatabase.PostgreSql => value.ToString(),
-            _ => value.Address
-        };
+            return null;
+        }
+
+        // Every provider, PostgreSQL included, gets the PhysicalAddress: Npgsql's macaddr/macaddr8
+        // handlers bind from PhysicalAddress, while a string with NpgsqlDbType.MacAddr is rejected
+        // ("Writing values of 'System.String' is not supported ...", confirmed live).
+        return value.Address;
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out MacAddress result)

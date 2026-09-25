@@ -25,6 +25,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Text.Json;
 using pengdows.crud.enums;
@@ -108,6 +109,7 @@ internal class AdvancedTypeRegistry
         public const string Inet = "Inet";
         public const string Cidr = "Cidr";
         public const string MacAddr = "MacAddr";
+        public const string MacAddr8 = "MacAddr8";
         public const string Interval = "Interval";
         public const string Uuid = "Uuid";
         public const string Hstore = "Hstore";
@@ -694,13 +696,17 @@ internal class AdvancedTypeRegistry
         RegisterMapping<Cidr>(SupportedDatabase.CockroachDb, pgCidr);
         RegisterMapping<Cidr>(SupportedDatabase.YugabyteDb, pgCidr);
 
-        // PostgreSQL macaddr
+        // PostgreSQL macaddr (6-byte EUI-48) / macaddr8 (8-byte EUI-64) - dispatch on the actual
+        // address width, since MacAddress supports both. By the time this callback runs the
+        // registered MacAddressConverter has already unwrapped the value to a PhysicalAddress.
         var pgMac = new ProviderTypeMapping
         {
             DbType = DbType.String,
             ConfigureParameter = (param, value) =>
             {
-                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.MacAddr);
+                var isEui64 = value is PhysicalAddress address && address.GetAddressBytes().Length == 8;
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty,
+                    isEui64 ? NpgsqlNames.MacAddr8 : NpgsqlNames.MacAddr);
             }
         };
         RegisterMapping<MacAddress>(SupportedDatabase.PostgreSql, pgMac);

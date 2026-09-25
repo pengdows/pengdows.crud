@@ -62,6 +62,18 @@ public sealed class PostgreSqlHStoreMacAddrRoundTripTests : DatabaseTestBase
         {
             await table.ExecuteNonQueryAsync();
         }
+
+        await DropTableIfExistsAsync(context, "mac_roundtrip");
+        await using (var table = context.CreateSqlContainer($"""
+            CREATE TABLE {IntegrationObjectNameHelper.Table(context, "mac_roundtrip")} (
+                id           INTEGER PRIMARY KEY,
+                mac_value    MACADDR NOT NULL,
+                mac8_value   MACADDR8 NOT NULL
+            )
+            """))
+        {
+            await table.ExecuteNonQueryAsync();
+        }
     }
 
     [SkippableFact]
@@ -91,6 +103,39 @@ public sealed class PostgreSqlHStoreMacAddrRoundTripTests : DatabaseTestBase
             Assert.Equal("has, special=>chars", actual.HStoreValue["needs quoting"]);
         });
     }
+
+    [SkippableFact]
+    public async Task MacAddress_SixAndEightByte_RoundTripAndBindInWherePredicate()
+    {
+        await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async context =>
+        {
+            var gateway = new TableGateway<MacEntity, int>(context);
+            var eightByte = MacAddress.Parse("08:00:2B:01:02:03:04:06");
+            var sixByte = MacAddress.Parse("08:00:2B:01:02:04");
+            Assert.True(await gateway.CreateAsync(new MacEntity
+            {
+                Id = 2,
+                MacValue = sixByte,
+                Mac8Value = eightByte
+            }, context));
+
+            var actual = await gateway.RetrieveOneAsync(2, context);
+            Assert.NotNull(actual);
+            Assert.Equal(sixByte, actual!.MacValue);
+            Assert.Equal(eightByte, actual.Mac8Value);
+
+            var table = IntegrationObjectNameHelper.Table(context, "mac_roundtrip");
+            await using var predicate = context.CreateSqlContainer($"SELECT id FROM {table} WHERE mac8_value = ");
+            var p = predicate.AddParameterWithValue("mac8", DbType.Object, eightByte);
+            predicate.Query.Append(predicate.MakeParameterName(p));
+            Assert.Equal(2, await predicate.ExecuteScalarOrNullAsync<int>());
+
+            await using var predicate6 = context.CreateSqlContainer($"SELECT id FROM {table} WHERE mac_value = ");
+            var p6 = predicate6.AddParameterWithValue("mac6", DbType.Object, sixByte);
+            predicate6.Query.Append(predicate6.MakeParameterName(p6));
+            Assert.Equal(2, await predicate6.ExecuteScalarOrNullAsync<int>());
+        });
+    }
 }
 
 [Table("hstore_roundtrip")]
@@ -98,4 +143,12 @@ public sealed class HStoreEntity
 {
     [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
     [Column("hstore_value", DbType.Object)] public HStore HStoreValue { get; set; }
+}
+
+[Table("mac_roundtrip")]
+public sealed class MacEntity
+{
+    [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+    [Column("mac_value", DbType.Object)] public MacAddress MacValue { get; set; }
+    [Column("mac8_value", DbType.Object)] public MacAddress Mac8Value { get; set; }
 }
