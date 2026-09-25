@@ -31,7 +31,8 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     {
         var coercion = new IntervalYearMonthCoercion();
 
-        Assert.False(coercion.TryRead(new DbValue(42), out _));
+        // BP-124: int/long are ODP.NET's total-months representation; double stays unknown.
+        Assert.False(coercion.TryRead(new DbValue(42d), out _));
     }
 
     [Fact]
@@ -221,7 +222,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         var interval = new IntervalYearMonth(3, 6);
 
         var result = converter.ToProviderValue(interval, SupportedDatabase.Oracle);
-        Assert.Equal("P3Y6M", result);
+        Assert.Equal("+0003-06", result); // BP-124: Oracle literal format, not ISO-8601
     }
 
     [Fact]

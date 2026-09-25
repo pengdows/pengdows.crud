@@ -77,7 +77,7 @@ public class AdvancedConvertersCoverageTests
         var interval = new IntervalYearMonth(2, 3);
 
         var providerValue = converter.ToProviderValue(interval, SupportedDatabase.Oracle);
-        Assert.Equal("P2Y3M", providerValue);
+        Assert.Equal("+0002-03", providerValue); // BP-124: Oracle literal format
 
         var parsed = (IntervalYearMonth?)converter.FromProviderValue("P2Y3M", SupportedDatabase.Oracle);
         Assert.NotNull(parsed);
@@ -92,7 +92,7 @@ public class AdvancedConvertersCoverageTests
         var interval = new IntervalDaySecond(1, new TimeSpan(2, 3, 4));
 
         var providerValue = converter.ToProviderValue(interval, SupportedDatabase.Oracle);
-        Assert.Equal("P1DT2H3M4S", providerValue);
+        Assert.Equal("+000000001 02:03:04.000000", providerValue); // BP-124: Oracle literal format
 
         var parsed = (IntervalDaySecond?)converter.FromProviderValue("P1DT2H3M4S", SupportedDatabase.Oracle);
         Assert.NotNull(parsed);

@@ -30,7 +30,7 @@ namespace pengdows.crud.types.converters;
 /// <remarks>
 /// <para><strong>Provider-specific behavior:</strong></para>
 /// <list type="bullet">
-/// <item><description><strong>Oracle:</strong> Maps to INTERVAL DAY TO SECOND type. Format: P5DT12H30M45.5S (ISO 8601).</description></item>
+/// <item><description><strong>Oracle:</strong> Maps to INTERVAL DAY TO SECOND type. Written as Oracle literal +DDDDDDDDD HH:MI:SS.FFFFFF.</description></item>
 /// <item><description><strong>PostgreSQL/CockroachDB:</strong> Can be stored as INTERVAL and formatted as ISO 8601.</description></item>
 /// <item><description><strong>Other databases:</strong> Stores as TimeSpan equivalent. No native interval day-second type.</description></item>
 /// </list>
@@ -87,7 +87,7 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
     {
         return provider switch
         {
-            SupportedDatabase.Oracle => FormatIso(value),
+            SupportedDatabase.Oracle => FormatOracle(value),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => FormatIso(value),
             _ => value.TotalTime
         };
@@ -118,6 +118,20 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
             result = default!;
             return false;
         }
+    }
+
+    // ODP.NET binds INTERVAL DAY TO SECOND from Oracle's literal format
+    // (+DDDDDDDDD HH:MI:SS.FFFFFF), not ISO-8601.
+    private static string FormatOracle(IntervalDaySecond value)
+    {
+        var sign = value.TotalTime < TimeSpan.Zero ? "-" : "+";
+        var absolute = value.TotalTime.Duration();
+        return string.Concat(sign,
+            absolute.Days.ToString("D9", CultureInfo.InvariantCulture), " ",
+            absolute.Hours.ToString("D2", CultureInfo.InvariantCulture), ":",
+            absolute.Minutes.ToString("D2", CultureInfo.InvariantCulture), ":",
+            absolute.Seconds.ToString("D2", CultureInfo.InvariantCulture), ".",
+            (absolute.Ticks % TimeSpan.TicksPerSecond).ToString("D7", CultureInfo.InvariantCulture)[..6]);
     }
 
     private static string FormatIso(IntervalDaySecond value)

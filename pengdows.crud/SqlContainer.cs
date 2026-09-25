@@ -2330,7 +2330,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private static DbParameter CloneParameter(DbParameter param, ISqlDialect dialect)
     {
-        var cloned = dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
+        DbParameter cloned;
+        try
+        {
+            cloned = dialect.CreateDbParameter(param.ParameterName, param.DbType, param.Value);
+        }
+        catch (ArgumentException) when (param.Value is not null and not DBNull)
+        {
+            // Some providers expose a provider-specific type through a DbType that does not
+            // describe the value (ODP.NET reports OracleDbType.IntervalYM parameters as Int64
+            // while they carry the provider's string representation). Provider metadata is
+            // copied below; use Object only to get through portable validation when cloning
+            // the cached template.
+            cloned = dialect.CreateDbParameter(param.ParameterName, DbType.Object, param.Value);
+        }
 
         // Only set non-default properties to avoid unnecessary provider overhead
         if (param.Direction != ParameterDirection.Input)

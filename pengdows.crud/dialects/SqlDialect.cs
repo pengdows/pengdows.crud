@@ -38,6 +38,7 @@ using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.types;
+using pengdows.crud.types.coercion;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -1384,8 +1385,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         else
         {
             handled = runtimeType != null &&
-                      AdvancedTypes.IsMappedType(runtimeType) &&
-                      AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType);
+                      ((AdvancedTypes.IsMappedType(runtimeType) &&
+                        AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType)) ||
+                       // Provider LOB mappings are keyed by Stream/TextReader, but the runtime type
+                       // is a concrete subclass (MemoryStream, StringReader, ...) that never matches.
+                       // Materialize to byte[]/string rather than handing the provider a raw
+                       // instance it cannot bind.
+                       ProviderParameterFactory.TryMaterializeLargeObject(parameter, value));
         }
 
         if (!handled)

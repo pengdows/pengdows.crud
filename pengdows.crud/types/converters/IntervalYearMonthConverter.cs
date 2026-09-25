@@ -30,7 +30,7 @@ namespace pengdows.crud.types.converters;
 /// <remarks>
 /// <para><strong>Provider-specific behavior:</strong></para>
 /// <list type="bullet">
-/// <item><description><strong>Oracle:</strong> Maps to INTERVAL YEAR TO MONTH type. Format: P3Y6M (ISO 8601).</description></item>
+/// <item><description><strong>Oracle:</strong> Maps to INTERVAL YEAR TO MONTH type. Written as Oracle literal +YYYY-MM (e.g. +0003-06).</description></item>
 /// <item><description><strong>PostgreSQL/CockroachDB:</strong> Can be stored as INTERVAL and formatted as ISO 8601.</description></item>
 /// <item><description><strong>Other databases:</strong> No native interval year-month type. Application-level storage required.</description></item>
 /// </list>
@@ -88,7 +88,7 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
     {
         return provider switch
         {
-            SupportedDatabase.Oracle => FormatIso(value),
+            SupportedDatabase.Oracle => FormatOracle(value),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => FormatIso(value),
             _ => value
         };
@@ -118,6 +118,16 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
 
         result = default!;
         return false;
+    }
+
+    // ODP.NET binds INTERVAL YEAR TO MONTH from Oracle's literal format (+YYYY-MM), not ISO-8601.
+    private static string FormatOracle(IntervalYearMonth value)
+    {
+        var sign = value.TotalMonths < 0 ? "-" : "+";
+        var absoluteMonths = Math.Abs(value.TotalMonths);
+        return string.Concat(sign,
+            (absoluteMonths / 12).ToString("D4", CultureInfo.InvariantCulture), "-",
+            (absoluteMonths % 12).ToString("D2", CultureInfo.InvariantCulture));
     }
 
     private static string FormatIso(IntervalYearMonth value)

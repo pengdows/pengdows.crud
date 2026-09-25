@@ -145,6 +145,13 @@ internal class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
             case IntervalYearMonth interval:
                 value = interval;
                 return true;
+            // ODP.NET exposes INTERVAL YEAR TO MONTH as the provider's numeric month count.
+            case int totalMonths:
+                value = IntervalYearMonth.FromTotalMonths(totalMonths);
+                return true;
+            case long totalMonths:
+                value = IntervalYearMonth.FromTotalMonths(checked((int)totalMonths));
+                return true;
             case string text:
                 try
                 {

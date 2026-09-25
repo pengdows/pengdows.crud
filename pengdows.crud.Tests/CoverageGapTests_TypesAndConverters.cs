@@ -1773,7 +1773,7 @@ public class CoverageGapTests_TypesAndConverters
     public void IntervalYearMonthCoercion_TryRead_UnknownType_ReturnsFalse()
     {
         var coercion = new IntervalYearMonthCoercion();
-        var src = new DbValue(42);
+        var src = new DbValue(42d); // BP-124: int/long now map to total months
 
         var result = coercion.TryRead(src, out var value);
 
