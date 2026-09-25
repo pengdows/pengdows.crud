@@ -19,6 +19,15 @@ namespace pengdows.crud.Tests;
 
 public class TenantTests
 {
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null)
+    {
+        var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
+        while (!condition() && DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+    }
+
     private sealed class StubResolver : ITenantConnectionResolver
     {
         private readonly IDatabaseContextConfiguration _cfg;
@@ -191,6 +200,57 @@ public class TenantTests
         registry.Invalidate("bad-tenant");
 
         Assert.Equal(0, removedCount);
+    }
+
+    // BP-105 (3.0 bbb2ef8): deterministically reproduces a race between Invalidate(tenant) and
+    // the registry's own Dispose() shutdown path. DisposeManaged's _contexts.Values.ToArray()
+    // snapshot can observe an entry that a concurrent Invalidate has already committed to
+    // disposing (ConcurrentDictionary gives no snapshot isolation). Simulated by calling
+    // entry.MarkRemoved directly (Invalidate's side effect) without removing the entry from
+    // _contexts, so shutdown still sees it. Before the fix, ContextRemoved fired twice and the
+    // context was disposed twice.
+    [Fact]
+    public async Task Invalidate_RacingWithRegistryDispose_FiresContextRemovedOnlyOnce()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ProviderName = "fake-sqlite",
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite"
+        };
+
+        var services = new ServiceCollection();
+        services.AddLogging();
+        services.AddKeyedSingleton<DbProviderFactory>("fake-sqlite",
+            (sp, key) => new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        using var provider = services.BuildServiceProvider();
+        var registry = new TenantContextRegistry(
+            provider,
+            new StubResolver(cfg),
+            new StubContextFactory(),
+            provider.GetRequiredService<ILoggerFactory>());
+
+        var context = (DatabaseContext)registry.GetContext("race-tenant");
+
+        var removedCount = 0;
+        registry.ContextRemoved += _ => Interlocked.Increment(ref removedCount);
+
+        var contextsField = typeof(TenantContextRegistry).GetField("_contexts",
+            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!;
+        var contexts =
+            (ConcurrentDictionary<string, TenantContextRegistry.TenantContextEntry>)contextsField
+                .GetValue(registry)!;
+        var entry = contexts["race-tenant"];
+
+        entry.MarkRemoved(registry, "race-tenant");
+
+        await WaitUntilAsync(() => Volatile.Read(ref removedCount) >= 1);
+        Assert.Equal(1, Volatile.Read(ref removedCount));
+        Assert.True(context.IsDisposed);
+
+        registry.Dispose();
+
+        Assert.Equal(1, Volatile.Read(ref removedCount));
     }
 
     // Verifies that ContextCreated fires when GetContext successfully creates a new context.
