@@ -15,13 +15,14 @@
 //   NpgsqlTimeSpan. Hydration reads interval columns as NpgsqlInterval (IntervalFieldReader), so
 //   months and the stored days/time split round-trip.
 // - Parse(): Handles ISO 8601-style durations (Y/M/W/D date part — years fold into months, weeks
-//   into days — and H/M/S time part); PostgreSQL's verbose text format ("1 year 2 mons") is not supported.
+//   into days — and H/M/S time part), plus PostgreSQL's verbose text format ("1 year 2 mons").
 // - Components: Months (includes years), Days, Microseconds (sub-day time).
 // - Thread-safe and immutable value objects.
 // =============================================================================
 
 using System.Globalization;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -44,11 +45,11 @@ namespace pengdows.crud.types.converters;
 /// <list type="bullet">
 /// <item><description>PostgreSqlInterval → PostgreSqlInterval (pass-through)</description></item>
 /// <item><description>TimeSpan → PostgreSqlInterval (converts via PostgreSqlInterval.FromTimeSpan)</description></item>
-/// <item><description>string → PostgreSqlInterval (parses ISO 8601-style durations with Y/M/W/D and H/M/S components)</description></item>
+/// <item><description>string → PostgreSqlInterval (parses ISO 8601-style and PostgreSQL verbose durations)</description></item>
 /// <item><description>NpgsqlTimeSpan → PostgreSqlInterval (converts Npgsql provider-specific type via reflection)</description></item>
 /// </list>
 /// <para><strong>Format:</strong> Reads ISO 8601-style durations such as "P3Y6M4DT12H30M5S" (years fold into
-/// months, weeks into days; PostgreSQL's verbose text format is not parsed). For PostgreSQL/CockroachDB/YugabyteDB
+/// months, weeks into days) and PostgreSQL verbose text such as "3 years 6 mons 4 days 12:30:05". For PostgreSQL/CockroachDB/YugabyteDB
 /// the value is written as Npgsql's <c>NpgsqlInterval</c>, which keeps months; ISO 8601 text is only a fallback
 /// when Npgsql isn't loaded.</para>
 /// <para><strong>Components:</strong> PostgreSqlInterval has three fields: Months (includes years), Days, and Microseconds (sub-day time).
@@ -97,6 +98,16 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
     private static readonly Lazy<ConstructorInfo?> NpgsqlIntervalCtor = new(() =>
         Type.GetType("NpgsqlTypes.NpgsqlInterval, Npgsql", throwOnError: false)
             ?.GetConstructor(new[] { typeof(int), typeof(int), typeof(long) }));
+
+    private static readonly Regex VerbosePartRegex = new(
+        @"(?<value>[+-]?\d+(?:\.\d+)?)\s*(?<unit>years?|mons?|months?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|microseconds?|usecs?|us)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex VerboseClockRegex = new(
+        @"(?<hours>[+-]?\d+):(?<minutes>\d{2}):(?<seconds>\d{2}(?:\.\d+)?)",
+        RegexOptions.CultureInvariant);
+    private static readonly Regex IsoDurationRegex = new(
+        @"^P(?:[+-]?\d+[YMWD])*(?:T(?:[+-]?\d+(?:\.\d+)?[HMS])+)?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     protected override object? ConvertToProvider(PostgreSqlInterval value, SupportedDatabase provider)
     {
@@ -250,6 +261,17 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
             remaining = remaining.Substring(1);
         }
 
+        if (!text.TrimStart().StartsWith("P", StringComparison.OrdinalIgnoreCase))
+        {
+            return ParseVerbose(text);
+        }
+
+        var isoText = text.Trim();
+        if (isoText.Length == 1 || !IsoDurationRegex.IsMatch(isoText))
+        {
+            throw new FormatException($"Invalid PostgreSQL interval: '{text}'.");
+        }
+
         var timeIndex = remaining.IndexOf('T');
         string? timePart = null;
         if (timeIndex >= 0)
@@ -296,6 +318,70 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
         if (!string.IsNullOrEmpty(timePart))
         {
             microseconds = ParseTimeComponent(timePart);
+        }
+
+        return new PostgreSqlInterval(months, days, microseconds);
+    }
+
+    private static PostgreSqlInterval ParseVerbose(string text)
+    {
+        var remaining = text.Trim();
+        var ago = remaining.EndsWith("ago", StringComparison.OrdinalIgnoreCase);
+        if (ago)
+        {
+            remaining = remaining[..^3].TrimEnd();
+        }
+
+        var months = 0;
+        var days = 0;
+        long microseconds = 0;
+        var matched = false;
+
+        foreach (Match match in VerbosePartRegex.Matches(remaining))
+        {
+            matched = true;
+            var value = decimal.Parse(match.Groups["value"].Value, CultureInfo.InvariantCulture);
+            var unit = match.Groups["unit"].Value.ToLowerInvariant();
+            if (unit.StartsWith("year", StringComparison.Ordinal))
+            {
+                months += checked((int)(value * 12));
+            }
+            else if (unit is "mon" or "mons" or "month" or "months")
+            {
+                months += checked((int)value);
+            }
+            else if (unit.StartsWith("day", StringComparison.Ordinal))
+            {
+                days += checked((int)value);
+            }
+            else
+            {
+                microseconds += checked((long)(value * 1_000_000m));
+            }
+        }
+
+        var clock = VerboseClockRegex.Match(remaining);
+        if (clock.Success)
+        {
+            matched = true;
+            var hours = long.Parse(clock.Groups["hours"].Value, CultureInfo.InvariantCulture);
+            var minutes = int.Parse(clock.Groups["minutes"].Value, CultureInfo.InvariantCulture);
+            var seconds = decimal.Parse(clock.Groups["seconds"].Value, CultureInfo.InvariantCulture);
+            microseconds += checked((long)((hours * 3600m + minutes * 60m + seconds) * 1_000_000m));
+        }
+
+        var unparsed = VerbosePartRegex.Replace(remaining, string.Empty);
+        unparsed = VerboseClockRegex.Replace(unparsed, string.Empty);
+        if (!matched || unparsed.Trim().Length != 0)
+        {
+            throw new FormatException($"Invalid PostgreSQL interval: '{text}'.");
+        }
+
+        if (ago)
+        {
+            months = -months;
+            days = -days;
+            microseconds = -microseconds;
         }
 
         return new PostgreSqlInterval(months, days, microseconds);

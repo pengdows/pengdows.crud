@@ -239,17 +239,6 @@ public class AdvancedTypeConverterTests
         Assert.Same(stub, result.ProviderValue);
     }
 
-    [Fact]
-    public void GeometryConverter_ToProviderValue_PostgresUsesGeoJsonWhenAvailable()
-    {
-        var geoJson = "{\"type\":\"Point\",\"coordinates\":[3,4]}";
-        var geometry = Geometry.FromGeoJson(geoJson, 4326);
-        var converter = new GeometryConverter();
-
-        var providerValue = converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql);
-
-        Assert.Equal(geoJson, providerValue);
-    }
 
     [Fact]
     public void GeographyConverter_ToProviderValue_SqlServerRequiresProviderSpecific()
@@ -353,17 +342,6 @@ public class AdvancedTypeConverterTests
         Assert.Equal(6, result.Months);
     }
 
-    [Fact]
-    public void IntervalConverter_ShouldTreatInvalidStringAsZero()
-    {
-        var converter = new PostgreSqlIntervalConverter();
-        var success = converter.TryConvertFromProvider("invalid", SupportedDatabase.PostgreSql, out var result);
-
-        Assert.True(success);
-        Assert.Equal(0, result.Months);
-        Assert.Equal(0, result.Days);
-        Assert.Equal(0, result.Microseconds);
-    }
 
     #endregion
 
@@ -903,5 +881,27 @@ public class AdvancedTypeConverterTests
 
             base.Dispose(disposing);
         }
+    }
+
+    [Fact]
+    public void IntervalConverter_ShouldRejectInvalidString()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        var success = converter.TryConvertFromProvider("invalid", SupportedDatabase.PostgreSql, out var result);
+
+        Assert.False(success);
+        Assert.Equal(default, result);
+    }
+
+    [Fact]
+    public void GeometryConverter_ToProviderValue_PostgresUsesGeoJsonWhenAvailable()
+    {
+        var geoJson = "{\"type\":\"Point\",\"coordinates\":[3,4]}";
+        var geometry = Geometry.FromGeoJson(geoJson, 4326);
+        var converter = new GeometryConverter();
+
+        var providerValue = converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql);
+
+        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(providerValue));
     }
 }

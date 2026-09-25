@@ -28,7 +28,7 @@ public class TableGatewayNegativeTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public async Task BuildUpdateAsync_LoadOriginal_NotFound_Throws()
+    public async Task BuildUpdateAsync_LoadOriginal_NotFound_ThrowsConcurrencyConflict()
     {
         // TestEntity has a [Version] column, so a missing original row is a concurrency conflict
         // per the documented contract ("version mismatch or row deleted"), not a generic

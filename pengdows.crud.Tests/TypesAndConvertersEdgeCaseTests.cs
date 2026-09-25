@@ -996,7 +996,7 @@ public class TypesAndConvertersEdgeCaseTests
         var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
 
         Assert.IsType<string>(result);
-        Assert.Equal("POINT(0 0)", result);
+        Assert.Equal("SRID=4326;POINT(0 0)", result);
     }
 
     [Fact]
@@ -1009,7 +1009,7 @@ public class TypesAndConvertersEdgeCaseTests
         var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
 
         Assert.IsType<string>(result);
-        Assert.Equal(json, result);
+        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(result));
     }
 
     [Fact]
@@ -1328,7 +1328,7 @@ public class TypesAndConvertersEdgeCaseTests
         var result = coercion.TryWrite(geog, parameter);
 
         Assert.True(result);
-        Assert.Equal("POINT(0 0)", parameter.Value);
+        Assert.Equal("SRID=4326;POINT(0 0)", parameter.Value);
         Assert.Equal(DbType.String, parameter.DbType);
     }
 
@@ -1907,7 +1907,7 @@ public class TypesAndConvertersEdgeCaseTests
 
         var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
 
-        Assert.Equal(json, result);
+        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(result));
     }
 
     #endregion

@@ -72,13 +72,25 @@ public class SpatialConverterBranchTests
         var geo = Geometry.FromGeoJson("{\"type\":\"Point\"}", 4326);
 
         Assert.IsType<byte[]>(converter.ToProviderValue(wkb, SupportedDatabase.PostgreSql));
-        Assert.Equal("POINT(1 2)", converter.ToProviderValue(wkt, SupportedDatabase.PostgreSql));
-        Assert.Equal("{\"type\":\"Point\"}", converter.ToProviderValue(geo, SupportedDatabase.PostgreSql));
+        Assert.Equal("SRID=4326;POINT(1 2)", converter.ToProviderValue(wkt, SupportedDatabase.PostgreSql));
+        Assert.Contains("\"name\":\"EPSG:4326\"",
+            Assert.IsType<string>(converter.ToProviderValue(geo, SupportedDatabase.PostgreSql)));
 
         var mysqlBytes = converter.ToProviderValue(wkt, SupportedDatabase.MySql);
         Assert.IsType<byte[]>(mysqlBytes);
 
         Assert.Throws<InvalidOperationException>(() => converter.ToProviderValue(geo, SupportedDatabase.MySql));
+    }
+
+    [Fact]
+    public void ConvertToProvider_YugabyteUsesPostgresSridEncoding()
+    {
+        var converter = new TestSpatialConverter();
+        var wkt = Geometry.FromWellKnownText("POINT(1 2)", 4326);
+
+        var result = converter.ToProviderValue(wkt, SupportedDatabase.YugabyteDb);
+
+        Assert.Equal("SRID=4326;POINT(1 2)", result);
     }
 
     [Fact]

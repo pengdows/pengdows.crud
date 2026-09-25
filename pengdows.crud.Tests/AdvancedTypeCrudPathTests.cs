@@ -62,7 +62,8 @@ public sealed class AdvancedTypeCrudPathTests
 
         Assert.NotNull(geographyParameter.Value);
         Assert.NotNull(geometryParameter.Value);
-        Assert.Equal(geography.ToString(), geographyParameter.Value?.ToString());
+        // PostgreSQL-family values keep their SRID (EWKT); SRID 0 means none, so no prefix.
+        Assert.Equal("SRID=4326;POINT(-87.6298 41.8781)", geographyParameter.Value?.ToString());
         Assert.Equal(geometry.ToString(), geometryParameter.Value?.ToString());
     }
 
