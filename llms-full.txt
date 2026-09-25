@@ -1450,11 +1450,10 @@ imposes, not a pengdows-specific gap.
 
 The public execution boundary does not expose the underlying `DbConnection` either: callers
 execute through governed containers, readers, and transaction leases rather than acquiring
-provider connections directly. The one exception on the public surface is
-`IDatabaseContext.DataSource` (a `DbDataSource?`), which hands back the provider data source the
-context was built with; a connection created from it is outside the governed system entirely —
-see [`implementation-evidence.md`](./implementation-evidence.md) for details. Treat it as an
-interop escape hatch, not an execution path.
+provider connections directly. The obsolete compatibility-only `IDatabaseContext.DataSource`
+property hands back the provider data source the context was built with; a connection created from
+it is outside the governed system entirely. `PGC027` rejects application use; use the context
+execution APIs instead.
 
 Two things sometimes get raised as counterexamples to this and are worth naming as out of
 scope rather than caveats, because neither is a gap in pengdows.crud's API: reaching an
@@ -2038,7 +2037,8 @@ indexed-lookup path but the query planner silently chose a different plan.
 
 ## `IDatabaseContext.DataSource` exposure (principle 5)
 
-`IDatabaseContext.DataSource` (a public `DbDataSource?`, `pengdows.crud.abstractions/IDatabaseContext.cs`)
+`IDatabaseContext.DataSource` (an obsolete compatibility-only `DbDataSource?`,
+`pengdows.crud.abstractions/IDatabaseContext.cs`)
 was introduced in the 2.0 rewrite (commit `d89b369`) and is still public on this branch;
 `ITransactionContext` forwards its parent context's value. It returns the writer-side data
 source the context was built with — a caller-supplied `DbDataSource` (e.g. `NpgsqlDataSource`)
@@ -2046,7 +2046,8 @@ or one the context created internally — or `null`. Any caller can use it to ca
 `DataSource.CreateConnection()` for a raw provider connection, outside governor accounting,
 session settings, and disposal tracking. It is the one public raw-provider accessor on the
 execution surface: there is no public `DbConnection` accessor (`GetConnection` is `internal`),
-and `ISqlContainer`/`ITrackedReader` expose no connection. Treat `DataSource` as interop-only.
+and `ISqlContainer`/`ITrackedReader` expose no connection. Application use is rejected by `PGC027`;
+use the context execution APIs instead.
 
 Tests that need to verify which `DbDataSource` a constructor actually wired up (including the
 reader-side data source, which has no public accessor) read the private field via reflection
@@ -2568,7 +2569,12 @@ app.Use(async (context, next) =>
 
 `ISqlDialect` exposes concrete `Supports*` capability flags — `SupportsJoins`, `SupportsMerge`, `SupportsWindowFunctions`, `SupportsJsonTypes`, `SupportsTemporalData`, `SupportsPropertyGraphQueries`, and more — so callers read one boolean per capability rather than reasoning about a standard level themselves.
 
-In the base `SqlDialect` class, most of these flags *default* from a single SQL-standard level: `MaxSupportedStandard` (a `SqlStandardLevel`, `Sql92` before initialization, the detected `ProductInfo.StandardCompliance` after). For example `SupportsJoins`/`SupportsSubqueries`/`SupportsUnion` require `Sql92`, `SupportsUserDefinedTypes`/`SupportsArrayTypes`/`SupportsRegularExpressions` require `Sql99`, `SupportsMerge`/`SupportsWindowFunctions`/`SupportsCommonTableExpressions`/`SupportsXmlTypes` require `Sql2003`, `SupportsTruncateTable`/`SupportsInsteadOfTriggers` require `Sql2008`, `SupportsTemporalData` requires `Sql2011`, `SupportsJsonTypes`/`SupportsRowPatternMatching` require `Sql2016`, and `SupportsPropertyGraphQueries` requires `Sql2023`. A few flags are plain constants instead (`SupportsSqlJsonConstructors`/`SupportsJsonTable` default `false`; constraint flags default `true`). Each dialect maps versions to a standard level (`DetermineStandardCompliance`, `GetMajorVersionToStandardMapping`, `GetDefaultStandardLevel`) and overrides individual capabilities directly — often with version-aware expressions (such as PostgreSQL's `SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15)`) — wherever the standard-level default would be wrong for that engine. A flag that a dialect does not override is only as accurate as its standard-level mapping, so verify it against the real engine before relying on it.
+The base `SqlDialect` still contains the legacy SQL-standard heuristic (`MaxSupportedStandard` and
+`SqlStandardLevel`) for 2.x binary compatibility, but those members are obsolete and rejected for
+new application use by `PGC027`. Consumers must query the specific `Supports*` capabilities. The
+legacy implementation maps feature flags to approximate SQL eras, while individual dialects may
+override capabilities with version-aware logic; that history is retained here to explain existing
+behavior, not as a capability contract for new code.
 
 ## Strategy Pattern Architecture
 

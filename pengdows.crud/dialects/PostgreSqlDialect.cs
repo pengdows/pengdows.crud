@@ -198,6 +198,7 @@ internal class PostgreSqlDialect : SqlDialect
     public override bool PrepareStatements => true;
     public override bool SupportsReadOnlyTransactions => true;
 
+    [Obsolete("MaxSupportedStandard is a coarse heuristic; query the specific Supports* capability instead.", false)]
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 

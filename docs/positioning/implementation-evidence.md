@@ -83,7 +83,8 @@ indexed-lookup path but the query planner silently chose a different plan.
 
 ## `IDatabaseContext.DataSource` exposure (principle 5)
 
-`IDatabaseContext.DataSource` (a public `DbDataSource?`, `pengdows.crud.abstractions/IDatabaseContext.cs`)
+`IDatabaseContext.DataSource` (an obsolete compatibility-only `DbDataSource?`,
+`pengdows.crud.abstractions/IDatabaseContext.cs`)
 was introduced in the 2.0 rewrite (commit `d89b369`) and is still public on this branch;
 `ITransactionContext` forwards its parent context's value. It returns the writer-side data
 source the context was built with — a caller-supplied `DbDataSource` (e.g. `NpgsqlDataSource`)
@@ -91,7 +92,8 @@ or one the context created internally — or `null`. Any caller can use it to ca
 `DataSource.CreateConnection()` for a raw provider connection, outside governor accounting,
 session settings, and disposal tracking. It is the one public raw-provider accessor on the
 execution surface: there is no public `DbConnection` accessor (`GetConnection` is `internal`),
-and `ISqlContainer`/`ITrackedReader` expose no connection. Treat `DataSource` as interop-only.
+and `ISqlContainer`/`ITrackedReader` expose no connection. Application use is rejected by `PGC027`;
+use the context execution APIs instead.
 
 Tests that need to verify which `DbDataSource` a constructor actually wired up (including the
 reader-side data source, which has no public accessor) read the private field via reflection

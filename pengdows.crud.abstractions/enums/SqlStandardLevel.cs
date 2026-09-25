@@ -15,6 +15,7 @@ namespace pengdows.crud.enums;
 /// became common in that era, but MySQL diverges significantly from ISO SQL:2008 in areas like
 /// type system, constraint semantics, transactional DDL, stored procedures, and information schema.
 /// </remarks>
+[Obsolete("SqlStandardLevel is a coarse heuristic; query the specific Supports* capability instead.", false)]
 public enum SqlStandardLevel
 {
     Sql86 = 1986,

@@ -366,6 +366,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
 
     /// <inheritdoc/>
+    [Obsolete("TransactionContext.DataSource bypasses pengdows.crud connection governance; use the transaction APIs instead.", false)]
     public DbDataSource? DataSource => _context.DataSource;
 
     /// <inheritdoc/>

@@ -472,6 +472,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>
     /// The highest SQL standard level this database/version supports
     /// </summary>
+    [Obsolete("MaxSupportedStandard is a coarse heuristic; query the specific Supports* capability instead.", false)]
     public virtual SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? ProductInfo.StandardCompliance : SqlStandardLevel.Sql92;
 

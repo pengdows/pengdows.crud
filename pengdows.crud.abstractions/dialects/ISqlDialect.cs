@@ -163,6 +163,7 @@ public interface ISqlDialect
     /// <summary>
     /// The highest SQL standard level this database/version supports.
     /// </summary>
+    [Obsolete("MaxSupportedStandard is a coarse heuristic; query the specific Supports* capability instead.", false)]
     SqlStandardLevel MaxSupportedStandard { get; }
 
     /// <summary>

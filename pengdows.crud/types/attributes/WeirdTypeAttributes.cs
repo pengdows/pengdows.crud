@@ -26,6 +26,7 @@ namespace pengdows.crud.types.attributes;
 /// <summary>
 /// Specifies how an enum should be stored in the database.
 /// </summary>
+[Obsolete("EnumStorage is inert and retained for 2.x compatibility; use ColumnAttribute.DbType or EnumColumnAttribute.", false)]
 public enum EnumStorage
 {
     /// <summary>Store as enum name (string)</summary>
@@ -38,6 +39,7 @@ public enum EnumStorage
 /// <summary>
 /// Configures database enum handling for a property or type.
 /// </summary>
+[Obsolete("DbEnumAttribute is inert and retained for 2.x compatibility; use EnumColumnAttribute.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Enum)]
 public class DbEnumAttribute : Attribute
 {
@@ -55,6 +57,7 @@ public class DbEnumAttribute : Attribute
 /// <summary>
 /// Specifies a JSON schema contract for a property.
 /// </summary>
+[Obsolete("JsonContractAttribute is inert and retained for 2.x compatibility; use JsonAttribute and CLR JSON type mapping.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class JsonContractAttribute : Attribute
 {
@@ -69,6 +72,7 @@ public class JsonContractAttribute : Attribute
 /// <summary>
 /// Marks a property as a concurrency token (like SQL Server rowversion).
 /// </summary>
+[Obsolete("ConcurrencyTokenAttribute is inert and retained for 2.x compatibility; use VersionAttribute.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class ConcurrencyTokenAttribute : Attribute
 {
@@ -77,6 +81,7 @@ public class ConcurrencyTokenAttribute : Attribute
 /// <summary>
 /// Configures range type formatting and validation.
 /// </summary>
+[Obsolete("RangeTypeAttribute is inert and retained for 2.x compatibility; use the mapped range CLR type and dialect behavior.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class RangeTypeAttribute : Attribute
 {
@@ -89,6 +94,7 @@ public class RangeTypeAttribute : Attribute
 /// <summary>
 /// Marks a computed column with storage information.
 /// </summary>
+[Obsolete("ComputedAttribute is inert and retained for 2.x compatibility; use the supported column mapping attributes.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class ComputedAttribute : Attribute
 {
@@ -102,6 +108,7 @@ public class ComputedAttribute : Attribute
 /// Indicates that a property should be treated as case-insensitive text.
 /// Used for documentation - actual case handling depends on database collation.
 /// </summary>
+[Obsolete("CaseInsensitiveAttribute is inert and retained for 2.x compatibility; configure collation in the database.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class CaseInsensitiveAttribute : Attribute
 {
@@ -110,6 +117,7 @@ public class CaseInsensitiveAttribute : Attribute
 /// <summary>
 /// Forces a numeric type to be stored/read as a string when precision exceeds .NET limits.
 /// </summary>
+[Obsolete("AsStringAttribute is inert and retained for 2.x compatibility; use an explicit CLR/string mapping.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class AsStringAttribute : Attribute
 {
@@ -118,6 +126,7 @@ public class AsStringAttribute : Attribute
 /// <summary>
 /// Controls memory allocation strategy for binary data.
 /// </summary>
+[Obsolete("MaxLengthForInlineAttribute is inert and retained for 2.x compatibility; use the supported binary mapping APIs.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class MaxLengthForInlineAttribute : Attribute
 {
@@ -140,6 +149,7 @@ public class MaxLengthForInlineAttribute : Attribute
 /// <summary>
 /// Allows MySQL zero dates ('0000-00-00') to be read instead of throwing.
 /// </summary>
+[Obsolete("AllowZeroDateAttribute is inert and retained for 2.x compatibility; configure zero-date handling in the provider.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class AllowZeroDateAttribute : Attribute
 {
@@ -148,6 +158,7 @@ public class AllowZeroDateAttribute : Attribute
 /// <summary>
 /// Applies case folding when reading text values.
 /// </summary>
+[Obsolete("CaseFoldOnReadAttribute is inert and retained for 2.x compatibility; normalize values explicitly.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class CaseFoldOnReadAttribute : Attribute
 {
@@ -156,6 +167,7 @@ public class CaseFoldOnReadAttribute : Attribute
 /// <summary>
 /// Configures spatial type handling with SRID enforcement.
 /// </summary>
+[Obsolete("SpatialTypeAttribute is inert and retained for 2.x compatibility; use Geometry or Geography mapping and explicit SRID values.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class SpatialTypeAttribute : Attribute
 {
@@ -173,6 +185,7 @@ public class SpatialTypeAttribute : Attribute
 /// <summary>
 /// Configures currency/money type handling.
 /// </summary>
+[Obsolete("CurrencyAttribute is inert and retained for 2.x compatibility; model currency explicitly.", false)]
 [AttributeUsage(AttributeTargets.Property | AttributeTargets.Field)]
 public class CurrencyAttribute : Attribute
 {

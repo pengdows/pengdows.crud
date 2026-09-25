@@ -135,6 +135,7 @@ public interface IDataSourceInformation
     /// This is NOT a measure of ISO SQL standard conformance.
     /// </para>
     /// </summary>
+    [Obsolete("StandardCompliance is a coarse heuristic; query the specific Supports* capability instead.", false)]
     SqlStandardLevel StandardCompliance { get; }
 
     /// <summary>

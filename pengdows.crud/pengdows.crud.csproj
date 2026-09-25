@@ -14,6 +14,7 @@
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
         <RepositoryType>git</RepositoryType>
         <WarningsAsErrors>true</WarningsAsErrors>
+        <NoWarn>$(NoWarn);CS0618</NoWarn>
     </PropertyGroup>
     <PropertyGroup Condition=" '$(SNK_PATH)' != '' ">
         <SignAssembly>true</SignAssembly>

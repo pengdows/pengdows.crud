@@ -16,18 +16,19 @@ disposed, and what exception a caller gets for using something after it's gone. 
 | `PreventDatabaseUnload` sentinel | Nothing beyond its own connection and the governor permit it holds for the context's lifetime | Never runs application work — see `docs/connection-pooling.md` and CLAUDE.md's `PreventDatabaseUnload` section |
 | `ITenantContextRegistry` (`TenantContextRegistry`) | Every `IDatabaseContext` it has created, for as long as it's cached | Nothing beyond that — see `docs/connection/multitenancy.md` for the full tenant lifecycle contract |
 
-**There is no public raw `DbConnection` accessor — but there is one raw `DbDataSource`
-accessor.** `IDatabaseContext` (`pengdows.crud.abstractions/IDatabaseContext.cs`) exposes no member
+**There is no supported public raw connection accessor.** `IDatabaseContext`
+(`pengdows.crud.abstractions/IDatabaseContext.cs`) exposes no member
 that returns an open `DbConnection`; connection acquisition (`GetConnection`/`GetConnectionAsync`)
 is `internal`, so the ordinary way to run a command is through
 `CreateSqlContainer`/`BeginTransaction`, both of which route through admission control
 (`PoolGovernor`) and the tracked-connection/reader-lease machinery. `IDatabaseContext` does,
-however, expose `DbDataSource? DataSource { get; }` — the writer-side data source the context was
+however, retain an obsolete `DbDataSource? DataSource { get; }` — the writer-side data source the context was
 built with (a caller-supplied one such as `NpgsqlDataSource`, or one the context created itself;
 `null` when there is none), and `ITransactionContext` forwards its parent context's value. A
 connection created from it via `DataSource.CreateConnection()` is outside the governed system
 entirely: no admission limits, no session settings, no metrics attribution, and no disposal
-tracking. Treat it as a provider-level escape hatch for interop only, never as an execution path.
+tracking. Do not use it from application code; `PGC027` reports it as an error. Use the context
+execution APIs instead.
 
 ## `PoolGovernor` admission lifecycle
 

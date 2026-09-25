@@ -236,6 +236,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// Null if using traditional DbProviderFactory approach.
     /// </summary>
     /// <inheritdoc/>
+    [Obsolete("DatabaseContext.DataSource bypasses pengdows.crud connection governance; use the context execution APIs instead.", false)]
     public DbDataSource? DataSource => _dataSource;
 
     /// <inheritdoc/>

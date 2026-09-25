@@ -49,5 +49,6 @@ internal class DatabaseProductInfo : IDatabaseProductInfo
     /// <summary>
     /// Gets or sets the SQL standard compliance level.
     /// </summary>
+    [Obsolete("StandardCompliance is a coarse heuristic; query the specific Supports* capability instead.", false)]
     public SqlStandardLevel StandardCompliance { get; set; } = SqlStandardLevel.Sql92;
 }

@@ -45,6 +45,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// When available, provides better performance through shared prepared statement caching.
     /// Null if using traditional DbProviderFactory approach.
     /// </summary>
+    [Obsolete("IDatabaseContext.DataSource bypasses pengdows.crud connection governance; use the context execution APIs instead.", false)]
     DbDataSource? DataSource { get; }
 
     /// <summary>

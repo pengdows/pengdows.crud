@@ -39,5 +39,6 @@ public interface IDatabaseProductInfo
     /// for estimating feature availability based on database version.
     /// </para>
     /// </summary>
+    [Obsolete("StandardCompliance is a coarse heuristic; query the specific Supports* capability instead.", false)]
     SqlStandardLevel StandardCompliance { get; set; }
 }

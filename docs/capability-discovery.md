@@ -23,8 +23,7 @@ that you usually shouldn't need to switch on it.
 `IDataSourceInformation` (`pengdows.crud.abstractions/IDataSourceInformation.cs`) is a smaller,
 metadata-flavored subset: detected product name/version, parsed `Version`, quoting characters,
 parameter marker pattern/regex/max length, named/repeated-parameter support, parameter/output
-limits, default-prepare recommendation, procedure wrapping style, SQL-standard compliance level
-(`StandardCompliance`), a handful of DDL-capability
+limits, default-prepare recommendation, procedure wrapping style, and a handful of DDL-capability
 flags (`SupportsDropTableIfExists`, `SupportsTruncateTable`, `SupportsMerge`,
 `SupportsInsertOnConflict`, `SupportsOnDuplicateKey`), fallback-dialect
 status, and `GetCompatibilityWarning()`. Everything on it also appears on `ISqlDialect`, which is
@@ -68,13 +67,14 @@ don't call it directly.
 
 This groups the actual capability surface. For per-database values, see
 `docs/supported-databases.md`'s matrix; for the architectural design, see `docs/architecture.md`'s
-"Explicit Capability Properties" section — the base `SqlDialect` derives most `Supports*` defaults
-from the dialect's SQL-standard level (`MaxSupportedStandard`), and individual dialects override
-concrete capabilities explicitly with version-aware logic where that default would be wrong.
+"Explicit Capability Properties" section — query the specific `Supports*` properties rather than
+the legacy SQL-standard heuristic properties, which are retained only for 2.x compatibility.
 
 **Identity & versioning:** `DatabaseType`, `ProductInfo` (`IDatabaseProductInfo`), `IsInitialized`,
-`IsFallbackDialect`, `GetCompatibilityWarning()`, `CanUseModernFeatures`, `HasBasicCompatibility`,
-`MaxSupportedStandard` (a `SqlStandardLevel`).
+`IsFallbackDialect`, `GetCompatibilityWarning()`, `CanUseModernFeatures`, and
+`HasBasicCompatibility`. Do not use `SqlStandardLevel`, `StandardCompliance`, or
+`MaxSupportedStandard`; they are coarse compatibility heuristics retained only for 2.x binary
+compatibility. Query the specific `Supports*` capability instead.
 
 **Parameters & identifiers:** `ParameterMarker`, `SupportsNamedParameters`,
 `SupportsRepeatedNamedParameters`, `SupportsSetValuedParameters`, `MaxParameterLimit`,

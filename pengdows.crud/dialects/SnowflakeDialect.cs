@@ -62,6 +62,7 @@ internal class SnowflakeDialect : SqlDialect
     public override string QuoteSuffix => "\"";
 
     // Snowflake has strong SQL:2016 compliance
+    [Obsolete("MaxSupportedStandard is a coarse heuristic; query the specific Supports* capability instead.", false)]
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : SqlStandardLevel.Sql2016;
 

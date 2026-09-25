@@ -457,7 +457,12 @@ app.Use(async (context, next) =>
 
 `ISqlDialect` exposes concrete `Supports*` capability flags — `SupportsJoins`, `SupportsMerge`, `SupportsWindowFunctions`, `SupportsJsonTypes`, `SupportsTemporalData`, `SupportsPropertyGraphQueries`, and more — so callers read one boolean per capability rather than reasoning about a standard level themselves.
 
-In the base `SqlDialect` class, most of these flags *default* from a single SQL-standard level: `MaxSupportedStandard` (a `SqlStandardLevel`, `Sql92` before initialization, the detected `ProductInfo.StandardCompliance` after). For example `SupportsJoins`/`SupportsSubqueries`/`SupportsUnion` require `Sql92`, `SupportsUserDefinedTypes`/`SupportsArrayTypes`/`SupportsRegularExpressions` require `Sql99`, `SupportsMerge`/`SupportsWindowFunctions`/`SupportsCommonTableExpressions`/`SupportsXmlTypes` require `Sql2003`, `SupportsTruncateTable`/`SupportsInsteadOfTriggers` require `Sql2008`, `SupportsTemporalData` requires `Sql2011`, `SupportsJsonTypes`/`SupportsRowPatternMatching` require `Sql2016`, and `SupportsPropertyGraphQueries` requires `Sql2023`. A few flags are plain constants instead (`SupportsSqlJsonConstructors`/`SupportsJsonTable` default `false`; constraint flags default `true`). Each dialect maps versions to a standard level (`DetermineStandardCompliance`, `GetMajorVersionToStandardMapping`, `GetDefaultStandardLevel`) and overrides individual capabilities directly — often with version-aware expressions (such as PostgreSQL's `SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15)`) — wherever the standard-level default would be wrong for that engine. A flag that a dialect does not override is only as accurate as its standard-level mapping, so verify it against the real engine before relying on it.
+The base `SqlDialect` still contains the legacy SQL-standard heuristic (`MaxSupportedStandard` and
+`SqlStandardLevel`) for 2.x binary compatibility, but those members are obsolete and rejected for
+new application use by `PGC027`. Consumers must query the specific `Supports*` capabilities. The
+legacy implementation maps feature flags to approximate SQL eras, while individual dialects may
+override capabilities with version-aware logic; that history is retained here to explain existing
+behavior, not as a capability contract for new code.
 
 ## Strategy Pattern Architecture
 

@@ -83,6 +83,7 @@ internal class OracleDialect : SqlDialect
     // AdvancedTypeRegistry so the mapping is explicit, testable, and dialect-co-located.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
+    [Obsolete("MaxSupportedStandard is a coarse heuristic; query the specific Supports* capability instead.", false)]
     public override SqlStandardLevel MaxSupportedStandard =>
         IsInitialized ? base.MaxSupportedStandard : DetermineStandardCompliance(null);
 

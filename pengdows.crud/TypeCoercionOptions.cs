@@ -7,6 +7,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud;
 
+[Obsolete("TypeCoercionOptions is retained for 2.x compatibility and is not supported application API.", false)]
 public sealed record TypeCoercionOptions(
     TimeMappingPolicy TimePolicy,
     JsonPassThrough JsonPreference,

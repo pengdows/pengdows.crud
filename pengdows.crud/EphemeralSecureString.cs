@@ -64,6 +64,7 @@ namespace pengdows.crud;
 /// </code>
 /// </example>
 /// <seealso cref="IEphemeralSecureString"/>
+[Obsolete("EphemeralSecureString is retained for 2.x compatibility and is not supported application API.", false)]
 public sealed class EphemeralSecureString : SafeAsyncDisposableBase, IEphemeralSecureString
 {
     /// <summary>
