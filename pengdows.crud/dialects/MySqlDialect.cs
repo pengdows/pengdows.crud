@@ -156,7 +156,13 @@ internal class MySqlDialect : SqlDialect
     // that can corrupt string values containing escape sequences when using text protocol.
     // Oracle MySql.Data defaults OFF to avoid max_prepared_stmt_count exhaustion on older servers.
     // ShouldDisablePrepareOn() guards against error 1461 on either path.
-    public override bool PrepareStatements => _isMySqlConnector;
+    //
+    // SingleStore is excluded even with MySqlConnector: its own driver guidance recommends
+    // leaving server-side prepare OFF (it compiles/caches plans internally anyway), and it
+    // mis-parses a compound CREATE PROCEDURE body under PREPARE with a generic 1064 rather than
+    // MySQL's dedicated 1295, so the prepare-fallback path can't recognise it (3.0 f92350b,
+    // confirmed live there against singlestoredb-dev).
+    public override bool PrepareStatements => _isMySqlConnector && DatabaseType != SupportedDatabase.SingleStore;
     public override bool SupportsReadOnlyTransactions => true;
 
     // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.
@@ -171,7 +177,21 @@ internal class MySqlDialect : SqlDialect
 
     public override bool SupportsOnDuplicateKey => true; // Available since MySQL 4.1 (2004) - safe to assume
     public override bool SupportsMerge => false;
-    public override bool SupportsSavepoints => true; // Available since MySQL 5.0.3 (2005)
+    // Available since MySQL 5.0.3 (2005) for MySQL/MariaDB/AuroraMySql/TiDB. SingleStore accepts
+    // SAVEPOINT / ROLLBACK TO SAVEPOINT but the rollback is a silent no-op (a row inserted after
+    // the savepoint survives), so it must report no savepoint support and throw
+    // NotSupportedException instead of silently keeping data (3.0 f92350b, confirmed live there).
+    // DatabaseType (not _flavor) so MariaDbDialect/TiDbDialect, which override DatabaseType, stay true.
+    public override bool SupportsSavepoints => DatabaseType != SupportedDatabase.SingleStore;
+
+    // SingleStore rejects FOREIGN KEY clauses at CREATE TABLE time outright.
+    public override bool EnforcesForeignKeyConstraints => DatabaseType != SupportedDatabase.SingleStore;
+
+    // SingleStore rejects any unique key beyond the table's shard key (both storage engines).
+    public override bool SupportsUniqueConstraints => DatabaseType != SupportedDatabase.SingleStore;
+
+    // "Feature 'Check constraints' is not supported by SingleStore."
+    public override bool SupportsCheckConstraints => DatabaseType != SupportedDatabase.SingleStore;
     public override bool SupportsJsonTypes => IsInitialized && IsVersionAtLeast(5, 7, 8);
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 8;

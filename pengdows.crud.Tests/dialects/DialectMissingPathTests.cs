@@ -43,6 +43,7 @@ public class DialectMissingPathTests
     [Theory]
     [InlineData(SupportedDatabase.MySql, true)]
     [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
     public void MySql_PrepareStatements_FalseOnlyForSingleStore_WhenUsingMySqlConnector(SupportedDatabase flavor, bool expected)
     {
         var factory = new fakeDbFactory(flavor);
@@ -73,6 +74,7 @@ public class DialectMissingPathTests
     [Theory]
     [InlineData(SupportedDatabase.MySql, true)]
     [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
     public void MySql_SupportsSavepoints_FalseOnlyForSingleStore(SupportedDatabase flavor, bool expected)
     {
         var factory = new fakeDbFactory(flavor);
@@ -88,6 +90,7 @@ public class DialectMissingPathTests
     [Theory]
     [InlineData(SupportedDatabase.MySql, true)]
     [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
     public void MySql_EnforcesForeignKeyConstraints_FalseOnlyForSingleStore(SupportedDatabase flavor, bool expected)
     {
         var factory = new fakeDbFactory(flavor);
@@ -102,6 +105,7 @@ public class DialectMissingPathTests
     [Theory]
     [InlineData(SupportedDatabase.MySql, true)]
     [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
     public void MySql_SupportsUniqueConstraints_FalseOnlyForSingleStore(SupportedDatabase flavor, bool expected)
     {
         var factory = new fakeDbFactory(flavor);
@@ -115,6 +119,7 @@ public class DialectMissingPathTests
     [Theory]
     [InlineData(SupportedDatabase.MySql, true)]
     [InlineData(SupportedDatabase.AuroraMySql, true)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
     public void MySql_SupportsCheckConstraints_FalseOnlyForSingleStore(SupportedDatabase flavor, bool expected)
     {
         var factory = new fakeDbFactory(flavor);
@@ -122,6 +127,19 @@ public class DialectMissingPathTests
 
         // CONFIRMED LIVE: "Feature 'Check constraints' is not supported by SingleStore."
         Assert.Equal(expected, dialect.SupportsCheckConstraints);
+    }
+
+    [Fact]
+    public async Task SingleStore_SavepointAsync_ThrowsNotSupported_InsteadOfSilentNoOpRollback()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SingleStore);
+        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, SupportedDatabase.SingleStore);
+        await using var context = new DatabaseContext(
+            "Data Source=test;EmulatedProduct=SingleStore", factory, new TypeMapRegistry(), dialect);
+        await using var txn = context.BeginTransaction();
+
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await txn.SavepointAsync("sp1"));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await txn.RollbackToSavepointAsync("sp1"));
     }
 
     [Fact]
