@@ -619,9 +619,13 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // If switching to an array value on providers that support set-valued parameters
         // (e.g., PostgreSQL ANY(@p)), coerce DbType to Object so the provider
         // can infer the correct array type during preparation.
-        if (preparedValue is Array && _dialect.SupportsSetValuedParameters)
+        if (preparedValue is Array arrayValue && _dialect.SupportsSetValuedParameters)
         {
             parameter.DbType = DbType.Object;
+            if (_dialect is SqlDialect setValuedDialect)
+            {
+                setValuedDialect.ConfigureSetValuedParameter(parameter, arrayValue);
+            }
         }
 
         parameter.Value = preparedValue ?? DBNull.Value;

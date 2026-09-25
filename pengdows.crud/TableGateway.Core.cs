@@ -994,6 +994,15 @@ public partial class TableGateway<TEntity, TRowID> :
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
 
+        // Set-valued dialects: BuildRetrieve binds one scalar for a single id and one typed array
+        // for several. The scalar-template fast paths below would push an array into a scalar
+        // parameter, which Npgsql rejects (BP-116).
+        if (dialect.SupportsSetValuedParameters)
+        {
+            await using var setValuedContainer = BuildRetrieve(list, ctx);
+            return await LoadListAsync(setValuedContainer, cancellationToken).ConfigureAwait(false);
+        }
+
         if (!dialect.SupportsSetValuedParameters && ctx.MaxParameterLimit > 0 && list.Count > ctx.MaxParameterLimit)
         {
             var results = new List<TEntity>(list.Count);
@@ -1090,6 +1099,11 @@ public partial class TableGateway<TEntity, TRowID> :
     private ISqlContainer GetRetrieveContainer(IReadOnlyList<TRowID> list, IDatabaseContext ctx)
     {
         var dialect = GetDialect(ctx);
+
+        if (dialect.SupportsSetValuedParameters)
+        {
+            return BuildRetrieve(list, ctx);
+        }
 
         // Try to use cached templates for better performance, but fall back to traditional method
         // to avoid circular dependency during template building

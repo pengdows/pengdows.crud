@@ -371,6 +371,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     public virtual bool SupportsSetValuedParameters => false;
+
+    /// <summary>
+    /// Reapplies provider-specific metadata after a cached parameter receives a new set-valued
+    /// (array) value. Providers such as Npgsql encode the element type in addition to DbType.Object.
+    /// </summary>
+    internal virtual void ConfigureSetValuedParameter(DbParameter parameter, Array value)
+    {
+    }
     public virtual int MaxParameterLimit => 2000;
 
     /// <inheritdoc />

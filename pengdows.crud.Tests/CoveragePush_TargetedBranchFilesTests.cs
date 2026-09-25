@@ -194,7 +194,9 @@ public sealed class CoveragePush_TargetedBranchFilesTests
         var oneContainer = Assert.IsAssignableFrom<ISqlContainer>(methodSqlite.Invoke(pgGateway,
             new object[] { new List<int> { 11 }, pg })!);
         var p0 = oneContainer.GetParameterValue("p0");
-        Assert.IsType<int[]>(p0);
+        // A single id binds a scalar "column = @p0" even on set-valued dialects: pushing an
+        // array into the scalar template failed live on Npgsql 9 (BP-116, matches 3.0).
+        Assert.IsType<int>(p0);
     }
 
     [Fact]
