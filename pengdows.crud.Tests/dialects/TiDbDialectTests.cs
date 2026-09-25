@@ -119,12 +119,67 @@ namespace pengdows.crud.Tests.dialects
             }
         }
 
-        [Fact]
-        public void MySqlSessionSettings_StillIncludeNoBackslashEscapes()
+        // Same corruption on MySQL itself via MySql.Data (confirmed live on 2.0.6: "O'Brien" ->
+        // syntax error; JSON with escapes -> "Invalid JSON text"). Oracle's MySql.Data escapes
+        // with backslashes regardless, so the mode must not be set when it is the driver.
+        [Theory]
+        [InlineData(SupportedDatabase.MySql, false)]
+        [InlineData(SupportedDatabase.AuroraMySql, false)]
+        [InlineData(SupportedDatabase.MariaDb, false)]
+        [InlineData(SupportedDatabase.MySql, true)]
+        [InlineData(SupportedDatabase.AuroraMySql, true)]
+        [InlineData(SupportedDatabase.MariaDb, true)]
+        public void MySqlFamily_OnMySqlData_SessionSettings_OmitNoBackslashEscapes(SupportedDatabase db, bool initialized)
         {
-            var dialect = new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger.Instance);
+            SqlDialect dialect;
+            DatabaseContext? context = null;
+            if (initialized)
+            {
+                var factory = new fakeDbFactory(db);
+                context = new DatabaseContext($"Data Source=test;EmulatedProduct={db}", factory);
+                dialect = (SqlDialect)context.Dialect;
+            }
+            else
+            {
+                var factory = new fakeDbFactory(db);
+                dialect = db == SupportedDatabase.MariaDb
+                    ? new MariaDbDialect(factory, NullLogger.Instance)
+                    : new MySqlDialect(factory, NullLogger.Instance, db);
+            }
+
+            try
+            {
+                foreach (var settings in new[]
+                         {
+                             dialect.GetBaseSessionSettings(),
+                             dialect.GetFinalSessionSettings(false),
+                             dialect.GetFinalSessionSettings(true)
+                         })
+                {
+                    Assert.DoesNotContain("NO_BACKSLASH_ESCAPES", settings, StringComparison.OrdinalIgnoreCase);
+                    Assert.Contains("ANSI_QUOTES", settings, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            finally
+            {
+                context?.Dispose();
+            }
+        }
+
+        // MySqlConnector reads the server's NO_BACKSLASH_ESCAPES status flag and escapes
+        // accordingly, so its behavior is unchanged.
+        [Theory]
+        [InlineData(SupportedDatabase.MySql)]
+        [InlineData(SupportedDatabase.MariaDb)]
+        public void MySqlFamily_OnMySqlConnector_SessionSettings_KeepNoBackslashEscapes(SupportedDatabase db)
+        {
+            var factory = new MySqlConnector.MinimalConnectorFactory();
+            SqlDialect dialect = db == SupportedDatabase.MariaDb
+                ? new MariaDbDialect(factory, NullLogger.Instance, isMySqlConnector: true)
+                : new MySqlDialect(factory, NullLogger.Instance, isMySqlConnector: true, db);
 
             Assert.Contains("NO_BACKSLASH_ESCAPES", dialect.GetBaseSessionSettings(), StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("NO_BACKSLASH_ESCAPES", dialect.GetFinalSessionSettings(false), StringComparison.OrdinalIgnoreCase);
         }
     }
 }

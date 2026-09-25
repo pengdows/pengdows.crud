@@ -404,7 +404,24 @@ internal class MySqlDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        return string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;
+        var settings = string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;
+        return OmitNoBackslashEscapes ? StripNoBackslashEscapes(settings) : settings;
+    }
+
+    // Oracle's MySql.Data binds parameters by substituting backslash-escaped literals into
+    // text-protocol SQL and does not switch escaping style for NO_BACKSLASH_ESCAPES, so with that
+    // mode set the server stores the backslashes literally or fails to parse the statement.
+    // Confirmed live on 2.0.6 (same code as 2.0.5) against MySQL 8 via MySql.Data: "O'Brien" ->
+    // syntax error, JSON containing escapes -> "Invalid JSON text". MySqlConnector reads the
+    // server's NO_BACKSLASH_ESCAPES status flag and escapes accordingly, so it keeps the mode.
+    // (GetFinalSessionSettings builds on GetBaseSessionSettings, so both are covered.)
+    protected virtual bool OmitNoBackslashEscapes => !_isMySqlConnector;
+
+    private static string StripNoBackslashEscapes(string settings)
+    {
+        return settings
+            .Replace(",NO_BACKSLASH_ESCAPES", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("NO_BACKSLASH_ESCAPES,", string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     public override string GetReadOnlySessionSettings()
