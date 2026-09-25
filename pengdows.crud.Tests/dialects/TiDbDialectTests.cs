@@ -76,5 +76,55 @@ namespace pengdows.crud.Tests.dialects
 
             Assert.Contains("tidb_pessimistic_txn_default", result, StringComparison.OrdinalIgnoreCase);
         }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void SessionSettings_OmitNoBackslashEscapes(bool initialized)
+        {
+            // MySql.Data substitutes parameters into text-protocol SQL with backslash escapes.
+            // TiDB does not report NO_BACKSLASH_ESCAPES back to the driver, so with that mode set
+            // the escapes are taken literally: confirmed live on 2.0.6 as a syntax error for
+            // "O'Brien" and silently corrupted backslash/JSON strings.
+            SqlDialect dialect;
+            DatabaseContext? context = null;
+            if (initialized)
+            {
+                var factory = new fakeDbFactory(SupportedDatabase.TiDb);
+                context = new DatabaseContext("Data Source=test;EmulatedProduct=TiDb", factory);
+                Assert.Equal(SupportedDatabase.TiDb, context.Product);
+                dialect = (SqlDialect)context.Dialect;
+            }
+            else
+            {
+                dialect = new TiDbDialect(new fakeDbFactory(SupportedDatabase.TiDb), NullLogger.Instance);
+            }
+
+            try
+            {
+                foreach (var settings in new[]
+                         {
+                             dialect.GetBaseSessionSettings(),
+                             dialect.GetFinalSessionSettings(false),
+                             dialect.GetFinalSessionSettings(true)
+                         })
+                {
+                    Assert.DoesNotContain("NO_BACKSLASH_ESCAPES", settings, StringComparison.OrdinalIgnoreCase);
+                    Assert.Contains("ANSI_QUOTES", settings, StringComparison.OrdinalIgnoreCase);
+                }
+            }
+            finally
+            {
+                context?.Dispose();
+            }
+        }
+
+        [Fact]
+        public void MySqlSessionSettings_StillIncludeNoBackslashEscapes()
+        {
+            var dialect = new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger.Instance);
+
+            Assert.Contains("NO_BACKSLASH_ESCAPES", dialect.GetBaseSessionSettings(), StringComparison.OrdinalIgnoreCase);
+        }
     }
 }

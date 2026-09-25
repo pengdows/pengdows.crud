@@ -46,8 +46,16 @@ internal class TiDbDialect : MySqlDialect
     public override bool EnforcesForeignKeyConstraints => false;
     public override bool SupportsCheckConstraints => false;
 
+    // MySql.Data substitutes parameters into text-protocol commands using backslash escapes.
+    // TiDB takes those backslashes literally when NO_BACKSLASH_ESCAPES is set, so quoted strings
+    // (including JSON text) are corrupted or fail to parse (confirmed live: "O'Brien" -> syntax
+    // error). Keep the shared MySQL baseline but omit that mode for TiDB. GetFinalSessionSettings
+    // builds on this method, so both the base and per-checkout scripts are covered.
     public override string GetBaseSessionSettings()
     {
-        return string.Concat(base.GetBaseSessionSettings(), "\nSET tidb_pessimistic_txn_default = ON;");
+        var baseline = base.GetBaseSessionSettings()
+            .Replace(",NO_BACKSLASH_ESCAPES", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("NO_BACKSLASH_ESCAPES,", string.Empty, StringComparison.OrdinalIgnoreCase);
+        return string.Concat(baseline, "\nSET tidb_pessimistic_txn_default = ON;");
     }
 }
