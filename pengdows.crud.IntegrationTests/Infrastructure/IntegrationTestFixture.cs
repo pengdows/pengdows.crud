@@ -200,6 +200,7 @@ public class IntegrationTestFixture : IAsyncLifetime
         {
             testbed.PostgreSQL.PostgreSqlTestContainer pg => pg.ConnectionString,
             testbed.Cockroach.CockroachDbTestContainer crdb => crdb.ConnectionString,
+            testbed.Yugabyte.YugabyteTestContainer yb => yb.ConnectionString,
             _ => throw new NotSupportedException(
                 $"GetRawConnectionString is not implemented for provider {provider} ({container.GetType().Name}).")
         };

@@ -439,6 +439,38 @@ internal class PostgreSqlDialect : SqlDialect
         return $"Options='-c {ReadOnlyTransactionSetting}=on'";
     }
 
+    // A connection string keeps only the last value of a repeated key, so appending a second
+    // Options= would silently drop the caller's own startup options (e.g. -c lock_timeout=5s)
+    // from every read connection. Merge the read-only setting into the caller's Options instead.
+    protected override string BuildReadOnlyConnectionString(string connectionString, string readOnlyParameter)
+    {
+        DbConnectionStringBuilder builder;
+        try
+        {
+            builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        }
+        catch (ArgumentException)
+        {
+            // Not a key/value connection string: nothing to merge into.
+            return base.BuildReadOnlyConnectionString(connectionString, readOnlyParameter);
+        }
+
+        var existing = builder.TryGetValue(NpgsqlOptionsKey, out var value) ? value as string : null;
+        if (string.IsNullOrWhiteSpace(existing))
+        {
+            return base.BuildReadOnlyConnectionString(connectionString, readOnlyParameter);
+        }
+
+        // The writer's baked Options may already carry default_transaction_read_only=off; a read
+        // connection must end up with =on regardless of what was there.
+        var readOnlyPattern = new Regex($@"{ReadOnlyTransactionSetting}\s*=\s*[^\s']+", RegexOptions.IgnoreCase);
+        builder[NpgsqlOptionsKey] = readOnlyPattern.IsMatch(existing)
+            ? readOnlyPattern.Replace(existing, $"{ReadOnlyTransactionSetting}=on")
+            : $"{existing} -c {ReadOnlyTransactionSetting}=on";
+
+        return builder.ConnectionString;
+    }
+
     /// <summary>
     /// Bakes Npgsql-specific settings (auto-prepare, multiplexing) into the connection
     /// string before the DataSource is created.  Must be called while the connection

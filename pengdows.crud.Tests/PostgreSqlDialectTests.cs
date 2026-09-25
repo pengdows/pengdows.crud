@@ -399,8 +399,13 @@ public class PostgreSqlDialectTests
 
         _dialect.ApplyConnectionSettings(connection, ctx, true);
 
-        // Read-only settings should be added to the connection string
-        Assert.Contains("Options='-c default_transaction_read_only=on'", connection.ConnectionString);
+        // Read-only settings should be added to the connection string. The context's own
+        // connection string already carries startup Options, so the read-only setting is merged
+        // into them rather than appended as a second (overriding) Options key.
+        var builder = new System.Data.Common.DbConnectionStringBuilder
+            { ConnectionString = connection.ConnectionString };
+        Assert.True(builder.TryGetValue("Options", out var options), connection.ConnectionString);
+        Assert.Contains("default_transaction_read_only=on", (string)options!, StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]

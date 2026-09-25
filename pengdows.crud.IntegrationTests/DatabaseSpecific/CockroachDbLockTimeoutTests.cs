@@ -10,10 +10,7 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 /// default. A caller's own explicit lock_timeout in Options must win (BP-118, 3.0 c58cb96).
 /// </summary>
 /// <remarks>
-/// Only the writer connection is asserted. The reader connection string is derived by appending
-/// PostgreSqlDialect.GetReadOnlyConnectionParameter (a second <c>Options=</c> key), which replaces
-/// every caller-supplied Options value for reads — a separate, pre-existing gap (also present in
-/// 3.0), not the MergeStartupOptions overwrite this test covers.
+/// Read connections are covered by PostgreSqlFamilyReaderOptionsTests.
 /// </remarks>
 [Collection("IntegrationTests")]
 public sealed class CockroachDbLockTimeoutTests : DatabaseTestBase

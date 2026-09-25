@@ -17,6 +17,13 @@ public class YugabyteTestContainer : TestContainer
     private const int _port = 5433;
     private const string _username = "yugabyte";
 
+    /// <summary>
+    /// The real connection string for this running container, for tests that need a second,
+    /// differently-configured DatabaseContext against it.
+    /// </summary>
+    public string ConnectionString =>
+        _connectionString ?? throw new InvalidOperationException("Container not started.");
+
     public YugabyteTestContainer()
     {
         _container = new ContainerBuilder()
