@@ -408,7 +408,24 @@ public partial class DatabaseContext
                 var target = initialConnection ?? PersistentConnection;
                 if (target != null)
                 {
-                    ExecuteSessionSettings(target, IsReadOnlyConnection);
+                    try
+                    {
+                        ExecuteSessionSettings(target, IsReadOnlyConnection);
+                    }
+                    catch
+                    {
+                        // A rejected/failed construction never returns an object for the caller
+                        // to Dispose. For SingleConnection mode `target` is typically the
+                        // already-open, already-owned PersistentConnection — undisposed, that's a
+                        // real connection leak on every FailClosed session-settings failure.
+                        target.Dispose();
+                        if (ReferenceEquals(target, PersistentConnection))
+                        {
+                            SetPersistentConnection(null);
+                        }
+
+                        throw;
+                    }
                 }
             }
 
