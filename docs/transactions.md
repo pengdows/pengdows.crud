@@ -113,7 +113,7 @@ await tx.ReleaseSavepointAsync("checkpoint1", ct);
 Isolation **fails up, never down**:
 
 - **Explicit `IsolationLevel`:** used as-is if the database supports it; otherwise the weakest supported level that is at least as strong is used (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot sits above ReadCommitted and is satisfied only by Snapshot or Serializable; RepeatableRead is satisfied only by Serializable). For example, `ReadCommitted` on CockroachDB or DuckDB runs as `Serializable`. If nothing at or above the requested level exists (e.g. `Serializable` on TiDB or Snowflake), `BeginTransaction` throws `InvalidOperationException`.
-- **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, or Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation enabled; `SafeNonBlockingReads` on PostgreSQL/YugabyteDB.
+- **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, or Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation enabled. On PostgreSQL/YugabyteDB `SafeNonBlockingReads` runs as `RepeatableRead` (an MVCC snapshot: non-blocking, no non-repeatable reads).
 - **Read-only `BeginTransaction` with no level and no profile** (`ExecutionType.Read`, `isolationLevel: null`): uses the `SafeNonBlockingReads` mapping and logs a warning if that mapping is degraded — it never throws for that.
 - **Write `BeginTransaction` with no level:** `ReadCommitted` if supported, else `Serializable`.
 

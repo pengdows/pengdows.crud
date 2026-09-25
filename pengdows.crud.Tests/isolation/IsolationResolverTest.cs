@@ -88,7 +88,8 @@ public class IsolationResolverTests
     {
         var resolver = new IsolationResolver(SupportedDatabase.PostgreSql, false, false);
 
-        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        // BP-209: PostgreSQL RepeatableRead is an MVCC snapshot - non-blocking, no non-repeatable reads.
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
         Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.ReadUncommitted));
@@ -253,11 +254,12 @@ public class IsolationResolverTests
     [Theory]
     [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.YugabyteDb)]
-    public void ResolveForTransaction_SafeNonBlockingReads_ThrowsForPostgresCompatibleDatabases(SupportedDatabase product)
+    public void ResolveForTransaction_SafeNonBlockingReads_UsesRepeatableReadForPostgresCompatibleDatabases(
+        SupportedDatabase product)
     {
         var resolver = new IsolationResolver(product, false, false);
 
-        Assert.Throws<pengdows.crud.exceptions.TransactionModeNotSupportedException>(() =>
+        Assert.Equal(IsolationLevel.RepeatableRead,
             resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
     }
 

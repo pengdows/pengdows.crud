@@ -377,9 +377,9 @@ public class TransactionTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // The profile throws rather than run below its guarantee: always on PostgreSQL/YugabyteDB,
-            // and on SQL Server when the database has snapshot isolation off.
-            var cannotGuarantee = provider is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb;
+            // The profile throws rather than run below its guarantee: on SQL Server when the database
+            // has snapshot isolation off. PostgreSQL/YugabyteDB run it as RepeatableRead (MVCC snapshot).
+            var cannotGuarantee = false;
             if (provider == SupportedDatabase.SqlServer)
             {
                 await using var probe = context.CreateSqlContainer(
@@ -406,6 +406,13 @@ public class TransactionTests : DatabaseTestBase
             await using var transaction = context.BeginTransaction(
                 IsolationProfile.SafeNonBlockingReads,
                 ExecutionType.Write);
+
+            if (provider is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
+            {
+                Assert.Equal(System.Data.IsolationLevel.RepeatableRead, transaction.IsolationLevel);
+                await using var level = transaction.CreateSqlContainer("SHOW transaction_isolation");
+                Assert.Equal("repeatable read", (await level.ExecuteScalarRequiredAsync<string>()).Trim());
+            }
 
             var helper = CreateTableGateway(context);
             await helper.CreateAsync(entity, transaction);

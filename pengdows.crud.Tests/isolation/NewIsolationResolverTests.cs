@@ -14,7 +14,8 @@ public class NewIsolationResolverTests
     {
         var resolver = new IsolationResolver(SupportedDatabase.YugabyteDb, false, false);
 
-        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
+        // BP-209: MVCC RepeatableRead is a non-blocking snapshot (inherits PostgreSQL semantics).
+        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
 

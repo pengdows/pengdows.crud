@@ -114,14 +114,14 @@ public class InvalidTransactionTypeTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public async Task BeginTransactionAsync_PostgreSql_SafeNonBlockingReads_ThrowsTransactionModeNotSupportedException()
+    public async Task BeginTransactionAsync_PostgreSql_SafeNonBlockingReads_UsesRepeatableRead()
     {
         var context = new DatabaseContext(
             $"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
 
-        await Assert.ThrowsAsync<TransactionModeNotSupportedException>(async () =>
-            await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
+        await using var tx = await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+        Assert.Equal(System.Data.IsolationLevel.RepeatableRead, tx.IsolationLevel);
     }
 
     [Fact]

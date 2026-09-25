@@ -22,7 +22,8 @@
 // - ResolveAtLeast(level): Requested level, or the weakest stronger supported one; never weaker.
 // - ResolveForTransaction(profile): Throws TransactionModeNotSupportedException when the
 //   resolution is Degraded (StrictConsistency on TiDB/Snowflake/Access; SafeNonBlockingReads
-//   on SQL Server without snapshot) and for SafeNonBlockingReads on PostgreSQL/YugabyteDB.
+//   on SQL Server without snapshot). PostgreSQL/YugabyteDB map SafeNonBlockingReads to
+//   RepeatableRead (MVCC snapshot).
 // - GetSupportedLevels(): Returns set of supported levels for current database.
 // - Constructor params: product, readCommittedSnapshotEnabled, allowSnapshotIsolation.
 // =============================================================================
@@ -64,19 +65,11 @@ internal sealed class IsolationResolver : IIsolationResolver
 
     /// <summary>
     /// Resolves an isolation profile for use when beginning a transaction. Unlike the
-    /// general-purpose <see cref="Resolve"/>, it rejects any Degraded resolution and
-    /// SafeNonBlockingReads on PostgreSQL/YugabyteDB.
+    /// general-purpose <see cref="Resolve"/>, it rejects any Degraded resolution.
     /// </summary>
     /// <exception cref="TransactionModeNotSupportedException">The profile's guarantee cannot be met on this product.</exception>
     internal IsolationLevel ResolveForTransaction(IsolationProfile profile)
     {
-        if (profile == IsolationProfile.SafeNonBlockingReads
-            && _product is SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb)
-        {
-            throw new TransactionModeNotSupportedException(
-                "IsolationProfile.SafeNonBlockingReads requires read-committed snapshot semantics, which PostgreSQL does not provide.");
-        }
-
         // A caller who asks for a profile gets at least that profile's guarantee, never less.
         var resolution = ResolveWithDetail(profile);
         if (resolution.Degraded)
@@ -367,7 +360,9 @@ internal sealed class IsolationResolver : IIsolationResolver
             },
             SupportedDatabase.PostgreSql => new Dictionary<IsolationProfile, IsolationLevel>
             {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+                // MVCC RepeatableRead is a transaction-wide snapshot: reads never block on writers
+                // and never see non-repeatable reads, which is what the profile promises.
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
@@ -379,7 +374,9 @@ internal sealed class IsolationResolver : IIsolationResolver
             },
             SupportedDatabase.YugabyteDb => new Dictionary<IsolationProfile, IsolationLevel>
             {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+                // MVCC RepeatableRead is a transaction-wide snapshot: reads never block on writers
+                // and never see non-repeatable reads, which is what the profile promises.
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },

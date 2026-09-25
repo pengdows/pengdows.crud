@@ -488,7 +488,7 @@ catch
 }
 
 // Portable isolation profile (throws TransactionModeNotSupportedException where the
-// database can't honor it — e.g. SafeNonBlockingReads on PostgreSQL/YugabyteDB)
+// database can't honor it — e.g. StrictConsistency on TiDB/Snowflake)
 using var txn = Context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
 
 // Savepoints
@@ -505,7 +505,7 @@ await txn.RollbackToSavepointAsync("checkpoint1");
 
 Always use `Context.BeginTransaction()` which pins the connection for the transaction's lifetime.
 
-**Isolation fails up, never down.** An explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot is above ReadCommitted and satisfied only by Snapshot/Serializable; RepeatableRead only by Serializable) — e.g. `ReadCommitted` on CockroachDB/DuckDB runs as `Serializable`; if nothing at or above exists (e.g. `Serializable` on TiDB/Snowflake) it throws `InvalidOperationException`. An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation, and on PostgreSQL/YugabyteDB). A read-only `BeginTransaction` with neither a level nor a profile uses the `SafeNonBlockingReads` mapping and only logs a warning if degraded. See `docs/transactions.md`.
+**Isolation fails up, never down.** An explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot is above ReadCommitted and satisfied only by Snapshot/Serializable; RepeatableRead only by Serializable) — e.g. `ReadCommitted` on CockroachDB/DuckDB runs as `Serializable`; if nothing at or above exists (e.g. `Serializable` on TiDB/Snowflake) it throws `InvalidOperationException`. An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation). A read-only `BeginTransaction` with neither a level nor a profile uses the `SafeNonBlockingReads` mapping and only logs a warning if degraded. See `docs/transactions.md`.
 
 ## Exception Hierarchy
 

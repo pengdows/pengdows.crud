@@ -22,18 +22,18 @@ namespace pengdows.crud.Tests;
 public class CoverageRaiseRestQuickWinsTests
 {
     /// <summary>
-    /// Documents that SafeNonBlockingReads requires RCSI — a SQL Server-only feature.
-    /// PostgreSQL has no RCSI equivalent; this async path must also throw.
+    /// BP-209: on PostgreSQL SafeNonBlockingReads runs as RepeatableRead (MVCC snapshot) on the
+    /// async path too, instead of throwing.
     /// </summary>
     [Fact]
-    public async Task BeginTransactionAsync_SafeNonBlockingReadsOnPostgreSql_Throws()
+    public async Task BeginTransactionAsync_SafeNonBlockingReadsOnPostgreSql_UsesRepeatableRead()
     {
         await using var context = new DatabaseContext(
             "Host=localhost;Database=test",
             new fakeDbFactory(SupportedDatabase.PostgreSql));
 
-        await Assert.ThrowsAsync<TransactionModeNotSupportedException>(
-            async () => await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads));
+        await using var tx = await context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
+        Assert.Equal(System.Data.IsolationLevel.RepeatableRead, tx.IsolationLevel);
     }
 
     [Fact]

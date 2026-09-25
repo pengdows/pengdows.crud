@@ -498,7 +498,7 @@ catch
 }
 
 // Portable isolation profile (throws TransactionModeNotSupportedException where the
-// database can't honor it — e.g. SafeNonBlockingReads on PostgreSQL/YugabyteDB)
+// database can't honor it — e.g. StrictConsistency on TiDB/Snowflake)
 using var txn = Context.BeginTransaction(IsolationProfile.SafeNonBlockingReads);
 
 // Savepoints
@@ -515,7 +515,7 @@ await txn.RollbackToSavepointAsync("checkpoint1");
 
 Always use `Context.BeginTransaction()` which pins the connection for the transaction's lifetime.
 
-**Isolation fails up, never down.** An explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot is above ReadCommitted and satisfied only by Snapshot/Serializable; RepeatableRead only by Serializable) — e.g. `ReadCommitted` on CockroachDB/DuckDB runs as `Serializable`; if nothing at or above exists (e.g. `Serializable` on TiDB/Snowflake) it throws `InvalidOperationException`. An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation, and on PostgreSQL/YugabyteDB). A read-only `BeginTransaction` with neither a level nor a profile uses the `SafeNonBlockingReads` mapping and only logs a warning if degraded. See `docs/transactions.md`.
+**Isolation fails up, never down.** An explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot is above ReadCommitted and satisfied only by Snapshot/Serializable; RepeatableRead only by Serializable) — e.g. `ReadCommitted` on CockroachDB/DuckDB runs as `Serializable`; if nothing at or above exists (e.g. `Serializable` on TiDB/Snowflake) it throws `InvalidOperationException`. An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation). A read-only `BeginTransaction` with neither a level nor a profile uses the `SafeNonBlockingReads` mapping and only logs a warning if degraded. See `docs/transactions.md`.
 
 ## Exception Hierarchy
 
@@ -1035,7 +1035,7 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `ModeContentionException : TimeoutException` — shared-connection mode lock (e.g. SingleConnection) or transaction-completion lock exceeded `ModeLockTimeout`
 - `PoolSaturatedException : TimeoutException` — no governor slot became available within `PoolAcquireTimeout` (includes SingleWriter write-slot waits)
 - `PoolForbiddenException : InvalidOperationException` — connection requested from a pool configured to reject all requests (e.g. the write pool of a `ReadOnly` context)
-- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation or on PostgreSQL/YugabyteDB). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
+- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
 - `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
 
 ```csharp
@@ -4740,7 +4740,7 @@ await tx.ReleaseSavepointAsync("checkpoint1", ct);
 Isolation **fails up, never down**:
 
 - **Explicit `IsolationLevel`:** used as-is if the database supports it; otherwise the weakest supported level that is at least as strong is used (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot sits above ReadCommitted and is satisfied only by Snapshot or Serializable; RepeatableRead is satisfied only by Serializable). For example, `ReadCommitted` on CockroachDB or DuckDB runs as `Serializable`. If nothing at or above the requested level exists (e.g. `Serializable` on TiDB or Snowflake), `BeginTransaction` throws `InvalidOperationException`.
-- **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, or Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation enabled; `SafeNonBlockingReads` on PostgreSQL/YugabyteDB.
+- **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, or Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation enabled. On PostgreSQL/YugabyteDB `SafeNonBlockingReads` runs as `RepeatableRead` (an MVCC snapshot: non-blocking, no non-repeatable reads).
 - **Read-only `BeginTransaction` with no level and no profile** (`ExecutionType.Read`, `isolationLevel: null`): uses the `SafeNonBlockingReads` mapping and logs a warning if that mapping is degraded — it never throws for that.
 - **Write `BeginTransaction` with no level:** `ReadCommitted` if supported, else `Serializable`.
 
@@ -9165,7 +9165,7 @@ Transactions are **operation-scoped** — create inside methods, never store as 
 ```csharp
 using var txn = ctx.BeginTransaction();
 // or with portable isolation profile (throws TransactionModeNotSupportedException if the
-// database can't guarantee it, e.g. SafeNonBlockingReads on PostgreSQL or on SQL Server
+// database can't guarantee it, e.g. SafeNonBlockingReads on SQL Server
 // without snapshot isolation):
 using var txn = ctx.BeginTransaction(IsolationProfile.StrictConsistency);
 
@@ -9176,7 +9176,7 @@ txn.Commit();
 
 **Isolation never silently weakens ("fails up"):**
 - Explicit `IsolationLevel`: used as-is if supported; otherwise the weakest supported level that is at least as strong (e.g. `ReadCommitted` on CockroachDB/DuckDB → `Serializable`). Throws `InvalidOperationException` if nothing at or above it exists (e.g. `Serializable` on TiDB/Snowflake).
-- `IsolationProfile`: throws `TransactionModeNotSupportedException` rather than run below the profile's guarantee — `StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation, and on PostgreSQL/YugabyteDB.
+- `IsolationProfile`: throws `TransactionModeNotSupportedException` rather than run below the profile's guarantee — `StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation.
 - Read-only `BeginTransaction(executionType: ExecutionType.Read)` with no level/profile: uses the `SafeNonBlockingReads` mapping and only logs a warning if it is degraded.
 - Savepoints on a dialect without savepoint support throw `NotSupportedException`.
 
@@ -9365,7 +9365,7 @@ A powerful abstraction layer that makes application code portable across differe
 - **Native `DbDataSource` support:** `DatabaseContext` now accepts a `DbDataSource` directly (e.g., `NpgsqlDataSource`), providing shared prepared-statement caching — a significant throughput win for PostgreSQL.
 - **Stored Procedure Wrapping (`ProcWrappingStyle`):** Automatically wraps stored procedure calls in the correct, vendor-specific syntax (`EXEC`, `CALL`, `BEGIN/END`, etc.).
 - **`IsolationProfile`:** Portable transaction isolation profiles that map to the safest and most optimal `System.Data.IsolationLevel` for the target database (e.g., `SafeNonBlockingReads`, `StrictConsistency`, `FastWithRisks`).
-- **Isolation never silently weakens ("fails up"):** an explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (e.g. `ReadCommitted` on CockroachDB/DuckDB → `Serializable`); `InvalidOperationException` if nothing at or above it exists (e.g. `Serializable` on TiDB/Snowflake). A profile throws `TransactionModeNotSupportedException` rather than run below its guarantee — `StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation and on PostgreSQL/YugabyteDB. A read-only `BeginTransaction(executionType: ExecutionType.Read)` with no level/profile only logs a warning if degraded.
+- **Isolation never silently weakens ("fails up"):** an explicit `IsolationLevel` is used as-is if supported, otherwise the weakest supported level at least as strong (e.g. `ReadCommitted` on CockroachDB/DuckDB → `Serializable`); `InvalidOperationException` if nothing at or above it exists (e.g. `Serializable` on TiDB/Snowflake). A profile throws `TransactionModeNotSupportedException` rather than run below its guarantee — `StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation. A read-only `BeginTransaction(executionType: ExecutionType.Read)` with no level/profile only logs a warning if degraded.
 - **`ISqlDialect`** is accessible directly via `context.Dialect` on any `IDatabaseContext` — no internal casts required.
 
 ### 3. Advanced Type System
