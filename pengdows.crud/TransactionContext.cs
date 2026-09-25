@@ -624,11 +624,26 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public ValueTask CommitAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        return CompleteTransactionWithWaitAsync(() =>
+        return CompleteTransactionWithWaitAsync(() => CommitTransactionAsync(cancellationToken), true, cancellationToken);
+    }
+
+    /// <summary>
+    /// Commits via <see cref="DbTransaction.CommitAsync"/> when the underlying transaction is a
+    /// real <see cref="DbTransaction"/> (true for every ADO.NET provider), so a provider with a
+    /// genuinely async/cancellable commit gets to use it and the cancellation token actually
+    /// reaches the call. Falls back to the sync IDbTransaction.Commit() for a non-DbTransaction
+    /// implementation (e.g. a hand-rolled test double).
+    /// </summary>
+    private async ValueTask CommitTransactionAsync(CancellationToken cancellationToken)
+    {
+        if (_transaction is DbTransaction dbTransaction)
+        {
+            await dbTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
         {
             _transaction.Commit();
-            return ValueTask.CompletedTask;
-        }, true, cancellationToken);
+        }
     }
 
     /// <inheritdoc/>
@@ -641,11 +656,20 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public ValueTask RollbackAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
-        return CompleteTransactionWithWaitAsync(() =>
+        return CompleteTransactionWithWaitAsync(() => RollbackTransactionAsync(cancellationToken), false, cancellationToken);
+    }
+
+    /// <summary>Async counterpart of <see cref="CommitTransactionAsync"/> — see its remarks.</summary>
+    private async ValueTask RollbackTransactionAsync(CancellationToken cancellationToken)
+    {
+        if (_transaction is DbTransaction dbTransaction)
+        {
+            await dbTransaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
+        }
+        else
         {
             _transaction.Rollback();
-            return ValueTask.CompletedTask;
-        }, false, cancellationToken);
+        }
     }
 
     /// <inheritdoc/>
@@ -851,6 +875,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                     Interlocked.Exchange(ref _rolledBack, 1);
                 }
             }
+            catch (OperationCanceledException)
+            {
+                // OperationCanceledException is never wrapped, matching every other execution
+                // path in the library — the finally below still runs unconditionally.
+                throw;
+            }
             catch (Exception ex)
             {
                 // Do NOT reset _completedState — connection is already closed in finally.
@@ -902,6 +932,12 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 {
                     Interlocked.Exchange(ref _rolledBack, 1);
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                // OperationCanceledException is never wrapped, matching every other execution
+                // path in the library — the finally below still runs unconditionally.
+                throw;
             }
             catch (Exception ex)
             {
@@ -1046,11 +1082,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 {
                     try
                     {
-                        await CompleteTransactionAsync(() =>
-                        {
-                            _transaction.Rollback();
-                            return ValueTask.CompletedTask;
-                        }, false).ConfigureAwait(false);
+                        await CompleteTransactionAsync(() => RollbackTransactionAsync(CancellationToken.None), false)
+                            .ConfigureAwait(false);
                     }
                     finally
                     {
