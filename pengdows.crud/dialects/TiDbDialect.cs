@@ -95,10 +95,13 @@ internal class TiDbDialect : MySqlDialect
     public override bool EnforcesForeignKeyConstraints => false;
     public override bool SupportsCheckConstraints => false;
 
+    // MySql.Data substitutes parameters into text-protocol commands using backslash escapes, and
+    // TiDB takes those backslashes literally when NO_BACKSLASH_ESCAPES is set (confirmed live:
+    // "O'Brien" -> syntax error). TiDB omits the mode for every driver, as 3.0 does.
+    protected override bool OmitNoBackslashEscapes => true;
+
     public override string GetBaseSessionSettings()
     {
-        var baseline = base.GetBaseSessionSettings()
-            .Replace(",NO_BACKSLASH_ESCAPES", string.Empty, StringComparison.OrdinalIgnoreCase);
-        return string.Concat(baseline, "\nSET tidb_pessimistic_txn_default = ON;");
+        return string.Concat(base.GetBaseSessionSettings(), "\nSET tidb_pessimistic_txn_default = ON;");
     }
 }
