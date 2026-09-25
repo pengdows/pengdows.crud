@@ -93,16 +93,16 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 
 | ID | Bug on 2.0.6 | 3.0 commit | Status |
 |---|---|---|---|
-| BP-101 | **Security:** `DbProviderLoader` symlink escape: assemblies can be loaded from outside the provider directory (`DbProviderLoader.cs:206-222`) | 4399d3a | Open |
-| BP-102 | Reader plan cache keyed by a bare 64-bit hash, so a collision reuses the wrong mapper (`BaseTableGateway.Core.cs:111`, `DataReaderMapper.cs:142`) | 4399d3a, 350e437 (RecordsetShape key) | Open |
-| BP-103 | `TrackedConnection` dispose retries with an unbounded `WaitAsync()`, so Dispose can hang forever (`TrackedConnection.cs:559`) | bbb2ef8 | Open |
-| BP-104 | `PoolGovernor.TryAcquire/TryAcquireAsync` leak turnstile interest on a pre-cancelled token (no try/catch, `PoolGovernor.cs:410-470`) | 5e6b244 | Open |
-| BP-105 | `TenantContextRegistry`: `Invalidate` racing `Dispose` can double-dispose and double-fire `ContextRemoved` (no `TryClaimDisposal`) | bbb2ef8 | Open |
-| BP-106 | `TransactionException` drops the inner exception's `IsTransient` at commit/rollback (`TransactionContext.cs:858/909`), so a commit deadlock looks non-transient | 923a02b (IsTransient part only; `Phase` would need a new ctor overload) | Open |
-| BP-107 | `CommitAsync`/`RollbackAsync` call the sync `_transaction.Commit()/Rollback()`, ignoring the token and provider async (`TransactionContext.cs:624-647`) | 317d303 (TransactionContext part) | Open |
-| BP-108 | `ParseVersion` mis-parses 5-part versions: Oracle "23.26.2.0.0 … 26ai" becomes major 26, breaking version gates (`SqlDialect.cs:2381-2393`) | 5d80b5c | Open |
-| BP-109 | SingleConnection + `FailClosed`: a session-settings failure during construction leaks the PersistentConnection (`Initialization.cs:409`) | 91225cd | Open |
-| BP-110 | `TrackedReader.Close()` doesn't release the lease; reader dispose stops at the first failure; `CreateSqlContainer` after Dispose isn't guarded; data sources are disposed even when a governor fails to drain | c5083b0 | Open |
+| BP-101 | **Security:** `DbProviderLoader` symlink escape: assemblies can be loaded from outside the provider directory (`DbProviderLoader.cs:206-222`) | 4399d3a | **Done** (e253343): real-symlink red test |
+| BP-102 | Reader plan cache keyed by a bare 64-bit hash, so a collision reuses the wrong mapper (`BaseTableGateway.Core.cs:111`, `DataReaderMapper.cs:142`) | 4399d3a, 350e437 (RecordsetShape key) | **Done** (16f4ebc): internal `RecordsetShape` key; red via a real in-process hash collision |
+| BP-103 | `TrackedConnection` dispose retries with an unbounded `WaitAsync()`, so Dispose can hang forever (`TrackedConnection.cs:559`) | bbb2ef8 | **Done** (bb24803) |
+| BP-104 | `PoolGovernor.TryAcquire/TryAcquireAsync` leak turnstile interest on a pre-cancelled token (no try/catch, `PoolGovernor.cs:410-470`) | 5e6b244 | **Done** (c2142c6) |
+| BP-105 | `TenantContextRegistry`: `Invalidate` racing `Dispose` can double-dispose and double-fire `ContextRemoved` (no `TryClaimDisposal`) | bbb2ef8 | **Done** (93df999): `ContextRemoved` fired twice before the fix |
+| BP-106 | `TransactionException` drops the inner exception's `IsTransient` at commit/rollback (`TransactionContext.cs:858/909`), so a commit deadlock looks non-transient | 923a02b (IsTransient part only; `Phase` would need a new ctor overload) | **Done** (2454128) |
+| BP-107 | `CommitAsync`/`RollbackAsync` call the sync `_transaction.Commit()/Rollback()`, ignoring the token and provider async (`TransactionContext.cs:624-647`) | 317d303 (TransactionContext part) | **Done** (e725e0c) |
+| BP-108 | `ParseVersion` mis-parses 5-part versions: Oracle "23.26.2.0.0 … 26ai" becomes major 26, breaking version gates (`SqlDialect.cs:2381-2393`) | 5d80b5c | **Done** (4d2db38): on 2.0.6 the parse returned null, not 26; truncates to 4 parts |
+| BP-109 | SingleConnection + `FailClosed`: a session-settings failure during construction leaks the PersistentConnection (`Initialization.cs:409`) | 91225cd | **Done** (870c59f) |
+| BP-110 | `TrackedReader.Close()` doesn't release the lease; reader dispose stops at the first failure; `CreateSqlContainer` after Dispose isn't guarded; data sources are disposed even when a governor fails to drain | c5083b0 | **Done** (ee0f710): 4 sub-bugs, each red first. 2.0.6 has no unique-connection-string registry, so (d) covers data sources only |
 | BP-111 | PostgreSQL HStore round-trip broken on Npgsql 9 (writes a string with `Hstore` type; reads only strings) (`ProviderParameterFactory.cs:142`) | 11c3c6c | Open |
 | BP-112 | PostgreSQL MacAddr8: always sent as `MacAddr`, so 8-byte EUI-64 values fail | 1187d9d + rest of cb8a514 | Open |
 | BP-113 | Firebird DDL resets only the writer pool; reader connections can see stale metadata (`SqlContainer.cs:1168`) | 7e87fad | Open |
@@ -112,12 +112,25 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | BP-117 | Batch upsert never emits `OVERRIDING SYSTEM VALUE`; YugabyteDB never gets it (product switch, `Upsert.cs:232`); PG<10 gate missing | c58cb96, a7ae9ef | Open |
 | BP-118 | CockroachDB: `MergeStartupOptions` overwrites a caller's explicit `lock_timeout` (`PostgreSqlDialect.cs:533`) | c58cb96 | Open |
 | BP-119 | MySQL error 1295 ("not supported in prepared statement protocol") doesn't trigger the disable-prepare fallback; CockroachDB inherits PG proc wrapping (should be None); TiDB VALUES() upsert override missing (defensive) | 3eb997c | Open |
-| BP-120 | Provider factory can't be found by its ADO.NET invariant name (`DbProviderLoader.cs:63` registers only the section key) | 335c5d0 | Open |
+| BP-120 | Provider factory can't be found by its ADO.NET invariant name (`DbProviderLoader.cs:63` registers only the section key) | 335c5d0 | **Done** (d683dac) |
 | BP-121 | FlatFile uses the resolver's default isolation mapping (no ReadUncommitted; SafeNonBlockingReads→ReadCommitted instead of RepeatableRead) | 15feeb2 | Open |
-| BP-122 | Metrics: percentiles sort up to 2048 doubles on every operation when a `MetricsUpdated` subscriber (the OTel observer) is attached (no memoization) | d0bc060 | Open |
-| BP-123 | Explicit `ReadOnlyConnectionString` equal to `ConnectionString` disables SingleWriter turnstile sharing | d5b24e3 | Open |
-| BP-124 | UNSURE, needs a red test first: type-coercion dispatch still gated on `AdvancedTypes.IsMappedType` (`SqlDialect.cs:1387`); `NeedsCommonConversions` opt-in for DuckDB/Firebird/Oracle/Snowflake | ed71269, 81eef2b | Open (verify) |
+| BP-122 | Metrics: percentiles sort up to 2048 doubles on every operation when a `MetricsUpdated` subscriber (the OTel observer) is attached (no memoization) | d0bc060 | **Done** (1a9efc1): recompute every 32nd call |
+| BP-123 | Explicit `ReadOnlyConnectionString` equal to `ConnectionString` disables SingleWriter turnstile sharing | d5b24e3 | **Done** (e1c41fa) |
+| BP-124 | UNSURE, needs a red test first: type-coercion dispatch still gated on `AdvancedTypes.IsMappedType` (`SqlDialect.cs:1387`); `NeedsCommonConversions` opt-in for DuckDB/Firebird/Oracle/Snowflake | ed71269, 81eef2b | **Done** (df02754, c3e01b9): targeted fixes (Stream/TextReader write binding, Oracle interval format/read, template-clone DbType fallback, DuckDB reader-owned BLOB streams on all 4 read paths). 3.0's full coercion-registry rewrite and the `NeedsCommonConversions` opt-ins were **not** ported: a probe showed no mis-conversion on 2.0.6. Live: Oracle interval + DuckDB portable round trips green |
 | BP-125 | UNSURE: FlatFile named `:` parameters and capability flags; depends on which pengdows.flatfile version 2.0.6 targets | 9f0299e | Open (verify) |
+
+### Found during the Tier 1 backport: bugs 3.0 still has
+
+- **3.0 async dispose ignores a governor drain timeout.** `DatabaseContext.DisposeManagedAsync` ends with
+  `await base.DisposeManagedAsync()`, which re-runs the sync `DisposeManaged()`. On that second pass the
+  governors are null and report "drained", so data sources and unique-connection-string claims are
+  released anyway. CORE-026 only holds for sync `Dispose()`. 2.0.6 fixes it with a sticky
+  `_sharedResourceDisposalDeferred` flag (BP-110 (d), test `DisposeAsync_GovernorDrainTimesOut_DoesNotDisposeOwnedDataSources`).
+- **MySQL + MySql.Data stores `"` as `\"`.** The session `sql_mode` includes `NO_BACKSLASH_ESCAPES`, but
+  MySql.Data (no server-side prepare) backslash-escapes text-protocol parameters. 3.0 only removes the flag
+  for TiDB, and its MySQL test container switched to MySqlConnector, which hides the bug. Tracked with BP-115 on 2.0.6.
+- **DuckDB BLOB → `Stream` reads zeros.** 3.0 fixes the compiled mapper and coercions but not `DataReaderMapper`'s
+  own setter path; 2.0.6 covers all four (c3e01b9).
 
 ### Tier 2: fixes that change visible behavior (decide per item)
 

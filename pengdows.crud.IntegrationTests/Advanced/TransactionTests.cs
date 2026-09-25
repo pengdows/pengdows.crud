@@ -439,4 +439,144 @@ public class TransactionTests : DatabaseTestBase
         };
     }
 
+    // ---- Ported from 3.0 (backport audit, 2026-09-25) ----
+
+    [SkippableFact]
+    public async Task Transaction_ChaosIsolationLevel_IsRejectedByEveryProvider()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Ported from testbed/TestProvider.cs's TestInvalidIsolationLevels, which was deleted
+            // without a replacement during the e0cd635 testbed -> pengdows.crud.IntegrationTests
+            // consolidation (see CLAUDE.md's "Adding a New Database" checklist item 24) — this and
+            // the test below close that regression. IsolationLevel.Chaos is universally invalid:
+            // no dialect's GetSupportedIsolationLevels() includes it, so IsolationResolver.Validate
+            // rejects it for every provider before any connection/driver round trip happens.
+            var ex = Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(IsolationLevel.Chaos));
+            Output.WriteLine($"{provider}: Chaos isolation level correctly rejected — {ex.Message}");
+            await Task.CompletedTask;
+        });
+    }
+
+    [SkippableFact]
+    public async Task Transaction_IsolationProfile_FastWithRisks_Works()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange
+            var entity = CreateTestEntity(NameEnum.Test, 1400);
+
+            // Act - Use IsolationProfile instead of IsolationLevel
+            await using var transaction = context.BeginTransaction(
+                IsolationProfile.FastWithRisks,
+                ExecutionType.Write);
+
+            var helper = CreateTableGateway(context);
+            await helper.CreateAsync(entity, transaction);
+            transaction.Commit();
+
+            // Assert
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
+            Assert.NotNull(retrieved);
+        });
+    }
+
+    [SkippableFact]
+    public async Task Transaction_IsolationProfile_StrictConsistency_Works()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            // Arrange
+            var entity = CreateTestEntity(NameEnum.Test, 1300);
+
+            // A database that cannot guarantee StrictConsistency (TiDB, Snowflake, Access) must refuse
+            // the profile rather than run below it (documented 2.0.x contract).
+            if (provider is SupportedDatabase.TiDb or SupportedDatabase.Snowflake or SupportedDatabase.Access)
+            {
+                Assert.Throws<pengdows.crud.exceptions.TransactionModeNotSupportedException>(() =>
+                    context.BeginTransaction(IsolationProfile.StrictConsistency, ExecutionType.Write));
+                return;
+            }
+
+            // Act - Use IsolationProfile instead of IsolationLevel
+            await using var transaction = context.BeginTransaction(
+                IsolationProfile.StrictConsistency,
+                ExecutionType.Write);
+
+            var helper = CreateTableGateway(context);
+            await helper.CreateAsync(entity, transaction);
+            transaction.Commit();
+
+            // Assert
+            var retrieved = await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context);
+            Assert.NotNull(retrieved);
+        });
+    }
+
+    // Not ported: 3.0's Transaction_ProviderSpecificUnsupportedIsolationLevel_IsRejected expected an
+    // unsupported explicit level to throw. 2.0.6's contract is that isolation fails up to the weakest
+    // stronger supported level (3.0 later adopted the same, see 3.0-backports d0bcda2); the testbed's
+    // [InvalidTxType] check verifies that on every database.
+
+    /// <summary>
+    /// <c>ReleaseSavepointAsync</c> — the third <see cref="pengdows.crud.enums.SavepointCapabilities"/>
+    /// flag, alongside <c>Create</c>/<c>Rollback</c> which the two tests above already cover —
+    /// discards a savepoint without rolling back any work performed after it. Verified live in two
+    /// parts against a real provider: (1) a released savepoint's prior work survives a commit
+    /// exactly as if the savepoint had never been rolled back to, and (2) a subsequent
+    /// <c>RollbackToSavepointAsync</c> to that now-discarded name genuinely fails against the real
+    /// server (name no longer exists) rather than silently succeeding — <c>fakeDb</c> cannot prove
+    /// either half of this since it never talks to a real savepoint stack.
+    /// </summary>
+    [SkippableFact]
+    public async Task Transaction_ReleaseSavepoint_DiscardsNameButKeepsWork()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (!context.Dialect.SavepointCapabilities.HasFlag(SavepointCapabilities.Release))
+            {
+                Output.WriteLine($"Skipping ReleaseSavepointAsync test for {provider}: Release not supported");
+                return;
+            }
+
+            // Part 1: release, then commit — both rows must survive since release doesn't roll back.
+            var entity1 = CreateTestEntity(NameEnum.Test, 900);
+            var entity2 = CreateTestEntity(NameEnum.Test2, 901);
+
+            await using (var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel))
+            {
+                var helper = CreateTableGateway(context);
+
+                await helper.CreateAsync(entity1, transaction);
+                await transaction.SavepointAsync("release_me");
+                await helper.CreateAsync(entity2, transaction);
+                await transaction.ReleaseSavepointAsync("release_me");
+
+                transaction.Commit();
+            }
+
+            var retrieved1 = await CreateTableGateway(context).RetrieveOneAsync(entity1.Id, context);
+            var retrieved2 = await CreateTableGateway(context).RetrieveOneAsync(entity2.Id, context);
+            Assert.NotNull(retrieved1);
+            Assert.NotNull(retrieved2); // Release must NOT discard entity2's work, unlike rollback.
+
+            // Part 2: a released savepoint name no longer exists — rolling back to it must fail.
+            var entity3 = CreateTestEntity(NameEnum.Test, 902);
+
+            await using var abortedTransaction =
+                context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
+            var abortedHelper = CreateTableGateway(context);
+
+            await abortedHelper.CreateAsync(entity3, abortedTransaction);
+            await abortedTransaction.SavepointAsync("also_released");
+            await abortedTransaction.ReleaseSavepointAsync("also_released");
+
+            await Assert.ThrowsAnyAsync<Exception>(
+                () => abortedTransaction.RollbackToSavepointAsync("also_released").AsTask());
+
+            abortedTransaction.Rollback();
+
+            Output.WriteLine($"{provider}: ReleaseSavepointAsync verified — work survives, name is discarded.");
+        });
+    }
 }
