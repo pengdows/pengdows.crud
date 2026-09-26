@@ -32,6 +32,11 @@ public class IsolationFailUpTests
     [InlineData(SupportedDatabase.Oracle, IsolationLevel.RepeatableRead, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.SqlServer, IsolationLevel.Snapshot, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.PostgreSql, IsolationLevel.RepeatableRead, IsolationLevel.RepeatableRead)]
+    // pengdows.flatfile's FlatFileTransaction.ValidateIsolationLevel accepts ReadUncommitted,
+    // ReadCommitted and RepeatableRead (plus Unspecified) and rejects Serializable/Snapshot.
+    [InlineData(SupportedDatabase.FlatFile, IsolationLevel.ReadUncommitted, IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.FlatFile, IsolationLevel.ReadCommitted, IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.FlatFile, IsolationLevel.RepeatableRead, IsolationLevel.RepeatableRead)]
     public void BeginTransaction_ExplicitLevel_ResolvesToRequestedOrNextStronger(
         SupportedDatabase product, IsolationLevel requested, IsolationLevel expected)
     {
@@ -59,6 +64,8 @@ public class IsolationFailUpTests
     [InlineData(SupportedDatabase.Snowflake, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.TiDb, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.Access, IsolationLevel.RepeatableRead)]
+    [InlineData(SupportedDatabase.FlatFile, IsolationLevel.Serializable)]
+    [InlineData(SupportedDatabase.FlatFile, IsolationLevel.Snapshot)]
     public void BeginTransaction_ExplicitLevel_NothingAtOrAbove_Throws(
         SupportedDatabase product, IsolationLevel requested)
     {
@@ -71,6 +78,7 @@ public class IsolationFailUpTests
     [InlineData(SupportedDatabase.TiDb)]
     [InlineData(SupportedDatabase.Snowflake)]
     [InlineData(SupportedDatabase.Access)]
+    [InlineData(SupportedDatabase.FlatFile)]
     public void BeginTransaction_StrictConsistency_WithoutSerializable_Throws(SupportedDatabase product)
     {
         var context = CreateContext(product);
@@ -83,6 +91,7 @@ public class IsolationFailUpTests
     [InlineData(SupportedDatabase.TiDb)]
     [InlineData(SupportedDatabase.Snowflake)]
     [InlineData(SupportedDatabase.Access)]
+    [InlineData(SupportedDatabase.FlatFile)]
     public async Task BeginTransactionAsync_StrictConsistency_WithoutSerializable_Throws(SupportedDatabase product)
     {
         var context = CreateContext(product);
@@ -112,5 +121,23 @@ public class IsolationFailUpTests
         using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
 
         Assert.Equal(IsolationLevel.ReadCommitted, tx.IsolationLevel);
+    }
+
+    /// <summary>
+    /// FlatFile: RepeatableRead freezes a per-table copy on first read
+    /// (FlatFileTransaction.ResolveForRead), so readers never block and never see a non-repeatable
+    /// read; that is the SafeNonBlockingReads guarantee. ReadUncommitted is accepted, so
+    /// FastWithRisks uses it.
+    /// </summary>
+    [Theory]
+    [InlineData(IsolationProfile.SafeNonBlockingReads, IsolationLevel.RepeatableRead)]
+    [InlineData(IsolationProfile.FastWithRisks, IsolationLevel.ReadUncommitted)]
+    public void BeginTransaction_FlatFileProfile_MapsToProviderLevel(IsolationProfile profile, IsolationLevel expected)
+    {
+        var context = CreateContext(SupportedDatabase.FlatFile);
+
+        using var tx = context.BeginTransaction(profile);
+
+        Assert.Equal(expected, tx.IsolationLevel);
     }
 }

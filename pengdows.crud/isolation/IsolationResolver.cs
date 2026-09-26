@@ -16,12 +16,13 @@
 //   * MySQL/MariaDB: RepeatableRead for safe reads; has ReadUncommitted
 //   * Oracle: ReadCommitted or Serializable only
 //   * CockroachDB/DuckDB: Serializable only
+//   * FlatFile: ReadUncommitted/ReadCommitted/RepeatableRead; no Serializable
 // - Resolve(profile): Returns IsolationLevel.
 // - ResolveWithDetail(profile): Returns IsolationResolution with degradation info.
 // - Validate(level): Throws if level not supported by database.
 // - ResolveAtLeast(level): Requested level, or the weakest stronger supported one; never weaker.
 // - ResolveForTransaction(profile): Throws TransactionModeNotSupportedException when the
-//   resolution is Degraded (StrictConsistency on TiDB/Snowflake/Access; SafeNonBlockingReads
+//   resolution is Degraded (StrictConsistency on TiDB/Snowflake/Access/FlatFile; SafeNonBlockingReads
 //   on SQL Server without snapshot). PostgreSQL/YugabyteDB map SafeNonBlockingReads to
 //   RepeatableRead (MVCC snapshot).
 // - GetSupportedLevels(): Returns set of supported levels for current database.
@@ -335,6 +336,17 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.ReadUncommitted,
                 IsolationLevel.ReadCommitted
             },
+            // pengdows.flatfile's FlatFileTransaction.ValidateIsolationLevel accepts exactly
+            // Unspecified/ReadUncommitted/ReadCommitted/RepeatableRead and throws
+            // NotSupportedException for Serializable and Snapshot. DML is always staged
+            // (write-aside), so no level ever sees dirty reads; RepeatableRead freezes a per-table
+            // copy on the transaction's first read of each table (ResolveForRead).
+            SupportedDatabase.FlatFile => new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead
+            },
             _ => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
@@ -471,6 +483,16 @@ internal sealed class IsolationResolver : IIsolationResolver
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted,
+                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+            },
+            // RepeatableRead's per-table snapshot never blocks on the (single) writer and gives
+            // repeatable reads, so it is the SafeNonBlockingReads level. Nothing reaches
+            // Serializable: StrictConsistency maps to the strongest level, RepeatableRead, which
+            // ResolveWithDetail reports as Degraded, so ResolveForTransaction throws.
+            SupportedDatabase.FlatFile => new Dictionary<IsolationProfile, IsolationLevel>
+            {
+                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+                [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
             _ => new Dictionary<IsolationProfile, IsolationLevel>
