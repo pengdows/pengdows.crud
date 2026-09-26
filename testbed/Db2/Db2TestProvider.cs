@@ -24,22 +24,17 @@ public class Db2TestProvider : TestProvider
     }
 
     /// <summary>
-    /// Db2 LUW's standard (non-<c>ACTIVATE DATABASE</c>'d) implicit-activation lifecycle
-    /// deactivates the database immediately when the last application connection disconnects —
-    /// unlike Firebird's LINGER, there is no delay to configure; immediate is already the
-    /// default. Nothing to enable here beyond confirming the probe should run.
+    /// Not measured on Db2. The probe needs a genuinely cold connection per sample, and the only
+    /// way to force that with IBM.Data.Db2 is <c>DB2Connection.ReleaseObjectPool()</c>, which
+    /// destabilizes the driver: CONFIRMED with a standalone repro (Net.IBM.Data.Db2-lnx 8.0.0.500,
+    /// no server needed) - a ReleaseObjectPool() followed by concurrent
+    /// <c>DB2Connection.ConnectionString</c> assignments segfaults the process (exit 139), and in
+    /// the full testbed run it surfaced as an intermittent ArgumentNullException from
+    /// <c>DB2ConnPool.ReplaceConnStrPwd</c> in the next (concurrency) test. The library never calls
+    /// ReleaseObjectPool; only this probe did. Earlier probe runs measured Db2's cold/warm gap at
+    /// ~2 ms (below the noise floor), which is why Db2's Best stays Standard.
     /// </summary>
-    protected override Task<bool> TryEnableFastIdleUnloadAsync() => Task.FromResult(true);
-
-    /// <summary>
-    /// Forces the IBM.Data.Db2 driver's connection pool to release its physical connections so
-    /// the probe's post-drain query is a genuine cold reconnect (and, per Db2's implicit
-    /// activation lifecycle, a genuine re-activation if the database was deactivated).
-    /// </summary>
-    protected override void ClearProviderPoolForIdleUnloadProbe()
-    {
-        DB2Connection.ReleaseObjectPool();
-    }
+    protected override Task<bool> TryEnableFastIdleUnloadAsync() => Task.FromResult(false);
 
     private async Task TestMergeParameterBindingAsync()
     {
