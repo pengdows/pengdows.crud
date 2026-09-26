@@ -131,6 +131,15 @@ internal static class InternalSqlDialectExtensions
     }
 
     /// <summary>
+    /// See <see cref="IInternalSqlDialect.SupportsSupplementaryCharacters"/>; true for a dialect that
+    /// isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool SupportsSupplementaryCharacters(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.SupportsSupplementaryCharacters;
+    }
+
+    /// <summary>
     /// See <see cref="IInternalSqlDialect.QualifiesColumnReferences"/>; false for a dialect that
     /// isn't an internal one (e.g. a test double).
     /// </summary>

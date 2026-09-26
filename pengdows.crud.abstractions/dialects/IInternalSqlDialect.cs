@@ -38,6 +38,13 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool PreservesEmptyBinary => true;
 
     /// <summary>
+    /// False when text outside the Unicode Basic Multilingual Plane (a UTF-16 surrogate pair, e.g.
+    /// an emoji) cannot be stored even in a Unicode database: Informix through Informix.Net.Core
+    /// rejects it ("An illegal character has been found in the statement").
+    /// </summary>
+    bool SupportsSupplementaryCharacters => true;
+
+    /// <summary>
     /// True when an unqualified column reference inside an expression (a SELECT list, a WHERE
     /// predicate, the right-hand side of SET) can resolve to something other than the column - on
     /// Informix a quoted "user", "today", "current", ... resolves to the special register - so the

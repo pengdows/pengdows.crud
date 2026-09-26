@@ -312,6 +312,11 @@ internal sealed class InformixDialect : SqlDialect
     // every other dialect without native UUID column support.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
+    // CONFIRMED live (Informix 15 developer image, Informix.Net.Core, DB_LOCALE and CLIENT_LOCALE
+    // en_US.utf8): CJK and other BMP text round-trips; any supplementary-plane character (an emoji)
+    // fails with "An illegal character has been found in the statement".
+    public override bool SupportsSupplementaryCharacters => false;
+
     public override string GetVersionQuery()
     {
         // UNVERIFIED: not confirmed against a live server - this is the standard documented

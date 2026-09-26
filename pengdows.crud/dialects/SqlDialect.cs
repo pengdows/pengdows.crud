@@ -628,6 +628,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <inheritdoc cref="IInternalSqlDialect.PreservesEmptyBinary"/>
     public virtual bool PreservesEmptyBinary => true;
 
+    /// <inheritdoc cref="IInternalSqlDialect.SupportsSupplementaryCharacters"/>
+    public virtual bool SupportsSupplementaryCharacters => true;
+
     /// <inheritdoc cref="IInternalSqlDialect.QualifiesColumnReferences"/>
     public virtual bool QualifiesColumnReferences => false;
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension

@@ -148,6 +148,19 @@ public class InformixDialectTests
         Assert.True(CreateDialect().SupportsMerge);
     }
 
+    // CONFIRMED live (Informix 15 developer image, Informix.Net.Core, database and client locale
+    // en_US.utf8): BMP text such as CJK round-trips, but any character outside the Basic
+    // Multilingual Plane (an emoji, a UTF-16 surrogate pair) fails with "An illegal character has
+    // been found in the statement".
+    [Fact]
+    public void SupportsSupplementaryCharacters_IsFalse()
+    {
+        Assert.False(InternalSqlDialectExtensions.SupportsSupplementaryCharacters(CreateDialect()));
+        Assert.True(InternalSqlDialectExtensions.SupportsSupplementaryCharacters(
+            SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql,
+                new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance)));
+    }
+
     // The smallest value of INTEGER and SMALLINT is their NULL representation (IBM docs). CONFIRMED
     // live (Informix 15, Informix.Net.Core) for INTEGER: an Int32 parameter holding int.MinValue
     // fails client-side with "Error in assignment" even for a BIGINT column. The value is a valid CLR int, so it is bound
