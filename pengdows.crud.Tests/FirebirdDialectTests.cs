@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -117,6 +118,39 @@ public class FirebirdDialectTests
         Assert.NotEqual(writerConnectionString, readerConnectionString);
         Assert.Contains(writerConnectionString, spyDialect.ResetCalls);
         Assert.Contains(readerConnectionString, spyDialect.ResetCalls);
+    }
+
+    // CONFIRMED live (Firebird 5, PreventDatabaseUnload): long-lived sentinel attachments block DDL
+    // on a table the application has used ("object TABLE ... is in use"). Killing just the two
+    // sentinel attachments (MON$ATTACHMENTS) made every failing DROP succeed; killing the
+    // transient pooled attachments did not. A FRESH sentinel reopened just before the DDL blocks
+    // too (confirmed live), so the sentinels stay closed while the DDL runs and fresh ones are
+    // opened as soon as it finishes.
+    [Fact]
+    public async Task ExecuteNonQueryAsync_DdlStatement_RecyclesPreventDatabaseUnloadSentinels()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        await using var context = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Firebird",
+            DbMode = DbMode.PreventDatabaseUnload
+        }, factory);
+        var before = context.GetSentinelSnapshot().Select(s => s.Connection).ToList();
+        Assert.NotEmpty(before);
+
+        await using (var ddl = context.CreateSqlContainer("DROP TABLE \"ddl_probe\""))
+        {
+            await ddl.ExecuteNonQueryAsync();
+        }
+
+        Assert.All(before, old => Assert.NotEqual(ConnectionState.Open, old.State));
+        var after = context.GetSentinelSnapshot().Select(s => s.Connection).ToList();
+        Assert.Equal(before.Count, after.Count);
+        Assert.All(after, fresh =>
+        {
+            Assert.DoesNotContain(fresh, before);
+            Assert.Equal(ConnectionState.Open, fresh.State);
+        });
     }
 
     [Fact]

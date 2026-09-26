@@ -144,7 +144,9 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     /// </summary>
     private void EnsureSentinelHealthy()
     {
-        if (AllSentinelsHealthy())
+        // A DDL statement has the sentinels deliberately closed (see
+        // DatabaseContext.SuspendSentinelsForDdl); reopening them now would block that DDL.
+        if (_context.SentinelsSuspended || AllSentinelsHealthy())
         {
             return;
         }
@@ -192,9 +194,17 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     /// <see cref="DatabaseContext.ReplaceSentinel"/> is a compare-and-swap and the loser disposes
     /// its replacement.
     /// </summary>
-    private async ValueTask EnsureSentinelHealthyAsync(CancellationToken cancellationToken)
+    /// <summary>
+    /// Reopens the sentinels a DDL statement closed (see DatabaseContext.SuspendSentinelsForDdl).
+    /// Same repair path as a lost sentinel, but logged at Debug: the close was deliberate.
+    /// </summary>
+    internal ValueTask RestoreSentinelsAfterDdlAsync(CancellationToken cancellationToken) =>
+        EnsureSentinelHealthyAsync(cancellationToken, deliberateClose: true);
+
+    private async ValueTask EnsureSentinelHealthyAsync(CancellationToken cancellationToken,
+        bool deliberateClose = false)
     {
-        if (AllSentinelsHealthy())
+        if (_context.SentinelsSuspended || AllSentinelsHealthy())
         {
             return;
         }
@@ -206,7 +216,8 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
             {
                 if (!IsHealthy(current))
                 {
-                    await RepairSentinelAsync(current, executionType, cancellationToken).ConfigureAwait(false);
+                    await RepairSentinelAsync(current, executionType, cancellationToken, deliberateClose)
+                        .ConfigureAwait(false);
                 }
             }
         }
@@ -217,15 +228,22 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     }
 
     private async ValueTask RepairSentinelAsync(ITrackedConnection current, ExecutionType executionType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken, bool deliberateClose = false)
     {
         if (_context.IsDisposed)
         {
             return;
         }
 
-        _context.Logger.LogWarning(
-            "PreventDatabaseUnload sentinel connection was {State}; reconnecting.", current.State);
+        if (deliberateClose)
+        {
+            _context.Logger.LogDebug("Reopening PreventDatabaseUnload sentinel closed for a DDL statement.");
+        }
+        else
+        {
+            _context.Logger.LogWarning(
+                "PreventDatabaseUnload sentinel connection was {State}; reconnecting.", current.State);
+        }
         DisposeQuietly(current);
 
         var replacement = _context.CreateSentinelConnection(executionType);

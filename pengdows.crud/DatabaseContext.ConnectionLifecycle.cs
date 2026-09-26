@@ -30,6 +30,7 @@ using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
+using pengdows.crud.strategies.connection;
 using pengdows.crud.threading;
 using pengdows.crud.wrappers;
 
@@ -135,6 +136,71 @@ public partial class DatabaseContext
 
             _sentinels.Add((connection, executionType));
             _connection ??= connection;
+        }
+    }
+
+    private int _sentinelSuspensions;
+
+    /// <summary>True while a DDL statement has the PreventDatabaseUnload sentinels closed.</summary>
+    internal bool SentinelsSuspended => Volatile.Read(ref _sentinelSuspensions) > 0;
+
+    /// <summary>
+    /// Closes every PreventDatabaseUnload sentinel ahead of a DDL statement on a dialect that
+    /// requires a pool reset for DDL (Firebird), and keeps them closed until
+    /// <see cref="ResumeSentinelsAfterDdl"/>. Confirmed live: any other attachment present while the
+    /// DDL runs — a long-lived sentinel, or a fresh one reopened just before the DDL — makes
+    /// DROP/ALTER of a table the application has used fail with "object ... is in use". Disposing
+    /// releases each sentinel's pool permit; the strategy's lazy repair reopens fresh sentinels on
+    /// the first connection acquisition after the DDL. Returns false (and suspends nothing) when
+    /// the context has no sentinels.
+    /// </summary>
+    internal bool SuspendSentinelsForDdl(List<string>? sentinelPools = null)
+    {
+        var sentinels = GetSentinelSnapshot();
+        if (sentinels.Count == 0)
+        {
+            return false;
+        }
+
+        Interlocked.Increment(ref _sentinelSuspensions);
+        foreach (var (connection, _) in sentinels)
+        {
+            sentinelPools?.Add(connection.ConnectionString);
+            try
+            {
+                connection.Dispose();
+            }
+            catch
+            {
+                // Best effort: a sentinel that fails to close is replaced by lazy repair anyway.
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Ends a <see cref="SuspendSentinelsForDdl"/> suspension and, when it was the last one,
+    /// reopens the sentinels so unload protection is back as soon as the DDL finishes. Never
+    /// throws (it runs in a finally): a failed reopen is logged and left to the strategy's lazy
+    /// repair on the next connection acquisition.
+    /// </summary>
+    internal async ValueTask ResumeSentinelsAfterDdlAsync()
+    {
+        if (Interlocked.Decrement(ref _sentinelSuspensions) > 0 ||
+            _connectionStrategy is not PreventDatabaseUnloadConnectionStrategy strategy)
+        {
+            return;
+        }
+
+        try
+        {
+            await strategy.RestoreSentinelsAfterDdlAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex,
+                "Could not reopen PreventDatabaseUnload sentinels after a DDL statement; they will be reopened on the next operation.");
         }
     }
 

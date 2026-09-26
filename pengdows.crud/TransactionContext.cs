@@ -83,6 +83,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 {
     private readonly ITrackedConnection _connection;
     private readonly IDatabaseContext _context;
+
+    internal IDatabaseContext OwningContext => _context;
     private readonly ISqlDialect _dialect;
     private readonly ILogger<TransactionContext> _logger;
     private readonly SemaphoreSlim _userLock;

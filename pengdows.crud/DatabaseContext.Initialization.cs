@@ -756,6 +756,8 @@ public partial class DatabaseContext
         // sentinel's permit doesn't starve ordinary work of the one remaining slot. Other
         // modes never inject an implicit minimum.
         var minPoolSizeKey = _dialect?.MinPoolSizeSettingName;
+        var writerBeforeMinimum = _connectionString;
+        var readerBeforeMinimum = _readerConnectionString;
         var writerMinimum = ConnectionMode == DbMode.PreventDatabaseUnload && rawWriterMax != 0 ? 2 : 0;
         _connectionString = ConnectionPoolingConfiguration.EnsureMinimumPoolSize(
             _connectionString, minPoolSizeKey, writerConfig.MinPoolSize, rawWriterMax, writerMinimum);
@@ -765,6 +767,8 @@ public partial class DatabaseContext
             _readerConnectionString = ConnectionPoolingConfiguration.EnsureMinimumPoolSize(
                 _readerConnectionString, minPoolSizeKey, readerConfig.MinPoolSize, rawReaderMax, readerMinimum);
         }
+
+        RebuildOwnedDataSourcesForChangedConnectionStrings(writerBeforeMinimum, readerBeforeMinimum);
 
         var writerKey = ComputePoolKeyHash(writerConnectionString);
         var readerKey = ComputePoolKeyHash(readerConnectionString);
@@ -2058,6 +2062,65 @@ public partial class DatabaseContext
     /// </list>
     /// Returns <c>null</c> only if both paths fail.
     /// </summary>
+    /// <summary>
+    /// The data sources are created before <see cref="InitializePoolGovernors"/> applies
+    /// PreventDatabaseUnload's provider minimum, so a string changed there must also reach the
+    /// data source its connections come from. Otherwise connections open from a pool keyed by the
+    /// old string while everything that manages pools by string (governor keys, the Firebird DDL
+    /// pool reset) targets the new one — confirmed live: the DDL reset cleared an unused pool and
+    /// DROP TABLE failed with "object ... is in use". A caller-provided data source is left alone.
+    /// The replaced data sources are retired, not disposed, because the construction-time
+    /// connection (PreventDatabaseUnload's writer sentinel) may already be open on them; they are
+    /// disposed with the context.
+    /// </summary>
+    private void RebuildOwnedDataSourcesForChangedConnectionStrings(string writerBefore, string readerBefore)
+    {
+        if (_dataSourceProvided || _factory == null)
+        {
+            return;
+        }
+
+        var writerChanged = !string.Equals(writerBefore, _connectionString, StringComparison.Ordinal);
+        var readerChanged = !string.IsNullOrWhiteSpace(_readerConnectionString) &&
+                            !string.Equals(readerBefore, _readerConnectionString, StringComparison.Ordinal);
+        if (!writerChanged && !readerChanged)
+        {
+            return;
+        }
+
+        var oldWriter = _dataSource;
+        var oldReader = _readerDataSource;
+        var readerSharedWriter = ReferenceEquals(oldReader, oldWriter);
+
+        if (writerChanged && oldWriter != null)
+        {
+            _dataSource = TryCreateDataSource(_factory, _connectionString);
+            RetireDataSource(oldWriter);
+        }
+
+        if (readerSharedWriter)
+        {
+            _readerDataSource = string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase)
+                ? _dataSource
+                : oldReader == null ? null : TryCreateDataSource(_factory, _readerConnectionString);
+        }
+        else if (readerChanged && oldReader != null)
+        {
+            _readerDataSource = TryCreateDataSource(_factory, _readerConnectionString);
+            RetireDataSource(oldReader);
+        }
+
+        RefreshRedactedConnectionStrings();
+    }
+
+    private void RetireDataSource(DbDataSource dataSource)
+    {
+        lock (_retiredDataSources)
+        {
+            _retiredDataSources.Add(dataSource);
+        }
+    }
+
     private DbDataSource? TryCreateDataSource(DbProviderFactory factory, string connectionString)
     {
         var nativeDataSource = TryCreateProviderDataSource(factory, connectionString);

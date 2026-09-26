@@ -60,7 +60,9 @@ public class MinPoolSizeBehaviorTests
     [InlineData(SupportedDatabase.MariaDb)]
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Firebird)]
-    public void PoolingSupportingDatabases_KeepAliveMode_DoesNotSetMinPoolSizeByDefault(
+    // KeepAlive is a compatibility alias for PreventDatabaseUnload: its sentinel permanently
+    // occupies one governor slot, so the provider pool needs a minimum of 2 (BP-204, as 3.0).
+    public void PoolingSupportingDatabases_KeepAliveMode_SetsMinPoolSizeToTwo(
         SupportedDatabase database)
     {
         // Arrange
@@ -76,7 +78,6 @@ public class MinPoolSizeBehaviorTests
         var connectionString = context.ConnectionString;
 
         // Assert
-        // KeepAlive should be honored when explicitly requested (for testing/debugging)
         Assert.Equal(DbMode.KeepAlive, context.ConnectionMode);
 
         var builder = factory.CreateConnectionStringBuilder() ?? new DbConnectionStringBuilder();
@@ -85,7 +86,8 @@ public class MinPoolSizeBehaviorTests
         var dialect = context.GetDialect();
         if (!string.IsNullOrEmpty(dialect.MinPoolSizeSettingName))
         {
-            Assert.False(builder.ContainsKey(dialect.MinPoolSizeSettingName));
+            Assert.True(builder.ContainsKey(dialect.MinPoolSizeSettingName));
+            Assert.Equal("2", builder[dialect.MinPoolSizeSettingName]?.ToString());
         }
     }
 
