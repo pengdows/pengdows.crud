@@ -199,8 +199,18 @@ internal static partial class DbExceptionTranslationSupport
             };
         }
 
+        // DbException.ErrorCode defaults to the exception's HRESULT. When that is all it carries,
+        // the provider's real code (if any) is on its Errors collection: Informix.Net.Core's
+        // IfxException reports ErrorCode -2146232009 for every error and the Informix code (-268,
+        // -530, -691, ...) only as Errors[0].NativeError (confirmed live).
         if (exception is DbException dbException && dbException.ErrorCode != 0)
         {
+            if (dbException.ErrorCode == dbException.HResult &&
+                TryGetErrorCodeFromErrorsCollection(exception) is { } nativeCode)
+            {
+                return nativeCode;
+            }
+
             return dbException.ErrorCode;
         }
 
@@ -224,7 +234,8 @@ internal static partial class DbExceptionTranslationSupport
         foreach (var error in errors)
         {
             var numberProperty = error.GetType().GetProperty("MessageNumber", BindingFlags.Public | BindingFlags.Instance) ??
-                                  error.GetType().GetProperty("Number", BindingFlags.Public | BindingFlags.Instance);
+                                  error.GetType().GetProperty("Number", BindingFlags.Public | BindingFlags.Instance) ??
+                                  error.GetType().GetProperty("NativeError", BindingFlags.Public | BindingFlags.Instance);
             if (numberProperty?.GetValue(error) is int number)
             {
                 return number;

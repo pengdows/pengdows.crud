@@ -142,9 +142,13 @@ internal sealed class InformixDialect : SqlDialect
     // (logged database) / -239 (unlogged database). Both are documented, distinct codes for
     // the SAME condition depending on database logging mode, not alternates for different
     // constraint kinds. Source: IBM support "SQL state X23000:-239".
+    // SQLSTATE 23000 alone is not enough: Informix reports 23000 for every integrity violation
+    // (check -530, not null -391, foreign key -691/-692; confirmed live), so it only decides when
+    // no Informix error code is available (none, or only the exception's HRESULT).
     public override bool IsUniqueViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23000", StringComparison.OrdinalIgnoreCase) ||
-        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) is 268 or 239;
+        TryGetProviderErrorCode(ex) is { } code && code != ex.HResult
+            ? Math.Abs(code) is 268 or 239
+            : string.Equals(TryGetProviderSqlState(ex), "23000", StringComparison.OrdinalIgnoreCase);
 
     // -691: insert violates a foreign key (parent row missing). -692: delete/update blocked
     // because a child row still references this row. Both documented on oninit.com's
