@@ -6,6 +6,9 @@ using testbed.Db2;
 using testbed.Access;
 using testbed.Cockroach;
 using testbed.DuckDb;
+#if PENGDOWS_FLATFILE
+using testbed.FlatFile;
+#endif
 using testbed.Firebird;
 using testbed.Informix;
 using testbed.mariaDb;
@@ -59,6 +62,9 @@ public class ParallelTestOrchestrator
             SupportedDatabase.Firebird => new FirebirdSqlTestContainer(),
             SupportedDatabase.CockroachDb => new CockroachDbTestContainer(),
             SupportedDatabase.DuckDB => new DuckDbTestContainer(),
+#if PENGDOWS_FLATFILE
+            SupportedDatabase.FlatFile => new FlatFileTestContainer(),
+#endif
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Snowflake when _includeSnowflake => new SnowflakeTestContainer(),
@@ -85,6 +91,11 @@ public class ParallelTestOrchestrator
         ISet<string>? exclude = null)
     {
         var testConfigurations = GetTestConfigurations();
+#if !PENGDOWS_FLATFILE
+        Console.WriteLine(
+            "WARNING: FlatFile NOT tested - the pengdows.flatfile sibling checkout was not found at build time " +
+            "(see PengdowsFlatFileProject in testbed/testbed.csproj).");
+#endif
 
         // Apply filtering if provided
         if (only is { Count: > 0 })
@@ -232,6 +243,17 @@ public class ParallelTestOrchestrator
                 Container = new DuckDbTestContainer(),
                 TestProviderFactory = (db, sp) => new DuckDbTestProvider(db, sp)
             },
+#if PENGDOWS_FLATFILE
+            // In-process and file-based like SQLite/DuckDB, so always on: no Docker needed. Built
+            // from the sibling pengdows.flatfile checkout (see testbed.csproj).
+            new()
+            {
+                ContainerName = "FlatFile",
+                DatabaseProvider = "FlatFile",
+                Container = new FlatFileTestContainer(),
+                TestProviderFactory = (db, sp) => new FlatFileTestProvider(db, sp)
+            },
+#endif
             new()
             {
                 ContainerName = "PostgreSQL",

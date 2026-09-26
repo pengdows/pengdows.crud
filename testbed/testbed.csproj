@@ -37,4 +37,25 @@
         <ProjectReference Include="..\pengdows.stormgate\pengdows.stormgate.csproj"/>
     </ItemGroup>
 
+    <!--
+      pengdows.flatfile is not published to NuGet yet, so the testbed builds it from a sibling
+      checkout (the same layout 3.0 uses: ../../pengdows.flatfile next to this repository). Only the
+      testbed and pengdows.crud.IntegrationTests reference it; the shipped packages never do.
+      Override PengdowsFlatFileProject (e.g. -p:PengdowsFlatFileProject=/abs/path/pengdows.flatfile.csproj)
+      when building from a worktree. Without the sibling checkout, FlatFile is left out of the build
+      and the testbed prints a warning instead of silently passing.
+    -->
+    <PropertyGroup>
+        <PengdowsFlatFileProject Condition="'$(PengdowsFlatFileProject)' == ''">$(MSBuildThisFileDirectory)..\..\pengdows.flatfile\pengdows.flatfile\pengdows.flatfile.csproj</PengdowsFlatFileProject>
+        <DefineConstants Condition="Exists('$(PengdowsFlatFileProject)')">$(DefineConstants);PENGDOWS_FLATFILE</DefineConstants>
+    </PropertyGroup>
+
+    <ItemGroup Condition="Exists('$(PengdowsFlatFileProject)')">
+        <ProjectReference Include="$(PengdowsFlatFileProject)"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="!Exists('$(PengdowsFlatFileProject)')">
+        <Compile Remove="FlatFile\**"/>
+    </ItemGroup>
+
 </Project>

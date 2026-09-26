@@ -379,6 +379,9 @@ CREATE TABLE {tableName} (
             // -607 "Specified domain or source column ... does not exist". Same lineage/limitation
             // as Firebird, which hardcodes TIMESTAMP in its own dedicated CreateTable override.
             SupportedDatabase.InterBase => "TIMESTAMP",
+            // pengdows.flatfile parses ISO SQL only: DATETIME is rejected as a vendor type
+            // (pengdows.sql/SqlParser.cs VendorDataTypes); TIMESTAMP is the standard spelling.
+            SupportedDatabase.FlatFile => "TIMESTAMP",
             _ => "DATETIME"
         };
     }
@@ -566,6 +569,9 @@ CREATE TABLE {tableName} (
             SupportedDatabase.CockroachDb => "UUID",
             SupportedDatabase.YugabyteDb => "UUID",
             SupportedDatabase.DuckDB => "UUID",
+            // pengdows.flatfile maps UUID to System.Guid (SqlBinder.MapSqlDataTypeToClrType), so
+            // FlatFileDialect passes Guid through natively.
+            SupportedDatabase.FlatFile => "UUID",
             SupportedDatabase.Firebird => "CHAR(16) CHARACTER SET OCTETS",
             SupportedDatabase.InterBase => "CHAR(16) CHARACTER SET OCTETS",
             // AdoNetCore.AseClient writes DbType.Guid as 16 bytes; BINARY(16) round-trips it.
@@ -616,9 +622,19 @@ CREATE TABLE {tableName} (
             // ParameterMarkerFormat == "?" and uses bare positional binding, same as Informix/HANA
             // (see AccessDialect.SupportsNamedParameters).
             SupportedDatabase.Access => "?",
+            // pengdows.flatfile binds ISO SQL ":name" host parameters by DbParameter.ParameterName
+            // (pengdows.sql/SqlLexer.cs NamedParameter token, BoundPredicateEvaluator.ResolveParameter).
+            SupportedDatabase.FlatFile => ":",
             _ => "@"
         };
     }
+
+    // A CSV field cannot tell NULL from "" for a text column unless the table declares a null
+    // token: pengdows.flatfile's CREATE TABLE ... WITH (NULLTOKEN = '...') option
+    // (DefaultFlatFileQueryExecutor's CREATE TABLE options, ClrTypeParser.MatchesNullToken).
+    // Without it both round-trip as "", which is what null_text/empty_text below check.
+    private static string FlatFileNullTokenClause(SupportedDatabase product) =>
+        product == SupportedDatabase.FlatFile ? " WITH (NULLTOKEN = '<<NULL>>')" : string.Empty;
 
     private static bool RequiresUtcDateTimeOffset(SupportedDatabase product)
     {
@@ -1640,7 +1656,7 @@ CREATE TABLE {table} (
     {_context.WrapObjectName("guid_value")} {GetGuidType(_context.Product)},
     {_context.WrapObjectName("bin_value")} {GetBinaryType(_context.Product)} NOT NULL,
     PRIMARY KEY ({_context.WrapObjectName("id")})
-)");
+){FlatFileNullTokenClause(_context.Product)}");
         await sc.ExecuteNonQueryAsync();
 
         var id = Interlocked.Increment(ref _nextId);
