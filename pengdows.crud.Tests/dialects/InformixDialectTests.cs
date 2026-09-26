@@ -148,6 +148,37 @@ public class InformixDialectTests
         Assert.True(CreateDialect().SupportsMerge);
     }
 
+    // The smallest value of INTEGER and SMALLINT is their NULL representation (IBM docs). CONFIRMED
+    // live (Informix 15, Informix.Net.Core) for INTEGER: an Int32 parameter holding int.MinValue
+    // fails client-side with "Error in assignment" even for a BIGINT column. The value is a valid CLR int, so it is bound
+    // one size wider; a column too narrow for it then gets the server's own range error.
+    [Fact]
+    public void CreateDbParameter_IntMinValue_IsBoundAsInt64()
+    {
+        var parameter = CreateDialect().CreateDbParameter("p", DbType.Int32, int.MinValue);
+
+        Assert.Equal(DbType.Int64, parameter.DbType);
+        Assert.Equal((long)int.MinValue, parameter.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_ShortMinValue_IsBoundAsInt32()
+    {
+        var parameter = CreateDialect().CreateDbParameter<short?>("p", DbType.Int16, short.MinValue);
+
+        Assert.Equal(DbType.Int32, parameter.DbType);
+        Assert.Equal((int)short.MinValue, parameter.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_OrdinaryInt_KeepsItsType()
+    {
+        var parameter = CreateDialect().CreateDbParameter("p", DbType.Int32, int.MinValue + 1);
+
+        Assert.Equal(DbType.Int32, parameter.DbType);
+        Assert.Equal(int.MinValue + 1, parameter.Value);
+    }
+
     // CONFIRMED live (Informix 15, HARN-005 TypeHydrationTests): a NULL bool parameter was sent as
     // DbType.Boolean while non-null bools are converted to Int16, and the server rejected it
     // ("No cast from boolean to smallint") for the SMALLINT column a non-null bool binds to. A NULL

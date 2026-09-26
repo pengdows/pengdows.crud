@@ -290,6 +290,20 @@ internal sealed class InformixDialect : SqlDialect
             return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
         }
 
+        // INTEGER's and SMALLINT's smallest value is their NULL representation (IBM docs: ranges
+        // -2147483647..2147483647 and -32767..32767), so the driver refuses to bind int.MinValue as
+        // an Int32 at all ("Error in assignment", confirmed live even for a BIGINT column). Bind those
+        // valid CLR values one size wider; a column too narrow then gets the server's range error.
+        if (type == DbType.Int32 && value is int i && i == int.MinValue)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.Int64, (long)i);
+        }
+
+        if (type == DbType.Int16 && value is short s && s == short.MinValue)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.Int32, (int)s);
+        }
+
         return base.CreateDbParameter(name, type, value);
     }
 
