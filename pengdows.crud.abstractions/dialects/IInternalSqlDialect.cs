@@ -36,6 +36,13 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool PreservesEmptyBinary => true;
 
     /// <summary>
+    /// False when text outside the Unicode Basic Multilingual Plane (a UTF-16 surrogate pair, e.g.
+    /// an emoji) cannot be stored even in a Unicode database: Informix through Informix.Net.Core
+    /// rejects it ("An illegal character has been found in the statement").
+    /// </summary>
+    bool SupportsSupplementaryCharacters => true;
+
+    /// <summary>
     /// Renders provider-specific JSON casts for parameter placeholders.
     /// </summary>
     string RenderJsonArgument(string parameterMarker, IColumnInfo column);

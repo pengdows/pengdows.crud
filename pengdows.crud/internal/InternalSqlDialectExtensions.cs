@@ -121,6 +121,15 @@ internal static class InternalSqlDialectExtensions
         return dialect is not IInternalSqlDialect internalDialect || internalDialect.PreservesEmptyBinary;
     }
 
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.SupportsSupplementaryCharacters"/>; true for a dialect that
+    /// isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool SupportsSupplementaryCharacters(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.SupportsSupplementaryCharacters;
+    }
+
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)
     {
         if (dialect is not IInternalSqlDialect internalDialect)

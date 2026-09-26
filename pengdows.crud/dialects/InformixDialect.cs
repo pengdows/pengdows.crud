@@ -198,6 +198,11 @@ internal sealed class InformixDialect : SqlDialect
         return base.CreateDbParameter(name, type, value);
     }
 
+    // CONFIRMED live (Informix 15 developer image, Informix.Net.Core, DB_LOCALE and CLIENT_LOCALE
+    // en_US.utf8): CJK and other BMP text round-trips; any supplementary-plane character (an emoji)
+    // fails with "An illegal character has been found in the statement".
+    public override bool SupportsSupplementaryCharacters => false;
+
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
         var code = TryGetProviderErrorCode(ex) is { } raw ? Math.Abs(raw) : (int?)null;
