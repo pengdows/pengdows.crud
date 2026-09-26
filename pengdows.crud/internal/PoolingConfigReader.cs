@@ -138,6 +138,40 @@ internal static class PoolingConfigReader
         }
     }
 
+    /// <summary>
+    /// Lowers an explicit minimum pool size that exceeds the explicit maximum to that maximum, using
+    /// the common keyword spellings (no dialect needed). SqlClient and IBM.Data.Db2 reject such a
+    /// string when it is assigned, so it must be corrected before the first (detection) connection.
+    /// Returns the input unchanged when there is nothing to correct or it can't be parsed.
+    /// </summary>
+    internal static string ClampMinPoolSizeToMax(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return connectionString;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            var minKey = MinPoolSizeAliases.FirstOrDefault(builder.ContainsKey);
+            var maxKey = MaxPoolSizeAliases.FirstOrDefault(builder.ContainsKey);
+            if (minKey is null || maxKey is null ||
+                TryGetInt(builder, minKey) is not int min || TryGetInt(builder, maxKey) is not int max ||
+                min <= max || max < 0)
+            {
+                return connectionString;
+            }
+
+            builder[minKey] = max;
+            return builder.ConnectionString;
+        }
+        catch (ArgumentException)
+        {
+            return connectionString;
+        }
+    }
+
     private static bool? TryGetBool(DbConnectionStringBuilder b, string key)
     {
         foreach (var candidate in GetKeyCandidates(key))

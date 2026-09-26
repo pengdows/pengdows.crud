@@ -724,7 +724,48 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             var normalized = value ?? string.Empty;
             ConnectionStringHistory.Add(normalized);
+            if (EmulatedProduct is SupportedDatabase.SqlServer or SupportedDatabase.Db2)
+            {
+                ThrowIfMinPoolSizeExceedsMax(normalized);
+            }
             _connectionString = normalized;
+        }
+    }
+
+    /// <summary>
+    /// Microsoft.Data.SqlClient ("Invalid min or max pool size values, min pool size cannot be greater
+    /// than the max pool size") and IBM.Data.Db2 (ArgumentException "Invalid argument") reject a
+    /// connection string whose Min Pool Size exceeds its Max Pool Size when it is assigned (both
+    /// confirmed), so fakeDb does too when emulating them. MySql.Data accepts it at assignment.
+    /// </summary>
+    private static void ThrowIfMinPoolSizeExceedsMax(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return;
+        }
+
+        DbConnectionStringBuilder builder;
+        try
+        {
+            builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        }
+        catch (ArgumentException)
+        {
+            return;
+        }
+
+        if (TryGetInt(builder, "Min Pool Size", out var min) && TryGetInt(builder, "Max Pool Size", out var max) &&
+            min > max)
+        {
+            throw new ArgumentException(
+                $"Invalid min or max pool size values: Min Pool Size ({min}) cannot be greater than Max Pool Size ({max}).");
+        }
+
+        static bool TryGetInt(DbConnectionStringBuilder b, string key, out int value)
+        {
+            value = 0;
+            return b.TryGetValue(key, out var raw) && int.TryParse(Convert.ToString(raw), out value);
         }
     }
 
