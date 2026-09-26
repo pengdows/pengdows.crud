@@ -57,6 +57,19 @@ public class SybaseTranslatorTests
         Assert.IsType<ForeignKeyViolationException>(result);
     }
 
+    // CONFIRMED live (ASE 16.0): deleting a parent row that a child still references raises 547
+    // ("Dependent foreign key constraint violation in a referential integrity constraint"); 546 is
+    // only the child-side insert/update case.
+    [Fact]
+    public void AseError547_DependentRowDelete_MapsTo_ForeignKeyViolationException()
+    {
+        var raw = Ase(547, "Dependent foreign key constraint violation in a referential integrity constraint. dbname =  'testdb', table name = 'parent_t', constraint name = 'fk1'.");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SybaseASE), raw, DbOperationKind.Delete);
+
+        Assert.IsType<ForeignKeyViolationException>(result);
+    }
+
     [Fact]
     public void AseError548_MapsTo_CheckConstraintViolationException()
     {

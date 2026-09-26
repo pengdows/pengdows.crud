@@ -253,6 +253,16 @@ public class SybaseAseDialectTests
         Assert.Equal(DbConstraintKind.ForeignKey, info.ConstraintKind);
     }
 
+    // CONFIRMED live (ASE 16.0): 547 is the dependent-row (parent delete/update) side of a
+    // foreign key violation.
+    [Fact]
+    public void AnalyzeException_547_ReturnsForeignKeyConstraintKind()
+    {
+        var info = Dialect().AnalyzeException(Ase(547, "Dependent foreign key constraint violation"));
+        Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
+        Assert.Equal(DbConstraintKind.ForeignKey, info.ConstraintKind);
+    }
+
     [Fact]
     public void AnalyzeException_548_ReturnsCheckConstraintKind()
     {
