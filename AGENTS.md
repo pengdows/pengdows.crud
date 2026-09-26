@@ -432,7 +432,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite/DuckDB `Standard` -> `SingleWriter`, LocalDB -> `PreventDatabaseUnload`)
+8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite `Standard` -> `SingleWriter`); where `Best` picks `PreventDatabaseUnload` (LocalDB, Firebird) an explicit `Standard` is honored
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** — incompatible with connection management, use `ctx.BeginTransaction()`
 11. **ISqlContainer execution methods return ValueTask** — not Task, for reduced allocations

@@ -607,7 +607,7 @@ public partial class DatabaseContext
             }
 
             // Warn on mode/database mismatches (performance, not correctness)
-            WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode);
+            WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode, isLocalDb);
 
             // Pooling defaults will be applied after dialect detection
 
@@ -1866,7 +1866,7 @@ public partial class DatabaseContext
             reason);
     }
 
-    private void WarnOnModeMismatch(DbMode resolved, SupportedDatabase product, bool wasCoerced)
+    private void WarnOnModeMismatch(DbMode resolved, SupportedDatabase product, bool wasCoerced, bool isLocalDb)
     {
         // Don't warn if we auto-coerced (already logged by LogModeOverride)
         if (wasCoerced)
@@ -1902,8 +1902,8 @@ public partial class DatabaseContext
             }
         }
 
-        // Pattern 2: an embedded single-writer engine (Access — SQLite/DuckDB stay hard-coerced
-        // and never reach this: see SqlDialect.CoerceEmbeddedSingleWriterMode's allowStandard
+        // Pattern 2: an embedded single-writer engine (DuckDB, Access — SQLite stays hard-coerced
+        // and never reaches this: see SqlDialect.CoerceEmbeddedSingleWriterMode's allowStandard
         // parameter) explicitly running Standard mode against a file-based database. The engine's
         // own documentation claims concurrent-connection/writer support; pengdows.crud honors the
         // explicit choice but surfaces the dialect's own evidence-backed risk description
@@ -1921,6 +1921,22 @@ public partial class DatabaseContext
                 "Standard mode used with file-based {Database}. {Risk}",
                 product,
                 risk
+            );
+        }
+
+        // Pattern 3: SQL Server LocalDB explicitly running Standard mode. Purely a
+        // performance/lifecycle tradeoff, not a correctness risk: LocalDB's auto-shutdown-after-idle
+        // isn't masked by a PreventDatabaseUnload sentinel. Only relevant if the workload actually
+        // goes idle long enough to trigger it — see SqlServerDialect.CoerceConnectionMode.
+        if (isLocalDb && resolved == DbMode.Standard)
+        {
+            _logger.LogWarning(
+                diagnostics.EventIds.ModeMismatch,
+                "Standard mode used with SQL Server LocalDB. LocalDB automatically shuts down " +
+                "after an idle period, which incurs a reconnect cost on next use; " +
+                "PreventDatabaseUnload avoids that cost by holding one sentinel connection open. " +
+                "This is irrelevant if your workload keeps the database busy continuously — " +
+                "Standard mode is honored here because it was explicitly requested."
             );
         }
     }

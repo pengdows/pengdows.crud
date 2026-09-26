@@ -44,7 +44,7 @@ The framework provides intelligent, adaptive connection strategies to ensure opt
 - **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string:
     - `:memory:` SQLite/DuckDB → `SingleConnection`
     - File-based SQLite/DuckDB (and shared-cache in-memory SQLite) and Microsoft Access → `SingleWriter`
-    - SQL Server LocalDB → `PreventDatabaseUnload` (forced for LocalDB regardless of the requested mode; `KeepAlive` is an `[Obsolete]` alias)
+    - SQL Server LocalDB and Firebird → `PreventDatabaseUnload` (a sentinel per pool; an explicit `Standard` is always honored; `KeepAlive` is an `[Obsolete]` alias)
     - Everything else → `Standard`
 - **`ModeLockTimeout`:** Configurable timeout (`TimeSpan?`) for internal mode locks and transaction completion locks; `null` means wait indefinitely.
 

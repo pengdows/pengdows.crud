@@ -52,8 +52,11 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void DuckDbFile_StandardMode_CoercesToSingleWriter_WithWarning()
+    public void DuckDbFile_StandardMode_IsHonored_WithUnsafeWarning()
     {
+        // DuckDB documents support for concurrent connections, so an explicit Standard request is
+        // honored (Best still defaults to SingleWriter), with a dialect-specific risk warning
+        // (WarnOnModeMismatch Pattern 2) instead of a coercion. Ported from 3.0 b356af1.
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -63,8 +66,11 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Standard
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.DuckDB), lf);
-        Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("Standard mode used with file-based"));
     }
 
     [Fact]
@@ -157,8 +163,11 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void SqlServerLocalDb_StandardMode_CoercesToKeepAlive_WithWarning()
+    public void SqlServerLocalDb_StandardMode_IsHonored_WithPerformanceWarning()
     {
+        // Best selects PreventDatabaseUnload for LocalDB, but a caller whose workload stays busy
+        // may explicitly choose Standard; it is honored with a performance-only warning
+        // (WarnOnModeMismatch Pattern 3). Ported from 3.0 b356af1.
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -168,8 +177,11 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Standard
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.SqlServer), lf);
-        Assert.Equal(DbMode.KeepAlive, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("Standard mode used with SQL Server LocalDB"));
     }
 
     [Fact]
@@ -194,11 +206,10 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void FirebirdEmbedded_BestMode_AutoSelectsStandard_WithInfo()
+    public void FirebirdEmbedded_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo()
     {
-        // Bug fix: embedded Firebird used to be forced into SingleConnection regardless of the
-        // requested mode. Real testing showed it behaves like an ordinary client-server database —
-        // it's now treated as a full server database like any other (see FirebirdDialect.cs).
+        // Firebird's idle-unload reconnect cost is real (measured live), so Best selects
+        // PreventDatabaseUnload; explicit modes stay honored (see FirebirdDialect.cs).
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -208,9 +219,9 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Best
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
         Assert.Contains(provider.Entries,
-            e => e.Level == LogLevel.Information && e.Message.Contains("Full server: Best selects Standard"));
+            e => e.Level == LogLevel.Information && e.Message.Contains("Best selects PreventDatabaseUnload"));
         Assert.DoesNotContain(provider.Entries,
             e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }

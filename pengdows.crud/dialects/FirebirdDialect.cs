@@ -79,17 +79,23 @@ internal class FirebirdDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;
 
-    // Deliberately does NOT override CoerceConnectionMode, so Best resolves to Standard here —
-    // same as any other full server database (base SqlDialect.CoerceConnectionMode).
-    //
-    // Bug fix: embedded Firebird was previously forced into SingleConnection mode by a dedicated
-    // DatabaseContext-level special case (serializing every read/write through one pinned
-    // connection). That was based on incorrect assumptions about embedded Firebird's concurrency
-    // model — real testing showed it behaves like an ordinary client-server database and does not
-    // need to be pinned to a single connection. PreventDatabaseUnload remains available as a fully-supported,
-    // explicitly-honored KNOB (never an auto-selected default) for deployments that specifically
-    // want to avoid Firebird's idle-unload reconnect cost — the operator decides that tradeoff,
-    // not this dialect.
+    /// <inheritdoc />
+    /// <remarks>
+    /// Firebird's default <c>RDB$LINGER=0</c> discards the database cache when the last attachment
+    /// closes, so every cold checkout after an idle gap pays a reconnect/reload cost (measured
+    /// live by the testbed's <c>DbMode.SentinelPreventsUnload</c> probe: a sentinel saved ~7-10ms
+    /// per cold checkout). <see cref="DbMode.Best"/> therefore selects PreventDatabaseUnload, which
+    /// keeps one sentinel per pool (reader and writer). Every explicit request is honored — in
+    /// particular <see cref="DbMode.Standard"/>, for a deployment busy enough never to drain its
+    /// pool. Embedded Firebird behaves like a client-server database here (it is not pinned to a
+    /// single connection).
+    /// </remarks>
+    public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        bool isLocalDb) =>
+        requested == DbMode.Best
+            ? (DbMode.PreventDatabaseUnload, "Firebird: Best selects PreventDatabaseUnload (idle-unload reconnect cost)")
+            : (requested, string.Empty);
+
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 

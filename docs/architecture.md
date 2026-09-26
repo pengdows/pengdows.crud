@@ -226,12 +226,13 @@ await conn.DisposeAsync();  // Returns to provider pool
 | SQLite | `Data Source=:memory:` (isolated) | `SingleConnection` | **REQUIRED** - Each `:memory:` = separate database |
 | SQLite | File-based (`mydb.db`) | `SingleWriter` | **OPTIMAL** - Prevents lock contention, WAL allows many readers + one writer |
 | PostgreSQL | Any | `Standard` | **OPTIMAL** - Full server, high concurrency, provider pooling |
-| SQL Server | LocalDB | `PreventDatabaseUnload` | **REQUIRED** - Prevents instance unload |
+| SQL Server | LocalDB | `PreventDatabaseUnload` | **DEFAULT** (Best) - Prevents instance unload; explicit `Standard` honored with a performance warning |
+| Firebird | Any | `PreventDatabaseUnload` | **DEFAULT** (Best) - Keeps a sentinel per pool so `LINGER=0` doesn't discard the page cache; every explicit mode honored |
 
 **Coercion** (forced mode change):
 - SQLite `:memory:` + Standard → **Coerced to SingleConnection** (correctness)
 - SQLite file + Standard → **Coerced to SingleWriter** (safety, prevents SQLITE_BUSY)
-- Firebird embedded → **Not coerced** — `FirebirdDialect` deliberately doesn't override `CoerceConnectionMode`, so `Best` resolves to `Standard` as for any client-server engine; `PreventDatabaseUnload` remains available as an explicit opt-in
+- Firebird (embedded or client-server) → **Not coerced**; `Best` selects `PreventDatabaseUnload` and every explicit mode is honored
 
 **Mode Mismatch Warnings** (safe but suboptimal):
 - PostgreSQL + SingleConnection → Logs warning (limits concurrency unnecessarily)
@@ -923,13 +924,13 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 
 **When it's correct**:
 - SQLite `:memory:` → **REQUIRED** (each connection = separate database)
-- Firebird embedded → **NOT REQUIRED**; embedded Firebird behaves like a client-server database, so `Best` resolves to `Standard` and work can use separate attachments
+- Firebird embedded → **NOT REQUIRED**; embedded Firebird behaves like a client-server database, so `Best` resolves to `PreventDatabaseUnload` (sentinels only) and work uses separate attachments
 - Small embedded databases → **OPTIMAL** (no connection overhead)
 
 **When it's suboptimal**:
 - PostgreSQL, SQL Server, MySQL → Use Standard instead (supports concurrency)
 
-**Correct**: SingleConnection is the **right choice** for certain databases. It is a disposable-data lifetime requirement for SQLite/DuckDB `:memory:`; embedded Firebird is not coerced into it (Best resolves to Standard) and can use SingleConnection only as an explicit specialized deployment shape. It is not a general high-concurrency mode.
+**Correct**: SingleConnection is the **right choice** for certain databases. It is a disposable-data lifetime requirement for SQLite/DuckDB `:memory:`; embedded Firebird is not coerced into it (Best resolves to PreventDatabaseUnload) and can use SingleConnection only as an explicit specialized deployment shape. It is not a general high-concurrency mode.
 
 ### 7. "Best mode always selects Standard"
 
@@ -940,6 +941,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 - SQLite `:memory:` → SingleConnection (required for correctness)
 - SQLite file → SingleWriter (optimal for WAL)
 - SQL Server LocalDB → PreventDatabaseUnload (prevents unload)
+- Firebird → PreventDatabaseUnload (keeps the page cache warm under `LINGER=0`)
 
 **Correct**: Best = "most functional safe mode for this specific database".
 

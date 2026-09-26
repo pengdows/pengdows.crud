@@ -43,9 +43,19 @@ public class DatabaseContextModeBranchTests
             new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false })!;
         Assert.Equal(DbMode.Standard, firebird);
 
+        // Best selects PreventDatabaseUnload for Firebird (measured idle-unload reconnect cost).
+        var firebirdBest = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Best, SupportedDatabase.Firebird, false })!;
+        Assert.Equal(DbMode.PreventDatabaseUnload, firebirdBest);
+
+        // LocalDB: Best selects PreventDatabaseUnload, but an explicit Standard is honored.
+        var localDbBest = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Best, SupportedDatabase.SqlServer, true })!;
+        Assert.Equal(DbMode.PreventDatabaseUnload, localDbBest);
+
         var localDb = (DbMode)coerce.Invoke(context,
             new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true })!;
-        Assert.Equal(DbMode.KeepAlive, localDb);
+        Assert.Equal(DbMode.Standard, localDb);
     }
 
     [Fact]
@@ -73,10 +83,11 @@ public class DatabaseContextModeBranchTests
         var context = CreateContext("Data Source=file:test.db");
         var warn = GetInstanceMethod("WarnOnModeMismatch");
 
-        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.PostgreSql, false });
-        warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false });
-        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false });
-        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.SybaseASE, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.PostgreSql, false, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false, false });
+        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false, false });
+        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.SybaseASE, false, false });
+        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, false, true });
     }
 
     [Fact]

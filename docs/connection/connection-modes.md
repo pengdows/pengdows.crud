@@ -34,9 +34,9 @@ The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connec
 
 The mode retains one sentinel connection per enabled pool: the connection opened during construction for dialect detection is kept open instead of being disposed (it is the writer-pool sentinel on a read-write context, the reader-pool sentinel on a read-only one), and when a dedicated `ReadOnlyConnectionString` is configured on a read-write context a second sentinel is opened for the reader pool. **The sentinel never executes application commands, opens transactions, or hands work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode — and, because it is never used for work, session settings are not applied to it. Each sentinel holds one permit from its own pool's governor, so effective working capacity per pool is the configured capacity minus its sentinel (which is why enabled pools are raised to at least 2 — see `docs/connection-pooling.md`).
 
-- `Best` auto-selects it **only** for SQL Server LocalDB. Other engines can have an idle-triggered reconnect/reactivation cost too (for example Firebird discarding a database's page cache when its last attachment closes under the default `LINGER` setting, Db2 deactivating an implicitly activated database, or SQL Server with `AUTO_CLOSE` explicitly turned on) — but a possible cost is not, by itself, sufficient reason to make `PreventDatabaseUnload` an auto-selected default for them. See "Why auto-selection stays LocalDB-only" below.
-- **Why auto-selection stays LocalDB-only**: a heavily-trafficked deployment may never actually drain its connection pool to zero, so an idle-unload cost never materializes in practice — while the sentinel's permit is paid unconditionally regardless. And a deployment deliberately built to scale-to-zero for cost reasons (genuinely cost-optimized serverless products like Azure SQL serverless or Aurora Serverless) would have that intentional behavior silently defeated by a forced sentinel. Only the operator knows which situation applies to their own deployment. So for Firebird, Db2, and SQL Server with `AUTO_CLOSE`, `PreventDatabaseUnload` stays a fully-supported, explicitly-honored **knob** — never an auto-selected default — and `Best` resolves to `Standard` for all of them, exactly like any other full-server database. LocalDB alone is the exception: there is no production LocalDB deployment shape where the auto-shutdown behavior is wanted, so it is selected unconditionally (see the LocalDb coercion rule below).
-- Extending the auto-selection list to a new database requires clearing BOTH bars: (1) empirical proof against a live engine showing a real reconnect cost, AND (2) a considered answer to "does essentially every deployment of this database genuinely want protection against this, with no real cost/tradeoff to weigh" — matching LocalDB, not the Firebird/Db2/SQL-Server-`AUTO_CLOSE` cases. Clearing the first bar alone is not sufficient.
+- `Best` auto-selects it for **SQL Server LocalDB** and **Firebird** (embedded and client-server). Firebird's default `LINGER` discards the database's page cache when its last attachment closes; the testbed's `DbMode.SentinelPreventsUnload` probe measured a sentinel saving ~7-10ms per cold checkout on live Firebird. Other engines with an idle-triggered cost (Db2 implicit activation/deactivation, SQL Server with `AUTO_CLOSE` explicitly on) stay knob-only: `Best` resolves to `Standard` for them.
+- **`Best` is a default, not a mandate.** Wherever `Best` selects `PreventDatabaseUnload`, an explicit `Standard` request is always honored: a deployment busy enough never to drain its pool doesn't need the sentinel, and one deliberately built to scale to zero must not have that defeated. Firebird honors every explicit mode; LocalDB honors `Standard` (the single-connection modes have no purpose there and resolve to `PreventDatabaseUnload`), with a performance-only warning.
+- Extending `Best`'s auto-selection to another database requires empirical proof against a live engine (the testbed probe) and a considered maintainer decision; a documented or plausible cost alone is not enough.
 - There is one sentinel per enabled pool: the writer pool, plus the reader pool when a dedicated `ReadOnlyConnectionString` is configured (a read-only context has only the reader-pool sentinel). A sentinel that is found Broken or Closed is replaced before the next connection-requiring operation (see §6).
 
 ### SingleConnection
@@ -44,9 +44,8 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 - Semantics: One pinned connection handles everything — reads, writes, transactions.
 - Threadsafe via `RealAsyncLocker`.
 - Used for: SQLite/DuckDB `:memory:` and explicitly selected specialized single-connection
-  deployments. Durable embedded Firebird can use `PreventDatabaseUnload` as an explicit,
-  operator-chosen alternative (not an automatic selection — see the PreventDatabaseUnload
-  section above).
+  deployments. Durable Firebird (embedded or client-server) gets `PreventDatabaseUnload` from
+  `Best` (see the PreventDatabaseUnload section above), not SingleConnection.
 - For SQLite/DuckDB `:memory:`, this is primarily a testing, example, or ephemeral-scratch
   mode. The database is owned by the connection; if that connection closes, its contents
   cannot be recovered by opening another connection.
@@ -95,9 +94,13 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 - SingleWriter (default for Best)
 - SingleConnection (allowed alternative)
-- Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log — SQLite and DuckDB
-  stay hard-coerced with no opt-out; see `SqlDialect.CoerceEmbeddedSingleWriterMode`'s
-  `allowStandard` parameter (neither dialect sets it).
+- PreventDatabaseUnload → coerced to SingleWriter with a Warning log (the mode has no meaning for a
+  file-based embedded engine).
+- Standard → SQLite: coerced to SingleWriter with a Warning log (hard-coerced, no opt-out).
+  DuckDB: honored, because DuckDB documents concurrent connections/transactions, with a risk
+  warning (`DuckDbDialect.DescribeStandardModeRisk`): same-row concurrent writers can fail with
+  `SerializationConflictException`, which SingleWriter prevents. See
+  `SqlDialect.CoerceEmbeddedSingleWriterMode`'s `allowStandard` parameter.
 
 ### Allowed for Access file-based:
 
@@ -141,9 +144,11 @@ The mode retains one sentinel connection per enabled pool: the connection opened
   surfaced to callers. **`SingleWriter` is the only mode confirmed both correct and fully
   concurrent for Access.**
 
-### LocalDb: `Best` and every explicit request — including `Standard` — coerce to PreventDatabaseUnload. `SqlServerDialect.CoerceConnectionMode` forces it unconditionally for LocalDB ("LocalDB requires PreventDatabaseUnload"); there is no opt-out. An explicit non-`Best` request that gets coerced is logged at Warning (see Logging below).
+### LocalDb: `Best` selects PreventDatabaseUnload. An explicit `Standard` is honored, with a performance-only warning (LocalDB's idle auto-shutdown isn't masked). Other explicit requests (`SingleWriter`, `SingleConnection`) resolve to PreventDatabaseUnload and are logged at Warning (see Logging below).
 
-### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2, Firebird): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. Firebird (default `LINGER`), Db2 (implicit database activation/deactivation), and SQL Server (with `AUTO_CLOSE`) can each unload a database once its last connection closes, but `PreventDatabaseUnload` is deliberately a knob for the operator to reach for, not an auto-selected default — see the PreventDatabaseUnload section above for why.
+### Firebird (embedded or client-server): `Best` selects PreventDatabaseUnload (one sentinel per pool). Every explicit choice — including `Standard` — is honored as-is, no warning logged.
+
+### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. Db2 (implicit database activation/deactivation) and SQL Server (with `AUTO_CLOSE`) can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
 
 ### FakeDb: no special case. It emulates a real dialect via `EmulatedProduct` and follows all the above rules.
 
@@ -219,10 +224,12 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 ## 7. Heuristics & Tests
 
-- Explicit Standard on embedded → coerced (never throw):
+- Explicit Standard on embedded (never throw):
   - SQLite/DuckDB `:memory:` → SingleConnection
-  - SQLite/DuckDB file-based → SingleWriter
-- Firebird (embedded or client-server) → treated as an ordinary full server database; `Best` and every explicit choice (including `PreventDatabaseUnload`) resolve/honor as requested, no coercion either way.
+  - SQLite file-based → SingleWriter
+  - DuckDB/Access file-based → honored, with a risk warning
+- Firebird (embedded or client-server) → `Best` selects PreventDatabaseUnload; every explicit choice is honored.
+- LocalDB → `Best` selects PreventDatabaseUnload; explicit `Standard` honored with a performance warning.
 - Unknown product with Best → Standard.
 
 ## 8. Metrics & Limits
@@ -253,7 +260,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 **Best practices:**
 - `Standard`, `PreventDatabaseUnload`, and `SingleWriter` are production-supported modes for the deployment shapes where their lifecycle and concurrency policies fit. This includes durable Firebird deployments, subject to the provider's connection and concurrency constraints.
-- `SingleConnection` against SQLite/DuckDB `:memory:` is **not a persistence or recovery mode** — it is intended there for tests and ephemeral scratch data. The limitation is structural: the database exists only inside that connection and cannot survive a process restart or dropped connection. Durable-storage Firebird embedded can explicitly choose `PreventDatabaseUnload` if the operator wants it (not an automatic selection); `SingleConnection` remains a separate, explicit specialized deployment shape.
+- `SingleConnection` against SQLite/DuckDB `:memory:` is **not a persistence or recovery mode** — it is intended there for tests and ephemeral scratch data. The limitation is structural: the database exists only inside that connection and cannot survive a process restart or dropped connection. Durable Firebird gets `PreventDatabaseUnload` from `Best`; `SingleConnection` remains a separate, explicit specialized deployment shape.
 - Each `DatabaseContext` can be safely used as a singleton (via DI or subclassing).
 
 **Timeouts:**

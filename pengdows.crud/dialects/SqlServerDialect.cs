@@ -114,17 +114,27 @@ internal class SqlServerDialect : SqlDialect
 
     /// <inheritdoc />
     /// <remarks>
-    /// LocalDB genuinely requires PreventDatabaseUnload unconditionally — there is no production
-    /// LocalDB deployment shape where the auto-shutdown behavior is wanted, so this is forced
-    /// regardless of the requested mode. Non-LocalDB SQL Server is an ordinary full server
-    /// database and falls through to the base implementation.
+    /// LocalDB auto-shuts down after an idle period, so <see cref="DbMode.Best"/> selects
+    /// PreventDatabaseUnload. That is a default, not a mandate: a workload busy enough never to go
+    /// idle doesn't need the sentinel, so an explicit <see cref="DbMode.Standard"/> is honored
+    /// (with a performance-only warning from DatabaseContext). The single-connection modes have no
+    /// purpose on LocalDB and still resolve to PreventDatabaseUnload. Non-LocalDB SQL Server is an
+    /// ordinary full server database and falls through to the base implementation.
+    /// (Ported from 3.0 b356af1.)
     /// </remarks>
     public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb)
     {
         if (isLocalDb)
         {
-            return (DbMode.PreventDatabaseUnload, "LocalDB requires PreventDatabaseUnload");
+            if (requested == DbMode.Standard)
+            {
+                return (DbMode.Standard, string.Empty);
+            }
+
+            return requested == DbMode.Best
+                ? (DbMode.PreventDatabaseUnload, "LocalDB: Best selects PreventDatabaseUnload")
+                : (DbMode.PreventDatabaseUnload, "LocalDB requires PreventDatabaseUnload");
         }
 
         return base.CoerceConnectionMode(requested, connectionString, isLocalDb);

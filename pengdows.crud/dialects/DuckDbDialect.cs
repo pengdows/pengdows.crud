@@ -75,9 +75,34 @@ internal class DuckDbDialect : SqlDialect
     }
 
     /// <inheritdoc />
+    /// <remarks>
+    /// Unlike SqliteDialect, an explicit <see cref="DbMode.Standard"/> request is honored rather
+    /// than coerced (<c>allowStandard: true</c>) — DuckDB is documented by its own vendor as
+    /// supporting concurrent connections/transactions, so a caller who has read that documentation
+    /// can opt in deliberately. <see cref="DbMode.Best"/> still resolves to SingleWriter. See
+    /// <see cref="DescribeStandardModeRisk"/> for the risk warning surfaced when this happens.
+    /// (Ported from 3.0 b356af1.)
+    /// </remarks>
     public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb) =>
-        CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString));
+        CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString), allowStandard: true);
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// DuckDB's optimistic concurrency control lets disjoint-row concurrent writers through, but
+    /// aborts a same-row write-write conflict ("Conflict on update!"), which this dialect
+    /// classifies as a serialization failure. Confirmed live on 3.0 (b356af1).
+    /// </remarks>
+    internal override string DescribeStandardModeRisk() =>
+        "DuckDB documents support for concurrent connections/transactions, and disjoint-row " +
+        "writers genuinely do proceed cleanly — but this was CONFIRMED LIVE to fail for " +
+        "same-row/same-resource contention: concurrent writers to the same row can throw " +
+        "SerializationConflictException (\"TransactionContext Error: Conflict on update!\"). " +
+        "pengdows.crud's SingleWriter mode prevents this (verified live: 20 concurrent same-row " +
+        "updates through one shared DatabaseContext, zero conflicts, all 20 applied). Standard " +
+        "mode is honored here because it was explicitly requested, but expect intermittent " +
+        "serialization-conflict errors under real write contention unless you serialize " +
+        "conflicting writes yourself.";
 
     public override string ParameterMarker => "$";
 

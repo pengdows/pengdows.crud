@@ -34,10 +34,14 @@ public class DbModeTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Arrange - SQLite/DuckDB containers use SingleWriter mode, others use Standard
-            var expectedMode = provider is SupportedDatabase.Sqlite or SupportedDatabase.DuckDB
-                ? DbMode.SingleWriter
-                : DbMode.Standard;
+            // Arrange - fixture contexts use Best: SQLite/DuckDB resolve to SingleWriter, Firebird to
+            // PreventDatabaseUnload (a sentinel per pool, never used for work), others to Standard
+            var expectedMode = provider switch
+            {
+                SupportedDatabase.Sqlite or SupportedDatabase.DuckDB => DbMode.SingleWriter,
+                SupportedDatabase.Firebird => DbMode.PreventDatabaseUnload,
+                _ => DbMode.Standard
+            };
             Assert.Equal(expectedMode, context.ConnectionMode);
 
             var helper = CreateTableGateway(context);

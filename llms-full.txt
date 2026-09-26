@@ -293,9 +293,11 @@ public int Version { get; set; }
 | Operation | Behavior |
 |-----------|----------|
 | **Create** | If version is null/0, automatically set to 1 |
-| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
+| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion`; on success writes the new value (`current + 1`) back into the entity |
 
-**Conflict detection:** `UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process).
+**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE` and Firebird `UPDATE OR INSERT` cannot detect a stale version.
+
+**Write-back:** after a successful `UpdateAsync`/`BatchUpdateAsync` the entity's numeric `[Version]` is set to the incremented value, so the same instance can be updated again. Opaque `byte[]`/`RowVersion` versions are DB-generated and are not written back; `UpsertAsync` doesn't write back either (rows affected can't tell an insert from an update).
 
 ## Upsert Behavior
 
@@ -762,7 +764,7 @@ MySQL/PostgreSQL suites.
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite = SingleWriter
+8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite = SingleWriter, LocalDB/Firebird = PreventDatabaseUnload (explicit `Standard` always honored)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** — incompatible with connection management, use `Context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations
@@ -2344,12 +2346,13 @@ await conn.DisposeAsync();  // Returns to provider pool
 | SQLite | `Data Source=:memory:` (isolated) | `SingleConnection` | **REQUIRED** - Each `:memory:` = separate database |
 | SQLite | File-based (`mydb.db`) | `SingleWriter` | **OPTIMAL** - Prevents lock contention, WAL allows many readers + one writer |
 | PostgreSQL | Any | `Standard` | **OPTIMAL** - Full server, high concurrency, provider pooling |
-| SQL Server | LocalDB | `PreventDatabaseUnload` | **REQUIRED** - Prevents instance unload |
+| SQL Server | LocalDB | `PreventDatabaseUnload` | **DEFAULT** (Best) - Prevents instance unload; explicit `Standard` honored with a performance warning |
+| Firebird | Any | `PreventDatabaseUnload` | **DEFAULT** (Best) - Keeps a sentinel per pool so `LINGER=0` doesn't discard the page cache; every explicit mode honored |
 
 **Coercion** (forced mode change):
 - SQLite `:memory:` + Standard → **Coerced to SingleConnection** (correctness)
 - SQLite file + Standard → **Coerced to SingleWriter** (safety, prevents SQLITE_BUSY)
-- Firebird embedded → **Not coerced** — `FirebirdDialect` deliberately doesn't override `CoerceConnectionMode`, so `Best` resolves to `Standard` as for any client-server engine; `PreventDatabaseUnload` remains available as an explicit opt-in
+- Firebird (embedded or client-server) → **Not coerced**; `Best` selects `PreventDatabaseUnload` and every explicit mode is honored
 
 **Mode Mismatch Warnings** (safe but suboptimal):
 - PostgreSQL + SingleConnection → Logs warning (limits concurrency unnecessarily)
@@ -3041,13 +3044,13 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 
 **When it's correct**:
 - SQLite `:memory:` → **REQUIRED** (each connection = separate database)
-- Firebird embedded → **NOT REQUIRED**; embedded Firebird behaves like a client-server database, so `Best` resolves to `Standard` and work can use separate attachments
+- Firebird embedded → **NOT REQUIRED**; embedded Firebird behaves like a client-server database, so `Best` resolves to `PreventDatabaseUnload` (sentinels only) and work uses separate attachments
 - Small embedded databases → **OPTIMAL** (no connection overhead)
 
 **When it's suboptimal**:
 - PostgreSQL, SQL Server, MySQL → Use Standard instead (supports concurrency)
 
-**Correct**: SingleConnection is the **right choice** for certain databases. It is a disposable-data lifetime requirement for SQLite/DuckDB `:memory:`; embedded Firebird is not coerced into it (Best resolves to Standard) and can use SingleConnection only as an explicit specialized deployment shape. It is not a general high-concurrency mode.
+**Correct**: SingleConnection is the **right choice** for certain databases. It is a disposable-data lifetime requirement for SQLite/DuckDB `:memory:`; embedded Firebird is not coerced into it (Best resolves to PreventDatabaseUnload) and can use SingleConnection only as an explicit specialized deployment shape. It is not a general high-concurrency mode.
 
 ### 7. "Best mode always selects Standard"
 
@@ -3058,6 +3061,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 - SQLite `:memory:` → SingleConnection (required for correctness)
 - SQLite file → SingleWriter (optimal for WAL)
 - SQL Server LocalDB → PreventDatabaseUnload (prevents unload)
+- Firebird → PreventDatabaseUnload (keeps the page cache warm under `LINGER=0`)
 
 **Correct**: Best = "most functional safe mode for this specific database".
 
@@ -3496,25 +3500,24 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
 
 ### PreventDatabaseUnload
 
-**PreventDatabaseUnload exists for exactly one reason, and it has nothing to do with performance.** It is not a health check, TCP keepalive, periodic ping, warmed working connection, or concurrency mode. It retains a single passive sentinel connection solely to prevent a target database from unloading, deactivating, closing, or pausing.
+**PreventDatabaseUnload exists for exactly one reason, and it has nothing to do with performance.** It is not a health check, TCP keepalive, periodic ping, warmed working connection, or concurrency mode. It retains a passive sentinel connection per enabled pool solely to prevent a target database from unloading, deactivating, closing, or pausing.
 
 The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connection late and closes it early — every operation gets a fresh connection from the pool and releases it back immediately after. That's normally harmless, because the ADO.NET connection pool keeps the underlying physical connections warm behind the scenes. But **SQL Server LocalDB is not a normal server** — it's a lightweight, self-managed engine process that watches its own connection count and **automatically unloads the database (shuts the engine instance down) once it observes zero active connections for a while**. If pengdows.crud used plain Standard mode against LocalDB, a quiet period (no requests for a stretch) would let the pool drain to zero open connections, LocalDB would notice and unload the database, and the *next* request would pay the cost of LocalDB re-launching and re-attaching the database file before it could even open a connection.
 
-The mode retains exactly one sentinel connection: the connection opened during construction for dialect detection is kept open (`DatabaseContext.PersistentConnection`) instead of being disposed. **The sentinel never executes application commands, opens transactions, or hands work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode — and, because it is never used for work, session settings are not applied to it. The sentinel is attached to a pinned governor slot, so effective working capacity is the configured capacity minus the retained sentinel.
+The mode retains one sentinel connection per enabled pool: the connection opened during construction for dialect detection is kept open instead of being disposed (it is the writer-pool sentinel on a read-write context, the reader-pool sentinel on a read-only one), and when a dedicated `ReadOnlyConnectionString` is configured on a read-write context a second sentinel is opened for the reader pool. **The sentinel never executes application commands, opens transactions, or hands work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode — and, because it is never used for work, session settings are not applied to it. Each sentinel holds one permit from its own pool's governor, so effective working capacity per pool is the configured capacity minus its sentinel (which is why enabled pools are raised to at least 2 — see `docs/connection-pooling.md`).
 
-- `Best` auto-selects it **only** for SQL Server LocalDB. Other engines can have an idle-triggered reconnect/reactivation cost too (for example Firebird discarding a database's page cache when its last attachment closes under the default `LINGER` setting, Db2 deactivating an implicitly activated database, or SQL Server with `AUTO_CLOSE` explicitly turned on) — but a possible cost is not, by itself, sufficient reason to make `PreventDatabaseUnload` an auto-selected default for them. See "Why auto-selection stays LocalDB-only" below.
-- **Why auto-selection stays LocalDB-only**: a heavily-trafficked deployment may never actually drain its connection pool to zero, so an idle-unload cost never materializes in practice — while the sentinel's permit is paid unconditionally regardless. And a deployment deliberately built to scale-to-zero for cost reasons (genuinely cost-optimized serverless products like Azure SQL serverless or Aurora Serverless) would have that intentional behavior silently defeated by a forced sentinel. Only the operator knows which situation applies to their own deployment. So for Firebird, Db2, and SQL Server with `AUTO_CLOSE`, `PreventDatabaseUnload` stays a fully-supported, explicitly-honored **knob** — never an auto-selected default — and `Best` resolves to `Standard` for all of them, exactly like any other full-server database. LocalDB alone is the exception: there is no production LocalDB deployment shape where the auto-shutdown behavior is wanted, so it is selected unconditionally (see the LocalDb coercion rule below).
-- Extending the auto-selection list to a new database requires clearing BOTH bars: (1) empirical proof against a live engine showing a real reconnect cost, AND (2) a considered answer to "does essentially every deployment of this database genuinely want protection against this, with no real cost/tradeoff to weigh" — matching LocalDB, not the Firebird/Db2/SQL-Server-`AUTO_CLOSE` cases. Clearing the first bar alone is not sufficient.
-- There is a single sentinel per context, even when separate read and write connection strings are configured. The sentinel is not health-checked or replaced after construction (see §6).
+- `Best` auto-selects it for **SQL Server LocalDB** and **Firebird** (embedded and client-server). Firebird's default `LINGER` discards the database's page cache when its last attachment closes; the testbed's `DbMode.SentinelPreventsUnload` probe measured a sentinel saving ~7-10ms per cold checkout on live Firebird. Other engines with an idle-triggered cost (Db2 implicit activation/deactivation, SQL Server with `AUTO_CLOSE` explicitly on) stay knob-only: `Best` resolves to `Standard` for them.
+- **`Best` is a default, not a mandate.** Wherever `Best` selects `PreventDatabaseUnload`, an explicit `Standard` request is always honored: a deployment busy enough never to drain its pool doesn't need the sentinel, and one deliberately built to scale to zero must not have that defeated. Firebird honors every explicit mode; LocalDB honors `Standard` (the single-connection modes have no purpose there and resolve to `PreventDatabaseUnload`), with a performance-only warning.
+- Extending `Best`'s auto-selection to another database requires empirical proof against a live engine (the testbed probe) and a considered maintainer decision; a documented or plausible cost alone is not enough.
+- There is one sentinel per enabled pool: the writer pool, plus the reader pool when a dedicated `ReadOnlyConnectionString` is configured (a read-only context has only the reader-pool sentinel). A sentinel that is found Broken or Closed is replaced before the next connection-requiring operation (see §6).
 
 ### SingleConnection
 
 - Semantics: One pinned connection handles everything — reads, writes, transactions.
 - Threadsafe via `RealAsyncLocker`.
 - Used for: SQLite/DuckDB `:memory:` and explicitly selected specialized single-connection
-  deployments. Durable embedded Firebird can use `PreventDatabaseUnload` as an explicit,
-  operator-chosen alternative (not an automatic selection — see the PreventDatabaseUnload
-  section above).
+  deployments. Durable Firebird (embedded or client-server) gets `PreventDatabaseUnload` from
+  `Best` (see the PreventDatabaseUnload section above), not SingleConnection.
 - For SQLite/DuckDB `:memory:`, this is primarily a testing, example, or ephemeral-scratch
   mode. The database is owned by the connection; if that connection closes, its contents
   cannot be recovered by opening another connection.
@@ -3563,9 +3566,13 @@ The mode retains exactly one sentinel connection: the connection opened during c
 
 - SingleWriter (default for Best)
 - SingleConnection (allowed alternative)
-- Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log — SQLite and DuckDB
-  stay hard-coerced with no opt-out; see `SqlDialect.CoerceEmbeddedSingleWriterMode`'s
-  `allowStandard` parameter (neither dialect sets it).
+- PreventDatabaseUnload → coerced to SingleWriter with a Warning log (the mode has no meaning for a
+  file-based embedded engine).
+- Standard → SQLite: coerced to SingleWriter with a Warning log (hard-coerced, no opt-out).
+  DuckDB: honored, because DuckDB documents concurrent connections/transactions, with a risk
+  warning (`DuckDbDialect.DescribeStandardModeRisk`): same-row concurrent writers can fail with
+  `SerializationConflictException`, which SingleWriter prevents. See
+  `SqlDialect.CoerceEmbeddedSingleWriterMode`'s `allowStandard` parameter.
 
 ### Allowed for Access file-based:
 
@@ -3609,9 +3616,11 @@ The mode retains exactly one sentinel connection: the connection opened during c
   surfaced to callers. **`SingleWriter` is the only mode confirmed both correct and fully
   concurrent for Access.**
 
-### LocalDb: `Best` and every explicit request — including `Standard` — coerce to PreventDatabaseUnload. `SqlServerDialect.CoerceConnectionMode` forces it unconditionally for LocalDB ("LocalDB requires PreventDatabaseUnload"); there is no opt-out. An explicit non-`Best` request that gets coerced is logged at Warning (see Logging below).
+### LocalDb: `Best` selects PreventDatabaseUnload. An explicit `Standard` is honored, with a performance-only warning (LocalDB's idle auto-shutdown isn't masked). Other explicit requests (`SingleWriter`, `SingleConnection`) resolve to PreventDatabaseUnload and are logged at Warning (see Logging below).
 
-### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2, Firebird): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. Firebird (default `LINGER`), Db2 (implicit database activation/deactivation), and SQL Server (with `AUTO_CLOSE`) can each unload a database once its last connection closes, but `PreventDatabaseUnload` is deliberately a knob for the operator to reach for, not an auto-selected default — see the PreventDatabaseUnload section above for why.
+### Firebird (embedded or client-server): `Best` selects PreventDatabaseUnload (one sentinel per pool). Every explicit choice — including `Standard` — is honored as-is, no warning logged.
+
+### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. Db2 (implicit database activation/deactivation) and SQL Server (with `AUTO_CLOSE`) can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
 
 ### FakeDb: no special case. It emulates a real dialect via `EmulatedProduct` and follows all the above rules.
 
@@ -3678,7 +3687,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Transaction start: `BeginTransaction()` eagerly opens the connection and errors surface immediately.
 - Persistent modes (PreventDatabaseUnload/SingleConnection): if a required connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
-- **After construction, neither persistent mode recreates its long-lived connection.** For `PreventDatabaseUnload` this only affects the unload protection — the sentinel is never used for work, so a dropped sentinel does not break reads or writes, which keep using their own ephemeral connections; the protection is simply lost until the context is recreated. `SingleConnection` cannot safely recreate a connection for disposable `:memory:` databases; a replacement would be a different empty database.
+- **`PreventDatabaseUnload` repairs a lost sentinel lazily.** At the top of every `GetConnection`/`GetConnectionAsync`, any sentinel whose state is `Broken` or `Closed` is disposed (releasing its governor permit) and replaced by a freshly opened connection that takes a new permit from the same pool, with a warning logged. There is no background monitor, so the guarantee is "repaired before the next operation", not continuous; a dropped sentinel never breaks reads or writes, which use their own ephemeral connections. A repair that races context disposal disposes its replacement instead of installing it.
+- **`SingleConnection` never recreates its pinned connection.** It cannot safely recreate a connection for disposable `:memory:` databases; a replacement would be a different empty database.
 
   **For `:memory:` SQLite/DuckDB, this isn't a missing feature — it's unrepairable in principle, not just in the current implementation.** The entire database lives only inside that one connection; there is no separate file or server for a replacement connection to reconnect to. Opening a *new* connection to the same `:memory:` connection string doesn't recover the old data, it silently creates a brand-new, empty database — which would be a much worse failure mode than the current loud "every operation now fails" behavior. So for `:memory:` specifically, treat `SingleConnection` mode as "the data does not survive a connection break," full stop, not as a gap to fix.
 
@@ -3686,10 +3696,12 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 ## 7. Heuristics & Tests
 
-- Explicit Standard on embedded → coerced (never throw):
+- Explicit Standard on embedded (never throw):
   - SQLite/DuckDB `:memory:` → SingleConnection
-  - SQLite/DuckDB file-based → SingleWriter
-- Firebird (embedded or client-server) → treated as an ordinary full server database; `Best` and every explicit choice (including `PreventDatabaseUnload`) resolve/honor as requested, no coercion either way.
+  - SQLite file-based → SingleWriter
+  - DuckDB/Access file-based → honored, with a risk warning
+- Firebird (embedded or client-server) → `Best` selects PreventDatabaseUnload; every explicit choice is honored.
+- LocalDB → `Best` selects PreventDatabaseUnload; explicit `Standard` honored with a performance warning.
 - Unknown product with Best → Standard.
 
 ## 8. Metrics & Limits
@@ -3720,7 +3732,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 **Best practices:**
 - `Standard`, `PreventDatabaseUnload`, and `SingleWriter` are production-supported modes for the deployment shapes where their lifecycle and concurrency policies fit. This includes durable Firebird deployments, subject to the provider's connection and concurrency constraints.
-- `SingleConnection` against SQLite/DuckDB `:memory:` is **not a persistence or recovery mode** — it is intended there for tests and ephemeral scratch data. The limitation is structural: the database exists only inside that connection and cannot survive a process restart or dropped connection. Durable-storage Firebird embedded can explicitly choose `PreventDatabaseUnload` if the operator wants it (not an automatic selection); `SingleConnection` remains a separate, explicit specialized deployment shape.
+- `SingleConnection` against SQLite/DuckDB `:memory:` is **not a persistence or recovery mode** — it is intended there for tests and ephemeral scratch data. The limitation is structural: the database exists only inside that connection and cannot survive a process restart or dropped connection. Durable Firebird gets `PreventDatabaseUnload` from `Best`; `SingleConnection` remains a separate, explicit specialized deployment shape.
 - Each `DatabaseContext` can be safely used as a singleton (via DI or subclassing).
 
 **Timeouts:**
@@ -4484,7 +4496,12 @@ individual tenant context is torn down, and `GetContext`/`AcquireLease` call `Th
 on entry — so a call that *starts* after shutdown begins reliably observes
 `ObjectDisposedException`. A call that had already passed that check and is blocked on an
 in-flight construction is the creation-race case described above: it may still receive a context
-that the shutdown path disposes as soon as construction completes.
+that the shutdown path disposes as soon as construction completes. `Dispose()` hands that
+in-flight construction to a background work item (it never blocks on someone else's
+construction), so the orphaned context is disposed shortly *after* `Dispose()` returns.
+`DisposeAsync()` instead awaits the in-flight construction — without blocking any thread — and
+disposes the resulting context before it completes, so after `await registry.DisposeAsync()` no
+tenant context the registry created is left undisposed.
 
 ## Source: `docs/supported-databases.md`
 # Supported Databases
@@ -4940,6 +4957,7 @@ This keeps generated statements within provider limits without exposing a user-c
 
 - Batch insert uses a multi-row statement only when the dialect advertises `SupportsBatchInsert`; otherwise the gateway falls back to one container per entity. The multi-row shape is dialect-owned (`BuildBatchInsertSql`): most dialects emit `INSERT ... VALUES (...), (...)`; Oracle overrides it to emit `INSERT ALL INTO ... VALUES (...) ... SELECT 1 FROM DUAL`.
 - Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity. As of this writing, `SupportsBatchUpdate` is `true` for PostgreSQL/CockroachDB/YugabyteDB (`UPDATE ... FROM (VALUES ...)`), SQL Server (`MERGE ... USING (VALUES ...)`), and Snowflake (`UPDATE ... FROM (VALUES ...)`, no target alias). All other dialects — including Oracle — fall back to one update per entity. `PrimaryKeyTableGateway<TEntity>` batch update always builds one update container per entity.
+- `TableGateway<T,TId>` batch update keys its WHERE/match condition on the `[Id]` column on every path, exactly like single-row `UpdateAsync`; `[PrimaryKey]` columns are ordinary updateable SET columns, and `[CreatedBy]`/`[CreatedOn]` are never written. An entity with no `[Id]` throws `NotSupportedException` — use `PrimaryKeyTableGateway<TEntity>` for `[PrimaryKey]`-only entities.
 - Batch upsert uses multi-row `ON CONFLICT` or `ON DUPLICATE KEY` only when the connected product advertises those capabilities; otherwise it falls back to one `BuildUpsert(...)` container per entity.
 - Batch delete by IDs uses chunked `WHERE ... IN (...)`.
 - Batch delete by entity collection builds one delete container per entity because each delete is keyed by the mapped `[Id]` or `[PrimaryKey]` values from that entity.
@@ -5406,18 +5424,19 @@ disposed, and what exception a caller gets for using something after it's gone. 
 | `PreventDatabaseUnload` sentinel | Nothing beyond its own connection and the governor permit it holds for the context's lifetime | Never runs application work — see `docs/connection-pooling.md` and CLAUDE.md's `PreventDatabaseUnload` section |
 | `ITenantContextRegistry` (`TenantContextRegistry`) | Every `IDatabaseContext` it has created, for as long as it's cached | Nothing beyond that — see `docs/connection/multitenancy.md` for the full tenant lifecycle contract |
 
-**There is no public raw `DbConnection` accessor — but there is one raw `DbDataSource`
-accessor.** `IDatabaseContext` (`pengdows.crud.abstractions/IDatabaseContext.cs`) exposes no member
+**There is no supported public raw connection accessor.** `IDatabaseContext`
+(`pengdows.crud.abstractions/IDatabaseContext.cs`) exposes no member
 that returns an open `DbConnection`; connection acquisition (`GetConnection`/`GetConnectionAsync`)
 is `internal`, so the ordinary way to run a command is through
 `CreateSqlContainer`/`BeginTransaction`, both of which route through admission control
 (`PoolGovernor`) and the tracked-connection/reader-lease machinery. `IDatabaseContext` does,
-however, expose `DbDataSource? DataSource { get; }` — the writer-side data source the context was
+however, retain an obsolete `DbDataSource? DataSource { get; }` — the writer-side data source the context was
 built with (a caller-supplied one such as `NpgsqlDataSource`, or one the context created itself;
 `null` when there is none), and `ITransactionContext` forwards its parent context's value. A
 connection created from it via `DataSource.CreateConnection()` is outside the governed system
 entirely: no admission limits, no session settings, no metrics attribution, and no disposal
-tracking. Treat it as a provider-level escape hatch for interop only, never as an execution path.
+tracking. Do not use it from application code; `PGC027` reports it as an error. Use the context
+execution APIs instead.
 
 ## `PoolGovernor` admission lifecycle
 
@@ -5444,8 +5463,8 @@ state independent of `SafeAsyncDisposableBase.IsDisposed`:
 `DisposeManaged()`/`DisposeManagedAsync()` (sync/async disposal share this structure):
 
 1. Unsubscribe from the metrics collector's own change event.
-2. Dispose the persistent connection, if any (`SingleConnection` pinned connection /
-   `PreventDatabaseUnload` sentinel).
+2. Dispose the persistent connections, if any (`SingleConnection` pinned connection /
+   every `PreventDatabaseUnload` sentinel — one per enabled pool).
 3. Dispose the connection-open coordination primitives (`_connectionOpenLocker`/`_connectionOpenGate`).
 4. **Drain each governor (writer first, then reader) with `PoolAcquireTimeout` as the drain
    timeout, then dispose it** — a *different* use from ordinary slot acquisition, but the same
@@ -7277,8 +7296,7 @@ that you usually shouldn't need to switch on it.
 `IDataSourceInformation` (`pengdows.crud.abstractions/IDataSourceInformation.cs`) is a smaller,
 metadata-flavored subset: detected product name/version, parsed `Version`, quoting characters,
 parameter marker pattern/regex/max length, named/repeated-parameter support, parameter/output
-limits, default-prepare recommendation, procedure wrapping style, SQL-standard compliance level
-(`StandardCompliance`), a handful of DDL-capability
+limits, default-prepare recommendation, procedure wrapping style, and a handful of DDL-capability
 flags (`SupportsDropTableIfExists`, `SupportsTruncateTable`, `SupportsMerge`,
 `SupportsInsertOnConflict`, `SupportsOnDuplicateKey`), fallback-dialect
 status, and `GetCompatibilityWarning()`. Everything on it also appears on `ISqlDialect`, which is
@@ -7322,13 +7340,14 @@ don't call it directly.
 
 This groups the actual capability surface. For per-database values, see
 `docs/supported-databases.md`'s matrix; for the architectural design, see `docs/architecture.md`'s
-"Explicit Capability Properties" section — the base `SqlDialect` derives most `Supports*` defaults
-from the dialect's SQL-standard level (`MaxSupportedStandard`), and individual dialects override
-concrete capabilities explicitly with version-aware logic where that default would be wrong.
+"Explicit Capability Properties" section — query the specific `Supports*` properties rather than
+the legacy SQL-standard heuristic properties, which are retained only for 2.x compatibility.
 
 **Identity & versioning:** `DatabaseType`, `ProductInfo` (`IDatabaseProductInfo`), `IsInitialized`,
-`IsFallbackDialect`, `GetCompatibilityWarning()`, `CanUseModernFeatures`, `HasBasicCompatibility`,
-`MaxSupportedStandard` (a `SqlStandardLevel`).
+`IsFallbackDialect`, `GetCompatibilityWarning()`, `CanUseModernFeatures`, and
+`HasBasicCompatibility`. Do not use `SqlStandardLevel`, `StandardCompliance`, or
+`MaxSupportedStandard`; they are coarse compatibility heuristics retained only for 2.x binary
+compatibility. Query the specific `Supports*` capability instead.
 
 **Parameters & identifiers:** `ParameterMarker`, `SupportsNamedParameters`,
 `SupportsRepeatedNamedParameters`, `SupportsSetValuedParameters`, `MaxParameterLimit`,
@@ -9072,9 +9091,11 @@ The `[Version]` attribute enables optimistic concurrency control:
 | Operation | Behavior |
 |-----------|----------|
 | **Create** | If version is null/0, automatically set to 1 |
-| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
+| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion`; on success writes the new value (`current + 1`) back into the entity |
 
-**Conflict detection:** `UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process).
+**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE` and Firebird `UPDATE OR INSERT` cannot detect a stale version.
+
+**Write-back:** after a successful `UpdateAsync`/`BatchUpdateAsync` the entity's numeric `[Version]` is set to the incremented value, so the same instance can be updated again. Opaque `byte[]`/`RowVersion` versions are DB-generated and are not written back; `UpsertAsync` doesn't write back either (rows affected can't tell an insert from an update).
 
 ## Upsert Behavior
 
@@ -9283,7 +9304,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite/DuckDB `Standard` -> `SingleWriter`, LocalDB -> `PreventDatabaseUnload`)
+8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite `Standard` -> `SingleWriter`); where `Best` picks `PreventDatabaseUnload` (LocalDB, Firebird) an explicit `Standard` is honored
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** — incompatible with connection management, use `ctx.BeginTransaction()`
 11. **ISqlContainer execution methods return ValueTask** — not Task, for reduced allocations
@@ -9375,7 +9396,7 @@ The framework provides intelligent, adaptive connection strategies to ensure opt
 - **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string:
     - `:memory:` SQLite/DuckDB → `SingleConnection`
     - File-based SQLite/DuckDB (and shared-cache in-memory SQLite) and Microsoft Access → `SingleWriter`
-    - SQL Server LocalDB → `PreventDatabaseUnload` (forced for LocalDB regardless of the requested mode; `KeepAlive` is an `[Obsolete]` alias)
+    - SQL Server LocalDB and Firebird → `PreventDatabaseUnload` (a sentinel per pool; an explicit `Standard` is always honored; `KeepAlive` is an `[Obsolete]` alias)
     - Everything else → `Standard`
 - **`ModeLockTimeout`:** Configurable timeout (`TimeSpan?`) for internal mode locks and transaction completion locks; `null` means wait indefinitely.
 
@@ -9539,9 +9560,11 @@ public int Version { get; set; }
 | Operation | Behavior |
 |-----------|----------|
 | **Create** | If version is null/0, automatically set to 1 |
-| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
+| **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion`; on success writes the new value (`current + 1`) back into the entity |
 
-**Conflict detection:** `UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process).
+**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE` and Firebird `UPDATE OR INSERT` cannot detect a stale version.
+
+**Write-back:** after a successful `UpdateAsync`/`BatchUpdateAsync` the entity's numeric `[Version]` is set to the incremented value, so the same instance can be updated again. Opaque `byte[]`/`RowVersion` versions are DB-generated and are not written back; `UpsertAsync` doesn't write back either (rows affected can't tell an insert from an update).
 
 ## CRITICAL: Audit Field Behavior
 
