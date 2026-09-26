@@ -155,7 +155,7 @@ public abstract class TestContainer : SafeAsyncDisposableBase, ITestContainer
             }
         }
 
-        throw new TimeoutException($"Could not connect after {numberOfSecondsToWait}s.");
+        throw new TimeoutException($"Could not connect after {numberOfSecondsToWait}s. Last error: {lastError}");
     }
 
     protected virtual ValueTask DisposeAsyncCore()

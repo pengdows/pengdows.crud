@@ -65,8 +65,19 @@ internal static class InformixNativeLibraryBootstrap
     /// fix is to fix the PATH here, early, and let <c>InformixTestContainer</c> rewrite that
     /// same file's contents later once the real port is known — only the env var's value needs
     /// to be stable from first contact onward, not the file's content.
+    /// <para>
+    /// A process that can't re-exec itself (vstest's testhost) must have INFORMIXDIR and
+    /// INFORMIXSQLHOSTS exported before it starts: on Unix, Environment.SetEnvironmentVariable only
+    /// updates .NET's own copy of the environment, never the native one the client's getenv() reads
+    /// (documented .NET behavior; observed as Informix -23101 "Unspecified System Error" under
+    /// vstest when only LD_LIBRARY_PATH was exported). An INFORMIXSQLHOSTS
+    /// already set at startup is therefore used as this path.
+    /// </para>
     /// </summary>
-    public static readonly string SqlHostsPath = Path.Combine(Path.GetTempPath(), "pengdows-informix-sqlhosts");
+    public static readonly string SqlHostsPath =
+        Environment.GetEnvironmentVariable("INFORMIXSQLHOSTS") is { Length: > 0 } exported
+            ? exported
+            : Path.Combine(Path.GetTempPath(), "pengdows-informix-sqlhosts");
 
     public static void Register()
     {

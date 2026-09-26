@@ -17,6 +17,20 @@ if [[ -z "${FIREBIRD_EMBEDDED_CLIENT_LIBRARY:-}" ]]; then
   rm -f "${firebird_env}"
 fi
 
+# Informix.Net.Core-lnx's native client (libthcli15a.so) resolves its own dependencies through
+# LD_LIBRARY_PATH, which glibc reads only at process start, and reads INFORMIXDIR (its CSDK tree:
+# GLS locale and message files) and INFORMIXSQLHOSTS through native getenv(), which never sees
+# values a .NET process sets for itself. The testbed re-executes itself with all three; vstest's
+# testhost cannot, so export them here. The native tree is identical for both target frameworks.
+# Db2 needs nothing here: its bootstrap loads libdb2.so by absolute path.
+for tfm in net8.0 net10.0; do
+  informix_lib="${root}/pengdows.crud.IntegrationTests/bin/Release/${tfm}/native/lib"
+  LD_LIBRARY_PATH="${informix_lib}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+done
+export LD_LIBRARY_PATH
+export INFORMIXDIR="${INFORMIXDIR:-${root}/pengdows.crud.IntegrationTests/bin/Release/net10.0/native}"
+export INFORMIXSQLHOSTS="${INFORMIXSQLHOSTS:-${TMPDIR:-/tmp}/pengdows-informix-sqlhosts}"
+
 dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" \
   -c Release \
   --results-directory "${results}" \
