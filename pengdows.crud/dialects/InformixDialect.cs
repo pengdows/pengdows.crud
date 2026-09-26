@@ -166,6 +166,38 @@ internal sealed class InformixDialect : SqlDialect
     public override bool IsCheckConstraintViolation(DbException ex) =>
         Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 530;
 
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        // CONFIRMED live (testbed): Informix.Net.Core has no DbType.DateTimeOffset mapping
+        // ("No mapping exists from DbType DateTimeOffset to a known IfxType", thrown from
+        // IfxParameter.set_DbType before any later conversion can run), and Informix has no
+        // offset-aware temporal type. Store the UTC instant as a plain DateTime, matching
+        // Db2/Sybase/Firebird/InterBase. Null is remapped too: the driver rejects the DbType itself.
+        if (type == DbType.DateTimeOffset)
+        {
+            object coerced = value is DateTimeOffset dto
+                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
+                : DBNull.Value;
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+        }
+
+        // INTEGER's and SMALLINT's smallest value is their NULL representation (IBM docs: ranges
+        // -2147483647..2147483647 and -32767..32767), so the driver refuses to bind int.MinValue as
+        // an Int32 at all ("Error in assignment", confirmed live even for a BIGINT column). Bind those
+        // valid CLR values one size wider; a column too narrow then gets the server's range error.
+        if (type == DbType.Int32 && value is int i && i == int.MinValue)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.Int64, (long)i);
+        }
+
+        if (type == DbType.Int16 && value is short s && s == short.MinValue)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.Int32, (int)s);
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
+
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
         var code = TryGetProviderErrorCode(ex) is { } raw ? Math.Abs(raw) : (int?)null;
