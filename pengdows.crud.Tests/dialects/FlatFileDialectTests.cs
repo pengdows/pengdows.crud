@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -63,6 +64,35 @@ public class FlatFileDialectTests
     public void IsEmbeddedSingleWriterEngine_IsTrue()
     {
         Assert.True(Dialect().IsEmbeddedSingleWriterEngine);
+    }
+
+    // pengdows.sql/SqlParser.cs parses SAVEPOINT / RELEASE SAVEPOINT / ROLLBACK TO SAVEPOINT with a
+    // regular or delimited identifier, and DefaultFlatFileQueryExecutor routes them to
+    // FlatFileTransaction.Save/Release/Rollback(name) (FlatFileTransaction.SupportsSavepoints).
+    [Fact]
+    public void Savepoints_AreFullySupported_WithAnsiSyntax()
+    {
+        var d = Dialect();
+
+        Assert.True(d.SupportsSavepoints);
+        Assert.Equal(
+            SavepointCapabilities.Create | SavepointCapabilities.Rollback | SavepointCapabilities.Release,
+            d.SavepointCapabilities);
+        Assert.Equal("SAVEPOINT \"sp1\"", d.GetSavepointSql("sp1"));
+        Assert.Equal("ROLLBACK TO SAVEPOINT \"sp1\"", d.GetRollbackToSavepointSql("sp1"));
+        Assert.Equal("RELEASE SAVEPOINT \"sp1\"", d.GetReleaseSavepointSql("sp1"));
+    }
+
+    [Fact]
+    public async Task TransactionSavepoints_DoNotThrow()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.FlatFile);
+        await using var context = new DatabaseContext("path=/tmp/db;EmulatedProduct=FlatFile", factory);
+        await using var tx = context.BeginTransaction();
+
+        await tx.SavepointAsync("sp1");
+        await tx.RollbackToSavepointAsync("sp1");
+        await tx.ReleaseSavepointAsync("sp1");
     }
 
     // pengdows.sql/SqlLexer.cs tokenizes ":name" as a NamedParameter and

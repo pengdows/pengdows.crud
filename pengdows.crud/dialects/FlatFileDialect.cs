@@ -84,6 +84,16 @@ internal class FlatFileDialect : SqlDialect
     public override string ParameterMarker => ":";
 
     /// <summary>
+    /// <c>pengdows.sql/SqlParser.cs</c> parses the SQL-92 <c>SAVEPOINT name</c>,
+    /// <c>RELEASE SAVEPOINT name</c> and <c>ROLLBACK TO SAVEPOINT name</c> forms (regular or
+    /// delimited identifier), and <c>DefaultFlatFileQueryExecutor</c> routes them to
+    /// <c>FlatFileTransaction.Save/Release/Rollback(name)</c>, which undo staged DML and DDL
+    /// backups since the savepoint. The base ANSI SQL text and full
+    /// <see cref="SqlDialect.SavepointCapabilities"/> (Create|Rollback|Release) apply unchanged.
+    /// </summary>
+    public override bool SupportsSavepoints => true;
+
+    /// <summary>
     /// pengdows.flatfile has no stored-procedure/trigger/control-flow support at all (confirmed:
     /// its README lists this under "Not supported"). <see cref="ProcWrappingStyle.None"/> is the
     /// base default already, but this override documents that the value was verified, not left
