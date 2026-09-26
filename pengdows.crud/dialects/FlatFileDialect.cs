@@ -93,6 +93,26 @@ internal class FlatFileDialect : SqlDialect
     /// </summary>
     public override bool SupportsSavepoints => true;
 
+    /// <summary>
+    /// <c>pengdows.sql/SqlParser.cs</c> parses the SQL:2008 <c>OFFSET n ROWS FETCH {FIRST|NEXT} n ROWS
+    /// ONLY</c> tail (<c>ParseOffset</c>/<c>ParseFetchFirst</c>) and has no <c>LIMIT</c> clause: the
+    /// real provider rejects <c>SELECT * FROM t LIMIT 1</c> ("Expected token 'EndOfInput' ... found
+    /// 'NumericLiteral'"). <see cref="SqlDialect.AppendPaging"/> already emits OFFSET/FETCH because
+    /// <see cref="SqlDialect.SupportsOffsetFetch"/> is true.
+    /// </summary>
+    public override bool SupportsLimitOffset => false;
+
+    /// <summary>
+    /// The base query ends in the generic <c>LIMIT 1</c>, which pengdows.flatfile rejects (see
+    /// <see cref="SupportsLimitOffset"/>); use the standard <c>FETCH FIRST 1 ROWS ONLY</c>.
+    /// </summary>
+    public override string GetNaturalKeyLookupQuery(string tableName, string idColumnName,
+        IReadOnlyList<string> columnNames, IReadOnlyList<string> parameterNames)
+    {
+        var query = base.GetNaturalKeyLookupQuery(tableName, idColumnName, columnNames, parameterNames);
+        return query.Replace(" LIMIT 1", " FETCH FIRST 1 ROWS ONLY", StringComparison.Ordinal);
+    }
+
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
 
     /// <summary>

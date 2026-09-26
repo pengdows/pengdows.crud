@@ -97,6 +97,31 @@ public class FlatFileDialectTests
         await tx.ReleaseSavepointAsync("sp1");
     }
 
+    // pengdows.sql/SqlParser.cs has ParseOffset/ParseFetchFirst (OFFSET n ROWS FETCH {FIRST|NEXT}
+    // n ROWS ONLY) and no LIMIT clause: "SELECT * FROM t LIMIT 1" fails with "Expected token
+    // 'EndOfInput' ... found 'NumericLiteral'" (probed against the real provider).
+    [Fact]
+    public void Paging_IsOffsetFetchOnly()
+    {
+        var d = Dialect();
+
+        Assert.True(d.SupportsOffsetFetch);
+        Assert.False(d.SupportsLimitOffset);
+        var query = new SqlQueryBuilder();
+        d.AppendPaging(query, 10, 5);
+        Assert.Equal(" OFFSET 10 ROWS FETCH NEXT 5 ROWS ONLY", query.ToString());
+    }
+
+    [Fact]
+    public void GetNaturalKeyLookupQuery_UsesFetchFirst_NoLimit()
+    {
+        var d = Dialect();
+
+        var sql = d.GetNaturalKeyLookupQuery("orders", "id", new[] { "order_code" }, new[] { ":p0" });
+
+        Assert.Equal("SELECT \"id\" FROM \"orders\" WHERE \"order_code\" = :p0 FETCH FIRST 1 ROWS ONLY", sql);
+    }
+
     // TransactionCharacteristicsExecutor applies SET TRANSACTION READ ONLY to the current
     // FlatFileTransaction, and DefaultFlatFileQueryExecutor then rejects every mutating statement
     // ("the transaction is READ ONLY"). The setting is per transaction (a new FlatFileTransaction
