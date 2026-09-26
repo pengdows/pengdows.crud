@@ -66,7 +66,9 @@ internal sealed class SybaseExceptionTranslator : IDbExceptionTranslator
             548 => new CheckConstraintViolationException(
                 $"{operationKind} violated a check constraint on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),
-            546 => new ForeignKeyViolationException(
+            // 546: child insert/update with no parent; 547: delete/update of a parent that a child
+            // still references (confirmed live, ASE 16.0).
+            546 or 547 => new ForeignKeyViolationException(
                 $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),
             1205 => new DeadlockException(

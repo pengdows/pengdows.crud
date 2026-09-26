@@ -295,7 +295,7 @@ internal class SybaseDialect : SqlDialect
 
         return number.Value switch
         {
-            2601 or 546 or 548 or 233 => DbErrorCategory.ConstraintViolation,
+            2601 or 546 or 547 or 548 or 233 => DbErrorCategory.ConstraintViolation,
             1205 => DbErrorCategory.Deadlock,
             _ => base.ClassifyException(exception)
         };
@@ -313,7 +313,8 @@ internal class SybaseDialect : SqlDialect
         var constraintKind = number.Value switch
         {
             2601 => DbConstraintKind.Unique,
-            546 => DbConstraintKind.ForeignKey,
+            // 546: child row without a parent; 547: parent row still referenced (confirmed live).
+            546 or 547 => DbConstraintKind.ForeignKey,
             233 => DbConstraintKind.NotNull,
             548 => DbConstraintKind.Check,
             _ => DbConstraintKind.None
