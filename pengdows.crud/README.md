@@ -49,7 +49,7 @@ The repository contains concrete support for:
 - TiDB
 - Snowflake
 - SingleStore (detected at runtime; uses the MySQL dialect)
-- IBM Db2 (LUW tested; z/OS and IBM i should work but are untested)
+- IBM Db2 for Linux/Unix/Windows (LUW) — Db2 for z/OS and Db2 for i are not supported
 - SAP (Sybase) ASE
 - IBM Informix
 - SAP HANA

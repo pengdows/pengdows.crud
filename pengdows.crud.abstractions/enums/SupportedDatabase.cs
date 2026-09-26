@@ -153,8 +153,9 @@ public enum SupportedDatabase
     /// <summary>
     /// IBM Db2. Enterprise RDBMS with strong SQL standard compliance
     /// (<c>FETCH FIRST n ROWS ONLY</c> paging, <c>CALL</c>-style stored procedures).
-    /// Db2 for Linux/Unix/Windows (LUW) is specifically supported and tested; Db2 for z/OS and
-    /// Db2 for i should work but have not been tested.
+    /// Only Db2 for Linux/Unix/Windows (LUW) is supported. Db2 for z/OS and Db2 for i are separate
+    /// IBM products whose features differ from LUW's (transactions among them) and are not supported;
+    /// a Db2 server not recognized as LUW logs a warning.
     /// </summary>
     Db2 = 1 << 14,
 

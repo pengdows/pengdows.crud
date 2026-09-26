@@ -1,4 +1,7 @@
 using System;
+using System.Linq;
+using Microsoft.Extensions.Logging;
+using pengdows.crud.Tests.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -17,7 +20,7 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public class Db2BestModeTests
 {
-    private static DatabaseContext Create(DbMode mode, bool luw)
+    private static DatabaseContext Create(DbMode mode, bool luw, ILoggerFactory? loggerFactory = null)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Db2);
         if (!luw)
@@ -26,11 +29,14 @@ public class Db2BestModeTests
                 new InvalidOperationException("SQL0440N  No authorized routine named \"ENV_GET_INST_INFO\" (z/OS or IBM i)"));
         }
 
-        return new DatabaseContext(new DatabaseContextConfiguration
+        var configuration = new DatabaseContextConfiguration
         {
             ConnectionString = "Server=localhost:50000;Database=testdb;EmulatedProduct=Db2",
             DbMode = mode
-        }, factory);
+        };
+        return loggerFactory == null
+            ? new DatabaseContext(configuration, factory)
+            : new DatabaseContext(configuration, factory, loggerFactory);
     }
 
     [Fact]
@@ -58,5 +64,23 @@ public class Db2BestModeTests
         using var context = Create(requested, luw: true);
 
         Assert.Equal(requested, context.ConnectionMode);
+    }
+
+    // Only Db2 LUW is supported (maintainer decision 2026-09-26: z/OS and IBM i differ in real
+    // features, transactions among them). A Db2 server not recognized as LUW is warned about, not
+    // refused - the LUW check can also fail on a real LUW server for a user who may not run it.
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    public void NonLuwDb2Server_LogsUnsupportedWarning(bool luw, bool expectWarning)
+    {
+        var provider = new ListLoggerProvider();
+        using var loggerFactory = new LoggerFactory(new[] { provider });
+        using var context = Create(DbMode.Best, luw, loggerFactory);
+
+        var warned = provider.Entries.Any(e => e.Level == LogLevel.Warning &&
+                                               e.Message.Contains("only Db2 for Linux/Unix/Windows (LUW) is supported",
+                                                   StringComparison.OrdinalIgnoreCase));
+        Assert.Equal(expectWarning, warned);
     }
 }

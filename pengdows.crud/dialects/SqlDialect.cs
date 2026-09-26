@@ -280,6 +280,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         DatabaseTopology topology) =>
         CoerceConnectionMode(requested, connectionString, topology.IsLocalDb);
 
+    /// <summary>
+    /// A warning DatabaseContext logs when the detected server is a variant of this product that
+    /// pengdows.crud does not support (e.g. a Db2 server that is not Db2 LUW); null when supported.
+    /// Warns rather than refuses: detection can fail on a supported server too.
+    /// </summary>
+    internal virtual string? DescribeUnsupportedTopology(DatabaseTopology topology) => null;
+
     public virtual (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb)
     {

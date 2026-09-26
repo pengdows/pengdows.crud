@@ -148,7 +148,7 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 ### Firebird (embedded or client-server): `Best` selects PreventDatabaseUnload (one sentinel per pool). Every explicit choice — including `Standard` — is honored as-is, no warning logged.
 
-### Db2: on a positively detected Db2 LUW server `Best` selects PreventDatabaseUnload; on any other or unrecognized Db2 server (z/OS, IBM i — untested) it selects Standard. Every explicit choice — including `Standard` — is honored.
+### Db2: on a positively detected Db2 LUW server `Best` selects PreventDatabaseUnload; on any other or unrecognized Db2 server it selects Standard (and a warning is logged: only Db2 LUW is supported). Every explicit choice — including `Standard` — is honored.
 
 ### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. SQL Server with `AUTO_CLOSE` can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
 
