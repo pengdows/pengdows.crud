@@ -590,6 +590,7 @@ CREATE TABLE {tableName} (
             SupportedDatabase.MySql => "DATETIME(6)",
             SupportedDatabase.MariaDb => "DATETIME(6)",
             SupportedDatabase.TiDb => "DATETIME(6)",
+            SupportedDatabase.SingleStore => "DATETIME(6)",
             SupportedDatabase.Db2 => "TIMESTAMP(6)",
             SupportedDatabase.SybaseASE => "BIGDATETIME",
             SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",

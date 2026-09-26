@@ -17,6 +17,7 @@ using testbed.Oracle;
 using testbed.PostgreSQL;
 using testbed.SqlServer;
 using testbed.SapHana;
+using testbed.SingleStore;
 using testbed.InterBase;
 using testbed.Sybase;
 using testbed.TiDB;
@@ -74,6 +75,7 @@ public class ParallelTestOrchestrator
             SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
             SupportedDatabase.InterBase when _includeInterBase => new InterBaseTestContainer(),
             SupportedDatabase.Spanner => new SpannerOmniTestContainer(),
+            SupportedDatabase.SingleStore => new SingleStoreTestContainer(),
             SupportedDatabase.Access when _includeAccess => new AccessTestContainer(),
             _ => null
         };
@@ -395,6 +397,17 @@ public class ParallelTestOrchestrator
                 DatabaseProvider = "Spanner",
                 Container = new SpannerOmniTestContainer(),
                 TestProviderFactory = (db, sp) => new SpannerTestProvider(db, sp)
+            },
+            // SingleStore's own dev image self-issues a free developer license, so no credentials are
+            // needed. No dedicated TestProvider: DatabaseDetectionService tags the connection as
+            // SupportedDatabase.SingleStore (@@memsql_version), and the base TestProvider already
+            // branches on it where SingleStore differs from MySQL (stored-procedure syntax).
+            new()
+            {
+                ContainerName = "SingleStore",
+                DatabaseProvider = "SingleStore",
+                Container = new SingleStoreTestContainer(),
+                TestProviderFactory = (db, sp) => new TestProvider(db, sp)
             },
         };
 
