@@ -2360,6 +2360,20 @@ public partial class DatabaseContext
         var (mode, reason) = dialect is SqlDialect sqlDialect
             ? sqlDialect.CoerceConnectionMode(requested, _connectionString, topology)
             : dialect.CoerceConnectionMode(requested, _connectionString, topology.IsLocalDb);
+        // Best must not override a caller's explicit one-connection pool to make room for a
+        // PreventDatabaseUnload sentinel (CONFIRMED live on Db2: IBM's driver rejects the raised
+        // pool size once the detection connection has created the pool at size 1).
+        if (requested == DbMode.Best && mode == DbMode.PreventDatabaseUnload && dialect is SqlDialect poolDialect)
+        {
+            var configuredMax = _configuredWritePoolSize ??
+                                PoolingConfigReader.GetEffectivePoolConfig(poolDialect, _connectionString).MaxPoolSize;
+            if (configuredMax is < 2)
+            {
+                (mode, reason) = (DbMode.Standard,
+                    $"Best would select PreventDatabaseUnload, but its sentinel needs a second pooled connection and the configured maximum pool size is {configuredMax}; using Standard");
+            }
+        }
+
         LogModeOverride(requested, mode, reason);
         if (dialect is SqlDialect topologyDialect && topologyDialect.DescribeUnsupportedTopology(topology) is { } unsupported)
         {
