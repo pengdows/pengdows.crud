@@ -103,6 +103,15 @@ internal static class InternalSqlDialectExtensions
         return dialect is IInternalSqlDialect internalDialect && internalDialect.MergeMatchedConditionAsUpdateWhere;
     }
 
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>; true for a dialect
+    /// that isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool MergeUpsertReportsSkippedVersionRow(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.MergeUpsertReportsSkippedVersionRow;
+    }
+
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)
     {
         if (dialect is not IInternalSqlDialect internalDialect)

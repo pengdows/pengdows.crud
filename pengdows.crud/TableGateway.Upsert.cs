@@ -79,7 +79,8 @@ public partial class TableGateway<TEntity, TRowID>
             if (_versionColumn != null)
             {
                 var canDetect = dialect.SupportsOnConflictWhere
-                    || (dialect.SupportsMerge && dialect.EmitsAnsiMergeSyntax);
+                    || (dialect.SupportsMerge && dialect.EmitsAnsiMergeSyntax
+                        && dialect.MergeUpsertReportsSkippedVersionRow());
                 if (canDetect)
                 {
                     throw new ConcurrencyConflictException(

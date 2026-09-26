@@ -557,7 +557,8 @@ public partial class TableGateway<TEntity, TRowID>
         //    (SupportsMerge && EmitsAnsiMergeSyntax) — a 0-affected row there is an ordinary no-op
         //    upsert (or a non-version-related skip), not a detectable conflict.
         var versionConflictDetectionApplies = _versionColumn != null &&
-            (dialect.SupportsOnConflictWhere || (dialect.SupportsMerge && dialect.EmitsAnsiMergeSyntax));
+            (dialect.SupportsOnConflictWhere || (dialect.SupportsMerge && dialect.EmitsAnsiMergeSyntax
+                && dialect.MergeUpsertReportsSkippedVersionRow()));
 
         try
         {

@@ -22,6 +22,14 @@ internal interface IInternalSqlDialect : ISqlDialect
     void ConfigureSetValuedParameter(DbParameter parameter, Array value);
 
     /// <summary>
+    /// True when a MERGE upsert whose version-guarded matched branch skips a stale row reports that
+    /// row as 0 rows affected, so the gateways can raise ConcurrencyConflictException. False where
+    /// rows affected can't reveal the skip: Firebird's UPDATE OR INSERT carries no guard, and Sybase
+    /// ASE's @@rowcount counts the matched row even when "WHEN MATCHED AND ..." is false.
+    /// </summary>
+    bool MergeUpsertReportsSkippedVersionRow => true;
+
+    /// <summary>
     /// Renders provider-specific JSON casts for parameter placeholders.
     /// </summary>
     string RenderJsonArgument(string parameterMarker, IColumnInfo column);
