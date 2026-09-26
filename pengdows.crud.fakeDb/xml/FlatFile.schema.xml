@@ -50,8 +50,8 @@
         <IdentifierPattern>^[A-Za-z_][A-Za-z0-9_]*$</IdentifierPattern>
         <IdentifierCase>2</IdentifierCase>
         <OrderByColumnsInSelect>false</OrderByColumnsInSelect>
-        <ParameterMarkerFormat>?</ParameterMarkerFormat>
-        <ParameterMarkerPattern>\?</ParameterMarkerPattern>
+        <ParameterMarkerFormat>:{0}</ParameterMarkerFormat>
+        <ParameterMarkerPattern>:[\p{L}_][\p{L}\p{N}_]*</ParameterMarkerPattern>
         <ParameterNameMaxLength>128</ParameterNameMaxLength>
         <ParameterNamePattern>^[\p{L}_][\p{L}\p{N}_]*$</ParameterNamePattern>
         <QuotedIdentifierPattern>"([^"]|"")+"?</QuotedIdentifierPattern>

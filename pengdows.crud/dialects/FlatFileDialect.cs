@@ -65,11 +65,23 @@ internal class FlatFileDialect : SqlDialect
     public override string? GetReadOnlyConnectionParameter() => "readonly=true";
 
     /// <summary>
-    /// pengdows.flatfile's own SQL grammar supports only positional <c>?</c> parameters — its
-    /// README states this explicitly ("Positional parameters only (?) — no named (@name)
-    /// parameters"). Verified against the engine's real syntax, not assumed.
+    /// pengdows.flatfile binds the ISO SQL <c>:name</c> host-parameter form: <c>pengdows.sql/SqlLexer.cs</c>
+    /// emits a <c>NamedParameter</c> token for <c>:</c> followed by a letter or underscore, and
+    /// <c>BoundPredicateEvaluator.ResolveParameter</c> matches the bare name against
+    /// <c>DbParameter.ParameterName</c> case-insensitively (so a name may be repeated). Positional
+    /// <c>?</c> also works, but one statement cannot mix the two (<c>SqlBinder.BindParameter</c>),
+    /// and <c>@name</c>/<c>$1</c> are rejected as vendor syntax. The old README line "positional
+    /// ? only" was stale. Being a named-parameter dialect also turns off the ODBC-style common
+    /// conversions (bool to Int16, Guid to string, DateTimeOffset to UTC DateTime): the provider's
+    /// <c>ClrTypeMap</c> handles bool/Guid/DateTimeOffset natively, and a BOOLEAN column rejects
+    /// an Int16 <c>1</c>.
     /// </summary>
-    public override bool SupportsNamedParameters => false;
+    public override bool SupportsNamedParameters => true;
+
+    /// <summary>
+    /// See <see cref="SupportsNamedParameters"/>: <c>:name</c>, the same marker as Oracle.
+    /// </summary>
+    public override string ParameterMarker => ":";
 
     /// <summary>
     /// pengdows.flatfile has no stored-procedure/trigger/control-flow support at all (confirmed:

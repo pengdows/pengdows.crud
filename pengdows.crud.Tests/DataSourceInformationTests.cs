@@ -178,11 +178,10 @@ public class DataSourceInformationTests
         {
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "@",
-            SupportedDatabase.Oracle or SupportedDatabase.Snowflake => ":",
+            // pengdows.flatfile binds ISO SQL ":name" parameters (see
+            // FlatFileDialect.SupportsNamedParameters), same marker as Oracle/Snowflake.
+            SupportedDatabase.Oracle or SupportedDatabase.Snowflake or SupportedDatabase.FlatFile => ":",
             SupportedDatabase.DuckDB => "$",
-            // FlatFile's own SQL grammar supports only positional ? parameters (see
-            // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
-            SupportedDatabase.FlatFile => "?",
             // Informix's ADO.NET driver has no named-parameter support at all - positional "?"
             // only (see InformixDialect.SupportsNamedParameters). SAP HANA likewise (confirmed
             // live via DataSourceInformation.ParameterMarkerFormat == "?"). Access's OLE DB
@@ -283,14 +282,12 @@ public class DataSourceInformationTests
         Assert.Equal(expectedWrap, info.ProcWrappingStyle);
 
         // Assert: named parameters flags
-        // FlatFile's own SQL grammar supports only positional ? parameters (see
-        // FlatFileDialect.SupportsNamedParameters) — verified against its README, not assumed.
-        // Informix's ADO.NET driver likewise has no named-parameter support at all (see
+        // Informix's ADO.NET driver has no named-parameter support at all (see
         // InformixDialect.SupportsNamedParameters), nor does SAP HANA's (confirmed live via
         // DataSourceInformation.ParameterMarkerFormat == "?"). Access's OLE DB provider is
-        // positional-only too (confirmed live: ParameterMarkerFormat == "?").
-        var expectedSupportsNamedParameters = db != SupportedDatabase.FlatFile
-            && db != SupportedDatabase.Informix && db != SupportedDatabase.SapHana
+        // positional-only too (confirmed live: ParameterMarkerFormat == "?"). FlatFile binds
+        // ":name" (see FlatFileDialect.SupportsNamedParameters).
+        var expectedSupportsNamedParameters = db != SupportedDatabase.Informix && db != SupportedDatabase.SapHana
             && db != SupportedDatabase.Access;
         Assert.Equal(expectedSupportsNamedParameters, info.SupportsNamedParameters);
         Assert.Equal(expectedRequiresStoredProcParameterNameMatch, info.RequiresStoredProcParameterNameMatch);

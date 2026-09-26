@@ -1,3 +1,5 @@
+using System;
+using System.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -7,9 +9,8 @@ using Xunit;
 namespace pengdows.crud.Tests.dialects;
 
 /// <summary>
-/// Scoped to the pool-separation/read-only findings from
-/// docs/connection/new-database-pooling-appname-readonly-audit.md's FlatFile section — not a
-/// full FlatFileDialect capability suite (no dedicated one exists on this branch yet).
+/// FlatFileDialect capability decisions, each checked against the pengdows.flatfile provider
+/// source (0.2.1-preview.1) rather than its README.
 /// </summary>
 public class FlatFileDialectTests
 {
@@ -40,5 +41,52 @@ public class FlatFileDialectTests
         // constant and ReadOnly property (SetOrRemove(KeyReadOnly, value ? "true" : null)) — a
         // real, hard-enforced keyword: "any mutating statement (DML/DDL) is rejected immediately".
         Assert.Equal("readonly=true", Dialect().GetReadOnlyConnectionParameter());
+    }
+
+    // pengdows.sql/SqlLexer.cs tokenizes ":name" as a NamedParameter and
+    // BoundPredicateEvaluator.ResolveParameter matches it against DbParameter.ParameterName
+    // (bare, case-insensitive). The old "positional ? only" README claim is stale.
+    [Fact]
+    public void SupportsNamedParameters_IsTrue_WithColonMarker()
+    {
+        var d = Dialect();
+
+        Assert.True(d.SupportsNamedParameters);
+        Assert.Equal(":", d.ParameterMarker);
+        Assert.Equal(":w0", d.MakeParameterName("w0"));
+    }
+
+    // With positional parameters the base dialect applied the ODBC-style common conversions
+    // (bool to Int16, Guid to string, DateTimeOffset to UTC DateTime). pengdows.flatfile's type
+    // system (ClrTypeMap) has native bool/Guid/DateTimeOffset, and a BOOLEAN column rejects the
+    // Int16 value 1 ("Value '1' is not valid for boolean column"), found live in the testbed.
+    [Fact]
+    public void CreateDbParameter_Boolean_StaysBoolean()
+    {
+        var p = Dialect().CreateDbParameter("b", DbType.Boolean, true);
+
+        Assert.Equal(DbType.Boolean, p.DbType);
+        Assert.Equal(true, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_Guid_StaysGuid()
+    {
+        var guid = Guid.NewGuid();
+
+        var p = Dialect().CreateDbParameter("g", DbType.Guid, guid);
+
+        Assert.Equal(DbType.Guid, p.DbType);
+        Assert.Equal(guid, p.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_DateTimeOffset_KeepsOffset()
+    {
+        var value = new DateTimeOffset(2026, 9, 25, 10, 30, 0, TimeSpan.FromHours(-5));
+
+        var p = Dialect().CreateDbParameter("d", DbType.DateTimeOffset, value);
+
+        Assert.Equal(value, p.Value);
     }
 }
