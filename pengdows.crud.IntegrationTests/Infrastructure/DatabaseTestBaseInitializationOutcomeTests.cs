@@ -50,4 +50,32 @@ public class DatabaseTestBaseInitializationOutcomeTests
                 exclusionReasons: new[] { "Snowflake: not enabled (INCLUDE_SNOWFLAKE)" },
                 failureReasons: Array.Empty<string>()));
     }
+
+    // HARN-006: a test that targets one provider (RunTestAgainstProviderAsync, Firebird Embedded)
+    // must skip when configuration excluded that provider (INTEGRATION_ONLY), not fail - and still
+    // fail when the provider is enabled but unavailable.
+    [Fact]
+    public void TargetedProvider_Available_DoesNotThrow()
+    {
+        DatabaseTestBase.EnsureTargetedProviderAvailable(SupportedDatabase.MariaDb,
+            new[] { SupportedDatabase.MariaDb }, available: true);
+    }
+
+    [Fact]
+    public void TargetedProvider_ExcludedByConfiguration_Skips()
+    {
+        var ex = Assert.Throws<Xunit.SkipException>(() =>
+            DatabaseTestBase.EnsureTargetedProviderAvailable(SupportedDatabase.MariaDb,
+                new[] { SupportedDatabase.PostgreSql }, available: false));
+
+        Assert.Contains("MariaDb", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void TargetedProvider_EnabledButUnavailable_Fails()
+    {
+        Assert.Throws<InvalidOperationException>(() =>
+            DatabaseTestBase.EnsureTargetedProviderAvailable(SupportedDatabase.MariaDb,
+                new[] { SupportedDatabase.MariaDb }, available: false));
+    }
 }

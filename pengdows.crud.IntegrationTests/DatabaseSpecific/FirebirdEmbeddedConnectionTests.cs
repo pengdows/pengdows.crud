@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit;
 
 namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
@@ -18,10 +19,11 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 /// </summary>
 public sealed class FirebirdEmbeddedConnectionTests
 {
-    [Fact]
+    [SkippableFact]
     [Trait("Category", "FirebirdEmbedded")]
     public async Task FirebirdEmbedded_AllowsMultipleSimultaneousAttachments()
     {
+        SkipUnlessFirebirdSelected();
         var path = NewDatabasePath();
         try
         {
@@ -39,10 +41,11 @@ public sealed class FirebirdEmbeddedConnectionTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     [Trait("Category", "FirebirdEmbedded")]
     public async Task FirebirdEmbedded_ConcurrentReadersUseSeparateAttachments()
     {
+        SkipUnlessFirebirdSelected();
         var path = NewDatabasePath();
         try
         {
@@ -62,10 +65,11 @@ public sealed class FirebirdEmbeddedConnectionTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     [Trait("Category", "FirebirdEmbedded")]
     public async Task FirebirdEmbedded_ReaderAndWriterCanOperateConcurrently()
     {
+        SkipUnlessFirebirdSelected();
         var path = NewDatabasePath();
         try
         {
@@ -85,10 +89,11 @@ public sealed class FirebirdEmbeddedConnectionTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     [Trait("Category", "FirebirdEmbedded")]
     public async Task FirebirdEmbedded_NonConflictingWritersCanOperateConcurrently()
     {
+        SkipUnlessFirebirdSelected();
         var path = NewDatabasePath();
         try
         {
@@ -122,10 +127,11 @@ public sealed class FirebirdEmbeddedConnectionTests
     // pool (Firebird's reader connection string differs by Application Name, so there is a
     // dedicated reader pool), each on a real embedded attachment, with real work still getting
     // its own separate attachments.
-    [Fact]
+    [SkippableFact]
     [Trait("Category", "FirebirdEmbedded")]
     public async Task FirebirdEmbedded_PreventDatabaseUnloadUsesPerPoolSentinelsAndRealWorkAttachments()
     {
+        SkipUnlessFirebirdSelected();
         var path = NewDatabasePath();
         try
         {
@@ -238,6 +244,15 @@ public sealed class FirebirdEmbeddedConnectionTests
         $"Database={path};ServerType=Embedded;ClientLibrary={ClientLibrary};" +
         $"User ID=SYSDBA;Password={Password};" +
         (disablePooling ? "Pooling=false" : string.Empty);
+
+    // HARN-006: skip (not fail) when INTEGRATION_ONLY excludes Firebird. A missing engine while
+    // Firebird is selected still fails - see ClientLibrary/Password.
+    private static void SkipUnlessFirebirdSelected()
+    {
+        var enabled = IntegrationTestConfiguration.EnabledProviders;
+        DatabaseTestBase.EnsureTargetedProviderAvailable(SupportedDatabase.Firebird, enabled,
+            available: enabled.Contains(SupportedDatabase.Firebird));
+    }
 
     private static string ClientLibrary =>
         Environment.GetEnvironmentVariable("FIREBIRD_EMBEDDED_CLIENT_LIBRARY")

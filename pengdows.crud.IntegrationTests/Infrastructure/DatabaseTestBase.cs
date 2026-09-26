@@ -123,6 +123,28 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         }
     }
 
+    /// <summary>
+    /// HARN-006: a test that targets one provider skips when configuration (INTEGRATION_ONLY, an
+    /// opt-in provider that is not enabled) excluded it, and fails when the provider is enabled
+    /// but unavailable - the same rule <see cref="EnsureProvidersInitialized"/> applies per class.
+    /// </summary>
+    internal static void EnsureTargetedProviderAvailable(SupportedDatabase provider,
+        IReadOnlyList<SupportedDatabase> enabledProviders, bool available)
+    {
+        if (available)
+        {
+            return;
+        }
+
+        if (!enabledProviders.Contains(provider))
+        {
+            throw new Xunit.SkipException(
+                $"{provider} is excluded by configuration for this run (INTEGRATION_ONLY or an opt-in provider that is not enabled).");
+        }
+
+        throw new InvalidOperationException($"Provider {provider} is enabled but not available for testing.");
+    }
+
     public virtual Task DisposeAsync()
     {
         DatabaseContexts.Clear();
@@ -234,14 +256,12 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         Func<IDatabaseContext, Task> testAction,
         [CallerMemberName] string? testName = null)
     {
-        if (!DatabaseContexts.TryGetValue(provider, out var context))
-        {
-            throw new InvalidOperationException($"Provider {provider} is not available for testing");
-        }
+        var available = DatabaseContexts.TryGetValue(provider, out var context);
+        EnsureTargetedProviderAvailable(provider, IntegrationTestConfiguration.EnabledProviders, available);
 
         var start = DateTime.UtcNow;
         IntegrationTraceLog.Write(provider, $"test start name={testName ?? "<unknown>"}", Output);
-        await testAction(context);
+        await testAction(context!);
         IntegrationTraceLog.Write(provider,
             $"test done name={testName ?? "<unknown>"} elapsedMs={(DateTime.UtcNow - start).TotalMilliseconds:F0}",
             Output);
