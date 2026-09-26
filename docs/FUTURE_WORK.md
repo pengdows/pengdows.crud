@@ -114,11 +114,11 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | BP-118 | CockroachDB: `MergeStartupOptions` overwrites a caller's explicit `lock_timeout` (`PostgreSqlDialect.cs:533`) | c58cb96 | **Done** (live, writer); reader half fixed separately (d35c929) |
 | BP-119 | MySQL error 1295 ("not supported in prepared statement protocol") doesn't trigger the disable-prepare fallback; CockroachDB inherits PG proc wrapping (should be None); TiDB VALUES() upsert override missing (defensive) | 3eb997c | **Done** (1295 fallback unit-only; TiDB VALUES() live). CRDB proc wrapping=None **not** ported: CREATE PROCEDURE/CALL work live on CRDB v25.1 |
 | BP-120 | Provider factory can't be found by its ADO.NET invariant name (`DbProviderLoader.cs:63` registers only the section key) | 335c5d0 | **Done** (d683dac) |
-| BP-121 | FlatFile uses the resolver's default isolation mapping (no ReadUncommitted; SafeNonBlockingReads→ReadCommitted instead of RepeatableRead) | 15feeb2 | **N/A**: pengdows.flatfile is unpublished and 2.0.6 doesn't reference it; its current preview rejects Serializable, so 3.0's mapping would throw |
+| BP-121 | FlatFile uses the resolver's default isolation mapping (no ReadUncommitted; SafeNonBlockingReads→ReadCommitted instead of RepeatableRead) | 15feeb2 | **In progress**: the provider source is at ~/prj/pengdows/pengdows.flatfile (0.2.1-preview.1). It accepts ReadUncommitted/ReadCommitted/RepeatableRead only (d333c99, 2026-09-19), so 3.0's four-level declaration (15feeb2) is now wrong in 3.0 too |
 | BP-122 | Metrics: percentiles sort up to 2048 doubles on every operation when a `MetricsUpdated` subscriber (the OTel observer) is attached (no memoization) | d0bc060 | **Done** (1a9efc1): recompute every 32nd call |
 | BP-123 | Explicit `ReadOnlyConnectionString` equal to `ConnectionString` disables SingleWriter turnstile sharing | d5b24e3 | **Done** (e1c41fa) |
 | BP-124 | UNSURE, needs a red test first: type-coercion dispatch still gated on `AdvancedTypes.IsMappedType` (`SqlDialect.cs:1387`); `NeedsCommonConversions` opt-in for DuckDB/Firebird/Oracle/Snowflake | ed71269, 81eef2b | **Done** (df02754, c3e01b9): targeted fixes (Stream/TextReader write binding, Oracle interval format/read, template-clone DbType fallback, DuckDB reader-owned BLOB streams on all 4 read paths). 3.0's full coercion-registry rewrite and the `NeedsCommonConversions` opt-ins were **not** ported: a probe showed no mis-conversion on 2.0.6. Live: Oracle interval + DuckDB portable round trips green |
-| BP-125 | UNSURE: FlatFile named `:` parameters and capability flags; depends on which pengdows.flatfile version 2.0.6 targets | 9f0299e | **N/A**: same unpublished-package situation |
+| BP-125 | UNSURE: FlatFile named `:` parameters and capability flags; depends on which pengdows.flatfile version 2.0.6 targets | 9f0299e | **In progress**: verify FlatFileDialect against the real provider source + a live FlatFile testbed provider |
 
 ### Found during the Tier 1 backport: bugs 3.0 still has
 
@@ -141,9 +141,9 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 
 | ID | Change | 3.0 commit | Status |
 |---|---|---|---|
-| BP-201 | PK gateway `UpdateAsync`/`BatchUpdateAsync`/`BatchUpsertAsync` don't throw `ConcurrencyConflictException` on a `[Version]` mismatch (`PrimaryKeyTableGateway.Update.cs:56/78`) | 5e6b244 | Open (decide) |
-| BP-202 | `BatchUpsertAsync` silently swallows a stale `[Version]` (except the ON DUPLICATE KEY path, which can't detect it) | 21ccbca, 89db70d | Open (decide) |
-| BP-203 | After `UpdateAsync`/`BatchUpdateAsync` the entity keeps the old `[Version]`, so reusing the instance always conflicts (`WriteBackIncrementedVersion`) | 04719e7, 21ccbca | Open (decide) |
+| BP-201 | PK gateway `UpdateAsync`/`BatchUpdateAsync`/`BatchUpsertAsync` don't throw `ConcurrencyConflictException` on a `[Version]` mismatch (`PrimaryKeyTableGateway.Update.cs:56/78`) | 5e6b244 | **Done** (live 11/11 providers) |
+| BP-202 | `BatchUpsertAsync` silently swallows a stale `[Version]` (except the ON DUPLICATE KEY path, which can't detect it) | 21ccbca, 89db70d | **Done**: MySQL-family ON DUPLICATE KEY and Firebird UPDATE OR INSERT can't detect a stale version (documented). The live run also found every MySQL 8.0.19+ versioned upsert failing with an ambiguous `version` column; fixed |
+| BP-203 | After `UpdateAsync`/`BatchUpdateAsync` the entity keeps the old `[Version]`, so reusing the instance always conflicts (`WriteBackIncrementedVersion`) | 04719e7, 21ccbca | **Done**: fakeDb taught `col ± n` SET arithmetic so persisted versions advance |
 | BP-204 | `MaxConcurrentWrites=0` means read-only only in SingleWriter; PreventDatabaseUnload pool capacity ≥2; config-vs-connection-string mismatch warning | d506a74 | Open (decide) |
 | BP-205 | DuckDB read-only safety check runs after the explicit `ReadOnlyConnectionString` check (`DatabaseContext.cs:261`); native batch UPDATE keys on `[PrimaryKey]`, not `[Id]` (`TableGateway.Batch.cs:264`) | 5e6b244 | Open (decide) |
 | BP-206 | PreventDatabaseUnload sentinel never repaired when Broken/Closed; no per-pool (reader) sentinel; sentinel replacement and permit accounting | 5e6b244, 61201f6, cd74c28 | Open (decide) |
