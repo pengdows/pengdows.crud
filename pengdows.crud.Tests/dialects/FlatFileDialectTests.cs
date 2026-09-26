@@ -106,6 +106,12 @@ public class FlatFileDialectTests
         [Version] [Column("ver", DbType.Int32)] public int Ver { get; set; }
     }
 
+    [Table("ff_orders", "sales")]
+    private sealed class FfSchemaEntity
+    {
+        [Id(true)] [Column("id", DbType.Int64)] public long Id { get; set; }
+    }
+
     private static DatabaseContext FlatFileContext() =>
         new("path=/tmp/db;EmulatedProduct=FlatFile", new fakeDbFactory(SupportedDatabase.FlatFile));
 
@@ -132,6 +138,20 @@ public class FlatFileDialectTests
         Assert.StartsWith("MERGE INTO \"ff_upsert\" t USING (VALUES (:", sql);
         Assert.Contains("WHEN MATCHED AND t.\"ver\" = s.\"ver\" THEN UPDATE SET \"name\" = s.\"name\"", sql);
         Assert.DoesNotContain("SET t.", sql);
+    }
+
+    // CREATE SCHEMA and schema-qualified "s"."t" names work in DDL, DML and MERGE (probed live;
+    // directory-mode catalogs keep a directory per schema). With SupportsNamespaces false the
+    // gateway silently dropped [Table(schema:)] and hit a same-named table in the default schema.
+    [Fact]
+    public void SupportsNamespaces_KeepsSchemaQualifiedTableName()
+    {
+        Assert.True(Dialect().SupportsNamespaces);
+
+        using var context = FlatFileContext();
+        var gateway = new TableGateway<FfSchemaEntity, long>(context);
+
+        Assert.Equal("\"sales\".\"ff_orders\"", gateway.WrappedTableName);
     }
 
     // pengdows.sql/SqlParser.cs has ParseOffset/ParseFetchFirst (OFFSET n ROWS FETCH {FIRST|NEXT}

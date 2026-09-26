@@ -130,6 +130,14 @@ internal class FlatFileDialect : SqlDialect
     /// </summary>
     public override bool MergeUpdateRequiresTargetAlias => false;
 
+    /// <summary>
+    /// <c>CREATE SCHEMA</c> and schema-qualified <c>"s"."t"</c> names work in DDL, DML and MERGE
+    /// against the real provider (directory mode keeps a directory per schema). With the base
+    /// <see langword="false"/>, <c>[Table(name, schema)]</c> silently lost its schema and hit a
+    /// same-named table in the default schema.
+    /// </summary>
+    public override bool SupportsNamespaces => true;
+
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
 
     /// <summary>
