@@ -55,6 +55,45 @@ public class Db2BestModeTests
         Assert.Equal(DbMode.Standard, context.ConnectionMode);
     }
 
+    // IBM's typed DB2ConnectionStringBuilder (confirmed live) rewrites UID/PWD to User ID/Password and
+    // reports every keyword it knows (ClientApplicationName, Pooling, Max/Min Pool Size) as present
+    // even when unset. fakeDb emulates both.
+    private static fakeDbFactory TypedDb2BuilderFactory()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Db2)
+        {
+            ConnectionStringBuilderBehavior = ConnectionStringBuilderBehavior.ReportKnownKeywordsAsPresent
+                                              | ConnectionStringBuilderBehavior.CanonicalizeCredentialKeywords
+        };
+        factory.KnownConnectionStringKeywords = new[]
+            { "ClientApplicationName", "Pooling", "Max Pool Size", "Min Pool Size" };
+        return factory;
+    }
+
+    private static string? GetKey(string connectionString, string key)
+    {
+        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
+        return builder.TryGetValue(key, out var value) ? Convert.ToString(value) : null;
+    }
+
+    // CONFIRMED live (Db2 LUW 11.5.8): a UID/PWD connection string got no ClientApplicationName at
+    // all, so the reader and writer pools were never split. The builder's canonical "User ID"/
+    // "Password" made the "were credentials stripped by normalization?" check report a false
+    // positive (it compared key names, not values), which disables the generated application name.
+    [Fact]
+    public void Best_OnDb2Luw_WithCredentialSynonyms_SplitsReaderAndWriterPoolsByApplicationName()
+    {
+        var factory = TypedDb2BuilderFactory();
+        using var context = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=localhost:50000;Database=testdb;UID=user;PWD=secret;EmulatedProduct=Db2",
+            DbMode = DbMode.Best
+        }, factory);
+
+        Assert.Contains(factory.CreatedConnections, c =>
+            GetKey(c.ConnectionString, "ClientApplicationName")?.EndsWith("-ro") == true);
+    }
+
     [Theory]
     [InlineData(DbMode.Standard)]
     [InlineData(DbMode.PreventDatabaseUnload)]

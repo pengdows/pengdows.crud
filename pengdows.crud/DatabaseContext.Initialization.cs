@@ -2101,10 +2101,12 @@ public partial class DatabaseContext
             return true;
         }
 
+        // Compare by value, not key name: a typed provider builder may rewrite a credential synonym
+        // to its canonical keyword (IBM.Data.Db2: UID -> User ID, PWD -> Password; confirmed live),
+        // which keeps the credential but not the key the caller wrote.
         foreach (var entry in originalSensitive)
         {
-            if (!normalizedSensitive.TryGetValue(entry.Key, out var value) ||
-                string.IsNullOrWhiteSpace(value))
+            if (!normalizedSensitive.Values.Contains(entry.Value, StringComparer.Ordinal))
             {
                 return true;
             }
