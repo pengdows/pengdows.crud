@@ -270,4 +270,25 @@ internal class FlatFileDialect : SqlDialect
     /// <inheritdoc cref="IsUniqueViolation"/>
     public override bool IsCheckConstraintViolation(DbException ex) =>
         string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// pengdows.flatfile (0.2.1-preview.1+) raises <c>FlatFileException</c> with standard SQLSTATEs:
+    /// 25006 (read-only SQL transaction: a write on a readonly connection or in a READ ONLY
+    /// transaction) and HYT00 (timeout expired: waiting for the single-writer lock, or for a
+    /// consistent read snapshot). Connection-class 08xxx is handled by FlatFileExceptionTranslator.
+    /// </summary>
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        switch (TryGetProviderSqlState(ex))
+        {
+            case "25006":
+                category = DbErrorCategory.ReadOnlyViolation;
+                return true;
+            case "HYT00":
+                category = DbErrorCategory.Timeout;
+                return true;
+            default:
+                return base.TryClassifyProviderException(ex, out category);
+        }
+    }
 }
