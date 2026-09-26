@@ -461,6 +461,38 @@ internal static class DatabaseDetectionService
     /// <summary>
     /// Detects database topology (LocalDB, embedded, etc.) from connection string.
     /// </summary>
+    /// <summary>
+    /// Returns a row only on Db2 for Linux/Unix/Windows: SYSPROC.ENV_GET_INST_INFO() does not exist
+    /// on Db2 for z/OS or Db2 for i.
+    /// </summary>
+    internal const string Db2LuwProbeSql = "SELECT SERVICE_LEVEL FROM TABLE(SYSPROC.ENV_GET_INST_INFO()) AS INSTANCEINFO";
+
+    /// <summary>
+    /// <see cref="DetectTopology(SupportedDatabase, string?)"/> plus facts only a live connection can
+    /// tell: whether a Db2 server is Db2 LUW (<see cref="Db2LuwProbeSql"/> returns a row there and
+    /// fails on z/OS and IBM i). A failed or missing probe means "not LUW", the safe default.
+    /// </summary>
+    public static DatabaseTopology DetectTopology(SupportedDatabase product, string? connectionString,
+        IDbConnection? connection)
+    {
+        var topology = DetectTopology(product, connectionString);
+        if (product != SupportedDatabase.Db2 || connection?.State != ConnectionState.Open)
+        {
+            return topology;
+        }
+
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = Db2LuwProbeSql;
+            return topology with { IsDb2Luw = command.ExecuteScalar() is not null and not DBNull };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return topology;
+        }
+    }
+
     public static DatabaseTopology DetectTopology(SupportedDatabase product, string? connectionString)
     {
         var isLocalDb = false;
@@ -537,4 +569,8 @@ internal static class DatabaseDetectionService
 /// <summary>
 /// Represents database topology characteristics (LocalDB, embedded, etc.).
 /// </summary>
-internal record DatabaseTopology(bool IsLocalDb, bool IsEmbedded);
+/// <param name="IsDb2Luw">
+/// Db2 for Linux/Unix/Windows (as opposed to Db2 for z/OS or Db2 for i). LUW's default implicit
+/// activation deactivates a database when its last connection closes (see Db2Dialect).
+/// </param>
+internal record DatabaseTopology(bool IsLocalDb, bool IsEmbedded, bool IsDb2Luw = false);

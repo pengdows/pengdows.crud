@@ -271,6 +271,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// single-writer engines (SqliteDialect, DuckDbDialect, AccessDialect) or a topology-specific requirement like
     /// SQL Server LocalDB (SqlServerDialect).
     /// </remarks>
+    /// <summary>
+    /// Topology-aware coercion used by DatabaseContext: <see cref="DatabaseTopology"/> carries facts
+    /// only the live detection connection can tell (e.g. Db2 LUW vs z/OS). Defaults to the public
+    /// overload, which knows only whether the target is LocalDB.
+    /// </summary>
+    internal virtual (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        DatabaseTopology topology) =>
+        CoerceConnectionMode(requested, connectionString, topology.IsLocalDb);
+
     public virtual (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb)
     {

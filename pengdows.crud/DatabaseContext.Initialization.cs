@@ -532,7 +532,7 @@ public partial class DatabaseContext
 
             // 3) Detect product/capabilities once
             var product = DatabaseDetectionService.DetectProduct(initConn, _factory);
-            var topology = DatabaseDetectionService.DetectTopology(product, _connectionString);
+            var topology = DatabaseDetectionService.DetectTopology(product, _connectionString, initConn);
             var isLocalDb = topology.IsLocalDb;
 
             // Optional: RCSI prefetch (SQL Server only)
@@ -595,7 +595,7 @@ public partial class DatabaseContext
 
             // 4) Coerce ConnectionMode based on product/topology
             var requestedMode = ConnectionMode;
-            ConnectionMode = CoerceMode(requestedMode, product, isLocalDb);
+            ConnectionMode = CoerceMode(requestedMode, product, topology);
             var inMemoryKind = DetectInMemoryKind(product, _connectionString);
 
             if (ConnectionMode == DbMode.SingleConnection
@@ -1837,7 +1837,7 @@ public partial class DatabaseContext
         return connectionString;
     }
 
-    private DbMode CoerceMode(DbMode requested, SupportedDatabase product, bool isLocalDb)
+    private DbMode CoerceMode(DbMode requested, SupportedDatabase product, DatabaseTopology topology)
     {
         // All per-database coercion policy (what Best resolves to, which explicit modes are unsafe
         // and get coerced, which are safe and honored as-is) lives on the dialect now — see
@@ -1845,7 +1845,9 @@ public partial class DatabaseContext
         // all; only a database with real mode restrictions (embedded engines, LocalDB) overrides
         // the dialect's base implementation.
         var dialect = SqlDialectFactory.CreateDialectForType(product, _factory, _logger);
-        var (mode, reason) = dialect.CoerceConnectionMode(requested, _connectionString, isLocalDb);
+        var (mode, reason) = dialect is SqlDialect sqlDialect
+            ? sqlDialect.CoerceConnectionMode(requested, _connectionString, topology)
+            : dialect.CoerceConnectionMode(requested, _connectionString, topology.IsLocalDb);
         LogModeOverride(requested, mode, reason);
         return mode;
     }

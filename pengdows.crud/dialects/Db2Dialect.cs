@@ -20,6 +20,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
@@ -173,6 +174,23 @@ internal sealed class Db2Dialect : SqlDialect
     {
         return $"{WrapObjectName("s")}.{WrapObjectName(columnName)}";
     }
+
+    /// <inheritdoc />
+    /// <remarks>
+    /// CONFIRMED live (Db2 LUW 11.5.8): under LUW's default implicit activation a database
+    /// deactivates when its last connection closes, and the next cold connection costs ~1.1-1.3 s
+    /// (a PreventDatabaseUnload sentinel, or a DBA's ACTIVATE DATABASE, brings it to ~4 ms). So on
+    /// Db2 LUW, Best selects PreventDatabaseUnload. Db2 for z/OS and Db2 for i have no implicit
+    /// deactivation, so Best stays Standard there; that side is not live-verified (no z/OS or
+    /// IBM i server available) and rests on SYSPROC.ENV_GET_INST_INFO() existing only on LUW. Every
+    /// explicit request - including Standard, for a database kept busy or explicitly activated -
+    /// is honored.
+    /// </remarks>
+    internal override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        DatabaseTopology topology) =>
+        requested == DbMode.Best && topology.IsDb2Luw
+            ? (DbMode.PreventDatabaseUnload, "Db2 LUW: Best selects PreventDatabaseUnload (implicit-activation unload cost)")
+            : base.CoerceConnectionMode(requested, connectionString, topology);
 
     public override string GetVersionQuery()
     {

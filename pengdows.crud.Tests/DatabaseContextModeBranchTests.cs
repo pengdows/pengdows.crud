@@ -16,16 +16,16 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var isolated = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false })!;
+            new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleConnection, isolated);
 
         var contextShared = CreateContext("Data Source=file:memdb1?mode=memory&cache=shared");
         var shared = (DbMode)coerce.Invoke(contextShared,
-            new object?[] { DbMode.Best, SupportedDatabase.Sqlite, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Sqlite, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleWriter, shared);
 
         var duckShared = (DbMode)coerce.Invoke(contextShared,
-            new object?[] { DbMode.Best, SupportedDatabase.DuckDB, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.DuckDB, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleWriter, duckShared);
     }
 
@@ -40,21 +40,21 @@ public class DatabaseContextModeBranchTests
         // database — it's now treated as a full server database (see FirebirdDialect.cs), so an
         // explicit Standard request is honored as-is.
         var firebird = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false })!;
+            new object?[] { DbMode.Standard, SupportedDatabase.Firebird, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.Standard, firebird);
 
         // Best selects PreventDatabaseUnload for Firebird (measured idle-unload reconnect cost).
         var firebirdBest = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Firebird, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Firebird, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.PreventDatabaseUnload, firebirdBest);
 
         // LocalDB: Best selects PreventDatabaseUnload, but an explicit Standard is honored.
         var localDbBest = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.SqlServer, true })!;
+            new object?[] { DbMode.Best, SupportedDatabase.SqlServer, new pengdows.crud.@internal.DatabaseTopology(true, false) })!;
         Assert.Equal(DbMode.PreventDatabaseUnload, localDbBest);
 
         var localDb = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true })!;
+            new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, new pengdows.crud.@internal.DatabaseTopology(true, false) })!;
         Assert.Equal(DbMode.Standard, localDb);
     }
 
@@ -65,15 +65,15 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var bestPostgres = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.PostgreSql, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.PostgreSql, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.Standard, bestPostgres);
 
         var explicitMode = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false })!;
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleWriter, explicitMode);
 
         var unknownBest = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Unknown, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Unknown, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.Standard, unknownBest);
     }
 
@@ -103,11 +103,11 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var bestDb2 = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Db2, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Db2, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.Standard, bestDb2);
 
         var explicitMode = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.SingleWriter, SupportedDatabase.Db2, false })!;
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.Db2, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleWriter, explicitMode);
     }
 
