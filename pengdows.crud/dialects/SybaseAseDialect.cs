@@ -163,6 +163,11 @@ internal class SybaseAseDialect : SqlDialect
     // semicolon is rejected ("Incorrect syntax near ';'"), unlike SQL Server.
     public override bool SupportsMerge => true;
 
+    // CONFIRMED live (ASE 16.0): when "WHEN MATCHED AND t.version = s.version" is false the row is
+    // left untouched, but @@rowcount (and the driver's rows affected) still reports 1, so a stale
+    // [Version] upsert can't be told from a successful one.
+    public override bool MergeUpsertReportsSkippedVersionRow => false;
+
     // Verified live: a MERGE whose USING source is a multi-row VALUES-derived table
     // ("MERGE INTO t USING (VALUES (@b0, ...), (@b1, ...)) AS s(...) ON ...") fails with
     // "Incorrect syntax near the keyword 'VALUES'." ASE has no VALUES-derived-table-as-MERGE-source

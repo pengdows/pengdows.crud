@@ -295,7 +295,7 @@ public int Version { get; set; }
 | **Create** | If version is null/0, automatically set to 1 |
 | **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion`; on success writes the new value (`current + 1`) back into the entity |
 
-**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE` and Firebird `UPDATE OR INSERT` cannot detect a stale version.
+**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE`, Firebird `UPDATE OR INSERT` and Sybase ASE `MERGE` (whose rows affected still counts a guard-skipped row) cannot detect a stale version.
 
 **Write-back:** after a successful `UpdateAsync`/`BatchUpdateAsync` the entity's numeric `[Version]` is set to the incremented value, so the same instance can be updated again. Opaque `byte[]`/`RowVersion` versions are DB-generated and are not written back; `UpsertAsync` doesn't write back either (rows affected can't tell an insert from an update).
 
@@ -4907,12 +4907,14 @@ carry a version guard:
 | Per-entity `MERGE` fallback (SQL Server, Oracle, Db2, Snowflake, ...) | yes | row skipped, throws |
 | Multi-row `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL, MariaDB, TiDB, Aurora MySQL) | **no** | **row overwritten, no exception** |
 | Firebird `UPDATE OR INSERT ... MATCHING` | **no** | **row overwritten, no exception** |
+| Sybase ASE per-entity `MERGE` | yes | **row skipped, no exception** (ASE still reports 1 row affected) |
 
 The MySQL-family and Firebird rows are a real limitation, not an oversight: `ON DUPLICATE KEY
 UPDATE` has no conditional-update predicate, and MySQL reports 0 affected rows for an upsert that
 changed nothing, so a rows-affected shortfall can't be told apart from an ordinary no-op. On those
 databases, use `UpdateAsync`/`BatchUpdateAsync` (which do check the version) when a stale write
-must be rejected.
+must be rejected. Sybase ASE's `MERGE` does honor the guard (the stale row is left untouched),
+but its rows affected counts the guard-skipped row as affected, so the skip is silent there too.
 
 A multi-row `ON CONFLICT` chunk can't say which of its entities were stale (no `RETURNING` is used
 for batch operations), so re-read the whole batch before retrying.
@@ -5909,7 +5911,8 @@ database assigns it; see `docs/advanced-types.md`.
   an insert from an update). (`UpsertAsync` and `BatchUpsertAsync` on both gateways throw `ConcurrencyConflictException` on a version
   mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
   ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY
-  UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites — see
+  UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites; Sybase ASE's
+  MERGE leaves the stale row untouched but reports it as affected, so no exception — see
   `docs/batch-operations.md`.)
 - On `TableGateway<T,TId>`, a `[Version]` column also enables `loadOriginal`-by-default
   change-aware updates (see `docs/batch-operations.md` and `BuildUpdateAsync`'s `loadOriginal`
@@ -9095,7 +9098,7 @@ The `[Version]` attribute enables optimistic concurrency control:
 | **Create** | If version is null/0, automatically set to 1 |
 | **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion`; on success writes the new value (`current + 1`) back into the entity |
 
-**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE` and Firebird `UPDATE OR INSERT` cannot detect a stale version.
+**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE`, Firebird `UPDATE OR INSERT` and Sybase ASE `MERGE` (whose rows affected still counts a guard-skipped row) cannot detect a stale version.
 
 **Write-back:** after a successful `UpdateAsync`/`BatchUpdateAsync` the entity's numeric `[Version]` is set to the incremented value, so the same instance can be updated again. Opaque `byte[]`/`RowVersion` versions are DB-generated and are not written back; `UpsertAsync` doesn't write back either (rows affected can't tell an insert from an update).
 
@@ -9564,7 +9567,7 @@ public int Version { get; set; }
 | **Create** | If version is null/0, automatically set to 1 |
 | **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion`; on success writes the new value (`current + 1`) back into the entity |
 
-**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE` and Firebird `UPDATE OR INSERT` cannot detect a stale version.
+**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE`, Firebird `UPDATE OR INSERT` and Sybase ASE `MERGE` (whose rows affected still counts a guard-skipped row) cannot detect a stale version.
 
 **Write-back:** after a successful `UpdateAsync`/`BatchUpdateAsync` the entity's numeric `[Version]` is set to the incremented value, so the same instance can be updated again. Opaque `byte[]`/`RowVersion` versions are DB-generated and are not written back; `UpsertAsync` doesn't write back either (rows affected can't tell an insert from an update).
 

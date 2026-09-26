@@ -149,7 +149,8 @@ database assigns it; see `docs/advanced-types.md`.
   an insert from an update). (`UpsertAsync` and `BatchUpsertAsync` on both gateways throw `ConcurrencyConflictException` on a version
   mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
   ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY
-  UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites — see
+  UPDATE` and Firebird `UPDATE OR INSERT` can't, so there a stale upsert overwrites; Sybase ASE's
+  MERGE leaves the stale row untouched but reports it as affected, so no exception — see
   `docs/batch-operations.md`.)
 - On `TableGateway<T,TId>`, a `[Version]` column also enables `loadOriginal`-by-default
   change-aware updates (see `docs/batch-operations.md` and `BuildUpdateAsync`'s `loadOriginal`

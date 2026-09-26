@@ -114,6 +114,45 @@ public class TableGatewayBatchUpsertVersionConflictTests
         Assert.Equal(0, affected);
     }
 
+    // CONFIRMED live (ASE 16.0): when a MERGE's "WHEN MATCHED AND t.version = s.version" guard skips
+    // a stale row, @@rowcount still reports 1, so a skipped row can't be told from an update. The
+    // gateway therefore must not treat Sybase's rows affected as a conflict signal (same class as
+    // Firebird/MySQL); the row itself stays untouched.
+    [Fact]
+    public async Task UpsertAsync_SybaseMerge_ZeroAffected_DoesNotThrow()
+    {
+        await using var context = MakeContext(SupportedDatabase.SybaseASE, 0);
+        var gateway = new TableGateway<VersionedUpsertRow, int>(context, new StubAuditValueResolver("upsert-user"));
+
+        var affected = await gateway.UpsertAsync(new VersionedUpsertRow { Id = 1, Name = "a", Version = 3 }, context);
+
+        Assert.Equal(0, affected);
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_SybaseMerge_ZeroAffected_DoesNotThrow()
+    {
+        await using var context = MakeContext(SupportedDatabase.SybaseASE, 0, 0);
+        var gateway = new TableGateway<VersionedUpsertRow, int>(context, new StubAuditValueResolver("upsert-user"));
+
+        var affected = await gateway.BatchUpsertAsync(TwoRows(), context);
+
+        Assert.Equal(0, affected);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.SybaseASE, false)]
+    [InlineData(SupportedDatabase.Firebird, false)]
+    [InlineData(SupportedDatabase.SqlServer, true)]
+    [InlineData(SupportedDatabase.Oracle, true)]
+    public void MergeUpsertReportsSkippedVersionRow_MatchesDialect(SupportedDatabase db, bool expected)
+    {
+        var dialect = pengdows.crud.dialects.SqlDialectFactory.CreateDialectForType(db, new fakeDbFactory(db),
+            NullLogger.Instance);
+
+        Assert.Equal(expected, pengdows.crud.dialects.InternalSqlDialectExtensions.MergeUpsertReportsSkippedVersionRow(dialect));
+    }
+
     [Fact]
     public async Task BatchUpsertAsync_AllRowsAffected_DoesNotThrow()
     {

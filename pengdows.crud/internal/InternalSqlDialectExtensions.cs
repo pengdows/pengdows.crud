@@ -113,6 +113,15 @@ internal static class InternalSqlDialectExtensions
     }
 
     /// <summary>
+    /// See <see cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>; true for a dialect
+    /// that isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool MergeUpsertReportsSkippedVersionRow(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.MergeUpsertReportsSkippedVersionRow;
+    }
+
+    /// <summary>
     /// See <see cref="IInternalSqlDialect.QualifiesColumnReferences"/>; false for a dialect that
     /// isn't an internal one (e.g. a test double).
     /// </summary>

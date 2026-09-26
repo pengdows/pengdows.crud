@@ -412,8 +412,9 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     /// chunked ON CONFLICT carries a version guard only when the dialect supports
     /// <c>DO UPDATE ... WHERE</c>; chunked ON DUPLICATE KEY (MySQL family) has no guard and
     /// reports 0 affected for an unchanged row, so it can't detect a conflict; the per-entity
-    /// fallback uses the same rule as single-entity <c>UpsertAsync</c> (a guarded MERGE, except
-    /// Firebird's UPDATE OR INSERT, which has no guard).
+    /// fallback uses the same rule as single-entity <c>UpsertAsync</c> (a guarded MERGE whose rows
+    /// affected reveals a skipped row; not Firebird's unguarded UPDATE OR INSERT or Sybase ASE, see
+    /// <see cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>).
     /// </summary>
     private protected bool BatchUpsertCanDetectVersionConflict(IDatabaseContext ctx)
     {
@@ -433,7 +434,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             return false;
         }
 
-        return info.SupportsMerge && info.Product != SupportedDatabase.Firebird;
+        return info.SupportsMerge && GetDialect(ctx).MergeUpsertReportsSkippedVersionRow();
     }
 
     protected void CheckParameterLimit(ISqlContainer sc, int? toAdd)

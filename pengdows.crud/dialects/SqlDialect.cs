@@ -622,6 +622,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <inheritdoc cref="IInternalSqlDialect.SupportsMergeMatchedCondition"/>
     public virtual bool SupportsMergeMatchedCondition => true;
 
+    /// <inheritdoc cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>
+    public virtual bool MergeUpsertReportsSkippedVersionRow => true;
+
     /// <inheritdoc cref="IInternalSqlDialect.QualifiesColumnReferences"/>
     public virtual bool QualifiesColumnReferences => false;
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension

@@ -513,6 +513,7 @@ public class PrimaryKeyTableGatewayTests
             SupportedDatabase.MySql => "Server=localhost;EmulatedProduct=MySql",
             SupportedDatabase.SqlServer => "Server=localhost;EmulatedProduct=SqlServer",
             SupportedDatabase.Firebird => "Data Source=test;EmulatedProduct=Firebird",
+            SupportedDatabase.SybaseASE => "Data Source=test;EmulatedProduct=SybaseASE",
             _ => "Data Source=:memory:;EmulatedProduct=Sqlite"
         };
         return new DatabaseContext(new DatabaseContextConfiguration
@@ -576,6 +577,28 @@ public class PrimaryKeyTableGatewayTests
         var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
 
         var affected = await gw.BatchUpsertAsync(TwoVersionedPkEntities(), ctx);
+        Assert.Equal(0, affected);
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_SybaseMerge_ZeroAffected_DoesNotThrow()
+    {
+        // Sybase ASE's MERGE reports @@rowcount 1 even when the version guard skips a stale row
+        // (confirmed live), so rows affected is no conflict signal there.
+        await using var ctx = MakeFixedNonQueryContext(SupportedDatabase.SybaseASE, 0);
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+
+        var affected = await gw.BatchUpsertAsync(TwoVersionedPkEntities(), ctx);
+        Assert.Equal(0, affected);
+    }
+
+    [Fact]
+    public async Task UpsertAsync_SybaseMerge_ZeroAffected_DoesNotThrow()
+    {
+        await using var ctx = MakeFixedNonQueryContext(SupportedDatabase.SybaseASE, 0);
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+
+        var affected = await gw.UpsertAsync(TwoVersionedPkEntities()[0], ctx);
         Assert.Equal(0, affected);
     }
 

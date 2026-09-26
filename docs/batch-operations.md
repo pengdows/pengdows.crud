@@ -131,12 +131,14 @@ carry a version guard:
 | Per-entity `MERGE` fallback (SQL Server, Oracle, Db2, Snowflake, ...) | yes | row skipped, throws |
 | Multi-row `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL, MariaDB, TiDB, Aurora MySQL) | **no** | **row overwritten, no exception** |
 | Firebird `UPDATE OR INSERT ... MATCHING` | **no** | **row overwritten, no exception** |
+| Sybase ASE per-entity `MERGE` | yes | **row skipped, no exception** (ASE still reports 1 row affected) |
 
 The MySQL-family and Firebird rows are a real limitation, not an oversight: `ON DUPLICATE KEY
 UPDATE` has no conditional-update predicate, and MySQL reports 0 affected rows for an upsert that
 changed nothing, so a rows-affected shortfall can't be told apart from an ordinary no-op. On those
 databases, use `UpdateAsync`/`BatchUpdateAsync` (which do check the version) when a stale write
-must be rejected.
+must be rejected. Sybase ASE's `MERGE` does honor the guard (the stale row is left untouched),
+but its rows affected counts the guard-skipped row as affected, so the skip is silent there too.
 
 A multi-row `ON CONFLICT` chunk can't say which of its entities were stale (no `RETURNING` is used
 for batch operations), so re-read the whole batch before retrying.

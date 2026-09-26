@@ -73,7 +73,7 @@ public partial class TableGateway<TEntity, TRowID>
                 if (_versionColumn != null)
                 {
                     var canDetect = dialect.SupportsOnConflictWhere
-                        || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                        || (dialect.SupportsMerge && dialect.MergeUpsertReportsSkippedVersionRow());
                     if (canDetect)
                     {
                         // The enclosing catch below restores audit fields for this path -

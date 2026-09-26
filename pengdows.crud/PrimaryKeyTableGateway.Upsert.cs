@@ -121,7 +121,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 if (_versionColumn != null)
                 {
                     var canDetect = dialect.SupportsOnConflictWhere
-                        || (dialect.SupportsMerge && ctx.DataSourceInfo.Product != SupportedDatabase.Firebird);
+                        || (dialect.SupportsMerge && dialect.MergeUpsertReportsSkippedVersionRow());
                     if (canDetect)
                     {
                         throw new ConcurrencyConflictException(

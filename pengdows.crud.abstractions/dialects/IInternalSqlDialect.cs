@@ -24,6 +24,14 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool SupportsMergeMatchedCondition => true;
 
     /// <summary>
+    /// True when a MERGE upsert whose version-guarded matched branch skips a stale row reports that
+    /// row as 0 rows affected, so the gateways can raise ConcurrencyConflictException. False where
+    /// rows affected can't reveal the skip: Firebird's UPDATE OR INSERT carries no guard, and Sybase
+    /// ASE's @@rowcount counts the matched row even when "WHEN MATCHED AND ..." is false.
+    /// </summary>
+    bool MergeUpsertReportsSkippedVersionRow => true;
+
+    /// <summary>
     /// True when an unqualified column reference inside an expression (a SELECT list, a WHERE
     /// predicate, the right-hand side of SET) can resolve to something other than the column - on
     /// Informix a quoted "user", "today", "current", ... resolves to the special register - so the
