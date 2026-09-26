@@ -631,6 +631,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <inheritdoc cref="IInternalSqlDialect.SupportsSupplementaryCharacters"/>
     public virtual bool SupportsSupplementaryCharacters => true;
 
+    /// <inheritdoc cref="IInternalSqlDialect.SupportsSpacesInIdentifiers"/>
+    public virtual bool SupportsSpacesInIdentifiers => true;
+
+    /// <inheritdoc cref="IInternalSqlDialect.SupportsOnConflictOnSecondaryUniqueKey"/>
+    public virtual bool SupportsOnConflictOnSecondaryUniqueKey => true;
+
     /// <inheritdoc cref="IInternalSqlDialect.QualifiesColumnReferences"/>
     public virtual bool QualifiesColumnReferences => false;
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension

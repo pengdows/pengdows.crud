@@ -40,6 +40,26 @@ public class SpannerDialectTests
         Assert.False(CreateDialect().SupportsMerge);
     }
 
+    // CONFIRMED live (Spanner Omni + PGAdapter, HARN-005): a quoted identifier containing a space
+    // is rejected ("table name not valid: Default Order").
+    [Fact]
+    public void SupportsSpacesInIdentifiers_IsFalse()
+    {
+        Assert.False(InternalSqlDialectExtensions.SupportsSpacesInIdentifiers(CreateDialect()));
+        Assert.True(InternalSqlDialectExtensions.SupportsSpacesInIdentifiers(
+            new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance)));
+    }
+
+    // CONFIRMED live (Spanner Omni + PGAdapter, HARN-005): INSERT ... ON CONFLICT whose target is a
+    // secondary unique index rather than the primary key fails with "UNIMPLEMENTED".
+    [Fact]
+    public void SupportsOnConflictOnSecondaryUniqueKey_IsFalse()
+    {
+        Assert.False(InternalSqlDialectExtensions.SupportsOnConflictOnSecondaryUniqueKey(CreateDialect()));
+        Assert.True(InternalSqlDialectExtensions.SupportsOnConflictOnSecondaryUniqueKey(
+            new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance)));
+    }
+
     [Fact]
     public void SupportsBatchUpdate_IsFalse()
     {

@@ -140,6 +140,25 @@ internal static class InternalSqlDialectExtensions
     }
 
     /// <summary>
+    /// See <see cref="IInternalSqlDialect.SupportsSpacesInIdentifiers"/>; true for a dialect that
+    /// isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool SupportsSpacesInIdentifiers(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.SupportsSpacesInIdentifiers;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.SupportsOnConflictOnSecondaryUniqueKey"/>; true for a
+    /// dialect that isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool SupportsOnConflictOnSecondaryUniqueKey(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect ||
+               internalDialect.SupportsOnConflictOnSecondaryUniqueKey;
+    }
+
+    /// <summary>
     /// See <see cref="IInternalSqlDialect.QualifiesColumnReferences"/>; false for a dialect that
     /// isn't an internal one (e.g. a test double).
     /// </summary>

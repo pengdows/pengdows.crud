@@ -45,6 +45,18 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool SupportsSupplementaryCharacters => true;
 
     /// <summary>
+    /// False when a quoted identifier may not contain a space (Spanner: "table name not valid").
+    /// </summary>
+    bool SupportsSpacesInIdentifiers => true;
+
+    /// <summary>
+    /// False when INSERT ... ON CONFLICT can only target the primary key, not a secondary unique
+    /// index (Spanner: "UNIMPLEMENTED"), so an upsert keyed on a [PrimaryKey] business key that is
+    /// not the table's primary key fails there.
+    /// </summary>
+    bool SupportsOnConflictOnSecondaryUniqueKey => true;
+
+    /// <summary>
     /// True when an unqualified column reference inside an expression (a SELECT list, a WHERE
     /// predicate, the right-hand side of SET) can resolve to something other than the column - on
     /// Informix a quoted "user", "today", "current", ... resolves to the special register - so the
