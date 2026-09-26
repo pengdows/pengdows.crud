@@ -208,7 +208,9 @@ public class DataSourceInformationTests
                        || db == SupportedDatabase.SybaseASE
                        || db == SupportedDatabase.Db2
                        || db == SupportedDatabase.SapHana
-                       || db == SupportedDatabase.Informix;
+                       || db == SupportedDatabase.Informix
+                       // pengdows.flatfile implements SQL:2003 MERGE (see FlatFileDialect.SupportsMerge).
+                       || db == SupportedDatabase.FlatFile;
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
@@ -259,12 +261,12 @@ public class DataSourceInformationTests
         };
         var expectedRequiresStoredProcParameterNameMatch = db switch
         {
-            // FlatFile and Informix both have no named parameters at all (positional ? only) and
-            // no stored-procedure support (ProcWrappingStyle.None), so there is nothing to
-            // name-match against. SAP HANA has no named parameters either, even though it DOES
-            // support stored procedures (ProcWrappingStyle.Call) - same "nothing to name-match"
-            // conclusion for a different reason. Access matches FlatFile/Informix's reasoning
-            // exactly: positional ? only, no ADO.NET-invocable stored procedures at all.
+            // Informix has no named parameters at all (positional ? only) and no stored-procedure
+            // support (ProcWrappingStyle.None), so there is nothing to name-match against. FlatFile
+            // binds :name but has no stored procedures either. SAP HANA has no named parameters,
+            // even though it DOES support stored procedures (ProcWrappingStyle.Call) - same
+            // "nothing to name-match" conclusion for a different reason. Access matches Informix's
+            // reasoning exactly: positional ? only, no ADO.NET-invocable stored procedures at all.
             SupportedDatabase.FlatFile or SupportedDatabase.Informix or SupportedDatabase.SapHana
                 or SupportedDatabase.Access => false,
             SupportedDatabase.Firebird or SupportedDatabase.Sqlite or SupportedDatabase.SqlServer

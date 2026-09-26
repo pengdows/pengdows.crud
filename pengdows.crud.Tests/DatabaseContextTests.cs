@@ -117,7 +117,7 @@ public class DatabaseContextTests
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
         var result = context.CreateDbParameter("p1", DbType.Int32, 123, ParameterDirection.Output);
 
-        // Positional dialects (e.g. Informix, FlatFile) still retain the caller's chosen name on
+        // Positional dialects (e.g. Informix, Access) still retain the caller's chosen name on
         // the DbParameter object — only the rendered SQL text ignores it (MakeParameterName
         // always returns "?"). Blanking it here used to be the behavior, but that broke
         // SqlContainer's own internal name-based bookkeeping (dictionary key, SetParameterValue,
