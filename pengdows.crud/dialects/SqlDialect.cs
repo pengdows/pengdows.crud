@@ -795,6 +795,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // DuckDbDialect overrides this; see its comment for the evidence.
     internal virtual bool SupportsCloseConnectionReaderBehavior => true;
 
+    /// <summary>
+    /// True when <paramref name="sql"/> changes the database's type catalog in a way a provider
+    /// caches per data source (Npgsql: CREATE/ALTER/DROP EXTENSION, TYPE, DOMAIN). The context then
+    /// reloads the provider's types on every data source it owns after the statement runs.
+    /// </summary>
+    internal virtual bool InvalidatesProviderTypeCache(string sql) => false;
+
     public virtual bool SupportsSemicolonStatementSeparator => true;
 
     /// <summary>
