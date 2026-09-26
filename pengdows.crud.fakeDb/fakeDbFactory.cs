@@ -73,6 +73,12 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
         ConnectionStringBuilderBehavior.None;
 
+    /// <summary>
+    /// Keywords the emulated provider's typed builder knows, for
+    /// <see cref="ConnectionStringBuilderBehavior.ReportKnownKeywordsAsPresent"/>.
+    /// </summary>
+    internal IReadOnlyCollection<string> KnownConnectionStringKeywords { get; set; } = Array.Empty<string>();
+
     // Shared data store across all connections from this factory
     private readonly FakeDataStore _sharedDataStore = new();
 
@@ -419,7 +425,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             return null;
         }
 
-        return new fakeDbConnectionStringBuilder(_pretendToBe, ConnectionStringBuilderBehavior);
+        return new fakeDbConnectionStringBuilder(_pretendToBe, ConnectionStringBuilderBehavior,
+            KnownConnectionStringKeywords);
     }
 }
 
