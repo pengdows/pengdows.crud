@@ -1466,8 +1466,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         // Apply common type coercions (Guid→string, bool→int16, DateTimeOffset→UtcDateTime).
         // Controlled by NeedsCommonConversions so dialects can opt in independently of
-        // whether they use named or positional parameters.
-        if (!handled && !valueIsNull && NeedsCommonConversions &&
+        // whether they use named or positional parameters. A NULL gets the same converted type
+        // (the converters leave its DBNull value alone): Informix rejects a NULL typed Boolean
+        // for the SMALLINT column a non-null bool binds to ("No cast from boolean to smallint",
+        // confirmed live).
+        if (!handled && NeedsCommonConversions &&
             _commonConversions.TryGetValue(parameter.DbType, out var converter))
         {
             converter(parameter, value);

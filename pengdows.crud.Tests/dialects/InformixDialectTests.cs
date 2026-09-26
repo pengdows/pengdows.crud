@@ -148,6 +148,22 @@ public class InformixDialectTests
         Assert.True(CreateDialect().SupportsMerge);
     }
 
+    // CONFIRMED live (Informix 15, HARN-005 TypeHydrationTests): a NULL bool parameter was sent as
+    // DbType.Boolean while non-null bools are converted to Int16, and the server rejected it
+    // ("No cast from boolean to smallint") for the SMALLINT column a non-null bool binds to. A NULL
+    // must be typed the way the same non-null value would be.
+    [Theory]
+    [InlineData(DbType.Boolean, DbType.Int16)]
+    [InlineData(DbType.Guid, DbType.String)]
+    [InlineData(DbType.DateTimeOffset, DbType.DateTime)]
+    public void CreateDbParameter_Null_GetsTheSameConvertedTypeAsANonNullValue(DbType requested, DbType expected)
+    {
+        var parameter = CreateDialect().CreateDbParameter<object?>("p", requested, null);
+
+        Assert.Equal(expected, parameter.DbType);
+        Assert.Equal(DBNull.Value, parameter.Value);
+    }
+
     // Every mapping below was round-tripped live through a MERGE (insert, then update) against
     // Informix 15.0.1.0.3 with Informix.Net.Core. Booleans are bound as Int16 on this positional
     // dialect, so they are cast to SMALLINT (the column type the testbed uses for booleans).
