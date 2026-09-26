@@ -443,6 +443,12 @@ public partial class DatabaseContext
         catch (Exception e)
         {
             _logger?.LogError(e, "DatabaseContext construction failed.");
+            // A failed constructor never returns an object for the caller to Dispose, so release
+            // what construction already opened or created: sentinels / the persistent connection
+            // (CONFIRMED live on Db2: a failed PreventDatabaseUnload construction left its writer
+            // sentinel open and exhausted a one-connection pool for every later context), owned
+            // data sources, and governors.
+            ReleaseResourcesAfterFailedConstruction();
             throw;
         }
         finally
@@ -1837,6 +1843,24 @@ public partial class DatabaseContext
         return connectionString;
     }
 
+    private void ReleaseResourcesAfterFailedConstruction()
+    {
+        DisposePersistentConnections();
+        try
+        {
+            DisposeOwnedDataSources();
+        }
+        catch
+        {
+            // best effort, as in normal disposal
+        }
+
+        _writerGovernor?.Dispose();
+        _writerGovernor = null;
+        _readerGovernor?.Dispose();
+        _readerGovernor = null;
+    }
+
     private DbMode CoerceMode(DbMode requested, SupportedDatabase product, DatabaseTopology topology)
     {
         // All per-database coercion policy (what Best resolves to, which explicit modes are unsafe
@@ -1848,6 +1872,20 @@ public partial class DatabaseContext
         var (mode, reason) = dialect is SqlDialect sqlDialect
             ? sqlDialect.CoerceConnectionMode(requested, _connectionString, topology)
             : dialect.CoerceConnectionMode(requested, _connectionString, topology.IsLocalDb);
+        // Best must not override a caller's explicit one-connection pool to make room for a
+        // PreventDatabaseUnload sentinel (CONFIRMED live on Db2: IBM's driver rejects the raised
+        // pool size once the detection connection has created the pool at size 1).
+        if (requested == DbMode.Best && mode == DbMode.PreventDatabaseUnload && dialect is SqlDialect poolDialect)
+        {
+            var configuredMax = _configuredWritePoolSize ??
+                                PoolingConfigReader.GetEffectivePoolConfig(poolDialect, _connectionString).MaxPoolSize;
+            if (configuredMax is < 2)
+            {
+                (mode, reason) = (DbMode.Standard,
+                    $"Best would select PreventDatabaseUnload, but its sentinel needs a second pooled connection and the configured maximum pool size is {configuredMax}; using Standard");
+            }
+        }
+
         LogModeOverride(requested, mode, reason);
         if (dialect is SqlDialect topologyDialect && topologyDialect.DescribeUnsupportedTopology(topology) is { } unsupported)
         {
