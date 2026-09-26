@@ -32,6 +32,8 @@ public class TestTableCreator
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
             SupportedDatabase.TiDb => CreateMySqlTableSql(),
             SupportedDatabase.DuckDB => CreateDuckDbTableSql(),
+            // pengdows.flatfile parses ISO SQL; the DuckDB DDL is ISO-clean.
+            SupportedDatabase.FlatFile => CreateDuckDbTableSql(),
             SupportedDatabase.CockroachDb => CreatePostgreSqlTableSql(),
             SupportedDatabase.YugabyteDb => CreatePostgreSqlTableSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeTableSql(),
@@ -200,6 +202,22 @@ public class TestTableCreator
                     {guidCol} UUID NOT NULL,
                     {binCol} BLOB NOT NULL
                 )",
+            // ISO SQL types only (TIMESTAMPTZ is vendor shorthand there). NULLTOKEN: a CSV field
+            // cannot tell NULL from '' for a text column without a declared null token.
+            SupportedDatabase.FlatFile => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMP WITH TIME ZONE NOT NULL,
+                    {guidCol} UUID NOT NULL,
+                    {binCol} BLOB NOT NULL
+                ) WITH (NULLTOKEN = '<<NULL>>')",
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -225,7 +243,7 @@ public class TestTableCreator
                     {userCol} TEXT
                 )",
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-                or SupportedDatabase.Snowflake => $@"
+                or SupportedDatabase.Snowflake or SupportedDatabase.FlatFile => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {selectCol} VARCHAR(255),
@@ -333,7 +351,7 @@ public class TestTableCreator
                     {0}name{1} TEXT NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
                 )", qp, qs, table),
-            SupportedDatabase.PostgreSql => string.Format(@"
+            SupportedDatabase.PostgreSql or SupportedDatabase.FlatFile => string.Format(@"
                 CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,

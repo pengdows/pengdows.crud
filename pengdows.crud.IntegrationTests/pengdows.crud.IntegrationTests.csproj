@@ -29,4 +29,11 @@
         <ProjectReference Include="..\testbed\testbed.csproj"/>
     </ItemGroup>
 
+    <!-- Same sibling-checkout rule as testbed/testbed.csproj: the pengdows.flatfile reference
+         arrives through testbed, and PENGDOWS_FLATFILE gates the FlatFile-specific test code. -->
+    <PropertyGroup>
+        <PengdowsFlatFileProject Condition="'$(PengdowsFlatFileProject)' == ''">$(MSBuildThisFileDirectory)..\..\pengdows.flatfile\pengdows.flatfile\pengdows.flatfile.csproj</PengdowsFlatFileProject>
+        <DefineConstants Condition="Exists('$(PengdowsFlatFileProject)')">$(DefineConstants);PENGDOWS_FLATFILE</DefineConstants>
+    </PropertyGroup>
+
 </Project>

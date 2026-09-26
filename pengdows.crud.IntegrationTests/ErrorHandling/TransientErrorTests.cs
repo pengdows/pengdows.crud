@@ -81,6 +81,15 @@ public class TransientErrorTests : DatabaseTestBase
                 DuckDB.NET.Data.DuckDBClientFactory.Instance);
         }
 
+#if PENGDOWS_FLATFILE
+        // pengdows.flatfile is embedded too: a directory-mode path that doesn't exist.
+        if (provider == SupportedDatabase.FlatFile)
+        {
+            return new DatabaseContext("path=/nonexistent_dir_pengdows_probe/flatfile",
+                pengdows.flatfile.FlatFileProviderFactory.Instance);
+        }
+#endif
+
         // Every other provider is TCP-based: rewrite the real connection string's port to a
         // closed local port (nothing listening) — an immediate, deterministic ECONNREFUSED,
         // as opposed to a blackholed host which could instead manifest as a slow-connect

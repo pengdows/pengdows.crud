@@ -40,7 +40,9 @@ public class InsertReturningTests : DatabaseTestBase
     {
         SupportedDatabase.MySql,
         SupportedDatabase.TiDb,
-        SupportedDatabase.Snowflake
+        SupportedDatabase.Snowflake,
+        // pengdows.flatfile: no IDENTITY/RETURNING; the id comes from a sequence DEFAULT.
+        SupportedDatabase.FlatFile
     };
 
     public InsertReturningTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
@@ -202,6 +204,15 @@ CREATE TABLE {table} (
             SupportedDatabase.Snowflake => $@"
 CREATE TABLE {table} (
     {context.WrapObjectName("id")} BIGINT AUTOINCREMENT PRIMARY KEY,
+    {context.WrapObjectName("name")} VARCHAR(255) NOT NULL
+)",
+            // ISO SQL: no IDENTITY column, so the id defaults from a sequence. The DROP runs first
+            // because SetupDatabaseAsync only drops the table.
+            SupportedDatabase.FlatFile => $@"
+DROP SEQUENCE IF EXISTS {context.WrapObjectName(TableName + "_seq")};
+CREATE SEQUENCE {context.WrapObjectName(TableName + "_seq")};
+CREATE TABLE {table} (
+    {context.WrapObjectName("id")} BIGINT DEFAULT NEXT VALUE FOR {context.WrapObjectName(TableName + "_seq")} NOT NULL PRIMARY KEY,
     {context.WrapObjectName("name")} VARCHAR(255) NOT NULL
 )",
             _ => throw new NotSupportedException($"Provider {provider} is not supported by this test")

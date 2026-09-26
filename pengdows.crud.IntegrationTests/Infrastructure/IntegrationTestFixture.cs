@@ -20,7 +20,11 @@ internal static class IntegrationTestConfiguration
         SupportedDatabase.DuckDB,
         SupportedDatabase.Oracle,
         SupportedDatabase.YugabyteDb,
-        SupportedDatabase.TiDb
+        SupportedDatabase.TiDb,
+        // In-process; built from the sibling pengdows.flatfile checkout (see testbed.csproj). When
+        // that checkout is missing, ParallelTestOrchestrator.CreateContainerAsync returns null and the
+        // fixture reports FlatFile as unavailable.
+        SupportedDatabase.FlatFile
     };
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>

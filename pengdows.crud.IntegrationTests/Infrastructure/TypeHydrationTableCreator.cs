@@ -63,6 +63,7 @@ public class TypeHydrationTableCreator
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeSql(),
+            SupportedDatabase.FlatFile => CreateFlatFileSql(),
             _ => throw new NotSupportedException(
                 $"Database {_context.Product} is not supported by TypeHydrationTableCreator")
         };
@@ -199,6 +200,35 @@ CREATE TABLE IF NOT EXISTS {2} (
     {0}col_enum_int{1}       INTEGER          NOT NULL,
     {0}col_enum_str{1}       VARCHAR(50)      NOT NULL
 )", qp, qs, table);
+    }
+
+    // pengdows.flatfile: ISO SQL types only (TIMESTAMPTZ is rejected as vendor shorthand, so the
+    // standard TIMESTAMP WITH TIME ZONE). NULLTOKEN lets col_string_null keep NULL distinct from ''.
+    private string CreateFlatFileSql()
+    {
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
+        var w = (string name) => _context.WrapObjectName(name);
+        return $@"
+CREATE TABLE IF NOT EXISTS {table} (
+    {w("id")}                 BIGINT           NOT NULL PRIMARY KEY,
+    {w("col_string")}         VARCHAR(500)     NOT NULL,
+    {w("col_string_null")}    VARCHAR(500),
+    {w("col_short")}          SMALLINT         NOT NULL,
+    {w("col_int")}            INTEGER          NOT NULL,
+    {w("col_int_null")}       INTEGER,
+    {w("col_long")}           BIGINT           NOT NULL,
+    {w("col_float")}          REAL             NOT NULL,
+    {w("col_double")}         DOUBLE PRECISION NOT NULL,
+    {w("col_decimal")}        DECIMAL(18,8)    NOT NULL,
+    {w("col_bool")}           BOOLEAN          NOT NULL,
+    {w("col_bool_null")}      BOOLEAN,
+    {w("col_datetime")}       TIMESTAMP        NOT NULL,
+    {w("col_datetimeoffset")} TIMESTAMP WITH TIME ZONE NOT NULL,
+    {w("col_guid")}           UUID             NOT NULL,
+    {w("col_binary")}         BLOB,
+    {w("col_enum_int")}       INTEGER          NOT NULL,
+    {w("col_enum_str")}       VARCHAR(50)      NOT NULL
+) WITH (NULLTOKEN = '<<NULL>>')";
     }
 
     private string CreateSnowflakeSql()

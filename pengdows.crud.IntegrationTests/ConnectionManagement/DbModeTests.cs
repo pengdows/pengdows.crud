@@ -34,11 +34,13 @@ public class DbModeTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Arrange - fixture contexts use Best: SQLite/DuckDB resolve to SingleWriter, Firebird to
-            // PreventDatabaseUnload (a sentinel per pool, never used for work), others to Standard
+            // Arrange - fixture contexts use Best: SQLite/DuckDB/FlatFile resolve to SingleWriter,
+            // Firebird to PreventDatabaseUnload (a sentinel per pool, never used for work), others to
+            // Standard
             var expectedMode = provider switch
             {
-                SupportedDatabase.Sqlite or SupportedDatabase.DuckDB => DbMode.SingleWriter,
+                SupportedDatabase.Sqlite or SupportedDatabase.DuckDB or SupportedDatabase.FlatFile =>
+                    DbMode.SingleWriter,
                 SupportedDatabase.Firebird => DbMode.PreventDatabaseUnload,
                 _ => DbMode.Standard
             };
@@ -416,6 +418,14 @@ public class DbModeTests : DatabaseTestBase
             if (provider == SupportedDatabase.DuckDB)
             {
                 Output.WriteLine("Skipping isolation test for DuckDB");
+                return;
+            }
+
+            // Capability: pengdows.flatfile allows one writer connection per database, so the second
+            // concurrent write transaction this test needs cannot exist (ConnectionWriteLock).
+            if (provider == SupportedDatabase.FlatFile)
+            {
+                Output.WriteLine("Skipping isolation test for FlatFile (single writer; no concurrent write transaction)");
                 return;
             }
 
