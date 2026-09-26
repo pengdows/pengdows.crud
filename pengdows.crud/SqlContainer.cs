@@ -1645,7 +1645,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 metrics,
                 this,
                 contextLocker,
-                singleConnectionTxGate);
+                singleConnectionTxGate,
+                readFailure => readFailure is not DatabaseException && LooksLikeProviderException(readFailure)
+                    ? TranslateDatabaseException(readFailure, operationKind)
+                    : null);
             cmd = null;
             singleConnectionTxGate = null; // TrackedReader owns it until reader disposal.
             lockTransferred = true; // TrackedReader now owns both the connection and context locks

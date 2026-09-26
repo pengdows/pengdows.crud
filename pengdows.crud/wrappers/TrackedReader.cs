@@ -49,6 +49,10 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     private long _firstRowTimestamp;
     private int _metricsRecorded;
 
+    // Translates a provider exception raised while fetching a row into the typed DatabaseException
+    // hierarchy (null when it isn't a provider exception), like failures while executing the command.
+    private readonly Func<Exception, Exception?>? _readFailureTranslator;
+
     internal TrackedReader(
         DbDataReader reader,
         ITrackedConnection connection,
@@ -58,8 +62,10 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         MetricsCollector? metricsCollector = null,
         IReaderLifetimeListener? lifetimeListener = null,
         IAsyncDisposable? contextLocker = null,
-        IAsyncDisposable? singleConnectionTransactionGate = null)
+        IAsyncDisposable? singleConnectionTransactionGate = null,
+        Func<Exception, Exception?>? readFailureTranslator = null)
     {
+        _readFailureTranslator = readFailureTranslator;
         _reader = reader;
         _connection = connection;
         _connectionLocker = connectionLocker;
@@ -178,7 +184,17 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     /// </remarks>
     public bool Read()
     {
-        if (_reader.Read())
+        bool hasRow;
+        try
+        {
+            hasRow = _reader.Read();
+        }
+        catch (Exception ex) when (TranslateReadFailure(ex) is { } translated)
+        {
+            throw translated;
+        }
+
+        if (hasRow)
         {
             Interlocked.CompareExchange(ref _firstRowTimestamp, Stopwatch.GetTimestamp(), 0);
             Interlocked.Increment(ref _rowsRead);
@@ -481,7 +497,17 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     /// </remarks>
     public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
     {
-        if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        bool hasRow;
+        try
+        {
+            hasRow = await _reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (TranslateReadFailure(ex) is { } translated)
+        {
+            throw translated;
+        }
+
+        if (hasRow)
         {
             Interlocked.CompareExchange(ref _firstRowTimestamp, Stopwatch.GetTimestamp(), 0);
             Interlocked.Increment(ref _rowsRead);
@@ -490,6 +516,16 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
         await DisposeAsync().ConfigureAwait(false); // Auto-dispose when done reading
         return false;
+    }
+
+    private Exception? TranslateReadFailure(Exception exception)
+    {
+        if (_readFailureTranslator == null || exception is OperationCanceledException)
+        {
+            return null;
+        }
+
+        return _readFailureTranslator(exception);
     }
 
     public DateTime GetDateTime(int i)
