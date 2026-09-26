@@ -151,8 +151,10 @@ public enum SupportedDatabase
     AuroraPostgreSql = 1 << 13,
 
     /// <summary>
-    /// IBM Db2 (LUW). Enterprise RDBMS with strong SQL standard compliance
+    /// IBM Db2. Enterprise RDBMS with strong SQL standard compliance
     /// (<c>FETCH FIRST n ROWS ONLY</c> paging, <c>CALL</c>-style stored procedures).
+    /// Db2 for Linux/Unix/Windows (LUW) is specifically supported and tested; Db2 for z/OS and
+    /// Db2 for i should work but have not been tested.
     /// </summary>
     Db2 = 1 << 14,
 

@@ -894,7 +894,7 @@ The repository contains concrete support for:
 - TiDB
 - Snowflake
 - SingleStore (detected at runtime; uses the MySQL dialect)
-- IBM Db2
+- IBM Db2 (LUW tested; z/OS and IBM i should work but are untested)
 - SAP (Sybase) ASE
 - IBM Informix
 - SAP HANA
@@ -3506,7 +3506,7 @@ The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connec
 
 The mode retains one sentinel connection per enabled pool: the connection opened during construction for dialect detection is kept open instead of being disposed (it is the writer-pool sentinel on a read-write context, the reader-pool sentinel on a read-only one), and when a dedicated `ReadOnlyConnectionString` is configured on a read-write context a second sentinel is opened for the reader pool. **The sentinel never executes application commands, opens transactions, or hands work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode — and, because it is never used for work, session settings are not applied to it. Each sentinel holds one permit from its own pool's governor, so effective working capacity per pool is the configured capacity minus its sentinel (which is why enabled pools are raised to at least 2 — see `docs/connection-pooling.md`).
 
-- `Best` auto-selects it for **SQL Server LocalDB** and **Firebird** (embedded and client-server). Firebird's default `LINGER` discards the database's page cache when its last attachment closes; the testbed's `DbMode.SentinelPreventsUnload` probe measured a sentinel saving ~7-10ms per cold checkout on live Firebird. Other engines with an idle-triggered cost (Db2 implicit activation/deactivation, SQL Server with `AUTO_CLOSE` explicitly on) stay knob-only: `Best` resolves to `Standard` for them.
+- `Best` auto-selects it for **SQL Server LocalDB**, **Firebird** (embedded and client-server) and **Db2 LUW**. Firebird's default `LINGER` discards the database's page cache when its last attachment closes (the testbed probe measured a sentinel saving ~7-10ms per cold checkout). Db2 LUW's default implicit activation deactivates a database when its last connection closes (measured ~1.1 s per cold connection, ~4 ms with a sentinel); it is recognized on the detection connection, and any Db2 server not positively recognized as LUW keeps `Standard`. SQL Server with `AUTO_CLOSE` explicitly on stays knob-only: `Best` resolves to `Standard`.
 - **`Best` is a default, not a mandate.** Wherever `Best` selects `PreventDatabaseUnload`, an explicit `Standard` request is always honored: a deployment busy enough never to drain its pool doesn't need the sentinel, and one deliberately built to scale to zero must not have that defeated. Firebird honors every explicit mode; LocalDB honors `Standard` (the single-connection modes have no purpose there and resolve to `PreventDatabaseUnload`), with a performance-only warning.
 - Extending `Best`'s auto-selection to another database requires empirical proof against a live engine (the testbed probe) and a considered maintainer decision; a documented or plausible cost alone is not enough.
 - There is one sentinel per enabled pool: the writer pool, plus the reader pool when a dedicated `ReadOnlyConnectionString` is configured (a read-only context has only the reader-pool sentinel). A sentinel that is found Broken or Closed is replaced before the next connection-requiring operation (see §6).
@@ -3550,7 +3550,7 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 - Resolver hint only. Not an actual strategy.
 - Defaults to the safest mode based on dialect + connection string:
-  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2, Firebird — embedded or client-server) → Standard
+  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, non-LUW Db2) → Standard; Firebird and Db2 LUW → PreventDatabaseUnload
   - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based → SingleWriter
@@ -3620,7 +3620,9 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 ### Firebird (embedded or client-server): `Best` selects PreventDatabaseUnload (one sentinel per pool). Every explicit choice — including `Standard` — is honored as-is, no warning logged.
 
-### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. Db2 (implicit database activation/deactivation) and SQL Server (with `AUTO_CLOSE`) can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
+### Db2: on a positively detected Db2 LUW server `Best` selects PreventDatabaseUnload; on any other or unrecognized Db2 server (z/OS, IBM i — untested) it selects Standard. Every explicit choice — including `Standard` — is honored.
+
+### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. SQL Server with `AUTO_CLOSE` can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
 
 ### FakeDb: no special case. It emulates a real dialect via `EmulatedProduct` and follows all the above rules.
 
@@ -4527,7 +4529,7 @@ pengdows.crud supports 23 directly supported database products via the `Supporte
 | `SingleStore=65536` | SingleStore (formerly MemSQL); detected at runtime, delegates to MySQL dialect — see note below |
 | `FlatFile=32768` | [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) — embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files |
 | `SybaseASE=131072` | Sybase (SAP) Adaptive Server Enterprise — dedicated `SybaseAseDialect`, T-SQL family — see note below |
-| `Db2=16384` | IBM Db2 for Linux/Unix/Windows (Db2 LUW) — dedicated `Db2Dialect` — see note below |
+| `Db2=16384` | IBM Db2 — dedicated `Db2Dialect`. **LUW specifically supported and tested; z/OS and IBM i should work but are untested** — see note below |
 | `Spanner=262144` | Google Cloud Spanner through its PostgreSQL interface / PGAdapter |
 | `Informix=524288` | IBM Informix Dynamic Server |
 | `SapHana=1048576` | SAP HANA (opt-in integration coverage) |
@@ -4552,7 +4554,7 @@ pengdows.crud supports 23 directly supported database products via the `Supporte
 
 > **Informix special registers:** an *unqualified* quoted identifier named after a special register (`user`, `today`, `current`, `sitename`, `dbservername`, `current_user`) resolves to the register, not the column, wherever it appears in an expression. For example, `DELETE FROM "t" WHERE "user" = ?` compares the session user name. The gateways table-qualify every column reference on Informix, so generated SQL is safe. In your own SQL, always qualify such columns (`"t"."user"`, or an alias). Informix's .NET provider also trims trailing spaces from every `VARCHAR`/`LVARCHAR` value it reads, with no option to turn it off (IBM APAR IC63704); see `ISqlDialect.PreservesTrailingWhitespace`.
 
-> **IBM Db2 (LUW):** has its own dedicated `Db2Dialect`, verified live against `ibmcom/db2` (Phase 2 testbed validation; `testbed/Db2/Db2TestContainer.cs` exists, but Db2 is not currently registered in `ParallelTestOrchestrator.GetTestConfigurations()`, so the default testbed run does not exercise it). Generated-key retrieval wraps the ENTIRE insert statement — `SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...))` — rather than appending a trailing RETURNING/OUTPUT clause; this branch's dialect layer has no per-database "wrap the whole statement" hook (unlike newer branches), so `TableGateway.Core.cs` (`BuildCreateWithReturning`) special-cases `SupportedDatabase.Db2` directly, matching its existing SqlServer/Oracle special cases. Isolation levels (Db2's UR/CS/RS/RR map to ReadUncommitted/ReadCommitted/RepeatableRead/Serializable) are registered in `IsolationResolver`'s central per-database switch, not on the dialect itself — this branch's isolation system predates per-dialect isolation customization. Stored procedures use SQL-standard `CALL` syntax (same wrapping style as MySQL/MariaDB); a bare `SAVEPOINT name` is rejected (`SQL0104N`) — Db2 requires `ON ROLLBACK RETAIN CURSORS`. IBM's `DB2Exception` declares its own all-caps `SQLState` property (ambiguous with the inherited `DbException.SqlState`) and often doesn't populate SqlState via any property at all — both are handled by `DbExceptionTranslationSupport`'s ambiguity-safe reflection scan plus a message-embedded-SQLSTATE regex fallback, not Db2-specific special-casing.
+> **IBM Db2:** Db2 for Linux/Unix/Windows (LUW) is specifically supported and tested; Db2 for z/OS and Db2 for i should work but have not been tested. The dedicated `Db2Dialect` is verified live against Db2 LUW (`ibmcom/db2`) in the always-on testbed run (`testbed/Db2`). The Db2 family is three separate products sharing a common SQL subset (Db2 LUW, Db2 for z/OS, Db2 for i), not one engine on different operating systems, so behavior outside that common subset may differ on z/OS and IBM i. IBM's .NET driver may also require a Db2 Connect license to reach z/OS or IBM i. `DbMode.Best`: on a positively detected Db2 LUW server it selects `PreventDatabaseUnload` (LUW's default implicit activation deactivates an idle database; measured ~1.1 s per cold connection versus ~4 ms with a sentinel); any other or unrecognized Db2 server keeps `Standard`, and an explicit `Standard` is always honored. Generated-key retrieval wraps the ENTIRE insert statement — `SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...))` — rather than appending a trailing RETURNING/OUTPUT clause; this branch's dialect layer has no per-database "wrap the whole statement" hook (unlike newer branches), so `TableGateway.Core.cs` (`BuildCreateWithReturning`) special-cases `SupportedDatabase.Db2` directly, matching its existing SqlServer/Oracle special cases. Isolation levels (Db2's UR/CS/RS/RR map to ReadUncommitted/ReadCommitted/RepeatableRead/Serializable) are registered in `IsolationResolver`'s central per-database switch, not on the dialect itself — this branch's isolation system predates per-dialect isolation customization. Stored procedures use SQL-standard `CALL` syntax (same wrapping style as MySQL/MariaDB); a bare `SAVEPOINT name` is rejected (`SQL0104N`) — Db2 requires `ON ROLLBACK RETAIN CURSORS`. IBM's `DB2Exception` declares its own all-caps `SQLState` property (ambiguous with the inherited `DbException.SqlState`) and often doesn't populate SqlState via any property at all — both are handled by `DbExceptionTranslationSupport`'s ambiguity-safe reflection scan plus a message-embedded-SQLSTATE regex fallback, not Db2-specific special-casing.
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 

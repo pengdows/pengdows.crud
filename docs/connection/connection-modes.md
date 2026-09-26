@@ -34,7 +34,7 @@ The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connec
 
 The mode retains one sentinel connection per enabled pool: the connection opened during construction for dialect detection is kept open instead of being disposed (it is the writer-pool sentinel on a read-write context, the reader-pool sentinel on a read-only one), and when a dedicated `ReadOnlyConnectionString` is configured on a read-write context a second sentinel is opened for the reader pool. **The sentinel never executes application commands, opens transactions, or hands work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode — and, because it is never used for work, session settings are not applied to it. Each sentinel holds one permit from its own pool's governor, so effective working capacity per pool is the configured capacity minus its sentinel (which is why enabled pools are raised to at least 2 — see `docs/connection-pooling.md`).
 
-- `Best` auto-selects it for **SQL Server LocalDB** and **Firebird** (embedded and client-server). Firebird's default `LINGER` discards the database's page cache when its last attachment closes; the testbed's `DbMode.SentinelPreventsUnload` probe measured a sentinel saving ~7-10ms per cold checkout on live Firebird. Other engines with an idle-triggered cost (Db2 implicit activation/deactivation, SQL Server with `AUTO_CLOSE` explicitly on) stay knob-only: `Best` resolves to `Standard` for them.
+- `Best` auto-selects it for **SQL Server LocalDB**, **Firebird** (embedded and client-server) and **Db2 LUW**. Firebird's default `LINGER` discards the database's page cache when its last attachment closes (the testbed probe measured a sentinel saving ~7-10ms per cold checkout). Db2 LUW's default implicit activation deactivates a database when its last connection closes (measured ~1.1 s per cold connection, ~4 ms with a sentinel); it is recognized on the detection connection, and any Db2 server not positively recognized as LUW keeps `Standard`. SQL Server with `AUTO_CLOSE` explicitly on stays knob-only: `Best` resolves to `Standard`.
 - **`Best` is a default, not a mandate.** Wherever `Best` selects `PreventDatabaseUnload`, an explicit `Standard` request is always honored: a deployment busy enough never to drain its pool doesn't need the sentinel, and one deliberately built to scale to zero must not have that defeated. Firebird honors every explicit mode; LocalDB honors `Standard` (the single-connection modes have no purpose there and resolve to `PreventDatabaseUnload`), with a performance-only warning.
 - Extending `Best`'s auto-selection to another database requires empirical proof against a live engine (the testbed probe) and a considered maintainer decision; a documented or plausible cost alone is not enough.
 - There is one sentinel per enabled pool: the writer pool, plus the reader pool when a dedicated `ReadOnlyConnectionString` is configured (a read-only context has only the reader-pool sentinel). A sentinel that is found Broken or Closed is replaced before the next connection-requiring operation (see §6).
@@ -78,7 +78,7 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 - Resolver hint only. Not an actual strategy.
 - Defaults to the safest mode based on dialect + connection string:
-  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2, Firebird — embedded or client-server) → Standard
+  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, non-LUW Db2) → Standard; Firebird and Db2 LUW → PreventDatabaseUnload
   - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based → SingleWriter
@@ -148,7 +148,9 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 ### Firebird (embedded or client-server): `Best` selects PreventDatabaseUnload (one sentinel per pool). Every explicit choice — including `Standard` — is honored as-is, no warning logged.
 
-### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. Db2 (implicit database activation/deactivation) and SQL Server (with `AUTO_CLOSE`) can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
+### Db2: on a positively detected Db2 LUW server `Best` selects PreventDatabaseUnload; on any other or unrecognized Db2 server (z/OS, IBM i — untested) it selects Standard. Every explicit choice — including `Standard` — is honored.
+
+### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. SQL Server with `AUTO_CLOSE` can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
 
 ### FakeDb: no special case. It emulates a real dialect via `EmulatedProduct` and follows all the above rules.
 

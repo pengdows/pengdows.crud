@@ -1,6 +1,8 @@
 // =============================================================================
 // FILE: Db2Dialect.cs
-// PURPOSE: IBM Db2 for Linux/Unix/Windows (Db2 LUW) specific dialect implementation.
+// PURPOSE: IBM Db2 dialect. Db2 for Linux/Unix/Windows (LUW) is specifically supported and
+//          tested; Db2 for z/OS and Db2 for i should work but have not been tested (they are
+//          separate products sharing a common SQL subset, so behavior beyond it may differ).
 //
 // AI SUMMARY:
 // - Supports Db2 LUW 11.1+ (native BOOLEAN, GENERATE_UUID(), FINAL TABLE clause).
