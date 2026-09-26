@@ -80,6 +80,21 @@ public class SybaseAseDialectTests
         Assert.Equal(guid, param.Value);
     }
 
+    // CONFIRMED live (ASE 16.0): with ASE's default "set ansinull off", "col = @p" with a NULL
+    // parameter matches rows whose col is NULL (count 1); after "set ansinull on" it matches none,
+    // as on every other database. The session baseline must normalize it, like SQL Server's
+    // ANSI_NULLS ON. ASE rejects ';' between statements, so the two SETs are newline-separated.
+    [Fact]
+    public void BaseSessionSettings_EnableAnsiNullComparisons_WithoutSemicolons()
+    {
+        var settings = Dialect().GetBaseSessionSettings();
+
+        Assert.Contains("SET QUOTED_IDENTIFIER ON", settings);
+        Assert.Contains("SET ANSINULL ON", settings);
+        Assert.DoesNotContain(";", settings);
+        Assert.DoesNotContain(";", Dialect().GetFinalSessionSettings(readOnly: false));
+    }
+
     [Fact]
     public void ParameterMarker_IsAt()
         => Assert.Equal("@", Dialect().ParameterMarker);

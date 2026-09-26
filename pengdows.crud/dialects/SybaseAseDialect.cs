@@ -205,7 +205,12 @@ internal class SybaseAseDialect : SqlDialect
     // default so GetFinalSessionSettings never tries to semicolon-join it with a second
     // statement) — ASE does not accept ';' as a multi-statement separator at all in this
     // provider/version, unlike every other T-SQL-family dialect in this codebase.
-    public override string GetBaseSessionSettings() => "SET QUOTED_IDENTIFIER ON";
+    //
+    // SET ANSINULL ON: ASE's default (off) makes "col = @p" with a NULL parameter match NULL rows,
+    // unlike every other database (confirmed live, ASE 16.0); this is the ASE counterpart of SQL
+    // Server's ANSI_NULLS ON. Newline-separated: ASE accepts several statements in one batch but
+    // not a ';' between them.
+    public override string GetBaseSessionSettings() => "SET QUOTED_IDENTIFIER ON\nSET ANSINULL ON";
 
     public override string GetVersionQuery() => "SELECT @@version";
 
