@@ -340,6 +340,11 @@ public class fakeDbCommand : DbCommand
             SupportedDatabase.Db2 when normalizedCommand.Contains("SYSPROC.ENV_GET_INST_INFO")
                 => "11.05.0800",
 
+            // Spanner's PostgreSQL interface is detected by this probe (ordinary PostgreSQL rejects
+            // it). Confirmed live against Spanner Omni + PGAdapter: it returns an empty string.
+            SupportedDatabase.Spanner when normalizedCommand == "SHOW SPANNER.OPTIMIZER_VERSION"
+                => string.Empty,
+
             _ => null
         };
     }

@@ -44,11 +44,10 @@
 //   no override needed for that shape). But a DELETE blocked by a child row instead returns the
 //   generic "P0001" code with a message pattern - the inherited SqlState-only check misses this
 //   shape entirely.
-// - SupportsOverridingSystemValue needs no override here - unlike 3.0 (where this is a dialect
-//   capability flag ISqlDialect exposes), 2.0.6's TableGateway.Upsert.cs decides whether to emit
-//   "OVERRIDING SYSTEM VALUE" via a direct product-type switch matching only PostgreSql/
-//   AuroraPostgreSql - Spanner, being a distinct SupportedDatabase value, is already correctly
-//   excluded by that switch with no code changes needed.
+// - SupportsOverridingSystemValue is false: CONFIRMED live, Spanner's PostgreSQL interface
+//   rejects "OVERRIDING SYSTEM VALUE" ("P0001: Statements with OVERRIDING clauses are not
+//   supported"). Since BP-117 the upsert paths use this dialect capability, which Spanner would
+//   otherwise inherit (true) from PostgreSqlDialect.
 // =============================================================================
 
 using System.Data;
@@ -68,6 +67,9 @@ internal sealed class SpannerDialect : PostgreSqlDialect
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Spanner;
     public override bool SupportsMerge => false;
+
+    // CONFIRMED live: "Statements with OVERRIDING clauses are not supported" (see file header).
+    internal override bool SupportsOverridingSystemValue => false;
     public override bool SupportsSetValuedParameters => false;
 
     // Verified live against a real Spanner Omni + PGAdapter instance: `ROW_NUMBER() OVER (...)`

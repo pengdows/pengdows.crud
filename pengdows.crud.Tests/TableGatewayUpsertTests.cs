@@ -126,9 +126,13 @@ public class TableGatewayUpsertTests
     [InlineData(SupportedDatabase.PostgreSql, true)]
     [InlineData(SupportedDatabase.YugabyteDb, true)]
     [InlineData(SupportedDatabase.CockroachDb, false)]
+    // CONFIRMED live: Spanner's PostgreSQL interface rejects the clause ("P0001: Statements with
+    // OVERRIDING clauses are not supported").
+    [InlineData(SupportedDatabase.Spanner, false)]
     public async Task BuildUpsert_WithWritableId_OverridingSystemValue_PerDialect(SupportedDatabase db, bool expected)
     {
         await using var context = CreateUpsertContext(db);
+        Assert.Equal(db, context.Product);
         var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
 
         using var container = gateway.BuildUpsert(new ExplicitIdentityEntity { Id = 42, Value = "x" }, context);
@@ -140,6 +144,7 @@ public class TableGatewayUpsertTests
     [InlineData(SupportedDatabase.PostgreSql, true)]
     [InlineData(SupportedDatabase.YugabyteDb, true)]
     [InlineData(SupportedDatabase.CockroachDb, false)]
+    [InlineData(SupportedDatabase.Spanner, false)]
     public async Task BuildBatchUpsert_WithWritableId_OverridingSystemValue_PerDialect(SupportedDatabase db, bool expected)
     {
         await using var context = CreateUpsertContext(db);
