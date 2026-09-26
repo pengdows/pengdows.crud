@@ -18,6 +18,15 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     public override SupportedDatabase DatabaseType => SupportedDatabase.Spanner;
     public override bool SupportsMerge => false;
     public override bool SupportsOverridingSystemValue => false;
+
+    // CONFIRMED live (Spanner Omni + PGAdapter): a quoted identifier containing a space is rejected
+    // ("table name not valid: Default Order").
+    public override bool SupportsSpacesInIdentifiers => false;
+
+    // CONFIRMED live (Spanner Omni + PGAdapter): INSERT ... ON CONFLICT works when the target is the
+    // primary key; a secondary unique index as the target fails with "UNIMPLEMENTED".
+    public override bool SupportsOnConflictOnSecondaryUniqueKey => false;
+
     public override bool SupportsSetValuedParameters => false;
 
     // Verified live against a real Spanner Omni + PGAdapter instance: `ROW_NUMBER() OVER (...)`

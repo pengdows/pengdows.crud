@@ -43,6 +43,18 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool SupportsSupplementaryCharacters => true;
 
     /// <summary>
+    /// False when a quoted identifier may not contain a space (Spanner: "table name not valid").
+    /// </summary>
+    bool SupportsSpacesInIdentifiers => true;
+
+    /// <summary>
+    /// False when INSERT ... ON CONFLICT can only target the primary key, not a secondary unique
+    /// index (Spanner: "UNIMPLEMENTED"), so an upsert keyed on a [PrimaryKey] business key that is
+    /// not the table's primary key fails there.
+    /// </summary>
+    bool SupportsOnConflictOnSecondaryUniqueKey => true;
+
+    /// <summary>
     /// Renders provider-specific JSON casts for parameter placeholders.
     /// </summary>
     string RenderJsonArgument(string parameterMarker, IColumnInfo column);
