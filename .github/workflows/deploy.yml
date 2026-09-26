@@ -107,10 +107,12 @@ jobs:
 
       - name: Run integration suite
         run: |
-          # testbed is multi-targeted (net8.0;net10.0) - run the matrix on each.
-          for tfm in net8.0 net10.0; do
-            dotnet run --no-build --configuration Release -f "$tfm" --project testbed/testbed.csproj
-          done
+          # HARN-004: same entry point as a local run. run-integration-tests.sh provisions the
+          # pinned Firebird Embedded runtime, exports the native-driver environment the
+          # integration fixture needs before `dotnet test` starts, runs
+          # pengdows.crud.IntegrationTests on both TFMs, then the testbed matrix on net8.0 and
+          # net10.0. It fails the job on the first failing suite.
+          ./run-integration-tests.sh
 
       - name: Generate coverage report
         run: |
