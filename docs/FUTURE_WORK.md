@@ -141,6 +141,18 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 - **DuckDB BLOB → `Stream` reads zeros.** 3.0 fixes the compiled mapper and coercions but not `DataReaderMapper`'s
   own setter path; 2.0.6 covers all four (c3e01b9).
 
+### Found during Tier 2 and the new mode rules (2026-09-25)
+
+| ID | Finding | Status |
+|---|---|---|
+| NEW-001 | Firebird `Best` → PreventDatabaseUnload; explicit `Standard` honored wherever `Best` picks PreventDatabaseUnload (LocalDB, Firebird); DuckDB honors explicit `Standard` (maintainer rules found testing 3.0; LocalDB/DuckDB from 3.0 b356af1) | **Done** (3156d2c). 3.0 still maps Firebird Best → Standard |
+| NEW-002 | Firebird DDL fails ("object TABLE ... is in use") under PreventDatabaseUnload: sentinel attachments, even freshly reopened ones, block DDL | **Done** (c5d1c3d): sentinels closed before the pool reset, kept closed during the DDL, reopened after. 3.0 has the same exposure |
+| NEW-003 | Data sources created before BP-204's `MinPoolSize=2` was applied, so working connections never got the minimum | **Done** (c5d1c3d) |
+| NEW-004 | Spanner inherited `SupportsOverridingSystemValue` from PostgreSQL after BP-117 (live: "Statements with OVERRIDING clauses are not supported"); fakeDb never answered the Spanner detection probe | **Done** (5f5cf51) |
+| NEW-005 | Npgsql type cache stale on the reader data source after CREATE EXTENSION/TYPE/DOMAIN | **Done** (7ef48b7): reload types on every owned data source |
+| NEW-006 | Db2 "Value cannot be null." once in the full parallel matrix run (net10.0 only); two isolated Db2 testbed runs green | Observed once, not reproduced. Watch the next full runs |
+| HARN-006 | A test that targets a specific provider (e.g. `TransactionRollbackOnKilledConnectionTests`, Firebird Embedded) fails instead of skipping when `INTEGRATION_ONLY` excludes that provider | Open |
+
 ### Tier 2: fixes that change visible behavior (decide per item)
 
 | ID | Change | 3.0 commit | Status |
