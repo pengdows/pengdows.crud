@@ -1,6 +1,8 @@
 // =============================================================================
 // FILE: Db2Dialect.cs
-// PURPOSE: IBM Db2 for Linux/Unix/Windows (Db2 LUW) specific dialect implementation.
+// PURPOSE: IBM Db2 for Linux/Unix/Windows (LUW) dialect. Only LUW is supported: Db2 for z/OS and
+//          Db2 for i are separate IBM products whose features differ (transactions among them) and
+//          are not supported; a Db2 server not recognized as LUW logs a warning.
 //
 // AI SUMMARY:
 // - Supports Db2 LUW 11.1+ (native BOOLEAN, GENERATE_UUID(), FINAL TABLE clause).
@@ -310,6 +312,20 @@ internal sealed class Db2Dialect : SqlDialect
     /// explicit request - including Standard, for a database kept busy or explicitly activated -
     /// is honored.
     /// </remarks>
+    /// <inheritdoc />
+    /// <remarks>
+    /// Only Db2 for Linux/Unix/Windows is supported (maintainer decision 2026-09-26). Db2 for z/OS
+    /// and Db2 for i are separate IBM products whose real features differ from LUW's - transactions
+    /// among them (e.g. IBM i commitment control depends on journaling).
+    /// </remarks>
+    internal override string? DescribeUnsupportedTopology(DatabaseTopology topology) =>
+        topology.IsDb2Luw
+            ? null
+            : "This Db2 server was not recognized as Db2 for Linux/Unix/Windows. In pengdows.crud only " +
+              "Db2 for Linux/Unix/Windows (LUW) is supported; Db2 for z/OS and Db2 for i are not supported and " +
+              "may behave differently (notably transactions). If this is a LUW server, the recognition query " +
+              "SYSPROC.ENV_GET_INST_INFO() could not run for this user.";
+
     internal override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         DatabaseTopology topology) =>
         requested == DbMode.Best && topology.IsDb2Luw

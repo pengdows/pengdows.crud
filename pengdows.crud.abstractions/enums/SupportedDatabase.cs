@@ -144,6 +144,9 @@ public enum SupportedDatabase : ulong
     /// <summary>
     /// IBM Db2 (LUW). Enterprise RDBMS with strong SQL standard compliance
     /// (<c>FETCH FIRST n ROWS ONLY</c> paging, <c>CALL</c>-style stored procedures).
+    /// Only Db2 for Linux/Unix/Windows (LUW) is supported. Db2 for z/OS and Db2 for i are separate
+    /// IBM products whose features differ from LUW's (transactions among them) and are not supported;
+    /// a Db2 server not recognized as LUW logs a warning.
     /// </summary>
     Db2 = 1UL << 14,
 

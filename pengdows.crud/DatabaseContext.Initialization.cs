@@ -2361,6 +2361,11 @@ public partial class DatabaseContext
             ? sqlDialect.CoerceConnectionMode(requested, _connectionString, topology)
             : dialect.CoerceConnectionMode(requested, _connectionString, topology.IsLocalDb);
         LogModeOverride(requested, mode, reason);
+        if (dialect is SqlDialect topologyDialect && topologyDialect.DescribeUnsupportedTopology(topology) is { } unsupported)
+        {
+            _logger.LogWarning("{UnsupportedTopology}", unsupported);
+        }
+
         return mode;
     }
 
