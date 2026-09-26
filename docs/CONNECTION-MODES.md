@@ -49,7 +49,7 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
   - Full servers → Standard
   - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
-  - SQLite/DuckDB file-based → SingleWriter
+  - SQLite/DuckDB file-based, FlatFile → SingleWriter
   - Firebird embedded → SingleConnection
   - Unknown product → Standard
 
@@ -118,7 +118,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Explicit Standard on embedded → coerced (never throw):
   - SQLite/DuckDB `:memory:` → SingleConnection
   - Firebird embedded → SingleConnection
-  - SQLite/DuckDB file-based → SingleWriter
+  - SQLite/DuckDB file-based, FlatFile → SingleWriter
 - Unknown product with Best → Standard.
 
 ## 8. Metrics & Limits

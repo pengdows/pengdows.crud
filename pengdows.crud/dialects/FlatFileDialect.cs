@@ -3,17 +3,25 @@
 // PURPOSE: Dialect for pengdows.flatfile — a file-backed ADO.NET provider over
 //          CSV/TSV/pipe/delimited/fixed-width/NDJSON files.
 //
-// STATUS: Partial. Only the properties below reflect a deliberate, verified decision
-// against pengdows.flatfile's actual behavior (see citations on each). Everything not
-// overridden here still falls through to SqlDialect's generic defaults and has NOT been
-// verified against pengdows.flatfile — in particular isolation levels/profiles (its
-// FlatFileTransaction is file-snapshot/undo-journal rollback, explicitly not real
-// concurrent-connection isolation or MVCC per its own README), generated-key/identity
-// plan (flatfile has no autoincrement/sequence/RETURNING concept at all), session
-// settings, and CoerceConnectionMode/DbMode-Best selection. Decide those from real
-// research against pengdows.flatfile's source, not by copying another embedded dialect's
-// assumptions — see CLAUDE.md's "Adding a New Database" checklist and its SAP HANA
-// callout for the same caution.
+// STATUS: Verified against the pengdows.flatfile provider source (0.2.1-preview.1, main) and
+// live via testbed/FlatFile and a direct SQL probe. Each override below cites the provider code
+// it relies on. Decisions that keep a base default on purpose:
+// - Isolation levels/profiles live in IsolationResolver on this branch (FlatFile case):
+//   ReadUncommitted/ReadCommitted/RepeatableRead only; Serializable/Snapshot and
+//   StrictConsistency throw (FlatFileTransaction.ValidateIsolationLevel rejects them).
+// - Generated keys: no IDENTITY, no RETURNING, no session last-id function. A column can
+//   DEFAULT NEXT VALUE FOR a sequence, but crud cannot read the value back, so
+//   GetGeneratedKeyPlan's CorrelationToken fallback is correct.
+// - Session settings: none. The provider has no session state to normalize; identifiers
+//   are ANSI double-quoted natively.
+// - Guids: GuidFormat stays PassThrough; ClrTypeMap/ClrTypeParser handle System.Guid and
+//   SQL UUID natively.
+// - Exceptions: constraint kinds come from FlatFileException.SqlState (class 23). The
+//   provider has no deadlock/serialization/timeout DbException to classify; write-lock
+//   contention (TimeoutException) and read-only violations (InvalidOperationException) are not
+//   DbExceptions, so they never reach the translator.
+// - Text NULL vs '': a CSV field cannot tell them apart unless the table declares
+//   CREATE TABLE ... WITH (NULLTOKEN = '...'); that is table DDL, not a dialect setting.
 // =============================================================================
 
 using System.Data.Common;
@@ -26,8 +34,7 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.dialects;
 
 /// <summary>
-/// Dialect for <c>pengdows.flatfile</c>. See the file-level STATUS remark above — this is a
-/// deliberately partial dialect, not a finished one.
+/// Dialect for <c>pengdows.flatfile</c>. See the file-level STATUS remark above.
 /// </summary>
 internal class FlatFileDialect : SqlDialect
 {

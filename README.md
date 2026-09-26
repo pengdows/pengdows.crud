@@ -57,7 +57,7 @@ The repository contains concrete support for:
 - InterBase
 - Google Spanner (PostgreSQL interface)
 - Microsoft Access
-- pengdows.flatfile (partial dialect over CSV/delimited/fixed-width/NDJSON files)
+- pengdows.flatfile (embedded dialect over CSV/delimited/fixed-width/NDJSON files)
 
 When product detection cannot identify the connected database, the library falls back to a conservative SQL-92 dialect.
 

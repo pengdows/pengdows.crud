@@ -32,7 +32,7 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 
 7. **DbMode.Best can coerce unsafe choices.**
    - SQLite/DuckDB isolated `:memory:` must be SingleConnection.
-   - SQLite/DuckDB file databases resolve to SingleWriter (WAL-friendly); an explicit Standard/PreventDatabaseUnload request is coerced to SingleWriter.
+   - SQLite/DuckDB file databases and FlatFile resolve to SingleWriter (WAL-friendly); an explicit Standard/PreventDatabaseUnload request is coerced to SingleWriter.
    - SQL Server LocalDB coerces to PreventDatabaseUnload.
 
 8. **fakeDb is control-flow, not database semantics.**
