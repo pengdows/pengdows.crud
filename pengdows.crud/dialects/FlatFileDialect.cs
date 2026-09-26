@@ -138,6 +138,22 @@ internal class FlatFileDialect : SqlDialect
     /// </summary>
     public override bool SupportsNamespaces => true;
 
+    // Reporting-only capability flags. The base derives them from MaxSupportedStandard, which is
+    // Sql92 for FlatFile (ServerVersion "1.0", no version map), so every post-92 feature read
+    // false. Each true value was run against the real provider: WITH / WITH RECURSIVE,
+    // ROW_NUMBER() OVER, NTH_VALUE with a ROWS frame, TRUNCATE TABLE, JSON_VALUE, JSON_TABLE,
+    // JSON_OBJECT/JSON_ARRAY, CREATE TYPE. The Sql99+ features it lacks stay false through the
+    // same Sql92 derivation: SIMILAR TO is rejected, and there is no ARRAY or XML type, no
+    // triggers, no MATCH_RECOGNIZE and no FOR SYSTEM_TIME.
+    public override bool SupportsCommonTableExpressions => true;
+    public override bool SupportsWindowFunctions => true;
+    public override bool SupportsEnhancedWindowFunctions => true;
+    public override bool SupportsTruncateTable => true;
+    public override bool SupportsJsonTypes => true;
+    public override bool SupportsJsonTable => true;
+    public override bool SupportsSqlJsonConstructors => true;
+    public override bool SupportsUserDefinedTypes => true;
+
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
 
     /// <summary>

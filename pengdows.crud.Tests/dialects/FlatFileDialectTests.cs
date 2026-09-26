@@ -154,6 +154,33 @@ public class FlatFileDialectTests
         Assert.Equal("\"sales\".\"ff_orders\"", gateway.WrappedTableName);
     }
 
+    // Reporting-only ISqlDialect capability flags. The base derives them from
+    // MaxSupportedStandard, which is Sql92 for FlatFile (ServerVersion "1.0", no version map), so
+    // every post-92 feature read false. Each true value below was run against the real provider:
+    // WITH / WITH RECURSIVE, ROW_NUMBER() OVER, NTH_VALUE with a ROWS frame, TRUNCATE TABLE,
+    // JSON_VALUE, JSON_TABLE, JSON_OBJECT/JSON_ARRAY, CREATE TYPE. SIMILAR TO is rejected; there is
+    // no ARRAY or XML type, no triggers, no MATCH_RECOGNIZE, and no FOR SYSTEM_TIME.
+    [Fact]
+    public void CapabilityFlags_MatchTheProviderGrammar()
+    {
+        var d = Dialect();
+
+        Assert.True(d.SupportsCommonTableExpressions);
+        Assert.True(d.SupportsWindowFunctions);
+        Assert.True(d.SupportsEnhancedWindowFunctions);
+        Assert.True(d.SupportsTruncateTable);
+        Assert.True(d.SupportsJsonTypes);
+        Assert.True(d.SupportsJsonTable);
+        Assert.True(d.SupportsSqlJsonConstructors);
+        Assert.True(d.SupportsUserDefinedTypes);
+        Assert.False(d.SupportsArrayTypes);
+        Assert.False(d.SupportsRegularExpressions);
+        Assert.False(d.SupportsXmlTypes);
+        Assert.False(d.SupportsInsteadOfTriggers);
+        Assert.False(d.SupportsTemporalData);
+        Assert.False(d.SupportsRowPatternMatching);
+    }
+
     // pengdows.sql/SqlParser.cs has ParseOffset/ParseFetchFirst (OFFSET n ROWS FETCH {FIRST|NEXT}
     // n ROWS ONLY) and no LIMIT clause: "SELECT * FROM t LIMIT 1" fails with "Expected token
     // 'EndOfInput' ... found 'NumericLiteral'" (probed against the real provider).
