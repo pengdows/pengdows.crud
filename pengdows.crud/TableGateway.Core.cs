@@ -1049,8 +1049,10 @@ public partial class TableGateway<TEntity, TRowID> :
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
                 using var container = templates.GetByIdsTemplate!.Clone(ctx);
 
-                container.SetParameterValue("p0", list[0]);
-                container.SetParameterValue("p1", list[1]);
+                // BuildWhere names IN-list parameters w0..wN (p0/p1 resolve to them only on
+                // named-parameter dialects, not on positional ones such as Informix).
+                container.SetParameterValue("w0", list[0]);
+                container.SetParameterValue("w1", list[1]);
 
                 return await LoadListAsync(container, cancellationToken).ConfigureAwait(false);
             }
@@ -1135,8 +1137,10 @@ public partial class TableGateway<TEntity, TRowID> :
                 var templates = GetContainerTemplatesForDialect(dialect, ctx);
                 var container = templates.GetByIdsTemplate!.Clone(ctx);
 
-                container.SetParameterValue("p0", list[0]);
-                container.SetParameterValue("p1", list[1]);
+                // BuildWhere names IN-list parameters w0..wN (p0/p1 resolve to them only on
+                // named-parameter dialects, not on positional ones such as Informix).
+                container.SetParameterValue("w0", list[0]);
+                container.SetParameterValue("w1", list[1]);
 
                 return container;
             }
