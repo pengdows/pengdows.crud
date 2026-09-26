@@ -56,6 +56,26 @@ done here with the commit.
 | HARN-004 | CI coverage | all | 2.0.6's `deploy.yml` never runs `pengdows.crud.IntegrationTests`: the unit step filters it out and the integration step runs only the testbed. So integration tests (including the ported Firebird Embedded and live-provider tests) only run locally via `run-integration-tests.sh`. | Decide whether CI should run the integration project (about 11 minutes, Docker) and, if so, add the `scripts/install-firebird-embedded.sh` step before it (3.0 has that step). | **Done** (maintainer: both TFMs): CI's integration step runs `./run-integration-tests.sh` (Firebird Embedded provisioning, pengdows.crud.IntegrationTests on net8.0+net10.0, then the testbed on both) |
 | HARN-005 | Integration fixture coverage | Db2, Informix, SybaseASE, Spanner, SingleStore | `IntegrationTestFixture.BaseProviders` never starts these, so every `pengdows.crud.IntegrationTests` class excludes them by configuration, although `ParallelTestOrchestrator.CreateContainerAsync` already starts Db2/Informix/SybaseASE/Spanner always-on for the testbed. Only capability skips are legitimate. | Add them to `BaseProviders`, give each test class's setup DDL for them, fix what fails in the library. SingleStore first needs a 2.0.6 testbed container (3.0 has one). | Open |
 
+## Database variants: when a variant gets its own `SupportedDatabase` value (2026-09-26)
+
+**Rule (maintainer decision):** a database variant gets its own `SupportedDatabase` value and dialect
+when it has **different real features** — SQL generation, capabilities, or behavior pengdows.crud must
+handle. Being detectable separately is only the means of telling variants apart; if the features don't
+differ, the detection difference is irrelevant. Variants that differ only in lifecycle/topology (SQL
+Server LocalDB, Firebird embedded) stay a detected topology flag under their parent.
+
+Why this came up: the Aurora values carry identity only (detection returns them, then `SqlDialectFactory`
+builds a plain `MySqlDialect`/`PostgreSqlDialect` tagged with the Aurora value), and that cost a real bug
+(a `DatabaseType` switch without an `AuroraPostgreSql` arm dropped RETURNING — see the comment in
+`PostgreSqlDialect`). Db2's LUW / z/OS / i variants are the opposite case: separate IBM products with
+real differences (LUW's implicit-activation lifecycle was confirmed live).
+
+| ID | Item | Release | Status |
+|---|---|---|---|
+| VAR-001 | Document `AuroraMySql`/`AuroraPostgreSql` as detection labels that behave exactly like `MySql`/`PostgreSql` (enum XML docs, `docs/supported-databases.md`). They are in 2.0.5's public enum, so they stay in 2.x | 2.0.6 | Open |
+| VAR-002 | Fold Aurora into `MySql`/`PostgreSql`: keep "is Aurora" as internal detection information, replace any product-equality switches with capability checks, and add a migration note for code that checks `Product == AuroraMySql` or uses family masks such as `MySql \| AuroraMySql` | 3.0 | Open |
+| VAR-003 | Add `Db2Zos` and `Db2I` values with their own dialects once a real Db2 for z/OS / Db2 for i connection is available to build and test against. First capture what IBM's .NET driver reports for each (on LUW: `ServerType`/`DataSourceProductName` = `DB2/<platform>`; the PRDID is not exposed, and `GET DIAGNOSTICS … DB2_PRODUCT_ID` is z/OS-only syntax) and replay it in fakeDb. Until then `SupportedDatabase.Db2` is the LUW-tested dialect; other Db2 servers "should work, untested", and Best selects PreventDatabaseUnload only on a positively detected LUW server. Note: when `Db2Zos` arrives, a z/OS user's `context.Product` changes from `Db2` to `Db2Zos` (acceptable while z/OS is documented as untested) | Future | Open (needs a z/OS / IBM i connection) |
+
 ## 3.0 → 2.0.6 backport audit (2026-09-25, branch 2.0.6)
 
 **Question audited:** does 2.0.6 contain every non-breaking change from `3.0`, and does it enforce
