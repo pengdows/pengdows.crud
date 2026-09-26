@@ -112,6 +112,9 @@ internal class SybaseAseDialect : SqlDialect
     // storage ('  padded  ' is stored as 8 bytes), so they cannot round-trip.
     public override bool PreservesTrailingWhitespace => false;
 
+    // CONFIRMED live (ASE 16.0): a zero-length VARBINARY reads back as 0x00.
+    public override bool PreservesEmptyBinary => false;
+
     // Guids pass through to AdoNetCore.AseClient (the SqlDialect default), as in 2.0.5. Verified
     // live (ASE 16.0 SP02): the driver writes DbType.Guid into BINARY(16)/VARBINARY(16) as
     // Guid.ToByteArray(), which reads back as the same Guid and matches in equality lookups - use

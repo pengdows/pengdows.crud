@@ -32,6 +32,12 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool MergeUpsertReportsSkippedVersionRow => true;
 
     /// <summary>
+    /// False when a zero-length binary value does not read back as zero-length: Sybase ASE stores
+    /// it as the single byte 0x00 (as it stores '' as a single blank).
+    /// </summary>
+    bool PreservesEmptyBinary => true;
+
+    /// <summary>
     /// True when an unqualified column reference inside an expression (a SELECT list, a WHERE
     /// predicate, the right-hand side of SET) can resolve to something other than the column - on
     /// Informix a quoted "user", "today", "current", ... resolves to the special register - so the

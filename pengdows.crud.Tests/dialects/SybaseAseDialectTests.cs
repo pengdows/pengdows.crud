@@ -95,6 +95,17 @@ public class SybaseAseDialectTests
         Assert.DoesNotContain(";", Dialect().GetFinalSessionSettings(readOnly: false));
     }
 
+    // CONFIRMED live (ASE 16.0 via AdoNetCore.AseClient): a zero-length VARBINARY value reads back
+    // as the single byte 0x00, just as '' reads back as a single blank.
+    [Fact]
+    public void PreservesEmptyBinary_IsFalse()
+    {
+        Assert.False(InternalSqlDialectExtensions.PreservesEmptyBinary(Dialect()));
+        Assert.True(InternalSqlDialectExtensions.PreservesEmptyBinary(
+            SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer,
+                new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlDialect>.Instance)));
+    }
+
     [Fact]
     public void ParameterMarker_IsAt()
         => Assert.Equal("@", Dialect().ParameterMarker);
