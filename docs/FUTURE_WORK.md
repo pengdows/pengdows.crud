@@ -134,6 +134,10 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
   appended a second `Options=` key, replacing e.g. `-c lock_timeout=120s` on every read connection.
   Red live on PG/CRDB/YB; fixed on 2.0.6 (d35c929) by merging into the existing Options and forcing
   `default_transaction_read_only=on`.
+- **FlatFile isolation.** 3.0's `FlatFileDialect` (15feeb2) declares Serializable/Snapshot, but pengdows.flatfile
+  rejects both since d333c99 (2026-09-19).
+- **Firebird Embedded Best-mode test** asserts Best → PreventDatabaseUnload while both branches' FirebirdDialect
+  resolve Best → Standard by policy; 3.0's `SentinelPreventsUnload` probe measures the wrong thing (see BP-206).
 - **DuckDB BLOB → `Stream` reads zeros.** 3.0 fixes the compiled mapper and coercions but not `DataReaderMapper`'s
   own setter path; 2.0.6 covers all four (c3e01b9).
 
@@ -144,10 +148,10 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | BP-201 | PK gateway `UpdateAsync`/`BatchUpdateAsync`/`BatchUpsertAsync` don't throw `ConcurrencyConflictException` on a `[Version]` mismatch (`PrimaryKeyTableGateway.Update.cs:56/78`) | 5e6b244 | **Done** (live 11/11 providers) |
 | BP-202 | `BatchUpsertAsync` silently swallows a stale `[Version]` (except the ON DUPLICATE KEY path, which can't detect it) | 21ccbca, 89db70d | **Done**: MySQL-family ON DUPLICATE KEY and Firebird UPDATE OR INSERT can't detect a stale version (documented). The live run also found every MySQL 8.0.19+ versioned upsert failing with an ambiguous `version` column; fixed |
 | BP-203 | After `UpdateAsync`/`BatchUpdateAsync` the entity keeps the old `[Version]`, so reusing the instance always conflicts (`WriteBackIncrementedVersion`) | 04719e7, 21ccbca | **Done**: fakeDb taught `col ± n` SET arithmetic so persisted versions advance |
-| BP-204 | `MaxConcurrentWrites=0` means read-only only in SingleWriter; PreventDatabaseUnload pool capacity ≥2; config-vs-connection-string mismatch warning | d506a74 | Open (decide) |
-| BP-205 | DuckDB read-only safety check runs after the explicit `ReadOnlyConnectionString` check (`DatabaseContext.cs:261`); native batch UPDATE keys on `[PrimaryKey]`, not `[Id]` (`TableGateway.Batch.cs:264`) | 5e6b244 | Open (decide) |
-| BP-206 | PreventDatabaseUnload sentinel never repaired when Broken/Closed; no per-pool (reader) sentinel; sentinel replacement and permit accounting | 5e6b244, 61201f6, cd74c28 | Open (decide) |
-| BP-207 | `TenantContextRegistry.DisposeManagedAsync` fire-and-forgets in-flight construction instead of awaiting it (3.0 hit a `Lazy<Task>` deadlock here) | 7743c19 | Open (decide) |
+| BP-204 | `MaxConcurrentWrites=0` means read-only only in SingleWriter; PreventDatabaseUnload pool capacity ≥2; config-vs-connection-string mismatch warning | d506a74 | **Done**: `MaxConcurrentWrites=0` → ReadOnly in every mode; PreventDatabaseUnload pools ≥2 (mode-guarded); config vs connection-string mismatch warning |
+| BP-205 | DuckDB read-only safety check runs after the explicit `ReadOnlyConnectionString` check (`DatabaseContext.cs:261`); native batch UPDATE keys on `[PrimaryKey]`, not `[Id]` (`TableGateway.Batch.cs:264`) | 5e6b244 | **Done**: DuckDB read-only check order; native batch UPDATE keys on `[Id]` |
+| BP-206 | PreventDatabaseUnload sentinel never repaired when Broken/Closed; no per-pool (reader) sentinel; sentinel replacement and permit accounting | 5e6b244, 61201f6, cd74c28 | **Done**: Broken/Closed sentinel replaced via compare-and-swap; one sentinel per pool; read-only sentinel takes a reader permit. The testbed `SentinelPreventsUnload` probe was also rewritten: 3.0's version compared a cold sample with a warm pooled one and failed live on SQL Server/Firebird. The Firebird Embedded 5th method was ported with PreventDatabaseUnload requested explicitly, because Best resolves to Standard by policy (3.0's version contradicts its own dialect) |
+| BP-207 | `TenantContextRegistry.DisposeManagedAsync` fire-and-forgets in-flight construction instead of awaiting it (3.0 hit a `Lazy<Task>` deadlock here) | 7743c19 | **Done**: DisposeAsync awaits a per-entry construction signal (no pool thread parked, unlike 3.0's Task.Run) |
 | BP-208 | Read-only violations throw inconsistent types (`InvalidOperationException` on the reader write path vs `NotSupportedException` elsewhere) | 7db5f4c (with BP-302) | **Done** (9eec794): reader-path write on a read-only context now throws `NotSupportedException` like every other write path (3.0 semantics; read-only *transaction* writes keep `InvalidOperationException`, as in 3.0) |
 | BP-209 | PostgreSQL/YugabyteDB `SafeNonBlockingReads` throws `TransactionModeNotSupportedException`; 3.0 maps it to RepeatableRead (behavior part of 1cbd073 only; the signature change is 3.0-only) | 1cbd073 | **Done** (7cedda9): live `SHOW transaction_isolation` = repeatable read on PG/YB |
 
