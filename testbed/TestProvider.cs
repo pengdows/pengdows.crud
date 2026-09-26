@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using pengdows.crud;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
@@ -1090,8 +1091,8 @@ CREATE TABLE {tableName} (
     // since-reverted, never-actually-verified Db2 claim taken uncritically from a chat message),
     // this probe empirically measures whether a real cold-reconnect cost exists, for any database
     // that exposes a FAST, settable knob to force its normal (often minutes-long, CI-impractical)
-    // idle-unload timeout down to a few seconds. Databases without such a knob report an honest
-    // "not empirically tested" skip rather than guessing — see TryEnableFastIdleUnloadAsync.
+    // idle-unload timeout down to a few seconds. Databases without such a knob print an honest
+    // "not measured" line (no check recorded) rather than guessing — see TryEnableFastIdleUnloadAsync.
 
     /// <summary>
     /// Override to set a short, deterministic idle-unload timeout for this database if it exposes
@@ -1135,58 +1136,11 @@ CREATE TABLE {tableName} (
 
         try
         {
-            // Drain the pool and wait past the fast timeout just configured, then compare the first
-            // (cold, forced-reconnect) round trip against the immediately-following (warm, pooled)
-            // one. Apples-to-apples: same query shape, same connection string, only the pool state
-            // differs between the two measurements.
-            ClearProviderPoolForIdleUnloadProbe();
-            await Task.Delay(TimeSpan.FromSeconds(3));
-
             // A trivial "SELECT 1" with no FROM clause isn't universally portable (Firebird and
             // Oracle both reject it) — count against the already-created test_table instead, which
             // every dialect supports identically.
             var probeSql = $"SELECT COUNT(*) FROM {_helper.WrappedTableName}";
-
-            var coldSw = Stopwatch.StartNew();
-            await using (var coldContainer = _context.CreateSqlContainer(probeSql))
-            {
-                await coldContainer.ExecuteScalarOrNullAsync<int>();
-            }
-            coldSw.Stop();
-
-            var warmSw = Stopwatch.StartNew();
-            await using (var warmContainer = _context.CreateSqlContainer(probeSql))
-            {
-                await warmContainer.ExecuteScalarOrNullAsync<int>();
-            }
-            warmSw.Stop();
-
-            var coldMs = coldSw.Elapsed.TotalMilliseconds;
-            var warmMs = Math.Max(warmSw.Elapsed.TotalMilliseconds, 0.01);
-            var ratio = coldMs / warmMs;
-
-            // Generous threshold — this only needs to distinguish "genuinely paid a reconnect/
-            // reactivation cost" from ordinary run-to-run noise, not measure its exact magnitude.
-            var unloadDetected = coldMs - warmMs > 5.0 && ratio > 2.0;
-
-            // Detecting a real cost does NOT mean DbMode.Best should auto-select
-            // PreventDatabaseUnload — that's a separate, deliberate policy call (see CLAUDE.md and
-            // docs/connection/connection-modes.md). A heavily-trafficked deployment may never drain
-            // its pool to zero (the cost never actually materializes), and a deliberately
-            // scale-to-zero/cost-optimized deployment may not want a permanent sentinel forced on it
-            // at all — only the operator knows which applies. This probe's job is to confirm the cost
-            // is real and that PreventDatabaseUnload genuinely mitigates it (see the sentinel
-            // validation below), not to decide the default on the operator's behalf.
-            CheckOk(
-                $"  [DbMode] Idle-unload probe for {_context.Product}: cold={coldMs:F2}ms, warm={warmMs:F2}ms, ratio={ratio:F1}x — " +
-                (unloadDetected
-                    ? "unload/reactivation cost DETECTED (PreventDatabaseUnload available as an explicit opt-in to mitigate it)"
-                    : "no unload cost detected despite the fast knob"));
-
-            if (unloadDetected)
-            {
-                await TestSentinelPreventsDetectedUnloadCostAsync(probeSql, coldMs, warmMs);
-            }
+            await TestSentinelPreventsUnloadCostAsync(probeSql);
         }
         finally
         {
@@ -1198,72 +1152,104 @@ CREATE TABLE {tableName} (
     }
 
     /// <summary>
-    /// Closes the loop on a detected idle-unload cost: does <see cref="DbMode.PreventDatabaseUnload"/>'s
-    /// actual mechanism — one connection held open, never returned to the pool — genuinely prevent
-    /// it? Rather than trusting the design intent, this holds a real open reader (pinning a
-    /// connection exactly the way a PreventDatabaseUnload sentinel does) through the same
-    /// pool-clear-and-wait sequence, then re-measures. <see cref="ClearProviderPoolForIdleUnloadProbe"/>
-    /// only releases connections currently idle IN the pool — a connection actively checked out
-    /// (in use, not yet returned) is untouched by it, so the database should never actually see
-    /// zero attachments this time. The pass bar is relative to this database's own already-measured
-    /// cold/warm gap (recovering at least half of it), not a fixed absolute number — the raw
-    /// magnitude of the cost varies a lot per database (Firebird ~9ms, SQL Server AUTO_CLOSE ~40ms).
+    /// Measures the idle-unload cost and whether a real <see cref="DbMode.PreventDatabaseUnload"/>
+    /// context's sentinel prevents it.
     ///
-    /// PREVIOUSLY A REAL BUG, fixed here: this always called CheckOk regardless of
-    /// <c>sentinelPrevented</c>'s value, so a genuine sentinel-mechanism regression could never
-    /// fail a testbed run — it only ever produced an easy-to-miss "did NOT prevent it" log line.
-    /// Confirmed live against Firebird 3.0.9 (small absolute cold/warm gap, ~10-50ms) that a
-    /// SINGLE sentinel measurement is genuinely noisy: three consecutive runs produced prevented/
-    /// not-prevented/not-prevented. A bare pass-to-fail flip on one sample would have made
-    /// this check flaky. Instead, the sentinel round trip is measured up to 3 times against the
-    /// SAME held-open reader (the whole point is one persistent connection across repeated
-    /// drain-and-wait cycles) and a majority verdict decides pass/fail — smoothing single-sample
-    /// timing noise while still catching a sentinel mechanism that reliably fails to help.
+    /// Methodology (corrected from 3.0's version of this probe, which compared a pinned cold
+    /// sample against a WARM pooled round trip): every sample here starts by clearing the provider
+    /// pool and waiting past the fast idle-unload timeout, so every sample pays for a new physical
+    /// connection (login + session settings) — a cost no sentinel can remove. Comparing against a
+    /// warm round trip therefore always reported "cost still present" (live: SQL Server's pinned
+    /// samples recovered ~40ms of a ~109ms gap; the remaining ~67ms was reconnect cost). Here,
+    /// unpinned and pinned cold samples are interleaved and compared with each other, so the
+    /// difference isolates the unload/reactivation cost.
+    ///
+    /// The pin is a genuine PreventDatabaseUnload DatabaseContext on the same connection string,
+    /// not a stand-in held reader, and its sentinels are checked deterministically: after each
+    /// pool-clear-and-wait cycle every sentinel must still be registered and Open.
     /// </summary>
-    private async Task TestSentinelPreventsDetectedUnloadCostAsync(string probeSql, double coldMs, double warmMs)
+    private async Task TestSentinelPreventsUnloadCostAsync(string probeSql)
     {
-        await using var sentinelContainer = _context.CreateSqlContainer(probeSql);
-        await using var sentinelReader = await sentinelContainer.ExecuteReaderAsync();
-
-        var originalGap = coldMs - warmMs;
-        const int sampleCount = 3;
-        var samples = new List<(double SentinelMs, bool Prevented)>(sampleCount);
-
-        for (var i = 0; i < sampleCount; i++)
+        if (_context is not DatabaseContext concrete)
         {
-            ClearProviderPoolForIdleUnloadProbe();
-            await Task.Delay(TimeSpan.FromSeconds(3));
+            throw new InvalidOperationException(
+                $"Idle-unload probe needs a concrete DatabaseContext, got {_context.GetType().Name}.");
+        }
 
-            var sw = Stopwatch.StartNew();
-            await using (var container = _context.CreateSqlContainer(probeSql))
+        const int rounds = 5;
+        var unpinned = new List<double>(rounds);
+        var pinned = new List<double>(rounds);
+
+        for (var i = 0; i < rounds; i++)
+        {
+            unpinned.Add(await MeasureColdRoundTripAsync(probeSql));
+
+            await using var preventUnload = new DatabaseContext(new DatabaseContextConfiguration
             {
-                await container.ExecuteScalarOrNullAsync<int>();
+                ConnectionString = concrete.RawConnectionString,
+                DbMode = DbMode.PreventDatabaseUnload
+            }, concrete.Factory);
+
+            if (preventUnload.ConnectionMode != DbMode.PreventDatabaseUnload)
+            {
+                throw new InvalidOperationException(
+                    $"DbMode.SentinelPreventsUnload: requested PreventDatabaseUnload resolved to {preventUnload.ConnectionMode}.");
             }
-            sw.Stop();
 
-            var sentinelMs = sw.Elapsed.TotalMilliseconds;
-            var remainingGap = sentinelMs - warmMs;
-            samples.Add((sentinelMs, remainingGap < originalGap / 2.0));
+            pinned.Add(await MeasureColdRoundTripAsync(probeSql));
+
+            var sentinels = preventUnload.GetSentinelSnapshot();
+            if (sentinels.Count == 0 || sentinels.Any(sentinel => sentinel.Connection.State != ConnectionState.Open))
+            {
+                throw new InvalidOperationException(
+                    "DbMode.SentinelPreventsUnload: expected every sentinel Open after the idle window, got [" +
+                    string.Join(", ", sentinels.Select(sentinel => $"{sentinel.ExecutionType}:{sentinel.Connection.State}")) +
+                    "].");
+            }
         }
 
-        var preventedCount = samples.Count(s => s.Prevented);
-        var sentinelPrevented = preventedCount * 2 > sampleCount; // strict majority
-        var sampleSummary = string.Join(", ", samples.Select(s => $"{s.SentinelMs:F2}ms/{(s.Prevented ? "ok" : "fail")}"));
+        var unpinnedMedian = Median(unpinned);
+        var pinnedMedian = Median(pinned);
+        var saved = unpinnedMedian - pinnedMedian;
+        var pairsFaster = unpinned.Zip(pinned).Count(pair => pair.Second < pair.First);
+        var detected = saved > Math.Max(3.0, unpinnedMedian * 0.15) && pairsFaster * 2 > rounds;
+
+        // Detecting a real cost does NOT mean DbMode.Best should auto-select
+        // PreventDatabaseUnload — that's a separate, deliberate policy call (see CLAUDE.md and
+        // docs/connection/connection-modes.md). This probe only confirms the cost is real and that
+        // PreventDatabaseUnload genuinely mitigates it.
         var message =
-            $"  [DbMode] Sentinel validation for {_context.Product}: {preventedCount}/{sampleCount} samples prevented " +
-            $"the unload cost (samples: {sampleSummary}; original gap was {originalGap:F2}ms) — " +
-            (sentinelPrevented
-                ? "unload cost PREVENTED (confirms PreventDatabaseUnload's sentinel mechanism actually works here)"
-                : "cost still present — sentinel did NOT reliably prevent it (investigate before trusting PreventDatabaseUnload for this database)");
+            $"  [DbMode] Idle-unload probe for {_context.Product}: cold median without sentinel={unpinnedMedian:F2}ms, " +
+            $"with PreventDatabaseUnload sentinel={pinnedMedian:F2}ms (saved {saved:F2}ms; sentinel faster in " +
+            $"{pairsFaster}/{rounds} interleaved pairs; samples: " +
+            string.Join("/", unpinned.Select(v => v.ToString("F1"))) + " vs " +
+            string.Join("/", pinned.Select(v => v.ToString("F1"))) + ") — ";
 
-        if (sentinelPrevented)
+        CheckOk(message + (detected
+            ? "unload cost PREVENTED by the sentinel"
+            : "no unload cost distinguishable from reconnect cost; sentinels verified Open"));
+    }
+
+    private async Task<double> MeasureColdRoundTripAsync(string probeSql)
+    {
+        ClearProviderPoolForIdleUnloadProbe();
+        await Task.Delay(TimeSpan.FromSeconds(3));
+
+        var sw = Stopwatch.StartNew();
+        await using (var container = _context.CreateSqlContainer(probeSql))
         {
-            CheckOk(message);
+            await container.ExecuteScalarOrNullAsync<int>();
         }
-        else
-        {
-            throw new InvalidOperationException("DbMode.SentinelPreventsUnload failed: " + message.Trim());
-        }
+
+        sw.Stop();
+        return sw.Elapsed.TotalMilliseconds;
+    }
+
+    private static double Median(List<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToList();
+        var mid = sorted.Count / 2;
+        return sorted.Count % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2.0;
     }
 
     // -------------------------------------------------------------------------
