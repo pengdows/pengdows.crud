@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
+using pengdows.crud.attributes;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -95,6 +96,42 @@ public class FlatFileDialectTests
         await tx.SavepointAsync("sp1");
         await tx.RollbackToSavepointAsync("sp1");
         await tx.ReleaseSavepointAsync("sp1");
+    }
+
+    [Table("ff_upsert")]
+    private sealed class FfUpsertEntity
+    {
+        [Id(true)] [Column("id", DbType.Int64)] public long Id { get; set; }
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
+        [Version] [Column("ver", DbType.Int32)] public int Ver { get; set; }
+    }
+
+    private static DatabaseContext FlatFileContext() =>
+        new("path=/tmp/db;EmulatedProduct=FlatFile", new fakeDbFactory(SupportedDatabase.FlatFile));
+
+    // pengdows.sql/SqlParser.cs ParseMerge: MERGE INTO t USING (VALUES ...) AS s (cols) ON ...
+    // WHEN MATCHED [AND cond] THEN UPDATE SET col = ... WHEN NOT MATCHED THEN INSERT; the SET target
+    // is a bare column (ExpectIdentifier then Equals): "SET t.name = ..." fails with "Expected token
+    // 'Equals' ... found 'Dot'". There is no ON CONFLICT / ON DUPLICATE KEY / RETURNING. All probed
+    // against the real provider, including the version-guarded and multi-row VALUES forms.
+    [Fact]
+    public void Upsert_UsesMerge_WithBareUpdateTargets()
+    {
+        var d = Dialect();
+        Assert.True(d.SupportsMerge);
+        Assert.False(d.MergeUpdateRequiresTargetAlias);
+        Assert.False(d.SupportsInsertOnConflict);
+        Assert.False(d.SupportsOnDuplicateKey);
+        Assert.False(d.SupportsInsertReturning);
+
+        using var context = FlatFileContext();
+        var gateway = new TableGateway<FfUpsertEntity, long>(context);
+        using var sc = gateway.BuildUpsert(new FfUpsertEntity { Id = 1, Name = "a", Ver = 1 });
+        var sql = sc.Query.ToString();
+
+        Assert.StartsWith("MERGE INTO \"ff_upsert\" t USING (VALUES (:", sql);
+        Assert.Contains("WHEN MATCHED AND t.\"ver\" = s.\"ver\" THEN UPDATE SET \"name\" = s.\"name\"", sql);
+        Assert.DoesNotContain("SET t.", sql);
     }
 
     // pengdows.sql/SqlParser.cs has ParseOffset/ParseFetchFirst (OFFSET n ROWS FETCH {FIRST|NEXT}

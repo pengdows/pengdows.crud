@@ -113,6 +113,23 @@ internal class FlatFileDialect : SqlDialect
         return query.Replace(" LIMIT 1", " FETCH FIRST 1 ROWS ONLY", StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// <c>pengdows.sql/SqlParser.cs</c> <c>ParseMerge</c> implements SQL:2003 MERGE with a
+    /// <c>USING (VALUES ...) AS s (cols)</c> source, <c>WHEN MATCHED [AND cond]</c> and
+    /// <c>WHEN NOT MATCHED THEN INSERT</c>; the single-row, multi-row and version-guarded forms
+    /// that <c>BuildUpsert</c>/<c>BuildBatchUpsert</c> emit all run against the real provider. The
+    /// base derived this from <c>MaxSupportedStandard</c> (Sql92 for FlatFile), so upserts threw.
+    /// There is no <c>ON CONFLICT</c>, <c>ON DUPLICATE KEY</c> or <c>RETURNING</c>.
+    /// </summary>
+    public override bool SupportsMerge => true;
+
+    /// <summary>
+    /// <c>ParseMerge</c>'s <c>UPDATE SET</c> takes a bare column name (<c>ExpectIdentifier</c> then
+    /// <c>Equals</c>); <c>SET t.name = ...</c> fails with "Expected token 'Equals' ... found
+    /// 'Dot'". Same as PostgreSQL/DuckDB.
+    /// </summary>
+    public override bool MergeUpdateRequiresTargetAlias => false;
+
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
 
     /// <summary>
