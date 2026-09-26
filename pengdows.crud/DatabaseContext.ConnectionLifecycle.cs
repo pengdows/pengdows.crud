@@ -139,6 +139,45 @@ public partial class DatabaseContext
         }
     }
 
+    /// <summary>
+    /// Reloads the provider's type catalog on every data source this context owns (Npgsql's
+    /// <c>NpgsqlDataSource.ReloadTypesAsync</c>, found by reflection so the core library takes no
+    /// provider dependency). Called after DDL for which
+    /// <see cref="SqlDialect.InvalidatesProviderTypeCache"/> is true. Best effort: a data source
+    /// without the method is skipped and a failure is logged, never thrown.
+    /// </summary>
+    internal async ValueTask ReloadProviderTypesAsync(CancellationToken cancellationToken)
+    {
+        var dataSources = new[] { _dataSource, _readerDataSource }
+            .Where(d => d != null)
+            .Distinct()
+            .ToList();
+        foreach (var dataSource in dataSources)
+        {
+            try
+            {
+                var type = dataSource!.GetType();
+                var asyncReload = type.GetMethod("ReloadTypesAsync", new[] { typeof(CancellationToken) });
+                if (asyncReload?.Invoke(dataSource, new object[] { cancellationToken }) is Task task)
+                {
+                    await task.ConfigureAwait(false);
+                    continue;
+                }
+
+                type.GetMethod("ReloadTypes", Type.EmptyTypes)?.Invoke(dataSource, null);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex,
+                    "Could not reload provider types after a type-catalog DDL statement; connections from this data source may not recognize the new type until the application restarts.");
+            }
+        }
+    }
+
     private int _sentinelSuspensions;
 
     /// <summary>True while a DDL statement has the PreventDatabaseUnload sentinels closed.</summary>

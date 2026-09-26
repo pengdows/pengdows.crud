@@ -32,25 +32,9 @@ public sealed class PostgreSqlHStoreMacAddrRoundTripTests : DatabaseTestBase
             await extension.ExecuteNonQueryAsync();
         }
 
-        // Npgsql caches the type catalog per connection string the first time a connection opens
-        // (DatabaseContext already opened one during detection, before hstore existed). Reload it
-        // and clear the pool so every connection sees the hstore OID.
-        var borrowed = ((DatabaseContext)context).GetConnection(ExecutionType.Write);
-        try
-        {
-            if (borrowed.State != ConnectionState.Open)
-            {
-                await borrowed.OpenAsync();
-            }
-
-            var npgsql = (NpgsqlConnection)((IInternalConnectionWrapper)borrowed).UnderlyingConnection;
-            await npgsql.ReloadTypesAsync();
-            NpgsqlConnection.ClearPool(npgsql);
-        }
-        finally
-        {
-            ((DatabaseContext)context).CloseAndDisposeConnectionInternal(borrowed);
-        }
+        // No manual NpgsqlConnection.ReloadTypes here: the context reloads the type catalog on
+        // its writer and reader data sources after CREATE EXTENSION (see
+        // PostgreSqlDialect.InvalidatesProviderTypeCache). This test proves it live.
 
         await DropTableIfExistsAsync(context, "hstore_roundtrip");
         await using (var table = context.CreateSqlContainer($"""

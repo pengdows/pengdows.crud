@@ -687,6 +687,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // for every dialect except Firebird, so no write on any other database pays that cost.
     internal virtual bool RequiresConnectionPoolResetForDdl => false;
 
+    /// <summary>
+    /// True when <paramref name="sql"/> changes the database's type catalog in a way a provider
+    /// caches per data source (Npgsql: CREATE/ALTER/DROP EXTENSION, TYPE, DOMAIN). The context then
+    /// reloads the provider's types on every data source it owns after the statement runs.
+    /// </summary>
+    internal virtual bool InvalidatesProviderTypeCache(string sql) => false;
+
     // Internal, not part of ISqlDialect: called before executing a DDL statement (CREATE/DROP/
     // ALTER/TRUNCATE) so a dialect can clear stale ADO.NET connection-pool state that would
     // otherwise block the DDL's commit. No-op for every dialect except Firebird — see

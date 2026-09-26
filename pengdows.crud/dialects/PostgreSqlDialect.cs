@@ -434,6 +434,15 @@ internal class PostgreSqlDialect : SqlDialect
         return $"SET {ReadOnlyTransactionSetting} = off;";
     }
 
+    private static readonly Regex TypeCatalogDdl = new(
+        @"^\s*(CREATE|ALTER|DROP)\s+(OR\s+REPLACE\s+)?(EXTENSION|TYPE|DOMAIN)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    // CONFIRMED live: Npgsql caches the type catalog per data source, so after CREATE EXTENSION
+    // hstore a data source loaded earlier cannot read hstore ("DataTypeName '-'"). Inherited by
+    // YugabyteDB/CockroachDB/Spanner, which also run on Npgsql.
+    internal override bool InvalidatesProviderTypeCache(string sql) => TypeCatalogDdl.IsMatch(sql);
+
     public override string? GetReadOnlyConnectionParameter()
     {
         return $"Options='-c {ReadOnlyTransactionSetting}=on'";

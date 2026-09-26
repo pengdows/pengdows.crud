@@ -1221,6 +1221,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 activity.SetStatus(ActivityStatusCode.Ok);
             }
 
+            // Type-catalog DDL (Npgsql: CREATE EXTENSION/TYPE/DOMAIN, ...) leaves every data source
+            // with a stale type cache. Outside a transaction the change is already visible, so
+            // reload now; inside one it only becomes visible at commit.
+            if (executionType == ExecutionType.Write && _context is not ITransactionContext &&
+                _context is DatabaseContext typeOwner && _dialect is SqlDialect typeDialect &&
+                typeDialect.InvalidatesProviderTypeCache(Query.ToString()))
+            {
+                await typeOwner.ReloadProviderTypesAsync(cancellationToken).ConfigureAwait(false);
+            }
+
             return result;
         }
         catch (OperationCanceledException)

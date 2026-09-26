@@ -41,6 +41,23 @@ public sealed class FakeDbDataSource : DbDataSource
 
     public override string ConnectionString => _connectionString;
 
+    /// <summary>
+    /// Number of <see cref="ReloadTypes"/>/<see cref="ReloadTypesAsync"/> calls. Mirrors Npgsql's
+    /// NpgsqlDataSource.ReloadTypes, which a PostgreSQL-family context calls after DDL that changes
+    /// the type catalog (CREATE EXTENSION, CREATE TYPE, ...).
+    /// </summary>
+    public int ReloadTypesCount { get; private set; }
+
+    /// <summary>Emulates NpgsqlDataSource.ReloadTypes.</summary>
+    public void ReloadTypes() => ReloadTypesCount++;
+
+    /// <summary>Emulates NpgsqlDataSource.ReloadTypesAsync.</summary>
+    public Task ReloadTypesAsync(CancellationToken cancellationToken = default)
+    {
+        ReloadTypesCount++;
+        return Task.CompletedTask;
+    }
+
     protected override DbConnection CreateDbConnection()
     {
         var connection = _factory.CreateConnection();
