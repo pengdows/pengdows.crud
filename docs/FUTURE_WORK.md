@@ -114,11 +114,11 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | BP-118 | CockroachDB: `MergeStartupOptions` overwrites a caller's explicit `lock_timeout` (`PostgreSqlDialect.cs:533`) | c58cb96 | **Done** (live, writer); reader half fixed separately (d35c929) |
 | BP-119 | MySQL error 1295 ("not supported in prepared statement protocol") doesn't trigger the disable-prepare fallback; CockroachDB inherits PG proc wrapping (should be None); TiDB VALUES() upsert override missing (defensive) | 3eb997c | **Done** (1295 fallback unit-only; TiDB VALUES() live). CRDB proc wrapping=None **not** ported: CREATE PROCEDURE/CALL work live on CRDB v25.1 |
 | BP-120 | Provider factory can't be found by its ADO.NET invariant name (`DbProviderLoader.cs:63` registers only the section key) | 335c5d0 | **Done** (d683dac) |
-| BP-121 | FlatFile uses the resolver's default isolation mapping (no ReadUncommitted; SafeNonBlockingReads→ReadCommitted instead of RepeatableRead) | 15feeb2 | **In progress**: the provider source is at ~/prj/pengdows/pengdows.flatfile (0.2.1-preview.1). It accepts ReadUncommitted/ReadCommitted/RepeatableRead only (d333c99, 2026-09-19), so 3.0's four-level declaration (15feeb2) is now wrong in 3.0 too |
+| BP-121 | FlatFile uses the resolver's default isolation mapping (no ReadUncommitted; SafeNonBlockingReads→ReadCommitted instead of RepeatableRead) | 15feeb2 | **Done**: verified against ~/prj/pengdows/pengdows.flatfile (0.2.1-preview.1). Levels RU/RC/RR; SafeNonBlockingReads→RR, StrictConsistency throws (no Serializable), FastWithRisks→RU. Live FlatFile testbed 22 checks (1 capability skip: stored procs) on both TFMs |
 | BP-122 | Metrics: percentiles sort up to 2048 doubles on every operation when a `MetricsUpdated` subscriber (the OTel observer) is attached (no memoization) | d0bc060 | **Done** (1a9efc1): recompute every 32nd call |
 | BP-123 | Explicit `ReadOnlyConnectionString` equal to `ConnectionString` disables SingleWriter turnstile sharing | d5b24e3 | **Done** (e1c41fa) |
 | BP-124 | UNSURE, needs a red test first: type-coercion dispatch still gated on `AdvancedTypes.IsMappedType` (`SqlDialect.cs:1387`); `NeedsCommonConversions` opt-in for DuckDB/Firebird/Oracle/Snowflake | ed71269, 81eef2b | **Done** (df02754, c3e01b9): targeted fixes (Stream/TextReader write binding, Oracle interval format/read, template-clone DbType fallback, DuckDB reader-owned BLOB streams on all 4 read paths). 3.0's full coercion-registry rewrite and the `NeedsCommonConversions` opt-ins were **not** ported: a probe showed no mis-conversion on 2.0.6. Live: Oracle interval + DuckDB portable round trips green |
-| BP-125 | UNSURE: FlatFile named `:` parameters and capability flags; depends on which pengdows.flatfile version 2.0.6 targets | 9f0299e | **In progress**: verify FlatFileDialect against the real provider source + a live FlatFile testbed provider |
+| BP-125 | UNSURE: FlatFile named `:` parameters and capability flags; depends on which pengdows.flatfile version 2.0.6 targets | 9f0299e | **Done**: named `:` parameters, SingleWriter mode policy, savepoints, read-only transactions, OFFSET/FETCH paging, MERGE, namespaces and more, all verified against the provider source plus live probes. FlatFile added to the testbed and integration fixture via a conditional ProjectReference to the sibling repo |
 
 ### Found during the Tier 1 backport: bugs 3.0 still has
 
@@ -134,8 +134,11 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
   appended a second `Options=` key, replacing e.g. `-c lock_timeout=120s` on every read connection.
   Red live on PG/CRDB/YB; fixed on 2.0.6 (d35c929) by merging into the existing Options and forcing
   `default_transaction_read_only=on`.
-- **FlatFile isolation.** 3.0's `FlatFileDialect` (15feeb2) declares Serializable/Snapshot, but pengdows.flatfile
-  rejects both since d333c99 (2026-09-19).
+- **FlatFile.** 3.0's `FlatFileDialect` declares Serializable (provider rejects it since d333c99) and maps
+  FastWithRisks→RC (RU is supported); stores Guid as String although the provider has native Guid/UUID; says
+  no user-defined types (CREATE TYPE works); lacks savepoints, read-only transactions, `SupportsLimitOffset=false`,
+  FETCH FIRST natural-key lookup, namespaces, JSON_TABLE/SQL-JSON constructors. Its testbed hard-references the
+  sibling flatfile repo, which CI doesn't check out.
 - **Firebird Embedded Best-mode test** asserts Best → PreventDatabaseUnload while both branches' FirebirdDialect
   resolve Best → Standard by policy; 3.0's `SentinelPreventsUnload` probe measures the wrong thing (see BP-206).
 - **DuckDB BLOB → `Stream` reads zeros.** 3.0 fixes the compiled mapper and coercions but not `DataReaderMapper`'s
@@ -151,6 +154,7 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | NEW-004 | Spanner inherited `SupportsOverridingSystemValue` from PostgreSQL after BP-117 (live: "Statements with OVERRIDING clauses are not supported"); fakeDb never answered the Spanner detection probe | **Done** (5f5cf51) |
 | NEW-005 | Npgsql type cache stale on the reader data source after CREATE EXTENSION/TYPE/DOMAIN | **Done** (7ef48b7): reload types on every owned data source |
 | NEW-006 | Db2 "Value cannot be null." once in the full parallel matrix run (net10.0 only); two isolated Db2 testbed runs green | Observed once, not reproduced. Watch the next full runs |
+| FF-DEF | pengdows.flatfile provider defects found (repo not modified): read-only/writer-contention violations are InvalidOperationException/TimeoutException, not DbException; VARCHAR = Guid parameter throws raw ArgumentException (BoundPredicateEvaluator.cs:1166); README's isolation text is stale | Open (flatfile repo) |
 | HARN-006 | A test that targets a specific provider (e.g. `TransactionRollbackOnKilledConnectionTests`, Firebird Embedded) fails instead of skipping when `INTEGRATION_ONLY` excludes that provider | Open |
 
 ### Tier 2: fixes that change visible behavior (decide per item)
