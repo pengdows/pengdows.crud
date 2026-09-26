@@ -1,7 +1,9 @@
 using System;
 using System.Data;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -93,6 +95,53 @@ public class FlatFileDialectTests
         await tx.SavepointAsync("sp1");
         await tx.RollbackToSavepointAsync("sp1");
         await tx.ReleaseSavepointAsync("sp1");
+    }
+
+    // TransactionCharacteristicsExecutor applies SET TRANSACTION READ ONLY to the current
+    // FlatFileTransaction, and DefaultFlatFileQueryExecutor then rejects every mutating statement
+    // ("the transaction is READ ONLY"). The setting is per transaction (a new FlatFileTransaction
+    // per BEGIN), so nothing leaks to the next transaction on the connection. This enforces
+    // read-only even on a writer connection (SingleConnection mode), where readonly=true is absent.
+    [Fact]
+    public void SupportsReadOnlyTransactions_IsTrue()
+    {
+        Assert.True(Dialect().SupportsReadOnlyTransactions);
+    }
+
+    [Fact]
+    public void TryEnterReadOnlyTransaction_ExecutesSetTransactionReadOnly()
+    {
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container.Setup(c => c.ExecuteNonQueryAsync(CommandType.Text)).ReturnsAsync(0).Verifiable();
+        container.Setup(c => c.Dispose()).Verifiable();
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction.Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
+            .Returns(container.Object)
+            .Verifiable();
+
+        Dialect().TryEnterReadOnlyTransaction(transaction.Object);
+
+        container.Verify();
+        transaction.Verify();
+    }
+
+    [Fact]
+    public async Task TryEnterReadOnlyTransactionAsync_ExecutesSetTransactionReadOnly()
+    {
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container.Setup(c => c.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0)
+            .Verifiable();
+        container.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction.Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
+            .Returns(container.Object)
+            .Verifiable();
+
+        await Dialect().TryEnterReadOnlyTransactionAsync(transaction.Object, CancellationToken.None);
+
+        container.Verify();
+        transaction.Verify();
     }
 
     // pengdows.sql/SqlLexer.cs tokenizes ":name" as a NamedParameter and

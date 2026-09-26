@@ -93,6 +93,31 @@ internal class FlatFileDialect : SqlDialect
     /// </summary>
     public override bool SupportsSavepoints => true;
 
+    private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
+
+    /// <summary>
+    /// <c>TransactionCharacteristicsExecutor</c> applies <c>SET TRANSACTION READ ONLY</c> to the
+    /// current <c>FlatFileTransaction</c>, after which <c>DefaultFlatFileQueryExecutor</c> rejects
+    /// every mutating statement. The setting belongs to that one transaction (each BEGIN creates a
+    /// new <c>FlatFileTransaction</c>), so no reset SQL is needed. SingleWriter reads already use
+    /// <c>readonly=true</c> connections; this also covers a read-only transaction on a writer
+    /// connection (SingleConnection mode).
+    /// </summary>
+    public override bool SupportsReadOnlyTransactions => true;
+
+    /// <inheritdoc cref="SupportsReadOnlyTransactions"/>
+    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+    {
+        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "FlatFile");
+    }
+
+    /// <inheritdoc cref="SupportsReadOnlyTransactions"/>
+    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
+        CancellationToken cancellationToken = default)
+    {
+        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "FlatFile", cancellationToken);
+    }
+
     /// <summary>
     /// pengdows.flatfile has no stored-procedure/trigger/control-flow support at all (confirmed:
     /// its README lists this under "Not supported"). <see cref="ProcWrappingStyle.None"/> is the
