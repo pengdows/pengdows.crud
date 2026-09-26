@@ -811,9 +811,10 @@ public partial class DatabaseContext
     // connect/detect calls, which genuinely differ (Open vs OpenAsync, Detect vs DetectAsync)
     // and are kept separate rather than hidden behind a delegate-branching abstraction.
     private DbMode CoerceModeAndValidateInMemoryUsage(DbMode requestedMode, SupportedDatabase product,
-        bool isLocalDb)
+        DatabaseTopology topology)
     {
-        var coercedMode = CoerceMode(requestedMode, product, isLocalDb);
+        var isLocalDb = topology.IsLocalDb;
+        var coercedMode = CoerceMode(requestedMode, product, topology);
         var inMemoryKind = DetectInMemoryKind(product, _connectionString);
 
         if (coercedMode == DbMode.SingleConnection
@@ -886,7 +887,7 @@ public partial class DatabaseContext
 
             // 3) Detect product/capabilities once
             var product = DatabaseDetectionService.DetectProduct(initConn, _factory);
-            var topology = DatabaseDetectionService.DetectTopology(product, _connectionString);
+            var topology = DatabaseDetectionService.DetectTopology(product, _connectionString, initConn);
             var isLocalDb = topology.IsLocalDb;
 
             // Best-effort, provider-specific session-capability prefetch (currently only
@@ -913,7 +914,7 @@ public partial class DatabaseContext
 
             // 4) Coerce ConnectionMode based on product/topology
             var requestedMode = ConnectionMode;
-            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, isLocalDb);
+            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, topology);
 
             // Pooling defaults will be applied after dialect detection
 
@@ -980,7 +981,9 @@ public partial class DatabaseContext
 
             var product = await DatabaseDetectionService.DetectProductAsync(initConn, _factory, cancellationToken)
                 .ConfigureAwait(false);
-            var topology = DatabaseDetectionService.DetectTopology(product, _connectionString);
+            // The connection lets topology detection tell Db2 LUW from z/OS and IBM i (a one-row
+            // synchronous probe, Db2 only; see DatabaseDetectionService.DetectTopology).
+            var topology = DatabaseDetectionService.DetectTopology(product, _connectionString, initConn);
             var isLocalDb = topology.IsLocalDb;
 
             if (initConn != null)
@@ -1002,7 +1005,7 @@ public partial class DatabaseContext
             }
 
             var requestedMode = ConnectionMode;
-            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, isLocalDb);
+            ConnectionMode = CoerceModeAndValidateInMemoryUsage(requestedMode, product, topology);
 
             initConn = TakeOwnershipOfInitConnectionForMode(initConn, initExecutionType);
 
@@ -2343,7 +2346,7 @@ public partial class DatabaseContext
         return connectionString;
     }
 
-    private DbMode CoerceMode(DbMode requested, SupportedDatabase product, bool isLocalDb)
+    private DbMode CoerceMode(DbMode requested, SupportedDatabase product, DatabaseTopology topology)
     {
         // All per-database coercion policy (what Best resolves to, which explicit modes are unsafe
         // and get coerced, which are safe and honored as-is) lives on the dialect now — see
@@ -2354,7 +2357,9 @@ public partial class DatabaseContext
         // IsClientServerDatabase/CoerceConnectionMode defaults (honor explicit modes, Best -> Standard)
         // are already correct for it, matching what the old hardcoded switch below used to do.
         var dialect = SqlDialectFactory.CreateDialectForType(product, _factory, _logger);
-        var (mode, reason) = dialect.CoerceConnectionMode(requested, _connectionString, isLocalDb);
+        var (mode, reason) = dialect is SqlDialect sqlDialect
+            ? sqlDialect.CoerceConnectionMode(requested, _connectionString, topology)
+            : dialect.CoerceConnectionMode(requested, _connectionString, topology.IsLocalDb);
         LogModeOverride(requested, mode, reason);
         return mode;
     }
