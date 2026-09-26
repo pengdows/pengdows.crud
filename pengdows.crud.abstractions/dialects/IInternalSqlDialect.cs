@@ -30,6 +30,12 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool MergeUpsertReportsSkippedVersionRow => true;
 
     /// <summary>
+    /// False when a zero-length binary value does not read back as zero-length: Sybase ASE stores
+    /// it as the single byte 0x00 (as it stores '' as a single blank).
+    /// </summary>
+    bool PreservesEmptyBinary => true;
+
+    /// <summary>
     /// Renders provider-specific JSON casts for parameter placeholders.
     /// </summary>
     string RenderJsonArgument(string parameterMarker, IColumnInfo column);

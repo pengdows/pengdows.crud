@@ -693,6 +693,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     /// <inheritdoc cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>
     public virtual bool MergeUpsertReportsSkippedVersionRow => true;
+
+    /// <inheritdoc cref="IInternalSqlDialect.PreservesEmptyBinary"/>
+    public virtual bool PreservesEmptyBinary => true;
     public virtual bool SupportsOnDuplicateKey => false; // MySQL, MariaDB extension
     public virtual bool SupportsSavepoints => false;
 

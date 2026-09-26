@@ -155,6 +155,8 @@ internal class SybaseDialect : SqlDialect
         return select.ToString();
     }
 
+    // CONFIRMED live (ASE 16.0): a zero-length VARBINARY reads back as 0x00.
+    public override bool PreservesEmptyBinary => false;
     // Verified live: this ASE build rejects the multi-row VALUES clause the base
     // implementation generates ("INSERT INTO t (...) VALUES (r1...), (r2...)") with
     // "Incorrect syntax near ','." — falls back to one INSERT per row.
