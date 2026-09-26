@@ -98,6 +98,29 @@ internal class FlatFileDialect : SqlDialect
     public override bool IsClientServerDatabase => false;
 
     /// <summary>
+    /// <c>FlatFileConnection.Open</c> acquires <c>ConnectionWriteLock</c> for every non-readonly
+    /// connection: one writer per directory (or per file in single-file mode). A second in-process
+    /// writer waits <c>connectionTimeout</c> (default 5 s) and then throws
+    /// <see cref="TimeoutException"/>; a writer in another process is refused outright. Readonly
+    /// connections never take the lock. That is the SQLite/DuckDB single-writer constraint.
+    /// </summary>
+    public override bool IsEmbeddedSingleWriterEngine => true;
+
+    /// <summary>
+    /// Same policy as SQLite/DuckDB (<see cref="SqlDialect.CoerceEmbeddedSingleWriterMode"/>): Best,
+    /// Standard and PreventDatabaseUnload become SingleWriter, so writes are serialized by the
+    /// governor and reads use <c>readonly=true</c> connections that skip the write lock. Standard is
+    /// not honored because concurrent writers queue inside <c>Open()</c> and time out, and every
+    /// Standard read would also take the write lock. A PreventDatabaseUnload sentinel would hold the
+    /// write lock for the context's lifetime. pengdows.flatfile has no in-memory mode (every
+    /// connection names a <c>path</c> or <c>file</c>), so <see cref="SqlDialect.DetectInMemoryKind"/>
+    /// keeps its <see cref="InMemoryKind.None"/> default.
+    /// </summary>
+    public override (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
+        bool isLocalDb) =>
+        CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString));
+
+    /// <summary>
     /// Verified: pengdows.flatfile's SQL parser (<c>pengdows.sql/SqlParser.cs</c>) genuinely
     /// parses an <c>IF EXISTS</c> clause on <c>DROP TABLE</c>/<c>DROP VIEW</c>/<c>DROP INDEX</c>
     /// (see its <c>SqlAst.cs</c> <c>IfExists</c> properties), so the base <c>true</c> default is

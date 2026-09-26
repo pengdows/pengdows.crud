@@ -313,6 +313,25 @@ public class DatabaseContextTests
         Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
     }
 
+    // pengdows.flatfile allows one non-readonly connection per database (ConnectionWriteLock);
+    // a second in-process writer waits connectionTimeout and then throws TimeoutException.
+    [Theory]
+    [InlineData(DbMode.Best)]
+    [InlineData(DbMode.Standard)]
+    [InlineData(DbMode.PreventDatabaseUnload)]
+    public void FlatFile_SetsSingleWriterMode(DbMode requested)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.FlatFile);
+        using var context = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = "path=/tmp/db;EmulatedProduct=FlatFile",
+                DbMode = requested
+            },
+            factory);
+        Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
+    }
+
     [Fact]
     public void BeginTransaction_ReadOnly_DefaultsToResolverLevel()
     {

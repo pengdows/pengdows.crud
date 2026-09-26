@@ -43,6 +43,28 @@ public class FlatFileDialectTests
         Assert.Equal("readonly=true", Dialect().GetReadOnlyConnectionParameter());
     }
 
+    // FlatFileConnection.Open takes ConnectionWriteLock for every non-readonly connection: one
+    // writer per directory/file, a second in-process writer waits connectionTimeout then throws
+    // TimeoutException. Same constraint as SQLite/DuckDB, so the same coercion policy.
+    [Theory]
+    [InlineData(DbMode.Best, DbMode.SingleWriter)]
+    [InlineData(DbMode.Standard, DbMode.SingleWriter)]
+    [InlineData(DbMode.PreventDatabaseUnload, DbMode.SingleWriter)]
+    [InlineData(DbMode.SingleWriter, DbMode.SingleWriter)]
+    [InlineData(DbMode.SingleConnection, DbMode.SingleConnection)]
+    public void CoerceConnectionMode_UsesSingleWriterPolicy(DbMode requested, DbMode expected)
+    {
+        var (mode, _) = Dialect().CoerceConnectionMode(requested, "path=/tmp/db", isLocalDb: false);
+
+        Assert.Equal(expected, mode);
+    }
+
+    [Fact]
+    public void IsEmbeddedSingleWriterEngine_IsTrue()
+    {
+        Assert.True(Dialect().IsEmbeddedSingleWriterEngine);
+    }
+
     // pengdows.sql/SqlLexer.cs tokenizes ":name" as a NamedParameter and
     // BoundPredicateEvaluator.ResolveParameter matches it against DbParameter.ParameterName
     // (bare, case-insensitive). The old "positional ? only" README claim is stale.
