@@ -71,6 +71,41 @@ public class Db2TestContainer : TestContainer
     public string ConnectionString =>
         _connectionString ?? throw new InvalidOperationException("Container not started yet.");
 
+    private const string _probeDatabase = "probedb";
+    private string? _probeConnectionString;
+
+    /// <summary>
+    /// Creates (once) a second database that nothing else in the run connects to, and returns an
+    /// unpooled connection string for it. The idle-unload probe needs Db2 to really deactivate a
+    /// database between samples; the shared testdb never deactivates while other checks' pooled
+    /// connections are open, and the only way to drop those (<c>DB2Connection.ReleaseObjectPool</c>)
+    /// crashes the IBM driver under later concurrent use. Db2 has no SQL CREATE DATABASE, so this
+    /// runs the CLP inside the container.
+    /// </summary>
+    public async Task<string> EnsureIdleProbeDatabaseAsync()
+    {
+        if (_probeConnectionString is not null)
+        {
+            return _probeConnectionString;
+        }
+
+        var result = await _container.ExecAsync(new[]
+        {
+            "su", "-", _username, "-c",
+            $"db2 list db directory | grep -qi 'alias.*= {_probeDatabase}$' || db2 create database {_probeDatabase}"
+        });
+        if (result.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Could not create Db2 probe database '{_probeDatabase}' (exit {result.ExitCode}): {result.Stdout} {result.Stderr}");
+        }
+
+        var hostPort = _container.GetMappedPublicPort(_port);
+        _probeConnectionString =
+            $"Server=localhost:{hostPort};Database={_probeDatabase};UID={_username};PWD={_password};";
+        return _probeConnectionString;
+    }
+
     protected override ValueTask DisposeAsyncCore()
     {
         return _container.DisposeAsync();

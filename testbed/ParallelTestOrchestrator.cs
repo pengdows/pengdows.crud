@@ -227,6 +227,8 @@ public class ParallelTestOrchestrator
     // appear unconditionally. See CLAUDE.md "Adding a New Database".
     private List<TestConfiguration> GetTestConfigurations()
     {
+        // Db2's provider needs its container for the idle-unload probe's dedicated database.
+        var db2Container = new Db2TestContainer();
         var configurations = new List<TestConfiguration>
         {
             new()
@@ -362,8 +364,8 @@ public class ParallelTestOrchestrator
             {
                 ContainerName = "Db2",
                 DatabaseProvider = "Db2",
-                Container = new Db2TestContainer(),
-                TestProviderFactory = (db, sp) => new Db2TestProvider(db, sp)
+                Container = db2Container,
+                TestProviderFactory = (db, sp) => new Db2TestProvider(db, sp, db2Container)
             },
             new()
             {

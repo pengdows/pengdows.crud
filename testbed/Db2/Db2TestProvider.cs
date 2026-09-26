@@ -1,8 +1,11 @@
 #region
 
+using System.Data;
 using IBM.Data.Db2;
 using pengdows.crud;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 
 #endregion
@@ -11,9 +14,13 @@ namespace testbed.Db2;
 
 public class Db2TestProvider : TestProvider
 {
-    public Db2TestProvider(IDatabaseContext context, IServiceProvider serviceProvider)
+    private readonly Db2TestContainer? _container;
+
+    public Db2TestProvider(IDatabaseContext context, IServiceProvider serviceProvider,
+        Db2TestContainer? container = null)
         : base(context, serviceProvider)
     {
+        _container = container;
     }
 
     protected override async Task RunAdditionalTestsAsync()
@@ -24,17 +31,103 @@ public class Db2TestProvider : TestProvider
     }
 
     /// <summary>
-    /// Not measured on Db2. The probe needs a genuinely cold connection per sample, and the only
-    /// way to force that with IBM.Data.Db2 is <c>DB2Connection.ReleaseObjectPool()</c>, which
-    /// destabilizes the driver: CONFIRMED with a standalone repro (Net.IBM.Data.Db2-lnx 8.0.0.500,
-    /// no server needed) - a ReleaseObjectPool() followed by concurrent
-    /// <c>DB2Connection.ConnectionString</c> assignments segfaults the process (exit 139), and in
-    /// the full testbed run it surfaced as an intermittent ArgumentNullException from
-    /// <c>DB2ConnPool.ReplaceConnStrPwd</c> in the next (concurrency) test. The library never calls
-    /// ReleaseObjectPool; only this probe did. Earlier probe runs measured Db2's cold/warm gap at
-    /// ~2 ms (below the noise floor), which is why Db2's Best stays Standard.
+    /// Db2 LUW's implicit-activation lifecycle deactivates a database as soon as its last
+    /// application connection disconnects. This probe measures that cost and whether a real
+    /// PreventDatabaseUnload context's sentinel prevents it, against a dedicated database nothing
+    /// else connects to (<see cref="Db2TestContainer.EnsureIdleProbeDatabaseAsync"/>):
+    /// <list type="bullet">
+    /// <item>It does NOT clear the shared pool: <c>DB2Connection.ReleaseObjectPool()</c>, the IBM
+    /// driver's only pool-clearing API, was CONFIRMED (standalone repro, Net.IBM.Data.Db2-lnx
+    /// 8.0.0.500) to crash the driver under later concurrent use (segfault, or
+    /// ArgumentNullException from DB2ConnPool.ReplaceConnStrPwd in the next concurrency test).</item>
+    /// <item>Timed samples use raw, unpooled DB2Connections, so no pooled connection keeps the
+    /// probe database active. pengdows.crud itself rejects Pooling=false, which is why the samples
+    /// are raw; only the pinned phase's PreventDatabaseUnload context goes through pengdows.</item>
+    /// <item>Unpinned samples run before the pinned phase (not interleaved): once a pengdows
+    /// context has pooled connections to the probe database, it stays active.</item>
+    /// </list>
     /// </summary>
-    protected override Task<bool> TryEnableFastIdleUnloadAsync() => Task.FromResult(false);
+    protected override async Task TestIdleUnloadProbe()
+    {
+        if (_container is null)
+        {
+            Console.WriteLine("  [DbMode] Idle-unload probe for Db2: no container handle - not measured");
+            return;
+        }
+
+        const int rounds = 5;
+        var probeConnectionString = await _container.EnsureIdleProbeDatabaseAsync();
+        var rawUnpooled = probeConnectionString + "Pooling=false;";
+
+        var unpinned = new List<double>(rounds);
+        for (var i = 0; i < rounds; i++)
+        {
+            unpinned.Add(await MeasureColdRawRoundTripAsync(rawUnpooled));
+        }
+
+        var pinned = new List<double>(rounds);
+        await using (var preventUnload = new DatabaseContext(new DatabaseContextConfiguration
+                     {
+                         ConnectionString = probeConnectionString,
+                         DbMode = DbMode.PreventDatabaseUnload
+                     }, DB2Factory.Instance))
+        {
+            if (preventUnload.ConnectionMode != DbMode.PreventDatabaseUnload)
+            {
+                throw new InvalidOperationException(
+                    $"DbMode.SentinelPreventsUnload: requested PreventDatabaseUnload resolved to {preventUnload.ConnectionMode}.");
+            }
+
+            for (var i = 0; i < rounds; i++)
+            {
+                pinned.Add(await MeasureColdRawRoundTripAsync(rawUnpooled));
+            }
+
+            var sentinels = preventUnload.GetSentinelSnapshot();
+            if (sentinels.Count == 0 || sentinels.Any(s => s.Connection.State != ConnectionState.Open))
+            {
+                throw new InvalidOperationException(
+                    "DbMode.SentinelPreventsUnload: expected every sentinel Open after the idle windows, got [" +
+                    string.Join(", ", sentinels.Select(s => $"{s.ExecutionType}:{s.Connection.State}")) + "].");
+            }
+        }
+
+        var unpinnedMedian = Median(unpinned);
+        var pinnedMedian = Median(pinned);
+        var saved = unpinnedMedian - pinnedMedian;
+        var detected = saved > Math.Max(3.0, unpinnedMedian * 0.15);
+        CheckOk(
+            $"  [DbMode] Idle-unload probe for Db2 (dedicated probe database): cold median without sentinel=" +
+            $"{unpinnedMedian:F2}ms, with PreventDatabaseUnload sentinel={pinnedMedian:F2}ms (saved {saved:F2}ms; samples: " +
+            string.Join("/", unpinned.Select(v => v.ToString("F1"))) + " vs " +
+            string.Join("/", pinned.Select(v => v.ToString("F1"))) + ") — " +
+            (detected
+                ? "unload cost PREVENTED by the sentinel"
+                : "no unload cost distinguishable from reconnect cost; sentinels verified Open"));
+    }
+
+    private static async Task<double> MeasureColdRawRoundTripAsync(string unpooledConnectionString)
+    {
+        await Task.Delay(TimeSpan.FromSeconds(3));
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+        await using (var connection = new DB2Connection(unpooledConnectionString))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT 1 FROM SYSIBM.SYSDUMMY1";
+            await command.ExecuteScalarAsync();
+        }
+
+        sw.Stop();
+        return sw.Elapsed.TotalMilliseconds;
+    }
+
+    private static double Median(List<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToList();
+        var mid = sorted.Count / 2;
+        return sorted.Count % 2 == 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2.0;
+    }
 
     private async Task TestMergeParameterBindingAsync()
     {
