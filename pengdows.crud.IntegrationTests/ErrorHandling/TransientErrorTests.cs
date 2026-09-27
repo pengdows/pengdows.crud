@@ -132,6 +132,14 @@ public class TransientErrorTests : DatabaseTestBase
                 new DatabaseContext(WithBuilderKey(rawCs, "Server", "pengdows_no_such_server"),
                     Informix.Net.Core.InformixClientFactory.Instance),
 
+            // Snowflake derives its HTTPS endpoint from the account unless host/port are given, so
+            // point host/port at the closed local port. Its login otherwise retries for minutes.
+            SupportedDatabase.Snowflake =>
+                new DatabaseContext(
+                    WithBuilderKey(WithBuilderKey(WithBuilderKey(WithBuilderKey(rawCs,
+                        "host", "127.0.0.1"), "port", "1"), "connection_timeout", "15"), "maxHttpRetries", "1"),
+                    Snowflake.Data.Client.SnowflakeDbFactory.Instance),
+
             _ => throw new NotSupportedException(
                 $"No unreachable-endpoint builder defined for {provider}.")
         };
