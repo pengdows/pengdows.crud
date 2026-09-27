@@ -42,9 +42,14 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
         }
 
         var msg = exception.Message;
-        if (msg.Contains("connection", StringComparison.OrdinalIgnoreCase) &&
-            (msg.Contains("closed", StringComparison.OrdinalIgnoreCase) ||
-             msg.Contains("broken", StringComparison.OrdinalIgnoreCase)))
+        // "pre-login handshake": the server accepted the socket and then dropped it before login.
+        // Confirmed live as what the client sees when 'user connections' is exhausted (the server
+        // logs error 17809 but sends nothing; SqlException Number 0, Class 20). Every cause of this
+        // message is connection-level.
+        if ((msg.Contains("connection", StringComparison.OrdinalIgnoreCase) &&
+             (msg.Contains("closed", StringComparison.OrdinalIgnoreCase) ||
+              msg.Contains("broken", StringComparison.OrdinalIgnoreCase))) ||
+            msg.Contains("pre-login handshake", StringComparison.OrdinalIgnoreCase))
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }

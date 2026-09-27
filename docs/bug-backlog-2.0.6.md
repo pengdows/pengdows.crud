@@ -261,6 +261,18 @@ These are the rules the code is being brought in line with.
   both begin paths: gate and connection are still released, then the cancellation is rethrown as-is.
   Test: `TransactionBeginCancellationTests`.)* **3.0:** same bug, fixed there too.
 
+- [x] **A server refusing a connection at its connection limit threw a generic
+  `DatabaseOperationException` on most databases** (found while diagnosing the SybaseASE
+  integration failure, 2026-09-27). Each shape was reproduced live by exhausting the limit, and
+  now throws `ConnectionException`: PostgreSQL SQLSTATE 53300 (also CockroachDB/YugabyteDB);
+  SQL Server's pre-login handshake failure (the server logs 17809 but only drops the socket,
+  so the client sees Number 0, Class 20); Oracle ORA-02391 (SESSIONS_PER_USER) plus the
+  documented ORA-00018/00020, while the `processes` limit already surfaced as the mapped
+  ORA-50201; Db2 SQLSTATE 57030 (SQL1226N); Informix -25571; and Sybase ASE, which sends no
+  error at all, through AdoNetCore.AseClient's "Pool timed out trying to reserve a connection" /
+  "Timed out trying to establish a connection". MySQL-family 1040 was already mapped. A distinct
+  "connection limit" category is 3.0 work (POOL-002 in `docs/FUTURE_WORK.md`).
+
 ## Decisions needed (found while investigating)
 
 - [x] **D06 — `DbMode.SingleConnection`: a plain read during another task's open transaction fails on

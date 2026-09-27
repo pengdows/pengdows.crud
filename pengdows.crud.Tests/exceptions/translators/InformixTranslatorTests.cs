@@ -153,4 +153,17 @@ public class InformixTranslatorTests
 
         Assert.IsType<InformixExceptionTranslator>(registry.Get(SupportedDatabase.Informix));
     }
+
+    // Session limit (confirmed live during HARN-005, icr.io/informix/informix-developer-database:
+    // the developer image accepts about 24 concurrent sessions; the next fails with -25571 "Cannot
+    // create a user thread").
+    [Fact]
+    public void CannotCreateUserThread_25571_MapsTo_ConnectionException()
+    {
+        var raw = new NumberedDbException(-25571, "Cannot create a user thread.");
+
+        var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
 }

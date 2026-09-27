@@ -41,7 +41,8 @@ internal sealed class Db2ExceptionTranslator : IDbExceptionTranslator
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
 
-        if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
+        // 57030 (SQL1226N): the server's MAX_CONNECTIONS limit was reached (confirmed live).
+        if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true || sqlState == "57030")
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
