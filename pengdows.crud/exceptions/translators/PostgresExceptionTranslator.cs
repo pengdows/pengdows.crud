@@ -27,7 +27,10 @@ internal sealed class PostgresExceptionTranslator : IDbExceptionTranslator
             return classified;
         }
 
-        if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
+        // 53300 too_many_connections: the server refused the connection at its connection limit
+        // (confirmed live, "sorry, too many clients already"). The rest of class 53 is resource
+        // exhaustion inside a working session, not a connection failure.
+        if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true || sqlState == "53300")
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }

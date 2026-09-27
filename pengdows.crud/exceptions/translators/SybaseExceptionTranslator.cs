@@ -42,6 +42,16 @@ internal sealed class SybaseExceptionTranslator : IDbExceptionTranslator
                 database, exception, sqlState, errorCode, constraintName);
         }
 
+        // AdoNetCore.AseClient throws these (with no error number) whenever it cannot obtain a
+        // connection: a real pool wait timeout, or any login the server drops, such as ASE
+        // refusing a login at its 'number of user connections' limit (confirmed live; ASE sends
+        // no error, only its errorlog records it). Checked before the timeout heuristic: these are
+        // connection failures, not command timeouts.
+        if (IsConnectionAcquisitionFailure(exception.Message))
+        {
+            return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
+
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception) || errorCode == -2)
         {
             return DbExceptionTranslationSupport.CreateTimeout(database, exception, operationKind);
@@ -64,4 +74,8 @@ internal sealed class SybaseExceptionTranslator : IDbExceptionTranslator
             _ => DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind)
         };
     }
+
+    private static bool IsConnectionAcquisitionFailure(string message) =>
+        message.Equals("Pool timed out trying to reserve a connection", StringComparison.Ordinal) ||
+        message.Equals("Timed out trying to establish a connection", StringComparison.Ordinal);
 }

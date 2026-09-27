@@ -129,4 +129,35 @@ public class PostgresTranslatorTests
         Assert.Equal(SupportedDatabase.PostgreSql, result.Database);
         Assert.NotNull(result.InnerException);
     }
+
+    // Server connection limit (confirmed live 2026-09-27, postgres:latest with max_connections=6,
+    // Npgsql 9.0.3): PostgresException SqlState "53300", message "53300: sorry, too many clients
+    // already". Class 53 is "insufficient resources", not the 08 connection class, so it needs its
+    // own check. CockroachDB and YugabyteDB report the same SQLSTATE through the same translator.
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    public void SqlState53300_TooManyConnections_MapsTo_ConnectionException(SupportedDatabase database)
+    {
+        var raw = new SqlStateDbException("53300", "53300: sorry, too many clients already");
+
+        var result = _translator.Translate(TestDialect(database), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+        Assert.Equal("53300", result.SqlState);
+    }
+
+    // Other class-53 states are resource exhaustion inside a working session, not connection failures.
+    [Theory]
+    [InlineData("53100")]
+    [InlineData("53200")]
+    public void OtherInsufficientResourceStates_AreNot_ConnectionException(string sqlState)
+    {
+        var raw = new SqlStateDbException(sqlState, "insufficient resources");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.PostgreSql), raw, DbOperationKind.Query);
+
+        Assert.IsNotType<ConnectionException>(result);
+    }
 }

@@ -162,4 +162,22 @@ public class OracleTranslatorTests
 
         Assert.IsType<ConnectionException>(result);
     }
+
+    // Per-user session limit (confirmed live 2026-09-27, gvenzl/oracle-free with a profile
+    // SESSIONS_PER_USER 3, ODP.NET 23.8.0): OracleException.Number 2391. The server-wide
+    // 'processes' limit surfaces as ORA-50201 wrapping ORA-12537 (covered above). ORA-00018
+    // (maximum number of sessions exceeded) and ORA-00020 (maximum number of processes exceeded)
+    // are Oracle's documented codes for the other server-wide limits; not reproduced live.
+    [Theory]
+    [InlineData(2391, "ORA-02391: exceeded simultaneous SESSIONS_PER_USER limit")]
+    [InlineData(18, "ORA-00018: maximum number of sessions exceeded")]
+    [InlineData(20, "ORA-00020: maximum number of processes (100) exceeded")]
+    public void ConnectionLimit_MapsTo_ConnectionException(int number, string message)
+    {
+        var raw = new NumberedDbException(number, message);
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
 }

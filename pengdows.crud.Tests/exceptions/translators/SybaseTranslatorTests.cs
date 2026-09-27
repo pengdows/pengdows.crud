@@ -116,4 +116,23 @@ public class SybaseTranslatorTests
 
         Assert.IsType<SybaseExceptionTranslator>(registry.Get(SupportedDatabase.SybaseASE));
     }
+
+    // Server connection limit (confirmed live 2026-09-27, ASE 16 Developer Edition, cap 25):
+    // ASE logs "There are not enough 'user connections'..." to its own errorlog and drops the
+    // socket. AdoNetCore.AseClient 0.19.2 turns any non-ASE login failure into
+    // OperationCanceledException and throws exactly these messages (ConnectionPool.Reserve /
+    // GetTimedOutAseException, pooled and unpooled), with no error number. Both mean a connection
+    // could not be obtained, so they are connection failures, never command timeouts.
+    [Theory]
+    [InlineData("Pool timed out trying to reserve a connection")]
+    [InlineData("Timed out trying to establish a connection")]
+    public void ConnectionAcquisitionFailure_MapsTo_ConnectionException(string message)
+    {
+        var raw = new AseException(message);
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SybaseASE), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+        Assert.IsNotType<CommandTimeoutException>(result);
+    }
 }

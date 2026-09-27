@@ -40,7 +40,9 @@ internal sealed class InformixExceptionTranslator : IDbExceptionTranslator
         // The documented communication-failure codes are checked directly as well as the SQLSTATE
         // "08" class: not every provider populates SqlState reliably.
         var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
-        if (code is 908 or 27001 or 27002 ||
+        // -25571 "Cannot create a user thread": the server's session limit (confirmed live on the
+        // developer image at about 24 sessions).
+        if (code is 908 or 27001 or 27002 or 25571 ||
             sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
