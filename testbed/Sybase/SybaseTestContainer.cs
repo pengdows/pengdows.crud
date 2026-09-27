@@ -29,6 +29,7 @@ namespace testbed.Sybase;
 /// </remarks>
 public class SybaseTestContainer : TestContainer, ITestContainer
 {
+    private const int DeveloperEditionPoolSize = 5;
     private const string Username = "sa";
     private const string Password = "myPassword";
     private const string Database = "testdb";
@@ -176,11 +177,19 @@ public class SybaseTestContainer : TestContainer, ITestContainer
             throw new InvalidOperationException("Container not started.");
         }
 
+        // CONFIRMED live: ASE Developer Edition caps "number of user connections" at 25 (sp_configure
+        // rejects anything higher) and drops logins beyond it, which AseClient reports as "Pool timed
+        // out trying to reserve a connection". Size each pool (reader and writer) so a context, plus a
+        // second one some tests open, stays below that; the governor queues the rest.
         return Task.FromResult<IDatabaseContext>(
             new DatabaseContext(
-                _connectionString,
-                AseClientFactory.Instance,
-                null!));
+                new pengdows.crud.configuration.DatabaseContextConfiguration
+                {
+                    ConnectionString = _connectionString,
+                    MaxConcurrentReads = DeveloperEditionPoolSize,
+                    MaxConcurrentWrites = DeveloperEditionPoolSize
+                },
+                AseClientFactory.Instance));
     }
 
     protected override ValueTask DisposeAsyncCore()
