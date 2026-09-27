@@ -28,6 +28,14 @@ internal sealed class HanaExceptionTranslator : IDbExceptionTranslator
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
 
+        // -10709 "Connection failed": any failed connect (refused, reset, unreachable; confirmed
+        // live). HANA's tenant connection limit only resets the socket and surfaces as this too,
+        // so it can't be reported as TooManyConnectionsException.
+        if (errorCode == -10709)
+        {
+            return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
+
         if (exception is DbException dbEx)
         {
             if (dialect.IsUniqueViolation(dbEx))

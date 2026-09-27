@@ -27,6 +27,13 @@ internal sealed class InterBaseExceptionTranslator : IDbExceptionTranslator
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
 
+        // 335544744 isc_max_att_exceeded, "Maximum user count exceeded": the license's concurrent
+        // user cap (confirmed live on InterBase 15 Developer Edition at 16 attachments).
+        if (errorCode == 335544744)
+        {
+            return DbExceptionTranslationSupport.CreateTooManyConnections(database, exception, operationKind);
+        }
+
         if (exception is DbException dbEx)
         {
             if (dialect.IsUniqueViolation(dbEx))

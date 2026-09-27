@@ -98,4 +98,20 @@ public class InterBaseTranslatorTests
 
         Assert.IsType<InterBaseExceptionTranslator>(registry.Get(SupportedDatabase.InterBase));
     }
+
+    // License concurrent-user cap (confirmed live 2026-09-27, InterBase 15 Developer Edition,
+    // InterBaseSql.Data.InterBaseClient 10.0.3): the 17th attachment fails with IBException
+    // ErrorCode 335544744 (isc_max_att_exceeded), "Maximum user count exceeded. Contact your
+    // database administrator." The server was reached and named the limit.
+    [Fact]
+    public void ErrorCode335544744_MaxUserCountExceeded_MapsTo_TooManyConnectionsException()
+    {
+        var raw = new NumberedDbException(335544744,
+            "Maximum user count exceeded.  Contact your database administrator.");
+
+        var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Query);
+
+        Assert.IsType<TooManyConnectionsException>(result);
+        Assert.True(result.IsTransient);
+    }
 }
