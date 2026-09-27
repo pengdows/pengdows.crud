@@ -29,12 +29,20 @@ for tfm in net8.0 net10.0; do
 done
 export LD_LIBRARY_PATH
 export INFORMIXDIR="${INFORMIXDIR:-${root}/pengdows.crud.IntegrationTests/bin/Release/net10.0/native}"
-export INFORMIXSQLHOSTS="${INFORMIXSQLHOSTS:-${TMPDIR:-/tmp}/pengdows-informix-sqlhosts}"
 
-dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" \
-  -c Release \
-  --results-directory "${results}" \
-  --logger "trx;LogFileName=IntegrationTests.trx"
+# One target framework at a time, each with its own sqlhosts file. The Informix client resolves the
+# server through INFORMIXSQLHOSTS, and each test process writes its own container's port there;
+# with both frameworks running at once on one shared file, the last write won and both processes
+# used the same Informix database, dropping and recreating each other's tables (confirmed:
+# "table not in the database" / unique-violation failures only on Informix). Sequential runs also
+# halve the peak Docker load. Override with INTEGRATION_FRAMEWORKS="net10.0" to run just one.
+for tfm in ${INTEGRATION_FRAMEWORKS:-net8.0 net10.0}; do
+  INFORMIXSQLHOSTS="${INFORMIXSQLHOSTS_BASE:-${TMPDIR:-/tmp}/pengdows-informix-sqlhosts}-${tfm}" \
+    dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" \
+      -c Release -f "${tfm}" \
+      --results-directory "${results}" \
+      --logger "trx;LogFileName=IntegrationTests-${tfm}.trx"
+done
 
 # testbed is multi-targeted (net8.0;net10.0); run the matrix on each. Override with
 # TESTBED_FRAMEWORKS="net10.0" to run just one.
