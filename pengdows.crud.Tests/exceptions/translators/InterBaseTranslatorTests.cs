@@ -114,4 +114,21 @@ public class InterBaseTranslatorTests
         Assert.IsType<TooManyConnectionsException>(result);
         Assert.True(result.IsTransient);
     }
+
+    // Connection failures (confirmed live 2026-09-27, InterBase 15, InterBaseSql.Data.InterBaseClient
+    // 10.0.3): server stopped, wrong port, and a connection lost mid-session (server restarted under
+    // an open connection) all raise IBException ErrorCode 335544721 (isc_network_error), "Unable to
+    // complete network request to host ...", with no SQLSTATE; only the secondary status code
+    // differs (335544722 connect error / 335544726 read error).
+    [Theory]
+    [InlineData("Unable to complete network request to host \"172.28.0.10/3050\".")]
+    [InlineData("Unable to complete network request to host \"172.28.0.10\".")]
+    public void ErrorCode335544721_NetworkError_MapsTo_ConnectionException(string message)
+    {
+        var raw = new NumberedDbException(335544721, message);
+
+        var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
 }
