@@ -34,6 +34,15 @@ internal sealed class InterBaseExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateTooManyConnections(database, exception, operationKind);
         }
 
+        // 335544721 isc_network_error, "Unable to complete network request to host": the server
+        // is unreachable or the connection dropped (confirmed live for a stopped server, a wrong
+        // port and a server restart under an open connection). The provider sets no SQLSTATE, so
+        // Firebird's class-08 check doesn't apply here.
+        if (errorCode == 335544721)
+        {
+            return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+        }
+
         if (exception is DbException dbEx)
         {
             if (dialect.IsUniqueViolation(dbEx))

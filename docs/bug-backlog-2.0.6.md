@@ -280,7 +280,9 @@ These are the rules the code is being brought in line with.
   when it names `max_user_connections` (1226 for the hourly quotas does not).
   InterBase's license user cap (335544744, "Maximum user count exceeded") maps to it too; SAP HANA's
   -10709 "Connection failed" (refused, reset, or the tenant connection limit) is now a plain
-  `ConnectionException` instead of a generic error.
+  `ConnectionException` instead of a generic error, as is InterBase's 335544721 network error
+  ("Unable to complete network request to host": stopped server, wrong port, or a connection
+  dropped mid-session; the InterBase provider sets no SQLSTATE).
   *Additive public API:* `pengdows.crud.exceptions.TooManyConnectionsException`.
 
 ## Decisions needed (found while investigating)
