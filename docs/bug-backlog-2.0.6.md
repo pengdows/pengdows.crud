@@ -278,6 +278,9 @@ These are the rules the code is being brought in line with.
   signal also comes from TLS failures, genuine pool timeouts and unreachable servers.
   MySQL/MariaDB per-account limits also map to it: 1203 (global `max_user_connections`) and 1226
   when it names `max_user_connections` (1226 for the hourly quotas does not).
+  InterBase's license user cap (335544744, "Maximum user count exceeded") maps to it too; SAP HANA's
+  -10709 "Connection failed" (refused, reset, or the tenant connection limit) is now a plain
+  `ConnectionException` instead of a generic error.
   *Additive public API:* `pengdows.crud.exceptions.TooManyConnectionsException`.
 
 ## Decisions needed (found while investigating)

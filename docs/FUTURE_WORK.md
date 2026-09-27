@@ -474,7 +474,9 @@ POOL-002 (up-front lookup) and POOL-003 (adaptive limit).
 | Firebird 5.0.4 | No limit (300 unpooled attachments opened; no setting) | None | n/a | `mon$attachments` (own plus system attachments) |
 | Spanner (PGAdapter, emulator) | Not probed: no configurable connection limit locally | n/a | n/a | n/a |
 | SQLite, DuckDB, FlatFile | n/a (embedded) | n/a | n/a | n/a |
-| Snowflake, SAP HANA, InterBase, Access | Not probed (opt-in, not runnable here) | | | |
+| SAP HANA Express 2.00.088 | Tenant `maximum_external_connections` (set from SYSTEMDB; a tenant can't change it): **socket reset**, NativeError -10709 "Connection failed ... Connection reset by peer", the same code as a refused connect | User parameter `MAX_CONNECTIONS` is accepted but **not enforced** (free-form user parameter) | No (`m_inifile_contents` returns no rows to an app user) | Own sessions only (`m_connections`) |
+| InterBase 15 Developer Edition | License concurrent-user cap: 335544744 (isc_max_att_exceeded) "Maximum user count exceeded" at 16 attachments | None | No (license file, not SQL) | No (`tmp$attachments` denied to an ordinary user) |
+| Snowflake, Access | Not probed (cloud credentials / Windows only) | | | |
 
 What this means for the design:
 - **Scope is visible on the refusal** where there is a per-account limit: PostgreSQL/YugabyteDB by
@@ -488,8 +490,10 @@ What this means for the design:
 - **Server-wide usage is mostly invisible** to an app account (only PostgreSQL-family,
   Informix, and MySQL/SingleStore's `Threads_connected` show it), so POOL-003 has to work from
   pengdows' own in-use count at the moment of refusal, not from a server-side count.
-- **TiDB and SingleStore accept per-user limits they don't enforce.** Don't treat the configured
-  value as a real ceiling there.
+- **TiDB, SingleStore and SAP HANA accept per-user limits they don't enforce.** Don't treat the
+  configured value as a real ceiling there.
+- **SAP HANA joins SQL Server and Sybase ASE** in only dropping the socket at its limit, so for
+  those three the limit can only come from configuration, and HANA's isn't readable by an app user.
 
 ## Open items from architecture/DAL-comparison review (2026-08-12)
 

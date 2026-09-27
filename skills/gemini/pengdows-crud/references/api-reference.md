@@ -406,7 +406,7 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 - `SqlGenerationException` — thrown by `TypeMapRegistry` at entity registration/gateway construction for missing `[Table]`, empty column name, invalid enum `DbType`, duplicate columns, no `[Id]`/`[PrimaryKey]`, PK order errors, invalid `[Version]`/audit field types. Uses `SupportedDatabase.Unknown`.
 - `DataMappingException` — thrown in strict mode (`MapperOptions.Strict = true`) when column→property coercion fails. Uses `SupportedDatabase.Unknown`.
 - `ConnectionException` — thrown by provider translators for connection-level failures.
-- `TooManyConnectionsException` — a `ConnectionException` (`IsTransient = true`) for a server that was reached but reported it is at its connection limit (PostgreSQL 53300, MySQL 1040/1203/1226, Oracle ORA-02391/00018/00020, Db2 57030, Informix -25571). SQL Server and Sybase ASE only drop the socket at their limit, so they stay a plain `ConnectionException`.
+- `TooManyConnectionsException` — a `ConnectionException` (`IsTransient = true`) for a server that was reached but reported it is at its connection limit (PostgreSQL 53300, MySQL 1040/1203/1226, Oracle ORA-02391/00018/00020, Db2 57030, Informix -25571, InterBase 335544744). SQL Server, SAP HANA and Sybase ASE only drop the socket at their limit, so they stay a plain `ConnectionException`.
 - `TransactionException` — thrown by `TransactionContext` for begin/commit/rollback failures. After failure, `IsCompleted = true` and the connection is released; `Dispose` will not attempt a second rollback.
 - `OperationCanceledException` — **never** wrapped; propagates as-is.
 

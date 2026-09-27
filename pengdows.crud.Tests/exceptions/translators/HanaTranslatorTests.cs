@@ -120,4 +120,21 @@ public class HanaTranslatorTests
 
         Assert.IsType<ReadOnlyViolationException>(result);
     }
+
+    // Connection failure (confirmed live 2026-09-27, saplabs/hanaexpress 2.00.088, Sap.Data.Hana.Net
+    // 2.29.27): HanaException NativeError -10709 "Connection failed (RTE:[89006] ...)" both for a
+    // closed port (rc=111 connection refused) and for the tenant's maximum_external_connections
+    // limit (rc=104 connection reset by peer). The limit can't be told apart from any other failed
+    // connect, so it is a plain ConnectionException, not TooManyConnectionsException.
+    [Theory]
+    [InlineData("Connection failed (RTE:[89006] System call 'connect' failed, rc=111:Connection refused {127.0.0.1:39999} (localhost:39999))")]
+    [InlineData("Connection failed (RTE:[89006] System call 'recv' failed, rc=104:Connection reset by peer {172.17.0.1:46912 -> 172.17.0.2:39041} (172.17.0.1:46912 -> 172.17.0.2:39041))")]
+    public void NativeError10709_ConnectionFailed_MapsTo_ConnectionException(string message)
+    {
+        var raw = new NumberedDbException(-10709, message);
+
+        var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Query);
+
+        Assert.IsType<ConnectionException>(result);
+    }
 }
