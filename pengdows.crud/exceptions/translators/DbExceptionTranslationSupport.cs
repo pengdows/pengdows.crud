@@ -36,6 +36,23 @@ internal static partial class DbExceptionTranslationSupport
             errorCode: TryGetErrorCode(exception));
     }
 
+    /// <summary>
+    /// For a server that was reached but explicitly reported it is at its connection limit. Only
+    /// for signals that name the limit; a dropped socket stays <see cref="CreateConnection"/>.
+    /// </summary>
+    public static TooManyConnectionsException CreateTooManyConnections(
+        SupportedDatabase database,
+        Exception exception,
+        DbOperationKind operationKind)
+    {
+        return new TooManyConnectionsException(
+            $"{operationKind} was refused because {database} is at its connection limit: {exception.Message}",
+            database,
+            exception,
+            sqlState: TryGetSqlState(exception),
+            errorCode: TryGetErrorCode(exception));
+    }
+
     public static CommandTimeoutException CreateTimeout(
         SupportedDatabase database,
         Exception exception,

@@ -33,10 +33,17 @@ internal sealed class OracleExceptionTranslator : IDbExceptionTranslator
         var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
         var message = exception.Message;
 
-        // 50201: ODP.NET could not connect (also what the server-wide 'processes' limit surfaces as,
-        // wrapping ORA-12537; confirmed live). 2391: SESSIONS_PER_USER limit (confirmed live).
-        // 18/20: the documented sessions/processes limits (not reproduced live).
-        if (errorCode is 50201 or 2391 or 18 or 20)
+        // 2391: SESSIONS_PER_USER limit (confirmed live). 18/20: the documented sessions/processes
+        // limits (not reproduced live).
+        if (errorCode is 2391 or 18 or 20)
+        {
+            return DbExceptionTranslationSupport.CreateTooManyConnections(database, exception, operationKind);
+        }
+
+        // 50201: ODP.NET could not connect. The server-wide 'processes' limit also surfaces as this
+        // (wrapping ORA-12537, confirmed live), but so does any other failed connect, so it stays a
+        // plain connection failure.
+        if (errorCode == 50201)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }

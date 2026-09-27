@@ -138,13 +138,15 @@ public class PostgresTranslatorTests
     [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.CockroachDb)]
     [InlineData(SupportedDatabase.YugabyteDb)]
-    public void SqlState53300_TooManyConnections_MapsTo_ConnectionException(SupportedDatabase database)
+    public void SqlState53300_TooManyConnections_MapsTo_TooManyConnectionsException(SupportedDatabase database)
     {
         var raw = new SqlStateDbException("53300", "53300: sorry, too many clients already");
 
         var result = _translator.Translate(TestDialect(database), raw, DbOperationKind.Query);
 
-        Assert.IsType<ConnectionException>(result);
+        Assert.IsType<TooManyConnectionsException>(result);
+        Assert.IsAssignableFrom<ConnectionException>(result);
+        Assert.True(result.IsTransient);
         Assert.Equal("53300", result.SqlState);
     }
 

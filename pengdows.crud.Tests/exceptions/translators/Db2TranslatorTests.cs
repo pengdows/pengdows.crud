@@ -213,23 +213,25 @@ public class Db2TranslatorTests
     // not limited): DB2Exception with SqlState null on the exception itself, SQLSTATE 57030 only in
     // Errors[0] and the message text, native error -1226.
     [Fact]
-    public void SqlState57030_OnlyInMessageText_MapsTo_ConnectionException()
+    public void SqlState57030_OnlyInMessageText_MapsTo_TooManyConnectionsException()
     {
         var raw = new PlainMessageDbException(
             "ERROR [57030] [IBM] SQL1226N  The maximum number of client connections are already started.  SQLSTATE=57030");
 
         var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Query);
 
-        Assert.IsType<ConnectionException>(result);
+        Assert.IsType<TooManyConnectionsException>(result);
+        Assert.True(result.IsTransient);
     }
 
     [Fact]
-    public void SqlState57030_MapsTo_ConnectionException()
+    public void SqlState57030_MapsTo_TooManyConnectionsException()
     {
         var raw = new SqlStateDbException("57030", "SQL1226N  The maximum number of client connections are already started.");
 
         var result = _translator.Translate(TestDialect(SupportedDatabase.Db2), raw, DbOperationKind.Query);
 
-        Assert.IsType<ConnectionException>(result);
+        Assert.IsType<TooManyConnectionsException>(result);
+        Assert.True(result.IsTransient);
     }
 }

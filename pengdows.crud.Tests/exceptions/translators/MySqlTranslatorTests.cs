@@ -91,7 +91,6 @@ public class MySqlTranslatorTests
     }
 
     [Theory]
-    [InlineData(1040)]
     [InlineData(1042)]
     [InlineData(1043)]
     [InlineData(1044)]
@@ -156,5 +155,21 @@ public class MySqlTranslatorTests
 
         Assert.NotNull(result);
         Assert.IsAssignableFrom<DatabaseException>(result);
+    }
+
+    // Server connection limit (confirmed live 2026-09-27, mysql:latest and mariadb:latest with
+    // --max-connections=3, MySqlConnector 2.4.0): MySqlException Number 1040 "Too many connections".
+    [Theory]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    public void Error1040_TooManyConnections_MapsTo_TooManyConnectionsException(SupportedDatabase database)
+    {
+        var raw = new NumberedDbException(1040, "Too many connections");
+
+        var result = _translator.Translate(TestDialect(database), raw, DbOperationKind.Query);
+
+        Assert.IsType<TooManyConnectionsException>(result);
+        Assert.IsAssignableFrom<ConnectionException>(result);
+        Assert.True(result.IsTransient);
     }
 }

@@ -42,7 +42,12 @@ internal sealed class InformixExceptionTranslator : IDbExceptionTranslator
         var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
         // -25571 "Cannot create a user thread": the server's session limit (confirmed live on the
         // developer image at about 24 sessions).
-        if (code is 908 or 27001 or 27002 or 25571 ||
+        if (code == 25571)
+        {
+            return DbExceptionTranslationSupport.CreateTooManyConnections(database, exception, operationKind);
+        }
+
+        if (code is 908 or 27001 or 27002 ||
             sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);

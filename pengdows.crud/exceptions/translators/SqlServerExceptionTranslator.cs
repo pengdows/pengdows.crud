@@ -45,7 +45,8 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
         // "pre-login handshake": the server accepted the socket and then dropped it before login.
         // Confirmed live as what the client sees when 'user connections' is exhausted (the server
         // logs error 17809 but sends nothing; SqlException Number 0, Class 20). Every cause of this
-        // message is connection-level.
+        // message is connection-level, but TLS mismatches produce it too, so it is not reported as
+        // TooManyConnectionsException.
         if ((msg.Contains("connection", StringComparison.OrdinalIgnoreCase) &&
              (msg.Contains("closed", StringComparison.OrdinalIgnoreCase) ||
               msg.Contains("broken", StringComparison.OrdinalIgnoreCase))) ||

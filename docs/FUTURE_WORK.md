@@ -231,6 +231,11 @@ carries earlier 2.0.6 → 3.0 ports.
 - 2.0.6's 26-method testbed check suite (parameter binding, round trips, isolation fail-up, paging,
   upsert, register-named columns, Firebird time zones, ...): 3.0's `TestProvider` no longer has it; confirm
   where 3.0 covers each check, or port the missing ones.
+- Connection-limit refusals (2026-09-27, ccb305f + follow-up): `TooManyConnectionsException :
+  ConnectionException` and the live-verified mappings (PostgreSQL 53300, MySQL 1040, Oracle
+  ORA-02391/00018/00020, Db2 57030, Informix -25571; SQL Server pre-login handshake and Sybase
+  ASE's pool-reserve messages as plain `ConnectionException`), plus the SybaseASE test context's
+  pool cap of 5.
 
 ## Batch Operations
 
@@ -441,10 +446,10 @@ disconnect"; AdoNetCore.AseClient turns it into "Pool timed out trying to reserv
 connection"). An `sa` login instead gets a temporary administrative connection with a warning.
 The ceiling can only be learned by querying the configuration up front, not from the failure.
 
-2.0.6 already maps every verified connection-limit refusal to `ConnectionException` (see
-`docs/bug-backlog-2.0.6.md`). What POOL-002 adds in 3.0 is telling a full server apart from a
-broken network: a distinct `DbErrorCategory`/flag for "connection limit reached", since today
-it is indistinguishable from any other connection failure.
+2.0.6 already throws `TooManyConnectionsException` (a `ConnectionException`) when the database
+names its connection limit (see `docs/bug-backlog-2.0.6.md`); forward-port it to 3.0. SQL Server
+and Sybase ASE can't be classified that way from the failure, which is what POOL-002's up-front
+lookup is for.
 
 ## Open items from architecture/DAL-comparison review (2026-08-12)
 

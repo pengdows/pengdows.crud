@@ -46,7 +46,8 @@ internal sealed class SybaseExceptionTranslator : IDbExceptionTranslator
         // connection: a real pool wait timeout, or any login the server drops, such as ASE
         // refusing a login at its 'number of user connections' limit (confirmed live; ASE sends
         // no error, only its errorlog records it). Checked before the timeout heuristic: these are
-        // connection failures, not command timeouts.
+        // connection failures, not command timeouts. Not TooManyConnectionsException: the same
+        // message also covers a genuine pool wait timeout.
         if (IsConnectionAcquisitionFailure(exception.Message))
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);

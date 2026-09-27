@@ -397,6 +397,8 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 │   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure (provider translators)
+│   │   ├── FileLockContentionException     — embedded-file lock contention (IsTransient = false)
+│   │   └── TooManyConnectionsException     — server reached but at its connection limit (IsTransient = true)
 │   └── TransactionException               — begin/commit/rollback failure
 ├── SqlGenerationException                  — entity metadata programmer error (TypeMapRegistry)
 └── DataMappingException                    — strict-mode coercion failure (DataReaderMapper)
@@ -406,6 +408,7 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 - `SqlGenerationException` — thrown by `TypeMapRegistry` at entity registration/gateway construction for missing `[Table]`, empty column name, invalid enum `DbType`, duplicate columns, no `[Id]`/`[PrimaryKey]`, PK order errors, invalid `[Version]`/audit field types. Uses `SupportedDatabase.Unknown`.
 - `DataMappingException` — thrown in strict mode (`MapperOptions.Strict = true`) when column→property coercion fails. Uses `SupportedDatabase.Unknown`.
 - `ConnectionException` — thrown by provider translators for connection-level failures.
+- `TooManyConnectionsException` — a `ConnectionException` (`IsTransient = true`) for a server that was reached but reported it is at its connection limit (PostgreSQL 53300, MySQL 1040, Oracle ORA-02391/00018/00020, Db2 57030, Informix -25571). SQL Server and Sybase ASE only drop the socket at their limit, so they stay a plain `ConnectionException`.
 - `TransactionException` — thrown by `TransactionContext` for begin/commit/rollback failures. After failure, `IsCompleted = true` and the connection is released; `Dispose` will not attempt a second rollback.
 - `OperationCanceledException` — **never** wrapped; propagates as-is.
 

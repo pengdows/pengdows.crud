@@ -142,7 +142,8 @@ DatabaseException (abstract — carries Database, SqlState, ErrorCode, Constrain
   │    ├─ ConcurrencyConflictException    ← [Version] column mismatch on UpdateAsync
   │    ├─ CommandTimeoutException         ← IsTransient = true
   │    ├─ ConnectionException
-  │    │    └─ FileLockContentionException ← embedded-engine file lock held by another process; IsTransient = false
+  │    │    ├─ FileLockContentionException ← embedded-engine file lock held by another process; IsTransient = false
+  │    │    └─ TooManyConnectionsException ← server reached but at its connection limit; IsTransient = true
   │    ├─ ReadOnlyViolationException      ← write reached a read-only SQLite/DuckDB connection
   │    ├─ TransactionException
   │    ├─ TransientWriteConflictException ← IsTransient = true
