@@ -242,13 +242,6 @@ public class BasicCrudTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Skip databases that don't support native upsert
-            if (!SupportsMergeUpsert(provider))
-            {
-                Output.WriteLine($"Skipping upsert test for {provider} - no native MERGE support");
-                return;
-            }
-
             // Arrange
             var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 500);
@@ -259,8 +252,17 @@ public class BasicCrudTests : DatabaseTestBase
             entity.Value = 999;
             var upsertCount = await helper.UpsertAsync(entity, context);
 
-            // Assert
-            Assert.Equal(1, upsertCount);
+            // Assert - every upsert form reports the one updated row, except MySQL-family
+            // ON DUPLICATE KEY UPDATE, which reports an updated row as 2 affected rows.
+            if (context.Dialect.SupportsOnDuplicateKey && !context.Dialect.SupportsMerge
+                && !context.Dialect.SupportsInsertOnConflict)
+            {
+                Assert.InRange(upsertCount, 1, 2);
+            }
+            else
+            {
+                Assert.Equal(1, upsertCount);
+            }
 
             // Verify it was updated
             var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
@@ -290,13 +292,5 @@ public class BasicCrudTests : DatabaseTestBase
             IsActive = true,
             CreatedOn = DateTime.UtcNow
         };
-    }
-
-    private static bool SupportsMergeUpsert(SupportedDatabase provider)
-    {
-        return provider is SupportedDatabase.SqlServer or
-            SupportedDatabase.Oracle or
-            SupportedDatabase.Firebird or
-            SupportedDatabase.PostgreSql; // PostgreSQL 15+
     }
 }
