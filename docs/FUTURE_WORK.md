@@ -451,6 +451,46 @@ names its connection limit (see `docs/bug-backlog-2.0.6.md`); forward-port it to
 and Sybase ASE can't be classified that way from the failure, which is what POOL-002's up-front
 lookup is for.
 
+### Connection-limit survey: what each database reports and exposes (live, 2026-09-27)
+
+Each server was run with small limits and exhausted with unpooled opens. "App account" means an
+ordinary login with no admin, monitoring or catalog privileges. This is the design input for
+POOL-002 (up-front lookup) and POOL-003 (adaptive limit).
+
+| Database (version) | Server-wide limit: refusal | Per-account limit: refusal | App account can read the limit | App account can count sessions |
+|---|---|---|---|---|
+| PostgreSQL (`postgres:latest`) | 53300 "sorry, too many clients already"; "remaining connection slots are reserved for ..." once only reserved slots are left | `ALTER ROLE .. CONNECTION LIMIT`: 53300 "too many connections for role"; per database: "too many connections for database" | Yes: `SHOW max_connections`, `superuser_reserved_connections`, `reserved_connections`, `pg_roles.rolconnlimit`, `pg_database.datconnlimit` | Yes, all: `pg_stat_activity` rows are visible (details hidden) |
+| YugabyteDB (`yugabytedb/yugabyte:latest`) | 53300 "remaining connection slots are reserved for non-replication superuser connections" (`ysql_max_connections`) | Role `CONNECTION LIMIT`: 53300 "too many connections for role" | Role limit yes; `SHOW max_connections` read **-5** as an app role (8 as superuser), so not trustworthy | Yes (`pg_stat_activity`) |
+| CockroachDB 25.1 | Per node: `server.max_connections_per_gateway`, 53300 "sorry, too many clients already"; root exempt | None (`CONNECTION LIMIT` is a syntax error) | No: needs VIEWCLUSTERSETTING | Own sessions (`SHOW SESSIONS`) |
+| MySQL (`mysql:latest`) | 1040 "Too many connections" | `WITH MAX_USER_CONNECTIONS n`: **1226** "User 'x' has exceeded the 'max_user_connections' resource (current value: n)"; global `max_user_connections`: **1203** | Yes: `@@max_connections`; session `@@max_user_connections` returns the account's own limit | Server total yes (`Threads_connected`, `Max_used_connections`); processlist shows own sessions only |
+| MariaDB (`mariadb:latest`) | 1040 | 1226 (per account, same text); 1203 (global, settable only at startup when 0) | Same as MySQL | Same as MySQL |
+| TiDB 7.5.1 | 1040 (`SET GLOBAL max_connections`, 0 = unlimited) | `MAX_USER_CONNECTIONS` accepted but **not enforced** | `@@max_connections` yes; account limit reads 0 | Own sessions only; no `Threads_connected` |
+| SingleStore 9.1.1 | 1040 (`max_connections`, default 100000) | Global `max_user_connections` accepted but **not enforced**; per-account syntax rejected | Yes | Server total yes (`Threads_connected`) |
+| SQL Server (`mssql/server:latest`) | **Nothing sent**: server logs 17809, client sees pre-login handshake failure (Number 0, Class 20) | None natively (logon triggers only) | Yes: `sys.configurations` 'user connections' (0 = dynamic), `@@MAX_CONNECTIONS` | Own sessions only (needs VIEW SERVER STATE) |
+| Oracle Free (`gvenzl/oracle-free:slim`) | `processes`: ORA-50201 wrapping ORA-12537 (listener); ORA-00018/00020 documented, not reproduced (Free won't lower `sessions` below its derived minimum) | Profile `SESSIONS_PER_USER`: ORA-02391 | `user_resource_limits` (SESSIONS_PER_USER) yes; `v$parameter` readable on this image (usually needs SELECT_CATALOG_ROLE) | No (`v$session`, `v$resource_limit` denied) |
+| Db2 LUW 11.5.8 | SQL1226N SQLSTATE 57030 (`MAX_CONNECTIONS`/`MAX_COORDAGENTS`); instance owner exempt | None natively (WLM thresholds only) | Yes: `SYSIBMADM.DBMCFG` (`max_connections` -1 = same as `max_coordagents`) | No (MON_GET_CONNECTION needs EXECUTE) |
+| Informix 15 DE | -25571 "Cannot create a user thread" at ~24 sessions (Developer Edition cap; no config parameter found) | None | No setting to read | Yes, all: `sysmaster:syssessions` |
+| Sybase ASE 16 DE | **Nothing sent**: errorlog only; AseClient reports "Pool timed out trying to reserve a connection" | None | Yes: `master..sysconfigures` 'number of user connections'; `@@max_connections` is the theoretical max | Own sessions only |
+| Firebird 5.0.4 | No limit (300 unpooled attachments opened; no setting) | None | n/a | `mon$attachments` (own plus system attachments) |
+| Spanner (PGAdapter, emulator) | Not probed: no configurable connection limit locally | n/a | n/a | n/a |
+| SQLite, DuckDB, FlatFile | n/a (embedded) | n/a | n/a | n/a |
+| Snowflake, SAP HANA, InterBase, Access | Not probed (opt-in, not runnable here) | | | |
+
+What this means for the design:
+- **Scope is visible on the refusal** where there is a per-account limit: PostgreSQL/YugabyteDB by
+  message text under one SQLSTATE, MySQL/MariaDB by error number (1040 vs 1226/1203), Oracle by
+  number (02391 vs 00018/00020). A per-account refusal means the observed in-use count really is
+  this account's budget (shared only with other nodes using the same account).
+- **An up-front lookup works for most**: an app account can read the server limit on PostgreSQL,
+  MySQL/MariaDB, TiDB, SingleStore, SQL Server, Db2 and ASE, and the account limit on PostgreSQL,
+  YugabyteDB, MySQL/MariaDB and Oracle. It can't on CockroachDB (privilege) or Informix (no
+  setting), and YugabyteDB's `max_connections` is wrong for non-superusers.
+- **Server-wide usage is mostly invisible** to an app account (only PostgreSQL-family,
+  Informix, and MySQL/SingleStore's `Threads_connected` show it), so POOL-003 has to work from
+  pengdows' own in-use count at the moment of refusal, not from a server-side count.
+- **TiDB and SingleStore accept per-user limits they don't enforce.** Don't treat the configured
+  value as a real ceiling there.
+
 ## Open items from architecture/DAL-comparison review (2026-08-12)
 
 A broader review (isolation semantics, session init, pool governance, audit/lifecycle,
