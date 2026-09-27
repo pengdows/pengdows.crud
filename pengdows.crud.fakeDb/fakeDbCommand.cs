@@ -517,7 +517,7 @@ public class fakeDbCommand : DbCommand
         var parameters = new List<CapturedParameter>(_parameterCollection.Count);
         foreach (DbParameter parameter in _parameterCollection)
         {
-            parameters.Add(new CapturedParameter(parameter.ParameterName, parameter.Value));
+            parameters.Add(new CapturedParameter(parameter.ParameterName, parameter.Value) { DbType = parameter.DbType });
         }
 
         return new CapturedCommand(CommandText, parameters);

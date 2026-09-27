@@ -106,6 +106,27 @@ public class SybaseAseDialectTests
                 new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger<SqlDialect>.Instance)));
     }
 
+    // CONFIRMED live (ASE 16.0, AdoNetCore.AseClient 0.19.2): a NULL parameter typed DbType.Boolean
+    // is sent as BIT, which can't be NULL, and is stored as 0 - a nullable bool written as NULL read
+    // back as false. The same NULL typed Byte is stored as NULL. Non-null bools stay Boolean (BIT).
+    [Fact]
+    public void CreateDbParameter_NullBoolean_IsSentAsNullByte()
+    {
+        var parameter = Dialect().CreateDbParameter<bool?>("p", DbType.Boolean, null);
+
+        Assert.Equal(DbType.Byte, parameter.DbType);
+        Assert.Equal(DBNull.Value, parameter.Value);
+    }
+
+    [Fact]
+    public void CreateDbParameter_NonNullBoolean_StaysBoolean()
+    {
+        var parameter = Dialect().CreateDbParameter<bool?>("p", DbType.Boolean, true);
+
+        Assert.Equal(DbType.Boolean, parameter.DbType);
+        Assert.Equal(true, parameter.Value);
+    }
+
     [Fact]
     public void ParameterMarker_IsAt()
         => Assert.Equal("@", Dialect().ParameterMarker);

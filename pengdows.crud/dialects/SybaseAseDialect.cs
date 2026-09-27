@@ -137,6 +137,15 @@ internal class SybaseAseDialect : SqlDialect
             return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
         }
 
+        // CONFIRMED live (ASE 16.0, AdoNetCore.AseClient 0.19.2): a NULL typed DbType.Boolean is sent
+        // as BIT, which can't be NULL, and is stored as 0, so a nullable bool written as NULL read back
+        // as false. A NULL typed Byte is stored as NULL. (A BIT column can't hold NULL at all; a
+        // nullable bool column on ASE is TINYINT or similar.)
+        if (type == DbType.Boolean && (value is null || value is DBNull))
+        {
+            return base.CreateDbParameter<object?>(name, DbType.Byte, DBNull.Value);
+        }
+
         return base.CreateDbParameter(name, type, value);
     }
 
