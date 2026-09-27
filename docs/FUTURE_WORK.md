@@ -54,7 +54,7 @@ done here with the commit.
 | HARN-002 | Integration harness | SQL Server | SQL Server could not start within its wait under full-suite load, because six test classes that start their own containers (including `IntegrationMatrixTests`, the whole testbed matrix) had no `[Collection]` and ran in parallel with the fixture's startup. | They now share `StandaloneContainerCollection` (`DisableParallelization = true`), which runs alone after the parallel collections. SQL Server's startup wait was also raised to 180s in the testbed and in `CommandTimeoutTests`. | **Done** |
 | HARN-003 | testbed | Sybase ASE | Intermittent "The model database is unavailable" at setup: ASE rebuilds tempdb from model on boot, and `CREATE DATABASE` could race it right after the SIGSEGV-workaround restart. | `CREATE DATABASE` is retried while model is busy (120s deadline). | **Done** |
 | HARN-004 | CI coverage | all | 2.0.6's `deploy.yml` never runs `pengdows.crud.IntegrationTests`: the unit step filters it out and the integration step runs only the testbed. So integration tests (including the ported Firebird Embedded and live-provider tests) only run locally via `run-integration-tests.sh`. | Decide whether CI should run the integration project (about 11 minutes, Docker) and, if so, add the `scripts/install-firebird-embedded.sh` step before it (3.0 has that step). | **Done** (maintainer: both TFMs): CI's integration step runs `./run-integration-tests.sh` (Firebird Embedded provisioning, pengdows.crud.IntegrationTests on net8.0+net10.0, then the testbed on both) |
-| HARN-005 | Integration fixture coverage | Db2, Informix, SybaseASE, Spanner, SingleStore | `IntegrationTestFixture.BaseProviders` never starts these, so every `pengdows.crud.IntegrationTests` class excludes them by configuration, although `ParallelTestOrchestrator.CreateContainerAsync` already starts Db2/Informix/SybaseASE/Spanner always-on for the testbed. Only capability skips are legitimate. | Add them to `BaseProviders`, give each test class's setup DDL for them, fix what fails in the library. SingleStore first needs a 2.0.6 testbed container (3.0 has one). | **Done** (bf71d09..49d2d77): Db2, Informix, SybaseASE, Spanner and SingleStore (new always-on testbed container) run in the integration fixture; every skip keys on a dialect capability flag. Found and fixed 11 library bugs: Sybase 547 FK classification, Sybase ANSI NULL comparisons, Sybase MERGE stale-version upsert (new MergeUpsertReportsSkippedVersionRow flag), Sybase NULL bool stored as 0, Min Pool Size above Max before detection, Db2 reader/writer pools merged after credential-keyword renames, positional-dialect RetrieveAsync with 2 ids, Informix constraint classification by native error code, NULL parameters keeping the unconverted type, provider errors during row reads not translated, Informix int.MinValue binding. CI/local run needs LD_LIBRARY_PATH, INFORMIXDIR, INFORMIXSQLHOSTS for Informix (run-integration-tests.sh sets them) |
+| HARN-005 | Integration fixture coverage | Db2, Informix, SybaseASE, Spanner, SingleStore | `IntegrationTestFixture.BaseProviders` never starts these, so every `pengdows.crud.IntegrationTests` class excludes them by configuration, although `ParallelTestOrchestrator.CreateContainerAsync` already starts Db2/Informix/SybaseASE/Spanner always-on for the testbed. Only capability skips are legitimate. | Add them to `BaseProviders`, give each test class's setup DDL for them, fix what fails in the library. SingleStore first needs a 2.0.6 testbed container (3.0 has one). | **Done** (bf71d09..49d2d77): Db2, Informix, SybaseASE, Spanner and SingleStore (new always-on testbed container) run in the integration fixture; every skip keys on a dialect capability flag. Found and fixed 11 library bugs: Sybase 547 FK classification, Sybase ANSI NULL comparisons, Sybase MERGE stale-version upsert (new MergeUpsertReportsSkippedVersionRow flag), Sybase NULL bool stored as 0, Min Pool Size above Max before detection, Db2 reader/writer pools merged after credential-keyword renames, positional-dialect RetrieveAsync with 2 ids, Informix constraint classification by native error code, NULL parameters keeping the unconverted type, provider errors during row reads not translated, Informix int.MinValue binding. CI/local run needs LD_LIBRARY_PATH, INFORMIXDIR, INFORMIXSQLHOSTS for Informix (run-integration-tests.sh sets them). The SybaseASE test context caps each pool at 5, as Informix's does: ASE Developer Edition hard-limits "number of user connections" to 25, and AseClient reports the refused login as "Pool timed out trying to reserve a connection" (its connection factory turns any non-ASE login failure into OperationCanceledException) |
 
 ## Database variants: when a variant gets its own `SupportedDatabase` value (2026-09-26)
 
@@ -420,6 +420,31 @@ Recommended direction:
 
 See [`opentelemetry-metrics-plan.md`](opentelemetry-metrics-plan.md) for the full design and
 implementation plan.
+
+## Pool capacity tuning (3.0)
+
+The per-role `DatabaseMetrics.Read`/`.Write` and `PoolStatisticsSnapshot` already separate
+"not enough permitted concurrency" (queue and wait up, command latency flat) from "the database
+is degrading under concurrency" (command p95/p99 and deadlocks up too). Two gaps remain. Both
+are new behavior, so they target 3.0.
+
+| ID | Item | Target | Status |
+|----|------|--------|--------|
+| POOL-001 | **Pool wait/hold percentiles.** `PoolStatisticsSnapshot.AverageWaitMs`/`AverageHoldMs` are total ticks divided by acquisitions, so 100 waits of 500 ms among 99,900 waits of 0 ms read as a 0.5 ms average. Add p95/p99 for governor acquisition wait and slot hold time, reusing the memoized percentile rings commands and transactions already use (BP-122: recompute every 32nd call). Keep the recording off the governor's lock-free fast path cost-neutral; export through the OTel bridge alongside the existing `pengdows.db.client.pool.*` instruments | 3.0 | Open |
+| POOL-002 | **Server connection-ceiling discovery.** Read the server's connection limit where it is cheap and permitted (PostgreSQL-family `max_connections`, MySQL-family `max_connections`, SQL Server `@@MAX_CONNECTIONS`/`user connections`, Oracle `processes`/`sessions`, Sybase ASE `number of user connections`, ...) through a dialect capability, not a database-type switch. Log a warning when a context's configured reader + writer maximum reaches it, and expose it next to `MaxSlots`. **Do not clamp `MaxSlots` to it:** the ceiling is shared by every client, node and admin session on the server, so no single context can own it. Permission-denied or unsupported lookups report "unknown", never fail construction | 3.0 | Open |
+
+Why POOL-002 matters (confirmed live, 2026-09-27, ASE 16 Developer Edition, cap 25): when the
+server is out of user connections, ASE writes "There are not enough 'user connections'
+available to start a new process" to its **own errorlog only** and drops the socket. The client
+gets no error number and no limit value (CT-Lib: "Net-Library operation terminated due to
+disconnect"; AdoNetCore.AseClient turns it into "Pool timed out trying to reserve a
+connection"). An `sa` login instead gets a temporary administrative connection with a warning.
+The ceiling can only be learned by querying the configuration up front, not from the failure.
+
+2.0.6 already maps every verified connection-limit refusal to `ConnectionException` (see
+`docs/bug-backlog-2.0.6.md`). What POOL-002 adds in 3.0 is telling a full server apart from a
+broken network: a distinct `DbErrorCategory`/flag for "connection limit reached", since today
+it is indistinguishable from any other connection failure.
 
 ## Open items from architecture/DAL-comparison review (2026-08-12)
 
