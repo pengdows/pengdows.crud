@@ -42,7 +42,13 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
             return classified;
         }
 
-        if (errorCode is 1040 or 1042 or 1043 or 1044)
+        // 1040 "Too many connections" (confirmed live, MySQL and MariaDB).
+        if (errorCode == 1040)
+        {
+            return DbExceptionTranslationSupport.CreateTooManyConnections(database, exception, operationKind);
+        }
+
+        if (errorCode is 1042 or 1043 or 1044)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }

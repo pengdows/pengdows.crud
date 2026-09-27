@@ -149,6 +149,35 @@ public sealed class FileLockContentionException : ConnectionException
 }
 
 /// <summary>
+/// Thrown when the server was reached but refused the connection because it is at its connection
+/// limit (for example PostgreSQL SQLSTATE 53300, MySQL error 1040, Oracle ORA-02391, Db2 SQLSTATE
+/// 57030), as opposed to a server that could not be reached at all.
+/// </summary>
+/// <remarks>
+/// Only thrown when the database reports the limit explicitly. SQL Server and Sybase ASE drop the
+/// socket without saying why when they are out of connections, which is indistinguishable from other
+/// dropped logins, so those still surface as a plain <see cref="ConnectionException"/>.
+/// The usual fix is configuration, not the network: lower the pool sizes of the contexts sharing the
+/// server (<c>MaxConcurrentReads</c>/<c>MaxConcurrentWrites</c>, or <c>Max Pool Size</c>) or raise the
+/// server's limit. The server's limit is shared by every client, application node and admin session.
+/// <see cref="DatabaseException.IsTransient"/> is <see langword="true"/>: the refusal clears as other
+/// sessions disconnect, so a retry with backoff can succeed. Still a <see cref="ConnectionException"/>
+/// subtype, so existing <c>catch (ConnectionException)</c> handling sees it.
+/// </remarks>
+public sealed class TooManyConnectionsException : ConnectionException
+{
+    public TooManyConnectionsException(
+        string message,
+        SupportedDatabase database,
+        Exception? innerException = null,
+        string? sqlState = null,
+        int? errorCode = null)
+        : base(message, database, innerException, sqlState, errorCode, constraintName: null, isTransient: true)
+    {
+    }
+}
+
+/// <summary>
 /// Thrown when a write operation is attempted on a connection opened in read-only mode.
 /// </summary>
 /// <remarks>

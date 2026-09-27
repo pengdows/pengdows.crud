@@ -122,7 +122,9 @@ public class SybaseTranslatorTests
     // socket. AdoNetCore.AseClient 0.19.2 turns any non-ASE login failure into
     // OperationCanceledException and throws exactly these messages (ConnectionPool.Reserve /
     // GetTimedOutAseException, pooled and unpooled), with no error number. Both mean a connection
-    // could not be obtained, so they are connection failures, never command timeouts.
+    // could not be obtained, so they are connection failures, never command timeouts. The same
+    // message covers a genuine pool wait timeout, so it cannot be called a connection-limit refusal:
+    // exactly ConnectionException, not TooManyConnectionsException.
     [Theory]
     [InlineData("Pool timed out trying to reserve a connection")]
     [InlineData("Timed out trying to establish a connection")]

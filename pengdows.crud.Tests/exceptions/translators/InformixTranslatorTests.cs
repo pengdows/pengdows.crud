@@ -158,12 +158,13 @@ public class InformixTranslatorTests
     // the developer image accepts about 24 concurrent sessions; the next fails with -25571 "Cannot
     // create a user thread").
     [Fact]
-    public void CannotCreateUserThread_25571_MapsTo_ConnectionException()
+    public void CannotCreateUserThread_25571_MapsTo_TooManyConnectionsException()
     {
         var raw = new NumberedDbException(-25571, "Cannot create a user thread.");
 
         var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Query);
 
-        Assert.IsType<ConnectionException>(result);
+        Assert.IsType<TooManyConnectionsException>(result);
+        Assert.True(result.IsTransient);
     }
 }

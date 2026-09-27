@@ -176,7 +176,9 @@ public class SqlServerTranslatorTests
     // connections' = 5, Microsoft.Data.SqlClient 6.0.2): the server logs error 17809 but only
     // closes the socket, so the client sees SqlException Number 0, Class 20, "A connection was
     // successfully established with the server, but then an error occurred during the pre-login
-    // handshake." Any pre-login handshake failure is connection-level, whatever its cause.
+    // handshake." Any pre-login handshake failure is connection-level, whatever its cause. The same
+    // message also comes from TLS mismatches, so it cannot be called a connection-limit refusal:
+    // exactly ConnectionException, not TooManyConnectionsException.
     [Fact]
     public void PreLoginHandshakeFailure_MapsTo_ConnectionException()
     {
