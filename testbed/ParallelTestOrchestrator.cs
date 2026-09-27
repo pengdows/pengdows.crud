@@ -95,8 +95,8 @@ public class ParallelTestOrchestrator
         var testConfigurations = GetTestConfigurations();
 #if !PENGDOWS_FLATFILE
         Console.WriteLine(
-            "WARNING: FlatFile NOT tested - the pengdows.flatfile sibling checkout was not found at build time " +
-            "(see PengdowsFlatFileProject in testbed/testbed.csproj).");
+            "WARNING: FlatFile NOT tested - built without PENGDOWS_FLATFILE " +
+            "(testbed/testbed.csproj defines it alongside the pengdows.flatfile NuGet package).");
 #endif
 
         // Apply filtering if provided
@@ -248,8 +248,8 @@ public class ParallelTestOrchestrator
                 TestProviderFactory = (db, sp) => new DuckDbTestProvider(db, sp)
             },
 #if PENGDOWS_FLATFILE
-            // In-process and file-based like SQLite/DuckDB, so always on: no Docker needed. Built
-            // from the sibling pengdows.flatfile checkout (see testbed.csproj).
+            // In-process and file-based like SQLite/DuckDB, so always on: no Docker needed. The
+            // provider comes from the pengdows.flatfile NuGet package (see testbed.csproj).
             new()
             {
                 ContainerName = "FlatFile",

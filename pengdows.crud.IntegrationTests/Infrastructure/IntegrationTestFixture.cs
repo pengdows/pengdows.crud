@@ -21,9 +21,8 @@ internal static class IntegrationTestConfiguration
         SupportedDatabase.Oracle,
         SupportedDatabase.YugabyteDb,
         SupportedDatabase.TiDb,
-        // In-process; built from the sibling pengdows.flatfile checkout (see testbed.csproj). When
-        // that checkout is missing, ParallelTestOrchestrator.CreateContainerAsync returns null and the
-        // fixture reports FlatFile as unavailable.
+        // In-process; the provider comes from the pengdows.flatfile NuGet package (see
+        // testbed.csproj).
         SupportedDatabase.FlatFile,
         SupportedDatabase.Db2,
         // Informix's native client needs LD_LIBRARY_PATH, INFORMIXDIR and INFORMIXSQLHOSTS exported
