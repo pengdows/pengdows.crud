@@ -59,7 +59,9 @@ public class SqlContainerReuseTests : DatabaseTestBase
 
             // 3. Execute with first set of params
             container.AddParameterWithValue("id", DbType.Int64, e1.Id);
-            container.AddParameterWithValue("name", DbType.Int32, (int)e1.Name);
+            // name is a string column ([EnumColumn] with DbType.String stores the enum name); binding
+            // an Int32 relied on an implicit int-to-varchar conversion that Sybase ASE rejects.
+            container.AddParameterWithValue("name", DbType.String, e1.Name.ToString());
             container.AddParameterWithValue("value", DbType.Int32, e1.Value);
             container.AddParameterWithValue("is_active", DbType.Boolean, e1.IsActive);
             container.AddParameterWithValue("created_at", DbType.DateTime, e1.CreatedOn);
@@ -67,7 +69,7 @@ public class SqlContainerReuseTests : DatabaseTestBase
 
             // 4. Update parameters and execute again (reuse container)
             container.SetParameterValue("id", e2.Id);
-            container.SetParameterValue("name", (int)e2.Name);
+            container.SetParameterValue("name", e2.Name.ToString());
             container.SetParameterValue("value", e2.Value);
             // created_at remains the same
             await container.ExecuteNonQueryAsync();

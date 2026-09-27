@@ -285,6 +285,15 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         {
             // Table was not present; swallow
         }
+        catch (Exception ex) when (context.Product == SupportedDatabase.Spanner)
+        {
+            if (!await DatabaseSchemaHelper.TryDropSpannerBlockingIndicesAsync(context, ex).ConfigureAwait(false))
+            {
+                throw;
+            }
+
+            await DropTableIfExistsAsync(context, tableName).ConfigureAwait(false);
+        }
     }
 
     protected Task<IDatabaseContext> CreateAdditionalContextAsync(SupportedDatabase provider)
@@ -302,6 +311,31 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     protected static bool SupportsReadOnlyTransactions(IDatabaseContext context) =>
         context.Dialect.SupportsReadOnlyTransactions;
 
+    /// <summary>
+    /// Capability: whether an upsert that a [Version] guard skips is reported through rows
+    /// affected, so the gateways can throw ConcurrencyConflictException. Mirrors the gateways' own
+    /// rule: ON CONFLICT ... DO UPDATE ... WHERE, or a MERGE whose rows affected reveals the skipped
+    /// row (<c>MergeUpsertReportsSkippedVersionRow</c>; false for Firebird and Sybase ASE). MySQL-family
+    /// ON DUPLICATE KEY has neither.
+    /// </summary>
+    protected static bool UpsertRefusesVersionedEntities(IDatabaseContext context)
+    {
+        // Capability: a MERGE with no conditional matched clause in any form (Informix) cannot carry
+        // the [Version] check, so the gateways refuse a versioned upsert with NotSupportedException
+        // (SupportsMergeMatchedCondition = false) instead of silently overwriting.
+        var dialect = context.GetDialect();
+        return !dialect.SupportsOnConflictWhere && !dialect.SupportsOnDuplicateKey && dialect.SupportsMerge
+               && !pengdows.crud.dialects.InternalSqlDialectExtensions.SupportsMergeMatchedCondition(dialect);
+    }
+
+    protected static bool UpsertDetectsStaleVersion(IDatabaseContext context)
+    {
+        var dialect = context.GetDialect();
+        return dialect.SupportsOnConflictWhere
+               || (dialect.SupportsMerge && pengdows.crud.dialects.InternalSqlDialectExtensions
+                   .MergeUpsertReportsSkippedVersionRow(dialect));
+    }
+
     private static bool IsTableMissingException(Exception ex)
     {
         var message = ex.Message?.ToLowerInvariant() ?? string.Empty;
@@ -314,7 +348,10 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                || message.Contains("unknown table")
                || message.Contains("table not found")
                || message.Contains("invalid object name")
-               || message.Contains("ora-00942");
+               || message.Contains("ora-00942")
+               || message.Contains("sql0204n")
+               || message.Contains("is an undefined name")
+               || message.Contains("is not in the database");
     }
 
     private static string BuildExclusionReason(SupportedDatabase provider)

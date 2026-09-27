@@ -122,6 +122,16 @@ public class TransientErrorTests : DatabaseTestBase
 
             SupportedDatabase.Db2 => BuildUnreachableDb2Context(rawCs),
 
+            SupportedDatabase.SybaseASE =>
+                new DatabaseContext(WithBuilderKey(rawCs, "Port", "1"),
+                    AdoNetCore.AseClient.AseClientFactory.Instance),
+
+            // Informix resolves the endpoint from Server through sqlhosts (a changed Service port
+            // still connected, confirmed live), so name a server sqlhosts doesn't list.
+            SupportedDatabase.Informix =>
+                new DatabaseContext(WithBuilderKey(rawCs, "Server", "pengdows_no_such_server"),
+                    Informix.Net.Core.InformixClientFactory.Instance),
+
             _ => throw new NotSupportedException(
                 $"No unreachable-endpoint builder defined for {provider}.")
         };

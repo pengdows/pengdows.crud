@@ -266,7 +266,7 @@ public class AuditFieldTests : DatabaseTestBase
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {nameColumn} {stringType} NOT NULL,
     {createdAtColumn} {dateType},
     {createdByColumn} {stringType},
@@ -305,6 +305,11 @@ CREATE TABLE {table} (
             SupportedDatabase.SqlServer => "DATETIME2",
             SupportedDatabase.MySql => "DATETIME",
             SupportedDatabase.MariaDb => "DATETIME",
+            SupportedDatabase.SingleStore => "DATETIME(6)",
+            // Spanner's PostgreSQL interface has no plain TIMESTAMP, only TIMESTAMPTZ.
+            SupportedDatabase.Spanner => "TIMESTAMPTZ",
+            SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
+            SupportedDatabase.SybaseASE => "BIGDATETIME",
             _ => "TIMESTAMP"
         };
     }

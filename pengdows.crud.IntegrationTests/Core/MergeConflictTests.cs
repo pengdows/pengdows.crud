@@ -85,11 +85,17 @@ public class MergeConflictTests : DatabaseTestBase
             Assert.Equal(1, await helper.UpdateAsync(firstCopy, context));
 
             staleCopy!.Name = "stale";
-            var cannotDetect = provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb
-                or SupportedDatabase.TiDb or SupportedDatabase.Firebird;
-            if (cannotDetect)
+            if (UpsertRefusesVersionedEntities(context))
             {
-                Output.WriteLine($"{provider}: upsert cannot carry a version predicate; not asserted");
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.UpsertAsync(staleCopy, context));
+                Output.WriteLine($"{provider}: capability - versioned upsert refused (no conditional MERGE matched clause)");
+                return;
+            }
+
+            if (!UpsertDetectsStaleVersion(context))
+            {
+                Output.WriteLine(
+                    $"{provider}: capability - upsert rows affected cannot reveal a skipped stale version; not asserted");
                 return;
             }
 
@@ -138,7 +144,19 @@ public class MergeConflictTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            await RecreateTableAsync(context, "merge_records", BuildMergeRecordTableSql(provider, context));
+            // Capability: MergeRecord upserts on its record_key business key, a secondary unique
+            // index; SupportsOnConflictOnSecondaryUniqueKey = false (Spanner) can't target it.
+            if (!pengdows.crud.dialects.InternalSqlDialectExtensions.SupportsOnConflictOnSecondaryUniqueKey(
+                    context.GetDialect()))
+            {
+                Output.WriteLine($"Skipping for {provider}: dialect SupportsOnConflictOnSecondaryUniqueKey is false");
+                return;
+            }
+
+            await RecreateTableAsync(context, "merge_records", BuildMergeRecordTableSql(provider, context),
+                IntegrationObjectNameHelper.SpannerUniqueIndexSql(context,
+                    IntegrationObjectNameHelper.Table(context, "merge_records"), "ux_merge_records_record_key",
+                    context.WrapObjectName("record_key")));
 
             var helper = new TableGateway<MergeRecord, long>(context);
             var baseRecord = new MergeRecord
@@ -182,10 +200,16 @@ public class MergeConflictTests : DatabaseTestBase
         });
     }
 
-    private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql)
+    private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql,
+        string? extraSql = null)
     {
         await DropTableIfExistsAsync(context, tableName);
-        await using var container = context.CreateSqlContainer(createSql);
+
+        // extraSql is Spanner's CREATE UNIQUE INDEX. Sent in the same batch as CREATE TABLE, Spanner
+        // applies both as one schema change on an empty table (~9s); a separate CREATE INDEX runs its
+        // own backfill schema change (~90s on Spanner Omni, measured).
+        var sql = extraSql is null ? createSql : createSql + ";\n" + extraSql;
+        await using var container = context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }
 
@@ -203,13 +227,14 @@ public class MergeConflictTests : DatabaseTestBase
         var versionDefinition = provider switch
         {
             SupportedDatabase.Firebird => $"{versionColumn} {versionType} NOT NULL",
-            SupportedDatabase.Oracle => $"{versionColumn} {versionType} DEFAULT 1 NOT NULL",
+            SupportedDatabase.Oracle or SupportedDatabase.Informix or SupportedDatabase.SybaseASE
+                => $"{versionColumn} {versionType} DEFAULT 1 NOT NULL",
             _ => $"{versionColumn} {versionType} NOT NULL DEFAULT 1"
         };
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {nameColumn} {stringType} NOT NULL,
     {versionDefinition}
 )";
@@ -230,11 +255,10 @@ CREATE TABLE {table} (
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {keyColumn} {stringType} NOT NULL,
     {valueColumn} {intType} NOT NULL,
-    {updatedColumn} {dateType} NOT NULL,
-    UNIQUE ({keyColumn})
+    {updatedColumn} {dateType} NOT NULL{IntegrationObjectNameHelper.InlineUniqueConstraintClause(context, keyColumn)}
 )";
     }
 
@@ -279,6 +303,11 @@ CREATE TABLE {table} (
             SupportedDatabase.SqlServer => "DATETIME2",
             SupportedDatabase.MySql => "DATETIME",
             SupportedDatabase.MariaDb => "DATETIME",
+            SupportedDatabase.SingleStore => "DATETIME(6)",
+            // Spanner's PostgreSQL interface has no plain TIMESTAMP, only TIMESTAMPTZ.
+            SupportedDatabase.Spanner => "TIMESTAMPTZ",
+            SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
+            SupportedDatabase.SybaseASE => "BIGDATETIME",
             _ => "TIMESTAMP"
         };
     }

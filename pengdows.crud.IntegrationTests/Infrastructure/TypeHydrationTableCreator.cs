@@ -60,10 +60,15 @@ public class TypeHydrationTableCreator
             // YugabyteDb is PostgreSQL-wire-compatible like CockroachDb.
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => CreatePostgreSqlSql(),
             SupportedDatabase.SqlServer => CreateSqlServerSql(),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => CreateMySqlSql(),
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeSql(),
             SupportedDatabase.FlatFile => CreateFlatFileSql(),
+            SupportedDatabase.Spanner => CreateSpannerSql(),
+            SupportedDatabase.Db2 => CreateDb2Sql(),
+            SupportedDatabase.Informix => CreateInformixSql(),
+            SupportedDatabase.SybaseASE => CreateSybaseSql(),
             _ => throw new NotSupportedException(
                 $"Database {_context.Product} is not supported by TypeHydrationTableCreator")
         };
@@ -229,6 +234,121 @@ CREATE TABLE IF NOT EXISTS {table} (
     {w("col_enum_int")}       INTEGER          NOT NULL,
     {w("col_enum_str")}       VARCHAR(50)      NOT NULL
 ) WITH (NULLTOKEN = '<<NULL>>')";
+    }
+
+    // Spanner's PostgreSQL interface: no int2 ("use bigint or int8 instead"), no NUMERIC modifier,
+    // no plain TIMESTAMP (TIMESTAMPTZ only), and Guid is stored as a string (SpannerDialect).
+    private string CreateSpannerSql() => $@"
+CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(_context, "type_hydration")} (
+    id                 BIGINT           NOT NULL PRIMARY KEY,
+    col_string         VARCHAR(500)     NOT NULL,
+    col_string_null    VARCHAR(500),
+    col_short          BIGINT           NOT NULL,
+    col_int            INTEGER          NOT NULL,
+    col_int_null       INTEGER,
+    col_long           BIGINT           NOT NULL,
+    col_float          REAL             NOT NULL,
+    col_double         DOUBLE PRECISION NOT NULL,
+    col_decimal        NUMERIC          NOT NULL,
+    col_bool           BOOLEAN          NOT NULL,
+    col_bool_null      BOOLEAN,
+    col_datetime       TIMESTAMPTZ      NOT NULL,
+    col_datetimeoffset TIMESTAMPTZ      NOT NULL,
+    col_guid           VARCHAR(36)      NOT NULL,
+    col_binary         BYTEA,
+    col_enum_int       INTEGER          NOT NULL,
+    col_enum_str       VARCHAR(50)      NOT NULL
+)";
+
+    // Db2: native BOOLEAN; no time zone type (UTC instant stored); Guid as a string (Db2Dialect);
+    // no CREATE TABLE IF NOT EXISTS (the shared reset drops the table first).
+    private string CreateDb2Sql()
+    {
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
+        var w = (string name) => _context.WrapObjectName(name);
+        return $@"
+CREATE TABLE {table} (
+    {w("id")}                 BIGINT        NOT NULL PRIMARY KEY,
+    {w("col_string")}         VARCHAR(500)  NOT NULL,
+    {w("col_string_null")}    VARCHAR(500),
+    {w("col_short")}          SMALLINT      NOT NULL,
+    {w("col_int")}            INTEGER       NOT NULL,
+    {w("col_int_null")}       INTEGER,
+    {w("col_long")}           BIGINT        NOT NULL,
+    {w("col_float")}          REAL          NOT NULL,
+    {w("col_double")}         DOUBLE        NOT NULL,
+    {w("col_decimal")}        DECIMAL(18,8) NOT NULL,
+    {w("col_bool")}           BOOLEAN       NOT NULL,
+    {w("col_bool_null")}      BOOLEAN,
+    {w("col_datetime")}       TIMESTAMP(6)  NOT NULL,
+    {w("col_datetimeoffset")} TIMESTAMP(6)  NOT NULL,
+    {w("col_guid")}           VARCHAR(36)   NOT NULL,
+    {w("col_binary")}         VARBINARY(256),
+    {w("col_enum_int")}       INTEGER       NOT NULL,
+    {w("col_enum_str")}       VARCHAR(50)   NOT NULL
+)";
+    }
+
+    // Informix: SMALLFLOAT is 32-bit and FLOAT 64-bit; VARCHAR is capped at 255 bytes (LVARCHAR
+    // beyond); bool binds as SMALLINT; no time zone type; Guid as a string (InformixDialect); BYTE
+    // for binary (a smart BLOB needs an sbspace the developer image lacks). INTEGER's range is
+    // -2147483647..2147483647 (-2147483648 is its NULL representation), so col_int_null, which the
+    // boundary row sets to int.MinValue, is a BIGINT.
+    private string CreateInformixSql()
+    {
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
+        var w = (string name) => _context.WrapObjectName(name);
+        return $@"
+CREATE TABLE IF NOT EXISTS {table} (
+    {w("id")}                 BIGINT        NOT NULL PRIMARY KEY,
+    {w("col_string")}         LVARCHAR(500) NOT NULL,
+    {w("col_string_null")}    LVARCHAR(500),
+    {w("col_short")}          SMALLINT      NOT NULL,
+    {w("col_int")}            INTEGER       NOT NULL,
+    {w("col_int_null")}       BIGINT,
+    {w("col_long")}           BIGINT        NOT NULL,
+    {w("col_float")}          SMALLFLOAT    NOT NULL,
+    {w("col_double")}         FLOAT         NOT NULL,
+    {w("col_decimal")}        DECIMAL(18,8) NOT NULL,
+    {w("col_bool")}           SMALLINT      NOT NULL,
+    {w("col_bool_null")}      SMALLINT,
+    {w("col_datetime")}       DATETIME YEAR TO FRACTION(5) NOT NULL,
+    {w("col_datetimeoffset")} DATETIME YEAR TO FRACTION(5) NOT NULL,
+    {w("col_guid")}           VARCHAR(36)   NOT NULL,
+    {w("col_binary")}         BYTE,
+    {w("col_enum_int")}       INTEGER       NOT NULL,
+    {w("col_enum_str")}       VARCHAR(50)   NOT NULL
+)";
+    }
+
+    // Sybase ASE: REAL is 32-bit and FLOAT 64-bit; BIGDATETIME keeps microseconds (no offset);
+    // AdoNetCore.AseClient writes Guid as 16 bytes. A BIT column can never be NULL in ASE ("can't
+    // specify Null values on a column of type BIT"), so the nullable bool is a TINYINT 0/1.
+    private string CreateSybaseSql()
+    {
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
+        var w = (string name) => _context.WrapObjectName(name);
+        return $@"
+CREATE TABLE {table} (
+    {w("id")}                 BIGINT        NOT NULL PRIMARY KEY,
+    {w("col_string")}         VARCHAR(500)  NOT NULL,
+    {w("col_string_null")}    VARCHAR(500)  NULL,
+    {w("col_short")}          SMALLINT      NOT NULL,
+    {w("col_int")}            INT           NOT NULL,
+    {w("col_int_null")}       INT           NULL,
+    {w("col_long")}           BIGINT        NOT NULL,
+    {w("col_float")}          REAL          NOT NULL,
+    {w("col_double")}         FLOAT         NOT NULL,
+    {w("col_decimal")}        DECIMAL(18,8) NOT NULL,
+    {w("col_bool")}           BIT           NOT NULL,
+    {w("col_bool_null")}      TINYINT       NULL,
+    {w("col_datetime")}       BIGDATETIME   NOT NULL,
+    {w("col_datetimeoffset")} BIGDATETIME   NOT NULL,
+    {w("col_guid")}           BINARY(16)    NOT NULL,
+    {w("col_binary")}         VARBINARY(256) NULL,
+    {w("col_enum_int")}       INT           NOT NULL,
+    {w("col_enum_str")}       VARCHAR(50)   NOT NULL
+)";
     }
 
     private string CreateSnowflakeSql()

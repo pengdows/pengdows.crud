@@ -38,6 +38,11 @@ public class TestTableCreator
             SupportedDatabase.YugabyteDb => CreatePostgreSqlTableSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
+            SupportedDatabase.SingleStore => CreateMySqlTableSql(),
+            SupportedDatabase.Spanner => CreateSpannerTableSql(),
+            SupportedDatabase.Db2 => CreateDb2TableSql(),
+            SupportedDatabase.Informix => CreateInformixTableSql(),
+            SupportedDatabase.SybaseASE => CreateSybaseTableSql(),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -152,7 +157,8 @@ public class TestTableCreator
                     [guid_value] UNIQUEIDENTIFIER NOT NULL,
                     [binary_value] VARBINARY(256) NOT NULL
                 )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => $@"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {textCol} VARCHAR(255) NOT NULL,
@@ -218,6 +224,72 @@ public class TestTableCreator
                     {guidCol} UUID NOT NULL,
                     {binCol} BLOB NOT NULL
                 ) WITH (NULLTOKEN = '<<NULL>>')",
+            // Spanner's PostgreSQL interface rejects a NUMERIC precision/scale modifier and has no
+            // UUID type Npgsql can bind (SpannerDialect stores Guid as a string).
+            SupportedDatabase.Spanner => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} NUMERIC NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMPTZ NOT NULL,
+                    {guidCol} VARCHAR(36) NOT NULL,
+                    {binCol} BYTEA NOT NULL
+                )",
+            // No CREATE TABLE IF NOT EXISTS (the shared reset drops the table first) and no time
+            // zone type: the UTC instant is stored. Db2Dialect stores Guid as a string.
+            SupportedDatabase.Db2 => $@"
+                CREATE TABLE {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMP(6) NOT NULL,
+                    {guidCol} VARCHAR(36) NOT NULL,
+                    {binCol} VARBINARY(256) NOT NULL
+                )",
+            // Informix binds bool as SMALLINT (positional driver, common conversions), has no time
+            // zone type, and stores Guid as a string (InformixDialect.GuidFormat). BYTE binds a plain
+            // DbType.Binary parameter; a smart BLOB needs an sbspace the developer image lacks.
+            SupportedDatabase.Informix => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} NVARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} SMALLINT NOT NULL,
+                    {dtoCol} DATETIME YEAR TO FRACTION(5) NOT NULL,
+                    {guidCol} VARCHAR(36) NOT NULL,
+                    {binCol} BYTE NOT NULL
+                )",
+            // ASE columns are NOT NULL unless declared NULL. UNIVARCHAR stores UTF-16 whatever the
+            // server character set (this image's is iso_1). BIGDATETIME keeps microseconds (no
+            // offset); AdoNetCore.AseClient writes Guid as 16 bytes.
+            SupportedDatabase.SybaseASE => $@"
+                CREATE TABLE {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} UNIVARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255) NULL,
+                    {intCol} INT NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BIT NOT NULL,
+                    {dtoCol} BIGDATETIME NOT NULL,
+                    {guidCol} BINARY(16) NOT NULL,
+                    {binCol} VARBINARY(256) NOT NULL
+                )",
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -243,7 +315,8 @@ public class TestTableCreator
                     {userCol} TEXT
                 )",
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-                or SupportedDatabase.Snowflake or SupportedDatabase.FlatFile => $@"
+                or SupportedDatabase.Snowflake or SupportedDatabase.FlatFile or SupportedDatabase.Spanner
+                or SupportedDatabase.Informix => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {selectCol} VARCHAR(255),
@@ -258,7 +331,8 @@ public class TestTableCreator
                     {fromCol} NVARCHAR(255),
                     {userCol} NVARCHAR(255)
                 )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => $@"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {selectCol} VARCHAR(255),
@@ -297,6 +371,20 @@ public class TestTableCreator
                     {selectCol} VARCHAR,
                     {fromCol} VARCHAR,
                     {userCol} VARCHAR
+                )",
+            SupportedDatabase.Db2 => $@"
+                CREATE TABLE {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {selectCol} VARCHAR(255),
+                    {fromCol} VARCHAR(255),
+                    {userCol} VARCHAR(255)
+                )",
+            SupportedDatabase.SybaseASE => $@"
+                CREATE TABLE {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {selectCol} VARCHAR(255) NULL,
+                    {fromCol} VARCHAR(255) NULL,
+                    {userCol} VARCHAR(255) NULL
                 )",
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
@@ -544,6 +632,88 @@ public class TestTableCreator
                 ';
             END
         END;";
+    }
+
+    private string CreateSpannerTableSql()
+    {
+        // Spanner's PostgreSQL interface has no plain TIMESTAMP type ("P0001: Type <timestamp> is not
+        // supported."), only TIMESTAMPTZ.
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        return $@"
+        CREATE TABLE IF NOT EXISTS {table} (
+            id BIGINT PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            value INTEGER NOT NULL,
+            description TEXT,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            created_by VARCHAR(100),
+            updated_at TIMESTAMPTZ,
+            updated_by VARCHAR(100)
+        )";
+    }
+
+    private string CreateDb2TableSql()
+    {
+        // No CREATE TABLE IF NOT EXISTS: the shared reset drops test_table first. Columns are quoted
+        // because Db2 folds unquoted identifiers to upper case and WrapObjectName quotes lower case.
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        var qp = _context.QuotePrefix;
+        var qs = _context.QuoteSuffix;
+        return string.Format(@"
+        CREATE TABLE {2} (
+            {0}id{1} BIGINT NOT NULL PRIMARY KEY,
+            {0}name{1} VARCHAR(255) NOT NULL,
+            {0}value{1} INTEGER NOT NULL,
+            {0}description{1} VARCHAR(1024),
+            {0}is_active{1} BOOLEAN NOT NULL DEFAULT TRUE,
+            {0}created_at{1} TIMESTAMP NOT NULL DEFAULT CURRENT TIMESTAMP,
+            {0}created_by{1} VARCHAR(100),
+            {0}updated_at{1} TIMESTAMP,
+            {0}updated_by{1} VARCHAR(100)
+        )", qp, qs, table);
+    }
+
+    private string CreateInformixTableSql()
+    {
+        // VARCHAR is capped at 255 bytes (LVARCHAR beyond); bool binds as SMALLINT (see the testbed's
+        // TestProvider.GetBooleanType); DATETIME needs an explicit qualifier.
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        var qp = _context.QuotePrefix;
+        var qs = _context.QuoteSuffix;
+        return string.Format(@"
+        CREATE TABLE IF NOT EXISTS {2} (
+            {0}id{1} BIGINT NOT NULL PRIMARY KEY,
+            {0}name{1} VARCHAR(255) NOT NULL,
+            {0}value{1} INTEGER NOT NULL,
+            {0}description{1} LVARCHAR(1024),
+            {0}is_active{1} SMALLINT DEFAULT 1 NOT NULL,
+            {0}created_at{1} DATETIME YEAR TO FRACTION(5) DEFAULT CURRENT YEAR TO FRACTION(5) NOT NULL,
+            {0}created_by{1} VARCHAR(100),
+            {0}updated_at{1} DATETIME YEAR TO FRACTION(5),
+            {0}updated_by{1} VARCHAR(100)
+        )", qp, qs, table);
+    }
+
+    private string CreateSybaseTableSql()
+    {
+        // ASE has no CREATE TABLE IF NOT EXISTS (the shared reset drops test_table first), and a
+        // column is NOT NULL unless declared NULL. BIGDATETIME keeps microseconds.
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        var qp = _context.QuotePrefix;
+        var qs = _context.QuoteSuffix;
+        return string.Format(@"
+        CREATE TABLE {2} (
+            {0}id{1} BIGINT NOT NULL PRIMARY KEY,
+            {0}name{1} VARCHAR(255) NOT NULL,
+            {0}value{1} INT NOT NULL,
+            {0}description{1} VARCHAR(1024) NULL,
+            {0}is_active{1} BIT DEFAULT 1 NOT NULL,
+            {0}created_at{1} BIGDATETIME DEFAULT current_bigdatetime() NOT NULL,
+            {0}created_by{1} VARCHAR(100) NULL,
+            {0}updated_at{1} BIGDATETIME NULL,
+            {0}updated_by{1} VARCHAR(100) NULL
+        )", qp, qs, table);
     }
 
     private string CreateDuckDbTableSql()

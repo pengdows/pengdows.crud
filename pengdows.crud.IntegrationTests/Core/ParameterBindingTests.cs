@@ -28,10 +28,22 @@ public class ParameterBindingTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (!context.Dialect.SupportsNamedParameters)
+            {
+                // Capability: positional markers ("?") bind one value each, so a single parameter
+                // cannot be referenced twice (SupportsNamedParameters = false: Informix).
+                Output.WriteLine($"Skipping for {provider}: SupportsNamedParameters is false");
+                return;
+            }
+
             // Arrange
             var helper = new TableGateway<RoundTripEntity, long>(context);
             var id = DateTime.UtcNow.Ticks;
-            await helper.CreateAsync(new RoundTripEntity { Id = id, TextValue = "DualBind" }, context);
+            // DateTimeOffsetValue is set because its CLR default (year 1) is outside Spanner's
+            // timestamp range ("P0001: timestamp out of range"); it is irrelevant to this test.
+            await helper.CreateAsync(
+                new RoundTripEntity { Id = id, TextValue = "DualBind", DateTimeOffsetValue = DateTimeOffset.UtcNow },
+                context);
 
             // Derive specific marker from MakeParameterName
             var marker = context.MakeParameterName("p").Substring(0, 1);
@@ -68,7 +80,12 @@ public class ParameterBindingTests : DatabaseTestBase
             // Arrange
             var helper = new TableGateway<RoundTripEntity, long>(context);
             var id = DateTime.UtcNow.Ticks + 1;
-            await helper.CreateAsync(new RoundTripEntity { Id = id, TextValue = "NullTest", TextNullable = null },
+            // DateTimeOffsetValue: see BindSameParameterMultipleTimes_WorksSuccessfully.
+            await helper.CreateAsync(
+                new RoundTripEntity
+                {
+                    Id = id, TextValue = "NullTest", TextNullable = null, DateTimeOffsetValue = DateTimeOffset.UtcNow
+                },
                 context);
 
             var p0 = context.MakeParameterName("p0");
@@ -102,9 +119,24 @@ public class ParameterBindingTests : DatabaseTestBase
             var pBool = context.MakeParameterName("pBool");
             var pString = context.MakeParameterName("pString");
 
-            var sql = provider == SupportedDatabase.Firebird
-                ? $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM RDB$DATABASE"
-                : $"SELECT {pInt}, {pLong}, {pDecimal}, {pBool}, {pString}";
+            var sql = provider switch
+            {
+                SupportedDatabase.Firebird =>
+                    $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM RDB$DATABASE",
+                // Db2 needs a FROM clause and rejects an untyped "?" in a SELECT list (SQL0418N).
+                SupportedDatabase.Db2 =>
+                    $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM SYSIBM.SYSDUMMY1",
+                // Informix needs a FROM clause (sysmaster:sysdual has exactly one row) and a type
+                // for each positional "?" in a SELECT list.
+                SupportedDatabase.Informix =>
+                    $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM sysmaster:sysdual",
+                // Spanner's PostgreSQL interface reports the wrong result type for a bare parameter
+                // echo of int/long/decimal/bool (Npgsql then misreads the payload), so those need a
+                // CAST for type context.
+                SupportedDatabase.Spanner =>
+                    $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS NUMERIC), CAST({pBool} AS BOOLEAN), {pString}",
+                _ => $"SELECT {pInt}, {pLong}, {pDecimal}, {pBool}, {pString}"
+            };
 
             if (provider == SupportedDatabase.Oracle)
             {

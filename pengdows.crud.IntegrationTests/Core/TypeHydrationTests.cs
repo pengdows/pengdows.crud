@@ -85,7 +85,7 @@ public class TypeHydrationTests : DatabaseTestBase
             var retrieved = await gateway.RetrieveOneAsync(row.Id, context);
 
             Assert.NotNull(retrieved);
-            AssertZeroRow(retrieved!, provider);
+            AssertZeroRow(retrieved!, provider, context.Dialect.PreservesTrailingWhitespace);
         });
     }
 
@@ -105,7 +105,7 @@ public class TypeHydrationTests : DatabaseTestBase
             var retrieved = await gateway.RetrieveOneAsync(row.Id, context);
 
             Assert.NotNull(retrieved);
-            AssertBoundaryRow(retrieved!, provider);
+            AssertBoundaryRow(retrieved!, provider, context.Dialect.PreservesTrailingWhitespace);
         });
     }
 
@@ -217,11 +217,15 @@ public class TypeHydrationTests : DatabaseTestBase
         Assert.Equal(TypeHydrationEnum.Alpha, r.ColEnumStr);
     }
 
-    private static void AssertZeroRow(TypeHydrationEntity r, SupportedDatabase provider)
+    private static void AssertZeroRow(TypeHydrationEntity r, SupportedDatabase provider,
+        bool preservesTrailingWhitespace)
     {
         // Oracle coerces empty string '' to NULL for VARCHAR2/NVARCHAR2 columns
         if (provider == SupportedDatabase.Oracle)
             Assert.True(string.IsNullOrEmpty(r.ColString));
+        // Capability: Sybase ASE stores '' as a single blank (PreservesTrailingWhitespace = false).
+        else if (!preservesTrailingWhitespace)
+            Assert.Equal("", r.ColString?.TrimEnd());
         else
             Assert.Equal("", r.ColString);
 
@@ -246,9 +250,13 @@ public class TypeHydrationTests : DatabaseTestBase
         Assert.Equal(TypeHydrationEnum.Zero, r.ColEnumStr);
     }
 
-    private static void AssertBoundaryRow(TypeHydrationEntity r, SupportedDatabase provider)
+    private static void AssertBoundaryRow(TypeHydrationEntity r, SupportedDatabase provider,
+        bool preservesTrailingWhitespace)
     {
-        Assert.Equal("  whitespace preserved  ", r.ColString);
+        // Capability: trailing blanks are dropped where PreservesTrailingWhitespace is false; the
+        // leading ones must survive.
+        Assert.Equal(preservesTrailingWhitespace ? "  whitespace preserved  " : "  whitespace preserved",
+            r.ColString);
         Assert.Equal("explicit value", r.ColStringNull);
         Assert.Equal(short.MaxValue, r.ColShort);
         Assert.Equal(int.MaxValue, r.ColInt);

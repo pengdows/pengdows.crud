@@ -26,8 +26,15 @@ public class CompositeKeyTests : DatabaseTestBase
         context.RegisterEntity<OrderItem>();
         context.RegisterEntity<UserRole>();
 
-        await RecreateTableAsync(context, "order_items", BuildOrderItemsTableSql(provider, context));
-        await RecreateTableAsync(context, "user_roles", BuildUserRolesTableSql(provider, context));
+        await RecreateTableAsync(context, "order_items", BuildOrderItemsTableSql(provider, context),
+            IntegrationObjectNameHelper.SpannerUniqueIndexSql(context,
+                IntegrationObjectNameHelper.Table(context, "order_items"), "ux_order_items_order_product",
+                context.WrapObjectName("order_id"), context.WrapObjectName("product_id")));
+        await RecreateTableAsync(context, "user_roles", BuildUserRolesTableSql(provider, context),
+            IntegrationObjectNameHelper.SpannerUniqueIndexSql(context,
+                IntegrationObjectNameHelper.Table(context, "user_roles"), "ux_user_roles_tenant_user_role",
+                context.WrapObjectName("tenant_id"), context.WrapObjectName("user_id"),
+                context.WrapObjectName("role_id")));
     }
 
     #region Two-Column Composite Key Tests
@@ -145,6 +152,15 @@ public class CompositeKeyTests : DatabaseTestBase
             if (provider == SupportedDatabase.Snowflake)
             {
                 Output.WriteLine("Skipping duplicate composite key test for Snowflake (constraints are not enforced)");
+                return;
+            }
+
+            if (!IntegrationObjectNameHelper.CanDeclareSecondaryUniqueKey(context))
+            {
+                // Capability: no unique key beyond the shard key (SingleStore), so order_items has
+                // no (order_id, product_id) constraint for the database to enforce.
+                Output.WriteLine(
+                    $"Skipping duplicate composite key test for {provider}: no unique key beyond the shard key can be declared (SupportsUniqueConstraints = false)");
                 return;
             }
 
@@ -347,10 +363,16 @@ public class CompositeKeyTests : DatabaseTestBase
         };
     }
 
-    private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql)
+    private static async Task RecreateTableAsync(IDatabaseContext context, string tableName, string createSql,
+        string? extraSql = null)
     {
         await DropTableIfExistsAsync(context, tableName);
-        await using var container = context.CreateSqlContainer(createSql);
+
+        // extraSql is Spanner's CREATE UNIQUE INDEX. Sent in the same batch as CREATE TABLE, Spanner
+        // applies both as one schema change on an empty table (~9s); a separate CREATE INDEX runs its
+        // own backfill schema change (~90s on Spanner Omni, measured).
+        var sql = extraSql is null ? createSql : createSql + ";\n" + extraSql;
+        await using var container = context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
     }
 
@@ -369,12 +391,11 @@ public class CompositeKeyTests : DatabaseTestBase
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {orderIdColumn} {integerType} NOT NULL,
     {productIdColumn} {integerType} NOT NULL,
     {quantityColumn} {integerType} NOT NULL,
-    {unitPriceColumn} {decimalType} NOT NULL,
-    UNIQUE ({orderIdColumn}, {productIdColumn})
+    {unitPriceColumn} {decimalType} NOT NULL{IntegrationObjectNameHelper.InlineUniqueConstraintClause(context, orderIdColumn, productIdColumn)}
 )";
     }
 
@@ -395,13 +416,12 @@ CREATE TABLE {table} (
 
         return $@"
 CREATE TABLE {table} (
-    {idColumn} {idType} PRIMARY KEY,
+    {idColumn} {idType} NOT NULL PRIMARY KEY,
     {tenantColumn} {integerType} NOT NULL,
     {userColumn} {integerType} NOT NULL,
     {roleColumn} {integerType} NOT NULL,
     {grantedAtColumn} {dateTimeType} NOT NULL,
-    {grantedByColumn} {stringType},
-    UNIQUE ({tenantColumn}, {userColumn}, {roleColumn})
+    {grantedByColumn} {stringType}{IntegrationObjectNameHelper.InlineUniqueConstraintClause(context, tenantColumn, userColumn, roleColumn)}
 )";
     }
 
@@ -420,6 +440,8 @@ CREATE TABLE {table} (
         return provider switch
         {
             SupportedDatabase.Sqlite => "NUMERIC(18,2)",
+            // Spanner's PostgreSQL interface rejects a precision/scale modifier on NUMERIC.
+            SupportedDatabase.Spanner => "NUMERIC",
             _ => "DECIMAL(18,2)"
         };
     }
@@ -454,6 +476,11 @@ CREATE TABLE {table} (
             SupportedDatabase.SqlServer => "DATETIME2",
             SupportedDatabase.MySql => "DATETIME",
             SupportedDatabase.MariaDb => "DATETIME",
+            SupportedDatabase.SingleStore => "DATETIME(6)",
+            // Spanner's PostgreSQL interface has no plain TIMESTAMP, only TIMESTAMPTZ.
+            SupportedDatabase.Spanner => "TIMESTAMPTZ",
+            SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
+            SupportedDatabase.SybaseASE => "BIGDATETIME",
             _ => "TIMESTAMP"
         };
     }

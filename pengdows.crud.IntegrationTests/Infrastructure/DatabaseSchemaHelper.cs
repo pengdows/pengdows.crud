@@ -35,10 +35,66 @@ internal static class DatabaseSchemaHelper
             return;
         }
 
+        if (context.Product == SupportedDatabase.Spanner)
+        {
+            await DropSpannerTablesAsync(context);
+            return;
+        }
+
         foreach (var table in TablesToDrop)
         {
             await TryDropTableAsync(context, table);
         }
+    }
+
+    /// <summary>
+    /// Every Spanner DDL statement is a schema change (seconds each, even for a missing table), and
+    /// Spanner refuses to drop a table that still has a secondary index. Drops only the tables that
+    /// exist, their indexes first, as one DDL batch (one schema change).
+    /// </summary>
+    private static async Task DropSpannerTablesAsync(IDatabaseContext context)
+    {
+        var existing = new HashSet<string>(StringComparer.Ordinal);
+        await using (var tables = context.CreateSqlContainer(
+                         "SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'"))
+        await using (var reader = await tables.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                existing.Add(reader.GetString(0));
+            }
+        }
+
+        var toDrop = TablesToDrop.Where(existing.Contains).ToList();
+        if (toDrop.Count == 0)
+        {
+            return;
+        }
+
+        var indexes = new List<string>();
+        // Only user-created indexes: the ones Spanner manages for foreign keys (spanner_is_managed)
+        // can't be dropped ("It is in use by foreign keys") and go away with the table.
+        await using (var indexQuery = context.CreateSqlContainer(
+                         "SELECT table_name, index_name, CAST(spanner_is_managed AS VARCHAR) " +
+                         "FROM information_schema.indexes WHERE table_schema = 'public' AND index_type = 'INDEX'"))
+        await using (var reader = await indexQuery.ExecuteReaderAsync())
+        {
+            while (await reader.ReadAsync())
+            {
+                var managed = reader.IsDBNull(2) ? string.Empty : reader.GetString(2);
+                var isManaged = managed.Equals("YES", StringComparison.OrdinalIgnoreCase)
+                                || managed.Equals("true", StringComparison.OrdinalIgnoreCase);
+                if (!isManaged && toDrop.Contains(reader.GetString(0)))
+                {
+                    indexes.Add(reader.GetString(1));
+                }
+            }
+        }
+
+        var statements = indexes.Select(index => $"DROP INDEX {context.WrapObjectName(index)}")
+            .Concat(toDrop.Select(table => $"DROP TABLE {IntegrationObjectNameHelper.Table(context, table)}"));
+        await using var drop = context.CreateSqlContainer(string.Join(";\n", statements));
+        await drop.ExecuteNonQueryAsync();
     }
 
     internal static IReadOnlyList<string>? TryGetResetCommands(SupportedDatabase provider, string connectionString)
@@ -133,6 +189,12 @@ internal static class DatabaseSchemaHelper
                 return;
             }
 
+            if (await TryDropSpannerBlockingIndicesAsync(context, ex))
+            {
+                await TryDropTableAsync(context, tableName);
+                return;
+            }
+
             if (traceEnabled)
             {
                 IntegrationTraceLog.Write(context.Product,
@@ -178,7 +240,55 @@ internal static class DatabaseSchemaHelper
                || text.Contains("ora-00942")
                || text.Contains("table unknown")
                || text.Contains("table with name")
-               || text.Contains("catalog error");
+               || text.Contains("catalog error")
+               // Db2: SQL0204N "<schema>.<name> is an undefined name."
+               || text.Contains("sql0204n")
+               || text.Contains("is an undefined name")
+               // Informix: "The specified table (<name>) is not in the database."
+               || text.Contains("is not in the database");
+    }
+
+    /// <summary>
+    /// Spanner's PostgreSQL interface refuses to drop a table that still has a secondary index
+    /// ("Cannot drop table merge_records with indices: ux_merge_records_record_key."), where
+    /// PostgreSQL drops dependent indexes itself. Drops the indexes the message names and returns
+    /// true so the caller retries the DROP TABLE; returns false for any other error.
+    /// </summary>
+    internal static async Task<bool> TryDropSpannerBlockingIndicesAsync(IDatabaseContext context, Exception ex)
+    {
+        if (context.Product != SupportedDatabase.Spanner)
+        {
+            return false;
+        }
+
+        const string marker = "with indices:";
+        var message = ex.Message;
+        var markerIndex = message.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+        {
+            return false;
+        }
+
+        var tail = message[(markerIndex + marker.Length)..];
+        var end = tail.IndexOfAny(['.', '\n', '\r']);
+        if (end >= 0)
+        {
+            tail = tail[..end];
+        }
+
+        var indices = tail.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (indices.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var index in indices)
+        {
+            await using var dropIndex = context.CreateSqlContainer($"DROP INDEX {context.WrapObjectName(index)}");
+            await dropIndex.ExecuteNonQueryAsync();
+        }
+
+        return true;
     }
 
     private static bool IsMetadataLock(string message)

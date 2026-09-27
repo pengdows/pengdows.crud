@@ -39,11 +39,11 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
         await RecreateTablesAsync(provider, context);
     }
 
-    // MySQL-family ON DUPLICATE KEY UPDATE and Firebird UPDATE OR INSERT have no conditional update,
-    // so a stale version on an existing row can't be detected by any upsert there.
-    private static bool UpsertCannotDetectStaleVersion(SupportedDatabase provider) =>
-        provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
-            or SupportedDatabase.AuroraMySql or SupportedDatabase.SingleStore or SupportedDatabase.Firebird;
+    // Capability: MySQL-family ON DUPLICATE KEY UPDATE and Firebird UPDATE OR INSERT have no
+    // conditional update, and Sybase ASE's MERGE counts a guard-skipped row as affected, so a stale
+    // version on an existing row can't be detected by an upsert there.
+    private static bool UpsertCannotDetectStaleVersion(IDatabaseContext context) =>
+        !UpsertDetectsStaleVersion(context);
 
     [SkippableFact]
     public Task UpsertAsync_StaleVersion_ThrowsWhereDetectable()
@@ -61,7 +61,14 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
             Assert.Equal(1, await helper.UpdateAsync(holderA, context));
 
             holderB!.Name = "updated-by-b";
-            if (UpsertCannotDetectStaleVersion(provider))
+            if (UpsertRefusesVersionedEntities(context))
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.UpsertAsync(holderB, context));
+                Output.WriteLine($"{provider}: capability - versioned upsert refused (no conditional MERGE matched clause)");
+                return;
+            }
+
+            if (UpsertCannotDetectStaleVersion(context))
             {
                 var ex = await Record.ExceptionAsync(async () => await helper.UpsertAsync(holderB, context));
                 Assert.Null(ex);
@@ -98,7 +105,14 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
             staleTwo!.Name = "two-stale";
             var batch = new List<VersionedUpsertEntity> { one, staleTwo };
 
-            if (UpsertCannotDetectStaleVersion(provider))
+            if (UpsertRefusesVersionedEntities(context))
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.BatchUpsertAsync(batch, context));
+                Output.WriteLine($"{provider}: capability - versioned upsert refused (no conditional MERGE matched clause)");
+                return;
+            }
+
+            if (UpsertCannotDetectStaleVersion(context))
             {
                 var ex = await Record.ExceptionAsync(async () => await helper.BatchUpsertAsync(batch, context));
                 Assert.Null(ex);
@@ -269,7 +283,14 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
             staleB!.Name = "b-stale";
             var batch = new List<VersionedPkUpsertEntity> { a, staleB };
 
-            if (UpsertCannotDetectStaleVersion(provider))
+            if (UpsertRefusesVersionedEntities(context))
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await gateway.BatchUpsertAsync(batch, context));
+                Output.WriteLine($"{provider}: capability - versioned upsert refused (no conditional MERGE matched clause)");
+                return;
+            }
+
+            if (UpsertCannotDetectStaleVersion(context))
             {
                 var ex = await Record.ExceptionAsync(async () => await gateway.BatchUpsertAsync(batch, context));
                 Assert.Null(ex);
@@ -315,7 +336,8 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
         var versionDefinition = provider switch
         {
             SupportedDatabase.Firebird => $"{versionColumn} {versionType} NOT NULL",
-            SupportedDatabase.Oracle => $"{versionColumn} {versionType} DEFAULT 1 NOT NULL",
+            SupportedDatabase.Oracle or SupportedDatabase.Informix or SupportedDatabase.SybaseASE
+                => $"{versionColumn} {versionType} DEFAULT 1 NOT NULL",
             _ => $"{versionColumn} {versionType} NOT NULL DEFAULT 1"
         };
 

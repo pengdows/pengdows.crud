@@ -35,7 +35,12 @@ public class RoundTripTests : DatabaseTestBase
             {
                 Id = DateTime.UtcNow.Ticks,
                 TextValue = "  Leading and trailing whitespace  ",
-                TextUnicode = "Unicode: 🚀 CJK: 漢字 📧",
+                // Capability: without supplementary-plane support (Informix) the emoji are left out;
+                // the CJK text still exercises non-ASCII storage.
+                TextUnicode = pengdows.crud.dialects.InternalSqlDialectExtensions
+                    .SupportsSupplementaryCharacters(context.GetDialect())
+                    ? "Unicode: 🚀 CJK: 漢字 📧"
+                    : "Unicode: CJK: 漢字",
                 TextNullable = null,
                 IntValue = -1234567,
                 LongValue = long.MaxValue - 100,
@@ -55,7 +60,11 @@ public class RoundTripTests : DatabaseTestBase
             // Assert
             Assert.NotNull(retrieved);
             Assert.Equal(original.Id, retrieved!.Id);
-            Assert.Equal(original.TextValue, retrieved.TextValue);
+            // Capability: a dialect whose storage or provider drops trailing blanks
+            // (PreservesTrailingWhitespace = false: Sybase ASE, Informix) must still keep the leading ones.
+            Assert.Equal(
+                context.Dialect.PreservesTrailingWhitespace ? original.TextValue : original.TextValue.TrimEnd(),
+                retrieved.TextValue);
             Assert.Equal(original.TextUnicode, retrieved.TextUnicode);
             Assert.Equal(original.IntValue, retrieved.IntValue);
             Assert.Equal(original.LongValue, retrieved.LongValue);
@@ -89,7 +98,8 @@ public class RoundTripTests : DatabaseTestBase
 
             // DateTimeOffset assertions
             if (provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.Firebird
-                or SupportedDatabase.Snowflake or SupportedDatabase.Oracle)
+                or SupportedDatabase.Snowflake or SupportedDatabase.Oracle or SupportedDatabase.SybaseASE
+                or SupportedDatabase.Informix)
             {
                 // Discard offset, check UTC instant within 1ms
                 Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime,
@@ -146,6 +156,14 @@ public class RoundTripTests : DatabaseTestBase
                 Assert.True(string.IsNullOrEmpty(retrieved.TextUnicode));
                 Assert.Null(retrieved.TextNullable);
             }
+            else if (!context.Dialect.PreservesTrailingWhitespace)
+            {
+                // Capability: Sybase ASE stores '' in a varchar as a single blank, which differs from
+                // '' only in trailing whitespace (PreservesTrailingWhitespace = false).
+                Assert.Equal("", retrieved.TextValue?.TrimEnd());
+                Assert.Equal("", retrieved.TextUnicode?.TrimEnd());
+                Assert.Equal("", retrieved.TextNullable?.TrimEnd());
+            }
             else
             {
                 Assert.Equal("", retrieved.TextValue);
@@ -162,7 +180,16 @@ public class RoundTripTests : DatabaseTestBase
             // Note: some providers return null for empty binary, others empty array
             if (retrieved.BinaryValue != null)
             {
-                Assert.Empty(retrieved.BinaryValue);
+                if (pengdows.crud.dialects.InternalSqlDialectExtensions.PreservesEmptyBinary(context.GetDialect()))
+                {
+                    Assert.Empty(retrieved.BinaryValue);
+                }
+                else
+                {
+                    // Capability: Sybase ASE stores a zero-length binary as a single 0x00 byte
+                    // (PreservesEmptyBinary = false), as it stores '' as a single blank.
+                    Assert.Equal(new byte[] { 0x00 }, retrieved.BinaryValue);
+                }
             }
         });
     }

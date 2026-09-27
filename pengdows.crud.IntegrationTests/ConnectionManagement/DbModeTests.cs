@@ -35,13 +35,13 @@ public class DbModeTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Arrange - fixture contexts use Best: SQLite/DuckDB/FlatFile resolve to SingleWriter,
-            // Firebird to PreventDatabaseUnload (a sentinel per pool, never used for work), others to
-            // Standard
+            // Firebird and Db2 LUW to PreventDatabaseUnload (a sentinel per pool, never used for work),
+            // others to Standard
             var expectedMode = provider switch
             {
                 SupportedDatabase.Sqlite or SupportedDatabase.DuckDB or SupportedDatabase.FlatFile =>
                     DbMode.SingleWriter,
-                SupportedDatabase.Firebird => DbMode.PreventDatabaseUnload,
+                SupportedDatabase.Firebird or SupportedDatabase.Db2 => DbMode.PreventDatabaseUnload,
                 _ => DbMode.Standard
             };
             Assert.Equal(expectedMode, context.ConnectionMode);
@@ -454,12 +454,35 @@ public class DbModeTests : DatabaseTestBase
             await helper2.UpdateAsync(read2, tx2);
             // Don't commit tx2 yet
 
-            // Transaction 1: Read again - should NOT see uncommitted changes
-            var readAgain = await helper1.RetrieveOneAsync(entity.Id, tx1);
-            Assert.NotNull(readAgain);
-            Assert.Equal(entity.Value, readAgain!.Value); // Should still see original value
+            // Transaction 1: Read again - should NOT see uncommitted changes. A locking engine honors
+            // that either by blocking the read on tx2's row lock until tx2 ends (Sybase ASE), so tx2
+            // is rolled back if the read hasn't returned promptly, or by refusing the locked row at
+            // once (Informix's default NOT WAIT lock mode: a transient lock-conflict error). Never may
+            // the read return tx2's uncommitted 2000.
+            var readAgainTask = helper1.RetrieveOneAsync(entity.Id, tx1).AsTask();
+            var completedFirst = await Task.WhenAny(readAgainTask, Task.Delay(TimeSpan.FromSeconds(3)));
+            if (completedFirst != readAgainTask)
+            {
+                Output.WriteLine($"{provider}: read blocked on the uncommitted write; rolling the writer back");
+                tx2.Rollback();
+            }
 
-            tx2.Rollback(); // Cleanup
+            try
+            {
+                var readAgain = await readAgainTask;
+                Assert.NotNull(readAgain);
+                Assert.Equal(entity.Value, readAgain!.Value); // Should still see original value
+            }
+            catch (pengdows.crud.exceptions.TransientWriteConflictException ex)
+            {
+                Output.WriteLine($"{provider}: read refused on the uncommitted write's lock: {ex.Message}");
+            }
+
+            if (!tx2.IsCompleted)
+            {
+                tx2.Rollback(); // Cleanup
+            }
+
             tx1.Commit();
 
             // Assert - Original value should be preserved

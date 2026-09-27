@@ -100,10 +100,10 @@ public class ConstraintViolationTests : DatabaseTestBase
 
             Assert.Equal(provider, ex.Database);
             Assert.IsType<UniqueConstraintViolationException>(ex);
-            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            var info = context.GetDialect().AnalyzeException(ExtractInnerProviderException(ex));
             Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
             Assert.Equal(DbConstraintKind.Unique, info.ConstraintKind);
-            Assert.True(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
+            Assert.True(IsUniqueViolation(context, ExtractInnerProviderException(ex)));
         });
     }
 
@@ -240,10 +240,10 @@ public class ConstraintViolationTests : DatabaseTestBase
             var ex = await CaptureDatabaseExceptionAsync(() => helper.CreateAsync(entity2, context).AsTask());
 
             Assert.IsType<UniqueConstraintViolationException>(ex);
-            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            var info = context.GetDialect().AnalyzeException(ExtractInnerProviderException(ex));
             Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
             Assert.Equal(DbConstraintKind.Unique, info.ConstraintKind);
-            Assert.True(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
+            Assert.True(IsUniqueViolation(context, ExtractInnerProviderException(ex)));
         });
     }
 
@@ -303,10 +303,10 @@ public class ConstraintViolationTests : DatabaseTestBase
             });
 
             Assert.IsType<ForeignKeyViolationException>(ex);
-            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            var info = context.GetDialect().AnalyzeException(ExtractInnerProviderException(ex));
             Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
             Assert.Equal(DbConstraintKind.ForeignKey, info.ConstraintKind);
-            Assert.False(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
+            Assert.False(IsUniqueViolation(context, ExtractInnerProviderException(ex)));
         });
     }
 
@@ -432,10 +432,10 @@ public class ConstraintViolationTests : DatabaseTestBase
             });
 
             Assert.IsType<NotNullViolationException>(ex);
-            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            var info = context.GetDialect().AnalyzeException(ExtractInnerProviderException(ex));
             Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
             Assert.Equal(DbConstraintKind.NotNull, info.ConstraintKind);
-            Assert.False(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
+            Assert.False(IsUniqueViolation(context, ExtractInnerProviderException(ex)));
         });
     }
 
@@ -545,10 +545,10 @@ public class ConstraintViolationTests : DatabaseTestBase
             });
 
             Assert.IsType<CheckConstraintViolationException>(ex);
-            var info = context.GetDialect().AnalyzeException(ExtractInnerDbException(ex));
+            var info = context.GetDialect().AnalyzeException(ExtractInnerProviderException(ex));
             Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
             Assert.Equal(DbConstraintKind.Check, info.ConstraintKind);
-            Assert.False(context.GetDialect().IsUniqueViolation(ExtractInnerDbException(ex)));
+            Assert.False(IsUniqueViolation(context, ExtractInnerProviderException(ex)));
         });
     }
 
@@ -807,6 +807,21 @@ public class ConstraintViolationTests : DatabaseTestBase
                     {0}name{1} VARCHAR(255) NOT NULL,
                     CONSTRAINT fk_test_related FOREIGN KEY ({0}test_table_id{1}) REFERENCES {0}test_table{1}({0}id{1})
                 )", qp, qs),
+            SupportedDatabase.Informix => string.Format(@"
+                CREATE TABLE IF NOT EXISTS {0}test_related{1} (
+                    {0}id{1} BIGSERIAL NOT NULL PRIMARY KEY,
+                    {0}test_table_id{1} BIGINT NOT NULL,
+                    {0}name{1} VARCHAR(255) NOT NULL,
+                    FOREIGN KEY ({0}test_table_id{1}) REFERENCES {0}test_table{1}({0}id{1})
+                )", qp, qs),
+            // No CREATE TABLE IF NOT EXISTS in ASE; the shared reset drops test_related first.
+            SupportedDatabase.SybaseASE => string.Format(@"
+                CREATE TABLE {0}test_related{1} (
+                    {0}id{1} BIGINT IDENTITY NOT NULL PRIMARY KEY,
+                    {0}test_table_id{1} BIGINT NOT NULL,
+                    {0}name{1} VARCHAR(255) NOT NULL,
+                    CONSTRAINT fk_test_related FOREIGN KEY ({0}test_table_id{1}) REFERENCES {0}test_table{1}({0}id{1})
+                )", qp, qs),
             _ => throw new NotSupportedException($"Provider {provider} not supported for related table")
         };
 
@@ -911,6 +926,11 @@ public class ConstraintViolationTests : DatabaseTestBase
             // INDEX is the route pengdows.flatfile's own CLAUDE.md documents as fully supported
             // for adding uniqueness over pre-existing data — same fix as the Spanner case above.
             SupportedDatabase.FlatFile => "CREATE UNIQUE INDEX uq_name ON test_table (name)",
+            // Informix names a constraint after its definition.
+            SupportedDatabase.Informix =>
+                string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT UNIQUE ({0}name{1}) CONSTRAINT uq_name", qp, qs),
+            SupportedDatabase.SybaseASE =>
+                string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT uq_name UNIQUE ({0}name{1})", qp, qs),
             _ => null
         };
 
@@ -959,6 +979,11 @@ public class ConstraintViolationTests : DatabaseTestBase
             // Same ANSI ALTER TABLE ADD CONSTRAINT ... CHECK support as UNIQUE above.
             SupportedDatabase.FlatFile =>
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
+            // Informix names a constraint after its definition.
+            SupportedDatabase.Informix =>
+                string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT CHECK ({0}value{1} >= 0) CONSTRAINT chk_value_positive", qp, qs),
+            SupportedDatabase.SybaseASE =>
+                string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT chk_value_positive CHECK ({0}value{1} >= 0)", qp, qs),
             _ => null
         };
 
@@ -976,9 +1001,21 @@ public class ConstraintViolationTests : DatabaseTestBase
         }
     }
 
-    private static DbException ExtractInnerDbException(DatabaseException exception)
+    /// <summary>
+    /// The raw provider exception every DatabaseException preserves. Not always a DbException:
+    /// AdoNetCore.AseClient's AseException (Sybase ASE) derives from Exception directly.
+    /// </summary>
+    private static Exception ExtractInnerProviderException(DatabaseException exception)
     {
-        return Assert.IsAssignableFrom<DbException>(exception.InnerException);
+        Assert.NotNull(exception.InnerException);
+        return exception.InnerException!;
+    }
+
+    // SqlDialect.IsUniqueViolation(Exception) covers provider exceptions that are not DbExceptions
+    // (Sybase); for a DbException it defers to the ISqlDialect.IsUniqueViolation(DbException) path.
+    private static bool IsUniqueViolation(IDatabaseContext context, Exception providerException)
+    {
+        return ((pengdows.crud.dialects.SqlDialect)context.GetDialect()).IsUniqueViolation(providerException);
     }
 
     private static async Task<DatabaseException> CaptureDatabaseExceptionAsync(Func<Task> action)

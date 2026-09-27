@@ -6,6 +6,41 @@ namespace pengdows.crud.IntegrationTests.Infrastructure;
 
 internal static class IntegrationObjectNameHelper
 {
+    /// <summary>
+    /// False where a unique key on columns other than the primary (shard) key cannot be declared at
+    /// all: SingleStore rejects it ("unique keys must contain all columns of the shard key", confirmed
+    /// live on the 3.0 branch; its dialect reports SupportsUniqueConstraints = false). Tests that need
+    /// the database to reject a duplicate business key skip on this.
+    /// </summary>
+    public static bool CanDeclareSecondaryUniqueKey(IDatabaseContext context) =>
+        context.Product != SupportedDatabase.SingleStore;
+
+    /// <summary>
+    /// An inline table-level UNIQUE clause (with its leading comma), or empty where the database
+    /// cannot declare it inline. Spanner's PostgreSQL interface rejects inline UNIQUE ("create a
+    /// unique index instead"; see <see cref="SpannerUniqueIndexSql"/>), and see
+    /// <see cref="CanDeclareSecondaryUniqueKey"/>.
+    /// </summary>
+    public static string InlineUniqueConstraintClause(IDatabaseContext context, params string[] wrappedColumns) =>
+        context.Product == SupportedDatabase.Spanner || !CanDeclareSecondaryUniqueKey(context)
+            ? string.Empty
+            : $",\n    UNIQUE ({string.Join(", ", wrappedColumns)})";
+
+    /// <summary>
+    /// The separate CREATE UNIQUE INDEX Spanner needs in place of an inline UNIQUE clause, or null
+    /// for every other database.
+    /// </summary>
+    public static string? SpannerUniqueIndexSql(IDatabaseContext context, string qualifiedTable,
+        string indexName, params string[] wrappedColumns)
+    {
+        if (context.Product != SupportedDatabase.Spanner)
+        {
+            return null;
+        }
+
+        return $"CREATE UNIQUE INDEX {context.WrapObjectName(indexName)} ON {qualifiedTable} ({string.Join(", ", wrappedColumns)})";
+    }
+
     public static string Table(IDatabaseContext context, string tableName)
     {
         var parts = GetNamespaceParts(context);
@@ -30,6 +65,7 @@ internal static class IntegrationObjectNameHelper
                 => [GetPostgreSqlSchema(builder) ?? "public"],
             SupportedDatabase.SqlServer => [GetValue(builder, "Current Schema", "Schema") ?? "dbo"],
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore
                 => GetValue(builder, "Database", "Initial Catalog") is { Length: > 0 } db
                     ? [db]
                     : [],

@@ -17,8 +17,18 @@ public class QuotingTortureTests : DatabaseTestBase
     {
     }
 
+    // Capability: the torture identifiers contain spaces ("Default Order", "Group By"), which a
+    // dialect with SupportsSpacesInIdentifiers = false (Spanner) rejects even when quoted.
+    private static bool SupportsSpacesInIdentifiers(IDatabaseContext context) =>
+        pengdows.crud.dialects.InternalSqlDialectExtensions.SupportsSpacesInIdentifiers(context.GetDialect());
+
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
+        if (!SupportsSpacesInIdentifiers(context))
+        {
+            return;
+        }
+
         var tableCreator = new TestTableCreator(context);
         await tableCreator.CreateTortureTableAsync();
     }
@@ -28,6 +38,12 @@ public class QuotingTortureTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (!SupportsSpacesInIdentifiers(context))
+            {
+                Output.WriteLine($"Skipping for {provider}: dialect SupportsSpacesInIdentifiers is false");
+                return;
+            }
+
             // Arrange
             var helper = new TableGateway<TortureEntity, long>(context);
             var entity = new TortureEntity

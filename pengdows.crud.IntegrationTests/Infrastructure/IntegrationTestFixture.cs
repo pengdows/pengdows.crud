@@ -24,7 +24,15 @@ internal static class IntegrationTestConfiguration
         // In-process; built from the sibling pengdows.flatfile checkout (see testbed.csproj). When
         // that checkout is missing, ParallelTestOrchestrator.CreateContainerAsync returns null and the
         // fixture reports FlatFile as unavailable.
-        SupportedDatabase.FlatFile
+        SupportedDatabase.FlatFile,
+        SupportedDatabase.Db2,
+        // Informix's native client needs LD_LIBRARY_PATH, INFORMIXDIR and INFORMIXSQLHOSTS exported
+        // before the test host starts; see
+        // NativeClientEnvironment and run-integration-tests.sh.
+        SupportedDatabase.Informix,
+        SupportedDatabase.SybaseASE,
+        SupportedDatabase.Spanner,
+        SupportedDatabase.SingleStore
     };
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>
@@ -111,6 +119,17 @@ public class IntegrationTestFixture : IAsyncLifetime
 
         foreach (var provider in IntegrationTestConfiguration.EnabledProviders)
         {
+            // An enabled provider whose native client cannot load in this process still fails every
+            // test that needs it (no skip); the message names the directory to export.
+            var environmentError = NativeClientEnvironment.GetMissingEnvironmentError(provider,
+                AppContext.BaseDirectory, Environment.GetEnvironmentVariable);
+            if (environmentError is not null)
+            {
+                _startupFailures[provider] = environmentError;
+                Console.WriteLine($"Warning: {provider} not started: {environmentError}");
+                continue;
+            }
+
             try
             {
                 var container = await orchestrator.CreateContainerAsync(provider);
@@ -191,7 +210,7 @@ public class IntegrationTestFixture : IAsyncLifetime
     /// -- unlike <c>IDatabaseContext.ConnectionString</c> (deliberately redacted for safe
     /// logging/display), for test authors who need to build a second, differently-configured
     /// DatabaseContext (e.g. a custom pool size) against the same running container. Only
-    /// implemented for containers that expose a real connection string (currently PostgreSQL).
+    /// implemented for containers that expose a real connection string.
     /// </summary>
     public string GetRawConnectionString(SupportedDatabase provider)
     {
@@ -205,6 +224,9 @@ public class IntegrationTestFixture : IAsyncLifetime
             testbed.PostgreSQL.PostgreSqlTestContainer pg => pg.ConnectionString,
             testbed.Cockroach.CockroachDbTestContainer crdb => crdb.ConnectionString,
             testbed.Yugabyte.YugabyteTestContainer yb => yb.ConnectionString,
+            testbed.Db2.Db2TestContainer db2 => db2.ConnectionString,
+            testbed.Informix.InformixTestContainer ifx => ifx.ConnectionString,
+            testbed.SingleStore.SingleStoreTestContainer s2 => s2.ConnectionString,
             _ => throw new NotSupportedException(
                 $"GetRawConnectionString is not implemented for provider {provider} ({container.GetType().Name}).")
         };

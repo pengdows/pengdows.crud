@@ -1,5 +1,6 @@
 using IBM.Data.Db2;
 using pengdows.crud;
+using pengdows.crud.enums;
 using testbed.Db2;
 using Xunit;
 
@@ -62,6 +63,8 @@ public class Db2SessionSettingsTests
             await contaminate.ExecuteNonQueryAsync();
         }
 
+        // Reads run on the write pool too (ExecutionType.Write): reader and writer use separate
+        // provider pools, and only the writer's single connection carries the contamination.
         // Reacquire — with Max Pool Size=1 this MUST be the same physical connection. If pengdows
         // did not reapply GetBaseSessionSettings() on this checkout, the contaminated value ("UR")
         // would still be in effect here. Verified live that SET CURRENT ISOLATION RESET does not
@@ -70,14 +73,14 @@ public class Db2SessionSettingsTests
         // name. The important assertion either way is that it's no longer the contaminated value.
         await using (var isolationCheck = context.CreateSqlContainer("VALUES CURRENT ISOLATION"))
         {
-            var isolation = await isolationCheck.ExecuteScalarRequiredAsync<string>();
+            var isolation = await isolationCheck.ExecuteScalarRequiredAsync<string>(ExecutionType.Write);
             Assert.Equal(string.Empty, isolation.Trim());
         }
 
         await using (var temporalCheck = context.CreateSqlContainer(
                          "VALUES (CASE WHEN CURRENT TEMPORAL SYSTEM_TIME IS NULL THEN 'NULL' ELSE 'SET' END)"))
         {
-            var temporal = await temporalCheck.ExecuteScalarRequiredAsync<string>();
+            var temporal = await temporalCheck.ExecuteScalarRequiredAsync<string>(ExecutionType.Write);
             Assert.Equal("NULL", temporal.Trim());
         }
     }

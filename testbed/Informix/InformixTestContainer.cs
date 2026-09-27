@@ -12,6 +12,7 @@ public class InformixTestContainer : TestContainer
     private const string _database = "testdb";
     private const string _serverName = "informixserver";
     private const int _port = 9088;
+    private const int DeveloperImagePoolSize = 5;
     private readonly IContainer _container;
     private string? _connectionString;
     private string? _sqlhostsPath;
@@ -61,6 +62,9 @@ public class InformixTestContainer : TestContainer
         _sqlhostsPath = InformixNativeLibraryBootstrap.SqlHostsPath;
         File.WriteAllText(_sqlhostsPath, $"{_serverName}\tonsoctcp\tlocalhost\t{hostPort}\n");
 
+        // The test database is created with a UTF-8 locale (DB_LOCALE=en_US.utf8 at CREATE DATABASE)
+        // and the client uses the same, so non-ASCII text round-trips; the image's default locale
+        // (en_US.819) rejects it ("Inexact character conversion during translation").
         // CONFIRMED live: this exact connection string parses correctly and connects
         // (Host/Service/Server/Database/UID/PWD/Delimident are all real, recognized keys).
         // Delimident=true (not "y"/"1" — the builder only accepts standard .NET boolean text) is
@@ -68,7 +72,7 @@ public class InformixTestContainer : TestContainer
         // being interchangeable with '...' string literals (see InformixDialect.cs's file-level
         // summary).
         _connectionString =
-            $"Host=localhost;Service={hostPort};Server={_serverName};Database={_database};UID={_username};PWD={_password};Delimident=true;";
+            $"Host=localhost;Service={hostPort};Server={_serverName};Database={_database};UID={_username};PWD={_password};Delimident=true;DB_LOCALE=en_US.utf8;CLIENT_LOCALE=en_US.utf8;";
 
         // CONFIRMED live: the informix-developer-database image never creates a user database on
         // its own — its own informix_setup_user_db.sh entrypoint step only runs a schema script
@@ -99,7 +103,7 @@ public class InformixTestContainer : TestContainer
             {
                 "bash", "-c",
                 $"source /opt/ibm/scripts/informix_inf.env && " +
-                $"dbaccess sysmaster - <<< 'CREATE DATABASE {_database} WITH LOG;'"
+                $"export DB_LOCALE=en_US.utf8 && dbaccess sysmaster - <<< 'CREATE DATABASE {_database} WITH LOG;'"
             });
 
             if (result.ExitCode == 0)
@@ -124,7 +128,17 @@ public class InformixTestContainer : TestContainer
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return Task.FromResult<IDatabaseContext>(new DatabaseContext(_connectionString, InformixClientFactory.Instance));
+        // CONFIRMED live: the developer image accepts about 24 concurrent sessions; the 25th fails
+        // with -25571 "Cannot create a user thread". Size each pool (reader and writer) so a context,
+        // plus a second one some tests open, stays below that; the governor queues the rest.
+        return Task.FromResult<IDatabaseContext>(new DatabaseContext(
+            new pengdows.crud.configuration.DatabaseContextConfiguration
+            {
+                ConnectionString = _connectionString,
+                MaxConcurrentReads = DeveloperImagePoolSize,
+                MaxConcurrentWrites = DeveloperImagePoolSize
+            },
+            InformixClientFactory.Instance));
     }
 
     /// <summary>
