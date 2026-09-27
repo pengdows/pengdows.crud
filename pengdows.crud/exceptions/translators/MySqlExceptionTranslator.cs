@@ -42,8 +42,13 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
             return classified;
         }
 
-        // 1040 "Too many connections" (confirmed live, MySQL and MariaDB).
-        if (errorCode == 1040)
+        // Connection limits (confirmed live, MySQL and MariaDB): 1040 server-wide, 1203 the global
+        // max_user_connections, 1226 an account's own MAX_USER_CONNECTIONS. 1226 is also raised for
+        // the hourly quotas (max_questions/max_updates/max_connections_per_hour), which are not a
+        // concurrent-connection limit, so it only counts when it names max_user_connections.
+        if (errorCode is 1040 or 1203 ||
+            (errorCode == 1226 &&
+             exception.Message.Contains("'max_user_connections'", StringComparison.OrdinalIgnoreCase)))
         {
             return DbExceptionTranslationSupport.CreateTooManyConnections(database, exception, operationKind);
         }

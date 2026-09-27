@@ -276,6 +276,8 @@ These are the rules the code is being brought in line with.
   `ConnectionException` and is now `TooManyConnectionsException`. SQL Server's pre-login handshake
   failure, Sybase's messages and Oracle's ORA-50201 stay plain `ConnectionException`: the same
   signal also comes from TLS failures, genuine pool timeouts and unreachable servers.
+  MySQL/MariaDB per-account limits also map to it: 1203 (global `max_user_connections`) and 1226
+  when it names `max_user_connections` (1226 for the hourly quotas does not).
   *Additive public API:* `pengdows.crud.exceptions.TooManyConnectionsException`.
 
 ## Decisions needed (found while investigating)

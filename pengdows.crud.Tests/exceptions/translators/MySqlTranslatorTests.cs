@@ -172,4 +172,35 @@ public class MySqlTranslatorTests
         Assert.IsAssignableFrom<ConnectionException>(result);
         Assert.True(result.IsTransient);
     }
+
+    // Per-account limits (confirmed live 2026-09-27 on mysql:latest and mariadb:latest,
+    // MySqlConnector 2.4.0): an account created WITH MAX_USER_CONNECTIONS n gets 1226 naming the
+    // max_user_connections resource; the global max_user_connections gets 1203.
+    [Theory]
+    [InlineData(1226, "User 'app' has exceeded the 'max_user_connections' resource (current value: 3)")]
+    [InlineData(1203, "User app2 already has more than 'max_user_connections' active connections")]
+    public void PerAccountConnectionLimit_MapsTo_TooManyConnectionsException(int number, string message)
+    {
+        var raw = new NumberedDbException(number, message);
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Query);
+
+        Assert.IsType<TooManyConnectionsException>(result);
+        Assert.True(result.IsTransient);
+    }
+
+    // 1226 is also raised for the other per-account quotas, which are not a concurrent-connection
+    // limit: max_connections_per_hour and max_questions/max_updates only clear with the hour.
+    [Theory]
+    [InlineData("User 'app' has exceeded the 'max_questions' resource (current value: 10)")]
+    [InlineData("User 'app' has exceeded the 'max_updates' resource (current value: 10)")]
+    [InlineData("User 'app' has exceeded the 'max_connections_per_hour' resource (current value: 10)")]
+    public void Error1226_OtherResources_AreNot_TooManyConnectionsException(string message)
+    {
+        var raw = new NumberedDbException(1226, message);
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.MySql), raw, DbOperationKind.Query);
+
+        Assert.IsNotType<TooManyConnectionsException>(result);
+    }
 }
