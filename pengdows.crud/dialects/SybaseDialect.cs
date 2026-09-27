@@ -157,6 +157,33 @@ internal class SybaseDialect : SqlDialect
 
     // CONFIRMED live (ASE 16.0): a zero-length VARBINARY reads back as 0x00.
     public override bool PreservesEmptyBinary => false;
+
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        // Verified live (testbed): AdoNetCore.AseClient rejects a DateTimeOffset parameter
+        // outright ("Unsupported .net type System.DateTimeOffset"), and ASE has no offset-aware
+        // temporal type. Store the UTC instant as a plain DateTime, matching Db2/Firebird/
+        // InterBase. Null is remapped too: the driver rejects DbType.DateTimeOffset regardless
+        // of the value.
+        if (type == DbType.DateTimeOffset)
+        {
+            object coerced = value is DateTimeOffset dto
+                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
+                : DBNull.Value;
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+        }
+
+        // CONFIRMED live (ASE 16.0, AdoNetCore.AseClient 0.19.2): a NULL typed DbType.Boolean is sent
+        // as BIT, which can't be NULL, and is stored as 0, so a nullable bool written as NULL read back
+        // as false. A NULL typed Byte is stored as NULL. (A BIT column can't hold NULL at all; a
+        // nullable bool column on ASE is TINYINT or similar.)
+        if (type == DbType.Boolean && (value is null || value is DBNull))
+        {
+            return base.CreateDbParameter<object?>(name, DbType.Byte, DBNull.Value);
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
     // Verified live: this ASE build rejects the multi-row VALUES clause the base
     // implementation generates ("INSERT INTO t (...) VALUES (r1...), (r2...)") with
     // "Incorrect syntax near ','." — falls back to one INSERT per row.
