@@ -169,7 +169,7 @@ lifetime rule as `DatabaseContext` and `TableGateway<T,TId>`.
   different `DbMode`s).
 - Lease semantics and concurrency guarantees: `pengdows.crud.Tests/TenantContextLeaseTests.cs`.
 - Simpler DI-only pattern without the registry (a hand-rolled keyed `DatabaseContext` per
-  tenant name, no dynamic provider loading): `docs/ARCHITECTURE.md` (multi-tenancy section).
+  tenant name, no dynamic provider loading): `docs/architecture.md` ("Correct DI Registration", multi-tenant example).
 - There is no standalone runnable multitenant sample project in this repo
   (`pengdows-crud-example` doesn't cover this) — the test file above is the closest working
   demo.
