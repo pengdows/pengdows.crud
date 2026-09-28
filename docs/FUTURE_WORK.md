@@ -19,6 +19,14 @@ enhancement, unit test, integration test, testbed check and benchmark. 3.0 exist
 made things public that never should have been, which needs breaking changes. So "3.0 only" below
 means "not in 2.0.x as well"; nothing in 2.0.6 is optional for 3.0.
 
+**Shared-projects rule (maintainer, 2026-09-28):** every solution project other than
+`pengdows.crud` and `pengdows.crud.abstractions` (fakeDb, opentelemetry, unit and integration tests,
+testbed and the driver-version matrix, benchmarks, analyzers, tools, stormgate) is the same code on
+2.0.x and 3.0: the best of both. Measured 2026-09-28 (`2.0.6` vs `3.0-backports`): Tests 332 files
+differ, IntegrationTests 66, testbed 40, benchmarks 36, analyzers + tests 12, fakeDb 11, a few
+elsewhere; 3.0 also has `CrudBenchmarks.Tests` and nine `testbed.DriverVersionMatrix*` projects.
+Tracked as UNIFY (plan pending approval).
+
 **Reverse rule (maintainer, 2026-09-28):** every bug fix found on 3.0 comes back to 2.0.6 unless
 that would break semver (a binary or API change against 2.0.5, or a removal; package validation
 decides). Additive public API is not a fix; those stay per-item decisions (Tier 3 below).
