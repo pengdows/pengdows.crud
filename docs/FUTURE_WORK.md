@@ -316,6 +316,46 @@ carries earlier 2.0.6 → 3.0 ports.
   `IsolatedSqliteDatabase`, capability-keyed expectations; check which 3.0 tests carry the same
   database-name skips.
 
+## GEN-001 design: same-connection generated-key retrieval (proposed 2026-09-28, not started)
+
+**Problem.** Informix (`DBINFO`), SAP HANA (`CURRENT_IDENTITY_VALUE()`) and Access (`@@IDENTITY`)
+return the generated id only on the connection that ran the INSERT. pengdows releases the
+connection after each command, so the id query lands on another connection and returns 0. None of
+their drivers accepts INSERT + SELECT in one command (all confirmed live), and none exposes the value.
+
+**Existing pieces.** A container borrows its connection from its context
+(`IInternalConnectionProvider.GetConnection`) and returns it (`CloseAndDisposeConnection`).
+`TransactionContext` already pins one connection: its `GetConnection` returns it and
+`SqlContainer` skips releasing it (`if (_context is not TransactionContext ...)`).
+`GeneratedKeyPlan.SessionScopedFunction` exists in the public enum for this case, but the gateway
+has no branch for it (it falls into the default path: insert, release, query on a new lease).
+
+**Proposal (internal only; no public API change, so 2.0.6 and 3.0):**
+1. An internal pinned-connection lease: acquire one connection (with its pool slot, and under
+   SingleWriter the write permit) for a short sequence of commands, no transaction. Containers
+   pinned to it use that connection and skip releasing it (the same rule `TransactionContext` relies
+   on). Inside a caller's transaction, the transaction's connection is used as-is.
+2. A real `SessionScopedFunction` branch in both `CreateAsync` overloads: INSERT, then
+   `GetLastInsertedIdQuery()`, on the lease.
+3. Dialects switch to it: Informix (the verified `CASE DBINFO(...)` query recorded in
+   `InformixDialect`), HANA (`SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`), Access (`SELECT @@IDENTITY`).
+4. The same lease closes CORE-016: the compound-statement fallback and the default path's
+   `PopulateGeneratedIdAsync` have the same different-connection flaw.
+
+**Rejected.** An implicit transaction around the INSERT (extra round trips on every create, changes
+the caller's isolation, and an unlogged Informix database rejects `BEGIN WORK`); a compound command
+(rejected live by Informix, HANA and Access); provider-specific APIs (none exist).
+
+**Test plan (TDD).** fakeDb tests that the INSERT and the id query ran on the same connection and
+the pool slot is released exactly once, including when the INSERT throws, under Standard,
+SingleWriter and SingleConnection and inside a transaction; then implementation; then live on
+Informix (always-on) and HANA (opt-in) through `CreateAsync_NonReturningProviders_InsertsSuccessfully`.
+Access cannot be tested here (Windows only); say so in its dialect rather than claim it works.
+
+**Not covered.** Snowflake and FlatFile have no engine mechanism; DEC-007 decides their behavior.
+
+---
+
 ## Batch Operations
 
 The current batch implementation (`TableGateway.Batch.cs`) handles chunked multi-row INSERT,
