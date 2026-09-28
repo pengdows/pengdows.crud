@@ -44,7 +44,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// Overrides the table GetSchema()/GetSchema(string) return, bypassing the embedded
     /// per-SupportedDatabase XML resource lookup entirely — lets a test fabricate an arbitrary
     /// schema (e.g. a specific DataSourceProductName/Version pair) that doesn't correspond to any
-    /// real emulated product.
+    /// real emulated product. Ignored for products in <see cref="ProductsWithoutSchemaSupport"/>,
+    /// whose GetSchema overloads always throw.
     /// </summary>
     public DataTable? SchemaTable
     {
@@ -94,8 +95,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// <summary>
     /// Command text for every ExecuteScalar/ExecuteScalarAsync call this connection instance has
     /// run — the scalar-path equivalent of <see cref="ExecutedNonQueryTexts"/>/<see cref="ExecutedReaderTexts"/>,
-    /// which the scalar path lacked until TEST-010's connection-affinity investigation needed it to
-    /// prove which physical connection instance actually ran a given scalar query.
+    /// e.g. to prove which physical connection instance actually ran a given scalar query.
     /// </summary>
     public readonly List<string> ExecutedScalarTexts = new();
 
@@ -693,6 +693,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             // real .accdb via Microsoft.ACE.OLEDB.16.0 — the same Jet-compatibility version
             // reported by DataSourceProductVersion, unchanged across ACE 12.0 and 16.0.
             SupportedDatabase.Access => "04.00.0000",
+            // Products without a case here (e.g. SybaseASE, Informix, SapHana, InterBase)
+            // report the generic "1.0"; use SetServerVersion when a test needs a specific version.
             _ => "1.0"
         };
     }
@@ -728,7 +730,48 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             var normalized = value ?? string.Empty;
             ConnectionStringHistory.Add(normalized);
+            if (EmulatedProduct is SupportedDatabase.SqlServer or SupportedDatabase.Db2)
+            {
+                ThrowIfMinPoolSizeExceedsMax(normalized);
+            }
             _connectionString = normalized;
+        }
+    }
+
+    /// <summary>
+    /// Microsoft.Data.SqlClient ("Invalid min or max pool size values, min pool size cannot be greater
+    /// than the max pool size") and IBM.Data.Db2 (ArgumentException "Invalid argument") reject a
+    /// connection string whose Min Pool Size exceeds its Max Pool Size when it is assigned (both
+    /// confirmed), so fakeDb does too when emulating them. MySql.Data accepts it at assignment.
+    /// </summary>
+    private static void ThrowIfMinPoolSizeExceedsMax(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return;
+        }
+
+        DbConnectionStringBuilder builder;
+        try
+        {
+            builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+        }
+        catch (ArgumentException)
+        {
+            return;
+        }
+
+        if (TryGetInt(builder, "Min Pool Size", out var min) && TryGetInt(builder, "Max Pool Size", out var max) &&
+            min > max)
+        {
+            throw new ArgumentException(
+                $"Invalid min or max pool size values: Min Pool Size ({min}) cannot be greater than Max Pool Size ({max}).");
+        }
+
+        static bool TryGetInt(DbConnectionStringBuilder b, string key, out int value)
+        {
+            value = 0;
+            return b.TryGetValue(key, out var raw) && int.TryParse(Convert.ToString(raw), out value);
         }
     }
 
@@ -1126,7 +1169,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     }
 
     /// <summary>
-    /// Configure the connection to throw an exception on Close/Dispose.
+    /// Configure the connection to throw an exception on Close/CloseAsync. Dispose/DisposeAsync
+    /// swallow it.
     /// </summary>
     public void SetFailOnClose(Exception? exception)
     {

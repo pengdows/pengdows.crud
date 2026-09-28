@@ -297,10 +297,9 @@ public sealed class StormGate : IConnectionFactory, IDisposable, IAsyncDisposabl
             return;
         }
 
-        // Disposing _dataSource/_semaphore here unconditionally — the pre-fix behavior — raced
-        // with any acquire attempt still in flight (see RegisterLease's remarks). Deferring both
-        // until drained, exactly like the semaphore already was, closes that race for the data
-        // source too.
+        // _dataSource/_semaphore are only disposed once no acquire attempt is outstanding;
+        // disposing them unconditionally here would race any attempt still in flight (see
+        // RegisterLease's remarks). Otherwise the last CompleteLease() disposes them.
         if (TryClaimResourceDisposal())
         {
             _dataSource.Dispose();

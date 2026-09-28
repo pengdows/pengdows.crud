@@ -340,6 +340,11 @@ public class fakeDbCommand : DbCommand
             SupportedDatabase.Db2 when normalizedCommand.Contains("SYSPROC.ENV_GET_INST_INFO")
                 => "11.05.0800",
 
+            // Spanner's PostgreSQL interface is detected by this probe (ordinary PostgreSQL rejects
+            // it). Confirmed live against Spanner Omni + PGAdapter: it returns an empty string.
+            SupportedDatabase.Spanner when normalizedCommand == "SHOW SPANNER.OPTIMIZER_VERSION"
+                => string.Empty,
+
             _ => null
         };
     }
@@ -361,7 +366,7 @@ public class fakeDbCommand : DbCommand
         }
 
         // Propagate persistent scalar exception through the reader path as well,
-        // since ExecuteScalarCore now uses ExecuteReaderAsync internally.
+        // since SqlContainer's scalar methods (ExecuteScalarCore) execute via ExecuteReaderAsync.
         if (conn?.PersistentScalarException != null)
         {
             throw conn.PersistentScalarException;
@@ -513,7 +518,7 @@ public class fakeDbCommand : DbCommand
         var parameters = new List<CapturedParameter>(_parameterCollection.Count);
         foreach (DbParameter parameter in _parameterCollection)
         {
-            parameters.Add(new CapturedParameter(parameter.ParameterName, parameter.Value));
+            parameters.Add(new CapturedParameter(parameter.ParameterName, parameter.Value) { DbType = parameter.DbType });
         }
 
         return new CapturedCommand(CommandText, parameters);

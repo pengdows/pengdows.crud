@@ -24,7 +24,7 @@ public interface IFakeDbConnection : IDbConnection, IAsyncDisposable
     int OpenCount { get; }
 
     /// <summary>
-    /// Number of times <see cref="IDbConnection.OpenAsync"/> was called.
+    /// Number of times <see cref="OpenAsync(CancellationToken)"/> was called.
     /// </summary>
     int OpenAsyncCount { get; }
 

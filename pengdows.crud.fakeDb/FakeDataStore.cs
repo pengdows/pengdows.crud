@@ -2,6 +2,7 @@
 
 using System.Collections.Concurrent;
 using System.Data.Common;
+using System.Globalization;
 using System.Text.RegularExpressions;
 
 #endregion
@@ -802,11 +803,61 @@ public class FakeDataStore
                 var column = ResolveRowKey(row, CleanIdentifier(match.Groups[1].Value.Trim())) ??
                              CleanIdentifier(match.Groups[1].Value.Trim());
                 var valueExpression = match.Groups[2].Value.Trim();
-                var value = GetCompareValue(valueExpression, parameters);
+                var value = TryEvaluateColumnArithmetic(row, valueExpression, parameters, out var computed)
+                    ? computed
+                    : GetCompareValue(valueExpression, parameters);
                 row[column] = value;
             }
         }
     }
+
+    // Evaluates "column + operand" / "column - operand" against the row's current value, e.g. the
+    // "version" = "version" + 1 increment every versioned UPDATE emits. Returns false (so the caller
+    // falls back to plain value parsing) when the left side isn't a column of this row or either
+    // side isn't numeric.
+    private bool TryEvaluateColumnArithmetic(Dictionary<string, object?> row, string valueExpression,
+        DbParameterCollection? parameters, out object? result)
+    {
+        result = null;
+        var match = Regex.Match(valueExpression, @"^([`\[\]""\w.]+)\s*([+-])\s*(.+)$");
+        if (!match.Success)
+        {
+            return false;
+        }
+
+        var sourceKey = ResolveRowKey(row, CleanIdentifier(match.Groups[1].Value.Trim()));
+        if (sourceKey == null)
+        {
+            return false;
+        }
+
+        var left = row[sourceKey];
+        var right = GetCompareValue(match.Groups[3].Value, parameters);
+        if (left == null || right == null || right is string)
+        {
+            return false;
+        }
+
+        var subtract = match.Groups[2].Value == "-";
+        if (IsIntegral(left) && IsIntegral(right))
+        {
+            var l = Convert.ToInt64(left, CultureInfo.InvariantCulture);
+            var r = Convert.ToInt64(right, CultureInfo.InvariantCulture);
+            result = subtract ? l - r : l + r;
+            return true;
+        }
+
+        if (!TryToDouble(left, out var ld) || !TryToDouble(right, out var rd))
+        {
+            return false;
+        }
+
+        result = subtract ? ld - rd : ld + rd;
+        return true;
+    }
+
+    private static bool IsIntegral(object value) =>
+        value is byte or sbyte or short or ushort or int or uint or long or ulong;
 
     private IEnumerable<Dictionary<string, object?>> HandleLiteralSelect(string selectPart,
         DbParameterCollection? parameters)

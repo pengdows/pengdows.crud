@@ -1,9 +1,18 @@
+using System.Data;
+
 namespace pengdows.crud.fakeDb;
+
 
 /// <summary>
 /// A single bound parameter, captured by value at command-execution time.
 /// </summary>
-public sealed record CapturedParameter(string Name, object? Value);
+public sealed record CapturedParameter(string Name, object? Value)
+{
+    /// <summary>
+    /// The parameter's DbType when the command executed (what a real provider would bind it as).
+    /// </summary>
+    public DbType DbType { get; init; }
+}
 
 /// <summary>
 /// Command text paired with the parameters bound to it at the moment it executed — see

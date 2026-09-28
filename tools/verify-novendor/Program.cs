@@ -1,5 +1,5 @@
 // dotnet add package Mono.Cecil
-// Usage: dotnet run --project tools/verify-novendor -- <dir-with-dlls> [--allow "Pattern1;Pattern2"]
+// Usage: dotnet run --project tools/verify-novendor -- <dir-with-dlls> [--allow="Pattern1;Pattern2" | --allow "Pattern1;Pattern2"]
 
 using System;
 using System.Collections.Generic;
@@ -49,7 +49,7 @@ static class V
         }
     }
 
-    // Accepts --allow=a;b and the space-separated --allow "a;b" the usage text shows.
+    // Accepts both `--allow=a;b` and `--allow a;b` (the form the usage text shows).
     static string[] ParseAllows(string[] args)
     {
         string? value = null;

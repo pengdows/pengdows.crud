@@ -41,6 +41,23 @@ public sealed class FakeDbDataSource : DbDataSource
 
     public override string ConnectionString => _connectionString;
 
+    /// <summary>
+    /// Number of <see cref="ReloadTypes"/>/<see cref="ReloadTypesAsync"/> calls. Mirrors Npgsql's
+    /// NpgsqlDataSource.ReloadTypes, which a PostgreSQL-family context calls after DDL that changes
+    /// the type catalog (CREATE EXTENSION, CREATE TYPE, ...).
+    /// </summary>
+    public int ReloadTypesCount { get; private set; }
+
+    /// <summary>Emulates NpgsqlDataSource.ReloadTypes.</summary>
+    public void ReloadTypes() => ReloadTypesCount++;
+
+    /// <summary>Emulates NpgsqlDataSource.ReloadTypesAsync.</summary>
+    public Task ReloadTypesAsync(CancellationToken cancellationToken = default)
+    {
+        ReloadTypesCount++;
+        return Task.CompletedTask;
+    }
+
     protected override DbConnection CreateDbConnection()
     {
         var connection = _factory.CreateConnection();
@@ -74,7 +91,7 @@ public sealed class FakeDbDataSource : DbDataSource
     public bool WasDisposed { get; private set; }
 
     /// <summary>
-    /// TEST-017: when set, disposal throws this exception instead of completing normally —
+    /// When set, disposal throws this exception instead of completing normally —
     /// simulates cleanup itself failing (e.g. during a construction-failure catch block), so
     /// tests can prove the original exception still propagates rather than being replaced by
     /// this one. <see cref="WasDisposed"/> is still set first, so the attempt is observable even
