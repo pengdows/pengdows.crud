@@ -301,6 +301,16 @@ These are the rules the code is being brought in line with.
   mode, including an explicit `Standard`, and switches off by itself on the next DuckDB.NET release. fakeDb records each
   reader's `CommandBehavior` (`fakeDbConnection.ExecutedReaderBehaviors`).
 
+- [x] **Open-connection counts and connection metrics stayed at zero on Snowflake** (found via an
+  integration-test skip, INT-SKIP-010, 2026-09-28). pengdows counted opens and closes only from the
+  driver's `StateChange` events, and Snowflake.Data 4.8.0's `SnowflakeDbConnection` never raises them
+  (no `OnStateChange` call; every other supported driver does). `NumberOfOpenConnections`,
+  `PeakOpenConnections` and the connection metrics were wrong there; a test had skipped the assertion
+  on Snowflake, blaming "lazy" opening. `TrackedConnection` now notes whether the driver reported each
+  `Open`/`Close` and reports it to pengdows' handlers itself when it didn't, so drivers that do report
+  it are not counted twice. fakeDb can emulate such a driver
+  (`fakeDbFactory.RaiseConnectionStateChangeEvents` / `fakeDbConnection.RaiseStateChangeEvents`).
+
 ## Decisions needed (found while investigating)
 
 - [x] **D06 — `DbMode.SingleConnection`: a plain read during another task's open transaction fails on

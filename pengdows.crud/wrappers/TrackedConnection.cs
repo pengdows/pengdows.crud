@@ -268,10 +268,40 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             _connection.StateChange += _metricsHandler;
         }
 
+        _connection.StateChange += MarkDriverReportedStateChange;
+
         if (slot.HasValue)
         {
             AttachSlot(slot.Value);
         }
+    }
+
+    // Some drivers never raise StateChange (CONFIRMED: Snowflake.Data 4.8.0's SnowflakeDbConnection has
+    // no OnStateChange call), and pengdows counts open connections and connection metrics from that
+    // event. So Open/Close note whether the driver reported the transition, and report it to pengdows'
+    // own handlers themselves when it didn't; drivers that do report it are not counted twice.
+    private int _driverReportedStateChange;
+
+    private void MarkDriverReportedStateChange(object? sender, StateChangeEventArgs args)
+    {
+        Interlocked.Exchange(ref _driverReportedStateChange, 1);
+    }
+
+    private void ResetDriverReportedStateChange()
+    {
+        Interlocked.Exchange(ref _driverReportedStateChange, 0);
+    }
+
+    private void ReportTransitionIfDriverDidNot(ConnectionState from, ConnectionState to)
+    {
+        if (Interlocked.Exchange(ref _driverReportedStateChange, 0) != 0 || _connection.State != to)
+        {
+            return;
+        }
+
+        var args = new StateChangeEventArgs(from, to);
+        _onStateChange?.Invoke(_connection, args);
+        _metricsHandler?.Invoke(_connection, args);
     }
 
     private void HandleMetricsStateChange(object? sender, StateChangeEventArgs args)
@@ -359,6 +389,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             stopwatch = Stopwatch.StartNew();
         }
 
+        ResetDriverReportedStateChange();
         try
         {
             _connection.Open();
@@ -377,6 +408,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             }
         }
 
+        ReportTransitionIfDriverDidNot(ConnectionState.Closed, ConnectionState.Open);
         TriggerFirstOpen();
     }
 
@@ -481,6 +513,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             stopwatch = Stopwatch.StartNew();
         }
 
+        ResetDriverReportedStateChange();
         try
         {
             await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -499,6 +532,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             }
         }
 
+        ReportTransitionIfDriverDidNot(ConnectionState.Closed, ConnectionState.Open);
         await TriggerFirstOpenAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -681,6 +715,8 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         {
             _connection.StateChange -= _metricsHandler;
         }
+
+        _connection.StateChange -= MarkDriverReportedStateChange;
     }
 
     internal void AttachSlot(PoolSlot slot)
@@ -764,6 +800,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
 
         var stopwatch = Stopwatch.StartNew();
+        ResetDriverReportedStateChange();
         try
         {
             _connection.Close();
@@ -773,5 +810,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             stopwatch.Stop();
             _metricsCollector?.RecordConnectionCloseDuration(stopwatch.ElapsedMilliseconds);
         }
+
+        ReportTransitionIfDriverDidNot(ConnectionState.Open, ConnectionState.Closed);
     }
 }

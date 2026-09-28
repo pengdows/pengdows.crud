@@ -1115,9 +1115,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         return EmulatedProduct;
     }
 
+    /// <summary>
+    /// When false, this connection never raises <see cref="DbConnection.StateChange"/>, like drivers
+    /// that don't implement it (Snowflake.Data's SnowflakeDbConnection). Default true.
+    /// </summary>
+    public bool RaiseStateChangeEvents { get; set; } = true;
+
     private void RaiseStateChangedEvent(ConnectionState originalState)
     {
-        if (_state != originalState)
+        if (RaiseStateChangeEvents && _state != originalState)
         {
             OnStateChange(new StateChangeEventArgs(originalState, _state));
         }
