@@ -76,6 +76,13 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     /// </summary>
     public bool RaiseConnectionStateChangeEvents { get; set; } = true;
 
+    /// <summary>
+    /// When true, connections from this factory throw <see cref="ObjectDisposedException"/> when a
+    /// <see cref="DbConnection.StateChange"/> handler is added or removed after they are disposed, as
+    /// AdoNetCore.AseClient's AseConnection does. Default false.
+    /// </summary>
+    public bool ThrowOnStateChangeAccessAfterDispose { get; set; }
+
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
         ConnectionStringBuilderBehavior.None;
 
@@ -219,6 +226,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             // Apply data persistence setting from factory
             pre.EnableDataPersistence = EnableDataPersistence;
             pre.RaiseStateChangeEvents = RaiseConnectionStateChangeEvents;
+            pre.ThrowOnStateChangeAccessAfterDispose |= ThrowOnStateChangeAccessAfterDispose;
             pre.CommandFactory ??= CommandFactory;
             pre.SetFactoryReference(this);
             _createdConnections.Add(pre);
@@ -228,6 +236,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         var c = new fakeDbConnection(_sharedDataStore);
         c.EmulatedProduct = _pretendToBe;
         c.RaiseStateChangeEvents = RaiseConnectionStateChangeEvents;
+        c.ThrowOnStateChangeAccessAfterDispose = ThrowOnStateChangeAccessAfterDispose;
 
         // Configure failure modes based on factory settings
         if (_customException != null)

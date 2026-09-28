@@ -716,10 +716,25 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     {
         if (_metricsHandler != null)
         {
-            _connection.StateChange -= _metricsHandler;
+            DetachStateChangeHandler(_metricsHandler);
         }
 
-        _connection.StateChange -= MarkDriverReportedStateChange;
+        DetachStateChangeHandler(MarkDriverReportedStateChange);
+    }
+
+    // Runs after the connection is disposed, so a close raised during Dispose is still counted. Some
+    // drivers refuse StateChange access once disposed (CONFIRMED: AdoNetCore.AseClient 0.19.2's
+    // AseConnection throws ObjectDisposedException); the disposed connection raises no more events, so
+    // there is nothing left to detach from.
+    private void DetachStateChangeHandler(StateChangeEventHandler handler)
+    {
+        try
+        {
+            _connection.StateChange -= handler;
+        }
+        catch (ObjectDisposedException)
+        {
+        }
     }
 
     internal void AttachSlot(PoolSlot slot)

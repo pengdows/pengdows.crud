@@ -194,6 +194,7 @@ The point of most of the above is to reach an assertion afterward. On `fakeDbCon
   entirely different ORM layered on top).
 - `ExecutedReaderBehaviors` — the `CommandBehavior` each reader was opened with (parallel to `ExecutedReaderTexts`), e.g. to assert whether a library asked the provider to close the connection (`CommandBehavior.CloseConnection`)
 - `fakeDbFactory.RaiseConnectionStateChangeEvents = false` (or `fakeDbConnection.RaiseStateChangeEvents`) — connections never raise `StateChange`, like drivers that don't implement it (Snowflake.Data), to test code that relies on that event
+- `fakeDbFactory.ThrowOnStateChangeAccessAfterDispose = true` (or the same property on `fakeDbConnection`) — adding or removing a `StateChange` handler after the connection is disposed throws `ObjectDisposedException`, as AdoNetCore.AseClient's `AseConnection` does
 - `ExecutedNonQueryCommands`/`ExecutedReaderCommands` (`List<CapturedCommand>`, where
   `CapturedCommand` is `(string CommandText, IReadOnlyList<CapturedParameter> Parameters)`) —
   snapshots the **bound parameter name and value at the exact moment of execution**. This is the

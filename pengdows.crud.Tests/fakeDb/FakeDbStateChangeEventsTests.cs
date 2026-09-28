@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -28,5 +29,33 @@ public class FakeDbStateChangeEventsTests
 
         Assert.Equal(expectedEvents, events);
         Assert.Equal(ConnectionState.Closed, connection.State);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ThrowOnStateChangeAccessAfterDispose_ControlsWhetherADisposedConnectionRefusesHandlers(bool refuse)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SybaseASE) { ThrowOnStateChangeAccessAfterDispose = refuse };
+        var connection = factory.CreateConnection();
+        connection.ConnectionString = "Server=db;Database=test;EmulatedProduct=SybaseASE";
+        StateChangeEventHandler handler = (_, _) => { };
+        var events = 0;
+        connection.StateChange += handler;
+        connection.StateChange += (_, _) => events++;
+        connection.Open();
+        connection.Dispose();
+
+        var removal = Record.Exception(() => connection.StateChange -= handler);
+
+        Assert.Equal(2, events);
+        if (refuse)
+        {
+            Assert.IsType<ObjectDisposedException>(removal);
+        }
+        else
+        {
+            Assert.Null(removal);
+        }
     }
 }
