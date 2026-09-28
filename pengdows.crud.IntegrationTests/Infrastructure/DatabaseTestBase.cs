@@ -412,7 +412,9 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                || message.Contains("ora-00942")
                || message.Contains("sql0204n")
                || message.Contains("is an undefined name")
-               || message.Contains("is not in the database");
+               || message.Contains("is not in the database")
+               // SAP HANA (error 259): "invalid table name: <name>"
+               || message.Contains("invalid table name");
     }
 
     private static string BuildExclusionReason(SupportedDatabase provider)

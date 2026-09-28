@@ -245,7 +245,9 @@ internal static class DatabaseSchemaHelper
                || text.Contains("sql0204n")
                || text.Contains("is an undefined name")
                // Informix: "The specified table (<name>) is not in the database."
-               || text.Contains("is not in the database");
+               || text.Contains("is not in the database")
+               // SAP HANA (error 259): "invalid table name: <name>"
+               || text.Contains("invalid table name");
     }
 
     /// <summary>

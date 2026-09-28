@@ -315,8 +315,8 @@ WHERE {nameColumn} = ");
                || text.Contains("sql0204n")
                || text.Contains("is an undefined name")
                || text.Contains("is not in the database")
-               // SAP HANA: "invalid table name: Could not find table/view ..."
-               || text.Contains("could not find table");
+               // SAP HANA (error 259): "invalid table name: <name>"
+               || text.Contains("invalid table name");
     }
 
     /// <summary>
