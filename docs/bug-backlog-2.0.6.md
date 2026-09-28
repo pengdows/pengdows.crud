@@ -340,6 +340,16 @@ These are the rules the code is being brought in line with.
   `RenderInsertReturningClauseCharacterizationTests`. *Release note:* on MariaDB 10.5+, `CreateAsync`
   now sends `INSERT ... RETURNING` (same single round trip).
 
+- [x] **InterBase `CreateAsync` inserted NULL for a database-generated id** (found 2026-09-28 by
+  the strengthened generated-id integration test, GEN-001, run against InterBase for the first
+  time via the new opt-in `INCLUDE_INTERBASE`). InterBase's `PrefetchSequence` plan read the next
+  value from the `<table>_seq` generator and set it on the entity, then built the INSERT with
+  `BuildCreate`, which leaves `[Id(false)]` columns out; the id was never sent and the INSERT
+  failed with a NOT NULL violation (or, without the constraint, stored NULL). Both `CreateAsync`
+  overloads now build that INSERT with the id column included. The unit test only checked
+  `entity.Id`, never the SQL; it now checks the column list too, and the cancellation-token
+  overload has its own test. Live: InterBase 15, net8.0 and net10.0.
+
 ## Decisions needed (found while investigating)
 
 - [x] **D06 — `DbMode.SingleConnection`: a plain read during another task's open transaction fails on

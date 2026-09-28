@@ -174,8 +174,7 @@ public partial class TableGateway<TEntity, TRowID> :
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
-            // Proceed with standard insert since ID is now populated
-            await using var sc = BuildCreate(entity, ctx);
+            await using var sc = BuildCreateWithPrefetchedId(entity, ctx, dialect);
             var succeeded = await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
             writeSucceeded[0] = succeeded;
             return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
@@ -371,7 +370,7 @@ public partial class TableGateway<TEntity, TRowID> :
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
-            await using var sc = BuildCreate(entity, ctx);
+            await using var sc = BuildCreateWithPrefetchedId(entity, ctx, dialect);
             var succeeded = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
             writeSucceeded[0] = succeeded;
             return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
@@ -741,6 +740,32 @@ public partial class TableGateway<TEntity, TRowID> :
     /// Builds INSERT SQL container directly (no template cloning). Used during template
     /// initialization and for BuildCreateWithReturning which needs placeholder tokens.
     /// </summary>
+    /// <summary>
+    /// INSERT for the PrefetchSequence plan: the id was just read from the sequence, so it is sent
+    /// even though the column is database-generated (<c>[Id(false)]</c>) and normally left out of
+    /// the INSERT. Without it the row got NULL (CONFIRMED live on InterBase, 2026-09-28).
+    /// </summary>
+    private ISqlContainer BuildCreateWithPrefetchedId(TEntity entity, IDatabaseContext ctx, ISqlDialect dialect)
+    {
+        MutateEntityForInsert(entity);
+
+        var template = GetTemplatesForDialect(dialect);
+        var withId = new CachedSqlTemplates
+        {
+            InsertColumns = new List<IColumnInfo>(template.InsertColumns.Count + 1) { _idColumn! },
+            InsertParameterNames = new List<string>(template.InsertParameterNames.Count + 1)
+                { $"i{template.InsertParameterNames.Count}" }
+        };
+        withId.InsertColumns.AddRange(template.InsertColumns);
+        withId.InsertParameterNames.AddRange(template.InsertParameterNames);
+
+        var (sc, _) = BuildInsertContainerDirect(entity, ctx, dialect, withId);
+        sc.Query.Replace(PrefixClausePlaceholder, string.Empty);
+        sc.Query.Replace(OutputClausePlaceholder, string.Empty);
+        sc.Query.Replace(ReturningClausePlaceholder, string.Empty);
+        return sc;
+    }
+
     private (ISqlContainer sc, ISqlDialect dialect) BuildInsertContainerDirect(
         TEntity entity, IDatabaseContext ctx, ISqlDialect dialect, CachedSqlTemplates sqlTemplate)
     {

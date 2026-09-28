@@ -1,3 +1,4 @@
+using System.Threading;
 using System;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -154,5 +155,41 @@ public class GeneratedKeyPlanTests : SqlLiteContextTestBase
 
         Assert.True(result);
         Assert.Equal(456, entity.Id);
+        // The prefetched id must be sent: [Id(false)] columns are normally left out of the INSERT,
+        // which on InterBase (the dialect that uses this plan) inserted NULL (found live 2026-09-28).
+        AssertInsertIncludesIdColumn(conn);
+    }
+
+    [Fact]
+    public async Task CreateAsync_WithCancellationToken_PrefetchSequencePlan_SendsThePrefetchedId()
+    {
+        var factory = ((DatabaseContext)Context).Factory;
+        var dialect = new TestDialect(factory) { Plan = GeneratedKeyPlan.PrefetchSequence };
+        var customContext = new DatabaseContext(Context.ConnectionString, factory, TypeMap, dialect);
+
+        TypeMap.Register<SequenceEntity>();
+        var gateway = new TableGateway<SequenceEntity, int>(customContext);
+        var entity = new SequenceEntity { Name = "Test" };
+
+        var tracked = customContext.GetConnection(ExecutionType.Write, false);
+        var conn = (fakeDbConnection)((IInternalConnectionWrapper)tracked).UnderlyingConnection;
+        conn.EnableDataPersistence = false;
+        conn.EmulatedProduct = SupportedDatabase.Unknown;
+        conn.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["Value"] = 457 } });
+        conn.EnqueueReaderResult(new List<Dictionary<string, object?>>());
+
+        using var cts = new CancellationTokenSource();
+        var result = await gateway.CreateAsync(entity, customContext, cts.Token);
+
+        Assert.True(result);
+        Assert.Equal(457, entity.Id);
+        AssertInsertIncludesIdColumn(conn);
+    }
+
+    private static void AssertInsertIncludesIdColumn(fakeDbConnection conn)
+    {
+        var insert = Assert.Single(conn.ExecutedNonQueryTexts, sql => sql.Contains("INSERT INTO", StringComparison.Ordinal));
+        var columnList = insert[insert.IndexOf('(')..insert.IndexOf(')')];
+        Assert.Contains("\"id\"", columnList, StringComparison.Ordinal);
     }
 }
