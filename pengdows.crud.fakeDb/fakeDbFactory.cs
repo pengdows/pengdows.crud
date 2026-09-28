@@ -70,6 +70,12 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     /// </summary>
     public bool ReturnNullConnection { get; set; }
 
+    /// <summary>
+    /// When false, connections from this factory never raise <see cref="DbConnection.StateChange"/>,
+    /// like drivers that don't implement it (Snowflake.Data's SnowflakeDbConnection). Default true.
+    /// </summary>
+    public bool RaiseConnectionStateChangeEvents { get; set; } = true;
+
     internal ConnectionStringBuilderBehavior ConnectionStringBuilderBehavior { get; set; } =
         ConnectionStringBuilderBehavior.None;
 
@@ -212,6 +218,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
             // Apply data persistence setting from factory
             pre.EnableDataPersistence = EnableDataPersistence;
+            pre.RaiseStateChangeEvents = RaiseConnectionStateChangeEvents;
             pre.CommandFactory ??= CommandFactory;
             pre.SetFactoryReference(this);
             _createdConnections.Add(pre);
@@ -220,6 +227,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
         var c = new fakeDbConnection(_sharedDataStore);
         c.EmulatedProduct = _pretendToBe;
+        c.RaiseStateChangeEvents = RaiseConnectionStateChangeEvents;
 
         // Configure failure modes based on factory settings
         if (_customException != null)
