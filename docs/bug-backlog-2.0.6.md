@@ -285,6 +285,22 @@ These are the rules the code is being brought in line with.
   dropped mid-session; the InterBase provider sets no SQLSTATE).
   *Additive public API:* `pengdows.crud.exceptions.TooManyConnectionsException`.
 
+- [x] **File DuckDB failed intermittently under concurrent reads and writes, up to database
+  corruption** (found by removing a `ConcurrencyTests` skip, INT-SKIP-002, 2026-09-27). Root cause
+  is in DuckDB.NET: `DuckDBDataReader.Close()` with `CommandBehavior.CloseConnection` closes the
+  connection before releasing the reader's native objects, so when that connection is the file's
+  last one the database is closed while they are still alive. Symptoms seen live: "Failure while
+  replaying WAL file", "Could not read enough bytes from file", "Corrupt database file: computed
+  checksum ...", FATAL "database has been invalidated", native crashes. Raw DuckDB.NET failed 29/30
+  runs with `CloseConnection` and 0/30 with `CommandBehavior.Default`; reordering the call in
+  DuckDB.NET's source fixed it (200/200), so it is not in native DuckDB. Fixed upstream in DuckDB.NET
+  `develop` (f94d52b), not yet released; regression test submitted as Giorgi/DuckDB.NET#357. With
+  DuckDB.NET 1.5.5 or older (read from the provider assembly's version), pengdows now opens DuckDB
+  readers without `CloseConnection` (new internal dialect flag `SupportsCloseConnectionReaderBehavior`);
+  `TrackedReader` still closes the connection itself, after the reader and command. This covers every
+  mode, including an explicit `Standard`, and switches off by itself on the next DuckDB.NET release. fakeDb records each
+  reader's `CommandBehavior` (`fakeDbConnection.ExecutedReaderBehaviors`).
+
 ## Decisions needed (found while investigating)
 
 - [x] **D06 — `DbMode.SingleConnection`: a plain read during another task's open transaction fails on

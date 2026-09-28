@@ -128,6 +128,39 @@ internal class DuckDbDialect : SqlDialect
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
     // DuckDB has excellent SQL standard compliance and modern features
+    // DuckDB.NET's DuckDBDataReader.Close (through 1.5.5) closes the connection before releasing the
+    // reader's native objects when the reader was opened with CommandBehavior.CloseConnection. When that
+    // connection is the file's last one, DuckDB.NET closes the database while those objects are alive.
+    // CONFIRMED live (DuckDB.NET 1.3.2 and 1.5.5): concurrent reads and writes on one file then failed
+    // intermittently with WAL-replay failures, checksum corruption, FATAL "database has been
+    // invalidated" and native crashes; raw DuckDB.NET failed 29/30 runs with CloseConnection and 0/30
+    // with CommandBehavior.Default. Fixed upstream in DuckDB.NET develop (f94d52b), so the first release
+    // after 1.5.5 has the fix. TrackedReader closes the connection itself, in the safe order, so nothing
+    // is lost by not asking.
+    internal override bool SupportsCloseConnectionReaderBehavior =>
+        !ProviderHasCloseConnectionBug(Factory.GetType().Assembly.GetName());
+
+    private static readonly Version LastDuckDbNetWithCloseConnectionBug = new(1, 5, 5);
+
+    /// <summary>
+    /// True for DuckDB.NET 1.5.5 and older, which close the connection too early on
+    /// CommandBehavior.CloseConnection. DuckDB.NET stamps its package version as the assembly version
+    /// (1.5.5 is 1.5.5.0). A provider that isn't DuckDB.NET's own assembly (a test double or a wrapper)
+    /// is assumed affected, since not asking for CloseConnection costs nothing.
+    /// </summary>
+    internal static bool ProviderHasCloseConnectionBug(System.Reflection.AssemblyName provider)
+    {
+        if (!string.Equals(provider.Name, "DuckDB.NET.Data", StringComparison.OrdinalIgnoreCase) ||
+            provider.Version is not { } version)
+        {
+            return true;
+        }
+
+        // Compare major.minor.build only: new Version(1, 5, 5) sorts below 1.5.5.0.
+        var release = new Version(version.Major, version.Minor, Math.Max(version.Build, 0));
+        return release <= LastDuckDbNetWithCloseConnectionBug;
+    }
+
     public override bool SupportsMerge => IsVersionAtLeast(1, 4); // MERGE support added in v1.4.0
     public override bool SupportsMergeReturning => IsVersionAtLeast(1, 4); // MERGE RETURNING support added in v1.4.0
 

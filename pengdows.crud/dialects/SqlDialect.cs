@@ -718,6 +718,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // for every dialect except Firebird, so no write on any other database pays that cost.
     internal virtual bool RequiresConnectionPoolResetForDdl => false;
 
+    // Internal, not part of ISqlDialect: false when the provider mishandles
+    // CommandBehavior.CloseConnection, so a per-operation read opens its reader without it and
+    // TrackedReader closes the connection itself after disposing the reader and command.
+    // DuckDbDialect overrides this; see its comment for the evidence.
+    internal virtual bool SupportsCloseConnectionReaderBehavior => true;
+
     /// <summary>
     /// True when <paramref name="sql"/> changes the database's type catalog in a way a provider
     /// caches per data source (Npgsql: CREATE/ALTER/DROP EXTENSION, TYPE, DOMAIN). The context then
