@@ -74,6 +74,16 @@ public class InformixDialectTests
         Assert.Equal(SupportedDatabase.Informix, CreateDialect().DatabaseType);
     }
 
+    // CONFIRMED LIVE (2026-09-28): Informix.Net.Core rejects "INSERT ...; SELECT ..." in one
+    // command ("Cannot use a select ... in a multi-query prepare"), so CompoundStatement can't be
+    // used; Informix stays on the base CorrelationToken plan until GEN-001 adds a same-connection
+    // primitive (see the comment in InformixDialect).
+    [Fact]
+    public void GeneratedKeyPlan_IsNotCompoundStatement()
+    {
+        Assert.Equal(GeneratedKeyPlan.CorrelationToken, CreateDialect().GetGeneratedKeyPlan());
+    }
+
     [Fact]
     public void TryEnterReadOnlyTransaction_ExecutesSetTransactionReadOnly()
     {

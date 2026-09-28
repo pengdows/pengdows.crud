@@ -327,6 +327,19 @@ These are the rules the code is being brought in line with.
   raises no more events). fakeDb can emulate such a driver
   (`fakeDbFactory.ThrowOnStateChangeAccessAfterDispose` / `fakeDbConnection.ThrowOnStateChangeAccessAfterDispose`).
 
+- [x] **MariaDB 10.5+ never used `INSERT ... RETURNING`** (found 2026-09-28 by the integration
+  expectation test, INT-SKIP-016). `MariaDbDialect.SupportsInsertReturning` was hardcoded false
+  although MariaDB has had RETURNING since 10.5. It is now a version capability like the dialect's
+  other gates (`IsAtLeast(10, 5)`), and the generated-key plan follows it (Returning from 10.5, the
+  INSERT's own reply before), as SQLite does for 3.35. Fixing it exposed a second cause: the base
+  `SqlDialect.RenderInsertReturningClause` chose the clause from a database list and returned an
+  empty string for any dialect it didn't name (the same pattern that once dropped RETURNING for
+  Aurora PostgreSQL). It now follows `SupportsInsertReturning`, and SQL Server's `OUTPUT INSERTED`
+  moved into `SqlServerDialect`. No other database's generated SQL changes. Tests:
+  `MariaDbDialectTests.InsertReturning_DependsOnVersion`, `MariaDbInsertReturningTests`,
+  `RenderInsertReturningClauseCharacterizationTests`. *Release note:* on MariaDB 10.5+, `CreateAsync`
+  now sends `INSERT ... RETURNING` (same single round trip).
+
 ## Decisions needed (found while investigating)
 
 - [x] **D06 — `DbMode.SingleConnection`: a plain read during another task's open transaction fails on

@@ -98,8 +98,15 @@ public class InsertReturningTests : DatabaseTestBase
             // Row should exist in database (verify via raw SQL)
             await VerifyRowExistsAsync(context, uniqueName);
 
-            // Note: ID may or may not be populated depending on provider's fallback mechanism
-            Output.WriteLine($"{provider}: INSERT succeeded, ID = {entity.Id} (may be 0 if no RETURNING support)");
+            // Without RETURNING the id still comes back through the dialect's generated-key plan
+            // (the insert's own reply, a session-scoped function, a compound statement, or the
+            // correlation-token fallback), so it must be the new row's id.
+            Assert.True(entity.Id > 0, $"{provider}: expected the generated id to be populated, got {entity.Id}");
+            var retrieved = await helper.RetrieveOneAsync(entity.Id, context);
+            Assert.NotNull(retrieved);
+            Assert.Equal(uniqueName, retrieved!.Name);
+
+            Output.WriteLine($"{provider}: INSERT succeeded, ID = {entity.Id}");
         });
     }
 
@@ -110,17 +117,20 @@ public class InsertReturningTests : DatabaseTestBase
         {
             var supportsReturning = context.SupportsInsertReturning;
 
-            // Expected per database. RETURNING/OUTPUT (or Db2's FINAL TABLE) where the engine can
-            // return the generated id; a fallback otherwise.
+            // Expected per database: whether pengdows uses RETURNING/OUTPUT (or Db2's FINAL TABLE)
+            // to get the generated id. MariaDB added INSERT ... RETURNING in 10.5, so it follows
+            // the detected server version.
+            var serverVersion = ((pengdows.crud.dialects.SqlDialect)context.GetDialect()).ProductInfo.ParsedVersion;
             bool? expected = provider switch
             {
                 SupportedDatabase.SqlServer or SupportedDatabase.PostgreSql or SupportedDatabase.Sqlite
                     or SupportedDatabase.Firebird or SupportedDatabase.Oracle or SupportedDatabase.YugabyteDb
-                    or SupportedDatabase.CockroachDb or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
+                    or SupportedDatabase.CockroachDb or SupportedDatabase.DuckDB
                     or SupportedDatabase.Db2 or SupportedDatabase.Spanner => true,
-                SupportedDatabase.MySql or SupportedDatabase.TiDb or SupportedDatabase.Snowflake
-                    or SupportedDatabase.FlatFile or SupportedDatabase.SingleStore or SupportedDatabase.Informix
-                    or SupportedDatabase.SybaseASE => false,
+                SupportedDatabase.MariaDb => serverVersion >= new Version(10, 5),
+                SupportedDatabase.MySql or SupportedDatabase.TiDb
+                    or SupportedDatabase.Snowflake or SupportedDatabase.FlatFile or SupportedDatabase.SingleStore
+                    or SupportedDatabase.Informix or SupportedDatabase.SybaseASE => false,
                 _ => null
             };
 
