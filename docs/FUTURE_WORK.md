@@ -11,7 +11,10 @@ is not lost and can be picked up when the need arises.
 Each item below is blocked on a maintainer decision, usually "fix in 2.0.x now, or move to 3.0".
 None has been started. Defaults are proposals only.
 
-**Rule (maintainer, 2026-09-28):** 3.0 includes everything 2.0.6 has: every bug fix, performance
+**Rule (maintainer, 2026-09-28): 3.0 = 2.0 + the cleanups that break semver.** Anything on 3.0
+that doesn't break semver belongs on 2.0.x too, and everything on 2.0.x belongs on 3.0. In detail:
+
+3.0 includes everything 2.0.6 has: every bug fix, performance
 enhancement, unit test, integration test, testbed check and benchmark. 3.0 exists only because 2.0
 made things public that never should have been, which needs breaking changes. So "3.0 only" below
 means "not in 2.0.x as well"; nothing in 2.0.6 is optional for 3.0.
