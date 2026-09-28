@@ -16,7 +16,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 
 **Concurrent callers are supported:**
 - **Standard**: parallel operations using ephemeral connections
-- **PreventDatabaseUnload**: identical to Standard; additionally keeps one unused sentinel connection open to prevent the DB from unloading
+- **PreventDatabaseUnload**: identical to Standard; additionally keeps one unused sentinel connection per enabled pool (reader and writer) open to prevent the DB from unloading
 - **SingleConnection**: operations serialize on shared connection lock (single persistent connection, RealAsyncLocker)
 - **SingleWriter**: identical to Standard; governor fixes writable connections to 1 concurrent writer and 0 writers on read-only connections; writer-starvation-prevention turnstile enabled
 
@@ -65,7 +65,7 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 
 ### 5. One unified execution-environment abstraction, one convergence point
 
-`IDatabaseContext` isn't just "the connection object" — it's an execution-environment abstraction with two concrete substitutions sharing one contract: `DatabaseContext` (ordinary ephemeral execution) and `TransactionContext` (a pinned, transaction-scoped environment — see "TransactionContext is the alternate execution scope" in `docs/positioning/product-thesis.md`, principle 2). `pengdows.crud/ContextBase.cs` is the shared base centralizing container creation, parameter creation, quoting, and dialect delegation so SQL-building code written against `IDatabaseContext` never needs to know which one it actually received. `TransactionContext` specifically retains the parent context's `RootId`, metrics, dialect, product, and connection mode rather than exposing a separate, unrelated "transaction API" — a transaction is a *substituted execution scope*, not a different kind of object.
+`IDatabaseContext` isn't just "the connection object" — it's an execution-environment abstraction with two concrete substitutions sharing one contract: `DatabaseContext` (ordinary ephemeral execution) and `TransactionContext` (a pinned, transaction-scoped environment — see principle 2, "The application/database boundary is one coordinated system", in `docs/positioning/product-thesis.md`). `pengdows.crud/ContextBase.cs` is the shared base centralizing container creation, parameter creation, quoting, and dialect delegation so SQL-building code written against `IDatabaseContext` never needs to know which one it actually received. `TransactionContext` specifically retains the parent context's `RootId`, metrics, dialect, product, and connection mode rather than exposing a separate, unrelated "transaction API" — a transaction is a *substituted execution scope*, not a different kind of object.
 
 `ISqlContainer` is where all of this actually converges at execution time: it owns SQL text, parameters, execution intent (`ExecutionType`), connection acquisition, the two-level locking strategy, transaction association, metrics recording, tracing, command preparation, and provider exception translation — all in one place (see `SqlContainer.cs`). This is *why* so many apparently-separate features (dialect capabilities, connection modes, tenancy, observability) compose without every caller needing adapter code: they're all reached through the one object that already knows how to talk to whichever `IDatabaseContext` substitution it was handed.
 
@@ -88,10 +88,10 @@ This document explains the internal design of pengdows.crud version 2.0 for deve
 | Mode | Concurrent Calls | Behavior |
 |------|-----------------|----------|
 | **Standard** | ✅ Fully concurrent | Each operation gets ephemeral connection from provider pool. No serialization. |
-| **PreventDatabaseUnload** | ✅ Fully concurrent | Identical to Standard. One unused sentinel connection is kept open to prevent DB unload; it never performs operations. |
+| **PreventDatabaseUnload** | ✅ Fully concurrent | Identical to Standard. One unused sentinel connection per enabled pool (reader and writer) is kept open to prevent DB unload; sentinels never perform operations. Minimum pool size is raised to 2 per pool. |
 | **SingleWriter** | ⚠️ Writes serialize | Identical to Standard. Governor: writable connections capped at 1 concurrent writer; read-only connections allow 0 writers. Writer-starvation-prevention turnstile on. |
 | **SingleConnection** | ⚠️ All operations serialize | All operations share one persistent connection. Serialized at connection lock. |
-| **Transaction** | ⚠️ All operations serialize | TransactionContext always uses SingleConnection mode. Serialized at transaction user lock. |
+| **Transaction** | ⚠️ All operations serialize | TransactionContext reports the parent's `ConnectionMode` but pins one connection for its lifetime (and also takes the single-connection gate when the parent is `SingleConnection`). Serialized at transaction user lock. |
 
 **Key Insight**: Serialization happens at the **connection lock** (or transaction lock), not the context lock. See [Locking Strategy](#locking-strategy-two-level-locking).
 
@@ -165,7 +165,7 @@ Interlocked.Decrement(ref _connectionCount);
 **MetricsUpdated event** is fired **without holding locks**:
 
 ```csharp
-// pengdows.crud/DatabaseContext.Metrics.cs:320 (inside a per-subscriber try/catch)
+// pengdows.crud/DatabaseContext.Metrics.cs:322 (inside a per-subscriber try/catch)
 ((EventHandler<DatabaseMetrics>)invocation).Invoke(this, metrics);  // No lock held during callback
 ```
 
@@ -233,6 +233,7 @@ await conn.DisposeAsync();  // Returns to provider pool
 - SQLite `:memory:` + Standard → **Coerced to SingleConnection** (correctness)
 - SQLite file + Standard → **Coerced to SingleWriter** (safety, prevents SQLITE_BUSY)
 - Firebird (embedded or client-server) → **Not coerced**; `Best` selects `PreventDatabaseUnload` and every explicit mode is honored
+- Whenever `Best` would select `PreventDatabaseUnload` (e.g. LocalDB, Firebird), it uses `Standard` instead if the configured max pool size is under 2: the sentinel needs a second pooled connection, and `Best` must not override a caller's explicit one-connection pool (`CoerceMode`, DatabaseContext.Initialization.cs:1879-1891)
 
 **Mode Mismatch Warnings** (safe but suboptimal):
 - PostgreSQL + SingleConnection → Logs warning (limits concurrency unnecessarily)
@@ -458,8 +459,8 @@ app.Use(async (context, next) =>
 
 `ISqlDialect` exposes concrete `Supports*` capability flags — `SupportsJoins`, `SupportsMerge`, `SupportsWindowFunctions`, `SupportsJsonTypes`, `SupportsTemporalData`, `SupportsPropertyGraphQueries`, and more — so callers read one boolean per capability rather than reasoning about a standard level themselves.
 
-The base `SqlDialect` still contains the legacy SQL-standard heuristic (`MaxSupportedStandard` and
-`SqlStandardLevel`) for 2.x binary compatibility, but those members are obsolete and rejected for
+The base `SqlDialect` still contains the legacy SQL-standard heuristic (the `MaxSupportedStandard`
+property and the `SqlStandardLevel` enum) for 2.x binary compatibility, but both are obsolete and rejected for
 new application use by `PGC028`. Consumers must query the specific `Supports*` capabilities. The
 legacy implementation maps feature flags to approximate SQL eras, while individual dialects may
 override capabilities with version-aware logic; that history is retained here to explain existing
@@ -492,10 +493,10 @@ behavior, not as a capability contract for new code.
 
 ### Strategy Selection Logic
 
-**Initialization** (DatabaseContext.Initialization.cs:579-591):
+**Initialization** (DatabaseContext.Initialization.cs:607, :619):
 ```csharp
-ConnectionMode = CoerceMode(requestedMode, product, isLocalDb);
-WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode);
+ConnectionMode = CoerceMode(requestedMode, product, topology);
+WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode, isLocalDb);
 ```
 
 **Strategy instantiation** (strategies/connection/ConnectionStrategyFactory.cs):
@@ -603,7 +604,7 @@ await reader.DisposeAsync();
 **TrackedReader** auto-disposes when `Read()` or `ReadAsync()` returns `false`:
 
 ```csharp
-// pengdows.crud/wrappers/TrackedReader.cs:336
+// pengdows.crud/wrappers/TrackedReader.cs:487
 public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
 {
     if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -955,7 +956,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 - Subscribers expected to be observers, not controllers
 
 **What's actually done**:
-- Warning in XML docs (DatabaseContext.Metrics.cs:43-85); event invoked at DatabaseContext.Metrics.cs:320
+- Warning in XML docs (DatabaseContext.Metrics.cs:43-85); event invoked at DatabaseContext.Metrics.cs:322
 - Event fired without holding locks
 - User responsible for not re-entering
 
@@ -990,9 +991,9 @@ This section documents **contracts between internal components** that aren't vis
 
 ### The internal-interface seam — and its failure mode for custom decorators
 
-The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connection acquisition, dialect version-detection, and session-settings internals — those live on separate `internal` interfaces (`IInternalConnectionProvider`, `IInternalSqlDialect`, `ITypeMapAccessor`) that the concrete `DatabaseContext`/`SqlDialect` classes implement *in addition to* the public ones. A family of `internal static` extension classes (`InternalConnectionExtensions`, `InternalDialectProviderExtensions`, `InternalSessionSettingsExtensions`, `InternalSqlContainerExtensions`, `InternalSqlDialectExtensions`) form the seam: each casts its `IDatabaseContext`/`ISqlDialect` parameter to the matching internal interface and throws `InvalidOperationException` (e.g. `"IDatabaseContext must provide internal connection access."`) if the cast fails. This is what lets `SqlContainer`/the gateways call capabilities that don't exist anywhere on the public surface at all.
+The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connection acquisition, dialect version-detection, and session-settings internals — those live on separate `internal` interfaces (`IInternalConnectionProvider`, `IInternalSqlDialect`, `ITypeMapAccessor`) that the concrete `DatabaseContext`/`SqlDialect` classes implement *in addition to* the public ones. (`IInternalConnectionProvider` and `ITypeMapAccessor` live in `pengdows.crud/internal/`; `IInternalSqlDialect` lives in `pengdows.crud.abstractions/dialects/`; `TransactionContext` implements the first two as well.) `internal static` extension classes in `pengdows.crud/internal/` form the seam: `InternalConnectionExtensions` casts its `IDatabaseContext` to `IInternalConnectionProvider` and throws `InvalidOperationException("IDatabaseContext must provide internal connection access.")` if the cast fails; `InternalSqlDialectExtensions` casts to `IInternalSqlDialect` (throwing `"ISqlDialect must support internal detection operations."`), although several of its helpers fall back to a default instead of throwing; `InternalSqlContainerExtensions` casts `ISqlContainer` to the concrete `SqlContainer` class (throwing `"ISqlContainer must be a SqlContainer instance."`). `InternalDialectProviderExtensions` only requires a non-null `Dialect`, and `InternalSessionSettingsExtensions` does no cast at all. This is what lets `SqlContainer`/the gateways call capabilities that don't exist anywhere on the public surface at all.
 
-**Sharp edge:** any custom `IDatabaseContext`/`ISqlDialect` implementation *within the same solution* — most plausibly a test decorator wrapping the real implementation to override one behavior — compiles fine if it only implements the public interface, but throws `InvalidOperationException` at runtime the first time internal code tries to use it, since the decorator doesn't also implement the internal interface. If you're writing a decorator around either interface for testing, it needs to forward the relevant internal interface too, not just the public one.
+**Sharp edge:** any custom `IDatabaseContext`/`ISqlDialect`/`ISqlContainer` implementation *within the same solution* — most plausibly a test decorator wrapping the real implementation to override one behavior — compiles fine if it only implements the public interface, but throws `InvalidOperationException` at runtime the first time internal code tries to use it, since the decorator doesn't also implement the internal interface (or, for `ISqlContainer`, isn't the concrete `SqlContainer`). If you're writing a decorator around `IDatabaseContext` or `ISqlDialect` for testing, it needs to forward the relevant internal interface too, not just the public one; `ISqlContainer` cannot be decorated at all.
 
 ### IConnectionStrategy ↔ DatabaseContext
 
@@ -1011,7 +1012,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 - Connection lock **must** be held from reader creation until reader disposal
 - Auto-disposal **must** release connection and lock
 
-**Enforcement**: TrackedReader.cs:70-94 and 256-298 (sync/async disposal logic)
+**Enforcement**: TrackedReader.cs:81-170 (`DisposeManaged`) and 348-450 (`DisposeManagedAsync`)
 
 **On a transaction specifically, this fails fast — it does not block.** A reader opened on an `ITransactionContext` holds the transaction's user lock (`ReusableAsyncLocker` over `_userLock`) until the reader is disposed, and `ReusableAsyncLocker.MarkHeldByActiveReader()` marks that hold as owned by the reader. While it is marked, *any* further lock attempt on the transaction — another command, `Commit`/`Rollback` (sync or async), `SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync`, from the same logical flow or another thread — throws `InvalidOperationException("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active...")` immediately. Blocking would deadlock when the waiter is the flow that must dispose the reader (e.g. writing while still streaming a `LoadStreamAsync` result from the same transaction). A failed `Commit`/`Rollback` leaves the transaction uncompleted, so dispose the reader and retry. `Dispose()` of the transaction does not throw here, but skips the rollback and leaves the transaction and connection to the reader; dispose the reader first.
 
@@ -1023,11 +1024,11 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 
 **Contract**:
 - MetricsCollector fires MetricsChanged event **without holding locks**
-- DatabaseContext subscribes during construction (DatabaseContext.Initialization.cs:285)
-- DatabaseContext unsubscribes in disposal (DatabaseContext.cs:474, :515)
+- DatabaseContext subscribes during construction when `EnableMetrics` is set (DatabaseContext.Initialization.cs:288)
+- DatabaseContext unsubscribes in disposal (DatabaseContext.cs:525, :573)
 - Event handler (OnMetricsCollectorUpdated) **must not** acquire locks
 
-**Enforcement**: DatabaseContext.Metrics.cs:297-331 (`OnMetricsCollectorUpdated`)
+**Enforcement**: DatabaseContext.Metrics.cs:299-333 (`OnMetricsCollectorUpdated`)
 
 ### SqlDialect ↔ DataSourceInformation
 
@@ -1037,7 +1038,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 - Dialect selection based on SupportedDatabase enum
 - Vendor-specific behaviors encapsulated in dialect implementation
 
-**Enforcement**: DatabaseContext.Initialization.cs:290-311
+**Enforcement**: DatabaseContext.Initialization.cs:290-315 (dialect detection and `SqlDialect` type check); mode coercion is `CoerceMode` at :1869-1899, delegating to each dialect's `CoerceConnectionMode`
 
 ### TransactionContext ↔ IsolationResolver
 
@@ -1099,7 +1100,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 
 ### NULL handling in compiled mappers is deliberately loud
 
-`CompiledMapperFactory` skips the `IsDBNull` guard entirely for non-nullable value-type columns (`int`, `DateTime`, etc. — not `int?`) — the compiled getter calls the typed reader accessor directly. If the database genuinely returns `NULL` for a column mapped to a non-nullable value-type property (a schema change that didn't get mirrored in the C# type, most commonly), the result is a hard exception on the first NULL row rather than a silently-defaulted value. This is intentional: silently leaving the property at `default(T)` would be a worse failure mode (wrong data, no error) than a loud crash pointing at the mismatched column. If you hit this, the fix is making the property type match the column's actual nullability (`int?`), not suppressing the exception.
+`CompiledMapperFactory` skips the `IsDBNull` guard entirely for non-nullable value-type columns (`int`, `DateTime`, etc. — not `int?`) on its general read path — the compiled getter reads the value directly (a typed accessor, or `GetValue()` plus conversion for types such as `DateTimeOffset`). The special-cased paths (JSON, `byte[]`, lenient enum, PostgreSQL interval, and similar) keep the guard. If the database genuinely returns `NULL` for a column mapped to a non-nullable value-type property (a schema change that didn't get mirrored in the C# type, most commonly), the result is a hard exception on the first NULL row rather than a silently-defaulted value. This is intentional: silently leaving the property at `default(T)` would be a worse failure mode (wrong data, no error) than a loud crash pointing at the mismatched column. If you hit this, the fix is making the property type match the column's actual nullability (`int?`), not suppressing the exception.
 
 ### Compiled binders close over the dialect instance
 
@@ -1121,8 +1122,8 @@ Command preparation isn't a single global `Prepare=true`/`false` switch. `IConne
 
 Two `internal`, off-by-default `SqlDialect` members (deliberately not part of `ISqlDialect`) exist purely as `SqlContainer` connection-cleanup implementation details, not caller-observable capabilities — found and fixed together while implementing Oracle's batch-UPDATE strategy:
 
-- **`RequiresExplicitRollbackAfterFailedWrite`** (`false` by default, `true` for Firebird) — `FirebirdSql.Data.FirebirdClient` starts an implicit transaction per command and auto-commits it on success, but has no corresponding auto-rollback on failure, so a failed write left its transaction's lock dangling on the pooled connection indefinitely. `SqlContainer.ExecuteNonQueryAsync` (and the reader/scalar execution paths that also perform writes) issues an explicit bare `ROLLBACK` after any failed write when the dialect requires it, before the connection returns to the pool — skipped entirely inside an explicit `ITransactionContext`, since that connection's commit/rollback lifecycle already belongs to the transaction.
-- **`RequiresConnectionPoolResetForDdl`** (`false` by default, `true` for Firebird) — Firebird's DDL commit requires no *other* pooled connection to still be referencing the table's prior metadata generation, even one holding only cleanly-committed transactions; enough prior round trips reusing pooled connections could make a later `CREATE`/`DROP`/`ALTER`/`TRUNCATE` fail with nothing actually uncommitted. `SqlContainer` calls the internal `SqlDialect.ResetConnectionPoolForDdl(connectionString)` before such a statement when the dialect overrides it — Firebird's override reflects into `FbConnection.ClearPool(string)` (no hard package reference from `pengdows.crud` to `FirebirdSql.Data.FirebirdClient`, the same reflection pattern `OracleDialect` uses for its `StatementCacheSize` hook), using the real, unredacted connection string so it matches the actual ADO.NET pool key.
+- **`RequiresExplicitRollbackAfterFailedWrite`** (`false` by default, `true` for Firebird and InterBase) — `FirebirdSql.Data.FirebirdClient` starts an implicit transaction per command and auto-commits it on success, but has no corresponding auto-rollback on failure, so a failed write left its transaction's lock dangling on the pooled connection indefinitely. `SqlContainer.ExecuteNonQueryAsync` (and the reader/scalar execution paths that also perform writes) issues an explicit bare `ROLLBACK` after any failed write when the dialect requires it, before the connection returns to the pool — skipped entirely inside an explicit `ITransactionContext`, since that connection's commit/rollback lifecycle already belongs to the transaction.
+- **`RequiresConnectionPoolResetForDdl`** (`false` by default, `true` for Firebird) — Firebird's DDL commit requires no *other* pooled connection to still be referencing the table's prior metadata generation, even one holding only cleanly-committed transactions; enough prior round trips reusing pooled connections could make a later `CREATE`/`DROP`/`ALTER`/`TRUNCATE` fail with nothing actually uncommitted. `SqlContainer` calls the internal `SqlDialect.ResetConnectionPoolForDdl(connectionString)` before such a statement when the dialect overrides it — Firebird's override reflects into the static `FbConnection.ClearAllPools()` (no hard package reference from `pengdows.crud` to `FirebirdSql.Data.FirebirdClient`, the same reflection pattern `OracleDialect` uses for its `StatementCacheSize` hook) and swallows any failure as best-effort. It clears every Firebird pool process-wide, so the `connectionString` argument no longer decides which pools are reset: `ClearPool(connectionString)` only cleared the issuing context's own pool and could not reach a second, independent `DatabaseContext`'s pools (confirmed live).
 
 ### Provider-bug workarounds are narrow and stack-trace-verified, not blanket suppression
 
@@ -1130,7 +1131,7 @@ Two `internal`, off-by-default `SqlDialect` members (deliberately not part of `I
 
 ### `BoundedCache<TKey,TValue>`
 
-A thread-safe LRU used for `DataReaderMapper`'s setter/plan/property-lookup caches and several gateway accessor caches. Builds are deduped under concurrent load via `Lazy<T>` with `ExecutionAndPublication`, and eviction is a linear scan by last-access timestamp — cheap and correct at the library's typical bound sizes (roughly 32–512 entries depending on the cache), but not designed for a much larger working set. An application generating many distinct, ad-hoc SQL/result-set shapes at runtime (rather than a fixed, compile-time-known set of entities and queries) will churn this cache past its bound and repeatedly pay recompilation cost rather than getting a stable steady-state hit rate.
+A thread-safe LRU used for `DataReaderMapper`'s setter/plan/property-lookup caches and several gateway accessor caches. Builds are deduped under concurrent load via `Lazy<T>` with `ExecutionAndPublication`, and eviction is a linear scan for the lowest last-access stamp (a monotonic `Interlocked` counter, not wall-clock time) — cheap and correct at the library's typical bound sizes (roughly 32–512 entries depending on the cache), but not designed for a much larger working set. An application generating many distinct, ad-hoc SQL/result-set shapes at runtime (rather than a fixed, compile-time-known set of entities and queries) will churn this cache past its bound and repeatedly pay recompilation cost rather than getting a stable steady-state hit rate.
 
 ### Connection-string handling in the normalization cache
 
@@ -1140,8 +1141,10 @@ check (`AreConnectionStringsEquivalentIgnoringCredentials` in `DatabaseContext.I
 It is a `BoundedCache` capped at 256 entries, keyed on a SHA-256 digest of the connection string
 together with the read-only key/value, application-name setting and read-only suffix — every input
 that shapes the cached map, so the same connection string normalized with different parameters
-never shares an entry. The cached *value* has credential-like keys (password/user/secret/token/
-access) dropped before storage, and the key is a one-way hash, so no raw connection string or
+never shares an entry. The cached *value* is built by `TryBuildNormalizedConnectionMap` in
+`DatabaseContext.Initialization.cs`, whose `ShouldIgnoreKey` drops credential-like keys (exact
+password/pwd/user id/uid/user/username, plus any key containing password/secret/token/access)
+before storage, and the key is a one-way hash, so no raw connection string or
 credential stays resident; per-tenant or rotated credentials can't grow the cache past its bound.
 
 ### Connection Reuse
@@ -1164,7 +1167,7 @@ Measured, not projected — see `benchmarks/CrudBenchmarks/results/` for the und
 
 | Scenario | Result | Source |
 |----------|--------|--------|
-| PostgreSQL equal-footing CRUD (identical Npgsql auto-prepare config for all three frameworks), 1–100 records | pengdows.crud within roughly 0–10% of Dapper's mean time across read/filter/aggregate/create/update/delete scenarios (`P÷D` ≈ 0.98–1.10); EF Core ~1.1–1.6x slower than pengdows.crud | `postgres-run-2026-03-15-after-fix.md` |
+| PostgreSQL equal-footing CRUD (identical Npgsql auto-prepare config for all three frameworks), 1–100 records | pengdows.crud within roughly 0–10% of Dapper's mean time across read/filter/aggregate/create/update/delete scenarios (`P÷D` ≈ 0.94–1.10); EF Core ~1.1–1.6x slower than pengdows.crud; pengdows.crud allocates ~2x Dapper's heap, EF Core 8–10x pengdows.crud's | `postgres-run-2026-03-15-after-fix.md` |
 
 Other benchmark suites (e.g. `HydrationHotPathBenchmarks.cs`, `SQLiteWriteContentionBenchmarks.cs`, `SqlServerEqualFootingBenchmarks.cs`) live in `benchmarks/CrudBenchmarks/`, but no results for them are checked in on this branch — run them yourself before quoting numbers.
 
