@@ -6,7 +6,7 @@ namespace pengdows.crud.analyzers;
 /// <summary>
 /// Shared recognition logic for the gateway-context analyzer pair: PGC025
 /// (<see cref="GatewayMethodContextParameterAnalyzer"/>, definition-side — a gateway method that
-/// executes database work must resolve and forward its own context parameter) and PGC027
+/// executes database work must resolve and forward its own context parameter) and PGC029
 /// (<see cref="GatewayCallSiteContextAnalyzer"/>, call-site-side — under opt-in multitenancy
 /// enforcement, a call to a gateway execution method must supply a non-null context argument).
 /// Kept in one place so "what counts as a gateway" and "what counts as an execution method" can
@@ -16,7 +16,7 @@ internal static class GatewayAnalysisHelpers
 {
     /// <summary>
     /// Tier-1/2/3 gateway methods that build or execute database work. Anything not in this list
-    /// (a custom helper method, a plain property, etc.) is out of scope for both PGC025 and PGC027.
+    /// (a custom helper method, a plain property, etc.) is out of scope for both PGC025 and PGC029.
     /// </summary>
     internal static readonly ImmutableHashSet<string> ExecutionMethodNames =
     [

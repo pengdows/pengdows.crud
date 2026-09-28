@@ -278,7 +278,7 @@ documented rationale is transaction and multitenancy correctness, not a tenant-I
 runtime filter.
 
 **The default context is a single-tenant convenience, not a multitenancy escape hatch — and a
-second analyzer, PGC027, makes that distinction a compile-time contract rather than a
+second analyzer, PGC029, makes that distinction a compile-time contract rather than a
 convention.** A gateway's constructor-time default context (the fallback a call like
 `gateway.CreateAsync(entity)` silently uses when no context argument is supplied) is a
 perfectly ordinary, ergonomic default for a single-database application. It is not safe to rely
@@ -286,7 +286,7 @@ on once an application opts into multitenancy: at that point, omitting the conte
 doesn't mean "use the one obvious database," it means "silently run this operation against
 whichever tenant happened to construct this shared gateway" — a live cross-tenant correctness
 bug, not a style nit. PGC025 already protects the *callee* half of this (a gateway method must
-propagate whatever context it was given); **PGC027** (`GatewayCallSiteContextAnalyzer`) protects
+propagate whatever context it was given); **PGC029** (`GatewayCallSiteContextAnalyzer`) protects
 the *caller* half: once a consuming project sets the MSBuild property `PengdowsMultiTenancy` to
 `true`, any call to a gateway execution/build method that omits the context argument, or passes a
 literal `null`/`default`, is a compile error — including inside a custom subclass's own

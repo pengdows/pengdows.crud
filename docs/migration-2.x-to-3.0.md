@@ -386,7 +386,14 @@ A consumer that was getting `IConfiguration`, the full DI container, or the full
 implementation transitively through a reference to `pengdows.crud`/`pengdows.crud.abstractions`
 will need to reference those packages directly.
 
-### New analyzer diagnostic: `PGC027`
+### Analyzer diagnostics: `PGC028` and `PGC029`
+
+The analyzer package is the same code on 2.0.x and 3.0. 2.0.x reported its compatibility-surface
+rule as `PGC027`; that rule is now `PGC028` on both branches. On 3.0 it reports nothing, because the
+surface it guards was removed. Change any `PGC027` suppression to the rule it meant: `PGC028` for
+2.0.x code, `PGC029` for the multitenancy rule below.
+
+#### Opt-in multitenancy call-site rule: `PGC029`
 
 `GatewayCallSiteContextAnalyzer` (`DiagnosticSeverity.Error`) ships in the separate
 `pengdows.crud.analyzers` package, gated behind an explicit opt-in
@@ -394,7 +401,7 @@ will need to reference those packages directly.
 default** and does not affect a build that doesn't reference `pengdows.crud.analyzers` or doesn't
 set that property. Not independently confirmed whether the root `pengdows.crud` package's `.nupkg`
 transitively delivers the analyzer's `build/*.props` asset — if you reference only `pengdows.crud`
-today, verify whether `PGC027` is active for you before assuming it is or isn't.
+today, verify whether `PGC029` is active for you before assuming it is or isn't.
 
 ## Known follow-up needed (not yet resolved as of this writing)
 

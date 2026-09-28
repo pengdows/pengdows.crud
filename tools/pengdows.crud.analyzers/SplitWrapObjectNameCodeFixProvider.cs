@@ -266,7 +266,7 @@ public sealed class SplitWrapObjectNameCodeFixProvider : CodeFixProvider
     }
 
     // -------------------------------------------------------------------------
-    // Shared helpers (duplicated from analyzer to keep projects independent)
+    // Shared helpers (duplicated from SplitWrapObjectNameAnalyzer so each class is self-contained)
     // -------------------------------------------------------------------------
 
     private static bool TryGetWrapObjectNameArgument(ExpressionSyntax expression, out string argument)

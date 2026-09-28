@@ -30,7 +30,7 @@ public sealed class AnalyzerNuGetDeploymentTests
     [Fact]
     public void AnalyzerProject_PacksTheMultiTenancyPropsFile()
     {
-        // PGC027's opt-in enablement (PengdowsMultiTenancy) only reaches a consuming project's
+        // PGC029's opt-in enablement (PengdowsMultiTenancy) only reaches a consuming project's
         // compiler options if build/pengdows.crud.analyzers.props actually ships in the package —
         // NuGet's build/{PackageId}.props auto-import convention requires this exact path.
         var projectPath = Path.Combine(

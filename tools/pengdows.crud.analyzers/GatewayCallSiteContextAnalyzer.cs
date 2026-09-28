@@ -42,7 +42,7 @@ namespace pengdows.crud.analyzers;
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class GatewayCallSiteContextAnalyzer : DiagnosticAnalyzer
 {
-    public const string DiagnosticId = "PGC027";
+    public const string DiagnosticId = "PGC029";
     internal const string MultiTenancyPropertyKey = "build_property.PengdowsMultiTenancy";
 
     internal static readonly DiagnosticDescriptor Rule = new(
