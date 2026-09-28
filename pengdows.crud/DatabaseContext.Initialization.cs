@@ -861,6 +861,9 @@ public partial class DatabaseContext
         var rawConnectionString =
             config.ConnectionString ?? throw new ArgumentNullException(nameof(config.ConnectionString));
         _connectionString = NormalizeConnectionString(rawConnectionString);
+        // Min Pool Size above Max Pool Size is corrected silently (PoolMaxMinValidationTests), and
+        // must be before the detection connection: SqlClient and IBM.Data.Db2 reject it on assignment.
+        _connectionString = PoolingConfigReader.ClampMinPoolSizeToMax(_connectionString);
 
         ITrackedConnection? initConn = null;
         try
