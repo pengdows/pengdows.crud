@@ -1609,11 +1609,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // are going to set the connection to close and dispose when the reader is
             // closed. This prevents leaking
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
-            var behavior = isTransaction || isSingleConnection
-                ? (singleRow ? CommandBehavior.SingleRow : CommandBehavior.Default)
-                : (singleRow
-                    ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow
-                    : CommandBehavior.CloseConnection);
+            var closesConnectionAfterRead = !(isTransaction || isSingleConnection);
+            // A dialect whose provider mishandles CloseConnection (DuckDB) gets a plain reader;
+            // TrackedReader still closes the connection, after disposing the reader and command.
+            var useCloseConnectionBehavior = closesConnectionAfterRead &&
+                                             (_dialect is not SqlDialect readerDialect ||
+                                              readerDialect.SupportsCloseConnectionReaderBehavior);
+            var behavior = useCloseConnectionBehavior
+                ? (singleRow ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow : CommandBehavior.CloseConnection)
+                : (singleRow ? CommandBehavior.SingleRow : CommandBehavior.Default);
 
             // if this is our single connection to the database, for a transaction
             //or sqlCe mode, or single connection mode, we will NOT close the connection.
@@ -1626,7 +1630,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 dr,
                 conn,
                 connectionLocker,
-                (behavior & CommandBehavior.CloseConnection) == CommandBehavior.CloseConnection,
+                closesConnectionAfterRead,
                 cmd,
                 metrics,
                 this,

@@ -351,7 +351,7 @@ public class fakeDbCommand : DbCommand
         return ExecuteDbDataReaderCore(behavior);
     }
 
-    private DbDataReader ExecuteDbDataReaderCore(CommandBehavior _)
+    private DbDataReader ExecuteDbDataReaderCore(CommandBehavior behavior)
     {
         ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;
@@ -371,6 +371,7 @@ public class fakeDbCommand : DbCommand
         if (conn != null)
         {
             conn.ExecutedReaderTexts.Add(CommandText);
+            conn.ExecutedReaderBehaviors.Add(behavior);
             conn.ExecutedReaderCommands.Add(CaptureCommand());
         }
 

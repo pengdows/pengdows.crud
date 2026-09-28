@@ -86,6 +86,12 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public readonly List<string> ExecutedReaderTexts = new();
 
     /// <summary>
+    /// The <see cref="CommandBehavior"/> each ExecuteReader/ExecuteReaderAsync call on this connection
+    /// was opened with, in order (parallel to <see cref="ExecutedReaderTexts"/>).
+    /// </summary>
+    public readonly List<CommandBehavior> ExecutedReaderBehaviors = new();
+
+    /// <summary>
     /// Command text for every ExecuteScalar/ExecuteScalarAsync call this connection instance has
     /// run — the scalar-path equivalent of <see cref="ExecutedNonQueryTexts"/>/<see cref="ExecutedReaderTexts"/>,
     /// which the scalar path lacked until TEST-010's connection-affinity investigation needed it to

@@ -789,6 +789,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     public virtual bool MergeUpdateRequiresTargetAlias => true; // SQL-92 MERGE allows it (SQL Server, Oracle)
 
+    // Internal, not part of ISqlDialect: false when the provider mishandles
+    // CommandBehavior.CloseConnection, so a per-operation read opens its reader without it and
+    // TrackedReader closes the connection itself after disposing the reader and command.
+    // DuckDbDialect overrides this; see its comment for the evidence.
+    internal virtual bool SupportsCloseConnectionReaderBehavior => true;
+
     public virtual bool SupportsSemicolonStatementSeparator => true;
 
     /// <summary>
