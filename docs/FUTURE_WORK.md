@@ -16,6 +16,10 @@ enhancement, unit test, integration test, testbed check and benchmark. 3.0 exist
 made things public that never should have been, which needs breaking changes. So "3.0 only" below
 means "not in 2.0.x as well"; nothing in 2.0.6 is optional for 3.0.
 
+**Reverse rule (maintainer, 2026-09-28):** every bug fix found on 3.0 comes back to 2.0.6 unless
+that would break semver (a binary or API change against 2.0.5, or a removal; package validation
+decides). Additive public API is not a fix; those stay per-item decisions (Tier 3 below).
+
 | ID | Decision | Options | Notes | Status |
 |---|---|---|---|---|
 | DEC-001 | **`ConnectionFailedException` vs the `DatabaseException` hierarchy.** `pengdows.crud.exceptions.ConnectionFailedException : Exception` (with `Phase`/`Role`) is what `DatabaseContext` construction throws when its first connect or read-only validation fails. At runtime the same kind of failure is a `ConnectionException : DatabaseOperationException : DatabaseException`, and a server at its connection limit is a `TooManyConnectionsException : ConnectionException` (IsTransient). So `catch (ConnectionException)` misses a failure at construction, and a connection-limit refusal at construction is not a `TooManyConnectionsException` at the top level | (a) 2.0.x: reparent `ConnectionFailedException` under `ConnectionException`. That changes a public base type, so run package validation/ApiCompat against 2.0.5 first; `catch (Exception)` and `catch (ConnectionFailedException)` keep working. (b) 3.0 only: merge it into `ConnectionException` (carry `Phase`/`Role` there or on a subclass) and throw the translated type, e.g. `TooManyConnectionsException`, at construction too. (c) Both: (a) in 2.0.x, then (b) in 3.0 | Throw site: `DatabaseContext.Initialization.cs`; tests: `ConnectionFailedExceptionTests`. The 2.0.x rule is to stay binary compatible with 2.0.5 | Open (decide) |
