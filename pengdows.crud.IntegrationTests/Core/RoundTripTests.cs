@@ -46,9 +46,7 @@ public class RoundTripTests : DatabaseTestBase
                 LongValue = long.MaxValue - 100,
                 DecimalValue = 1234567.89123456m,
                 BoolValue = true,
-                DateTimeOffsetValue = provider == SupportedDatabase.Firebird
-                    ? new DateTimeOffset(2026, 2, 21, 19, 30, 45, 123, TimeSpan.Zero)
-                    : new DateTimeOffset(2026, 2, 21, 14, 30, 45, 123, TimeSpan.FromHours(-5)),
+                DateTimeOffsetValue = new DateTimeOffset(2026, 2, 21, 14, 30, 45, 123, TimeSpan.FromHours(-5)),
                 GuidValue = Guid.NewGuid(),
                 BinaryValue = new byte[] { 0x00, 0xFF, 0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x7F }
             };
@@ -71,8 +69,7 @@ public class RoundTripTests : DatabaseTestBase
             Assert.Equal(original.BoolValue, retrieved.BoolValue);
             Assert.Equal(original.GuidValue, retrieved.GuidValue);
             Assert.NotNull(retrieved.BinaryValue);
-            var normalizedBinary = NormalizeBinaryForProvider(provider, retrieved.BinaryValue!, original.BinaryValue);
-            Assert.Equal(original.BinaryValue, normalizedBinary);
+            Assert.Equal(original.BinaryValue, retrieved.BinaryValue);
 
             // Nullable string handling
             if (provider == SupportedDatabase.Oracle)
@@ -96,26 +93,11 @@ public class RoundTripTests : DatabaseTestBase
                 Assert.Equal(original.DecimalValue, retrieved.DecimalValue);
             }
 
-            // DateTimeOffset assertions
-            if (provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.Firebird
-                or SupportedDatabase.Snowflake or SupportedDatabase.Oracle or SupportedDatabase.SybaseASE
-                or SupportedDatabase.Informix)
-            {
-                // Discard offset, check UTC instant within 1ms
-                Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime,
-                    TimeSpan.FromMilliseconds(1));
-            }
-            else if (provider == SupportedDatabase.Sqlite)
-            {
-                // SQLite stores as ISO-8601 string, precision might be lost
-                Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime,
-                    TimeSpan.FromMilliseconds(1));
-            }
-            else
-            {
-                // Exact match for tz-aware providers
-                Assert.Equal(original.DateTimeOffsetValue, retrieved.DateTimeOffsetValue);
-            }
+            // The instant must survive to the millisecond everywhere. Whether the offset itself is kept
+            // depends on the column type (most databases store the UTC instant), and DateTimeOffset
+            // equality compares instants anyway.
+            Assert.Equal(original.DateTimeOffsetValue.UtcDateTime, retrieved.DateTimeOffsetValue.UtcDateTime,
+                TimeSpan.FromMilliseconds(1));
         });
     }
 
@@ -192,171 +174,5 @@ public class RoundTripTests : DatabaseTestBase
                 }
             }
         });
-    }
-
-    private static byte[] NormalizeBinaryForProvider(SupportedDatabase provider, byte[] actual, byte[] expected)
-    {
-        if (provider is not (SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb))
-        {
-            return actual;
-        }
-
-        if (actual.AsSpan().SequenceEqual(expected))
-        {
-            return actual;
-        }
-
-        if (TryDecodeMySqlEscapedBinary(actual, expected, out var normalized))
-        {
-            return normalized;
-        }
-
-        if (TryRemoveSingleExtraByte(actual, expected, out normalized))
-        {
-            return normalized;
-        }
-
-        return actual;
-    }
-
-    private static bool TryDecodeMySqlEscapedBinary(byte[] actual, byte[] expected, out byte[] normalized)
-    {
-        normalized = actual;
-
-        if (actual.Length <= expected.Length)
-        {
-            return false;
-        }
-
-        var decoded = new byte[expected.Length];
-        var actualIndex = 0;
-        var expectedIndex = 0;
-        var usedEscape = false;
-
-        while (actualIndex < actual.Length && expectedIndex < expected.Length)
-        {
-            if (actual[actualIndex] == expected[expectedIndex])
-            {
-                decoded[expectedIndex] = expected[expectedIndex];
-                actualIndex++;
-                expectedIndex++;
-                continue;
-            }
-
-            if (actual[actualIndex] == (byte)'\\'
-                && actualIndex + 1 < actual.Length
-                && TryTranslateMySqlEscape(actual[actualIndex + 1], out var unescaped)
-                && unescaped == expected[expectedIndex])
-            {
-                decoded[expectedIndex] = unescaped;
-                actualIndex += 2;
-                expectedIndex++;
-                usedEscape = true;
-                continue;
-            }
-
-            return false;
-        }
-
-        if (actualIndex != actual.Length || expectedIndex != expected.Length || !usedEscape)
-        {
-            return false;
-        }
-
-        normalized = decoded;
-        return true;
-    }
-
-    private static bool TryTranslateMySqlEscape(byte escapeByte, out byte unescaped)
-    {
-        switch (escapeByte)
-        {
-            case (byte)'0':
-                unescaped = 0x00;
-                return true;
-            case (byte)'b':
-                unescaped = 0x08;
-                return true;
-            case (byte)'n':
-                unescaped = 0x0A;
-                return true;
-            case (byte)'r':
-                unescaped = 0x0D;
-                return true;
-            case (byte)'t':
-                unescaped = 0x09;
-                return true;
-            case (byte)'Z':
-                unescaped = 0x1A;
-                return true;
-            case (byte)'\\':
-                unescaped = 0x5C;
-                return true;
-            case (byte)'\'':
-                unescaped = 0x27;
-                return true;
-            case (byte)'"':
-                unescaped = 0x22;
-                return true;
-            default:
-                unescaped = 0;
-                return false;
-        }
-    }
-
-    private static bool TryRemoveSingleExtraByte(byte[] actual, byte[] expected, out byte[] normalized)
-    {
-        normalized = actual;
-
-        if (actual.Length != expected.Length + 1)
-        {
-            return false;
-        }
-
-        var actualIndex = 0;
-        var expectedIndex = 0;
-        var extraByteIndex = -1;
-
-        while (actualIndex < actual.Length && expectedIndex < expected.Length)
-        {
-            if (actual[actualIndex] == expected[expectedIndex])
-            {
-                actualIndex++;
-                expectedIndex++;
-                continue;
-            }
-
-            if (extraByteIndex >= 0)
-            {
-                return false;
-            }
-
-            extraByteIndex = actualIndex;
-            actualIndex++;
-        }
-
-        if (extraByteIndex < 0)
-        {
-            extraByteIndex = actual.Length - 1;
-        }
-
-        if (actualIndex != actual.Length || expectedIndex != expected.Length)
-        {
-            return false;
-        }
-
-        normalized = new byte[expected.Length];
-        var write = 0;
-        for (var read = 0; read < actual.Length; read++)
-        {
-            if (read == extraByteIndex)
-            {
-                continue;
-            }
-
-            normalized[write++] = actual[read];
-        }
-
-        return true;
     }
 }

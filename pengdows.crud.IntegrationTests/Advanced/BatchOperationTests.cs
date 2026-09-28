@@ -302,13 +302,6 @@ public class BatchOperationTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Skip providers without native upsert support
-            if (!SupportsUpsert(provider))
-            {
-                Output.WriteLine($"Skipping upsert test for {provider}");
-                return;
-            }
-
             var existingCount = provider == SupportedDatabase.Snowflake ? 20 : 50;
 
             // Arrange - Create existing records
@@ -507,15 +500,6 @@ public class BatchOperationTests : DatabaseTestBase
         {
             IntegrationTraceLog.Write(provider, $"{phase} progress={current}/{total}");
         }
-    }
-
-    private static bool SupportsUpsert(SupportedDatabase provider)
-    {
-        // All providers support batch upsert, using their native mechanism:
-        //   ON CONFLICT DO UPDATE — PostgreSQL, CockroachDB, SQLite, DuckDB
-        //   ON DUPLICATE KEY UPDATE — MySQL, MariaDB
-        //   individual MERGE per entity (fallback) — SQL Server, Oracle, Firebird, Snowflake
-        return true;
     }
 
 }

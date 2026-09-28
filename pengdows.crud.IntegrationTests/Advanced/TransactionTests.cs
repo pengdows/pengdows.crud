@@ -496,10 +496,9 @@ public class TransactionTests : DatabaseTestBase
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 1300);
 
-            // A database that cannot guarantee StrictConsistency (TiDB, Snowflake, Access, FlatFile)
-            // must refuse the profile rather than run below it (documented 2.0.x contract).
-            if (provider is SupportedDatabase.TiDb or SupportedDatabase.Snowflake or SupportedDatabase.Access
-                or SupportedDatabase.FlatFile)
+            // StrictConsistency is a Serializable guarantee: a database without Serializable must
+            // refuse the profile rather than run below it (documented 2.0.x contract).
+            if (!context.GetSupportedIsolationLevels().Contains(IsolationLevel.Serializable))
             {
                 Assert.Throws<pengdows.crud.exceptions.TransactionModeNotSupportedException>(() =>
                     context.BeginTransaction(IsolationProfile.StrictConsistency, ExecutionType.Write));
