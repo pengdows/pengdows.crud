@@ -990,6 +990,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         finally
         {
             base.Dispose(disposing);
+            _disposedForEvents = true;
         }
     }
 
@@ -1007,6 +1008,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
 
         await base.DisposeAsync();
+        _disposedForEvents = true;
     }
 
     public override Task CloseAsync()
@@ -1120,6 +1122,43 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// that don't implement it (Snowflake.Data's SnowflakeDbConnection). Default true.
     /// </summary>
     public bool RaiseStateChangeEvents { get; set; } = true;
+
+    /// <summary>
+    /// When true, adding or removing a <see cref="DbConnection.StateChange"/> handler after this connection
+    /// has been disposed throws <see cref="ObjectDisposedException"/>, as AdoNetCore.AseClient's
+    /// AseConnection does. Default false.
+    /// </summary>
+    public bool ThrowOnStateChangeAccessAfterDispose { get; set; }
+
+    private bool _disposedForEvents;
+    private StateChangeEventHandler? _stateChange;
+
+    public override event StateChangeEventHandler? StateChange
+    {
+        add
+        {
+            ThrowIfStateChangeAccessRefused();
+            _stateChange += value;
+        }
+        remove
+        {
+            ThrowIfStateChangeAccessRefused();
+            _stateChange -= value;
+        }
+    }
+
+    private void ThrowIfStateChangeAccessRefused()
+    {
+        if (ThrowOnStateChangeAccessAfterDispose && _disposedForEvents)
+        {
+            throw new ObjectDisposedException(nameof(fakeDbConnection));
+        }
+    }
+
+    protected override void OnStateChange(StateChangeEventArgs stateChange)
+    {
+        _stateChange?.Invoke(this, stateChange);
+    }
 
     private void RaiseStateChangedEvent(ConnectionState originalState)
     {

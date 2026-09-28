@@ -311,6 +311,15 @@ These are the rules the code is being brought in line with.
   it are not counted twice. fakeDb can emulate such a driver
   (`fakeDbFactory.RaiseConnectionStateChangeEvents` / `fakeDbConnection.RaiseStateChangeEvents`).
 
+- [x] **Disposing a connection threw on Sybase ASE and leaked its pool slot** (found 2026-09-28 by the
+  integration run for the fix above). `TrackedConnection` detaches its `StateChange` handlers after
+  disposing the connection, and AdoNetCore.AseClient 0.19.2's `AseConnection` throws
+  `ObjectDisposedException` from the event's add/remove once disposed. With metrics on this was already
+  broken on Sybase; the StateChange fix above subscribes on every connection, so every Sybase dispose
+  threw, skipping the pool-slot release. The detach now ignores a disposed connection refusing it (it
+  raises no more events). fakeDb can emulate such a driver
+  (`fakeDbFactory.ThrowOnStateChangeAccessAfterDispose` / `fakeDbConnection.ThrowOnStateChangeAccessAfterDispose`).
+
 ## Decisions needed (found while investigating)
 
 - [x] **D06 — `DbMode.SingleConnection`: a plain read during another task's open transaction fails on
