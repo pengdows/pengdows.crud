@@ -36,20 +36,41 @@ internal static class IntegrationTestConfiguration
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>
         FilterIntegrationOnly(
-            GetEnabledProviders(ShouldIncludeSnowflake),
+            GetEnabledProviders(ShouldIncludeSnowflake, ShouldIncludeSapHana, ShouldIncludeInterBase),
             Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
 
     public static bool ShouldIncludeSnowflake =>
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"), "true",
             StringComparison.OrdinalIgnoreCase);
 
-    internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeSnowflake)
+    // Opt-in like Snowflake and the testbed: SAP HANA needs 16-32 GB RAM; InterBase needs its
+    // node-locked, externally managed container (see testbed/InterBase/InterBaseTestContainer.cs).
+    public static bool ShouldIncludeSapHana =>
+        string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SAPHANA"), "true",
+            StringComparison.OrdinalIgnoreCase);
+
+    public static bool ShouldIncludeInterBase =>
+        string.Equals(Environment.GetEnvironmentVariable("INCLUDE_INTERBASE"), "true",
+            StringComparison.OrdinalIgnoreCase);
+
+    internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeSnowflake,
+        bool includeSapHana = false, bool includeInterBase = false)
     {
         var providers = BaseProviders.ToList();
 
         if (includeSnowflake)
         {
             providers.Add(SupportedDatabase.Snowflake);
+        }
+
+        if (includeSapHana)
+        {
+            providers.Add(SupportedDatabase.SapHana);
+        }
+
+        if (includeInterBase)
+        {
+            providers.Add(SupportedDatabase.InterBase);
         }
 
         return providers;
@@ -114,7 +135,9 @@ public class IntegrationTestFixture : IAsyncLifetime
 
         var orchestrator = new ParallelTestOrchestrator(
             _host.Services,
-            IntegrationTestConfiguration.ShouldIncludeSnowflake);
+            IntegrationTestConfiguration.ShouldIncludeSnowflake,
+            includeSapHana: IntegrationTestConfiguration.ShouldIncludeSapHana,
+            includeInterBase: IntegrationTestConfiguration.ShouldIncludeInterBase);
 
         foreach (var provider in IntegrationTestConfiguration.EnabledProviders)
         {

@@ -428,6 +428,16 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             return "requires INCLUDE_SNOWFLAKE=true to enable Snowflake tests";
         }
 
+        if (provider == SupportedDatabase.SapHana && !IntegrationTestConfiguration.ShouldIncludeSapHana)
+        {
+            return "requires INCLUDE_SAPHANA=true to enable SAP HANA tests";
+        }
+
+        if (provider == SupportedDatabase.InterBase && !IntegrationTestConfiguration.ShouldIncludeInterBase)
+        {
+            return "requires INCLUDE_INTERBASE=true to enable InterBase tests";
+        }
+
         return "provider is not in the enabled list for this test run";
     }
 

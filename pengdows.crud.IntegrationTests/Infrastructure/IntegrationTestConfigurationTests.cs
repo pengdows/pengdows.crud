@@ -21,6 +21,22 @@ public class IntegrationTestConfigurationTests
         Assert.DoesNotContain(SupportedDatabase.Snowflake, providers);
     }
 
+    // SAP HANA (16-32 GB RAM) and InterBase (node-locked license, externally managed container) are
+    // opt-in like Snowflake, via INCLUDE_SAPHANA / INCLUDE_INTERBASE, matching the testbed.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(true, false)]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    public void GetEnabledProviders_IncludesSapHanaAndInterBase_OnlyWhenRequested(bool includeSapHana, bool includeInterBase)
+    {
+        var providers = IntegrationTestConfiguration.GetEnabledProviders(
+            includeSnowflake: false, includeSapHana: includeSapHana, includeInterBase: includeInterBase);
+
+        Assert.Equal(includeSapHana, providers.Contains(SupportedDatabase.SapHana));
+        Assert.Equal(includeInterBase, providers.Contains(SupportedDatabase.InterBase));
+    }
+
     [Fact]
     public void GetEnabledProviders_AlwaysIncludesOracle()
     {

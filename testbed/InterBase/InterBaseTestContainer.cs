@@ -121,7 +121,7 @@ public class InterBaseTestContainer : TestContainer
         }
 
         throw new TimeoutException(
-            $"Could not connect to InterBase at {_host}:{_port} after {timeout.TotalSeconds}s. " +
+            $"Could not connect to InterBase at {_host}:{_port} after {timeout.TotalSeconds}s. Last error: {lastError}. " +
             $"See {nameof(InterBaseTestContainer)}'s class remarks for the required one-time host setup " +
             "(licensed container image, docker-compose static IP, and a native libgds.so on this host).");
     }
