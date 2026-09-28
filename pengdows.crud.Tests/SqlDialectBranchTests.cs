@@ -48,7 +48,10 @@ public class SqlDialectBranchTests
     [Theory]
     [InlineData(SupportedDatabase.PostgreSql, " RETURNING \"id\"")]
     [InlineData(SupportedDatabase.SqlServer, " OUTPUT INSERTED.\"id\"")]
-    [InlineData(SupportedDatabase.Sqlite, " RETURNING \"id\"")]
+    // SQLite before version detection: RETURNING needs 3.35, so no clause (the gateway only asks
+    // for one when SupportsInsertReturning is true). The 3.35 case is in
+    // RenderInsertReturningClauseCharacterizationTests.
+    [InlineData(SupportedDatabase.Sqlite, "")]
     // Named, so it binds whether or not the command uses BindByName; the gateway reads "o0".
     [InlineData(SupportedDatabase.Oracle, " RETURNING \"id\" INTO :o0")]
     [InlineData(SupportedDatabase.Firebird, " RETURNING \"id\"")]

@@ -340,9 +340,6 @@ internal class SqliteDialect : SqlDialect
     // last_insert_rowid() is per-connection safe.
     public override bool HasSessionScopedLastIdFunction() => true;
 
-    public override string RenderInsertReturningClause(string idColumnWrapped) =>
-        $" RETURNING {idColumnWrapped}";
-
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
         var errorCode = TryGetProviderErrorCode(ex);

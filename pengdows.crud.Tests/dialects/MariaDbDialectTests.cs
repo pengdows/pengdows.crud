@@ -63,6 +63,29 @@ public class MariaDbDialectTests
         Assert.Equal(GeneratedKeyPlan.ReaderInsertedId, CreateDialect().GetGeneratedKeyPlan());
     }
 
+    // MariaDB added INSERT ... RETURNING in 10.5. From there the generated id comes back inline
+    // (GeneratedKeyPlan.Returning); older servers, and a dialect not yet initialized, read it from
+    // the INSERT's own reply (ReaderInsertedId).
+    [Theory]
+    [InlineData(10, 4, false)]
+    [InlineData(10, 5, true)]
+    [InlineData(10, 11, true)]
+    [InlineData(11, 4, true)]
+    public void InsertReturning_DependsOnVersion(int major, int minor, bool expected)
+    {
+        var d = CreateDialect();
+        Assert.False(d.SupportsInsertReturning);
+
+        SetVersion(d, new Version(major, minor));
+
+        Assert.Equal(expected, d.SupportsInsertReturning);
+        Assert.Equal(expected ? GeneratedKeyPlan.Returning : GeneratedKeyPlan.ReaderInsertedId, d.GetGeneratedKeyPlan());
+        if (expected)
+        {
+            Assert.Equal("RETURNING \"id\"", d.GetInsertReturningClause("id"));
+        }
+    }
+
     [Fact]
     public void FeatureGates_Depends_On_Version()
     {

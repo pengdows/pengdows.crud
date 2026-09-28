@@ -2856,14 +2856,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     /// <param name="idColumnWrapped">Quoted identity column name</param>
     /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
-    // Default: no inline RETURNING/OUTPUT clause. Overridden with " RETURNING {col}" by
-    // PostgreSqlDialect (covers Spanner/CockroachDb/YugabyteDb via inheritance), SqliteDialect,
-    // FirebirdDialect, and DuckDbDialect; overridden with " OUTPUT INSERTED.{col}" by
-    // SqlServerDialect. OracleDialect has its own distinct override (RETURNING INTO requires an
-    // ADO.NET output parameter, not an inline placeholder) — unaffected by this refactor.
+    // Default follows SupportsInsertReturning, so a dialect that gains RETURNING (MariaDB 10.5+,
+    // SQLite 3.35+) can't silently emit an empty clause. SqlServerDialect overrides it with
+    // " OUTPUT INSERTED.{col}" and OracleDialect with RETURNING INTO (an output parameter).
     public virtual string RenderInsertReturningClause(string idColumnWrapped)
     {
-        return string.Empty;
+        // Keyed on the capability, not a database list: a list silently emitted nothing for a
+        // dialect it didn't name (MariaDB 10.5+, and earlier Aurora PostgreSQL). SQL Server's
+        // OUTPUT INSERTED and Oracle's RETURNING INTO are their dialects' overrides.
+        return SupportsInsertReturning ? $" RETURNING {idColumnWrapped}" : string.Empty;
     }
 
     /// <summary>
