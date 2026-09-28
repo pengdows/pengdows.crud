@@ -192,12 +192,6 @@ public class ConcurrencyTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.DuckDB)
-            {
-                Output.WriteLine("Skipping concurrent read/write test for DuckDB (turnstile contention with serialized writes causes reader timeout).");
-                return;
-            }
-
             // Arrange
             var entities = Enumerable.Range(0, 5)
                 .Select(i => CreateTestEntity(NameEnum.Test, 600 + i))
@@ -289,12 +283,6 @@ public class ConcurrencyTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.DuckDB)
-            {
-                Output.WriteLine("Skipping bulk read/write concurrency test for DuckDB (WAL replay instability).");
-                return;
-            }
-
             // Arrange - Pre-populate some data
             var existingEntities = Enumerable.Range(0, 50)
                 .Select(i => CreateTestEntity(NameEnum.Test, 800 + i))
@@ -306,13 +294,12 @@ public class ConcurrencyTests : DatabaseTestBase
             // Act - Concurrent bulk operations
             var readTask = Task.Run(async () =>
             {
-                var readContext = await CreateAdditionalContextAsync(provider);
                 var results = new List<TestTable>();
 
                 for (var i = 0; i < 20; i++)
                 {
                     var ids = existingEntities.Take(25).Select(e => e.Id).ToList();
-                    var batch = await gateway.RetrieveAsync(ids, readContext);
+                    var batch = await gateway.RetrieveAsync(ids, context);
                     results.AddRange(batch);
                     await Task.Delay(2); // Small delay between batches
                 }
@@ -322,14 +309,13 @@ public class ConcurrencyTests : DatabaseTestBase
 
             var writeTask = Task.Run(async () =>
             {
-                var writeContext = await CreateAdditionalContextAsync(provider);
                 var newEntities = Enumerable.Range(0, 25)
                     .Select(i => CreateTestEntity(NameEnum.Test2, 850 + i))
                     .ToList();
 
                 foreach (var entity in newEntities)
                 {
-                    await gateway.CreateAsync(entity, writeContext);
+                    await gateway.CreateAsync(entity, context);
                     await Task.Delay(1); // Small delay between inserts
                 }
 
@@ -350,13 +336,6 @@ public class ConcurrencyTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Skip for SQLite which has limited concurrent write support
-            if (provider == SupportedDatabase.Sqlite)
-            {
-                Output.WriteLine("Skipping concurrent write test for SQLite");
-                return;
-            }
-
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 900);
             await CreateTableGateway(context).CreateAsync(entity, context);

@@ -271,13 +271,6 @@ public class BatchOperationTests : DatabaseTestBase
         {
             var helper = CreateTableGateway(context);
 
-            // Skip for providers that might have transaction size limits
-            if (provider == SupportedDatabase.Sqlite)
-            {
-                Output.WriteLine($"Skipping large transaction test for {provider}");
-                return;
-            }
-
             // Arrange
             var sw = Stopwatch.StartNew();
 
