@@ -31,9 +31,10 @@ public class ConstraintViolationTests : DatabaseTestBase
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
-        if (provider == SupportedDatabase.Snowflake)
+        if (!context.Dialect.EnforcesConstraints)
         {
-            // Snowflake constraints are not enforced; skip setup to avoid unsupported FK/unique assertions.
+            // Constraints are declared but not enforced (Snowflake); every test here is skipped for
+            // that capability, so there is no table to set up.
             return;
         }
 

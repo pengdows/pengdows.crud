@@ -362,15 +362,10 @@ WHERE lower(trim(rdb$relation_name)) = @name
     [SkippableFact]
     public Task CreateAsync_RealUniqueConstraintViolation_RestoresAuditFieldsToPreAttemptValues()
     {
-        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        // Targets SQLite specifically: the audit-field-restore-on-real-failure path with a fast,
+        // dependency-free real engine.
+        return RunTestAgainstProvidersAsync(new[] { SupportedDatabase.Sqlite }, async (provider, context) =>
         {
-            if (provider != SupportedDatabase.Sqlite)
-            {
-                Output.WriteLine(
-                    $"{provider}: skipped — this test targets SQLite specifically to validate the " +
-                    "audit-field-restore-on-real-failure path with a fast, dependency-free real engine.");
-                return;
-            }
 
             var helper = new TableGateway<AuditedEntity, long>(context, GetAuditResolver());
             var sharedId = Interlocked.Increment(ref _nextId);

@@ -56,7 +56,7 @@ public sealed class MySqlFamilyStringEscapingRoundTripTests : DatabaseTestBase
             Assert.Equal(value, await select.ExecuteScalarRequiredAsync<string>());
 
             // JSON column: MySQL validates the text, so a corrupted escape is a hard failure.
-            if (provider != SupportedDatabase.TiDb && value.StartsWith('{'))
+            if (value.StartsWith('{'))
             {
                 await DropTableIfExistsAsync(context, "escape_probe_json");
                 var jtable = IntegrationObjectNameHelper.Table(context, "escape_probe_json");

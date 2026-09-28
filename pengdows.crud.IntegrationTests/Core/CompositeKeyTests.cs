@@ -149,9 +149,9 @@ public class CompositeKeyTests : DatabaseTestBase
     {
         return RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping duplicate composite key test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping duplicate composite key test for {provider} (constraints are not enforced)");
                 return;
             }
 

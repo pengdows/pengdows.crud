@@ -43,8 +43,10 @@ public class MergeConflictTests : DatabaseTestBase
 
             await helper.CreateAsync(initial, context);
 
-            await using var concurrentContext = await CreateAdditionalContextAsync(provider);
-            concurrentContext.RegisterEntity<VersionedEntity>();
+            // A second reader/writer of the same row. The conflict is detected by the version column in
+            // SQL, so the same context serves; a second context on the same database is unsupported
+            // (one DatabaseContext per connection string, especially for file-based databases).
+            var concurrentContext = context;
             var concurrentHelper = new TableGateway<VersionedEntity, long>(concurrentContext);
 
             var firstCopy = await helper.RetrieveOneAsync(initial.Id, context);
@@ -169,8 +171,8 @@ public class MergeConflictTests : DatabaseTestBase
 
             await helper.CreateAsync(baseRecord, context);
 
-            await using var remoteContext = await CreateAdditionalContextAsync(provider);
-            remoteContext.RegisterEntity<MergeRecord>();
+            // Another writer of the same row, through the same context (see above).
+            var remoteContext = context;
             var remoteHelper = new TableGateway<MergeRecord, long>(remoteContext);
             var remoteCopy =
                 await remoteHelper.RetrieveOneAsync(new MergeRecord { RecordKey = baseRecord.RecordKey },

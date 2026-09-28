@@ -26,6 +26,7 @@ public class EmbeddedQuoteIdentifierIntegrationTests : IAsyncLifetime
 
     private readonly ITestOutputHelper _output;
     private readonly IntegrationTestFixture _fixture;
+    private IsolatedSqliteDatabase? _sqliteDatabase;
     private IDatabaseContext? _sqlite;
     private IDatabaseContext? _postgres;
 
@@ -39,7 +40,9 @@ public class EmbeddedQuoteIdentifierIntegrationTests : IAsyncLifetime
     {
         if (IntegrationTestConfiguration.EnabledProviders.Contains(SupportedDatabase.Sqlite))
         {
-            _sqlite = await _fixture.CreateAdditionalContextAsync(SupportedDatabase.Sqlite);
+            // Its own file: never a second context on the fixture's SQLite file.
+            _sqliteDatabase = new IsolatedSqliteDatabase();
+            _sqlite = _sqliteDatabase.Context;
             await using var create = _sqlite.CreateSqlContainer($@"
 CREATE TABLE IF NOT EXISTS {TableName} (
     id INTEGER PRIMARY KEY,
@@ -66,7 +69,7 @@ CREATE TABLE IF NOT EXISTS {_postgres.WrapObjectName(TableName)} (
         {
             await using var drop = _sqlite.CreateSqlContainer($"DROP TABLE IF EXISTS {TableName}");
             await drop.ExecuteNonQueryAsync();
-            _sqlite.Dispose();
+            _sqliteDatabase!.Dispose();
         }
 
         if (_postgres != null)

@@ -32,6 +32,7 @@ public class WrappedTableNameMultiTenantIntegrationTests : IAsyncLifetime
     private readonly ITestOutputHelper _output;
     private readonly IntegrationTestFixture _fixture;
     private IDatabaseContext? _postgres;
+    private IsolatedSqliteDatabase? _sqliteDatabase;
     private IDatabaseContext? _sqlite;
 
     public WrappedTableNameMultiTenantIntegrationTests(ITestOutputHelper output, IntegrationTestFixture fixture)
@@ -50,7 +51,9 @@ public class WrappedTableNameMultiTenantIntegrationTests : IAsyncLifetime
         }
 
         _postgres = await _fixture.CreateAdditionalContextAsync(SupportedDatabase.PostgreSql);
-        _sqlite = await _fixture.CreateAdditionalContextAsync(SupportedDatabase.Sqlite);
+        // Its own file: never a second context on the fixture's SQLite file.
+        _sqliteDatabase = new IsolatedSqliteDatabase();
+        _sqlite = _sqliteDatabase.Context;
 
         await using (var createSchema =
                      _postgres.CreateSqlContainer($"CREATE SCHEMA IF NOT EXISTS {_postgres.WrapObjectName(SchemaName)}"))
@@ -97,7 +100,7 @@ CREATE TABLE IF NOT EXISTS {TableName} (
                 await drop.ExecuteNonQueryAsync();
             }
 
-            _sqlite.Dispose();
+            _sqliteDatabase!.Dispose();
         }
     }
 

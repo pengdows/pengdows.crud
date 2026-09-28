@@ -78,4 +78,37 @@ public class DatabaseTestBaseInitializationOutcomeTests
             DatabaseTestBase.EnsureTargetedProviderAvailable(SupportedDatabase.MariaDb,
                 new[] { SupportedDatabase.MariaDb }, available: false));
     }
+
+    // INT-SKIP-008: a test for a feature that only some databases have (a stored procedure written
+    // in one engine's syntax) declares those databases. It runs every listed database that is
+    // available, skips only when configuration excluded all of them, and fails when a listed,
+    // enabled database is unavailable.
+    [Fact]
+    public void TargetedProviders_RunsTheListedAvailableOnes()
+    {
+        var selected = DatabaseTestBase.SelectTargetedProviders(
+            new[] { SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb },
+            enabledProviders: new[] { SupportedDatabase.Sqlite, SupportedDatabase.PostgreSql, SupportedDatabase.YugabyteDb },
+            availableProviders: new[] { SupportedDatabase.Sqlite, SupportedDatabase.PostgreSql, SupportedDatabase.YugabyteDb });
+
+        Assert.Equal(new[] { SupportedDatabase.PostgreSql, SupportedDatabase.YugabyteDb }, selected);
+    }
+
+    [Fact]
+    public void TargetedProviders_NoneEnabled_Skips()
+    {
+        Assert.Throws<Xunit.SkipException>(() => DatabaseTestBase.SelectTargetedProviders(
+            new[] { SupportedDatabase.Oracle },
+            enabledProviders: new[] { SupportedDatabase.Sqlite },
+            availableProviders: new[] { SupportedDatabase.Sqlite }));
+    }
+
+    [Fact]
+    public void TargetedProviders_EnabledButUnavailable_Fails()
+    {
+        Assert.Throws<InvalidOperationException>(() => DatabaseTestBase.SelectTargetedProviders(
+            new[] { SupportedDatabase.Oracle, SupportedDatabase.Db2 },
+            enabledProviders: new[] { SupportedDatabase.Oracle, SupportedDatabase.Db2 },
+            availableProviders: new[] { SupportedDatabase.Oracle }));
+    }
 }

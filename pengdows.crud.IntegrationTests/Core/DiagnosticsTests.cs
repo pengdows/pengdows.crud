@@ -51,9 +51,9 @@ public class DiagnosticsTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            if (provider == SupportedDatabase.Snowflake)
+            if (!context.Dialect.EnforcesConstraints)
             {
-                Output.WriteLine("Skipping unique constraint test for Snowflake (constraints are not enforced)");
+                Output.WriteLine($"Skipping unique constraint test for {provider} (constraints are not enforced)");
                 return;
             }
 

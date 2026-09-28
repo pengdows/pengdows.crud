@@ -24,44 +24,8 @@ public class InsertReturningTests : DatabaseTestBase
 {
     private const string TableName = "returning_test";
 
-    // Providers that support RETURNING/OUTPUT clause
-    private static readonly SupportedDatabase[] ReturningProviders =
-    {
-        SupportedDatabase.SqlServer,
-        SupportedDatabase.PostgreSql,
-        SupportedDatabase.Sqlite,
-        SupportedDatabase.Firebird,
-        SupportedDatabase.Oracle,
-        SupportedDatabase.YugabyteDb,
-        // SELECT id FROM FINAL TABLE (INSERT ...)
-        SupportedDatabase.Db2,
-        // PostgreSQL-interface RETURNING through PGAdapter
-        SupportedDatabase.Spanner
-    };
-
-    // Providers that do NOT support RETURNING; fall back to LAST_INSERT_ID() or similar
-    private static readonly SupportedDatabase[] NonReturningProviders =
-    {
-        SupportedDatabase.MySql,
-        SupportedDatabase.TiDb,
-        SupportedDatabase.Snowflake,
-        // pengdows.flatfile: no IDENTITY/RETURNING; the id comes from a sequence DEFAULT.
-        SupportedDatabase.FlatFile,
-        SupportedDatabase.SingleStore,
-        SupportedDatabase.Informix,
-        SupportedDatabase.SybaseASE
-    };
-
     public InsertReturningTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {
-    }
-
-    protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
-    {
-        var allProviders = ReturningProviders.Concat(NonReturningProviders).ToArray();
-        return IntegrationTestConfiguration.EnabledProviders
-            .Where(p => allProviders.Contains(p))
-            .ToList();
     }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
@@ -78,9 +42,9 @@ public class InsertReturningTests : DatabaseTestBase
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
             // Skip non-RETURNING providers in this test
-            if (NonReturningProviders.Contains(provider))
+            if (!context.Dialect.SupportsInsertReturning)
             {
-                Output.WriteLine($"Skipping {provider} - does not support RETURNING clause");
+                Output.WriteLine($"Skipping {provider} - does not support INSERT ... RETURNING (covered by CreateAsync_NonReturningProviders_InsertsSuccessfully)");
                 return;
             }
 
@@ -110,8 +74,8 @@ public class InsertReturningTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Only test non-RETURNING providers
-            if (!NonReturningProviders.Contains(provider))
+            // The fallback path (no RETURNING) only exists where the dialect can't return the id.
+            if (context.Dialect.SupportsInsertReturning)
             {
                 Output.WriteLine(
                     $"[{provider}] Skipping: {provider} supports RETURNING/OUTPUT clause — identity population via RETURNING is covered in CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders");
@@ -146,16 +110,22 @@ public class InsertReturningTests : DatabaseTestBase
         {
             var supportsReturning = context.SupportsInsertReturning;
 
-            if (NonReturningProviders.Contains(provider))
+            // Expected per database. RETURNING/OUTPUT (or Db2's FINAL TABLE) where the engine can
+            // return the generated id; a fallback otherwise.
+            bool? expected = provider switch
             {
-                Assert.False(supportsReturning,
-                    $"{provider} should NOT support INSERT RETURNING");
-            }
-            else if (ReturningProviders.Contains(provider))
-            {
-                Assert.True(supportsReturning,
-                    $"{provider} should support INSERT RETURNING");
-            }
+                SupportedDatabase.SqlServer or SupportedDatabase.PostgreSql or SupportedDatabase.Sqlite
+                    or SupportedDatabase.Firebird or SupportedDatabase.Oracle or SupportedDatabase.YugabyteDb
+                    or SupportedDatabase.CockroachDb or SupportedDatabase.MariaDb or SupportedDatabase.DuckDB
+                    or SupportedDatabase.Db2 or SupportedDatabase.Spanner => true,
+                SupportedDatabase.MySql or SupportedDatabase.TiDb or SupportedDatabase.Snowflake
+                    or SupportedDatabase.FlatFile or SupportedDatabase.SingleStore or SupportedDatabase.Informix
+                    or SupportedDatabase.SybaseASE => false,
+                _ => null
+            };
+
+            Assert.True(expected.HasValue, $"{provider}: add its expected SupportsInsertReturning value to this test");
+            Assert.Equal(expected, supportsReturning);
 
             Output.WriteLine($"{provider}: SupportsInsertReturning = {supportsReturning}");
             await Task.CompletedTask;
@@ -188,22 +158,26 @@ CREATE TABLE {table} (
     ""id"" BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
     ""name"" VARCHAR(255) NOT NULL
 );",
+            // DuckDB has no identity columns; the id defaults from a sequence. The DROP runs first
+            // because SetupDatabaseAsync only drops the table.
             SupportedDatabase.DuckDB => $@"
+DROP SEQUENCE IF EXISTS {context.WrapObjectName(TableName + "_seq")};
+CREATE SEQUENCE {context.WrapObjectName(TableName + "_seq")};
 CREATE TABLE {table} (
-    id BIGINT GENERATED BY DEFAULT AS IDENTITY,
-    name TEXT NOT NULL
+    {context.WrapObjectName("id")} BIGINT DEFAULT nextval('{TableName}_seq') PRIMARY KEY,
+    {context.WrapObjectName("name")} TEXT NOT NULL
 );",
             SupportedDatabase.Oracle => $@"
 CREATE TABLE {table} (
     {context.WrapObjectName("id")} NUMBER GENERATED BY DEFAULT ON NULL AS IDENTITY PRIMARY KEY,
     {context.WrapObjectName("name")} VARCHAR2(255) NOT NULL
 );",
-            SupportedDatabase.MySql or SupportedDatabase.TiDb or SupportedDatabase.SingleStore => $@"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb or SupportedDatabase.SingleStore => $@"
 CREATE TABLE {table} (
     `id` BIGINT AUTO_INCREMENT PRIMARY KEY,
     `name` VARCHAR(255) NOT NULL
 );",
-            SupportedDatabase.YugabyteDb => $@"
+            SupportedDatabase.YugabyteDb or SupportedDatabase.CockroachDb => $@"
 CREATE TABLE {table} (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(255) NOT NULL
@@ -309,14 +283,8 @@ WHERE {nameColumn} = ");
     [SkippableFact]
     public async Task Snowflake_AutoIncrement_Insert_RowsExistAfterCreate()
     {
-        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        await RunTestAgainstProvidersAsync(new[] { SupportedDatabase.Snowflake }, async (provider, context) =>
         {
-            if (provider != SupportedDatabase.Snowflake)
-            {
-                Output.WriteLine(
-                    $"[{provider}] Skipping: Snowflake-specific AUTOINCREMENT test — {provider} uses RETURNING/OUTPUT for reliable identity retrieval; see CreateAsync_ReturningClause_PopulatesIdentityAcrossProviders");
-                return;
-            }
 
             ((TypeMapRegistry)context.GetInternalTypeMapRegistry()).Register<ReturningEntity>();
             var helper = new TableGateway<ReturningEntity, long>(context);

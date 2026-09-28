@@ -128,6 +128,33 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// opt-in provider that is not enabled) excluded it, and fails when the provider is enabled
     /// but unavailable - the same rule <see cref="EnsureProvidersInitialized"/> applies per class.
     /// </summary>
+    /// <summary>
+    /// The databases a test that declares its own list should run: every listed database that is
+    /// available. Skips only when configuration excluded all of them; fails when a listed database
+    /// is enabled but unavailable.
+    /// </summary>
+    internal static IReadOnlyList<SupportedDatabase> SelectTargetedProviders(
+        IReadOnlyCollection<SupportedDatabase> providers,
+        IReadOnlyCollection<SupportedDatabase> enabledProviders,
+        IReadOnlyCollection<SupportedDatabase> availableProviders)
+    {
+        var missing = providers.Where(p => enabledProviders.Contains(p) && !availableProviders.Contains(p)).ToArray();
+        if (missing.Length > 0)
+        {
+            throw new InvalidOperationException(
+                $"Provider(s) {string.Join(", ", missing)} enabled but not available for testing.");
+        }
+
+        var selected = providers.Where(availableProviders.Contains).ToArray();
+        if (selected.Length == 0)
+        {
+            throw new Xunit.SkipException(
+                $"None of {string.Join(", ", providers)} is enabled for this run (INTEGRATION_ONLY or an opt-in provider that is not enabled).");
+        }
+
+        return selected;
+    }
+
     internal static void EnsureTargetedProviderAvailable(SupportedDatabase provider,
         IReadOnlyList<SupportedDatabase> enabledProviders, bool available)
     {
@@ -239,6 +266,40 @@ public abstract class DatabaseTestBase : IAsyncLifetime
 
         Output.WriteLine(
             $"[{DateTime.UtcNow:HH:mm:ss.fff}] Test execution across all providers complete (total: {(DateTime.UtcNow - testStart).TotalMilliseconds:F0}ms)");
+
+        if (failures.Any())
+        {
+            var errorMessage = string.Join("\n", failures.Select(f => $"{f.Provider}: {f.Error.Message}"));
+            throw new AggregateException($"Test failed on {failures.Count} provider(s):\n{errorMessage}",
+                failures.Select(f => f.Error));
+        }
+    }
+
+    /// <summary>
+    /// Run a test against only the listed databases, for a feature only they have (for example a
+    /// stored procedure in one engine's syntax). See <see cref="SelectTargetedProviders"/>.
+    /// </summary>
+    protected async Task RunTestAgainstProvidersAsync(
+        IReadOnlyCollection<SupportedDatabase> providers,
+        Func<SupportedDatabase, IDatabaseContext, Task> testAction,
+        [CallerMemberName] string? testName = null)
+    {
+        var selected = SelectTargetedProviders(providers, IntegrationTestConfiguration.EnabledProviders,
+            DatabaseContexts.Keys.ToArray());
+        var failures = new List<(SupportedDatabase Provider, Exception Error)>();
+        foreach (var provider in selected)
+        {
+            try
+            {
+                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] Running {testName} against {provider}...");
+                await testAction(provider, DatabaseContexts[provider]);
+            }
+            catch (Exception ex)
+            {
+                Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} test failed: {ex.Message}");
+                failures.Add((provider, ex));
+            }
+        }
 
         if (failures.Any())
         {

@@ -98,8 +98,9 @@ public class MultiTenantDialectVersionTests : IAsyncLifetime
     {
         Skip.IfNot(IntegrationTestConfiguration.EnabledProviders.Contains(SupportedDatabase.MySql),
             "MySQL is not enabled for this test run.");
-        Skip.If(_oldConnectionString == null || _newConnectionString == null,
-            "MySQL containers failed to initialize.");
+        // An enabled provider whose containers didn't start is a failure, never a skip.
+        Assert.True(_oldConnectionString != null && _newConnectionString != null,
+            "MySQL is enabled but its version containers failed to initialize.");
 
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TenantEntity>();

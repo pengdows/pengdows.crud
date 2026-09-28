@@ -102,25 +102,17 @@ public class DbModeTests : DatabaseTestBase
             await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
             var helper = CreateTableGateway(context);
 
+            // Every driver counts, including ones that never raise StateChange (Snowflake): the
+            // transaction's connection is open from BeginTransaction on.
             var connCountInTransaction = transaction.NumberOfOpenConnections;
-            if (provider == SupportedDatabase.Snowflake)
-            {
-                Output.WriteLine("Snowflake opens connections lazily; skipping initial connection count assertion");
-            }
-            else
-            {
-                Assert.True(connCountInTransaction > 0, "Transaction should have at least one connection open");
-            }
+            Assert.True(connCountInTransaction > 0, "Transaction should have at least one connection open");
 
             await helper.CreateAsync(entity1, transaction);
             await helper.CreateAsync(entity2, transaction);
 
             // Connection should still be open during transaction
-            if (provider != SupportedDatabase.Snowflake)
-            {
-                Assert.True(transaction.NumberOfOpenConnections > 0,
-                    "Connection should remain open during transaction");
-            }
+            Assert.True(transaction.NumberOfOpenConnections > 0,
+                "Connection should remain open during transaction");
 
             transaction.Commit();
 
@@ -408,39 +400,15 @@ public class DbModeTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            // Skip SQLite which has limited isolation support
-            if (provider == SupportedDatabase.Sqlite)
-            {
-                Output.WriteLine("Skipping isolation test for SQLite");
-                return;
-            }
-
-            if (provider == SupportedDatabase.DuckDB)
-            {
-                Output.WriteLine("Skipping isolation test for DuckDB");
-                return;
-            }
-
-            // Capability: pengdows.flatfile allows one writer connection per database, so the second
-            // concurrent write transaction this test needs cannot exist (ConnectionWriteLock).
-            if (provider == SupportedDatabase.FlatFile)
-            {
-                Output.WriteLine("Skipping isolation test for FlatFile (single writer; no concurrent write transaction)");
-                return;
-            }
-
-            if (provider == SupportedDatabase.SqlServer && !context.RCSIEnabled)
-            {
-                Output.WriteLine("Skipping isolation test for SQL Server without RCSI");
-                return;
-            }
-
             // Arrange
             var entity = CreateTestEntity(NameEnum.Test, 1000);
             await CreateTableGateway(context).CreateAsync(entity, context);
 
-            // Act - Transaction 1: Read the entity
-            await using var tx1 = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
+            // Act - Transaction 1: Read the entity. It only reads, so it is a read transaction; only
+            // tx2 writes, which also lets single-writer engines (SQLite, DuckDB, pengdows.flatfile)
+            // run this test.
+            await using var tx1 = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel,
+                ExecutionType.Read);
             var helper1 = CreateTableGateway(context);
             var read1 = await helper1.RetrieveOneAsync(entity.Id, tx1);
             Assert.NotNull(read1);

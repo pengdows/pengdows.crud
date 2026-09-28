@@ -24,24 +24,29 @@ public class StoredProcedureTests : DatabaseTestBase
     }
 
     [SkippableFact]
+    public async Task StoredProc_ReturnValueCapture_ThrowsWhereTheWrappingStyleCannotCaptureIt()
+    {
+        await RunTestAgainstAllProvidersAsync((provider, context) =>
+        {
+            // Only the Exec wrapping style (SQL Server) can capture @RETURN_VALUE; every other style
+            // must refuse captureReturn: true rather than silently ignore it.
+            if (context.ProcWrappingStyle != ProcWrappingStyle.Exec)
+            {
+                var container = context.CreateSqlContainer("SomeProc");
+                Assert.Throws<NotSupportedException>(() =>
+                    container.WrapForStoredProc(ExecutionType.Write, includeParameters: false,
+                        captureReturn: true));
+            }
+
+            return Task.CompletedTask;
+        });
+    }
+
+    [SkippableFact]
     public async Task StoredProc_ReturnValueCapture_WorksOnSqlServer()
     {
-        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        await RunTestAgainstProvidersAsync(new[] { SupportedDatabase.SqlServer }, async (provider, context) =>
         {
-            if (provider != SupportedDatabase.SqlServer)
-            {
-                // Verify that captureReturn: true throws on dialects that don't support it (non-SqlServer)
-                // Note: SQL Server uses Exec style and is the only one currently supporting @RETURN_VALUE capture.
-                if (context.ProcWrappingStyle != ProcWrappingStyle.Exec)
-                {
-                    var container = context.CreateSqlContainer("SomeProc");
-                    Assert.Throws<NotSupportedException>(() =>
-                        container.WrapForStoredProc(ExecutionType.Write, includeParameters: false,
-                            captureReturn: true));
-                }
-
-                return;
-            }
 
             // Arrange: Create a simple proc that returns 42
             var dropSql = "IF OBJECT_ID('dbo.TestReturnProc', 'P') IS NOT NULL DROP PROCEDURE dbo.TestReturnProc";
@@ -74,13 +79,8 @@ public class StoredProcedureTests : DatabaseTestBase
     [SkippableFact]
     public async Task StoredProc_OutputParameter_WorksOnSqlServer()
     {
-        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        await RunTestAgainstProvidersAsync(new[] { SupportedDatabase.SqlServer }, async (provider, context) =>
         {
-            if (provider != SupportedDatabase.SqlServer)
-            {
-                return;
-            }
-
             const string dropSql =
                 "IF OBJECT_ID('dbo.TestOutputProc', 'P') IS NOT NULL DROP PROCEDURE dbo.TestOutputProc";
             const string createSql =
@@ -122,13 +122,8 @@ public class StoredProcedureTests : DatabaseTestBase
     [SkippableFact]
     public Task StoredProc_AnonymousBlock_WithOutParameter_WorksOnOracle()
     {
-        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        return RunTestAgainstProvidersAsync(new[] { SupportedDatabase.Oracle }, async (provider, context) =>
         {
-            if (provider != SupportedDatabase.Oracle)
-            {
-                return;
-            }
-
             var procName = context.WrapObjectName("sp_pengdows_oracle_test");
             var createSql =
                 $"CREATE OR REPLACE PROCEDURE {procName}(input_value IN NUMBER, output_value OUT NUMBER) AS\n" +
@@ -170,14 +165,10 @@ public class StoredProcedureTests : DatabaseTestBase
     [SkippableFact]
     public Task StoredProc_Call_RealProcedureWithInoutParameter_ExecutesViaCall()
     {
-        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        return RunTestAgainstProvidersAsync(
+            new[] { SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb },
+            async (provider, context) =>
         {
-            if (provider is not (SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb
-                or SupportedDatabase.YugabyteDb))
-            {
-                return;
-            }
-
             if (context.ProcWrappingStyle == ProcWrappingStyle.None)
             {
                 Output.WriteLine($"Skipping real PROCEDURE test on {provider}: stored procedures are unsupported.");
@@ -236,13 +227,8 @@ public class StoredProcedureTests : DatabaseTestBase
     [SkippableFact]
     public Task StoredProc_Call_ReturnsResultSetFromWithReturnCursor()
     {
-        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        return RunTestAgainstProvidersAsync(new[] { SupportedDatabase.Db2 }, async (provider, context) =>
         {
-            if (provider != SupportedDatabase.Db2)
-            {
-                return;
-            }
-
             var procName = context.WrapObjectName("sp_pengdows_db2_test");
             var createSql =
                 $"CREATE OR REPLACE PROCEDURE {procName}()\n" +
@@ -284,13 +270,8 @@ public class StoredProcedureTests : DatabaseTestBase
     [SkippableFact]
     public Task StoredProc_ExecuteProcedure_BothReadAndWriteSyntax_WorkOnFirebird()
     {
-        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        return RunTestAgainstProvidersAsync(new[] { SupportedDatabase.Firebird }, async (provider, context) =>
         {
-            if (provider != SupportedDatabase.Firebird)
-            {
-                return;
-            }
-
             var procName = context.WrapObjectName("sp_pengdows_fb_test");
             var createSql =
                 $"CREATE OR ALTER PROCEDURE {procName} (input_value INTEGER)\n" +
