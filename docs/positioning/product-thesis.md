@@ -363,7 +363,7 @@ The public execution boundary does not expose the underlying `DbConnection` eith
 execute through governed containers, readers, and transaction leases rather than acquiring
 provider connections directly. The obsolete compatibility-only `IDatabaseContext.DataSource`
 property hands back the provider data source the context was built with; a connection created from
-it is outside the governed system entirely. `PGC027` rejects application use; use the context
+it is outside the governed system entirely. `PGC028` rejects application use; use the context
 execution APIs instead.
 
 Two things sometimes get raised as counterexamples to this and are worth naming as out of

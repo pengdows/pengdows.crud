@@ -27,7 +27,7 @@ built with (a caller-supplied one such as `NpgsqlDataSource`, or one the context
 `null` when there is none), and `ITransactionContext` forwards its parent context's value. A
 connection created from it via `DataSource.CreateConnection()` is outside the governed system
 entirely: no admission limits, no session settings, no metrics attribution, and no disposal
-tracking. Do not use it from application code; `PGC027` reports it as an error. Use the context
+tracking. Do not use it from application code; `PGC028` reports it as an error. Use the context
 execution APIs instead.
 
 ## `PoolGovernor` admission lifecycle

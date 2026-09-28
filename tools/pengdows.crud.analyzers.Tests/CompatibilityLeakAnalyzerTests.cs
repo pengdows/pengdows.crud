@@ -140,7 +140,7 @@ public sealed class CompatibilityLeakAnalyzerTests
             expectedCount: 3);
     }
 
-    // A using-alias must not sidestep PGC027: the alias directive itself names the blocked type, and
+    // A using-alias must not sidestep PGC028: the alias directive itself names the blocked type, and
     // an identifier bound through the alias resolves to the aliased type.
     [Fact]
     public async Task AliasedBlockedType_IsReportedAtTheAliasAndAtEachUse()

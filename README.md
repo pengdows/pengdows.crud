@@ -140,7 +140,8 @@ Current rules include:
 - `PGC008`: do not inject raw values into SQL predicates or joins; parameterize the value instead
 - `PGC025`: public/protected gateway methods that execute database work must accept an `IDatabaseContext`/`ITransactionContext` parameter and route execution through `ctx = context ?? Context`
 - `PGC026`: use `WrapObjectName("alias.column")` instead of `WrapObjectName("alias") + "." + WrapObjectName("column")`
-- `PGC027` (error): do not use APIs kept public only for 2.x binary compatibility (`IDatabaseContext.DataSource`, `SqlStandardLevel`/`MaxSupportedStandard`/`StandardCompliance`, internal bookkeeping types, the inert type attributes) or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are fixed at construction (their setters do nothing)
+- `PGC028` (error): do not use APIs kept public only for 2.x binary compatibility (`IDatabaseContext.DataSource`, `SqlStandardLevel`/`MaxSupportedStandard`/`StandardCompliance`, internal bookkeeping types, the inert type attributes) or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are fixed at construction (their setters do nothing)
+- `PGC029` (error, opt-in): with `<PengdowsMultiTenancy>true</PengdowsMultiTenancy>` in the consuming project, every call to a gateway execution/build method must pass a non-null `IDatabaseContext`/`ITransactionContext`; relying on the gateway's default context would silently pick the wrong tenant. Off unless the property is set
 
 ```csharp
 // Bad

@@ -25,7 +25,18 @@ testbed and the driver-version matrix, benchmarks, analyzers, tools, stormgate) 
 2.0.x and 3.0: the best of both. Measured 2026-09-28 (`2.0.6` vs `3.0-backports`): Tests 332 files
 differ, IntegrationTests 66, testbed 40, benchmarks 36, analyzers + tests 12, fakeDb 11, a few
 elsewhere; 3.0 also has `CrudBenchmarks.Tests` and nine `testbed.DriverVersionMatrix*` projects.
-Tracked as UNIFY (plan pending approval).
+Code that must differ because the core API differs goes in one clearly marked branch-specific
+folder per project; everything else is byte-identical, checked by a drift script (maintainer choice
+"1a", 2026-09-28).
+
+| ID | Project(s) | Status |
+|---|---|---|
+| UNIFY-001 | `tools/pengdows.crud.analyzers` + `.Tests` | **Done** on 2.0.6 (copied to 3.0 next). Best of both: 3.0's shared `GatewayAnalysisHelpers`, multitenancy call-site rule and packed `build/pengdows.crud.analyzers.props`, and its option-aware test verifier; 2.0.6's compatibility rule and tests, and net8.0+net10.0 test targets. PGC027 had meant a different rule on each branch; both got new IDs so each rule is reported on both branches (maintainer, 2026-09-28): compatibility rule **PGC028**, multitenancy call-site rule **PGC029**. `DiagnosticIdTests` pins both and fails if two rules share an ID |
+| UNIFY-002 | drift check script (shared paths vs the other branch) | Open |
+| UNIFY-003 | `pengdows.crud.fakeDb`, `pengdows.crud.opentelemetry`, `pengdows.stormgate*`, `tools/verify-novendor` | Open |
+| UNIFY-004 | `benchmarks` (+ 3.0's `CrudBenchmarks.Tests`), `testbed.DriverVersionMatrix*` (3.0 only today) | Open |
+| UNIFY-005 | `testbed`, `pengdows.crud.IntegrationTests` | Open |
+| UNIFY-006 | `pengdows.crud.Tests` | Open |
 
 **Reverse rule (maintainer, 2026-09-28):** every bug fix found on 3.0 comes back to 2.0.6 unless
 that would break semver (a binary or API change against 2.0.5, or a removal; package validation
@@ -162,11 +173,11 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 
 | ID | Item | 3.0 commit | Plan | Status |
 |---|---|---|---|---|
-| BP-E01 | `pengdows.crud.tenant.ITenantConfiguration`: empty public marker, nothing implements or consumes it | b96ea22 (made internal) | Added to PGC027 `BlockedTypes` + `[Obsolete(false)]` (analyzer test `TenantConfigurationMarker_IsReported`) | **Done** |
+| BP-E01 | `pengdows.crud.tenant.ITenantConfiguration`: empty public marker, nothing implements or consumes it | b96ea22 (made internal) | Added to PGC028 (then PGC027) `BlockedTypes` + `[Obsolete(false)]` (analyzer test `TenantConfigurationMarker_IsReported`) | **Done** |
 | BP-E02 | `AuditCreationPolicy` setter on `ITableGateway`/`IPrimaryKeyTableGateway`/`BaseTableGateway`: mutable shared state on a singleton gateway | 6f01a9a (`init`) | Now `init` on all three (the interfaces keep a default body). New in 2.0.6, so no 2.0.5 impact (package validation clean). Pinned via the `IsExternalInit` modreq test ported from 3.0 | **Done** |
 | BP-E03 | `IDatabaseContextConfiguration.SessionInitializationFailureMode` is non-nullable on 2.0.6, nullable on 3.0 | ba8268f (CORE-039) | Now `SessionInitializationFailureMode?`, default `null`, matching 3.0's type. On 2.0.x `null` still means BestEffort for **every** context (2.0.5 behavior); 3.0's FailClosed-for-read-only default stays 3.0-only (behavior change). Tests pin both | **Done** |
 | — | `TransactionModeNotSupportedException` | f045677 (removed) | **Keep.** Still thrown on 2.0.6 (`IsolationResolver.cs:76,84`), so blocking it would be wrong | Decided |
-| — | DataSource, SqlStandardLevel family, EphemeralSecureString, ConnectionLocalState, ILockerAsync, TypeCoercionOptions, EnumStorage, inert attributes, ReadWriteMode/ProcWrappingStyle setters | various | Already `[Obsolete]` + PGC027 on 2.0.6 | Done |
+| — | DataSource, SqlStandardLevel family, EphemeralSecureString, ConnectionLocalState, ILockerAsync, TypeCoercionOptions, EnumStorage, inert attributes, ReadWriteMode/ProcWrappingStyle setters | various | Already `[Obsolete]` + PGC028 (then PGC027) on 2.0.6 | Done |
 
 ### Tier 1: bug fixes, no public-API change (low risk)
 
@@ -260,7 +271,7 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | BP-304 | `AddDbProviderLoading` DI entry point (the loader ctor is internal, so the feature is unreachable today) | ee13db6 | Open (decide) |
 | BP-305 | Public `DataReaderMapper` | be7756b | Open (decide) |
 | BP-306 | `MultiTenantOptions.MaxTenantCount` wired through DI | 4399d3a | Open (decide) |
-| BP-307 | Opt-in multitenancy call-site analyzer. **Needs a new diagnostic ID** (PGC027 is CompatibilityLeakAnalyzer on 2.0.6) | f34d7bf | Open (decide) |
+| BP-307 | Opt-in multitenancy call-site analyzer. **Needs a new diagnostic ID** (PGC027 was CompatibilityLeakAnalyzer on 2.0.6) | f34d7bf | **Done** (2026-09-28, UNIFY-001): the analyzer project is now identical on 2.0.6 and 3.0; the compatibility rule is PGC028 and the multitenancy call-site rule PGC029 on both |
 | BP-308 | `ISqlDialect.JoinParenthesization` (with a default implementation; nothing consumes it yet) | 70d3b99 | Open (decide) |
 | BP-309 | Oracle array-bound `BatchCreate` (ArrayBindCount instead of INSERT ALL) | b30c970 | Open (decide) |
 | BP-310 | Oracle batch UPDATE via MERGE | e639f9a | Open (decide) |

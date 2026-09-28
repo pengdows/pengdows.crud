@@ -10,47 +10,6 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
 {
     public const string DiagnosticId = "PGC025";
 
-    private static readonly ImmutableHashSet<string> ExecutionMethodNames =
-    [
-        "BeginTransaction",
-        "BeginTransactionAsync",
-        "RetrieveOneAsync",
-        "RetrieveAsync",
-        "RetrieveStreamAsync",
-        "CreateAsync",
-        "UpdateAsync",
-        "DeleteAsync",
-        "UpsertAsync",
-        "BatchCreateAsync",
-        "BatchUpdateAsync",
-        "BatchUpsertAsync",
-        "BatchDeleteAsync",
-        "LoadSingleAsync",
-        "LoadListAsync",
-        "LoadStreamAsync",
-        "ExecuteNonQueryAsync",
-        "ExecuteScalarRequiredAsync",
-        "ExecuteScalarOrNullAsync",
-        "TryExecuteScalarAsync",
-        "ExecuteReaderAsync",
-        "CountAllAsync",
-        "CountWhereAsync",
-        "CountWhereNullAsync",
-        "CountWhereEqualsAsync",
-        "BuildCreate",
-        "BuildCreateWithReturning",
-        "BuildRetrieve",
-        "BuildBaseRetrieve",
-        "BuildUpdate",
-        "BuildUpdateAsync",
-        "BuildDelete",
-        "BuildBatchCreate",
-        "BuildBatchUpdate",
-        "BuildBatchDelete",
-        "BuildBatchUpsert",
-        "BuildUpsert"
-    ];
-
     internal static readonly DiagnosticDescriptor Rule = new(
         DiagnosticId,
         "Gateway methods should accept an execution context",
@@ -91,7 +50,7 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
             return;
         }
 
-        if (!IsGatewayType(method.ContainingType))
+        if (!GatewayAnalysisHelpers.IsGatewayType(method.ContainingType))
         {
             return;
         }
@@ -174,7 +133,7 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
     {
         foreach (var parameter in method.Parameters)
         {
-            if (IsContextType(parameter.Type))
+            if (GatewayAnalysisHelpers.IsContextType(parameter.Type))
             {
                 return parameter;
             }
@@ -190,36 +149,13 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
         foreach (var invocation in declaration.DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             var methodName = GetInvokedMethodName(invocation);
-            if (methodName != null && ExecutionMethodNames.Contains(methodName))
+            if (methodName != null && GatewayAnalysisHelpers.ExecutionMethodNames.Contains(methodName))
             {
                 result.Add(invocation);
             }
         }
 
         return result;
-    }
-
-    private static bool IsGatewayType(INamedTypeSymbol? type)
-    {
-        while (type != null)
-        {
-            if (type.Name is "TableGateway" or "PrimaryKeyTableGateway" or "BaseTableGateway")
-            {
-                return true;
-            }
-
-            foreach (var iface in type.AllInterfaces)
-            {
-                if (iface.Name is "ITableGateway" or "IPrimaryKeyTableGateway")
-                {
-                    return true;
-                }
-            }
-
-            type = type.BaseType;
-        }
-
-        return false;
     }
 
     private static string? GetInvokedMethodName(InvocationExpressionSyntax invocation)
@@ -230,24 +166,6 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
             IdentifierNameSyntax identifier => identifier.Identifier.ValueText,
             _ => null
         };
-    }
-
-    private static bool IsContextType(ITypeSymbol type)
-    {
-        if (type.Name is "IDatabaseContext" or "ITransactionContext")
-        {
-            return true;
-        }
-
-        foreach (var iface in type.AllInterfaces)
-        {
-            if (iface.Name is "IDatabaseContext" or "ITransactionContext")
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     /// <summary>

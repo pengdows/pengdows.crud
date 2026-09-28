@@ -460,7 +460,7 @@ app.Use(async (context, next) =>
 
 The base `SqlDialect` still contains the legacy SQL-standard heuristic (`MaxSupportedStandard` and
 `SqlStandardLevel`) for 2.x binary compatibility, but those members are obsolete and rejected for
-new application use by `PGC027`. Consumers must query the specific `Supports*` capabilities. The
+new application use by `PGC028`. Consumers must query the specific `Supports*` capabilities. The
 legacy implementation maps feature flags to approximate SQL eras, while individual dialects may
 override capabilities with version-aware logic; that history is retained here to explain existing
 behavior, not as a capability contract for new code.

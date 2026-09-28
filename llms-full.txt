@@ -986,7 +986,8 @@ Current rules include:
 - `PGC008`: do not inject raw values into SQL predicates or joins; parameterize the value instead
 - `PGC025`: public/protected gateway methods that execute database work must accept an `IDatabaseContext`/`ITransactionContext` parameter and route execution through `ctx = context ?? Context`
 - `PGC026`: use `WrapObjectName("alias.column")` instead of `WrapObjectName("alias") + "." + WrapObjectName("column")`
-- `PGC027` (error): do not use APIs kept public only for 2.x binary compatibility (`IDatabaseContext.DataSource`, `SqlStandardLevel`/`MaxSupportedStandard`/`StandardCompliance`, internal bookkeeping types, the inert type attributes) or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are fixed at construction (their setters do nothing)
+- `PGC028` (error): do not use APIs kept public only for 2.x binary compatibility (`IDatabaseContext.DataSource`, `SqlStandardLevel`/`MaxSupportedStandard`/`StandardCompliance`, internal bookkeeping types, the inert type attributes) or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are fixed at construction (their setters do nothing)
+- `PGC029` (error, opt-in): with `<PengdowsMultiTenancy>true</PengdowsMultiTenancy>` in the consuming project, every call to a gateway execution/build method must pass a non-null `IDatabaseContext`/`ITransactionContext`; relying on the gateway's default context would silently pick the wrong tenant. Off unless the property is set
 
 ```csharp
 // Bad
@@ -1459,7 +1460,7 @@ The public execution boundary does not expose the underlying `DbConnection` eith
 execute through governed containers, readers, and transaction leases rather than acquiring
 provider connections directly. The obsolete compatibility-only `IDatabaseContext.DataSource`
 property hands back the provider data source the context was built with; a connection created from
-it is outside the governed system entirely. `PGC027` rejects application use; use the context
+it is outside the governed system entirely. `PGC028` rejects application use; use the context
 execution APIs instead.
 
 Two things sometimes get raised as counterexamples to this and are worth naming as out of
@@ -2034,7 +2035,7 @@ The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
   parameter (see thesis principle 3).
 - **PGC026** — warns on the split `WrapObjectName("alias") + "." + WrapObjectName("column")`
   pattern in favor of the single-call `WrapObjectName("alias.column")` form.
-- **PGC027** — an error on any use of the API kept public only for 2.x binary compatibility
+- **PGC028** — an error on any use of the API kept public only for 2.x binary compatibility
   (`DataSource`, the SQL-standard-level heuristics, internal bookkeeping types, the inert type
   attributes), and on assigning `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are
   fixed at construction (the setters are no-ops; 3.0 makes them `init`).
@@ -2057,7 +2058,7 @@ or one the context created internally — or `null`. Any caller can use it to ca
 `DataSource.CreateConnection()` for a raw provider connection, outside governor accounting,
 session settings, and disposal tracking. It is the one public raw-provider accessor on the
 execution surface: there is no public `DbConnection` accessor (`GetConnection` is `internal`),
-and `ISqlContainer`/`ITrackedReader` expose no connection. Application use is rejected by `PGC027`;
+and `ISqlContainer`/`ITrackedReader` expose no connection. Application use is rejected by `PGC028`;
 use the context execution APIs instead.
 
 Tests that need to verify which `DbDataSource` a constructor actually wired up (including the
@@ -2583,7 +2584,7 @@ app.Use(async (context, next) =>
 
 The base `SqlDialect` still contains the legacy SQL-standard heuristic (`MaxSupportedStandard` and
 `SqlStandardLevel`) for 2.x binary compatibility, but those members are obsolete and rejected for
-new application use by `PGC027`. Consumers must query the specific `Supports*` capabilities. The
+new application use by `PGC028`. Consumers must query the specific `Supports*` capabilities. The
 legacy implementation maps feature flags to approximate SQL eras, while individual dialects may
 override capabilities with version-aware logic; that history is retained here to explain existing
 behavior, not as a capability contract for new code.
@@ -5442,7 +5443,7 @@ built with (a caller-supplied one such as `NpgsqlDataSource`, or one the context
 `null` when there is none), and `ITransactionContext` forwards its parent context's value. A
 connection created from it via `DataSource.CreateConnection()` is outside the governed system
 entirely: no admission limits, no session settings, no metrics attribution, and no disposal
-tracking. Do not use it from application code; `PGC027` reports it as an error. Use the context
+tracking. Do not use it from application code; `PGC028` reports it as an error. Use the context
 execution APIs instead.
 
 ## `PoolGovernor` admission lifecycle
@@ -9332,7 +9333,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 - Never commit secrets or real connection strings; use environment variables and user-secrets. Strong-name via `SNK_PATH` (do not commit keys).
 - Do not hardcode identifier quoting. Use `WrapObjectName(...)` and `CompositeIdentifierSeparator` (e.g., `var full = ctx.WrapObjectName("schema") + ctx.CompositeIdentifierSeparator + ctx.WrapObjectName("table");`).
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
-- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call), and `PGC027` (error: do not use the 2.x binary-compatibility-only API or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle` after construction).
+- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call), `PGC028` (error: do not use the 2.x binary-compatibility-only API or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle` after construction), and `PGC029` (error, opt-in via the `PengdowsMultiTenancy` MSBuild property: gateway calls must pass an explicit context).
 
 ## Additional Requirements
 
@@ -9678,7 +9679,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 - Never commit secrets or real connection strings; use environment variables and user-secrets.
 - Do not hardcode identifier quoting — use `WrapObjectName(...)` and `CompositeIdentifierSeparator`.
 - Always parameterize values (`AddParameterWithValue`, `CreateDbParameter`); avoid string interpolation for SQL.
-- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call), and `PGC027` (error: do not use the 2.x binary-compatibility-only API or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle` after construction).
+- `pengdows.crud.analyzers` enforces raw predicate/join value injection as `PGC008` (`IS NULL` / `IS NOT NULL` are the normal exceptions); it also ships `PGC001` (pengdows.crud components must be registered as singletons), `PGC025` (gateway methods that execute DB work must accept a context and use `ctx = context ?? Context`), `PGC026` (use `WrapObjectName("alias.column")` instead of splitting the call), `PGC028` (error: do not use the 2.x binary-compatibility-only API or assign `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle` after construction), and `PGC029` (error, opt-in via the `PengdowsMultiTenancy` MSBuild property: gateway calls must pass an explicit context).
 
 ## Project Mandates
 

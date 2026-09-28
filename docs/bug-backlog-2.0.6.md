@@ -202,6 +202,13 @@ These are the rules the code is being brought in line with.
   requires singleton, and it's resolved from the root provider. **3.0:** same bug.
 - [x] **T04 — `verify-novendor --allow`:** *(fixed; both forms accepted)* the usage text (`Program.cs:56`) shows `--allow "x;y"`, which
   the parser silently ignores (it only reads `--allow=`). Accept both forms. **3.0:** same.
+- [x] **T05 — Analyzer diagnostic IDs unified with 3.0 (2026-09-28).** The analyzer project is now
+  the same code on 2.0.x and 3.0. PGC027 meant the compatibility-surface rule here and the
+  multitenancy call-site rule on 3.0, so both moved to new IDs: the compatibility rule is **PGC028**,
+  and the opt-in multitenancy call-site rule (new on 2.0.6) is **PGC029**, off unless the consuming
+  project sets `<PengdowsMultiTenancy>true</PengdowsMultiTenancy>`. **Release note:** a
+  `#pragma warning disable PGC027`, `[SuppressMessage]` or `.editorconfig` entry for PGC027 must be
+  changed to PGC028. Tests: `DiagnosticIdTests`, `GatewayCallSiteContextAnalyzerTests`.
 
 ## Investigated (tests written first; outcome per item)
 

@@ -10,10 +10,14 @@ namespace pengdows.crud.analyzers;
 /// Prevents consumers from depending on public compatibility leftovers that are not part of
 /// the supported application-facing contract.
 /// </summary>
+/// <remarks>
+/// The analyzer project is the same code on 2.0.x and 3.0. On 3.0 every symbol listed here is
+/// removed, internal, or has a non-public setter, so this rule has nothing to report there.
+/// </remarks>
 [DiagnosticAnalyzer(LanguageNames.CSharp)]
 public sealed class CompatibilityLeakAnalyzer : DiagnosticAnalyzer
 {
-    public const string DiagnosticId = "PGC027";
+    public const string DiagnosticId = "PGC028";
 
     internal static readonly DiagnosticDescriptor Rule = new(
         DiagnosticId,
