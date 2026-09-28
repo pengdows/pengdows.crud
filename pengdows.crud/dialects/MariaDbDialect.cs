@@ -14,7 +14,8 @@
 //   * OFFSET/FETCH syntax in 10.6+ (MySQL never supported it)
 //   * Version numbering is 10.x era (different from MySQL's simple major versioning);
 //     DetermineStandardCompliance uses MariaDB-specific major/minor thresholds
-// - Uses LAST_INSERT_ID() for returning generated IDs.
+// - Generated IDs: INSERT ... RETURNING from 10.5; before that the id is read from the
+//   INSERT's own reply (ReaderInsertedId). LAST_INSERT_ID() is only the fallback query.
 // - Session settings: Inherits ANSI_QUOTES mode from MySqlDialect.
 // - AUTO_INCREMENT for identity columns.
 // =============================================================================
@@ -45,6 +46,7 @@ namespace pengdows.crud.dialects;
 /// <item><description>No <c>INSERT ... AS</c> alias syntax for upserts</description></item>
 /// <item><description>Prepared statements enabled by default (vs conservative MySQL default)</description></item>
 /// <item><description>OFFSET/FETCH syntax supported in 10.6+ (MySQL never supported it)</description></item>
+/// <item><description><c>INSERT ... RETURNING</c> in 10.5+ (MySQL has none), used for generated ids</description></item>
 /// <item><description>Version numbering uses 10.x era scheme; <see cref="DetermineStandardCompliance"/> uses MariaDB-specific major/minor thresholds</description></item>
 /// </list>
 /// </remarks>
@@ -84,9 +86,14 @@ internal class MariaDbDialect : MySqlDialect
         return "SELECT LAST_INSERT_ID()";
     }
 
+    // MariaDB added INSERT ... RETURNING in 10.5. From there the generated id comes back inline;
+    // before that (or before detection) it is read from the INSERT's own reply. Same pattern as
+    // SqliteDialect's 3.35 RETURNING gate.
+    public override bool SupportsInsertReturning => IsInitialized && IsAtLeast(10, 5);
+
     public override GeneratedKeyPlan GetGeneratedKeyPlan()
     {
-        return GeneratedKeyPlan.ReaderInsertedId;
+        return SupportsInsertReturning ? GeneratedKeyPlan.Returning : GeneratedKeyPlan.ReaderInsertedId;
     }
 
     public override object? GetLastInsertedIdFromCommand(DbCommand? command)

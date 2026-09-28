@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using Xunit;
 
 namespace pengdows.crud.Tests.dialects;
@@ -31,7 +32,27 @@ public class RenderInsertReturningClauseCharacterizationTests
     [Fact] public void Postgres_UsesReturning() => Assert.Equal(" RETURNING \"id\"", Postgres().RenderInsertReturningClause("\"id\""));
     [Fact] public void CockroachDb_UsesReturning() => Assert.Equal(" RETURNING \"id\"", Cockroach().RenderInsertReturningClause("\"id\""));
     [Fact] public void YugabyteDb_UsesReturning() => Assert.Equal(" RETURNING \"id\"", Yugabyte().RenderInsertReturningClause("\"id\""));
-    [Fact] public void Sqlite_UsesReturning() => Assert.Equal(" RETURNING \"id\"", Sqlite().RenderInsertReturningClause("\"id\""));
+    // The clause follows SupportsInsertReturning, which is a version gate on SQLite (3.35) and
+    // MariaDB (10.5): nothing before the version is known or below it, RETURNING from it on.
+    [Fact] public void Sqlite_BeforeVersionDetection_RendersNothing() => Assert.Equal(string.Empty, Sqlite().RenderInsertReturningClause("\"id\""));
+    [Fact] public void Sqlite_335_UsesReturning() => Assert.Equal(" RETURNING \"id\"", WithVersion(Sqlite(), "SQLite", SupportedDatabase.Sqlite, new Version(3, 35)).RenderInsertReturningClause("\"id\""));
+    [Fact] public void MariaDb_104_RendersNothing() => Assert.Equal(string.Empty, WithVersion(MariaDb(), "MariaDB", SupportedDatabase.MariaDb, new Version(10, 4)).RenderInsertReturningClause("\"id\""));
+    [Fact] public void MariaDb_105_UsesReturning() => Assert.Equal(" RETURNING \"id\"", WithVersion(MariaDb(), "MariaDB", SupportedDatabase.MariaDb, new Version(10, 5)).RenderInsertReturningClause("\"id\""));
+
+    private static MariaDbDialect MariaDb() => new(new fakeDbFactory(SupportedDatabase.MariaDb), NullLogger.Instance);
+
+    private static T WithVersion<T>(T dialect, string productName, SupportedDatabase db, Version version) where T : SqlDialect
+    {
+        typeof(SqlDialect).GetField("_productInfo", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
+            .SetValue(dialect, new DatabaseProductInfo
+            {
+                ProductName = productName,
+                ProductVersion = version.ToString(),
+                ParsedVersion = version,
+                DatabaseType = db
+            });
+        return dialect;
+    }
     [Fact] public void Firebird_UsesReturning() => Assert.Equal(" RETURNING \"id\"", Firebird().RenderInsertReturningClause("\"id\""));
     [Fact] public void DuckDb_UsesReturning() => Assert.Equal(" RETURNING \"id\"", DuckDb().RenderInsertReturningClause("\"id\""));
     [Fact] public void SqlServer_UsesOutputInserted() => Assert.Equal(" OUTPUT INSERTED.\"id\"", SqlServer().RenderInsertReturningClause("\"id\""));

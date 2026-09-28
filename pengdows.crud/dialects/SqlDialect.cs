@@ -2857,19 +2857,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <returns>SQL clause like " RETURNING id" or " OUTPUT INSERTED.id"</returns>
     public virtual string RenderInsertReturningClause(string idColumnWrapped)
     {
-        return DatabaseType switch
-        {
-            SupportedDatabase.PostgreSql => $" RETURNING {idColumnWrapped}",
-            SupportedDatabase.CockroachDb => $" RETURNING {idColumnWrapped}",
-            SupportedDatabase.YugabyteDb => $" RETURNING {idColumnWrapped}",
-            SupportedDatabase.SqlServer => $" OUTPUT INSERTED.{idColumnWrapped}",
-            SupportedDatabase.Sqlite => $" RETURNING {idColumnWrapped}",
-            SupportedDatabase.Firebird => $" RETURNING {idColumnWrapped}",
-            SupportedDatabase.DuckDB => $" RETURNING {idColumnWrapped}",
-            _ => string.Empty
-            // Oracle is handled by OracleDialect.RenderInsertReturningClause override.
-            // Oracle RETURNING INTO requires an output parameter, not an inline placeholder.
-        };
+        // Keyed on the capability, not a database list: a list silently emitted nothing for a
+        // dialect it didn't name (MariaDB 10.5+, and earlier Aurora PostgreSQL). SQL Server's
+        // OUTPUT INSERTED and Oracle's RETURNING INTO are their dialects' overrides.
+        return SupportsInsertReturning ? $" RETURNING {idColumnWrapped}" : string.Empty;
     }
 
     /// <summary>

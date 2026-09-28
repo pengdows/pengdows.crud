@@ -317,6 +317,11 @@ internal class SqlServerDialect : SqlDialect
         return $"OUTPUT INSERTED.{WrapObjectName(idColumnName)}";
     }
 
+    public override string RenderInsertReturningClause(string idColumnWrapped)
+    {
+        return $" OUTPUT INSERTED.{idColumnWrapped}";
+    }
+
     public override string GetLastInsertedIdQuery()
     {
         // Fallback method - prefer OUTPUT clause
