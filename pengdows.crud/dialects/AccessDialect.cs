@@ -163,9 +163,8 @@
 //   entry (SetEnumProperty reflection-sets OleDbType.Date) — not a CreateDbParameter override
 //   here, to avoid adding a
 //   hard System.Data.OleDb reference to this library (matching SqliteDialect's own
-//   reflection-based provider-namespace check for the same reason). DateTimeOffset binding for
-//   Access has not been verified live and is NOT registered — do not assume the DateTime fix
-//   generalizes to it without testing first.
+//   reflection-based provider-namespace check for the same reason). DateTimeOffset has no OleDb
+//   mapping at all (CONFIRMED live) — CreateDbParameter below converts it to a UTC DateTime.
 // - Natural-key lookup: Access uses SELECT TOP n (confirmed live), not the base class's generic
 //   LIMIT-based fallback — mirrors SybaseAseDialect's GetNaturalKeySelectClause override (on 3.0;
 //   this branch inlines the equivalent case directly in SqlDialect.GetNaturalKeyLookupQuery).
@@ -324,6 +323,25 @@ internal sealed class AccessDialect : SqlDialect
     // either DbType.Decimal or DbType.Currency — neither has the DbType.DateTime-style
     // OleDbType-mapping problem found elsewhere in this file.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
+
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        // CONFIRMED live (testbed type matrix): System.Data.OleDb has no DbType.DateTimeOffset
+        // mapping ("No mapping exists from DbType DateTimeOffset to a known OleDbType", thrown from
+        // OleDbParameter.set_DbType before any later conversion can run), and Jet/ACE has no
+        // offset-aware temporal type. Store the UTC instant as a plain DateTime, matching
+        // Informix/Sybase/InterBase; the DateTime then picks up the OleDbType.Date mapping from
+        // AdvancedTypeRegistry. Null is remapped too: the driver rejects the DbType itself.
+        if (type == DbType.DateTimeOffset)
+        {
+            object coerced = value is DateTimeOffset dto
+                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
+                : DBNull.Value;
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
 
     // Isolation-level data (CONFIRMED live: RepeatableRead/Serializable/Snapshot all throw
     // "Neither the isolation level nor a strengthening of it is supported.") lives in

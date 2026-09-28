@@ -228,6 +228,71 @@ public class AccessDialectTests
         Assert.Equal(DbType.Boolean, param.DbType);
     }
 
+    // CONFIRMED live (testbed type matrix): System.Data.OleDb has no DbType.DateTimeOffset mapping
+    // ("No mapping exists from DbType DateTimeOffset to a known OleDbType", thrown by
+    // OleDbParameter.set_DbType), and Jet/ACE has no offset-aware temporal type. The dialect
+    // stores the UTC instant as a plain DateTime, matching Informix/Sybase/InterBase.
+    [Fact]
+    public void CreateDbParameter_NonNullDateTimeOffset_CoercesToUnspecifiedUtcDateTime()
+    {
+        var dto = new DateTimeOffset(2026, 2, 21, 12, 34, 56, TimeSpan.FromHours(-5));
+        var param = CreateDialect().CreateDbParameter<DateTimeOffset?>("p", DbType.DateTimeOffset, dto);
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+        var stored = Assert.IsType<DateTime>(param.Value);
+        Assert.Equal(DateTimeKind.Unspecified, stored.Kind);
+        Assert.Equal(dto.UtcDateTime, DateTime.SpecifyKind(stored, DateTimeKind.Utc));
+    }
+
+    [Fact]
+    public void CreateDbParameter_NullDateTimeOffset_CoercesToDbTypeDateTimeWithDbNull()
+    {
+        var param = CreateDialect().CreateDbParameter<DateTimeOffset?>("p", DbType.DateTimeOffset, null);
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+        Assert.Equal(DBNull.Value, param.Value);
+    }
+
+    // fakeDb's generic parameter accepts any DbType, so the two tests above cannot see the real
+    // failure: OleDbParameter.set_DbType throws before any later coercion runs. This parameter
+    // rejects DbType.DateTimeOffset the same way, proving the dialect never assigns it.
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CreateDbParameter_DateTimeOffset_NeverAssignsDbTypeDateTimeOffsetToProvider(bool hasValue)
+    {
+        var dialect = new AccessDialect(new OleDbLikeFactory(), NullLogger<AccessDialect>.Instance);
+        DateTimeOffset? value = hasValue ? new DateTimeOffset(2026, 2, 21, 12, 34, 56, TimeSpan.Zero) : null;
+
+        var param = dialect.CreateDbParameter("p", DbType.DateTimeOffset, value);
+
+        Assert.Equal(DbType.DateTime, param.DbType);
+    }
+
+    private sealed class OleDbLikeParameter : fakeDbParameter
+    {
+        private DbType _dbType;
+
+        public override DbType DbType
+        {
+            get => _dbType;
+            set => _dbType = value == DbType.DateTimeOffset
+                ? throw new ArgumentException("No mapping exists from DbType DateTimeOffset to a known OleDbType.")
+                : value;
+        }
+    }
+
+    private sealed class OleDbLikeFactory : DbProviderFactory
+    {
+        private readonly fakeDbFactory _inner = new(SupportedDatabase.Access);
+
+        public override DbConnection CreateConnection() => _inner.CreateConnection()!;
+        public override DbCommand CreateCommand() => _inner.CreateCommand()!;
+        public override DbConnectionStringBuilder CreateConnectionStringBuilder() =>
+            _inner.CreateConnectionStringBuilder()!;
+        public override DbParameter CreateParameter() => new OleDbLikeParameter();
+    }
+
     // CONFIRMED live: a Guid parameter bound via the DbType.String reassignment round-trips
     // correctly — Access has no native UUID/GUID type.
     [Fact]
