@@ -291,6 +291,23 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 
 ### Forward-port to 3.0 (2.0.6-only work)
 
+**Status (2026-09-28):** branch `3.0-backports` (pushed; not yet merged into `3.0`) now carries this
+session's library fixes, cherry-picked and verified by the 3.0 unit suite (10091/10091, net8.0 and
+net10.0): connection-limit mapping and `TooManyConnectionsException` (ccb305f, e2e4491, 97ec6b3,
+7c929f3, d500ef5), the DuckDB.NET <= 1.5.5 CloseConnection workaround (af8278e), StateChange-less
+connection counting (a866eca), the Sybase dispose fix (1fc965b), MariaDB 10.5+ RETURNING (6c57cda;
+on 3.0 the base `RenderInsertReturningClause` now follows the capability too) and the InterBase
+prefetched-id fix (dba436d). Still to port: the 2026-09-26 HARN-005 library batch (bf71d09 ..
+fdbcfe7: Sybase 547/ANSI nulls/versioned upsert/NULL bools, Min Pool Size, Db2 pool split, positional
+RetrieveAsync, Informix classification/int.MinValue/supplementary chars, NULL parameter types,
+row-read error translation, Spanner limits) and everything older listed below.
+
+**Found while porting:** 3.0's skill API references (`skills/*/pengdows-crud/*api-reference.md`)
+lost six sections in df6a3404 (2026-08-16; the commit message doesn't mention it): Supported
+Databases, IAuditValueResolver/IAuditValues, ScalarResult, EnumParseFailureMode, Exception
+Hierarchy, ITenantContextRegistry. Restore them on 3.0, updated for 3.0's API (2.0.6's copies are
+partly stale, e.g. the SupportedDatabase listing).
+
 These 2.0.6 changes need to go into `3.0` too (or be consciously dropped). `3.0-backports` already
 carries earlier 2.0.6 → 3.0 ports.
 - Testbed skip audit fixes (SKIP-001..016): Sybase `DateTimeOffset` coercion (Guid stays pass-through),
