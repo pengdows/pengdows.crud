@@ -42,6 +42,9 @@ public sealed class DapperIntegrationTests
         }
         finally
         {
+            // Microsoft.Data.Sqlite keeps disposed connections' file handles in its pool, and
+            // Windows can't delete a file with an open handle.
+            SqliteConnection.ClearAllPools();
             File.Delete(databasePath);
         }
     }
