@@ -50,7 +50,7 @@ decides). Additive public API is not a fix; those stay per-item decisions (Tier 
 | DEC-004 | **VAR-001** Aurora values documented as detection labels | 2.0.6 docs now, or fold into VAR-002 (3.0) | See "Database variants" below | Open (decide) |
 | DEC-006 | **Db2 `DbMode.Best`** (NEW-007): a cold connection after Db2 deactivates the database took ~1.13 s live vs ~3.6 ms with a PreventDatabaseUnload sentinel | — | **Decided and done**: 2.0.6 9f1fb1c (2026-09-26) makes `Best` select PreventDatabaseUnload on a positively detected Db2 LUW server (topology probe `SYSPROC.ENV_GET_INST_INFO()`), Standard on any other Db2 server; every explicit mode is honored; f8e3344 limits support to LUW with a warning otherwise, 18a4db1 keeps Standard when the pool maximum is below 2. Ported to 3.0-backports (2f35f6b, 4412c1c, 370adae; local, not yet pushed) | **Done** |
 | DEC-007 | **`CreateAsync` leaves a database-generated `[Id(false)]` at 0 and returns `true`** when the dialect can't return the id and the entity has no `[CorrelationToken]` column (GEN-001: Informix, SAP HANA, Snowflake, FlatFile). The code does this on purpose ("skip ID population", `TableGateway.Core.cs` `PopulateGeneratedIdAsync`) | (a) throw a clear `NotSupportedException` naming the fix (add a correlation column, or use a client-generated id); (b) keep it, documented, with a dialect capability the tests assert; (c) reject such an entity at gateway construction | Behavior change for (a)/(c). Informix and HANA can be fixed properly by GEN-001's same-connection primitive; Snowflake and FlatFile have no engine mechanism | Open (decide) |
-| DEC-005 | **Forward-port of 2.0.6-only work to 3.0** (list in "Forward-port to 3.0" below) | — | **Scope decided (2026-09-28): everything** (see the rule above). **Timing decided (2026-09-29): now**, then merge `3.0-backports` into `3.0` (maintainer). In progress; see "Forward-port to 3.0" for the exact state | **In progress** |
+| DEC-005 | **Forward-port of 2.0.6-only work to 3.0** (list in "Forward-port to 3.0" below) | — | **Scope decided (2026-09-28): everything** (see the rule above). **Timing decided (2026-09-29): now**, then merge `3.0-backports` into `3.0` (maintainer). Done: `3.0-backports` merged (fast-forward) into `origin/3.0` at 08d3755a; remaining test-project work rides on UNIFY-005/006, see "Forward-port to 3.0" | **Done** |
 
 DuckDB.NET 1.5.6 (released 2026-09-29) has the fix; validated 2026-09-29: the 1.5.6 package's
 `Close()` disposes the result enumerator before `CloseConnection()`; our upstream regression test
@@ -242,11 +242,11 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 
 | ID | Finding | Status |
 |---|---|---|
-| NEW-001 | Firebird `Best` → PreventDatabaseUnload; explicit `Standard` honored wherever `Best` picks PreventDatabaseUnload (LocalDB, Firebird); DuckDB honors explicit `Standard` (maintainer rules found testing 3.0; LocalDB/DuckDB from 3.0 b356af1) | **Done** (3156d2c). 3.0 still maps Firebird Best → Standard |
-| NEW-002 | Firebird DDL fails ("object TABLE ... is in use") under PreventDatabaseUnload: sentinel attachments, even freshly reopened ones, block DDL | **Done** on 2.0.6 (c5d1c3d): sentinels closed before the pool reset, kept closed during the DDL, reopened after. 3.0 has the same exposure; its port needs reimplementing on 3.0's different sentinel code (see "Forward-port to 3.0") |
-| NEW-003 | Data sources created before BP-204's `MinPoolSize=2` was applied, so working connections never got the minimum | **Done** on 2.0.6 (c5d1c3d); 3.0 port pending with NEW-002 |
+| NEW-001 | Firebird `Best` → PreventDatabaseUnload; explicit `Standard` honored wherever `Best` picks PreventDatabaseUnload (LocalDB, Firebird); DuckDB honors explicit `Standard` (maintainer rules found testing 3.0; LocalDB/DuckDB from 3.0 b356af1) | **Done** (3156d2c); on 3.0 too (316d004b) |
+| NEW-002 | Firebird DDL fails ("object TABLE ... is in use") under PreventDatabaseUnload: sentinel attachments, even freshly reopened ones, block DDL | **Done** on 2.0.6 (c5d1c3d): sentinels closed before the pool reset, kept closed during the DDL, reopened after. Reimplemented on 3.0 (91606cd2) |
+| NEW-003 | Data sources created before BP-204's `MinPoolSize=2` was applied, so working connections never got the minimum | **Done** on 2.0.6 (c5d1c3d) and 3.0 (316d004b) |
 | NEW-004 | Spanner inherited `SupportsOverridingSystemValue` from PostgreSQL after BP-117 (live: "Statements with OVERRIDING clauses are not supported"); fakeDb never answered the Spanner detection probe | **Done** (5f5cf51); 3.0 already had Spanner's `SupportsOverridingSystemValue => false` |
-| NEW-005 | Npgsql type cache stale on the reader data source after CREATE EXTENSION/TYPE/DOMAIN | **Done** (7ef48b7): reload types on every owned data source. Ported to 3.0-backports (03a4603, local) |
+| NEW-005 | Npgsql type cache stale on the reader data source after CREATE EXTENSION/TYPE/DOMAIN | **Done** (7ef48b7): reload types on every owned data source. Ported to 3.0 (03a46035) |
 | NEW-006 | Db2 "Value cannot be null." (ArgumentNullException from IBM's `DB2ConnPool.ReplaceConnStrPwd`) in the full testbed run, twice (net10 then net8) | **Resolved (harness)**: caused by the testbed's idle-unload probe calling `DB2Connection.ReleaseObjectPool()` right before the concurrency test. A standalone repro (no server) shows ReleaseObjectPool followed by concurrent ConnectionString assignment segfaults the IBM driver. The library never calls it; the Db2 probe no longer runs (reported "not measured") |
 | NEW-007 | Db2 idle-unload probe rebuilt on a dedicated database (9c8c944): cold connection after deactivation ~1.13 s, with a PreventDatabaseUnload sentinel ~3.6 ms. The earlier ~2 ms result was an artifact (shared database never deactivated) | **Done**: Db2 LUW `Best` selects PreventDatabaseUnload (9f1fb1c; see DEC-006) |
 | FF-DEF | pengdows.flatfile provider defects (read-only/writer-contention/missing-location errors not DbException; VARCHAR = Guid parameter threw raw ArgumentException; stale README isolation text) | **Done**: fixed in pengdows.flatfile 92969c3 (pushed to its `main`): `FlatFileException` with SQLSTATE 25006 / HYT00 / 08001 / 08004; Guid compared by its character form; docs corrected. crud side: e3fe81f maps 25006 → `ReadOnlyViolationException`, HYT00 → `CommandTimeoutException`, 08xxx → `ConnectionException`; ported to 3.0-backports (39981e5, local) |
@@ -294,71 +294,58 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 
 ### Forward-port to 3.0 (2.0.6-only work)
 
-**Status (2026-09-29).** Maintainer asked (2026-09-29) to bring every fix into 3.0 and then merge
-`3.0-backports` into `3.0`. Triage: of 2.0.6's 154 library-touching commits not on 3.0 by patch-id,
-most are already on 3.0 in substance (backports *from* 3.0, or hand-ported in bundled commits), and
-some are 2.0.x-only compatibility work that must not go to 3.0 (restoring 2.0.5 binary compatibility,
-obsolete markers and PGC028 enforcement, the enum-value realignment, the Sybase rename revert, the
-2.0.5 Guid pass-through for Sybase ASE, the `TotalConnectionsReused` obsolete marker).
+**Status: library work done and merged (2026-09-29).** Maintainer asked (2026-09-29) to bring every fix
+into 3.0 and then merge `3.0-backports` into `3.0`. Triage: of 2.0.6's 154 library-touching commits not
+on 3.0 by patch-id, most were already on 3.0 in substance (backports *from* 3.0, or hand-ported in
+bundled commits), and some are 2.0.x-only compatibility work that must not go to 3.0 (restoring 2.0.5
+binary compatibility, obsolete markers and PGC028 enforcement, the enum-value realignment, the Sybase
+rename revert, the 2.0.5 Guid pass-through for Sybase ASE, the `TotalConnectionsReused` obsolete
+marker).
 
-- **Pushed** on `origin/3.0-backports` (26 commits ahead of `origin/3.0`): this series' connection-limit
-  mapping and `TooManyConnectionsException`, the DuckDB.NET <= 1.5.5 workaround and the 1.5.6 test
-  update, StateChange-less connection counting, the Sybase dispose fix, MariaDB 10.5+ RETURNING (on 3.0
-  the base `RenderInsertReturningClause` follows the capability too), the InterBase prefetched-id fix,
-  and the unified analyzers (UNIFY-001) and fakeDb/stormgate (UNIFY-003).
-- **Committed locally, not yet pushed** (worktree `../pengdows.crud-3.0`, each commit builds): BP-115
-  MySQL-family `NO_BACKSLASH_ESCAPES` on MySql.Data, PostgreSQL-family read-connection Options, BP-202
-  MySQL upsert version qualification, Npgsql type reload after type-catalog DDL, Db2 LUW `Best` mode,
-  Db2 LUW-only support, FlatFile SQLSTATE classification, `Best` below a 2-connection pool, Sybase 547,
-  Sybase ANSI nulls, Sybase stale-version claim (`MergeUpsertReportsSkippedVersionRow`, added to 3.0's
-  `EmitsAnsiMergeSyntax` checks), Db2 reader/writer pool split, Sybase empty binary
-  (`PreservesEmptyBinary`), positional `RetrieveAsync` with two ids, Informix constraint
-  classification, NULL parameter types, row-read error translation, Informix `int.MinValue` and
-  DateTimeOffset binding.
-- **In progress:** 1f102fe (Informix `SupportsSupplementaryCharacters`), mid-cherry-pick with conflicts.
-- **Next:** 2ab9460 (Spanner limits), fdbcfe7 (Sybase NULL bools).
-- **Needs reimplementing on 3.0's design, not cherry-picking:** c5d1c3d (NEW-002/003: Firebird DDL
-  under PreventDatabaseUnload and the data-source rebuild; 3.0's sentinel code differs) and 0dde303
-  (the SKIP-001..016 dialect gaps: 28 conflicting files including `ISqlDialect`/`IInternalSqlDialect`;
-  port item by item, e.g. Informix savepoints/paging/MERGE/`ProcWrappingStyle.Informix`,
-  `QualifiesColumnReferences`, `SupportsPaging`, `PreservesTrailingWhitespace`, Sybase and Firebird
-  DateTimeOffset handling).
-- **Then:** build and run the 3.0 unit suite and live checks for the affected databases; a docs pass
-  (doc conflicts kept 3.0's text, so e.g. Db2 LUW-only and Db2's `Best` mode still need writing into
-  3.0's docs); pull, merge `3.0-backports` into `3.0`, push.
-- Test conflicts in shared projects kept 3.0's side during the port; UNIFY-005/006 bring 2.0.6's
-  tests over.
+`3.0-backports` was fast-forwarded into `origin/3.0` at 08d3755a. It carries:
+- Connection-limit mapping and `TooManyConnectionsException`; the DuckDB.NET <= 1.5.5 workaround and
+  the 1.5.6 test update; StateChange-less connection counting; the Sybase dispose fix; MariaDB 10.5+
+  RETURNING; the InterBase prefetched-id fix; the unified analyzers (UNIFY-001) and fakeDb/stormgate
+  (UNIFY-003).
+- BP-115 `NO_BACKSLASH_ESCAPES` on MySql.Data, PostgreSQL-family read-connection Options, BP-202 MySQL
+  upsert version qualification, Npgsql type reload after type-catalog DDL (NEW-005), Db2 LUW `Best`
+  mode and LUW-only support, FlatFile SQLSTATE classification, `Best` below a 2-connection pool.
+- Sybase 547, ANSI nulls, stale-version claim (`MergeUpsertReportsSkippedVersionRow`), empty binary
+  (`PreservesEmptyBinary`), NULL bools and DateTimeOffset; Db2 reader/writer pool split; positional
+  `RetrieveAsync` with two ids; NULL parameter types; row-read error translation.
+- Informix: constraint classification, `int.MinValue`, DateTimeOffset binding,
+  `SupportsSupplementaryCharacters`, savepoints, SKIP/FIRST paging, MERGE (`SupportsMergeMatchedCondition`
+  false, so a `[Version]` upsert is refused), `ProcWrappingStyle.Informix`, `QualifiesColumnReferences`;
+  public `ISqlDialect.SupportsPaging` and `PreservesTrailingWhitespace`.
+- Spanner limits (`SupportsSpacesInIdentifiers`, `SupportsOnConflictOnSecondaryUniqueKey`); Firebird 4+
+  zoned DateTimeOffset; PostgreSQL spatial SRID preservation and invalid-interval rejection (3.0's
+  `TableGateway.Update` rule kept).
+- NEW-001 (Firebird `Best` -> PreventDatabaseUnload), NEW-002 (DDL sentinel suspension) and NEW-003
+  (data-source rebuild), reimplemented on 3.0's sentinel code. **Policy note:** this replaces 3.0's
+  older "LocalDB only" `Best` text; 3.0's docs now match 2.0.6 (LocalDB, Firebird, Db2 LUW).
+- The library side of the skip audit (0dde303), and a docs pass (CLAUDE/AGENTS/GEMINI, llms-full,
+  skills, connection-modes, supported-databases, advanced-types, architecture).
 
-**Found while porting:** 3.0's skill API references (`skills/*/pengdows-crud/*api-reference.md`)
-lost six sections in df6a3404 (2026-08-16; the commit message doesn't mention it): Supported
-Databases, IAuditValueResolver/IAuditValues, ScalarResult, EnumParseFailureMode, Exception
-Hierarchy, ITenantContextRegistry. Restore them on 3.0, updated for 3.0's API (2.0.6's copies are
-partly stale, e.g. the SupportedDatabase listing).
+Verification: 3.0 unit suite 10235/10235 on net10; net8 had one timing-sensitive failure that passed
+when run alone (see "Timing flakes" below). 3.0 integration run for Informix, SybaseASE, Firebird,
+PostgreSQL and MariaDB passed on net10 and net8, apart from two SQL Server tests that fail instead of
+skipping when `INTEGRATION_ONLY` excludes SQL Server (HARN-006 is not on 3.0 yet; comes with UNIFY-005).
 
-These 2.0.6 changes need to go into `3.0` too (or be consciously dropped). `3.0-backports` already
-carries earlier 2.0.6 → 3.0 ports.
-- Testbed skip audit fixes (SKIP-001..016): Sybase `DateTimeOffset` coercion (Guid stays pass-through),
-  Informix savepoints/SKIP-FIRST paging/typed-CAST MERGE/`EXECUTE PROCEDURE` (`ProcWrappingStyle.Informix`)/`DateTimeOffset`
-  coercion/`QualifiesColumnReferences`, Firebird 4+ `FbZonedDateTime` writes + reads, `ISqlDialect.SupportsPaging`,
-  `PreservesTrailingWhitespace`, the `{P}name` repeated-parameter documentation.
-- Harness: HARN-001..003 (fail instead of skip on provider startup failure, standalone-container
-  collection, SQL Server wait, Sybase model-database retry).
-- 2.0.6's 26-method testbed check suite (parameter binding, round trips, isolation fail-up, paging,
-  upsert, register-named columns, Firebird time zones, ...): 3.0's `TestProvider` no longer has it; confirm
-  where 3.0 covers each check, or port the missing ones.
-- Connection-limit refusals (2026-09-27, ccb305f + follow-up): `TooManyConnectionsException :
-  ConnectionException` and the live-verified mappings (PostgreSQL 53300, MySQL 1040, Oracle
-  ORA-02391/00018/00020, Db2 57030, Informix -25571; SQL Server pre-login handshake and Sybase
-  ASE's pool-reserve messages as plain `ConnectionException`), plus the SybaseASE test context's
-  pool cap of 5.
-- DuckDB.NET <= 1.5.5 `CommandBehavior.CloseConnection` workaround (af8278e): internal
-  `SupportsCloseConnectionReaderBehavior` dialect flag, fakeDb `ExecutedReaderBehaviors`.
-- Connection counting for drivers that never raise `StateChange` (a866eca, Snowflake.Data) and the
-  Sybase ASE dispose fix (1fc965b), with fakeDb's `RaiseConnectionStateChangeEvents` and
-  `ThrowOnStateChangeAccessAfterDispose`.
-- Integration-test skip audit INT-SKIP-001..016: `RunTestAgainstProvidersAsync`,
-  `IsolatedSqliteDatabase`, capability-keyed expectations; check which 3.0 tests carry the same
-  database-name skips.
+**Still open on 3.0:**
+- Shared test projects: test conflicts kept 3.0's side during the port (e.g.
+  `PostgreSqlFamilyReaderOptionsTests` was held back). UNIFY-005/006 bring over 2.0.6's tests, the
+  testbed harness (HARN-001..003, HARN-006), the 26-method testbed check suite and the INT-SKIP-001..016
+  integration-test changes.
+- 3.0's skill API references (`skills/*/pengdows-crud/*api-reference.md`) lost six sections in
+  df6a3404 (2026-08-16; the commit message doesn't mention it): Supported Databases,
+  IAuditValueResolver/IAuditValues, ScalarResult, EnumParseFailureMode, Exception Hierarchy,
+  ITenantContextRegistry. Restore them on 3.0, updated for 3.0's API (2.0.6's copies are partly
+  stale, e.g. the SupportedDatabase listing).
+- 3.0's `docs/planning/future-work.md` has not been reconciled with this file.
+
+**Timing flakes (net8, found while porting).** On full net8 unit-suite runs, about every other run
+fails one timing-sensitive test, a different one each time; each passes when run alone. The threading
+code was not touched by the port. Not yet investigated; worth checking on 2.0.6 as well.
 
 ## GEN-001 design: same-connection generated-key retrieval (proposed 2026-09-28, not started)
 
