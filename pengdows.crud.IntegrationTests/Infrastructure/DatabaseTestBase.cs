@@ -76,13 +76,14 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             var setupStart = DateTime.UtcNow;
             Output.WriteLine($"[{setupStart:HH:mm:ss.fff}] Resetting {provider} database...");
             IntegrationTraceLog.Write(provider, "cleanup start", Output);
-            await CleanupDatabaseAsync(provider, context);
+            await RunWithTimeoutAsync(() => CleanupDatabaseAsync(provider, context), SetupTimeout, provider,
+                "cleanup");
             IntegrationTraceLog.Write(provider,
                 $"cleanup done elapsedMs={(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}", Output);
             Output.WriteLine(
                 $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} cleanup complete, running SetupDatabaseAsync...");
             IntegrationTraceLog.Write(provider, "setup start", Output);
-            await SetupDatabaseAsync(provider, context);
+            await RunWithTimeoutAsync(() => SetupDatabaseAsync(provider, context), SetupTimeout, provider, "setup");
             IntegrationTraceLog.Write(provider,
                 $"setup done elapsedMs={(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}", Output);
             Output.WriteLine(
@@ -209,6 +210,35 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         return providers.Where(filtered.Contains).ToArray();
     }
 
+    // HARN-007: a statement that never returns must fail its provider, not hang the whole run. Seen
+    // with Spanner Omni DDL: the server applied it, but the client waited 20+ minutes in
+    // NpgsqlDataReader.NextResult although the connection string sets CommandTimeout=60.
+    internal static readonly TimeSpan SetupTimeout =
+        ParseTimeout(Environment.GetEnvironmentVariable("INTEGRATION_SETUP_TIMEOUT_SECONDS"), TimeSpan.FromMinutes(5));
+
+    internal static readonly TimeSpan TestTimeout =
+        ParseTimeout(Environment.GetEnvironmentVariable("INTEGRATION_TEST_TIMEOUT_SECONDS"), TimeSpan.FromMinutes(10));
+
+    internal static TimeSpan ParseTimeout(string? seconds, TimeSpan fallback) =>
+        int.TryParse(seconds, out var value) && value > 0 ? TimeSpan.FromSeconds(value) : fallback;
+
+    internal static async Task RunWithTimeoutAsync(Func<Task> work, TimeSpan timeout, SupportedDatabase provider,
+        string phase)
+    {
+        var task = work();
+        try
+        {
+            await task.WaitAsync(timeout);
+        }
+        catch (TimeoutException) when (!task.IsCompleted)
+        {
+            throw new TimeoutException(
+                $"{provider} {phase} did not finish within {timeout.TotalSeconds:F0}s: a statement stalled " +
+                "(HARN-007, seen with Spanner Omni DDL). Raise INTEGRATION_SETUP_TIMEOUT_SECONDS / " +
+                "INTEGRATION_TEST_TIMEOUT_SECONDS if the work is legitimately slower.");
+        }
+    }
+
     /// <summary>
     /// Override to perform database-specific setup (create tables, etc.)
     /// </summary>
@@ -242,7 +272,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] Running test against {provider}...");
                 Output.WriteLine(
                     $"[{providerStart:HH:mm:ss.fff}] {provider} connections before test: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
-                await testAction(provider, context);
+                await RunWithTimeoutAsync(() => testAction(provider, context), TestTimeout, provider, "test");
                 Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] ✅ {provider} test finished");
                 Output.WriteLine(
                     $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} connections after test: {context.NumberOfOpenConnections} open, peak {context.PeakOpenConnections}");
@@ -292,7 +322,8 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             try
             {
                 Output.WriteLine($"[{DateTime.UtcNow:HH:mm:ss.fff}] Running {testName} against {provider}...");
-                await testAction(provider, DatabaseContexts[provider]);
+                await RunWithTimeoutAsync(() => testAction(provider, DatabaseContexts[provider]), TestTimeout,
+                    provider, "test");
             }
             catch (Exception ex)
             {
