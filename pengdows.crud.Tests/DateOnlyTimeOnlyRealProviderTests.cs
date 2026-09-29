@@ -80,6 +80,44 @@ public sealed class DateOnlyTimeOnlyRealProviderTests
         Assert.Equal(2, Assert.Single(matched).Id);
     }
 
+    // Plain TimeSpan properties on TIME columns through the same real providers. DuckDB.NET binds
+    // DbType.Time only from TimeOnly ("Unable to cast object of type 'System.TimeSpan' to type
+    // 'DuckDB.NET.Native.DuckDBTimeOnly'", found on 3.0), so a TimeSpan must bind as TimeOnly there.
+    [Theory]
+    [MemberData(nameof(Providers))]
+    public async Task TimeSpanProperty_OnTimeColumn_RoundTripsAndFilters(string provider)
+    {
+        await using var context = CreateContext(provider);
+        await using (var ddl = context.CreateSqlContainer(
+                         $"CREATE TABLE shift (id INTEGER PRIMARY KEY, starts {TimeType(provider)} NOT NULL, ends {TimeType(provider)})"))
+        {
+            await ddl.ExecuteNonQueryAsync();
+        }
+
+        var gateway = new TableGateway<Shift, int>(context);
+        var row = new Shift { Id = 1, Starts = new TimeSpan(8, 30, 0), Ends = null };
+        Assert.True(await gateway.CreateAsync(row));
+
+        var actual = await gateway.RetrieveOneAsync(1);
+        Assert.NotNull(actual);
+        Assert.Equal(row.Starts, actual!.Starts);
+        Assert.Null(actual.Ends);
+
+        await using var sc = gateway.BuildBaseRetrieve("s");
+        sc.Query.Append(" WHERE ").Append(sc.WrapObjectName("s.starts")).Append(" = ");
+        var p = sc.AddParameterWithValue("starts", DbType.Time, new TimeSpan(8, 30, 0));
+        sc.Query.Append(sc.MakeParameterName(p));
+        Assert.Single(await gateway.LoadListAsync(sc));
+    }
+
+    [Table("shift")]
+    private sealed class Shift
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("starts", DbType.Time)] public TimeSpan Starts { get; set; }
+        [Column("ends", DbType.Time)] public TimeSpan? Ends { get; set; }
+    }
+
     [Table("calendar")]
     private sealed class Calendar
     {

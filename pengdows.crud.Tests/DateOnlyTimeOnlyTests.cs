@@ -18,7 +18,8 @@ namespace pengdows.crud.Tests;
 /// TimeSpan would on the same dialect, so each dialect's existing, live-verified DateTime/TimeSpan
 /// handling applies unchanged. Reads accept every shape providers return for DATE/TIME columns:
 /// DateTime, DateTimeOffset, TimeSpan, ISO strings (SQLite, FlatFile), and native DateOnly/TimeOnly.
-/// A dialect whose driver takes DateOnly/TimeOnly itself (FlatFile) binds them unchanged instead.
+/// A dialect whose driver needs something else (FlatFile's DateOnly/TimeOnly, DuckDB's TimeOnly,
+/// Snowflake's DateTime) adjusts the equivalent too, so the equivalence holds on every dialect.
 /// </summary>
 public sealed class DateOnlyTimeOnlyTests
 {
@@ -34,19 +35,13 @@ public sealed class DateOnlyTimeOnlyTests
         SqlDialectFactory.CreateDialectForType(provider, new fakeDbFactory(provider),
             NullLogger<SqlDialect>.Instance);
 
-    private static bool BindsNatively(ISqlDialect dialect) => ((SqlDialect)dialect).BindsDateOnlyAndTimeOnlyNatively;
-
-    // What a DateOnly/TimeOnly parameter must carry: the value itself on a native dialect, otherwise
-    // exactly what the same dialect binds for the DateTime/TimeSpan equivalent.
+    // What a DateOnly/TimeOnly parameter must carry: exactly what the same dialect binds for the
+    // DateTime/TimeSpan equivalent.
     private static object? ExpectedDate(ISqlDialect dialect, DbType dbType) =>
-        BindsNatively(dialect)
-            ? SampleDate
-            : dialect.CreateDbParameter("e", dbType, SampleDate.ToDateTime(TimeOnly.MinValue)).Value;
+        dialect.CreateDbParameter("e", dbType, SampleDate.ToDateTime(TimeOnly.MinValue)).Value;
 
     private static object? ExpectedTime(ISqlDialect dialect) =>
-        BindsNatively(dialect)
-            ? SampleTime
-            : dialect.CreateDbParameter("e", DbType.Time, SampleTime.ToTimeSpan()).Value;
+        dialect.CreateDbParameter("e", DbType.Time, SampleTime.ToTimeSpan()).Value;
 
     [Theory]
     [MemberData(nameof(AllDatabases))]
@@ -235,10 +230,6 @@ public sealed class DateOnlyTimeOnlyTests
             .ToList();
         Assert.Contains(ExpectedDate(dialect, DbType.Date), values);
         Assert.Contains(ExpectedTime(dialect), values);
-        if (!BindsNatively(dialect))
-        {
-            Assert.DoesNotContain(values, v => v is DateOnly or TimeOnly);
-        }
     }
 
     [Theory]

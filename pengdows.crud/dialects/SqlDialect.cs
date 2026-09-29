@@ -1393,18 +1393,17 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         // TYPE-001: DateOnly/TimeOnly bind exactly as the equivalent midnight DateTime / TimeSpan
         // (re-dispatched virtually), so every dialect's existing DateTime/TimeSpan handling applies,
-        // unless the dialect's driver takes them natively.
-        if (!BindsDateOnlyAndTimeOnlyNatively)
+        // unless the dialect's driver takes them natively for a DATE/TIME column.
+        if (value is DateOnly dateOnly &&
+            !(BindsDateOnlyAndTimeOnlyNatively && type is DbType.Date or DbType.Object))
         {
-            if (value is DateOnly dateOnly)
-            {
-                return CreateDbParameter(name, type, dateOnly.ToDateTime(TimeOnly.MinValue));
-            }
+            return CreateDbParameter(name, type, dateOnly.ToDateTime(TimeOnly.MinValue));
+        }
 
-            if (value is TimeOnly timeOnly)
-            {
-                return CreateDbParameter(name, type, timeOnly.ToTimeSpan());
-            }
+        if (value is TimeOnly timeOnly &&
+            !(BindsDateOnlyAndTimeOnlyNatively && type is DbType.Time or DbType.Object))
+        {
+            return CreateDbParameter(name, type, timeOnly.ToTimeSpan());
         }
 
         var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();

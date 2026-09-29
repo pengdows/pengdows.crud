@@ -104,6 +104,19 @@ public sealed class TimeOfDayBindingTests
         Assert.Equal(DBNull.Value, dialect.CreateDbParameter("n", DbType.Date, (DateOnly?)null).Value);
     }
 
+    // Native only where the column is a DATE/TIME: a DateOnly declared DbType.DateTime/DateTime2 targets
+    // a TIMESTAMP column and binds as the midnight DateTime, like every other dialect.
+    [Theory]
+    [InlineData(DbType.DateTime)]
+    [InlineData(DbType.DateTime2)]
+    public void FlatFile_DateOnlyForTimestamp_BindsAsMidnightDateTime(DbType dbType)
+    {
+        var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.FlatFile,
+            new fakeDbFactory(SupportedDatabase.FlatFile), NullLogger<SqlDialect>.Instance);
+
+        Assert.Equal(new DateTime(2026, 9, 29), dialect.CreateDbParameter("d", dbType, new DateOnly(2026, 9, 29)).Value);
+    }
+
     // The same FlatFile validation rejects a DateTime property on a DATE column and a TimeSpan property
     // on a TIME column, so those bind as DateOnly/TimeOnly when the column's DbType says DATE/TIME.
     [Fact]
