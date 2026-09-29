@@ -101,6 +101,20 @@ public class BasicCoercionsBranchTests
         Assert.Equal(TimeSpan.FromMinutes(1), fromString);
     }
 
+    // Snowflake.Data (and some other drivers) return a TIME column as a DateTime anchored to a date,
+    // so a TimeSpan property must take its time of day. TYPE-001.
+    [Fact]
+    public void TimeSpanCoercion_ReadsTimeOfDayFromDateTimeAndTimeOnly()
+    {
+        var tsCoercion = new TimeSpanCoercion();
+
+        Assert.True(tsCoercion.TryRead(new DbValue(new DateTime(1970, 1, 1, 13, 45, 30)), out var fromDateTime));
+        Assert.Equal(new TimeSpan(13, 45, 30), fromDateTime);
+
+        Assert.True(tsCoercion.TryRead(new DbValue(new TimeOnly(13, 45, 30)), out var fromTimeOnly));
+        Assert.Equal(new TimeSpan(13, 45, 30), fromTimeOnly);
+    }
+
     [Fact]
     public void DecimalAndByteArrayCoercions_HandleConversions()
     {

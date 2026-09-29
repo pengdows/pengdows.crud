@@ -72,6 +72,8 @@ pengdows.crud normalizes types across database providers:
 | `DateTime` | DATETIME2 | TIMESTAMP | DATE | DATETIME | TEXT |
 | `bool` | BIT | BOOLEAN | NUMBER(1,0) | TINYINT(1) | INTEGER |
 | `Guid` | UNIQUEIDENTIFIER | UUID | RAW(16) | BINARY(16) | TEXT |
+| `DateOnly` | DATE | DATE | DATE | DATE | TEXT |
+| `TimeOnly` | TIME | TIME | INTERVAL DAY(0) TO SECOND | TIME | TEXT |
 
 ## DateTime Handling
 
@@ -79,6 +81,22 @@ pengdows.crud normalizes types across database providers:
 - Database-specific timezone handling is abstracted away
 - Audit timestamps (`[CreatedOn]`, `[LastUpdatedOn]`) are always UTC
 - Local time conversion is handled at the application layer
+
+## DateOnly and TimeOnly
+
+`DateOnly` and `TimeOnly` (and their nullable forms) work as plain entity properties on every
+database, with no converter: declare them `[Column("d", DbType.Date)]` and `[Column("t", DbType.Time)]`
+(`DbType.DateTime`/`DateTime2` also accept `DateOnly`).
+
+- Writes bind exactly as the equivalent midnight `DateTime` / `TimeSpan`, so each database's
+  date/time handling applies unchanged. Where a driver needs something else the dialect handles it:
+  Snowflake binds `TIME` from a `DateTime`, Oracle (no `TIME` type) as `INTERVAL DAY TO SECOND`,
+  SingleStore as text, and FlatFile takes `DateOnly`/`TimeOnly` natively (a `DateTime`/`TimeSpan`
+  declared `DbType.Date`/`DbType.Time` is converted for it).
+- Reads accept every shape providers return: `DateTime`, `DateTimeOffset`, `TimeSpan`, ISO strings
+  (SQLite, FlatFile) and native `DateOnly`/`TimeOnly`. A date is taken from the stored wall-clock
+  value, never shifted through UTC.
+- Spanner has no time-of-day column type, so `TimeOnly` has no native column there (tracked as TYPE-006).
 
 ## JSON Support
 

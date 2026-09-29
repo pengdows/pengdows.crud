@@ -41,6 +41,8 @@ internal static class BasicCoercions
         registry.Register(new DateTimeCoercion());
         registry.Register(new DateTimeOffsetCoercion());
         registry.Register(new TimeSpanCoercion());
+        registry.Register(new DateOnlyCoercion());
+        registry.Register(new TimeOnlyCoercion());
         registry.Register(new DecimalCoercion());
 
         // Binary types
@@ -168,6 +170,13 @@ internal class TimeSpanCoercion : DbCoercion<TimeSpan>
             case double d:
                 value = TimeSpan.FromSeconds(d);
                 return true;
+            // Some drivers (Snowflake.Data) return a TIME column as a DateTime anchored to a date.
+            case DateTime dt:
+                value = dt.TimeOfDay;
+                return true;
+            case TimeOnly t:
+                value = t.ToTimeSpan();
+                return true;
             case string str when TimeSpan.TryParse(str, out var parsed):
                 value = parsed;
                 return true;
@@ -180,6 +189,106 @@ internal class TimeSpanCoercion : DbCoercion<TimeSpan>
     public override bool TryWrite(TimeSpan value, DbParameter parameter)
     {
         parameter.Value = value;
+        parameter.DbType = DbType.Time;
+        return true;
+    }
+}
+
+/// <summary>
+/// Coercion for DateOnly (TYPE-001). Providers return a DATE column as DateTime (most), DateTimeOffset,
+/// an ISO string (SQLite, FlatFile) or DateOnly (DuckDB.NET, Npgsql on request). A DATE is a calendar
+/// date, so the date is taken from the stored wall-clock value and never shifted through UTC.
+/// </summary>
+internal class DateOnlyCoercion : DbCoercion<DateOnly>
+{
+    public override bool TryRead(in DbValue src, out DateOnly value)
+    {
+        if (src.IsNull)
+        {
+            value = default;
+            return false;
+        }
+
+        switch (src.RawValue)
+        {
+            case DateOnly d:
+                value = d;
+                return true;
+            case DateTime dt:
+                value = DateOnly.FromDateTime(dt);
+                return true;
+            case DateTimeOffset dto:
+                value = DateOnly.FromDateTime(dto.DateTime);
+                return true;
+            case string s when DateOnly.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed):
+                value = parsed;
+                return true;
+            // Keep the string's own wall-clock date: parsing to DateTime would convert an explicit
+            // offset ("...Z", SQLite's stored form) to local time and move the date.
+            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto):
+                value = DateOnly.FromDateTime(dto.DateTime);
+                return true;
+            default:
+                value = default;
+                return false;
+        }
+    }
+
+    public override bool TryWrite(DateOnly value, DbParameter parameter)
+    {
+        parameter.Value = value.ToDateTime(TimeOnly.MinValue);
+        parameter.DbType = DbType.Date;
+        return true;
+    }
+}
+
+/// <summary>
+/// Coercion for TimeOnly (TYPE-001). Providers return a TIME column as TimeSpan (most), DateTime
+/// (some drivers anchor it to a date), an ISO string (SQLite, FlatFile) or TimeOnly (DuckDB.NET).
+/// </summary>
+internal class TimeOnlyCoercion : DbCoercion<TimeOnly>
+{
+    public override bool TryRead(in DbValue src, out TimeOnly value)
+    {
+        if (src.IsNull)
+        {
+            value = default;
+            return false;
+        }
+
+        switch (src.RawValue)
+        {
+            case TimeOnly t:
+                value = t;
+                return true;
+            case TimeSpan ts when ts >= TimeSpan.Zero && ts.Ticks < TimeSpan.TicksPerDay:
+                value = TimeOnly.FromTimeSpan(ts);
+                return true;
+            case DateTime dt:
+                value = TimeOnly.FromDateTime(dt);
+                return true;
+            case DateTimeOffset dto:
+                value = TimeOnly.FromDateTime(dto.DateTime);
+                return true;
+            case string s when TimeOnly.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed):
+                value = parsed;
+                return true;
+            case string s when TimeSpan.TryParse(s, CultureInfo.InvariantCulture, out var ts)
+                               && ts >= TimeSpan.Zero && ts.Ticks < TimeSpan.TicksPerDay:
+                value = TimeOnly.FromTimeSpan(ts);
+                return true;
+            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto):
+                value = TimeOnly.FromDateTime(dto.DateTime);
+                return true;
+            default:
+                value = default;
+                return false;
+        }
+    }
+
+    public override bool TryWrite(TimeOnly value, DbParameter parameter)
+    {
+        parameter.Value = value.ToTimeSpan();
         parameter.DbType = DbType.Time;
         return true;
     }

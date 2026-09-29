@@ -253,6 +253,14 @@ internal class SnowflakeDialect : SqlDialect
             return dto.UtcDateTime;
         }
 
+        // Snowflake.Data binds DbType.Time only from a DateTime and sends its time of day
+        // (SFDataConverter.CSharpValToSfVal); a TimeSpan fails with error 270003. A value outside
+        // one day is passed through so the driver rejects it rather than silently wrapping it.
+        if (dbType == DbType.Time && value is TimeSpan ts && ts >= TimeSpan.Zero && ts.Ticks < TimeSpan.TicksPerDay)
+        {
+            return new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Unspecified).Add(ts);
+        }
+
         return base.PrepareParameterValue(value, dbType);
     }
 

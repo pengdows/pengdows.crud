@@ -24,6 +24,7 @@
 //   CREATE TABLE ... WITH (NULLTOKEN = '...'); that is table DDL, not a dialect setting.
 // =============================================================================
 
+using System.Data;
 using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -84,6 +85,26 @@ internal class FlatFileDialect : SqlDialect
     /// an Int16 <c>1</c>.
     /// </summary>
     public override bool SupportsNamedParameters => true;
+
+    // pengdows.flatfile validates DATE/TIME columns against DateOnly/TimeOnly and rejects a midnight
+    // DateTime ("contains parts which are not specific to the DateOnly") or a TimeSpan ("Object must
+    // be of type TimeOnly"); confirmed live (TYPE-001).
+    internal override bool BindsDateOnlyAndTimeOnlyNatively => true;
+
+    // The same validation rejects a DateTime for a DATE column and a TimeSpan for a TIME column, so a
+    // value declared DbType.Date/Time binds as the DateOnly/TimeOnly the driver requires.
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        switch (value)
+        {
+            case DateTime dateTime when dbType == DbType.Date:
+                return DateOnly.FromDateTime(dateTime);
+            case TimeSpan span when dbType == DbType.Time && span >= TimeSpan.Zero && span.Ticks < TimeSpan.TicksPerDay:
+                return TimeOnly.FromTimeSpan(span);
+            default:
+                return base.PrepareParameterValue(value, dbType);
+        }
+    }
 
     /// <summary>
     /// See <see cref="SupportsNamedParameters"/>: <c>:name</c>, the same marker as Oracle.

@@ -20,6 +20,7 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -130,14 +131,46 @@ internal class MySqlDialect : SqlDialect
 
     protected override bool NormalizeDateTimeOffsetToUtc => true;
 
-    protected override DbType RemapDbType(DbType type) =>
-        type == DbType.Boolean ? DbType.Byte : base.RemapDbType(type);
+    // MySQL TIME text: [-]HH:MM:SS[.ffffff], hours beyond 23 allowed (range -838:59:59..838:59:59).
+    private static string FormatTimeText(TimeSpan span)
+    {
+        var magnitude = span.Duration();
+        var text = string.Create(CultureInfo.InvariantCulture,
+            $"{(span < TimeSpan.Zero ? "-" : string.Empty)}{(long)magnitude.TotalHours:00}:{magnitude.Minutes:00}:{magnitude.Seconds:00}");
+        var fraction = magnitude.Ticks % TimeSpan.TicksPerSecond;
+        return fraction == 0
+            ? text
+            : text + "." + (fraction / 10).ToString("000000", CultureInfo.InvariantCulture);
+    }
+
+    // SingleStore rejects the typed TIME literal MySqlConnector sends for a TimeSpan
+    // ("... near ''13:45:30.000000', time '6:00:01.000000')'", confirmed live; MySQL, MariaDB and
+    // TiDB accept it), so a time of day binds there as text (TYPE-001).
+    private bool BindsTimeAsText => DatabaseType == SupportedDatabase.SingleStore;
+
+    protected override DbType RemapDbType(DbType type) => type switch
+    {
+        DbType.Boolean => DbType.Byte,
+        DbType.Time when BindsTimeAsText => DbType.String,
+        _ => base.RemapDbType(type)
+    };
 
     public override object? PrepareParameterValue(object? value, DbType dbType)
     {
         if (dbType == DbType.Boolean && value is bool boolean)
         {
             return boolean ? (byte)1 : (byte)0;
+        }
+
+        if (dbType == DbType.Time && BindsTimeAsText)
+        {
+            switch (value)
+            {
+                case TimeSpan span:
+                    return FormatTimeText(span);
+                case DateTime dateTime:
+                    return FormatTimeText(dateTime.TimeOfDay);
+            }
         }
 
         return base.PrepareParameterValue(value, dbType);

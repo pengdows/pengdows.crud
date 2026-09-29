@@ -95,4 +95,34 @@ public class SnowflakeDialectTests
         Assert.Contains("CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ", baseSettings, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("TIMEZONE = 'Mars'", baseSettings, StringComparison.OrdinalIgnoreCase);
     }
+
+    // ─── TIME binding ─────────────────────────────────────────────────────────
+
+    // Snowflake.Data binds DbType.Time only from a DateTime and sends its time of day
+    // (SFDataConverter.CSharpValToSfVal, TIME branch, 5.6.0); a TimeSpan fails live with
+    // "Failed to convert data 13:45:30 from type System.TimeSpan to type Time" (270003). TYPE-001.
+    [Fact]
+    public void CreateDbParameter_TimeSpanAndTimeOnlyForTime_BindAsDateTimeCarryingTheTimeOfDay()
+    {
+        var dialect = CreateDialect();
+
+        foreach (var value in new object[] { new TimeSpan(13, 45, 30), new TimeOnly(13, 45, 30) })
+        {
+            var parameter = dialect.CreateDbParameter("t", System.Data.DbType.Time, value);
+
+            var bound = Assert.IsType<DateTime>(parameter.Value);
+            Assert.Equal(new TimeSpan(13, 45, 30), bound.TimeOfDay);
+            Assert.Equal(System.Data.DbType.Time, parameter.DbType);
+        }
+    }
+
+    [Fact]
+    public void CreateDbParameter_TimeSpanForOtherDbTypes_IsUnchanged()
+    {
+        var dialect = CreateDialect();
+
+        var parameter = dialect.CreateDbParameter("t", System.Data.DbType.Object, new TimeSpan(1, 2, 3));
+
+        Assert.Equal(new TimeSpan(1, 2, 3), parameter.Value);
+    }
 }

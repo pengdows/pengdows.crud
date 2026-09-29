@@ -360,6 +360,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         "intermittent lock-contention or transaction-conflict errors under real write concurrency. " +
         "Consider SingleWriter mode unless you have verified your workload's concurrency safety.";
 
+    /// <summary>
+    /// True when the driver binds <see cref="DateOnly"/>/<see cref="TimeOnly"/> itself and rejects
+    /// the equivalent DateTime/TimeSpan for DATE/TIME columns (FlatFile). Otherwise they are bound
+    /// as their DateTime/TimeSpan equivalents.
+    /// </summary>
+    internal virtual bool BindsDateOnlyAndTimeOnlyNatively => false;
+
     public virtual string ParameterMarker => "?";
 
     public virtual string ParameterMarkerAt(int ordinal)
@@ -1382,6 +1389,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
         if (value is RowVersion rowVersion)
         {
             return CreateDbParameter(name, type, rowVersion.ToArray());
+        }
+
+        // TYPE-001: DateOnly/TimeOnly bind exactly as the equivalent midnight DateTime / TimeSpan
+        // (re-dispatched virtually), so every dialect's existing DateTime/TimeSpan handling applies,
+        // unless the dialect's driver takes them natively.
+        if (!BindsDateOnlyAndTimeOnlyNatively)
+        {
+            if (value is DateOnly dateOnly)
+            {
+                return CreateDbParameter(name, type, dateOnly.ToDateTime(TimeOnly.MinValue));
+            }
+
+            if (value is TimeOnly timeOnly)
+            {
+                return CreateDbParameter(name, type, timeOnly.ToTimeSpan());
+            }
         }
 
         var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();
