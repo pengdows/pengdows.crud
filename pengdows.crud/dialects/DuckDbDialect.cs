@@ -65,13 +65,15 @@ internal class DuckDbDialect : SqlDialect
     /// <remarks><c>data source=:memory:</c> is Isolated unless paired with <c>cache=shared</c>.</remarks>
     public override InMemoryKind DetectInMemoryKind(string? connectionString)
     {
-        var s = (connectionString ?? string.Empty).Trim().ToLowerInvariant();
-        if (!s.Contains("data source=:memory:"))
+        // DuckDB.NET's builder rewrites every data-source alias to "DataSource" (its own
+        // InMemoryConnectionString is "DataSource=:memory:"), so match with spaces removed.
+        var s = (connectionString ?? string.Empty).ToLowerInvariant().Replace(" ", string.Empty);
+        if (!s.Contains("datasource=:memory:"))
         {
             return InMemoryKind.None;
         }
 
-        return s.Replace(" ", string.Empty).Contains("cache=shared") ? InMemoryKind.Shared : InMemoryKind.Isolated;
+        return s.Contains("cache=shared") ? InMemoryKind.Shared : InMemoryKind.Isolated;
     }
 
     /// <inheritdoc />
