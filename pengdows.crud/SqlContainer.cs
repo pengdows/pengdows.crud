@@ -1170,6 +1170,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var metrics = GetMetricsCollector(executionType);
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         var commandFailed = false;
+        DatabaseContext? suspendedSentinelOwner = null;
         using var activity = StartActivity("ExecuteNonQuery");
         try
         {
@@ -1192,17 +1193,28 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             if (executionType == ExecutionType.Write && _dialect is SqlDialect ddlDialect &&
                 ddlDialect.RequiresConnectionPoolResetForDdl && IsDdlStatement(Query.ToString()))
             {
-                // A stale, idle connection sitting in EITHER pool (not just the writer's) can
-                // still block a DDL commit — reader and writer connections are, in general, two
-                // distinct physical ADO.NET pools (differentiated by ApplicationName/pool
-                // discriminator), so both must be cleared. When a dialect has no such
-                // differentiation the two strings are identical and this is a harmless repeat.
-                var writerConnectionString = InternalConnectionStringAccess.GetRawConnectionString(_context);
-                var readerConnectionString = InternalConnectionStringAccess.GetRawReaderConnectionString(_context);
-                ddlDialect.ResetConnectionPoolForDdl(writerConnectionString);
-                if (!string.Equals(readerConnectionString, writerConnectionString, StringComparison.Ordinal))
+                // A stale idle connection in EITHER pool can block a DDL commit. Reader and writer
+                // are, in general, distinct ADO.NET pools (ApplicationName/pool discriminator), so
+                // clear both. When they share one connection string this is skipped.
+                //
+                // PreventDatabaseUnload sentinels block the DDL too (confirmed live), so close them
+                // first and keep them closed until it finishes: a sentinel returned to its pool
+                // after the pool was cleared would stay a live attachment. The construction-time
+                // sentinel was opened with the caller's raw string, so its pool is cleared as well.
+                var poolsToReset = new List<string>
                 {
-                    ddlDialect.ResetConnectionPoolForDdl(readerConnectionString);
+                    InternalConnectionStringAccess.GetRawConnectionString(_context),
+                    InternalConnectionStringAccess.GetRawReaderConnectionString(_context)
+                };
+                var owner = (_context is TransactionContext tx ? tx.OwningContext : _context) as DatabaseContext;
+                if (owner != null && owner.SuspendSentinelsForDdl(poolsToReset))
+                {
+                    suspendedSentinelOwner = owner;
+                }
+
+                foreach (var pool in poolsToReset.Where(p => !string.IsNullOrEmpty(p)).Distinct(StringComparer.Ordinal))
+                {
+                    ddlDialect.ResetConnectionPoolForDdl(pool);
                 }
             }
 
@@ -1307,6 +1319,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             Cleanup(cmd, conn);
+            if (suspendedSentinelOwner != null)
+            {
+                await suspendedSentinelOwner.ResumeSentinelsAfterDdlAsync().ConfigureAwait(false);
+            }
         }
     }
 
