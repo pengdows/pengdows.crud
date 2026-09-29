@@ -352,9 +352,27 @@ public class fakeDbDataReader : DbDataReader
         return (double)GetValue(i);
     }
 
+    // A real provider reports the column's declared type whatever the current row holds, and never
+    // reports NULL as DBNull. fakeDb has no declared types, so it reports the type of the column's
+    // first non-null value in the current result set (object when every value is NULL).
     public override Type GetFieldType(int ordinal)
     {
-        return GetValue(ordinal).GetType();
+        var value = GetValue(ordinal);
+        if (value is not null && value is not DBNull)
+        {
+            return value.GetType();
+        }
+
+        var name = GetName(ordinal);
+        foreach (var row in CurrentRows)
+        {
+            if (row.TryGetValue(name, out var candidate) && candidate is not null && candidate is not DBNull)
+            {
+                return candidate.GetType();
+            }
+        }
+
+        return typeof(object);
     }
 
     public override float GetFloat(int i)
