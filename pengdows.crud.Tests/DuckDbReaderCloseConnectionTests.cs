@@ -15,9 +15,9 @@ namespace pengdows.crud.Tests;
 /// CONFIRMED live (DuckDB.NET 1.3.2 and 1.5.5, native 1.5.5): concurrent reads and writes on one file
 /// then failed intermittently with WAL-replay failures, checksum corruption, FATAL "database has been
 /// invalidated" and native crashes; raw DuckDB.NET with CloseConnection failed 29/30 runs, with
-/// CommandBehavior.Default 0/30. Fixed upstream in DuckDB.NET develop (f94d52b), unreleased. pengdows
-/// therefore never asks DuckDB for CloseConnection; TrackedReader closes the connection itself after
-/// disposing the reader and command.
+/// CommandBehavior.Default 0/30. Fixed upstream (f94d52b) and released in DuckDB.NET 1.5.6. On 1.5.5
+/// and older pengdows never asks DuckDB for CloseConnection; TrackedReader closes the connection itself
+/// after disposing the reader and command. From 1.5.6 it asks again.
 /// </summary>
 public sealed class DuckDbReaderCloseConnectionTests
 {
@@ -84,5 +84,20 @@ public sealed class DuckDbReaderCloseConnectionTests
         };
 
         Assert.Equal(expected, pengdows.crud.dialects.DuckDbDialect.ProviderHasCloseConnectionBug(name));
+    }
+
+    // Against the real provider: the tests reference DuckDB.NET 1.5.6, the first release with the fix
+    // (CONFIRMED by decompiling the 1.5.6 package: Close() disposes the result enumerator before
+    // command.CloseConnection(); assembly version 1.5.6.0), so pengdows asks for CloseConnection again.
+    [Fact]
+    public void RealDuckDbNet156_UsesCloseConnection()
+    {
+        var factory = DuckDB.NET.Data.DuckDBClientFactory.Instance;
+        Assert.Equal(new System.Version(1, 5, 6, 0), factory.GetType().Assembly.GetName().Version);
+
+        var dialect = new pengdows.crud.dialects.DuckDbDialect(factory,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        Assert.True(dialect.SupportsCloseConnectionReaderBehavior);
     }
 }

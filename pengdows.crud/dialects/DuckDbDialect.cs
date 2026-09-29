@@ -178,9 +178,11 @@ internal class DuckDbDialect : SqlDialect
     // CONFIRMED live (DuckDB.NET 1.3.2 and 1.5.5): concurrent reads and writes on one file then failed
     // intermittently with WAL-replay failures, checksum corruption, FATAL "database has been
     // invalidated" and native crashes; raw DuckDB.NET failed 29/30 runs with CloseConnection and 0/30
-    // with CommandBehavior.Default. Fixed upstream in DuckDB.NET develop (f94d52b), so the first release
-    // after 1.5.5 has the fix. TrackedReader closes the connection itself, in the safe order, so nothing
-    // is lost by not asking.
+    // with CommandBehavior.Default. Fixed upstream (f94d52b) and released in DuckDB.NET 1.5.6: CONFIRMED
+    // by decompiling the 1.5.6 package (Close() disposes the result enumerator before
+    // command.CloseConnection(); assembly version 1.5.6.0) and by our upstream regression test passing at
+    // the 1.5.6 release commit (e28f086) while failing with the old order. TrackedReader closes the
+    // connection itself, in the safe order, so nothing is lost by not asking on 1.5.5 and older.
     internal override bool SupportsCloseConnectionReaderBehavior =>
         !ProviderHasCloseConnectionBug(Factory.GetType().Assembly.GetName());
 
