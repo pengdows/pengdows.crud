@@ -391,8 +391,31 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     internal IProcWrappingStrategy ProcWrappingStrategy => _procWrappingStrategy;
 
+    // Owned data sources replaced during construction (see
+    // RebuildOwnedDataSourcesForChangedConnectionStrings); disposed with the context.
+    private readonly List<DbDataSource> _retiredDataSources = new();
+
     private void DisposeOwnedDataSources()
     {
+        DbDataSource[] retired;
+        lock (_retiredDataSources)
+        {
+            retired = _retiredDataSources.ToArray();
+            _retiredDataSources.Clear();
+        }
+
+        foreach (var dataSource in retired)
+        {
+            try
+            {
+                dataSource.Dispose();
+            }
+            catch
+            {
+                // ignore, as for the current data sources below
+            }
+        }
+
         var primaryOwned = _dataSourceProvided ? null : _dataSource;
         var readerOwned = _readerDataSource;
 

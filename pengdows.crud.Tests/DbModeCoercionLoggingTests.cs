@@ -235,31 +235,6 @@ public class DbModeCoercionLoggingTests
             e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
-    [Fact]
-    public void FirebirdEmbedded_BestMode_SelectsStandard_PreventDatabaseUnloadRemainsAnExplicitKnob()
-    {
-        // Firebird's RDB$LINGER=0 default does cause a real, empirically-confirmed reconnect cost
-        // after an idle gap (testbed.TestProvider.TestIdleUnloadProbe), and PreventDatabaseUnload
-        // genuinely mitigates it — but unlike LocalDB, the cost only matters for deployments with
-        // real idle gaps: a heavily-trafficked instance may never drain its pool to zero, and a
-        // deliberately cost-optimized/scale-to-zero deployment may not want a permanent sentinel
-        // forced on it at all. Only the operator knows which applies, so Firebird is treated as an
-        // ordinary full server database here (Best selects Standard, same as Db2/PostgreSQL/etc.)
-        // — PreventDatabaseUnload stays fully available and honored as an explicit opt-in, never
-        // auto-selected.
-        var provider = new ListLoggerProvider();
-        using var lf = new LoggerFactory(new[] { provider });
-        var cfg = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Database=C:/data/test.fdb;ServerType=Embedded;EmulatedProduct=Firebird",
-            ProviderName = SupportedDatabase.Firebird.ToString(),
-            DbMode = DbMode.Best
-        };
-        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
-        Assert.DoesNotContain(provider.Entries,
-            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
-    }
 
     [Fact]
     public void FirebirdEmbedded_StandardMode_IsHonored_NoCoercion()
@@ -284,11 +259,10 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
-    public void FirebirdClientServer_BestMode_SelectsStandard_SameAsEmbedded()
+    public void FirebirdClientServer_BestMode_SelectsPreventDatabaseUnload_SameAsEmbedded()
     {
-        // CoerceMode makes no embedded-vs-client-server distinction for Firebird — see
-        // FirebirdEmbedded_BestMode_SelectsStandard_PreventDatabaseUnloadRemainsAnExplicitKnob
-        // for the full policy rationale.
+        // CoerceMode makes no embedded-vs-client-server distinction for Firebird: Best selects
+        // PreventDatabaseUnload for both (see FirebirdEmbedded_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo).
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
         var cfg = new DatabaseContextConfiguration
@@ -298,7 +272,7 @@ public class DbModeCoercionLoggingTests
             DbMode = DbMode.Best
         };
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
-        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
         Assert.DoesNotContain(provider.Entries,
             e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
@@ -351,5 +325,45 @@ public class DbModeCoercionLoggingTests
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), lf);
         Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
         Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+    }
+
+    [Fact]
+    public void FirebirdEmbedded_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo()
+    {
+        // Firebird's idle-unload reconnect cost is real (measured live), so Best selects
+        // PreventDatabaseUnload; explicit modes stay honored (see FirebirdDialect.cs).
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Database=C:/data/test.fdb;ServerType=Embedded;EmulatedProduct=Firebird",
+            ProviderName = SupportedDatabase.Firebird.ToString(),
+            DbMode = DbMode.Best
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
+        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Best selects PreventDatabaseUnload"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+    }
+
+    [Fact]
+    public void FirebirdEmbedded_StandardMode_IsHonoredAsIs_NoWarning()
+    {
+        // Bug fix: an explicit Standard request for embedded Firebird used to be forcibly coerced
+        // to SingleConnection with a warning. Now that Firebird is treated as an ordinary
+        // full-server database, any explicit mode is honored as-is — same as PostgreSQL/MySQL/etc.
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Database=C:/data/test.fdb;ServerType=Embedded;EmulatedProduct=Firebird",
+            ProviderName = SupportedDatabase.Firebird.ToString(),
+            DbMode = DbMode.Standard
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 }

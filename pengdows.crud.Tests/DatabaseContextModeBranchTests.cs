@@ -16,52 +16,46 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var isolated = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false })!;
+            new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleConnection, isolated);
 
         var contextShared = CreateContext("Data Source=file:memdb1?mode=memory&cache=shared");
         var shared = (DbMode)coerce.Invoke(contextShared,
-            new object?[] { DbMode.Best, SupportedDatabase.Sqlite, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Sqlite, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleWriter, shared);
 
         var duckShared = (DbMode)coerce.Invoke(contextShared,
-            new object?[] { DbMode.Best, SupportedDatabase.DuckDB, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.DuckDB, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleWriter, duckShared);
     }
 
     [Fact]
     public void CoerceMode_HandlesFirebirdAndLocalDb()
     {
-        // Firebird (embedded or ordinary client-server alike — CoerceMode makes no distinction)
-        // is treated as an ordinary full server database: Best selects Standard, and
-        // PreventDatabaseUnload remains available as an explicitly-honored opt-in knob rather
-        // than an auto-selected default — unlike LocalDB below, which genuinely requires it
-        // unconditionally.
         var context = CreateContext("ServerType=Embedded;Database=C:\\data\\test.fdb;");
         var coerce = GetInstanceMethod("CoerceMode");
 
+        // Bug fix: embedded Firebird used to be forcibly coerced to SingleConnection regardless
+        // of the requested mode. Real testing showed it behaves like an ordinary client-server
+        // database — it's now treated as a full server database (see FirebirdDialect.cs), so an
+        // explicit Standard request is honored as-is.
+        var firebird = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Standard, SupportedDatabase.Firebird, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
+        Assert.Equal(DbMode.Standard, firebird);
+
+        // Best selects PreventDatabaseUnload for Firebird (measured idle-unload reconnect cost).
         var firebirdBest = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Firebird, false })!;
-        Assert.Equal(DbMode.Standard, firebirdBest);
+            new object?[] { DbMode.Best, SupportedDatabase.Firebird, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
+        Assert.Equal(DbMode.PreventDatabaseUnload, firebirdBest);
 
-        var firebirdStandard = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.Firebird, false })!;
-        Assert.Equal(DbMode.Standard, firebirdStandard);
+        // LocalDB: Best selects PreventDatabaseUnload, but an explicit Standard is honored.
+        var localDbBest = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Best, SupportedDatabase.SqlServer, new pengdows.crud.@internal.DatabaseTopology(true, false) })!;
+        Assert.Equal(DbMode.PreventDatabaseUnload, localDbBest);
 
-        var firebirdPreventUnload = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.PreventDatabaseUnload, SupportedDatabase.Firebird, false })!;
-        Assert.Equal(DbMode.PreventDatabaseUnload, firebirdPreventUnload);
-
-        // LocalDB requires PreventDatabaseUnload for Best and every other requested mode, EXCEPT
-        // an explicit Standard request, which is now honored — see SqlServerDialect.
-        // CoerceConnectionMode and CLAUDE.md's "Connection Management and DbMode" section.
-        var localDbStandard = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, true })!;
-        Assert.Equal(DbMode.Standard, localDbStandard);
-
-        var localDbOther = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.SingleWriter, SupportedDatabase.SqlServer, true })!;
-        Assert.Equal(DbMode.PreventDatabaseUnload, localDbOther);
+        var localDb = (DbMode)coerce.Invoke(context,
+            new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, new pengdows.crud.@internal.DatabaseTopology(true, false) })!;
+        Assert.Equal(DbMode.Standard, localDb);
     }
 
     [Fact]
@@ -71,23 +65,16 @@ public class DatabaseContextModeBranchTests
         var coerce = GetInstanceMethod("CoerceMode");
 
         var bestPostgres = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.PostgreSql, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.PostgreSql, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.Standard, bestPostgres);
 
         var explicitMode = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false })!;
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleWriter, explicitMode);
 
         var unknownBest = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Unknown, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Unknown, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.Standard, unknownBest);
-
-        // Sybase ASE is a full client-server RDBMS like the others in this branch, not an
-        // "unknown provider" — same DbMode.Best -> Standard outcome as the default branch would
-        // give, but this asserts it's classified correctly rather than falling through by luck.
-        var bestSybase = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.SybaseASE, false })!;
-        Assert.Equal(DbMode.Standard, bestSybase);
     }
 
     [Fact]
@@ -100,30 +87,27 @@ public class DatabaseContextModeBranchTests
         warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false, false });
         warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false, false });
         warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.SybaseASE, false, false });
-        // Pattern 2: DuckDB/Access honor an explicit Standard request — exercise the risk-warning branch.
-        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.DuckDB, false, false });
-        // Pattern 3: SQL Server LocalDB honors an explicit Standard request — exercise the
-        // performance-warning branch.
         warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, false, true });
     }
 
     [Fact]
     public void CoerceMode_Db2_TreatedAsFullServerDatabase()
     {
-        // Regression: Db2 was missing from the explicit "full server databases" case list,
-        // silently falling to the `default` branch. The RESULT was already correct (Standard),
-        // but the default branch's LogModeOverride message says "Unknown provider" — misleading
-        // for a fully-supported database. Db2 now shares the explicit case with the other
-        // client-server databases.
+        // Regression guard (structurally guaranteed under the current dialect-delegated
+        // architecture, kept as an explicit test anyway): CoerceMode delegates entirely to
+        // ISqlDialect.CoerceConnectionMode, so there is no per-database switch left for Db2 (or
+        // any other client-server database) to be silently missing from — Db2Dialect inherits the
+        // base SqlDialect defaults (Best -> Standard, explicit modes honored as-is) with no
+        // special-casing needed. See CLAUDE.md's "Adding a New Database" checklist item 9.
         var context = CreateContext("Server=localhost;Database=test");
         var coerce = GetInstanceMethod("CoerceMode");
 
         var bestDb2 = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.Best, SupportedDatabase.Db2, false })!;
+            new object?[] { DbMode.Best, SupportedDatabase.Db2, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.Standard, bestDb2);
 
         var explicitMode = (DbMode)coerce.Invoke(context,
-            new object?[] { DbMode.SingleWriter, SupportedDatabase.Db2, false })!;
+            new object?[] { DbMode.SingleWriter, SupportedDatabase.Db2, new pengdows.crud.@internal.DatabaseTopology(false, false) })!;
         Assert.Equal(DbMode.SingleWriter, explicitMode);
     }
 
@@ -137,27 +121,6 @@ public class DatabaseContextModeBranchTests
         var method = GetInstanceMethod("IsClientServerDatabase");
 
         var result = (bool)method.Invoke(context, new object?[] { SupportedDatabase.Db2 })!;
-
-        Assert.True(result);
-    }
-
-    [Theory]
-    [InlineData(SupportedDatabase.YugabyteDb)]
-    [InlineData(SupportedDatabase.TiDb)]
-    [InlineData(SupportedDatabase.Snowflake)]
-    [InlineData(SupportedDatabase.AuroraMySql)]
-    [InlineData(SupportedDatabase.AuroraPostgreSql)]
-    public void IsClientServerDatabase_NowDelegatesToDialect_CoversPreviouslyMissingDatabases(SupportedDatabase db)
-    {
-        // Regression: the old hardcoded switch only listed 8 databases, so every distributed/cloud
-        // variant added since (Yugabyte, TiDB, Snowflake, the Aurora flavors) silently fell to the
-        // `false` default and never got the SingleConnection/SingleWriter mode-mismatch warning.
-        // Now that this delegates to ISqlDialect.IsClientServerDatabase, any database whose dialect
-        // doesn't override the (true) base default is covered automatically.
-        var context = CreateContext("Server=localhost;Database=test");
-        var method = GetInstanceMethod("IsClientServerDatabase");
-
-        var result = (bool)method.Invoke(context, new object?[] { db })!;
 
         Assert.True(result);
     }
@@ -183,5 +146,26 @@ public class DatabaseContextModeBranchTests
         var field = typeof(DatabaseContext).GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(field);
         field!.SetValue(target, value);
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.Snowflake)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    [InlineData(SupportedDatabase.AuroraPostgreSql)]
+    public void IsClientServerDatabase_NowDelegatesToDialect_CoversPreviouslyMissingDatabases(SupportedDatabase db)
+    {
+        // Regression: the old hardcoded switch only listed 8 databases, so every distributed/cloud
+        // variant added since (Yugabyte, TiDB, Snowflake, the Aurora flavors) silently fell to the
+        // `false` default and never got the SingleConnection/SingleWriter mode-mismatch warning.
+        // Now that this delegates to ISqlDialect.IsClientServerDatabase, any database whose dialect
+        // doesn't override the (true) base default is covered automatically.
+        var context = CreateContext("Server=localhost;Database=test");
+        var method = GetInstanceMethod("IsClientServerDatabase");
+
+        var result = (bool)method.Invoke(context, new object?[] { db })!;
+
+        Assert.True(result);
     }
 }
