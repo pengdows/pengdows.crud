@@ -39,7 +39,19 @@
     <ItemGroup>
         <ProjectReference Include="..\pengdows.crud\pengdows.crud.csproj"/>
         <ProjectReference Include="..\pengdows.stormgate\pengdows.stormgate.csproj"/>
-        <ProjectReference Include="..\..\pengdows.flatfile\pengdows.flatfile\pengdows.flatfile.csproj"/>
+    </ItemGroup>
+
+    <!--
+      pengdows.flatfile comes from NuGet. Only the testbed and pengdows.crud.IntegrationTests
+      reference it; the shipped packages never do. PENGDOWS_FLATFILE stays defined so the
+      FlatFile-specific code keeps its guard for anyone building without the package.
+    -->
+    <PropertyGroup>
+        <DefineConstants>$(DefineConstants);PENGDOWS_FLATFILE</DefineConstants>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="pengdows.flatfile" Version="0.2.1-preview.2"/>
     </ItemGroup>
 
 </Project>
