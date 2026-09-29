@@ -27,11 +27,20 @@ provider/type combinations listed below and exercised by the unit and provider i
 It does not claim that an arbitrary third-party ADO.NET extension type can be converted without a
 registered implementation.
 
+For PostgreSQL-family spatial values, the CRUD coercion path writes binary values as EWKB when an
+SRID is present and restores that SRID when reading the EWKB payload. WKT writes use EWKT. The
+converter boundary also formats GeoJSON with a `crs` member, but GeoJSON is not a native write
+format for the ordinary gateway coercion path. The current live regression uses PostgreSQL
+`BYTEA` to verify the EWKB wire payload; a PostGIS-extension column test remains provider-image
+specific and is not implied by the ordinary PostgreSQL test.
+
 ## Usage pattern
 
 No special attribute is needed to use these types. Declare the property with the value-object
-type and a `[Column]` attribute giving the storage `DbType`; the coercion pipeline does the rest
-based on the CLR type:
+type and a `[Column]` attribute with `DbType.Object`; the coercion pipeline does the rest based on
+the CLR type. (`DbType.String` and the other string `DbType`s only accept `string`, `char`,
+`char[]` and `Guid` properties, so a value-object property declared with them fails when the
+gateway builds its SQL templates.)
 
 ```csharp
 [Table("hosts")]
@@ -39,26 +48,27 @@ public class Host
 {
     [Id(false)] [Column("id", DbType.Int32)] public int Id { get; set; }
 
-    [Column("address", DbType.String)] public Inet Address { get; set; }
-    [Column("subnet", DbType.String)] public Cidr Subnet { get; set; }
-    [Column("mac", DbType.String)] public MacAddress Mac { get; set; }
-    [Column("tags", DbType.String)] public HStore Tags { get; set; }
-    [Column("uptime", DbType.String)] public PostgreSqlInterval Uptime { get; set; }
-    [Column("metadata", DbType.String)] public JsonValue Metadata { get; set; }
-
-    [Version]
-    [Column("row_version", DbType.Binary)]
-    public RowVersion RowVersion { get; set; }
+    [Column("address", DbType.Object)] public Inet Address { get; set; }
+    [Column("subnet", DbType.Object)] public Cidr Subnet { get; set; }
+    [Column("mac", DbType.Object)] public MacAddress Mac { get; set; }
+    [Column("tags", DbType.Object)] public HStore Tags { get; set; }
+    [Column("uptime", DbType.Object)] public PostgreSqlInterval Uptime { get; set; }
+    [Column("metadata", DbType.Object)] public JsonValue Metadata { get; set; }
 }
 ```
 
-`RowVersion` follows the same `[Version]` contract as a plain `byte[]` rowversion column
-(`docs/primary-keys-pseudokeys.md` / `CLAUDE.md`'s Version Column section): it's excluded from
-the SET clause and used only in the optimistic-concurrency WHERE match. It is **not**
-incremented by the library — SQL Server generates the new value server-side, so (like a plain
-`byte[]` rowversion) the caller's in-memory value goes stale after a successful write unless
-reloaded; there is no free write-back for this column shape (tracked in
-`docs/planning/future-work.md`).
+**`RowVersion` and `[Version]`:** a `RowVersion`- or `byte[]`-typed `[Version]` column is a
+server-generated version token. It is excluded from the SET clause and used only in the
+optimistic-concurrency WHERE match — it is **not** incremented by the library; SQL Server generates
+the new value server-side, so the caller's in-memory value goes stale after a successful write
+unless reloaded. A stale value makes `UpdateAsync` throw `ConcurrencyConflictException`. Mark the
+property `[NonInsertable]` and `[NonUpdateable]` as well, since the database assigns it:
+
+```csharp
+[Version, NonInsertable, NonUpdateable]
+[Column("rv", DbType.Binary)]
+public RowVersion Rv { get; set; }
+```
 
 ## Type reference
 
@@ -67,13 +77,13 @@ reloaded; there is no free write-back for this column shape (tracked in
 | `Inet` (`types/valueobjects/Inet.cs`) | IP address, optional CIDR prefix | PostgreSQL, CockroachDB, YugabyteDB → `inet` |
 | `Cidr` (`Cidr.cs`) | Network subnet, prefix required, host bits canonicalized to 0 | PostgreSQL, CockroachDB, YugabyteDB → `cidr` |
 | `MacAddress` (`MacAddress.cs`) | Hardware address, wraps `PhysicalAddress` | PostgreSQL, CockroachDB, YugabyteDB → `macaddr` (6-byte EUI-48) or `macaddr8` (8-byte EUI-64), dispatched on the address's actual byte length |
-| `Range<T>` (`Range.cs`, `T : struct`) | Bounded range with inclusive/exclusive brackets | PostgreSQL/CockroachDB/YugabyteDB `int4range` (`Range<int>`), `tsrange` (`Range<DateTime>`) |
+| `Range<T>` (`Range.cs`, `T : struct`) | Bounded range with inclusive/exclusive brackets; `Range<T>.Empty` is PostgreSQL's `empty` (distinct from the unbounded `(,)`, which is `default`; `IsEmpty` is true for both, `IsEmptyRange` only for `Empty`) | PostgreSQL/CockroachDB/YugabyteDB `int4range` (`Range<int>`), `int8range` (`Range<long>`), `tsrange` (`Range<DateTime>`); sent as `NpgsqlRange<T>` |
 | `PostgreSqlInterval` (`PostgreSqlInterval.cs`) | months/days/microseconds, matches PG's internal storage | PostgreSQL, CockroachDB, YugabyteDB → `interval` |
 | `IntervalYearMonth` (`IntervalYearMonth.cs`) | Oracle `INTERVAL YEAR TO MONTH` | Oracle only |
 | `IntervalDaySecond` (`IntervalDaySecond.cs`) | Oracle `INTERVAL DAY TO SECOND` | Oracle only |
 | `HStore` (`HStore.cs`) | PostgreSQL key/value column | Built-in `coercion/` pipeline (`ProviderParameterFactory`/`BasicCoercions`), provider-agnostic at the CLR boundary |
 | `JsonValue` (`JsonValue.cs`) | Lazy string/`JsonDocument`/`JsonElement` JSON wrapper | Same built-in `coercion/` pipeline as `HStore`, provider-agnostic at the CLR boundary |
-| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server (UDT), PostgreSQL/PostGIS (WKB via `Binary`) |
+| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server (UDT) for both; PostgreSQL/CockroachDB/YugabyteDB spatial paths for both (binary writes use EWKB when an SRID is present; WKT/GeoJSON retain SRID in EWKT/`crs`) |
 | `RowVersion` (`RowVersion.cs`) | 8-byte optimistic-concurrency token | SQL Server → `rowversion`/`timestamp` |
 
 `JsonDocument` (the BCL type, not `JsonValue`) is also directly mapped in

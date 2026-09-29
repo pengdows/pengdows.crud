@@ -38,7 +38,7 @@ public enum DbMode
 #### 2. KeepAlive (`1`)
 - Extends `Standard` by holding **one idle persistent sentinel connection** to prevent the database engine from unloading between operations.
 - **The sentinel connection is NEVER used for queries or commands.** All actual operations use ephemeral connections identical to `Standard`.
-- **Actual use case: SQL Server LocalDB only.** `CoerceMode` forces LocalDB → KeepAlive automatically. For SQLite/DuckDB, requesting KeepAlive is always coerced to `SingleWriter` instead — it never actually applies there regardless of what's requested. It's honored (not coerced away) if explicitly requested against a full-server database, but that isn't a recommended or automatically-selected use — LocalDB is the only case where KeepAlive is both reachable and needed.
+- **Auto-selected by `Best` for SQL Server LocalDB, Firebird and Db2 LUW** (each has a measured idle-unload cost); an explicit `Standard` is always honored. For SQLite/DuckDB, requesting it is coerced to `SingleWriter` instead.
 - *Clarification*: NOT for AWS RDS Proxy or server-side connection keep-alives, and not a substitute for `SingleWriter` on SQLite/DuckDB.
 
 #### 3. SingleWriter (`2`)

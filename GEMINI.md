@@ -221,7 +221,7 @@ public int Version { get; set; }
 | **Create** | If version is null/0, automatically set to 1 |
 | **Update** | Increments version by 1 in SET clause; adds `WHERE version = @currentVersion` |
 
-**Conflict detection:** `UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process).
+**Conflict detection:** `UpdateAsync` and `BatchUpdateAsync` (on both `TableGateway` and `PrimaryKeyTableGateway`) automatically throw `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch or row deleted by another process). `BatchUpsertAsync` throws when a version-guarded statement (MERGE, `ON CONFLICT ... WHERE`) skips a row; MySQL-family `ON DUPLICATE KEY UPDATE`, Firebird `UPDATE OR INSERT` and Sybase ASE `MERGE` (whose rows affected still counts a guard-skipped row) cannot detect a stale version. Informix refuses a `[Version]` upsert outright (`NotSupportedException`): its MERGE has no conditional matched clause to carry the version check.
 
 ## CRITICAL: Audit Field Behavior
 
@@ -422,7 +422,7 @@ MySQL/PostgreSQL suites.
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite = SingleWriter
+8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload (explicit `Standard` always honored)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** — incompatible with connection management, use `context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations

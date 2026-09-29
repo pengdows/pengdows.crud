@@ -53,14 +53,9 @@ The mechanism: pengdows.crud's default philosophy (Standard mode) opens a connec
 
 The mode opens one sentinel through the normal connection and session-initialization path for every materially separate configured pool. **Sentinels never execute application commands, open transactions, or hand work to callers** — every real read and write still goes through its own fresh ephemeral connection exactly like Standard mode. Each sentinel consumes one permit from its corresponding governor, so effective working capacity is the configured capacity minus the retained sentinel(s).
 
-- `Best` auto-selects it **only** for SQL Server LocalDB. Several other databases have a real, empirically-confirmed idle-triggered reconnect/reactivation cost — but confirming the cost exists is not, by itself, sufficient reason to make `PreventDatabaseUnload` an auto-selected default for them. See "Why auto-selection stays LocalDB-only" below.
-- `testbed.TestProvider.TestIdleUnloadProbe` measures this empirically against live containers rather than trusting any documentation/general-knowledge claim — for any database exposing a fast, settable lifecycle knob (`TryEnableFastIdleUnloadAsync`/`ClearProviderPoolForIdleUnloadProbe`, overridden per dialect; no knob → an honest "not empirically tested" skip). Results so far:
-  - **Firebird** (embedded or ordinary client-server — this is not an embedded-only quirk): default SuperServer `RDB$LINGER=0`/`NULL` discards the database's page cache the moment the last attachment closes (terminology: Firebird doesn't unload the *server* — the process keeps running; only that one database's cache/attachment unloads). The probe sets `ALTER DATABASE SET LINGER TO 1`, drains the pool, and measures — consistently ~5-10x cold/warm ratio across Firebird 3.0/4.0/5.0.
-  - **Db2**: `DB2Connection.ReleaseObjectPool()` drains the pool; Db2's implicit-activation deactivation is immediate by default (no delay knob needed). Measured cold/warm gap: only ~2ms — noise, below the probe's threshold. **Confirms Db2 is genuinely fine in `Standard`.**
-  - **SQL Server with `AUTO_CLOSE` explicitly turned on** (`ALTER DATABASE CURRENT SET AUTO_CLOSE ON`; off by default, so this doesn't touch SQL Server's own `Best` resolution): a real ~68x cold/warm ratio, larger than Firebird's.
-  - A follow-up sentinel-validation step (hold one connection open through the same drain-and-wait sequence, then re-measure) confirmed `PreventDatabaseUnload`'s actual mechanism genuinely closes the gap for the SQL Server `AUTO_CLOSE` case.
-- **Why auto-selection stays LocalDB-only**: a heavily-trafficked deployment may never actually drain its connection pool to zero, so a confirmed-real cost never materializes in practice — while the sentinel's permit is paid unconditionally regardless. And a deployment deliberately built to scale-to-zero for cost reasons (genuinely cost-optimized serverless products like Azure SQL serverless or Aurora Serverless, as distinct from the Firebird/Db2/SQL-Server cases above, which are architectural quirks nobody actually wants) would have that intentional behavior silently defeated by a forced sentinel. Only the operator knows which situation applies to their own deployment. So for Firebird, Db2, and SQL Server with `AUTO_CLOSE`, `PreventDatabaseUnload` stays a fully-supported, explicitly-honored **knob** — never an auto-selected default — and `Best` resolves to `Standard` for all of them, exactly like any other full-server database. LocalDB alone is the exception: there is no production LocalDB deployment shape where the auto-shutdown behavior is wanted, so it stays an unconditional `Best` selection.
-- Extending the auto-selection list to a new database requires clearing BOTH bars: (1) the same empirical proof (a live-container probe showing a real reconnect cost), AND (2) a considered answer to "does essentially every deployment of this database genuinely want protection against this, with no real cost/tradeoff to weigh" — matching LocalDB, not the Firebird/Db2/SQL-Server-AUTO_CLOSE cases. A Db2 addition was proposed and reverted in the same session for lacking the first bar; Firebird's own `Best → PreventDatabaseUnload` auto-selection was *also* built, empirically verified, and then deliberately reverted back to `Standard` once the second bar was worked through — clearing the first bar alone was not sufficient.
+- `Best` auto-selects it for **SQL Server LocalDB**, **Firebird** (embedded and client-server) and **Db2 LUW**. Firebird's default `LINGER` discards the database's page cache when its last attachment closes (the testbed probe measured a sentinel saving ~7-10ms per cold checkout). Db2 LUW's default implicit activation deactivates a database when its last connection closes (measured ~1.1 s per cold connection, ~4 ms with a sentinel); it is recognized on the detection connection, and any Db2 server not positively recognized as LUW keeps `Standard`. SQL Server with `AUTO_CLOSE` explicitly on stays knob-only: `Best` resolves to `Standard`.
+- **`Best` is a default, not a mandate.** Wherever `Best` selects `PreventDatabaseUnload`, an explicit `Standard` request is always honored: a deployment busy enough never to drain its pool doesn't need the sentinel, and one deliberately built to scale to zero must not have that defeated. Firebird honors every explicit mode; LocalDB honors `Standard` (the single-connection modes have no purpose there and resolve to `PreventDatabaseUnload`), with a performance-only warning.
+- Extending `Best`'s auto-selection to another database requires empirical proof against a live engine (the testbed probe) and a considered maintainer decision; a documented or plausible cost alone is not enough.
 - Separate read and write connection strings receive separate sentinels. A reported Closed/Broken sentinel is replaced lazily, through the normal connection path, after confirming that the context is still active.
 
 ### SingleConnection
@@ -103,7 +98,7 @@ The mode opens one sentinel through the normal connection and session-initializa
 
 - Resolver hint only. Not an actual strategy.
 - Defaults to the safest mode based on dialect + connection string:
-  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2, Firebird — embedded or client-server) → Standard
+  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, non-LUW Db2) → Standard; Firebird and Db2 LUW → PreventDatabaseUnload
   - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based → SingleWriter
@@ -184,7 +179,11 @@ performance-only (not correctness-risk) Warning when this happens — LocalDB is
 client-server engine under the hood, so Standard mode works correctly, it just forgoes the
 idle-reconnect mitigation.
 
-### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, Db2, Firebird): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. Firebird, Db2, and SQL Server (with `AUTO_CLOSE`) each have a real, empirically-confirmed idle-unload cost, but `PreventDatabaseUnload` is deliberately a knob for the operator to reach for, not an auto-selected default — see the PreventDatabaseUnload section above for why.
+### Firebird (embedded or client-server): `Best` selects PreventDatabaseUnload (one sentinel per pool). Every explicit choice — including `Standard` — is honored as-is, no warning logged.
+
+### Db2: on a positively detected Db2 LUW server `Best` selects PreventDatabaseUnload; on any other or unrecognized Db2 server it selects Standard (and a warning is logged: only Db2 LUW is supported). Every explicit choice — including `Standard` — is honored.
+
+### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. SQL Server with `AUTO_CLOSE` can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
 
 ### FakeDb: no special case. It emulates a real dialect via `EmulatedProduct` and follows all the above rules.
 
@@ -261,7 +260,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Explicit Standard on embedded → coerced (never throw):
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite/DuckDB file-based → SingleWriter
-- Firebird (embedded or client-server) → treated as an ordinary full server database; `Best` and every explicit choice (including `PreventDatabaseUnload`) resolve/honor as requested, no coercion either way.
+- Firebird (embedded or client-server) → `Best` selects PreventDatabaseUnload; every explicit choice (including `Standard`) is honored as requested, no coercion
 - Unknown product with Best → Standard.
 
 ## 8. Metrics & Limits

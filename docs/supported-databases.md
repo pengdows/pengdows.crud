@@ -18,7 +18,7 @@ pengdows.crud supports 23 directly supported databases via the `SupportedDatabas
 | `Snowflake=2048` | Snowflake (opt-in; cloud-only, requires credentials) |
 | `AuroraMySql=4096` | Aurora MySQL (AWS managed; detected at runtime, delegates to MySQL dialect) |
 | `AuroraPostgreSql=8192` | Aurora PostgreSQL (AWS managed; detected at runtime, delegates to PostgreSQL dialect) |
-| `Db2=16384` | IBM Db2 for Linux/Unix/Windows (Db2 LUW) |
+| `Db2=16384` | IBM Db2 for Linux/Unix/Windows (Db2 LUW) — dedicated `Db2Dialect`. **Only LUW is supported; Db2 for z/OS and Db2 for i are not** — see the Db2 gotchas below |
 | `FlatFile=32768` | [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) — embedded ADO.NET provider over CSV/TSV/delimited/fixed-width/NDJSON files |
 | `SingleStore=65536` | SingleStore (formerly MemSQL); detected at runtime, delegates to MySQL dialect — see note below |
 | `SybaseASE=131072` | Sybase (SAP) Adaptive Server Enterprise — dedicated `SybaseDialect`, T-SQL family — see note below |
@@ -76,7 +76,7 @@ Database support is a joint capability over **(database engine, client driver)**
 > - **Embedded Engines (SQLite & DuckDB):** SQLite and DuckDB execute in-process, bundled with their ADO.NET provider (`Microsoft.Data.Sqlite` bundles SQLite 3.45+; `DuckDB.NET.Data.Full` bundles DuckDB 1.3.2).
 > - **MariaDB & Driver Support:** MariaDB versions report a `5.5.5-10.x.x-MariaDB` handshake prefix (MDEV-28910). Both `MySql.Data 9.3.0` and `MySqlConnector 2.4.0` connect cleanly to MariaDB 10.x/11.x in automated testbed validation.
 > - **MySQL / MariaDB Prepared Statements:** `COM_STMT_PREPARE` in MySQL 5.7 and MariaDB ≤ 10.5 rejects DDL / stored procedure statements with error 1295. `MySqlDialect` automatically detects error 1295 and falls back to text execution protocol seamlessly.
-> - **Firebird & DateTimeOffset Driver Constraint:** `FirebirdSql.Data.FirebirdClient 10.3.3` throws "Incorrect time zone value" in its internal `DbValue.GetTimeZoneId()` when binding raw CLR `DateTimeOffset` values. This is an ADO.NET client driver constraint; use UTC `DateTime` values when targeting Firebird.
+> - **Firebird & DateTimeOffset Driver Constraint:** `FirebirdSql.Data.FirebirdClient 10.3.3` throws "Incorrect time zone value" in its internal `DbValue.GetTimeZoneId()` when binding raw CLR `DateTimeOffset` values. pengdows.crud never sends one: on Firebird 4+ a `DateTimeOffset` is sent as an `FbZonedDateTime` holding the UTC instant, which the driver encodes against the column type the server reports — a `TIMESTAMP WITH TIME ZONE` column stores the instant, a plain `TIMESTAMP` column stores the UTC wall time (the same value earlier releases stored). Zoned columns read back as `DateTimeOffset`/UTC `DateTime`. Firebird 3 has no zoned types and keeps the UTC-`DateTime` mapping. Verified live on Firebird 5.0.4 with FirebirdClient 10.3.3.
 > - **PostgreSQL & Npgsql Support Policy:** PostgreSQL 9.5, 15.0, and 16.4 are all validated. `CREATE PROCEDURE` is verified on PostgreSQL 11+, while PostgreSQL 9.5 executes `CREATE FUNCTION`.
 > - **MySQL / MariaDB read-only syntax:** `SET SESSION transaction_read_only = 1` is verified on MySQL 5.7+. MariaDB uses `SET SESSION tx_read_only = 1` (verified 10.2+).
 
@@ -217,6 +217,21 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
 - `IBM.Data.Db2`'s driver throws immediately on `DbType.Guid` before any conversion runs; GUIDs
   must be remapped to `DbType.String` at parameter-creation time.
 - A bare `SAVEPOINT name` fails with SQL0104N — needs the `ON ROLLBACK RETAIN CURSORS` suffix.
+- Only Db2 for Linux/Unix/Windows (LUW) is supported. Db2 for z/OS and Db2 for i are separate IBM
+  products sharing a common SQL subset, and their real features differ (e.g. IBM i commitment
+  control depends on journaling), so they are **not supported**. A Db2 server not recognized as LUW
+  (via `SYSPROC.ENV_GET_INST_INFO()`, which exists only on LUW) logs a warning rather than refusing,
+  because a restricted LUW user may be unable to run the recognition query. They are planned as
+  separate `SupportedDatabase` values once they can be tested (tracker VAR-003).
+- `DbMode.Best` selects `PreventDatabaseUnload` on a positively detected Db2 LUW server (LUW's
+  default implicit activation deactivates an idle database; measured ~1.1 s per cold connection
+  versus ~4 ms with a sentinel); any other or unrecognized Db2 server keeps `Standard`, and an
+  explicit `Standard` is always honored.
+- Pool-size caveat (IBM driver, confirmed live): IBM.Data.Db2 fixes a pool's size the first time a
+  connection string opens it and rejects a later string asking a different size for the same
+  server and database. `PreventDatabaseUnload` needs at least two pooled connections, so `Best`
+  stays `Standard` below a maximum pool size of 2, and an explicit `PreventDatabaseUnload` with
+  `Max Pool Size=1` fails in the driver with "Invalid argument".
 
 **DuckDB**
 - `ReadOnlyConnectionsCanBlockConcurrentWriters => true` and
@@ -247,9 +262,12 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
   round trips reusing pooled connections, a later DDL statement can fail with "object TABLE ...
   is in use" even though nothing is actually still running or uncommitted. `pengdows.crud`
   compensates automatically here too: before executing DDL, `SqlDialect.ResetConnectionPoolForDdl`
-  (internal, Firebird-only) clears the ADO.NET pool for that exact connection string via
-  reflection into `FbConnection.ClearPool(string)` — no application code needs to know about this
-  either.
+  (internal, Firebird-only) clears every Firebird ADO.NET pool in the process via reflection into
+  `FbConnection.ClearAllPools()` (`ClearPool(string)` only reached the issuing context's own pool,
+  not a second `DatabaseContext`'s; confirmed live), and, under `PreventDatabaseUnload`, closes the
+  context's sentinel connections until the DDL finishes and then reopens them (any other
+  attachment present while the DDL runs makes it fail the same way; confirmed live) — no
+  application code needs to know about this either.
 
 **SAP HANA**
 - Positional `?` parameters only — no named-parameter support at all in `Sap.Data.Hana.Net.v8.0`.
@@ -276,6 +294,26 @@ it lists the quirks most likely to surprise a caller who assumes uniform SQL-sta
   unique, 461/462 foreign key, 287 not-null, 677 check).
 - Savepoints support the full `Create`/`Rollback`/`Release` set — unlike Oracle, which has no
   `RELEASE SAVEPOINT` at all.
+
+**Informix**
+- Positional `?` parameters only; owner-qualified schemas.
+- An *unqualified* quoted identifier named after a special register (`user`, `today`, `current`,
+  `sitename`, `dbservername`, `current_user`) resolves to the register, not the column, wherever it
+  appears in an expression — `DELETE FROM "t" WHERE "user" = ?` compares the session user name.
+  The gateways table-qualify every column reference on Informix, so generated SQL is safe. In your
+  own SQL, always qualify such columns (`"t"."user"`, or an alias).
+- Informix.Net.Core trims trailing spaces from every `VARCHAR`/`LVARCHAR` value it reads, with no
+  option to turn it off (IBM APAR IC63704); see `ISqlDialect.PreservesTrailingWhitespace`.
+- Text outside the Unicode Basic Multilingual Plane (a surrogate pair, e.g. an emoji) is rejected
+  by the provider even in a Unicode database.
+- Paging uses the native `SELECT SKIP n FIRST m ...`; neither `OFFSET`/`FETCH` nor `LIMIT`/`OFFSET`
+  parses.
+- `MERGE` works with a one-row `SELECT ... FROM sysmaster:sysdual` source (the `VALUES (...)`
+  derived table is a syntax error), but has no conditional matched clause in any form, so
+  `UpsertAsync` of an entity with a `[Version]` column throws `NotSupportedException` rather than
+  overwrite a newer row.
+- No multi-row `VALUES` batch insert (one statement per row). Savepoints work (create, rollback,
+  release). Stored procedures use `EXECUTE PROCEDURE name(args)` (`ProcWrappingStyle.Informix`).
 
 **InterBase**
 - Named `@` parameters, confirmed live via a real parameterized INSERT and SELECT WHERE clause
