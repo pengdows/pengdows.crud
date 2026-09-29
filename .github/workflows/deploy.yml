@@ -25,6 +25,7 @@ concurrency:
 permissions:
   contents: write  # Needed for git push and release creation
   actions: write   # Needed for gh variable set (coverage ratchet)
+  id-token: write  # NuGet Trusted Publishing: NuGet/login exchanges the GitHub OIDC token for a short-lived key
 
 jobs:
   build-and-test:
@@ -490,16 +491,6 @@ jobs:
           dotnet pack pengdows.stormgate.EntityFrameworkCore/pengdows.stormgate.EntityFrameworkCore.csproj -c Release \
             --no-build \
             -p:PackageVersion=${{ steps.version.outputs.version }}
-      - name: Debug API Key
-        run: |
-          if [ -z "$NUGET_API_KEY" ]; then
-            echo "NUGET_API_KEY is empty!"
-            exit 1
-          else
-            echo "NUGET_API_KEY is set and length is ${#NUGET_API_KEY}"
-          fi
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
       - name: Check if version already published
         id: nuget_check
         run: |
@@ -554,6 +545,15 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Trusted Publishing: no long-lived API key. Requires a nuget.org Trusted Publishing policy
+      # (owner pengdows, repository pengdows/pengdows.crud, workflow deploy.yml).
+      - name: Log in to NuGet (Trusted Publishing)
+        if: steps.nuget_check.outputs.skip != 'true'
+        id: nuget_login
+        uses: NuGet/login@v1
+        with:
+          user: pengdows
+
       - name: Push package to NuGet
         if: steps.nuget_check.outputs.skip != 'true'
         run: |
@@ -583,7 +583,7 @@ jobs:
             --api-key "$NUGET_API_KEY" \
             --skip-duplicate
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{ steps.nuget_login.outputs.NUGET_API_KEY }}
 
       - name: Configure git identity
         if: steps.nuget_check.outputs.skip != 'true'
