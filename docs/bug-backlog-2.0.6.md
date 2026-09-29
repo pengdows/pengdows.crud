@@ -301,12 +301,16 @@ These are the rules the code is being brought in line with.
   checksum ...", FATAL "database has been invalidated", native crashes. Raw DuckDB.NET failed 29/30
   runs with `CloseConnection` and 0/30 with `CommandBehavior.Default`; reordering the call in
   DuckDB.NET's source fixed it (200/200), so it is not in native DuckDB. Fixed upstream in DuckDB.NET
-  `develop` (f94d52b), not yet released; regression test submitted as Giorgi/DuckDB.NET#357. With
+  (f94d52b), released in 1.5.6; regression test submitted as Giorgi/DuckDB.NET#357. With
   DuckDB.NET 1.5.5 or older (read from the provider assembly's version), pengdows now opens DuckDB
   readers without `CloseConnection` (new internal dialect flag `SupportsCloseConnectionReaderBehavior`);
   `TrackedReader` still closes the connection itself, after the reader and command. This covers every
   mode, including an explicit `Standard`, and switches off by itself on the next DuckDB.NET release. fakeDb records each
   reader's `CommandBehavior` (`fakeDbConnection.ExecutedReaderBehaviors`).
+  **Validated 2026-09-29 on DuckDB.NET 1.5.6** (the first release with the fix): the gate switches
+  off (`RealDuckDbNet156_UsesCloseConnection` against the real provider), and with `CloseConnection`
+  back on the full DuckDB integration suite and 10/10 runs of the concurrent read/write tests pass
+  on net8.0 and net10.0. The unit tests and testbed now reference 1.5.6.
 
 - [x] **Open-connection counts and connection metrics stayed at zero on Snowflake** (found via an
   integration-test skip, INT-SKIP-010, 2026-09-28). pengdows counted opens and closes only from the
