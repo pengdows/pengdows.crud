@@ -359,6 +359,8 @@ public partial class TableGateway<TEntity, TRowID>
             return BuildFirebirdMergeUpsert(entity, ctx);
         }
 
+        ThrowIfVersionedMergeUpsertUnsupported(dialect);
+
         PrepareForInsertOrUpsert(entity);
 
         var template = GetTemplatesForDialect(dialect);

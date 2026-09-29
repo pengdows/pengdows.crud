@@ -231,11 +231,8 @@ public class DataSourceInformationTests
                         // against a real saplabs/hanaexpress container, using a custom
                         // RenderMergeSource override ("USING (SELECT ... FROM DUMMY) s") since
                         // the base VALUES-row-constructor source shape is rejected.
-                        || db == SupportedDatabase.SapHana;
-                        // Informix: MERGE INTO itself is documented, but the base
-                        // RenderMergeSource's USING (VALUES (...)) AS s (...) shape was
-                        // CONFIRMED live to be rejected ("A syntax error has occurred.") — see
-                        // InformixDialect.cs's SupportsMerge comment. Left disabled.
+                        || db == SupportedDatabase.SapHana
+                        || db == SupportedDatabase.Informix;
         Assert.Equal(canMerge, info.SupportsMerge);
         Assert.NotEqual(!canMerge, info.SupportsMerge);
 
@@ -277,6 +274,7 @@ public class DataSourceInformationTests
                 or SupportedDatabase.MariaDb or SupportedDatabase.Snowflake
                 or SupportedDatabase.Db2 or SupportedDatabase.SingleStore
                 or SupportedDatabase.SapHana => ProcWrappingStyle.Call,
+            SupportedDatabase.Informix => ProcWrappingStyle.Informix,
             SupportedDatabase.TiDb or SupportedDatabase.CockroachDb => ProcWrappingStyle.None,
             SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql
                 or SupportedDatabase.YugabyteDb => ProcWrappingStyle.PostgreSQL,

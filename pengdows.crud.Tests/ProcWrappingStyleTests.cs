@@ -19,6 +19,7 @@ public class ProcWrappingStyleTests
     [InlineData("None", ProcWrappingStyle.None)]
     [InlineData("Oracle", ProcWrappingStyle.Oracle)]
     [InlineData("PostgreSQL", ProcWrappingStyle.PostgreSQL)]
+    [InlineData("Informix", ProcWrappingStyle.Informix)]
     public void EnumParse_ShouldReturnCorrectValue(string input, ProcWrappingStyle expected)
     {
         var result = Enum.Parse<ProcWrappingStyle>(input, true);
@@ -35,7 +36,7 @@ public class ProcWrappingStyleTests
     public void ProcWrappingStyle_ShouldContainExpectedValues()
     {
         var names = Enum.GetNames(typeof(ProcWrappingStyle));
-        Assert.Equal(new[] { "None", "Call", "Exec", "PostgreSQL", "Oracle", "ExecuteProcedure" }, names);
+        Assert.Equal(new[] { "None", "Call", "Exec", "PostgreSQL", "Oracle", "ExecuteProcedure", "Informix" }, names);
     }
 
     private SqlContainer SetupParameterWrapTest(SupportedDatabase product)
@@ -48,6 +49,32 @@ public class ProcWrappingStyleTests
         }
 
         return sc;
+    }
+
+    // Informix documents EXECUTE PROCEDURE as the stand-alone statement (CALL is valid only inside
+    // an SPL routine). CONFIRMED live (15.0.1.0.3): EXECUTE PROCEDURE runs a procedure with or
+    // without a RETURNING value and a CREATE FUNCTION routine alike, returning any value as a row,
+    // so one form serves reads and writes. EXECUTE FUNCTION cannot run a procedure that returns
+    // nothing, and "SELECT * FROM name(args)" (the Firebird/PostgreSQL read form) is a syntax error.
+    [Theory]
+    [InlineData(ExecutionType.Read)]
+    [InlineData(ExecutionType.Write)]
+    public void WrapTestInformix(ExecutionType executionType)
+    {
+        var sc = SetupParameterWrapTest(SupportedDatabase.Informix);
+        var s = sc.WrapForStoredProc(executionType);
+        Assert.Equal("EXECUTE PROCEDURE \"dbo\".\"Sqltest\"(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", s);
+    }
+
+    // CONFIRMED live: Informix requires the parentheses even with no arguments
+    // ("EXECUTE PROCEDURE name" is a syntax error), unlike Firebird's EXECUTE PROCEDURE.
+    [Fact]
+    public void WrapTestInformix_NoArguments_KeepsParentheses()
+    {
+        var ctx = new DatabaseContext("DataSource=:memory:;EmulatedProduct=Informix",
+            new fakeDbFactory(SupportedDatabase.Informix));
+        var sc = ctx.CreateSqlContainer("ret5");
+        Assert.Equal("EXECUTE PROCEDURE \"ret5\"()", sc.WrapForStoredProc(ExecutionType.Read));
     }
 
     [Fact]

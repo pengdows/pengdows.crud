@@ -885,6 +885,22 @@ public interface ISqlDialect
     bool SupportsLimitOffset { get; }
 
     /// <summary>
+    /// True when <see cref="AppendPaging"/> can page a query on this dialect, by whatever syntax it
+    /// uses: <see cref="SupportsOffsetFetch"/>, <see cref="SupportsLimitOffset"/>, or a native form
+    /// such as Informix's <c>SELECT SKIP n FIRST m</c>. False when the engine has no way to skip
+    /// rows (e.g. Sybase ASE, where <see cref="AppendPaging"/> throws).
+    /// </summary>
+    bool SupportsPaging => SupportsOffsetFetch || SupportsLimitOffset;
+
+    /// <summary>
+    /// True when a string value's trailing whitespace survives a write and read-back. False for
+    /// Sybase ASE, whose engine strips trailing blanks from VARCHAR values on storage, and for
+    /// Informix, where the server stores them but the Informix .NET provider trims them from every
+    /// VARCHAR/LVARCHAR value it returns with no option to stop (IBM APAR IC63704).
+    /// </summary>
+    bool PreservesTrailingWhitespace => true;
+
+    /// <summary>
     /// Appends dialect-appropriate paging SQL to the supplied query builder.
     /// Uses <c>OFFSET n ROWS FETCH NEXT m ROWS ONLY</c> when <see cref="SupportsOffsetFetch"/>
     /// is true, otherwise falls back to <c>LIMIT m OFFSET n</c>.

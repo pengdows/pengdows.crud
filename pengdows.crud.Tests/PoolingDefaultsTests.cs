@@ -105,6 +105,16 @@ public class PoolingDefaultsTests
         Assert.Equal("MaxPoolSize", dialect.MaxPoolSizeSettingName);
     }
 
+    [Fact]
+    public void SnowflakeDialect_UsesSnowflakeV4DefaultMaxPoolSize()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Snowflake);
+        var logger = NullLogger<SqlDialect>.Instance;
+        var dialect = new SnowflakeDialect(factory, logger);
+
+        Assert.Equal(10, dialect.DefaultMaxPoolSize);
+    }
+
     /// <summary>
     /// Tests that SQLite gets correct pooling defaults (default provider behavior)
     /// </summary>

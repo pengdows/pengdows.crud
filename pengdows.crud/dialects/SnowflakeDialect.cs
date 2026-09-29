@@ -403,4 +403,8 @@ internal class SnowflakeDialect : SqlDialect
     public override string? MinPoolSizeSettingName => "minPoolSize";
     public override string? MaxPoolSizeSettingName => "maxPoolSize";
     public override string? ApplicationNameSettingName => "application";
+
+    // Snowflake.Data 4.x defaults maxPoolSize to 10. Keep pengdows.crud aligned
+    // with the provider unless the caller explicitly configures a different limit.
+    internal override int DefaultMaxPoolSize => 10;
 }

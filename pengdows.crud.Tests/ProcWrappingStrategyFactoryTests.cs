@@ -16,6 +16,7 @@ public class ProcWrappingStrategyFactoryTests
         Assert.IsType<OracleProcWrappingStrategy>(ProcWrappingStrategyFactory.Create(ProcWrappingStyle.Oracle));
         Assert.IsType<ExecuteProcedureWrappingStrategy>(
             ProcWrappingStrategyFactory.Create(ProcWrappingStyle.ExecuteProcedure));
+        Assert.IsType<InformixProcWrappingStrategy>(ProcWrappingStrategyFactory.Create(ProcWrappingStyle.Informix));
         Assert.IsType<UnsupportedProcWrappingStrategy>(ProcWrappingStrategyFactory.Create(ProcWrappingStyle.None));
         // Unknown values fallback to Unsupported
         Assert.IsType<UnsupportedProcWrappingStrategy>(ProcWrappingStrategyFactory.Create((ProcWrappingStyle)999));

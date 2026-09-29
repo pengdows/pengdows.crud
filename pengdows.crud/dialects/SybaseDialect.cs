@@ -158,6 +158,10 @@ internal class SybaseDialect : SqlDialect
     // CONFIRMED live (ASE 16.0): a zero-length VARBINARY reads back as 0x00.
     public override bool PreservesEmptyBinary => false;
 
+    // Verified live (ASE 16.0 SP02): the engine strips trailing blanks from VARCHAR values on
+    // storage ('  padded  ' is stored as 8 bytes), so they cannot round-trip.
+    public override bool PreservesTrailingWhitespace => false;
+
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         // Verified live (testbed): AdoNetCore.AseClient rejects a DateTimeOffset parameter

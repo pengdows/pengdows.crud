@@ -7,5 +7,6 @@ public enum ProcWrappingStyle
     Exec,
     PostgreSQL,
     Oracle,
-    ExecuteProcedure
+    ExecuteProcedure,
+    Informix
 }

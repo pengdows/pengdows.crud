@@ -374,6 +374,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return BuildPkFirebirdMergeUpsert(entity, context);
         }
 
+        ThrowIfVersionedMergeUpsertUnsupported(dialect);
         PrepareForPkUpsert(entity);
 
         var insertableColumns = GetCachedInsertableColumns();

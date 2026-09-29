@@ -149,6 +149,15 @@ internal static class InternalSqlDialectExtensions
                internalDialect.SupportsOnConflictOnSecondaryUniqueKey;
     }
 
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.SupportsMergeMatchedCondition"/>; true for a dialect that
+    /// isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool SupportsMergeMatchedCondition(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.SupportsMergeMatchedCondition;
+    }
+
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)
     {
         if (dialect is not IInternalSqlDialect internalDialect)

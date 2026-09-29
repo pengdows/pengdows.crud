@@ -1,6 +1,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -53,6 +54,28 @@ public class SqlContainerCreateCommandTests : SqlLiteContextTestBase
 
         var cmdParam = Assert.Single(command.Parameters);
         Assert.Same(parameter, cmdParam);
+    }
+
+    // The portable way to use one logical parameter more than once: write the {P}name token at
+    // each use. On a positional provider (Informix: "?" only, no names) each occurrence renders its
+    // own "?" and binds its own DbParameter carrying the same value, in order.
+    [Fact]
+    public async Task CreateCommand_RepeatedPlaceholder_PositionalProvider_BindsOneParameterPerOccurrence()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Informix);
+        await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Informix", factory);
+        await using var connection = context.GetConnection(ExecutionType.Read);
+        await connection.OpenAsync();
+
+        using var container = context.CreateSqlContainer("SELECT 1 FROM t WHERE a = {P}p0 OR b = {P}p0");
+        container.AddParameterWithValue("p0", DbType.String, "x");
+
+        using var command = container.CreateCommand(connection);
+
+        Assert.Equal("SELECT 1 FROM t WHERE a = ? OR b = ?", command.CommandText);
+        Assert.Equal(2, command.Parameters.Count);
+        Assert.All(command.Parameters.Cast<DbParameter>(), p => Assert.Equal("x", p.Value));
+        Assert.NotSame(command.Parameters[0], command.Parameters[1]);
     }
 
     [Fact]
