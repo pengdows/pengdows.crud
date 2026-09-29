@@ -426,6 +426,23 @@ internal abstract class SqlDialect : IInternalSqlDialect
         "intermittent lock-contention or transaction-conflict errors under real write concurrency. " +
         "Consider SingleWriter mode unless you have verified your workload's concurrency safety.";
 
+    /// <summary>
+    /// True when the driver binds <see cref="DateOnly"/>/<see cref="TimeOnly"/> itself and rejects
+    /// the equivalent DateTime/TimeSpan for DATE/TIME columns (FlatFile). Otherwise they are bound
+    /// as their DateTime/TimeSpan equivalents.
+    /// </summary>
+    internal virtual bool BindsDateOnlyAndTimeOnlyNatively => false;
+
+    /// <summary>
+    /// Last step of <see cref="CreateDbParameter{T}"/>, after whichever path (the advanced
+    /// dispatcher, the coercion registry or <see cref="PrepareParameterValue"/>) bound the value:
+    /// lets a dialect whose driver needs a different shape for a DATE/TIME parameter adjust it
+    /// against the declared <paramref name="declaredType"/> (TYPE-001). Default: no change.
+    /// </summary>
+    internal virtual void AdjustTemporalParameter(DbParameter parameter, DbType declaredType)
+    {
+    }
+
     public virtual string ParameterMarker => "?";
 
     public virtual string ParameterMarkerAt(int ordinal)
@@ -1483,6 +1500,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return CreateDbParameter(name, type, rowVersion.ToArray());
         }
 
+        // TYPE-001: DateOnly/TimeOnly bind exactly as the equivalent midnight DateTime / TimeSpan
+        // (re-dispatched virtually), so every dialect's existing DateTime/TimeSpan handling applies,
+        // unless the dialect's driver takes them natively for a DATE/TIME column.
+        if (value is DateOnly dateOnly &&
+            !(BindsDateOnlyAndTimeOnlyNatively && type is DbType.Date or DbType.Object))
+        {
+            return CreateDbParameter(name, type, dateOnly.ToDateTime(TimeOnly.MinValue));
+        }
+
+        if (value is TimeOnly timeOnly &&
+            !(BindsDateOnlyAndTimeOnlyNatively && type is DbType.Time or DbType.Object))
+        {
+            return CreateDbParameter(name, type, timeOnly.ToTimeSpan());
+        }
+
         var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();
         var start = traceTimings ? Stopwatch.GetTimestamp() : 0;
         var parameter = GetPooledParameter(out var pooled);
@@ -1549,6 +1581,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
             var preparedValue = PrepareParameterValue(value, type);
             parameter.Value = preparedValue ?? DBNull.Value;
         }
+
+        AdjustTemporalParameter(parameter, type);
 
         // Apply the dialect's declared Guid storage format when the caller passed DbType.Guid
         // and the AdvancedTypeRegistry did not already handle the parameter (e.g. PostgreSQL

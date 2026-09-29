@@ -87,6 +87,9 @@ internal class AdvancedTypeRegistry
         public const string Int4Range = "IntegerRange";
         public const string Int8Range = "BigIntRange";
         public const string TsRange = "TimestampRange";
+        public const string TsTzRange = "TimestampTzRange";
+        public const string DateRange = "DateRange";
+        public const string NumRange = "NumericRange";
         public const string Inet = "Inet";
         public const string Cidr = "Cidr";
         public const string MacAddr = "MacAddr";
@@ -366,6 +369,9 @@ internal class AdvancedTypeRegistry
         RegisterConverter(new PostgreSqlRangeConverter<int>());
         RegisterConverter(new PostgreSqlRangeConverter<DateTime>());
         RegisterConverter(new PostgreSqlRangeConverter<long>());
+        RegisterConverter(new PostgreSqlRangeConverter<DateOnly>());
+        RegisterConverter(new PostgreSqlRangeConverter<decimal>());
+        RegisterConverter(new PostgreSqlRangeConverter<DateTimeOffset>());
 
         // Network converters
         RegisterConverter(new InetConverter());
@@ -537,6 +543,26 @@ internal class AdvancedTypeRegistry
         RegisterMapping<Range<long>>(SupportedDatabase.PostgreSql, pgLongRange);
         RegisterMapping<Range<long>>(SupportedDatabase.CockroachDb, pgLongRange);
         RegisterMapping<Range<long>>(SupportedDatabase.YugabyteDb, pgLongRange);
+
+        // TYPE-009: daterange, numrange, tstzrange.
+        RegisterPostgreSqlFamilyRange<Range<DateOnly>>(NpgsqlNames.DateRange);
+        RegisterPostgreSqlFamilyRange<Range<decimal>>(NpgsqlNames.NumRange);
+        RegisterPostgreSqlFamilyRange<Range<DateTimeOffset>>(NpgsqlNames.TsTzRange);
+    }
+
+    private void RegisterPostgreSqlFamilyRange<TRange>(string npgsqlDbType)
+    {
+        var mapping = new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                SetEnumProperty(param, NpgsqlNames.DbTypeProperty, npgsqlDbType);
+            }
+        };
+        RegisterMapping<TRange>(SupportedDatabase.PostgreSql, mapping);
+        RegisterMapping<TRange>(SupportedDatabase.CockroachDb, mapping);
+        RegisterMapping<TRange>(SupportedDatabase.YugabyteDb, mapping);
     }
 
     private void RegisterNetworkMappings()
@@ -619,6 +645,15 @@ internal class AdvancedTypeRegistry
             {
                 SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalDS);
             }
+        });
+
+        // Oracle has no TIME type and ODP.NET rejects DbType.Time ("ORA-50028: Invalid parameter
+        // binding", confirmed live), so a time of day binds as INTERVAL DAY TO SECOND (TYPE-001).
+        // OracleDialect does the same for a NULL declared DbType.Time.
+        RegisterMapping<TimeSpan>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) => SetOracleIntervalDaySecond(param)
         });
 
         // SQL Server DateTimeOffset (UTC policy)
@@ -829,7 +864,11 @@ internal class AdvancedTypeRegistry
         // Removed from AdvancedTypeRegistry to keep Guid handling dialect-co-located.
     }
 
-    private static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)
+    /// <summary>Marks an ODP.NET parameter as OracleDbType.IntervalDS (no-op for other providers).</summary>
+    internal static void SetOracleIntervalDaySecond(DbParameter parameter) =>
+        SetEnumProperty(parameter, OracleNames.DbTypeProperty, OracleNames.IntervalDS);
+
+    internal static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)
     {
         if (parameter == null || string.IsNullOrEmpty(propertyName) || enumNames.Length == 0)
         {

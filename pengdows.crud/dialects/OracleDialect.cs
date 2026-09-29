@@ -640,6 +640,22 @@ internal class OracleDialect : SqlDialect
         _ => type
     };
 
+    // Oracle has no TIME type; a time of day binds as INTERVAL DAY TO SECOND (TYPE-001). A value is
+    // mapped by AdvancedTypeRegistry; a NULL declared DbType.Time must be too, since ODP.NET turns
+    // DbType.Time into OracleDbType.TimeStamp and Oracle type-checks a NULL bind against the column
+    // ("ORA-00932: expression is of data type TIMESTAMP", confirmed live).
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        var parameter = base.CreateDbParameter(name, type, value);
+        if (type == DbType.Time)
+        {
+            parameter.DbType = DbType.Object;
+            types.AdvancedTypeRegistry.SetOracleIntervalDaySecond(parameter);
+        }
+
+        return parameter;
+    }
+
     public override object? PrepareParameterValue(object? value, DbType dbType)
     {
         if (dbType == DbType.Boolean && value is bool b)

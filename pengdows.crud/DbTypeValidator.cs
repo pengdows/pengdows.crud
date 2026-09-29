@@ -63,10 +63,10 @@ internal static class DbTypeValidator
             [DbType.AnsiStringFixedLength] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
             [DbType.Xml] = new HashSet<Type> { typeof(string) }.ToFrozenSet(),
 
-            [DbType.DateTime] = new HashSet<Type> { typeof(DateTime), typeof(DateTimeOffset), typeof(string) }.ToFrozenSet(),
-            [DbType.DateTime2] = new HashSet<Type> { typeof(DateTime), typeof(DateTimeOffset), typeof(string) }.ToFrozenSet(),
-            [DbType.Date] = new HashSet<Type> { typeof(DateTime), typeof(DateTimeOffset), typeof(string) }.ToFrozenSet(),
-            [DbType.Time] = new HashSet<Type> { typeof(TimeSpan), typeof(DateTime), typeof(string) }.ToFrozenSet(),
+            [DbType.DateTime] = new HashSet<Type> { typeof(DateTime), typeof(DateTimeOffset), typeof(DateOnly), typeof(string) }.ToFrozenSet(),
+            [DbType.DateTime2] = new HashSet<Type> { typeof(DateTime), typeof(DateTimeOffset), typeof(DateOnly), typeof(string) }.ToFrozenSet(),
+            [DbType.Date] = new HashSet<Type> { typeof(DateTime), typeof(DateTimeOffset), typeof(DateOnly), typeof(string) }.ToFrozenSet(),
+            [DbType.Time] = new HashSet<Type> { typeof(TimeSpan), typeof(TimeOnly), typeof(DateTime), typeof(string) }.ToFrozenSet(),
             [DbType.DateTimeOffset] = new HashSet<Type> { typeof(DateTimeOffset), typeof(DateTime), typeof(string) }.ToFrozenSet(),
 
             [DbType.Guid] = new HashSet<Type> { typeof(Guid), typeof(string), typeof(byte[]) }.ToFrozenSet(),
@@ -170,6 +170,8 @@ internal static class DbTypeValidator
                type != typeof(DateTime) &&
                type != typeof(DateTimeOffset) &&
                type != typeof(TimeSpan) &&
+               type != typeof(DateOnly) &&
+               type != typeof(TimeOnly) &&
                type != typeof(decimal) &&
                !NumericTypes.Contains(type) &&
                type != typeof(byte[]) &&

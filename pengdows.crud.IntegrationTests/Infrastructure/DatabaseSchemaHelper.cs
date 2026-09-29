@@ -24,6 +24,8 @@ internal static class DatabaseSchemaHelper
         "accounts",
         "round_trip_entity",
         "type_hydration",
+        "calendar_days",
+        "calendar_times",
         "Default Order"
     };
 

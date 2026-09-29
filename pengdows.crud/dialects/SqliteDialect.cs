@@ -401,6 +401,13 @@ internal class SqliteDialect : SqlDialect
             return base.CreateDbParameter(name, DbType.String, dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
         }
 
+        // Microsoft.Data.Sqlite stores a TimeSpan bound as DbType.Time as '' (confirmed with a real
+        // in-memory database, TYPE-001), so bind the canonical "c" text instead.
+        if (value is TimeSpan span)
+        {
+            return base.CreateDbParameter(name, DbType.String, span.ToString("c", CultureInfo.InvariantCulture));
+        }
+
         if (value is Guid guid)
         {
             return base.CreateDbParameter(name, DbType.String, guid.ToString("D"));

@@ -152,6 +152,11 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
             return (T)(object)DateTime.Parse(text, CultureInfo.InvariantCulture);
         }
 
+        if (typeof(T) == typeof(DateOnly))
+        {
+            return (T)(object)DateOnly.Parse(text, CultureInfo.InvariantCulture);
+        }
+
         if (typeof(T) == typeof(DateTimeOffset))
         {
             return (T)(object)DateTimeOffset.Parse(text, CultureInfo.InvariantCulture);

@@ -73,6 +73,35 @@ internal class FlatFileDialect : SqlDialect
     /// </summary>
     public override bool SupportsNamedParameters => true;
 
+    // pengdows.flatfile validates DATE/TIME columns against DateOnly/TimeOnly and rejects a midnight
+    // DateTime ("contains parts which are not specific to the DateOnly") or a TimeSpan ("Object must
+    // be of type TimeOnly"); confirmed live (TYPE-001).
+    internal override bool BindsDateOnlyAndTimeOnlyNatively => true;
+
+    // The same validation rejects a DateTime for a DATE column and a TimeSpan for a TIME column, so a
+    // value declared DbType.Date/Time binds as the DateOnly/TimeOnly the driver requires, whatever
+    // the binding pipeline turned it into.
+    internal override void AdjustTemporalParameter(DbParameter parameter, DbType declaredType)
+    {
+        switch (parameter.Value)
+        {
+            case DateTime dateTime when declaredType == DbType.Date:
+                parameter.Value = DateOnly.FromDateTime(dateTime);
+                parameter.DbType = DbType.Date;
+                break;
+            case DateOnly when declaredType == DbType.Date:
+                parameter.DbType = DbType.Date;
+                break;
+            case TimeSpan span when declaredType == DbType.Time && span >= TimeSpan.Zero && span.Ticks < TimeSpan.TicksPerDay:
+                parameter.Value = TimeOnly.FromTimeSpan(span);
+                parameter.DbType = DbType.Time;
+                break;
+            case TimeOnly when declaredType == DbType.Time:
+                parameter.DbType = DbType.Time;
+                break;
+        }
+    }
+
     /// <summary>
     /// pengdows.flatfile's named-parameter form is <c>:name</c> (see <see cref="SupportsNamedParameters"/>
     /// above) — same marker character as <see cref="OracleDialect"/>.

@@ -321,6 +321,19 @@ internal class SnowflakeDialect : SqlDialect
         return base.PrepareParameterValue(value, dbType);
     }
 
+    // Snowflake.Data binds DbType.Time only from a DateTime and sends its time of day
+    // (SFDataConverter.CSharpValToSfVal); a TimeSpan fails with error 270003. A value outside
+    // one day is left alone so the driver rejects it rather than silently wrapping it (TYPE-001).
+    internal override void AdjustTemporalParameter(DbParameter parameter, DbType declaredType)
+    {
+        if (declaredType == DbType.Time && parameter.Value is TimeSpan ts && ts >= TimeSpan.Zero &&
+            ts.Ticks < TimeSpan.TicksPerDay)
+        {
+            parameter.Value = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Unspecified).Add(ts);
+            parameter.DbType = DbType.Time;
+        }
+    }
+
     /// <summary>
     /// Pass through — Snowflake.Data handles warehouse/role/schema in the connection string.
     /// </summary>

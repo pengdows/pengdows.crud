@@ -147,10 +147,10 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
 
         return constructor.Invoke(new object[]
         {
-            value.Lower ?? default(T),
+            ToProviderBound(value.Lower ?? default(T)),
             value.IsLowerInclusive,
             !value.HasLowerBound,
-            value.Upper ?? default(T),
+            ToProviderBound(value.Upper ?? default(T)),
             value.IsUpperInclusive,
             !value.HasUpperBound
         });
@@ -191,12 +191,15 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
                 var lowerInfiniteProp = type.GetProperty("LowerBoundInfinite");
                 var upperInfiniteProp = type.GetProperty("UpperBoundInfinite");
 
+                // Npgsql's element type can differ from the property's (daterange as
+                // NpgsqlRange<DateTime>, tstzrange as UTC NpgsqlRange<DateTime>), so each bound is
+                // coerced rather than unboxed.
                 var lower = lowerInfiniteProp != null && (bool)lowerInfiniteProp.GetValue(value)!
                     ? default
-                    : (T?)lowerProp?.GetValue(value);
+                    : CoerceBound(lowerProp?.GetValue(value));
                 var upper = upperInfiniteProp != null && (bool)upperInfiniteProp.GetValue(value)!
                     ? default
-                    : (T?)upperProp?.GetValue(value);
+                    : CoerceBound(upperProp?.GetValue(value));
                 var lowerInclusive = (bool?)lowerInclusiveProp?.GetValue(value) ?? true;
                 var upperInclusive = (bool?)upperInclusiveProp?.GetValue(value) ?? false;
                 result = new Range<T>(lower, upper, lowerInclusive, upperInclusive);
@@ -217,6 +220,22 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
             result = default!;
             return false;
         }
+    }
+
+    private static T? CoerceBound(object? bound)
+    {
+        return bound switch
+        {
+            null => null,
+            T typed => typed,
+            _ => (T?)TypeCoercionHelper.Coerce(bound, bound.GetType(), typeof(T))
+        };
+    }
+
+    // Npgsql writes a DateTimeOffset to timestamptz only at offset 0.
+    private static T ToProviderBound(T bound)
+    {
+        return bound is DateTimeOffset dto ? (T)(object)dto.ToUniversalTime() : bound;
     }
 
     private static string FormatRange(Range<T> range)
@@ -268,6 +287,12 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
         if (value == null)
         {
             return string.Empty;
+        }
+
+        // ISO dates are read the same under every PostgreSQL DateStyle.
+        if (value is DateOnly date)
+        {
+            return date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
         }
 
         return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;

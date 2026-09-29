@@ -80,6 +80,18 @@ internal class DuckDbDialect : SqlDialect
     /// <inheritdoc />
     public override bool IsEmbeddedSingleWriterEngine => true;
 
+    // DuckDB.NET binds DbType.Time only from TimeOnly: a TimeSpan fails with "Unable to cast object
+    // of type 'System.TimeSpan' to type 'DuckDB.NET.Native.DuckDBTimeOnly'" (confirmed with DuckDB.NET
+    // 1.5.6), so a time of day declared DbType.Time binds as TimeOnly (TYPE-001).
+    internal override void AdjustTemporalParameter(DbParameter parameter, DbType declaredType)
+    {
+        if (declaredType == DbType.Time && parameter.Value is TimeSpan span && span >= TimeSpan.Zero &&
+            span.Ticks < TimeSpan.TicksPerDay)
+        {
+            parameter.Value = TimeOnly.FromTimeSpan(span);
+        }
+    }
+
     /// <inheritdoc />
     /// <remarks><c>data source=:memory:</c> is Isolated unless paired with <c>cache=shared</c>.</remarks>
     public override InMemoryKind DetectInMemoryKind(string? connectionString)
