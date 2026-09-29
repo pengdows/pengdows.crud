@@ -192,7 +192,7 @@ public partial class TableGateway<TEntity, TRowID>
         if (idCol != null)
         {
             deleteSql =
-                $"DELETE FROM {BuildWrappedTableName(dialect)} WHERE {dialect.WrapSimpleName(idCol.Name)} = {{0}}";
+                $"DELETE FROM {BuildWrappedTableName(dialect)} WHERE {WrapColumnReference(dialect, idCol.Name)} = {{0}}";
 
             updateColumns = _tableInfo.Columns.Values
                 .Where(c => !c.IsId && !c.IsVersion && !c.IsNonUpdateable && !c.IsCreatedBy && !c.IsCreatedOn)
@@ -201,7 +201,7 @@ public partial class TableGateway<TEntity, TRowID>
 
             // Split into prefix/suffix for direct StringBuilder appends — eliminates string.Format per call
             updateSqlPrefix = $"UPDATE {BuildWrappedTableName(dialect)} SET ";
-            updateSqlSuffix = $" WHERE {dialect.WrapSimpleName(idCol.Name)} = ";
+            updateSqlSuffix = $" WHERE {WrapColumnReference(dialect, idCol.Name)} = ";
         }
 
         // Pre-build single-ID equality WHERE body — dialect-specific, stored in CachedSqlTemplates
@@ -232,7 +232,7 @@ public partial class TableGateway<TEntity, TRowID>
         if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn)
         {
             versionIncrementClause =
-                $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
+                $", {dialect.WrapSimpleName(_versionColumn.Name)} = {WrapColumnReference(dialect, _versionColumn.Name)} + 1";
         }
 
         // Upsert should never update conflict key columns (e.g., Oracle MERGE forbids it).

@@ -75,9 +75,7 @@ public abstract partial class BaseTableGateway<TEntity>
         IReadOnlyCollection<string>? extraSelectExpressions = null)
     {
         var hasAlias = !string.IsNullOrWhiteSpace(alias);
-        var wrappedAliasPrefix = hasAlias
-            ? dialect.WrapSimpleName(alias) + dialect.CompositeIdentifierSeparator
-            : string.Empty;
+        var wrappedAliasPrefix = ColumnReferencePrefix(alias, dialect);
 
         var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         sb.Append("SELECT ");
@@ -146,7 +144,7 @@ public abstract partial class BaseTableGateway<TEntity>
         CheckParameterLimit(sc, listOfObjects!.Count * keys.Count);
 
         var parameters = new List<DbParameter>(listOfObjects.Count * keys.Count);
-        var wrappedAlias = BuildAliasPrefix(alias, dialect);
+        var wrappedAlias = ColumnReferencePrefix(alias, dialect);
         var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
         try
         {

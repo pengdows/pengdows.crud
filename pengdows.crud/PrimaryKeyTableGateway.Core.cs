@@ -131,7 +131,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn)
         {
             versionIncrementClause =
-                $", {dialect.WrapSimpleName(_versionColumn.Name)} = {dialect.WrapSimpleName(_versionColumn.Name)} + 1";
+                $", {dialect.WrapSimpleName(_versionColumn.Name)} = {WrapColumnReference(dialect, _versionColumn.Name)} + 1";
         }
 
         string? upsertUpdateFragment = BuildMergeUpsertUpdateFragment(dialect, updateColumns);

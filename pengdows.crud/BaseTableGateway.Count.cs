@@ -40,7 +40,7 @@ public abstract partial class BaseTableGateway<TEntity>
         var dialect = GetDialect(ctx);
         using var sc = ctx.CreateSqlContainer();
         sc.Query.Append("SELECT COUNT(*) FROM ").Append(BuildWrappedTableName(dialect))
-            .Append(" WHERE ").Append(sc.WrapObjectName(column))
+            .Append(" WHERE ").Append(WrapCallerColumnReference(dialect, column))
             .Append(isLike ? " LIKE " : " = ");
         var p = sc.AddParameterWithValue("v", DbType.String, value);
         sc.Query.Append(sc.MakeParameterName(p));
@@ -56,7 +56,7 @@ public abstract partial class BaseTableGateway<TEntity>
         var dialect = GetDialect(ctx);
         using var sc = ctx.CreateSqlContainer();
         sc.Query.Append("SELECT COUNT(*) FROM ").Append(BuildWrappedTableName(dialect))
-            .Append(" WHERE ").Append(sc.WrapObjectName(column)).Append(" IS NULL");
+            .Append(" WHERE ").Append(WrapCallerColumnReference(dialect, column)).Append(" IS NULL");
         return await sc.ExecuteScalarOrNullAsync<long?>() ?? 0;
     }
 
@@ -86,14 +86,14 @@ public abstract partial class BaseTableGateway<TEntity>
         var dialect = GetDialect(ctx);
         using var sc = ctx.CreateSqlContainer();
         sc.Query.Append("SELECT COUNT(*) FROM ").Append(BuildWrappedTableName(dialect))
-            .Append(" WHERE ").Append(sc.WrapObjectName(column)).Append(" = ");
+            .Append(" WHERE ").Append(WrapCallerColumnReference(dialect, column)).Append(" = ");
         var p = sc.AddParameterWithValue("v", DbType.String, value);
         sc.Query.Append(sc.MakeParameterName(p));
 
         if (andWhereNull != null)
-            sc.Query.Append(" AND ").Append(sc.WrapObjectName(andWhereNull)).Append(" IS NULL");
+            sc.Query.Append(" AND ").Append(WrapCallerColumnReference(dialect, andWhereNull)).Append(" IS NULL");
         else if (andWhereNotNull != null)
-            sc.Query.Append(" AND ").Append(sc.WrapObjectName(andWhereNotNull)).Append(" IS NOT NULL");
+            sc.Query.Append(" AND ").Append(WrapCallerColumnReference(dialect, andWhereNotNull)).Append(" IS NOT NULL");
 
         return await sc.ExecuteScalarOrNullAsync<long?>() ?? 0;
     }
