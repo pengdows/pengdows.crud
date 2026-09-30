@@ -171,6 +171,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     protected readonly DbProviderFactory Factory;
     protected readonly ILogger Logger;
+
+    /// <summary>The dialect's logger, for internal helpers that log on its behalf.</summary>
+    internal ILogger DiagnosticsLogger => Logger;
     protected DbConnectionStringBuilder ConnectionStringBuilder { get; init; }
     private IDatabaseProductInfo? _productInfo;
 

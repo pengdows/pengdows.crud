@@ -108,7 +108,7 @@ internal class SqliteDialect : SqlDialect
         bool isLocalDb) =>
         CoerceEmbeddedSingleWriterMode(requested, DetectInMemoryKind(connectionString));
 
-    private static string? ExtractDataSourcePath(string connectionString)
+    private string? ExtractDataSourcePath(string connectionString)
     {
         try
         {
@@ -117,8 +117,9 @@ internal class SqliteDialect : SqlDialect
                 ? csb[ConnectionStringHelper.DataSourceKey]?.ToString()
                 : connectionString;
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.LogDebug(ex, "Could not parse the SQLite connection string; treating it as the data source.");
             return connectionString;
         }
     }
@@ -297,8 +298,9 @@ internal class SqliteDialect : SqlDialect
                 return "SQLite";
             }
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.LogDebug(ex, "SQLite product-name probe failed.");
         }
 
         return null;

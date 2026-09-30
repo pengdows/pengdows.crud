@@ -654,13 +654,13 @@ public partial class DatabaseContext
             _connectionString,
             effectiveApplicationName,
             _dialect?.ApplicationNameSettingName,
-            builder);
+            builder, logger: _logger);
 
         if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
         {
             _connectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
                 _connectionString,
-                _dialect?.PoolingSettingName);
+                _dialect?.PoolingSettingName, logger: _logger);
         }
 
         InitializeReadOnlyConnectionResources(configuration, effectiveApplicationName);
@@ -1139,12 +1139,12 @@ public partial class DatabaseContext
         var readerBeforeMinimum = _readerConnectionString;
         var writerMinimum = ConnectionMode == DbMode.PreventDatabaseUnload && rawWriterMax != 0 ? 2 : 0;
         _connectionString = ConnectionPoolingConfiguration.EnsureMinimumPoolSize(
-            _connectionString, minPoolSizeKey, writerConfig.MinPoolSize, rawWriterMax, writerMinimum);
+            _connectionString, minPoolSizeKey, writerConfig.MinPoolSize, rawWriterMax, writerMinimum, logger: _logger);
         if (!string.IsNullOrWhiteSpace(_readerConnectionString))
         {
             var readerMinimum = ConnectionMode == DbMode.PreventDatabaseUnload && rawReaderMax != 0 ? 2 : 0;
             _readerConnectionString = ConnectionPoolingConfiguration.EnsureMinimumPoolSize(
-                _readerConnectionString, minPoolSizeKey, readerConfig.MinPoolSize, rawReaderMax, readerMinimum);
+                _readerConnectionString, minPoolSizeKey, readerConfig.MinPoolSize, rawReaderMax, readerMinimum, logger: _logger);
         }
 
         RebuildOwnedDataSourcesForChangedConnectionStrings(writerBeforeMinimum, readerBeforeMinimum);
@@ -1351,7 +1351,7 @@ public partial class DatabaseContext
         {
             _readerConnectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
                 _readerConnectionString,
-                _dialect?.PoolingSettingName);
+                _dialect?.PoolingSettingName, logger: _logger);
         }
 
         // 2. Finalize reader connection string: apply MaxPoolSize + provider-specific
@@ -1366,7 +1366,7 @@ public partial class DatabaseContext
                 readMaxPoolSize,
                 _dialect.MaxPoolSizeSettingName,
                 overrideExisting: true,
-                readerBuilder);
+                readerBuilder, logger: _logger);
             _readerConnectionString = _dialect.PrepareConnectionStringForDataSource(_readerConnectionString, readOnly: true);
         }
 
@@ -1377,7 +1377,7 @@ public partial class DatabaseContext
             _connectionString,
             _dialect?.ApplicationNameSettingName,
             WriteApplicationNameSuffix,
-            effectiveApplicationName);
+            effectiveApplicationName, logger: _logger);
 
         var writerBuilder = GetFactoryConnectionStringBuilder(_connectionString);
         if (!_isWriteConnection)
@@ -1391,7 +1391,7 @@ public partial class DatabaseContext
             var readPoolSizeForWriter = ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _connectionString, "reader");
             _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
                 _connectionString, readPoolSizeForWriter, _dialect?.MaxPoolSizeSettingName,
-                overrideExisting: true, writerBuilder);
+                overrideExisting: true, writerBuilder, logger: _logger);
         }
         else if (ConnectionMode == DbMode.SingleWriter)
         {
@@ -1400,7 +1400,7 @@ public partial class DatabaseContext
             // so only the write slot needs to be sized here.
             _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
                 _connectionString, 1, _dialect?.MaxPoolSizeSettingName,
-                overrideExisting: true, writerBuilder);
+                overrideExisting: true, writerBuilder, logger: _logger);
         }
         else
         {
@@ -1411,7 +1411,7 @@ public partial class DatabaseContext
             var writeMax = ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString, "writer");
             _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
                 _connectionString, writeMax, _dialect?.MaxPoolSizeSettingName,
-                overrideExisting: true, writerBuilder);
+                overrideExisting: true, writerBuilder, logger: _logger);
         }
 
         if (_dialect != null)
@@ -1709,7 +1709,7 @@ public partial class DatabaseContext
             baseReaderConnectionString,
             _dialect.ApplicationNameSettingName,
             ReadOnlyApplicationNameSuffix,
-            effectiveApplicationName);
+            effectiveApplicationName, logger: _logger);
 
         // For dialects without ApplicationNameSettingName (e.g., Oracle ODP.NET), the
         // suffix is a no-op and reader/writer end up with identical connection strings,
@@ -1723,7 +1723,7 @@ public partial class DatabaseContext
             readerResult = ConnectionPoolingConfiguration.ApplyPoolDiscriminator(
                 readerResult,
                 _dialect.ReadOnlyPoolDiscriminatorSettingName,
-                _dialect.ReadOnlyPoolDiscriminatorSettingValue);
+                _dialect.ReadOnlyPoolDiscriminatorSettingValue, logger: _logger);
         }
 
         return readerResult;

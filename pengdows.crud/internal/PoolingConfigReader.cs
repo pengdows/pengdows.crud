@@ -15,6 +15,7 @@
 // =============================================================================
 
 using System.Data.Common;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.dialects;
 
 namespace pengdows.crud.@internal;
@@ -77,8 +78,9 @@ internal static class PoolingConfigReader
         {
             b = new DbConnectionStringBuilder { ConnectionString = connectionString };
         }
-        catch
+        catch (Exception ex)
         {
+            dialect.DiagnosticsLogger.LogDebug(ex, "Could not parse the connection string; using the dialect's default pool configuration.");
             return new PoolConfig(
                 null,
                 null,
@@ -132,8 +134,9 @@ internal static class PoolingConfigReader
             var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
             return TryGetInt(builder, dialect.MaxPoolSizeSettingName!);
         }
-        catch
+        catch (Exception ex)
         {
+            dialect.DiagnosticsLogger.LogDebug(ex, "Could not parse the connection string; no explicit max pool size.");
             return null;
         }
     }
