@@ -216,9 +216,8 @@ database-agnostic policy decoupled from connection identity — is in
   API, dialect fallback rules, and what is deliberately *not* implemented (no
   `BatchResult`, no partial-success reporting, no provider-native bulk loaders).
 - [`docs/generated-keys.md`](docs/generated-keys.md) — how `CreateAsync` retrieves an
-  auto-generated `[Id]` value per database: the `GeneratedKeyPlan` strategy enum, why
-  `SessionScopedFunction` needs a connection-pooling-safe alternative, and the exact plan each
-  dialect uses.
+  auto-generated `[Id]` value per database: the `GeneratedKeyPlan` strategy enum, how the id
+  query is kept on the INSERT's own connection, and the exact plan each dialect uses.
 - [`docs/exception-analysis.md`](docs/exception-analysis.md) — `ISqlDialect.AnalyzeException`/
   `DbExceptionInfo`: provider-neutral `Category`/`ConstraintKind`/`IsTransient`/`IsRetryable`/
   `ProviderErrorCode`/`SqlState` for control-flow branching without pattern-matching provider error

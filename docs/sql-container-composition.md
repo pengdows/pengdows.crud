@@ -101,7 +101,8 @@ Build/Load/convenience API surface:
 - **`MaxQueuedReads`/`MaxQueuedWrites`** (on `DatabaseContextConfiguration`) independently bound
   admission queues — callers beyond the cap are rejected immediately with
   `PoolSaturatedException` instead of waiting out `PoolAcquireTimeout` (`0` disables queueing for
-  that role; `null` uses the governor default).
+  that role; `null`, the default, sets no cap on 2.0.x, as in 2.0.5, so a waiting caller is bounded
+  only by `PoolAcquireTimeout`).
 
 ## A related but separate mapper: `DataReaderMapper`
 

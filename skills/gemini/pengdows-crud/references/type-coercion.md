@@ -81,7 +81,7 @@ pengdows.crud normalizes types across database providers:
 
 ## CorrelationToken
 
-The `[CorrelationToken]` attribute marks a property used as a unique correlation token for generated-ID retrieval fallback. Used when the database doesn't support `RETURNING`/`OUTPUT` and session-scoped identity functions are unreliable.
+The `[CorrelationToken]` attribute marks a property used as a unique correlation token for generated-ID retrieval fallback. Needed only where the dialect's plan is `CorrelationToken` (Snowflake): no `RETURNING`/`OUTPUT`, sequence prefetch or session last-id function. Without it such a dialect leaves a database-generated id unset. See `docs/generated-keys.md`.
 
 ```csharp
 [CorrelationToken]
@@ -105,6 +105,13 @@ database, with no converter: declare them `[Column("d", DbType.Date)]` and `[Col
 - Reads accept every shape providers return: `DateTime`, `DateTimeOffset`, `TimeSpan`, ISO strings
   (SQLite, FlatFile) and native `DateOnly`/`TimeOnly`. A date is taken from the stored wall-clock
   value, never shifted through UTC.
+- Fractional seconds a column can't hold are truncated, never rounded up: MySQL 8.0.8+ sessions set
+  `sql_mode` `TIME_TRUNCATE_FRACTIONAL` for this. TiDB (and MySQL before 8.0.8) can't, and round:
+  23:59:59.9999999 into `TIME(0)` becomes 24:00:00, which fails on read. Send values at the column's
+  precision there.
+- A `TimeSpan` outside 00:00:00 to 24:00:00 into `TIME` throws `ArgumentOutOfRangeException` on Sybase
+  ASE, Informix and FlatFile, whose drivers would otherwise store a different value; MySQL's `TIME`
+  holds ±838 h, and other databases reject it themselves.
 - Spanner has no time-of-day column type, so `TimeOnly` has no native column there (tracked as TYPE-006).
 
 ## JSON Support

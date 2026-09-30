@@ -8,17 +8,31 @@
 |---|---|---|---|
 | `Returning` | Inline `INSERT ... RETURNING id` | 1, atomic | PostgreSQL, Firebird, DuckDB, SQLite 3.35+, Db2 (`FROM FINAL TABLE`) |
 | `OutputInserted` | Inline `INSERT ... OUTPUT INSERTED.id` | 1, atomic | SQL Server |
-| `SessionScopedFunction` | `SELECT LAST_INSERT_ID()` / `last_insert_rowid()` / `SCOPE_IDENTITY()` as a separate statement, same connection | 2 | Safe only when guaranteed to run on the exact same physical connection immediately after the INSERT |
-| `PrefetchSequence` | `SELECT seq.NEXTVAL` before the INSERT, then insert the already-known value | 2, but ID is known before the write | InterBase (`CREATE GENERATOR` + `GEN_ID(name, 1)`) — the first shipped dialect to actually return this plan; see the Oracle note below for why Oracle itself doesn't |
+| `SessionScopedFunction` | The INSERT, then a session-scoped last-id query as a separate statement on the same pinned connection | 2 | Informix (`DBINFO`), SAP HANA (`CURRENT_IDENTITY_VALUE()`), Access (`@@IDENTITY`): drivers that reject a compound statement and expose no id |
+| `PrefetchSequence` | `SELECT seq.NEXTVAL` before the INSERT, then insert the already-known value | 2, but ID is known before the write | InterBase (`CREATE GENERATOR` + `GEN_ID(name, 1)`), FlatFile (`VALUES (NEXT VALUE FOR "<table>_seq")`); see the Oracle note below for why Oracle itself doesn't. The prefetch runs on a write connection: advancing a sequence is a write |
 | `CorrelationToken` | Add a unique token value to the INSERT, then `SELECT` the row back by that token | 2 | Universal fallback — works on any database with a uniqueness guarantee on the token column |
 | `NaturalKeyLookup` | Look up the just-inserted row by its natural key columns within the same transaction | 2 | Last resort; requires unique constraints on the lookup columns and explicit opt-in due to race-condition risk |
-| `CompoundStatement` | `INSERT ...; SELECT LAST_INSERT_ID()` as one multi-statement batch | 1 (batched) | Fixes `SessionScopedFunction`'s two-lease hazard — see below. Requires multi-statement support enabled on the connection. |
+| `CompoundStatement` | `INSERT ...; SELECT LAST_INSERT_ID()` as one multi-statement batch | 1 (batched) | MySql.Data, SQLite before 3.35, Sybase ASE. Saves `SessionScopedFunction`'s second round trip; requires multi-statement support on the connection. |
 | `ReaderInsertedId` | Execute the INSERT as a reader and read the generated key off a provider-specific `DbDataReader` property (e.g. `MySqlDataReader.LastInsertedId`), populated from the database's own OK packet | 1 | MySqlConnector, which deliberately does not support `AllowMultipleStatements` |
 | `None` | No retrieval strategy | — | Database doesn't support auto-generated keys, or the dialect hasn't configured one |
 
-## Why `SessionScopedFunction` needs a fix at all
+## The id query always runs on the INSERT's connection
 
-`SessionScopedFunction` is only safe when the INSERT and the follow-up `SELECT LAST_INSERT_ID()`-style call land on the *same physical connection*. With connection pooling in play, issuing them as two separate commands risks the pool handing back a different physical connection for the second call — silently returning the wrong (or no) generated ID. `CompoundStatement` and `ReaderInsertedId` both exist specifically to close this hazard for MySQL/MariaDB/pre-3.35 SQLite, by keeping the INSERT and the ID retrieval in a single round trip instead of two.
+A session-scoped last-id function (`DBINFO`, `CURRENT_IDENTITY_VALUE()`, `@@IDENTITY`,
+`LAST_INSERT_ID()`, ...) reports the id only on the connection that ran the INSERT. pengdows
+normally returns a connection to the pool after each command, so running the id query as a second
+command could land on another connection and read 0, a pooled connection's stale value, or another
+session's id. Since 2.0.6 (GEN-001, CORE-016) the gateway holds one connection for both statements:
+
+- Outside a transaction, `CreateAsync` pins one write connection (with its pool slot, and the write
+  permit under `SingleWriter`) for the INSERT and the id query, and releases it exactly once, also
+  when the INSERT throws. No transaction is opened.
+- Inside a caller's transaction, the transaction's connection is used as-is.
+- Under `SingleConnection`, the shared connection is used and stays open.
+
+The same pin covers the fallback id query of `Returning`/`OutputInserted`, `CompoundStatement` and
+`ReaderInsertedId`, which runs when the one-round-trip read yields no id.
+`CompoundStatement` and `ReaderInsertedId` still exist because they save that second round trip.
 
 ## A two-round-trip plan's ID-retrieval failure does not falsify the write
 
@@ -26,7 +40,7 @@
 
 ## Per-dialect assignment
 
-`SqlDialect.GetGeneratedKeyPlan()`'s base (virtual) logic: if `DatabaseType == Oracle`, return `PrefetchSequence`; otherwise, if the dialect supports inline RETURNING/OUTPUT, use `OutputInserted` for SQL Server and `Returning` for everything else; otherwise fall back to `SessionScopedFunction` if `HasSessionScopedLastIdFunction()` is true (the base implementation returns `true` only for MySQL, MariaDB, SQLite, SQL Server, and Sybase ASE — every one of which either overrides `GetGeneratedKeyPlan()` or supports inline RETURNING/OUTPUT, so no shipped dialect actually lands on `SessionScopedFunction`); otherwise `CorrelationToken`. Each dialect below either uses that base logic as-is or overrides it explicitly — note that `OracleDialect` itself overrides the method and returns `Returning`, so the base class's Oracle branch above is currently dead for the shipped dialect (see the Oracle row below):
+`SqlDialect.GetGeneratedKeyPlan()`'s base (virtual) logic: if `DatabaseType == Oracle`, return `PrefetchSequence`; otherwise, if the dialect supports inline RETURNING/OUTPUT, use `OutputInserted` for SQL Server and `Returning` for everything else; otherwise fall back to `SessionScopedFunction` if `HasSessionScopedLastIdFunction()` is true (the base implementation returns `true` only for MySQL, MariaDB, SQLite, SQL Server, and Sybase ASE — every one of which either overrides `GetGeneratedKeyPlan()` or supports inline RETURNING/OUTPUT); otherwise `CorrelationToken`. Informix, SAP HANA and Access select `SessionScopedFunction` by explicit override. Each dialect below either uses that base logic as-is or overrides it explicitly — note that `OracleDialect` itself overrides the method and returns `Returning`, so the base class's Oracle branch above is currently dead for the shipped dialect (see the Oracle row below):
 
 | Database | Plan | Notes |
 |---|---|---|
@@ -39,9 +53,12 @@
 | MariaDB | `ReaderInsertedId` | Explicit override — always, regardless of driver |
 | MySQL (and TiDB, which inherits `MySqlDialect`) | `ReaderInsertedId` if using MySqlConnector, else `CompoundStatement` | Explicit override, driver-dependent — the only dialect where the ADO.NET driver in use, not just the database engine, changes the generated-key strategy |
 | Sybase ASE | `CompoundStatement` | Explicit override — `SybaseAseDialect.GetGeneratedKeyPlan()`. ASE has no OUTPUT/RETURNING clause; the ID is read back with a space-separated `INSERT ... SELECT @@IDENTITY` batch (`GetCompoundInsertIdSuffix`), since a semicolon-separated batch is rejected by ASE |
-| SAP HANA | `CorrelationToken` | Base logic (falls through — no override). HANA does have a working session-scoped function, `SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`, confirmed live to return the correct value immediately after INSERT on a single held connection — but it is deliberately **not** wired up as `SessionScopedFunction`, to avoid the exact two-lease hazard described above. `CompoundStatement` was also confirmed rejected live (HANA has no multi-statement command support: `INSERT ...; SELECT ...` in one command throws a syntax error), so unlike MySQL/MariaDB there is no single-round-trip fix available — `CorrelationToken`'s two round trips are the safe option actually available for this database. |
+| SAP HANA | `SessionScopedFunction` | Explicit override (2.0.6). `SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`, confirmed live to return the new id right after the INSERT on the same connection, now runs on the pinned connection. `CompoundStatement` is rejected live (no multi-statement commands). HANA is opt-in in the integration suite (16-32 GB image), so the pinned path is unit-tested and was not run live in 2.0.6 |
+| Informix | `SessionScopedFunction` | Explicit override (2.0.6). `SELECT CASE WHEN DBINFO('bigserial') <> 0 THEN DBINFO('bigserial') WHEN DBINFO('serial8') <> 0 THEN DBINFO('serial8') ELSE DBINFO('sqlca.sqlerrd1') END FROM systables WHERE tabid = 1` returns the id for SERIAL, SERIAL8 and BIGSERIAL (each `DBINFO` form reports only its own type). Compound statements are rejected by Informix.Net.Core. Verified live on the pinned connection |
+| FlatFile | `PrefetchSequence` | Explicit override (2.0.6). FlatFile has no IDENTITY, RETURNING or last-id function but supports ISO sequences, so the id is fetched first with `VALUES (NEXT VALUE FOR "<table>_seq")` and sent in the INSERT. The sequence must exist, named `{tableName}_seq` like InterBase's generator. Verified live against pengdows.flatfile 0.2.1-preview.2 |
+| Snowflake | `CorrelationToken` | Base logic. Snowflake has no last-id mechanism; without a `[CorrelationToken]` column a database-generated id is left unset (DEC-007 in `docs/FUTURE_WORK.md`). Use a correlation column or a client-generated id |
 | InterBase | `PrefetchSequence` | Explicit override — `InterBaseDialect.GetGeneratedKeyPlan()`. InterBase supports none of IDENTITY columns, `CREATE SEQUENCE`, or `INSERT ... RETURNING` (all confirmed rejected live against a real InterBase 15 server), so the base logic's fall-through chain would otherwise land on `CorrelationToken`. Its real, working mechanism is the classic InterBase 6 `CREATE GENERATOR name` + `GEN_ID(name, 1)` pair — confirmed live to return the expected sequential value — consumed via `GetSequenceNextValQuery`. The generator must already exist, named `{tableName}_seq` per `TableGateway.Core.cs`'s fixed `GetSequenceName()` convention; the testbed's DDL is responsible for creating it. |
-| Access | `CorrelationToken` | Base logic (falls through — no override), same reasoning as SAP HANA's row above. `SELECT @@IDENTITY` works correctly on a single held connection immediately after INSERT (confirmed live), and the naive move is to wire it up as `SessionScopedFunction` — deliberately NOT done, to avoid the two-lease hazard, and `AccessDialect.HasSessionScopedLastIdFunction()` is left at the base `false` specifically so this method's own logic falls through past that branch. `CompoundStatement` was also confirmed rejected live (Access/OleDb rejects multi-statement batches outright: `"INSERT ...; SELECT @@IDENTITY"` in one command fails with "Characters found after end of SQL statement."), so — like HANA — there is no single-round-trip fix available; `CorrelationToken` is the safe option actually available. |
+| Access | `SessionScopedFunction` | Explicit override (2.0.6). `SELECT @@IDENTITY` returns the new id right after the INSERT on the same connection (confirmed live earlier), and now runs on the pinned connection. `CompoundStatement` is rejected (OleDb: "Characters found after end of SQL statement."). Access is Windows-only and can't run in this project's Linux integration suite, so the pinned path is unit-tested only |
 
 Databases not listed fall through to the base logic (RETURNING if supported, else session-scoped function, else correlation token).
 
