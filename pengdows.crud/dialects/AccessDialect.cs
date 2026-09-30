@@ -319,16 +319,11 @@ internal sealed class AccessDialect : SqlDialect
     // and is still used by TableGateway.Core.cs's PopulateGeneratedIdAsync fallback path.
     public override string GetLastInsertedIdQuery() => "SELECT @@IDENTITY";
 
-    // Deliberately NOT overridden to true, unlike Sybase's identical-looking @@IDENTITY case.
-    // CONFIRMED live that Access/OleDb rejects multi-statement batches outright ("Characters
-    // found after end of SQL statement") when trying "INSERT ...; SELECT @@IDENTITY" as one
-    // command — so, unlike Sybase, GeneratedKeyPlan.CompoundStatement is not available here to
-    // safely pair with a session-scoped id function. Leaving this at the base false means
-    // GetGeneratedKeyPlan()'s default correctly falls through to CorrelationToken instead of the
-    // categorically-unsafe SessionScopedFunction (GeneratedKeyPlanReachabilityTests forbids any
-    // dialect defaulting to it — the same pooled-connection hazard SAP HANA hit; see HanaDialect's
-    // remarks for the precedent of leaving this at the base default rather than overriding
-    // GetGeneratedKeyPlan() directly).
+    // "INSERT ...; SELECT @@IDENTITY" as one command is CONFIRMED rejected live ("Characters found
+    // after end of SQL statement"), so this is GeneratedKeyPlan.SessionScopedFunction: the gateway
+    // pins one connection for the INSERT and SELECT @@IDENTITY (GEN-001). Not tested live here
+    // (Access is Windows-only); the pinned path itself is covered by GeneratedKeySameConnectionTests.
+    public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.SessionScopedFunction;
 
     // Confirmed live: SELECT TOP n, not the base class's generic LIMIT-based fallback — mirrors
     // SybaseDialect's override.

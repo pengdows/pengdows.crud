@@ -6,8 +6,7 @@
 // STATUS: Partial. Only the properties below reflect a deliberate, verified decision
 // against pengdows.flatfile's actual behavior (see citations on each). Everything not
 // overridden here still falls through to SqlDialect's generic defaults and has NOT been
-// verified against pengdows.flatfile — in particular generated-key/identity plan (flatfile
-// has no autoincrement/sequence/RETURNING concept at all) and session settings. Decide
+// verified against pengdows.flatfile — in particular session settings. Decide
 // those from real research against pengdows.flatfile's source, not by copying another
 // embedded dialect's assumptions — see CLAUDE.md's "Adding a New Database" checklist and
 // its SAP HANA callout for the same caution.
@@ -35,6 +34,10 @@
 // it, which is exactly what "this dialect decides it now" should look like. FlatFile has
 // no `:memory:` concept at all (always file/directory-backed), so DetectInMemoryKind is
 // NOT overridden — the base SqlDialect default (always None) is already correct.
+//
+// Generated keys ARE decided (GEN-001): no IDENTITY, no RETURNING, no session last-id function,
+// but ISO sequences: a key column DEFAULTs NEXT VALUE FOR a sequence, so the id is prefetched
+// (VALUES (NEXT VALUE FOR "<table>_seq")) and sent in the INSERT, the PrefetchSequence plan.
 // =============================================================================
 
 using System;
@@ -189,6 +192,19 @@ internal class FlatFileDialect : SqlDialect
         IsolationLevel.RepeatableRead,
         IsolationLevel.Serializable
     };
+
+    // GEN-001: no IDENTITY/RETURNING/last-id function, but ISO sequences. Confirmed against
+    // pengdows.flatfile 0.2.1-preview.2: VALUES (NEXT VALUE FOR "seq") returns the next value and an
+    // explicit id in the INSERT overrides the column's DEFAULT NEXT VALUE FOR.
+    public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.PrefetchSequence;
+
+    public override string GetSequenceNextValQuery(string sequenceName) =>
+        $"VALUES (NEXT VALUE FOR {WrapObjectName(sequenceName)})";
+
+    // CONFIRMED live 2026-09-29 (pengdows.flatfile 0.2.1-preview.2): a TimeSpan of -01:00:00 was
+    // accepted into a TIME column and then failed to read back ("not recognized as a valid
+    // TimeOnly"). TIME holds a time of day, so SqlDialect rejects such a value before binding.
+    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
 
     /// <summary>
     /// FastWithRisks maps to ReadCommitted rather than ReadUncommitted: both behave identically

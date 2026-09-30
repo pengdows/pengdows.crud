@@ -127,7 +127,10 @@ public class CommandTimeoutTests
                 RedirectStandardOutput = true,
                 RedirectStandardError = true
             };
-            foreach (var a in args) startInfo.ArgumentList.Add(a);
+            foreach (var a in args)
+            {
+                startInfo.ArgumentList.Add(a);
+            }
 
             using var process = Process.Start(startInfo)!;
             await process.WaitForExitAsync();
@@ -186,9 +189,15 @@ public class CommandTimeoutTests
         public async ValueTask DisposeAsync()
         {
             using var stop = Process.Start("docker", $"stop {_name}");
-            if (stop != null) await stop.WaitForExitAsync();
+            if (stop != null)
+            {
+                await stop.WaitForExitAsync();
+            }
             using var rm = Process.Start("docker", $"rm {_name}");
-            if (rm != null) await rm.WaitForExitAsync();
+            if (rm != null)
+            {
+                await rm.WaitForExitAsync();
+            }
         }
     }
 }

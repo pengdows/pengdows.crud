@@ -230,6 +230,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     // Simple parameter pool - avoid repeated factory calls for hot paths
     private readonly ConcurrentQueue<DbParameter> _parameterPool = new();
+
+    // Set once the provider rejects DbType.Object as a pooled-parameter reset value (Informix).
+    private volatile bool _providerRejectsObjectDbTypeReset;
     private const int MaxPoolSize = 100; // Prevent unbounded growth
 
     /// <summary>
@@ -442,6 +445,27 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual void AdjustTemporalParameter(DbParameter parameter, DbType declaredType)
     {
     }
+
+    /// <summary>
+    /// True when the provider's typed <c>GetInt64</c> rejects a column that <c>GetValue</c> reads as
+    /// <see cref="long"/> (Informix.Net.Core on BIGSERIAL), so tracked readers read Int64 through
+    /// <c>GetValue</c> instead.
+    /// </summary>
+    internal virtual bool ReadsInt64ThroughGetValue => false;
+
+    /// <summary>
+    /// True when the engine rounds, rather than truncates, fractional seconds a column can't hold,
+    /// so a time or timestamp can be stored later than written (23:59:59.9999999 into TIME(0) as
+    /// 24:00:00). The library can't prevent it without the column's precision.
+    /// </summary>
+    internal virtual bool RoundsFractionalSecondsOnWrite => false;
+
+    /// <summary>
+    /// True when the TIME type holds only a time of day and the driver doesn't reject a
+    /// <see cref="TimeSpan"/> outside [00:00:00, 24:00:00): it wraps it (Sybase ASE, Informix) or
+    /// stores a value it can't read back (FlatFile). Such a value is rejected before binding.
+    /// </summary>
+    internal virtual bool TimeColumnHoldsOnlyATimeOfDay => false;
 
     public virtual string ParameterMarker => "?";
 
@@ -1447,17 +1471,23 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
             param.ParameterName = string.Empty;
             param.Value = null;
-            try
+            // CONFIRMED live: Informix.Net.Core's IfxParameter.set_DbType eagerly validates against
+            // its own TypeMap and throws on DbType.Object ("No mapping exists from DbType Object to
+            // a known IfxType"). The reset value is transient (CreateDbParameter<T> overwrites it with
+            // the caller's DbType moments later), so a provider that rejects it skips the reset: the
+            // dialect learns that once, logs it, and stops attempting it.
+            if (!_providerRejectsObjectDbTypeReset)
             {
-                param.DbType = DbType.Object;
-            }
-            catch
-            {
-                // Ignore providers that eagerly validate DbType against their own provider-type
-                // map and reject Object as a placeholder (e.g. Informix.Net.Core's
-                // IfxParameter.DbType setter throws "No mapping exists from DbType Object to a
-                // known IfxType" — confirmed live). The caller always overwrites DbType with
-                // the real value immediately after this reset, via CreateDbParameter<T>.
+                try
+                {
+                    param.DbType = DbType.Object;
+                }
+                catch (Exception ex)
+                {
+                    _providerRejectsObjectDbTypeReset = true;
+                    Logger.LogDebug(ex,
+                        "The provider's parameter rejects DbType.Object as a reset value; pooled parameters skip that reset.");
+                }
             }
             param.Direction = ParameterDirection.Input;
             param.Size = 0;
@@ -1504,15 +1534,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // (re-dispatched virtually), so every dialect's existing DateTime/TimeSpan handling applies,
         // unless the dialect's driver takes them natively for a DATE/TIME column.
         if (value is DateOnly dateOnly &&
-            !(BindsDateOnlyAndTimeOnlyNatively && type is DbType.Date or DbType.Object))
+            !(BindsDateOnlyAndTimeOnlyNatively && (type is DbType.Date or DbType.Object)))
         {
             return CreateDbParameter(name, type, dateOnly.ToDateTime(TimeOnly.MinValue));
         }
 
         if (value is TimeOnly timeOnly &&
-            !(BindsDateOnlyAndTimeOnlyNatively && type is DbType.Time or DbType.Object))
+            !(BindsDateOnlyAndTimeOnlyNatively && (type is DbType.Time or DbType.Object)))
         {
             return CreateDbParameter(name, type, timeOnly.ToTimeSpan());
+        }
+
+        if (TimeColumnHoldsOnlyATimeOfDay && type == DbType.Time && value is TimeSpan span &&
+            (span < TimeSpan.Zero || span >= TimeSpan.FromDays(1)))
+        {
+            throw new ArgumentOutOfRangeException(nameof(value),
+                $"{DatabaseType} TIME holds a time of day (00:00:00 to 23:59:59.9999999); its driver would store {span:c} as a different value.");
         }
 
         var traceTimings = Logger.IsEnabled(LogLevel.Debug) && IsParameterTimingEnabled();

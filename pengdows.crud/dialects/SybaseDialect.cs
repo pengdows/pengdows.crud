@@ -270,6 +270,10 @@ internal class SybaseDialect : SqlDialect
     // (verified live), so generated keys are read back via a compound statement.
     public override bool SupportsInsertReturning => false;
     public override bool SupportsIdentityColumns => true;
+    // CONFIRMED live 2026-09-29: the driver wraps a TimeSpan outside a day instead of rejecting it
+    // (-01:00:00 was stored as 23:00:00), so SqlDialect rejects one before binding.
+    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
+
     public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.CompoundStatement;
 
     // Verified live: "INSERT ...; SELECT @@IDENTITY" (semicolon-separated) fails with

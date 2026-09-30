@@ -53,6 +53,9 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     // hierarchy (null when it isn't a provider exception), like failures while executing the command.
     private readonly Func<Exception, Exception?>? _readFailureTranslator;
 
+    // SqlDialect.ReadsInt64ThroughGetValue: Informix.Net.Core's GetInt64 rejects BIGSERIAL.
+    private readonly bool _readsInt64ThroughGetValue;
+
     internal TrackedReader(
         DbDataReader reader,
         ITrackedConnection connection,
@@ -63,9 +66,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         IReaderLifetimeListener? lifetimeListener = null,
         IAsyncDisposable? contextLocker = null,
         IAsyncDisposable? singleConnectionTransactionGate = null,
-        Func<Exception, Exception?>? readFailureTranslator = null)
+        Func<Exception, Exception?>? readFailureTranslator = null,
+        bool readsInt64ThroughGetValue = false)
     {
         _readFailureTranslator = readFailureTranslator;
+        _readsInt64ThroughGetValue = readsInt64ThroughGetValue;
         _reader = reader;
         _connection = connection;
         _connectionLocker = connectionLocker;
@@ -268,6 +273,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     public long GetInt64(int i)
     {
+        if (_readsInt64ThroughGetValue && _reader.GetValue(i) is long value)
+        {
+            return value;
+        }
+
         return _reader.GetInt64(i);
     }
 

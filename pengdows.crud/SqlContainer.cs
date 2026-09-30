@@ -1304,18 +1304,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
-            if (singleConnectionTxGate != null)
-            {
-                await singleConnectionTxGate.DisposeAsync().ConfigureAwait(false);
-            }
-            if (contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
-            {
-                await contextLocker.DisposeAsync().ConfigureAwait(false);
-            }
-
             if (commandFailed && executionType == ExecutionType.Write)
             {
-                await TryRollBackFailedWriteAsync(conn, cancellationToken).ConfigureAwait(false);
+                // The caller's token may be the reason the write failed; the compensating rollback must
+                // still run, or the provider's implicit transaction and its locks stay on the pooled connection.
+                await TryRollBackFailedWriteAsync(conn).ConfigureAwait(false);
             }
 
             Cleanup(cmd, conn);
@@ -1323,6 +1316,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             {
                 await suspendedSentinelOwner.ResumeSentinelsAfterDdlAsync().ConfigureAwait(false);
             }
+
+            // Released last, so the context stays guarded through the rollback and cleanup, and a
+            // failing release can neither skip them nor mask the original exception.
+            await ReleaseLockBestEffortAsync(singleConnectionTxGate, _logger, "single-connection transaction gate")
+                .ConfigureAwait(false);
+            await ReleaseLockBestEffortAsync(contextLocker, _logger, "context lock").ConfigureAwait(false);
         }
     }
 
@@ -1339,7 +1338,27 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// <c>TransactionContext.Dispose</c>/<c>DisposeAsync</c>) — issuing a bare, un-enlisted
     /// ROLLBACK here would race or interfere with that ownership.
     /// </summary>
-    private async ValueTask TryRollBackFailedWriteAsync(ITrackedConnection? conn, CancellationToken cancellationToken)
+    // A failed release must never throw out of a finally block (it would skip the cleanup that
+    // follows and mask the original exception), but it is never silent either: a lock or gate left
+    // held makes later operations wait.
+    internal static async ValueTask ReleaseLockBestEffortAsync(ILockerAsync? locker, ILogger logger, string description)
+    {
+        if (locker == null || ReferenceEquals(locker, NoOpAsyncLocker.Instance))
+        {
+            return;
+        }
+
+        try
+        {
+            await locker.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Releasing the {Lock} failed; later operations may wait on it.", description);
+        }
+    }
+
+    private async ValueTask TryRollBackFailedWriteAsync(ITrackedConnection? conn)
     {
         if (conn == null || _context is ITransactionContext || _dialect is not SqlDialect concreteDialect ||
             !concreteDialect.RequiresExplicitRollbackAfterFailedWrite ||
@@ -1357,7 +1376,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             await using var rollbackCommand = wrapper.UnderlyingConnection.CreateCommand();
             rollbackCommand.CommandText = "ROLLBACK";
-            await rollbackCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            await rollbackCommand.ExecuteNonQueryAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception ex)
         {
@@ -1635,7 +1654,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // are going to set the connection to close and dispose when the reader is
             // closed. This prevents leaking
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
-            var closesConnectionAfterRead = !(isTransaction || isSingleConnection);
+            var closesConnectionAfterRead = !(isTransaction || isSingleConnection || (PinnedConnection != null));
             // A dialect whose provider mishandles CloseConnection (DuckDB) gets a plain reader;
             // TrackedReader still closes the connection, after disposing the reader and command.
             var useCloseConnectionBehavior = closesConnectionAfterRead &&
@@ -1664,7 +1683,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 singleConnectionTxGate,
                 readFailure => readFailure is not DatabaseException && LooksLikeProviderException(readFailure)
                     ? TranslateDatabaseException(readFailure, operationKind)
-                    : null);
+                    : null,
+                _dialect is SqlDialect { ReadsInt64ThroughGetValue: true });
             cmd = null;
             singleConnectionTxGate = null; // TrackedReader owns it until reader disposal.
             lockTransferred = true; // TrackedReader now owns both the connection and context locks
@@ -1739,58 +1759,31 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
-            // The single-connection transaction gate protects only the moment the write statement
-            // executes (see acquisition above) — never transferred to TrackedReader, always
-            // released here regardless of success or failure.
-            if (singleConnectionTxGate != null)
-            {
-                try
-                {
-                    await singleConnectionTxGate.DisposeAsync().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Ignore disposal errors in finally block
-                }
-            }
-
-            // If lock wasn't transferred to TrackedReader, release it here
-            if (!lockTransferred && connectionLocker != null)
-            {
-                try
-                {
-                    await connectionLocker.DisposeAsync().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // Ignore disposal errors in finally block
-                }
-            }
-
-            if (!lockTransferred && contextLocker != null && contextLocker != NoOpAsyncLocker.Instance)
-            {
-                try
-                {
-                    await contextLocker.DisposeAsync().ConfigureAwait(false);
-                }
-                catch
-                {
-                    // ignore
-                }
-            }
-
             // lockTransferred is only ever set true on the success path, after every catch block
             // above that could set commandFailed has already been passed — the two are mutually
             // exclusive by construction, so conn is always still SqlContainer-owned here when
             // commandFailed is true.
             if (commandFailed && executionType == ExecutionType.Write)
             {
-                await TryRollBackFailedWriteAsync(conn, cancellationToken).ConfigureAwait(false);
+                // The caller's token may be the reason the write failed; the compensating rollback must
+                // still run, or the provider's implicit transaction and its locks stay on the pooled connection.
+                await TryRollBackFailedWriteAsync(conn).ConfigureAwait(false);
             }
 
             // On success (lockTransferred), TrackedReader owns the connection — pass null.
             // On failure, pass the actual connection so Cleanup can dispose it.
             Cleanup(cmd, lockTransferred ? null : conn);
+
+            // Locks are released last, so the connection stays guarded through the rollback and cleanup.
+            // If they weren't transferred to the TrackedReader, they are released here.
+            if (!lockTransferred)
+            {
+                await ReleaseLockBestEffortAsync(connectionLocker, _logger, "connection lock").ConfigureAwait(false);
+                await ReleaseLockBestEffortAsync(contextLocker, _logger, "context lock").ConfigureAwait(false);
+            }
+
+            await ReleaseLockBestEffortAsync(singleConnectionTxGate, _logger, "single-connection transaction gate")
+                .ConfigureAwait(false);
         }
     }
 
@@ -2268,8 +2261,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }));
     }
 
+    /// <summary>
+    /// A connection held for a sequence of commands outside a transaction (GEN-001). When set, every
+    /// execution on this container uses it and none releases it: the lease owns and releases it.
+    /// </summary>
+    internal connection.PinnedConnectionLease? PinnedConnection { get; set; }
+
     private ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
+        if (PinnedConnection != null)
+        {
+            return PinnedConnection.Connection;
+        }
+
         if (_context is not IInternalConnectionProvider provider)
         {
             throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
@@ -2287,6 +2291,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     private ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared,
         CancellationToken cancellationToken)
     {
+        if (PinnedConnection != null)
+        {
+            return ValueTask.FromResult(PinnedConnection.Connection);
+        }
+
         if (_context is not IInternalConnectionProvider provider)
         {
             throw new InvalidOperationException("IDatabaseContext must provide internal connection access.");
@@ -2355,7 +2364,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // For reads, the TrackedReader owns the connection on success (conn will be null here).
         // For writes, or if a read failed before TrackedReader took ownership (conn is non-null),
         // we must dispose the connection to prevent leaks.
-        if (_context is not TransactionContext && conn is not null)
+        if (_context is not TransactionContext && conn is not null && PinnedConnection == null)
         {
             _context.CloseAndDisposeConnection(conn);
         }

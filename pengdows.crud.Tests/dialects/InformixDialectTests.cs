@@ -72,6 +72,16 @@ public class InformixDialectTests
         Assert.Equal(SupportedDatabase.Informix, CreateDialect().DatabaseType);
     }
 
+    // CONFIRMED LIVE (2026-09-28): Informix.Net.Core rejects "INSERT ...; SELECT ..." in one
+    // command ("Cannot use a select ... in a multi-query prepare"), so CompoundStatement can't be
+    // used; GEN-001: SessionScopedFunction, with the gateway pinning one connection for the INSERT
+    // and the DBINFO query (see the comment in InformixDialect).
+    [Fact]
+    public void GeneratedKeyPlan_IsSessionScopedFunction_NotCompoundStatement()
+    {
+        Assert.Equal(GeneratedKeyPlan.SessionScopedFunction, CreateDialect().GetGeneratedKeyPlan());
+    }
+
     [Fact]
     public void TryEnterReadOnlyTransaction_ExecutesSetTransactionReadOnly()
     {

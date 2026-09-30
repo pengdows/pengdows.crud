@@ -397,8 +397,21 @@ public class fakeDbDataReader : DbDataReader
 
     public override long GetInt64(int i)
     {
+        if (GetInt64RejectedColumns != null && GetInt64RejectedColumns.Contains(GetName(i)))
+        {
+            throw new InvalidCastException("Specified cast is not valid.");
+        }
+
         return (long)GetValue(i);
     }
+
+    /// <summary>
+    /// Columns whose <see cref="GetInt64"/> throws <see cref="InvalidCastException"/> while
+    /// <see cref="GetValue"/> still returns the <see cref="long"/> and <see cref="GetFieldType"/>
+    /// still reports it — emulates Informix.Net.Core, whose GetInt64 rejects a BIGSERIAL column
+    /// (confirmed live 2026-09-29; SERIAL8/INT8/BIGINT are unaffected).
+    /// </summary>
+    public ISet<string>? GetInt64RejectedColumns { get; set; }
 
     public override string GetString(int i)
     {

@@ -51,8 +51,14 @@ public class TableGatewayBatchAndLifecycleEdgeCaseTests : IAsyncLifetime
     {
         foreach (var ctx in new[] { _sqliteContext, _pgContext })
         {
-            if (ctx is IAsyncDisposable ad) await ad.DisposeAsync();
-            else if (ctx is IDisposable d) d.Dispose();
+            if (ctx is IAsyncDisposable ad)
+            {
+                await ad.DisposeAsync();
+            }
+            else if (ctx is IDisposable d)
+            {
+                d.Dispose();
+            }
         }
     }
 

@@ -40,6 +40,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
+using pengdows.crud.connection;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.exceptions;
@@ -171,7 +172,8 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var seqQuery = dialect.GetSequenceNextValQuery(GetSequenceName());
             using var seqSc = ctx.CreateSqlContainer(seqQuery);
-            var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
+            // Advancing a sequence is a write: a read-only connection rejects it (pengdows.flatfile).
+            var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Write).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
@@ -193,7 +195,9 @@ public partial class TableGateway<TEntity, TRowID> :
         if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) &&
             _idColumn != null && !_idColumn.IsIdWritable)
         {
+            await using var idLease = await AcquireGeneratedIdLeaseAsync(ctx, CancellationToken.None).ConfigureAwait(false);
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
+            PinTo(sc, idLease);
 
             object? generatedId;
             if (dialect.RequiresOutputParameterForReturning)
@@ -222,8 +226,8 @@ public partial class TableGateway<TEntity, TRowID> :
                 return true;
             }
 
-            // Fallback: PopulateGeneratedIdAsync for test/fake scenarios
-            await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+            // Fallback on the INSERT's own connection (CORE-016)
+            await PopulateGeneratedIdAsync(entity, ctx, CancellationToken.None, idLease).ConfigureAwait(false);
             return true;
         }
 
@@ -264,11 +268,13 @@ public partial class TableGateway<TEntity, TRowID> :
         // session-scoped; a separate pool lease could return a stale or zero value.
         if (plan == GeneratedKeyPlan.CompoundStatement && _idColumn != null && !_idColumn.IsIdWritable)
         {
+            await using var idLease = await AcquireGeneratedIdLeaseAsync(ctx, CancellationToken.None).ConfigureAwait(false);
             await using var sc = BuildCreate(entity, ctx);
+            PinTo(sc, idLease);
             sc.Query.Append(dialect.GetCompoundInsertIdSuffix());
 
-            // Scope the reader to this block so the connection is released before
-            // PopulateGeneratedIdAsync (which opens its own connection on pool/SingleConnection).
+            // Scope the reader so it is closed before the fallback query, which runs on the same
+            // pinned connection (CORE-016).
             object? generatedId = null;
             await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write).ConfigureAwait(false))
             {
@@ -292,7 +298,7 @@ public partial class TableGateway<TEntity, TRowID> :
                         generatedId = inner[0];
                     }
                 }
-            } // reader disposed here — connection released before any fallback query
+            } // reader disposed here; the pinned connection stays open for the fallback query
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -303,7 +309,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
             // Fallback for providers/fakeDb that return false from NextResult()
             // (e.g. fakeDbDataReader.NextResult always returns false).
-            await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+            await PopulateGeneratedIdAsync(entity, ctx, CancellationToken.None, idLease).ConfigureAwait(false);
             return true;
         }
 
@@ -313,16 +319,23 @@ public partial class TableGateway<TEntity, TRowID> :
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
             return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded).ConfigureAwait(false);
 
-        // 5. Default path: standard insert followed by optional session-scoped retrieval
+        // 5. Default path, including SessionScopedFunction (Informix, SAP HANA, Access): INSERT, then the
+        // session-scoped id query. A last-id function reports the id only on the connection that ran
+        // the INSERT, so both share one pinned connection (GEN-001, CORE-016).
         {
+            var needsId = _idColumn != null && !_idColumn.IsIdWritable;
+            await using var idLease = needsId
+                ? await AcquireGeneratedIdLeaseAsync(ctx, CancellationToken.None).ConfigureAwait(false)
+                : null;
             await using var sc = BuildCreate(entity, ctx);
+            PinTo(sc, idLease);
             var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
             var succeeded = rowsAffected == 1;
             writeSucceeded[0] = succeeded;
 
-            if (succeeded && _idColumn != null && !_idColumn.IsIdWritable)
+            if (succeeded && needsId)
             {
-                await PopulateGeneratedIdAsync(entity, ctx).ConfigureAwait(false);
+                await PopulateGeneratedIdAsync(entity, ctx, CancellationToken.None, idLease).ConfigureAwait(false);
             }
 
             return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
@@ -366,7 +379,8 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             var seqQuery = dialect.GetSequenceNextValQuery(GetSequenceName());
             using var seqSc = ctx.CreateSqlContainer(seqQuery);
-            var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
+            // Advancing a sequence is a write: a read-only connection rejects it (pengdows.flatfile).
+            var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             _idColumn.PropertyInfo.SetValue(entity, converted);
 
@@ -388,7 +402,9 @@ public partial class TableGateway<TEntity, TRowID> :
         if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) &&
             _idColumn != null && !_idColumn.IsIdWritable)
         {
+            await using var idLease = await AcquireGeneratedIdLeaseAsync(ctx, cancellationToken).ConfigureAwait(false);
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
+            PinTo(sc, idLease);
 
             object? generatedId;
             if (dialect.RequiresOutputParameterForReturning)
@@ -419,8 +435,8 @@ public partial class TableGateway<TEntity, TRowID> :
                 return true;
             }
 
-            // Fallback: PopulateGeneratedIdAsync for test/fake scenarios
-            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
+            // Fallback on the INSERT's own connection (CORE-016)
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken, idLease).ConfigureAwait(false);
             return true;
         }
 
@@ -457,10 +473,12 @@ public partial class TableGateway<TEntity, TRowID> :
         // 4. Compound statement plan (MySQL Oracle MySql.Data, SQLite pre-3.35).
         if (plan == GeneratedKeyPlan.CompoundStatement && _idColumn != null && !_idColumn.IsIdWritable)
         {
+            await using var idLease = await AcquireGeneratedIdLeaseAsync(ctx, cancellationToken).ConfigureAwait(false);
             await using var sc = BuildCreate(entity, ctx);
+            PinTo(sc, idLease);
             sc.Query.Append(dialect.GetCompoundInsertIdSuffix());
 
-            // Scope the reader to release the connection before PopulateGeneratedIdAsync.
+            // Scope the reader so it is closed before the fallback query on the pinned connection.
             object? generatedId = null;
             await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
             {
@@ -479,7 +497,7 @@ public partial class TableGateway<TEntity, TRowID> :
                         generatedId = inner[0];
                     }
                 }
-            } // reader disposed here — connection released before any fallback query
+            } // reader disposed here; the pinned connection stays open for the fallback query
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
@@ -488,7 +506,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 return true;
             }
 
-            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken, idLease).ConfigureAwait(false);
             return true;
         }
 
@@ -497,16 +515,23 @@ public partial class TableGateway<TEntity, TRowID> :
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
             return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded, cancellationToken).ConfigureAwait(false);
 
-        // 5. Default path: standard insert followed by optional session-scoped retrieval
+        // 5. Default path, including SessionScopedFunction (Informix, SAP HANA, Access): INSERT, then the
+        // session-scoped id query. A last-id function reports the id only on the connection that ran
+        // the INSERT, so both share one pinned connection (GEN-001, CORE-016).
         {
+            var needsId = _idColumn != null && !_idColumn.IsIdWritable;
+            await using var idLease = needsId
+                ? await AcquireGeneratedIdLeaseAsync(ctx, cancellationToken).ConfigureAwait(false)
+                : null;
             await using var sc = BuildCreate(entity, ctx);
+            PinTo(sc, idLease);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             var succeeded = rowsAffected == 1;
             writeSucceeded[0] = succeeded;
 
-            if (succeeded && _idColumn != null && !_idColumn.IsIdWritable)
+            if (succeeded && needsId)
             {
-                await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
+                await PopulateGeneratedIdAsync(entity, ctx, cancellationToken, idLease).ConfigureAwait(false);
             }
 
             return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
@@ -558,7 +583,9 @@ public partial class TableGateway<TEntity, TRowID> :
         bool[] writeSucceeded,
         CancellationToken cancellationToken = default)
     {
+        await using var idLease = await AcquireGeneratedIdLeaseAsync(ctx, cancellationToken).ConfigureAwait(false);
         await using var sc = BuildCreate(entity, ctx);
+        PinTo(sc, idLease);
         object? generatedId = null;
         await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false))
         {
@@ -574,12 +601,35 @@ public partial class TableGateway<TEntity, TRowID> :
             _idColumn!.PropertyInfo.SetValue(entity,
                 TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType));
         else
-            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken, idLease).ConfigureAwait(false);
         return true;
     }
 
+    // GEN-001 / CORE-016: a session-scoped id query must run on the connection that ran the INSERT.
+    // Inside a caller's transaction that is the transaction's connection (no lease); otherwise one
+    // connection is pinned for both commands and released once when the lease is disposed.
+    private static async ValueTask<PinnedConnectionLease?> AcquireGeneratedIdLeaseAsync(IDatabaseContext ctx,
+        CancellationToken cancellationToken)
+    {
+        if (ctx is ITransactionContext || ctx is not IInternalConnectionProvider)
+        {
+            return null;
+        }
+
+        return await PinnedConnectionLease.AcquireAsync(ctx, ExecutionType.Write, cancellationToken)
+            .ConfigureAwait(false);
+    }
+
+    private static void PinTo(ISqlContainer container, PinnedConnectionLease? lease)
+    {
+        if (lease != null && container is SqlContainer sqlContainer)
+        {
+            sqlContainer.PinnedConnection = lease;
+        }
+    }
+
     private async Task PopulateGeneratedIdAsync(TEntity entity, IDatabaseContext context,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, PinnedConnectionLease? lease = null)
     {
         if (_idColumn == null)
         {
@@ -615,6 +665,7 @@ public partial class TableGateway<TEntity, TRowID> :
         // tracked as still-open in CORE-016) — it only ensures this query is not routed to a
         // pool/connection-string that is definitely wrong.
         await using var sc = ctx.CreateSqlContainer(lastIdQuery);
+        PinTo(sc, lease);
         var generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken);
 
         if (generatedId != null && generatedId != DBNull.Value)
