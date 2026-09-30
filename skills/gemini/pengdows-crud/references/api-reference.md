@@ -326,6 +326,35 @@ bool IsCompleted { get; }
 IsolationLevel IsolationLevel { get; }
 ```
 
+---
+
+## IDataReaderMapper / DataReaderMapper
+
+General-purpose, attribute-free mapper: hydrates any POCO (`class, new()`) from any
+`ITrackedReader` result by public-property name matching — no `[Table]`/`[Column]` needed.
+Separate from and unrelated to `TableGateway`'s attribute-driven hydration; use it for results
+with no corresponding entity (e.g. a stored procedure's output). Public since 2.0.6 (BP-305).
+See `docs/data-reader-mapper.md`.
+
+```csharp
+// Static entry points:
+ValueTask<List<T>> DataReaderMapper.LoadObjectsFromDataReaderAsync<T>(ITrackedReader reader, CancellationToken ct = default);
+ValueTask<List<T>> DataReaderMapper.LoadAsync<T>(ITrackedReader reader, IMapperOptions options, CancellationToken ct = default);
+IAsyncEnumerable<T> DataReaderMapper.StreamAsync<T>(ITrackedReader reader, CancellationToken ct = default);
+IAsyncEnumerable<T> DataReaderMapper.StreamAsync<T>(ITrackedReader reader, IMapperOptions options, CancellationToken ct = default);
+
+// Or via the singleton instance:
+IDataReaderMapper mapper = DataReaderMapper.Instance;
+
+// MapperOptions: Strict (throw DataMappingException when a matched column can't be converted;
+// default logs a warning and keeps the property default), ColumnsOnly (map only [Column]
+// properties, by [Column] name), NamePolicy (string -> string transform, e.g. strip underscores
+// for snake_case columns), EnumMode (EnumParseFailureMode).
+var options = new MapperOptions(NamePolicy: name => name.Replace("_", ""));
+```
+
+---
+
 ## Parameter Naming Convention
 
 | Prefix | Used in | Build method(s) |
