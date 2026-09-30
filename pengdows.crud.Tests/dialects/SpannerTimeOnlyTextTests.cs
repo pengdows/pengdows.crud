@@ -52,6 +52,17 @@ public sealed class SpannerTimeOnlyTextTests
     }
 
     [Fact]
+    public void NullTimeDeclaredAsTime_BindsAsText()
+    {
+        // Spanner has no TIME type, so even a NULL must not be sent as one (Npgsql: "The NpgsqlDbType
+        // 'Time' isn't present in your database", found live on 3.0).
+        var parameter = Spanner().CreateDbParameter<TimeOnly?>("t", DbType.Time, null);
+
+        Assert.Equal(DbType.String, parameter.DbType);
+        Assert.Equal(DBNull.Value, parameter.Value);
+    }
+
+    [Fact]
     public void TheStoredText_ReadsBackExactly()
     {
         var value = new TimeOnly(13, 45, 30).Add(TimeSpan.FromTicks(1_234_567));

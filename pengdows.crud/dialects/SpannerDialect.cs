@@ -24,7 +24,8 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
 
     // Applied after the binding pipeline, whatever it turned the value into (TimeSpan, TimeOnly or
-    // a DateTime anchored to a date). A TimeSpan outside a day was already rejected.
+    // a DateTime anchored to a date). A TimeSpan outside a day was already rejected. A NULL is text
+    // too: Npgsql rejects DbType.Time outright on Spanner ("NpgsqlDbType 'Time' isn't present").
     internal override void AdjustTemporalParameter(DbParameter parameter, DbType declaredType)
     {
         if (declaredType != DbType.Time)
@@ -40,9 +41,9 @@ internal sealed class SpannerDialect : PostgreSqlDialect
             DateTime dateTime => dateTime.TimeOfDay,
             _ => (TimeSpan?)null
         };
+        parameter.DbType = DbType.String;
         if (timeOfDay is { } value)
         {
-            parameter.DbType = DbType.String;
             parameter.Value = value.ToString(@"hh\:mm\:ss\.fffffff", CultureInfo.InvariantCulture);
         }
     }
