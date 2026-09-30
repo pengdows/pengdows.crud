@@ -447,7 +447,7 @@ internal class SqlServerDialect : SqlDialect
             "Failed to configure SQL Server session settings");
     }
 
-    private static int? TryGetCompatibilityLevel(IDbConnection connection)
+    private int? TryGetCompatibilityLevel(IDbConnection connection)
     {
         try
         {
@@ -462,8 +462,9 @@ internal class SqlServerDialect : SqlDialect
                 _ => null
             };
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.LogDebug(ex, "SQL Server compatibility-level probe failed; the level stays unknown.");
             return null;
         }
     }

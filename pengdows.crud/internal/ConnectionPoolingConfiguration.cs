@@ -18,6 +18,7 @@
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Globalization;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
@@ -198,7 +199,8 @@ internal static class ConnectionPoolingConfiguration
         string connectionString,
         string? applicationName,
         string? applicationNameSettingName,
-        DbConnectionStringBuilder? builder = null)
+        DbConnectionStringBuilder? builder = null,
+        ILogger? logger = null)
     {
         // Return unchanged if no app name configured or provider doesn't support it
         if (string.IsNullOrWhiteSpace(applicationName) ||
@@ -235,8 +237,9 @@ internal static class ConnectionPoolingConfiguration
             builder[applicationNameSettingName] = applicationName;
             return SetSingleKey(connectionString, applicationNameSettingName, applicationName);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Could not parse the connection string; ApplyApplicationName left it unchanged.");
             // If parsing fails, return original
             return connectionString;
         }
@@ -257,7 +260,8 @@ internal static class ConnectionPoolingConfiguration
         string? applicationNameSettingName,
         string suffix,
         string? fallbackApplicationName = null,
-        DbConnectionStringBuilder? builder = null)
+        DbConnectionStringBuilder? builder = null,
+        ILogger? logger = null)
     {
         if (string.IsNullOrWhiteSpace(suffix) || string.IsNullOrWhiteSpace(applicationNameSettingName))
         {
@@ -300,8 +304,9 @@ internal static class ConnectionPoolingConfiguration
 
             return connectionString;
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Could not parse the connection string; ApplyApplicationNameSuffix left it unchanged.");
             return connectionString;
         }
     }
@@ -316,7 +321,8 @@ internal static class ConnectionPoolingConfiguration
         string connectionString,
         string? discriminatorSettingName,
         string? discriminatorSettingValue,
-        DbConnectionStringBuilder? builder = null)
+        DbConnectionStringBuilder? builder = null,
+        ILogger? logger = null)
     {
         if (string.IsNullOrWhiteSpace(discriminatorSettingName) ||
             string.IsNullOrWhiteSpace(discriminatorSettingValue) ||
@@ -343,8 +349,9 @@ internal static class ConnectionPoolingConfiguration
             builder[discriminatorSettingName] = discriminatorSettingValue;
             return SetSingleKey(connectionString, discriminatorSettingName, discriminatorSettingValue);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Could not parse the connection string; ApplyPoolDiscriminator left it unchanged.");
             return connectionString;
         }
     }
@@ -360,7 +367,8 @@ internal static class ConnectionPoolingConfiguration
         int maxPoolSize,
         string? maxPoolSizeSettingName,
         bool overrideExisting = false,
-        DbConnectionStringBuilder? builder = null)
+        DbConnectionStringBuilder? builder = null,
+        ILogger? logger = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString) || string.IsNullOrWhiteSpace(maxPoolSizeSettingName))
         {
@@ -389,8 +397,9 @@ internal static class ConnectionPoolingConfiguration
             builder[maxPoolSizeSettingName] = maxPoolSize;
             return SetSingleKey(connectionString, maxPoolSizeSettingName, maxPoolSize);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Could not parse the connection string; ApplyMaxPoolSize left it unchanged.");
             return connectionString;
         }
     }
@@ -408,7 +417,8 @@ internal static class ConnectionPoolingConfiguration
         string connectionString,
         string? minPoolSizeSettingName,
         int? rawMin,
-        int? rawMax)
+        int? rawMax,
+        ILogger? logger = null)
     {
         if (!rawMin.HasValue || string.IsNullOrWhiteSpace(minPoolSizeSettingName) ||
             string.IsNullOrWhiteSpace(connectionString))
@@ -438,8 +448,9 @@ internal static class ConnectionPoolingConfiguration
 
             return SetSingleKey(connectionString, minPoolSizeSettingName, clamped);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Could not parse the connection string; ClampMinPoolSize left it unchanged.");
             return connectionString;
         }
     }
@@ -449,7 +460,8 @@ internal static class ConnectionPoolingConfiguration
         string? minPoolSizeSettingName,
         int? rawMin,
         int? rawMax,
-        int requiredMinimum)
+        int requiredMinimum,
+        ILogger? logger = null)
     {
         if (string.IsNullOrWhiteSpace(minPoolSizeSettingName) ||
             string.IsNullOrWhiteSpace(connectionString) ||
@@ -485,8 +497,9 @@ internal static class ConnectionPoolingConfiguration
 
             return SetSingleKey(connectionString, minPoolSizeSettingName, target);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Could not parse the connection string; EnsureMinimumPoolSize left it unchanged.");
             return connectionString;
         }
     }
@@ -498,7 +511,8 @@ internal static class ConnectionPoolingConfiguration
     public static string StripUnsupportedMaxPoolSize(
         string connectionString,
         string? maxPoolSizeSettingName,
-        DbConnectionStringBuilder? builder = null)
+        DbConnectionStringBuilder? builder = null,
+        ILogger? logger = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString) || !string.IsNullOrWhiteSpace(maxPoolSizeSettingName))
         {
@@ -535,8 +549,9 @@ internal static class ConnectionPoolingConfiguration
 
             return RemoveKeys(connectionString, keysToRemove);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Could not parse the connection string; StripUnsupportedMaxPoolSize left it unchanged.");
             return connectionString;
         }
     }
@@ -561,7 +576,8 @@ internal static class ConnectionPoolingConfiguration
     /// <summary>
     /// Removes provider pooling settings from the connection string.
     /// </summary>
-    public static string StripPoolingSetting(string connectionString, string? poolingSettingName)
+    public static string StripPoolingSetting(string connectionString, string? poolingSettingName,
+        ILogger? logger = null)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
         {
@@ -591,8 +607,9 @@ internal static class ConnectionPoolingConfiguration
 
             return keysToRemove.Count == 0 ? connectionString : RemoveKeys(connectionString, keysToRemove);
         }
-        catch
+        catch (Exception ex)
         {
+            logger?.LogDebug(ex, "Could not parse the connection string; StripPoolingSetting left it unchanged.");
             return connectionString;
         }
     }
