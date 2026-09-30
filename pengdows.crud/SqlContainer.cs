@@ -1684,7 +1684,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 readFailure => readFailure is not DatabaseException && LooksLikeProviderException(readFailure)
                     ? TranslateDatabaseException(readFailure, operationKind)
                     : null,
-                _dialect is SqlDialect { ReadsInt64ThroughGetValue: true });
+                _dialect is SqlDialect { ReadsInt64ThroughGetValue: true },
+                _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true });
             cmd = null;
             singleConnectionTxGate = null; // TrackedReader owns it until reader disposal.
             lockTransferred = true; // TrackedReader now owns both the connection and context locks
@@ -1719,6 +1720,19 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var translated = TranslateDatabaseException(ex, operationKind);
             AddSanitizedExceptionEvent(activity, translated);
             throw translated;
+        }
+        catch (OverflowException ex) when (_dialect is SqlDialect { DecodesResultRowsAtExecute: true })
+        {
+            // TYPE-008: this provider decodes every result row while executing, so a stored value
+            // its .NET type can't hold fails here rather than in Read or a getter.
+            commandFailed = true;
+            metrics?.CommandFailed(startTimestamp);
+            activity?.SetStatus(ActivityStatusCode.Error);
+            var mapping = new DataMappingException(
+                $"Could not read the query's rows: a stored value can't be converted to its .NET type ({ex.Message})",
+                SupportedDatabase.Unknown, ex);
+            AddSanitizedExceptionEvent(activity, mapping);
+            throw mapping;
         }
         catch (Exception ex) when (ex is not DatabaseException)
         {

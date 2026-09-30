@@ -333,6 +333,10 @@ internal sealed class InformixDialect : SqlDialect
     // Tracked readers therefore read Int64 through GetValue.
     internal override bool ReadsInt64ThroughGetValue => true;
 
+    // CONFIRMED live 2026-09-30: for a DECIMAL value outside System.Decimal's range, GetValue returns
+    // C# null (not DBNull), IsDBNull throws OverflowException and GetDecimal NullReferenceException.
+    internal override bool ReportsOutOfRangeDecimalAsNull => true;
+
     // CONFIRMED live (Informix 15 developer image, Informix.Net.Core, DB_LOCALE and CLIENT_LOCALE
     // en_US.utf8): CJK and other BMP text round-trips; any supplementary-plane character (an emoji)
     // fails with "An illegal character has been found in the statement".

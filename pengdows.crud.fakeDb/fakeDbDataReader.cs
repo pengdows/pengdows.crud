@@ -198,8 +198,34 @@ public class fakeDbDataReader : DbDataReader
         var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
             ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
+        if (ColumnReadExceptions != null && ColumnReadExceptions.TryGetValue(keys[i], out var failure))
+        {
+            throw failure;
+        }
+
+        if (OutOfRangeReturnsNullColumns != null && OutOfRangeReturnsNullColumns.Contains(keys[i]))
+        {
+            return null!; // deliberately violates the contract, as the emulated driver does
+        }
+
         return row[keys[i]];
     }
+
+    /// <summary>
+    /// Columns whose reads (<see cref="GetValue"/> and every typed getter built on it) throw the
+    /// given exception — emulates a provider that can't convert a stored value, e.g. Npgsql's
+    /// <see cref="OverflowException"/>, ODP.NET's <see cref="InvalidCastException"/> or
+    /// MySqlConnector's <see cref="FormatException"/> for a NUMERIC above <see cref="decimal.MaxValue"/>.
+    /// </summary>
+    public IDictionary<string, Exception>? ColumnReadExceptions { get; set; }
+
+    /// <summary>
+    /// Columns that emulate Informix.Net.Core on a DECIMAL outside <see cref="decimal"/>'s range
+    /// (confirmed live 2026-09-30): <see cref="GetValue"/> returns C# <c>null</c> (not
+    /// <see cref="DBNull.Value"/>), <see cref="IsDBNull"/> throws <see cref="OverflowException"/>, and
+    /// <see cref="GetDecimal"/> throws <see cref="NullReferenceException"/>.
+    /// </summary>
+    public ISet<string>? OutOfRangeReturnsNullColumns { get; set; }
 
     public override int GetValues(object[] values)
     {
@@ -243,6 +269,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override bool IsDBNull(int i)
     {
+        if (OutOfRangeReturnsNullColumns != null && OutOfRangeReturnsNullColumns.Contains(GetName(i)))
+        {
+            throw new OverflowException("Value was either too large or too small for a Decimal.");
+        }
+
         var value = GetValue(i);
         return value is null || value == DBNull.Value;
     }
@@ -326,7 +357,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override string GetDataTypeName(int i)
     {
-        return GetValue(i).GetType().Name;
+        return RawValue(i)?.GetType().Name ?? nameof(DBNull);
     }
 
     public override DateTime GetDateTime(int i)
@@ -355,9 +386,18 @@ public class fakeDbDataReader : DbDataReader
     // A real provider reports the column's declared type whatever the current row holds, and never
     // reports NULL as DBNull. fakeDb has no declared types, so it reports the type of the column's
     // first non-null value in the current result set (object when every value is NULL).
+    // Column metadata comes from the stored value, never through GetValue: a real provider's
+    // GetFieldType/GetDataTypeName don't fail because a value can't be converted.
+    private object? RawValue(int i)
+    {
+        var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
+            ?? throw new IndexOutOfRangeException("No data rows.");
+        return row[GetKeys(row)[i]];
+    }
+
     public override Type GetFieldType(int ordinal)
     {
-        var value = GetValue(ordinal);
+        var value = RawValue(ordinal);
         if (value is not null && value is not DBNull)
         {
             return value.GetType();

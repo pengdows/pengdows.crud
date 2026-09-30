@@ -333,9 +333,10 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(37, result[0].Age);
-        // IsDBNull is no longer called for non-nullable value types (int), so GetValueCallCount
-        // is 1 (BuildSchemaHash → GetFieldType → GetValue), not 2.
-        Assert.Equal(1, reader.GetValueCallCount);
+        // IsDBNull is not called for non-nullable value types (int), and GetFieldType is column
+        // metadata (fakeDb no longer reads it through GetValue, like a real provider), so the typed
+        // path never calls GetValue.
+        Assert.Equal(0, reader.GetValueCallCount);
         Assert.Equal(1, reader.GetFieldValueCallCount);
     }
 
@@ -354,9 +355,9 @@ public class DataReaderMapperTests
 
         Assert.Single(result);
         Assert.Equal(58, result[0].Age);
-        // IsDBNull is no longer called for non-nullable value types (int), so the minimum
-        // is 2 (BuildSchemaHash → GetFieldType → GetValue, coercion setter → GetValue).
-        Assert.True(reader.GetValueCallCount >= 2);
+        // IsDBNull is not called for non-nullable value types (int); the coercion setter reads
+        // through GetValue (GetFieldType is metadata and no longer counted).
+        Assert.True(reader.GetValueCallCount >= 1);
         Assert.Equal(0, reader.GetFieldValueCallCount);
     }
 

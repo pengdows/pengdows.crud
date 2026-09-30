@@ -274,6 +274,11 @@ internal class SybaseDialect : SqlDialect
     // (-01:00:00 was stored as 23:00:00), so SqlDialect rejects one before binding.
     internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
 
+    // CONFIRMED live 2026-09-30: AdoNetCore.AseClient decodes result rows inside ExecuteReader
+    // (TokenReader → ValueReader.ReadTDS_DECN), so a NUMERIC above decimal.MaxValue throws
+    // OverflowException there. No parameter-side overflow reaches that point on this driver.
+    internal override bool DecodesResultRowsAtExecute => true;
+
     public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.CompoundStatement;
 
     // Verified live: "INSERT ...; SELECT @@IDENTITY" (semicolon-separated) fails with
