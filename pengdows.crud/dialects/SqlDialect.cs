@@ -618,6 +618,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Feature support based on SQL standards and database capabilities
     public virtual bool SupportsJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
     public virtual bool SupportsOuterJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
+    public virtual JoinParenthesization JoinParenthesization => JoinParenthesization.Optional;
     public virtual bool SupportsSubqueries => MaxSupportedStandard >= SqlStandardLevel.Sql92;
     public virtual bool SupportsUnion => MaxSupportedStandard >= SqlStandardLevel.Sql92;
 

@@ -383,6 +383,7 @@ property pengdows.crud.dialects.ISqlDialect::IsEmbeddedSingleWriterEngine : bool
 property pengdows.crud.dialects.ISqlDialect::IsFallbackDialect : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::IsInitialized : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::IsPrepareExhausted : bool { get; }
+property pengdows.crud.dialects.ISqlDialect::JoinParenthesization : pengdows.crud.enums.JoinParenthesization { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxOutputParameters : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxParameterLimit : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxPoolSizeSettingName : string { get; }
