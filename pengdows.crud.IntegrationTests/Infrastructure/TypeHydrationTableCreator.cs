@@ -80,6 +80,8 @@ public class TypeHydrationTableCreator
             SupportedDatabase.Snowflake => CreateSnowflakeSql(),
             SupportedDatabase.Db2 => CreateDb2Sql(),
             SupportedDatabase.FlatFile => CreateFlatFileSql(),
+            SupportedDatabase.SapHana => CreateHanaSql(),
+            SupportedDatabase.InterBase => CreateInterBaseSql(),
             _ => throw new NotSupportedException(
                 $"Database {_context.Product} is not supported by TypeHydrationTableCreator")
         };
@@ -387,6 +389,65 @@ BEGIN
             )';
     END IF;
 END;", qp, qs, table);
+    }
+
+    // TYPE-007: SAP HANA and InterBase (both opt-in; see IntegrationTestConfiguration). Types follow
+    // the live-confirmed choices in testbed's TestProvider; not run in this environment (HANA needs
+    // 16-32 GB, InterBase a node-locked license).
+    private string CreateHanaSql()
+    {
+        // SAP HANA: REAL = 32-bit float, DOUBLE = 64-bit; native BOOLEAN; no time-zone TIMESTAMP
+        // (UTC stored); Guid stored as text (HanaDialect GuidStorageFormat.String). Identifiers
+        // are quoted (unquoted ones fold to upper case).
+        var w = (string name) => _context.WrapObjectName(name);
+        return $@"CREATE COLUMN TABLE {w("type_hydration")} (
+    {w("id")}                 BIGINT          NOT NULL PRIMARY KEY,
+    {w("col_string")}         NVARCHAR(500)   NOT NULL,
+    {w("col_string_null")}    NVARCHAR(500),
+    {w("col_short")}          SMALLINT        NOT NULL,
+    {w("col_int")}            INTEGER         NOT NULL,
+    {w("col_int_null")}       INTEGER,
+    {w("col_long")}           BIGINT          NOT NULL,
+    {w("col_float")}          REAL            NOT NULL,
+    {w("col_double")}         DOUBLE          NOT NULL,
+    {w("col_decimal")}        DECIMAL(18,8)   NOT NULL,
+    {w("col_bool")}           BOOLEAN         NOT NULL,
+    {w("col_bool_null")}      BOOLEAN,
+    {w("col_datetime")}       TIMESTAMP       NOT NULL,
+    {w("col_datetimeoffset")} TIMESTAMP       NOT NULL,
+    {w("col_guid")}           NVARCHAR(36)    NOT NULL,
+    {w("col_binary")}         VARBINARY(256),
+    {w("col_enum_int")}       INTEGER         NOT NULL,
+    {w("col_enum_str")}       NVARCHAR(50)    NOT NULL
+)";
+    }
+
+    private string CreateInterBaseSql()
+    {
+        // InterBase (confirmed live in testbed): no BIGINT keyword (NUMERIC(18,0) is its 64-bit
+        // integer), no BOOLEAN (SMALLINT 0/1), TIMESTAMP only; Guid stored as 16 binary bytes
+        // (InterBaseDialect GuidStorageFormat.Binary).
+        var w = (string name) => _context.WrapObjectName(name);
+        return $@"CREATE TABLE {w("type_hydration")} (
+    {w("id")}                 NUMERIC(18,0)   NOT NULL PRIMARY KEY,
+    {w("col_string")}         VARCHAR(500)    NOT NULL,
+    {w("col_string_null")}    VARCHAR(500),
+    {w("col_short")}          SMALLINT        NOT NULL,
+    {w("col_int")}            INTEGER         NOT NULL,
+    {w("col_int_null")}       INTEGER,
+    {w("col_long")}           NUMERIC(18,0)   NOT NULL,
+    {w("col_float")}          FLOAT           NOT NULL,
+    {w("col_double")}         DOUBLE PRECISION NOT NULL,
+    {w("col_decimal")}        DECIMAL(18,8)   NOT NULL,
+    {w("col_bool")}           SMALLINT        NOT NULL,
+    {w("col_bool_null")}      SMALLINT,
+    {w("col_datetime")}       TIMESTAMP       NOT NULL,
+    {w("col_datetimeoffset")} TIMESTAMP       NOT NULL,
+    {w("col_guid")}           CHAR(16) CHARACTER SET OCTETS NOT NULL,
+    {w("col_binary")}         BLOB SUB_TYPE 0,
+    {w("col_enum_int")}       INTEGER         NOT NULL,
+    {w("col_enum_str")}       VARCHAR(50)     NOT NULL
+)";
     }
 
     private string CreateFirebirdSql()
