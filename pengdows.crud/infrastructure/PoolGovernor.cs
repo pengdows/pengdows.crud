@@ -85,6 +85,7 @@ internal sealed class PoolGovernor : IDisposable
     private long _turnstileQueued;
     private long _peakTurnstileQueued;
     private long _totalAcquired;
+    private long _totalWaits;
     private long _totalWaitTicks;
     private long _totalHoldTicks;
     private long _totalSlotTimeouts; // timed out waiting for a connection slot
@@ -277,6 +278,7 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             // Slow path: timed waits with a single deadline budget across gates.
+            Interlocked.Increment(ref _totalWaits);
             var waitStart = Stopwatch.GetTimestamp();
             var deadlineTicks = waitStart + _acquireTimeoutStopwatchTicks;
 
@@ -537,6 +539,7 @@ internal sealed class PoolGovernor : IDisposable
             }
 
             // Slow path: timed waits with a single deadline budget across gates.
+            Interlocked.Increment(ref _totalWaits);
             var waitStart = Stopwatch.GetTimestamp();
             var deadlineTicks = waitStart + _acquireTimeoutStopwatchTicks;
 
@@ -1002,7 +1005,10 @@ internal sealed class PoolGovernor : IDisposable
             Interlocked.Read(ref _totalTurnstileTimeouts),
             Interlocked.Read(ref _totalCanceledWaits),
             _disabled,
-            _forbidden);
+            _forbidden)
+        {
+            TotalWaits = Interlocked.Read(ref _totalWaits)
+        };
     }
 
     private static void UpdatePeak(ref long peak, long current)

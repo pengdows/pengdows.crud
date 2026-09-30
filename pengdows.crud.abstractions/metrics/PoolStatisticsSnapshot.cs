@@ -48,6 +48,9 @@ public readonly record struct PoolStatisticsSnapshot(
     bool Disabled,
     bool Forbidden)
 {
+    /// <summary>Gets the number of acquisitions that entered the blocking wait path.</summary>
+    public long TotalWaits { get; init; }
+
     /// <summary>
     /// Average time waiting to acquire a pool slot, in milliseconds.
     /// Zero if no acquisitions have occurred.

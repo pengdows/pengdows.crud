@@ -24,6 +24,7 @@ The current record includes:
 - transaction counts and latency estimates
 - error attribution counters
 - session-initialization counters
+- read/write request counts, pool waits/timeouts, and mode-lock waits/timeouts
 
 Avoid hard-coding a metric-count claim in docs. The authoritative shape is the `DatabaseMetrics` record in `pengdows.crud.abstractions`.
 
@@ -31,7 +32,10 @@ Avoid hard-coding a metric-count claim in docs. The authoritative shape is the `
 
 Separate from `DatabaseMetrics`, waiting on the mode lock in `SingleWriter`/`SingleConnection` is tracked by an internal `ModeContentionStats` collector (`pengdows.crud/metrics/ModeContentionStats.cs`) and surfaced publicly only when it times out: a failed wait throws `ModeContentionException` (`pengdows.crud.exceptions`) carrying a public `Snapshot` property (`ModeContentionSnapshot`: `CurrentWaiters`, `PeakWaiters`, `TotalWaits`, `TotalTimeouts`, `TotalWaitTimeTicks`, `AverageWaitTimeTicks`). Note `ModeContentionException` extends `TimeoutException` directly — it is **not** part of the `DatabaseException` hierarchy described in `CLAUDE.md`, so a `catch (DatabaseException)` block will not catch it.
 
-There is also an internal `AttributionStats` collector (read/write request counts, governor-wait/timeout counts) that records `ReadRequests`/`WriteRequests` per operation but has no public accessor today — its governor-wait and mode-wait counters are declared but never incremented, and its snapshot is never read anywhere. It exists in source but isn't a usable feature yet.
+The aggregate snapshot exposes cumulative read/write request counts, pool wait and timeout
+counts, and mode-lock wait and timeout counts. Pool counts come from the authoritative pool
+governors; mode counts come from the mode-lock collector. These values help explain pressure
+visible in the latency metrics.
 
 ## Percentile tracking is opt-in
 

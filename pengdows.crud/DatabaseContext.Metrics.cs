@@ -217,6 +217,10 @@ public partial class DatabaseContext
 
         var readMetrics = readSnapshot.HasValue ? CreateRoleMetrics(readSnapshot.Value) : DatabaseRoleMetrics.None;
         var writeMetrics = writeSnapshot.HasValue ? CreateRoleMetrics(writeSnapshot.Value) : DatabaseRoleMetrics.None;
+        var readPool = GetPoolStatisticsSnapshot(PoolLabel.Reader);
+        var writePool = GetPoolStatisticsSnapshot(PoolLabel.Writer);
+        var attribution = _attributionStats.GetSnapshot();
+        var mode = _modeContentionStats.GetSnapshot();
 
         return new DatabaseMetrics(
             readMetrics,
@@ -258,7 +262,15 @@ public partial class DatabaseContext
             snapshot.AvgFailedCommandMs)
         {
             CommandPercentilesAvailable = snapshot.CommandPercentilesAvailable,
-            TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable
+            TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable,
+            ReadRequests = attribution.ReadRequests,
+            WriteRequests = attribution.WriteRequests,
+            ReadPoolWaits = readPool.TotalWaits,
+            WritePoolWaits = writePool.TotalWaits,
+            ReadPoolTimeouts = readPool.TotalSlotTimeouts + readPool.TotalTurnstileTimeouts,
+            WritePoolTimeouts = writePool.TotalSlotTimeouts + writePool.TotalTurnstileTimeouts,
+            ModeWaits = mode.TotalWaits,
+            ModeTimeouts = mode.TotalTimeouts
         };
     }
 
