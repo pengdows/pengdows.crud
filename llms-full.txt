@@ -7012,6 +7012,9 @@ Build/Load/convenience API surface:
   `PoolSaturatedException` instead of waiting out `PoolAcquireTimeout` (`0` disables queueing for
   that role; `null`, the default, sets no cap on 2.0.x, as in 2.0.5, so a waiting caller is bounded
   only by `PoolAcquireTimeout`).
+- **`EnforceUniqueConnectionString`** (on `DatabaseContextConfiguration`, default `false`, 2.0.6)
+  turns the always-on duplicate-connection-string warning into an `InvalidOperationException` at
+  construction — see [`connection-pooling.md`](./connection-pooling.md).
 
 ## A related but separate mapper: `DataReaderMapper`
 

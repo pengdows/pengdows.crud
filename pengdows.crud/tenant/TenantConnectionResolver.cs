@@ -167,7 +167,8 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             EnableSingleWriterFairness = source.EnableSingleWriterFairness,
             SessionInitializationFailureMode = source.SessionInitializationFailureMode,
             MaxQueuedWrites = source.MaxQueuedWrites,
-            MaxQueuedReads = source.MaxQueuedReads
+            MaxQueuedReads = source.MaxQueuedReads,
+            EnforceUniqueConnectionString = source.EnforceUniqueConnectionString
         };
     }
 

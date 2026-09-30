@@ -482,7 +482,8 @@ public class TenantConnectionResolverTests
             EnableSingleWriterFairness = false,
             SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed,
             MaxQueuedWrites = 3,
-            MaxQueuedReads = 4
+            MaxQueuedReads = 4,
+            EnforceUniqueConnectionString = true
         };
 
         var resolver = new TenantConnectionResolver();

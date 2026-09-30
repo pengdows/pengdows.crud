@@ -189,4 +189,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
 
     /// <inheritdoc/>
     public SessionInitializationFailureMode? SessionInitializationFailureMode { get; set; }
+
+    /// <inheritdoc/>
+    public bool EnforceUniqueConnectionString { get; set; }
 }

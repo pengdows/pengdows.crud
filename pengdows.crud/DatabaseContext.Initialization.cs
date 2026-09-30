@@ -439,6 +439,16 @@ public partial class DatabaseContext
             }
 
             _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
+
+            // BP-301: always-on duplicate warning, and the opt-in hard check. A failed claim
+            // rolls back its own keys and throws; the catch below releases everything else.
+            var connectionStringKeys = ComputeConnectionStringKeys(configuration);
+            _uniqueConnectionStringWarnRegistrations =
+                UniqueConnectionStringRegistry.RegisterAllForWarning(this, connectionStringKeys, _logger);
+            if (configuration.EnforceUniqueConnectionString)
+            {
+                _uniqueConnectionStringClaims = UniqueConnectionStringRegistry.ClaimAll(this, connectionStringKeys);
+            }
         }
         catch (Exception e)
         {
@@ -1756,12 +1766,66 @@ public partial class DatabaseContext
     private string ComputePoolKeyHash(string connectionString)
     {
         var provider = _factory?.GetType().FullName ?? "unknown";
-        var redacted = RedactConnectionString(connectionString);
+        // Not RedactConnectionString: it collapses every secret to the same literal "REDACTED",
+        // right for logs but wrong for a pool-identity key — two connection strings differing only
+        // in credentials (distinct pools) would hash identically. Each secret is replaced by a
+        // hash of itself instead: distinct secrets stay distinct, no plaintext is retained.
+        var redacted = HashSensitiveConnectionStringValues(connectionString);
         var input = $"{provider}|{redacted}";
 
         using var sha = SHA256.Create();
         var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(input));
         return Convert.ToHexString(bytes).ToLowerInvariant();
+    }
+
+    private static string HashSensitiveConnectionStringValues(string connectionString)
+    {
+        if (string.IsNullOrWhiteSpace(connectionString))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            var keys = builder.Keys.Cast<object>().Select(k => k.ToString() ?? string.Empty).ToArray();
+            foreach (var key in keys)
+            {
+                var lower = key.ToLowerInvariant();
+                if (lower.Contains("password") || lower == "pwd" || lower.Contains("user id") || lower == "uid" ||
+                    lower.Contains("token") || lower.Contains("secret") || lower.Contains("access"))
+                {
+                    var value = builder[key]?.ToString() ?? string.Empty;
+                    var valueBytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+                    builder[key] = Convert.ToHexString(valueBytes)[..16].ToLowerInvariant();
+                }
+            }
+
+            return builder.ConnectionString;
+        }
+        catch (ArgumentException)
+        {
+            // Malformed: hash the whole string rather than risk two different ones colliding.
+            return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(connectionString)));
+        }
+    }
+
+    /// <summary>
+    /// The raw, caller-supplied connection string(s) — not the internally decorated reader/writer
+    /// variants — as keys for <see cref="IDatabaseContextConfiguration.EnforceUniqueConnectionString"/>.
+    /// </summary>
+    private List<string> ComputeConnectionStringKeys(IDatabaseContextConfiguration configuration)
+    {
+        var keys = new List<string>(2) { ComputePoolKeyHash(configuration.ConnectionString) };
+
+        if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&
+            !string.Equals(configuration.ReadOnlyConnectionString, configuration.ConnectionString,
+                StringComparison.OrdinalIgnoreCase))
+        {
+            keys.Add(ComputePoolKeyHash(configuration.ReadOnlyConnectionString));
+        }
+
+        return keys;
     }
 
     private string BuildReadOnlyConnectionStringFromBase(string baseConnectionString)
@@ -1856,6 +1920,7 @@ public partial class DatabaseContext
 
     private void ReleaseResourcesAfterFailedConstruction()
     {
+        ReleaseUniqueConnectionStringRegistrations();
         DisposePersistentConnections();
         DisposeOwnedDataSources();
 

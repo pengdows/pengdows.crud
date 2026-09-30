@@ -411,6 +411,19 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     // RebuildOwnedDataSourcesForChangedConnectionStrings); disposed with the context.
     private readonly List<DbDataSource> _retiredDataSources = new();
 
+    // BP-301: raw connection-string keys this context claimed (EnforceUniqueConnectionString) and
+    // registered for the always-on duplicate warning; released with the owned data sources.
+    private IReadOnlyList<string>? _uniqueConnectionStringClaims;
+    private IReadOnlyList<string>? _uniqueConnectionStringWarnRegistrations;
+
+    private void ReleaseUniqueConnectionStringRegistrations()
+    {
+        UniqueConnectionStringRegistry.ReleaseAll(this, _uniqueConnectionStringClaims);
+        _uniqueConnectionStringClaims = null;
+        UniqueConnectionStringRegistry.UnregisterAllForWarning(this, _uniqueConnectionStringWarnRegistrations);
+        _uniqueConnectionStringWarnRegistrations = null;
+    }
+
     private void DisposeOwnedDataSources()
     {
         DbDataSource[] retired;
@@ -552,6 +565,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         if (DisposePoolGovernors() && !_sharedResourceDisposalDeferred)
         {
             DisposeOwnedDataSources();
+            ReleaseUniqueConnectionStringRegistrations();
         }
         else if (!_sharedResourceDisposalDeferred)
         {
@@ -592,6 +606,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         if (await DisposePoolGovernorsAsync().ConfigureAwait(false) && !_sharedResourceDisposalDeferred)
         {
             await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
+            ReleaseUniqueConnectionStringRegistrations();
         }
         else if (!_sharedResourceDisposalDeferred)
         {
