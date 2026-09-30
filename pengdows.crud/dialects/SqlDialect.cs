@@ -408,6 +408,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool RequiresCorrelationTokenForGeneratedIds => false;
 
+    /// <summary>
+    /// The provider key for type mappings, converters and read coercion: the engine the database
+    /// runs, which is <see cref="DatabaseType"/> except for a detection label such as Aurora
+    /// (VAR-001), whose DatabaseType names the service but whose behavior is its engine's.
+    /// </summary>
+    internal virtual SupportedDatabase TypeMappingProvider => DatabaseType;
+
     public virtual string ParameterMarker => "?";
 
     public virtual string ParameterMarkerAt(int ordinal)
@@ -1517,7 +1524,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             handled = runtimeType != null &&
                       ((AdvancedTypes.IsMappedType(runtimeType) &&
-                        AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, DatabaseType)) ||
+                        AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, TypeMappingProvider)) ||
                        // Provider LOB mappings are keyed by Stream/TextReader, but the runtime type
                        // is a concrete subclass (MemoryStream, StringReader, ...) that never matches.
                        // Materialize to byte[]/string rather than handing the provider a raw
@@ -2773,7 +2780,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     public virtual bool HasSessionScopedLastIdFunction()
     {
-        return DatabaseType switch
+        return TypeMappingProvider switch
         {
             SupportedDatabase.MySql => true, // LAST_INSERT_ID() is per-connection safe
             SupportedDatabase.MariaDb => true, // LAST_INSERT_ID() is per-connection safe

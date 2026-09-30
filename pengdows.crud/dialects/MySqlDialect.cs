@@ -489,6 +489,10 @@ internal class MySqlDialect : SqlDialect
     // (GetFinalSessionSettings builds on GetBaseSessionSettings, so both are covered.)
     protected virtual bool OmitNoBackslashEscapes => !_isMySqlConnector;
 
+    // Aurora MySQL is a detection label for the MySQL engine (VAR-001): same type mappings.
+    internal override SupportedDatabase TypeMappingProvider =>
+        DatabaseType == SupportedDatabase.AuroraMySql ? SupportedDatabase.MySql : DatabaseType;
+
     // DatabaseType, not _flavor: MariaDbDialect and TiDbDialect override DatabaseType.
     /// <summary>MySQL (and Aurora MySQL) 8.0.8+; MariaDB and SingleStore truncate natively.</summary>
     protected virtual bool SupportsTimeTruncateFractional =>

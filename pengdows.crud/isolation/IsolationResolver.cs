@@ -202,7 +202,7 @@ internal sealed class IsolationResolver : IIsolationResolver
                     IsolationLevel.RepeatableRead,
                     IsolationLevel.Serializable
                 },
-            SupportedDatabase.PostgreSql => new HashSet<IsolationLevel>
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadCommitted,
                 IsolationLevel.RepeatableRead,
@@ -229,7 +229,7 @@ internal sealed class IsolationResolver : IIsolationResolver
                 IsolationLevel.Snapshot,
                 IsolationLevel.Serializable
             },
-            SupportedDatabase.MySql => new HashSet<IsolationLevel>
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => new HashSet<IsolationLevel>
             {
                 IsolationLevel.ReadUncommitted,
                 IsolationLevel.ReadCommitted,
@@ -370,7 +370,7 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
             },
-            SupportedDatabase.PostgreSql => new Dictionary<IsolationProfile, IsolationLevel>
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 // MVCC RepeatableRead is a transaction-wide snapshot: reads never block on writers
                 // and never see non-repeatable reads, which is what the profile promises.
@@ -404,7 +404,7 @@ internal sealed class IsolationResolver : IIsolationResolver
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
                 [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
             },
-            SupportedDatabase.MySql => new Dictionary<IsolationProfile, IsolationLevel>
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => new Dictionary<IsolationProfile, IsolationLevel>
             {
                 [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
                 [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,

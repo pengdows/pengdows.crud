@@ -211,7 +211,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private TypeCoercionOptions DefaultCoercionOptions => TypeCoercionOptions.Default with
     {
-        Provider = _dialect.DatabaseType
+        Provider = _dialect is SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : _dialect.DatabaseType
     };
 
     ISqlDialect ISqlDialectProvider.Dialect => _dialect;
