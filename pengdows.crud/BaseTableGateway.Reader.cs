@@ -14,6 +14,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using pengdows.crud.@internal;
+using pengdows.crud.exceptions;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud;
@@ -34,10 +35,52 @@ public abstract partial class BaseTableGateway<TEntity>
         return MapReaderToObjectWithPlan(reader, plan);
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private TEntity MapReaderToObjectWithPlan(ITrackedReader reader, HybridRecordsetPlan plan)
     {
-        return plan.CompiledMapper(reader);
+        try
+        {
+            return plan.CompiledMapper(reader);
+        }
+        catch (Exception ex) when (ex is OverflowException or InvalidCastException or FormatException)
+        {
+            // TYPE-008: a stored value the property can't hold (e.g. a NUMERIC above
+            // decimal.MaxValue) surfaced as whatever the provider threw. Report it as a mapping
+            // failure naming the column; never a truncated or default value.
+            throw CreateMappingException(reader, ex);
+        }
+    }
+
+    // Slow path, only after a failure: find the column that can't be read into its property.
+    private DataMappingException CreateMappingException(ITrackedReader reader, Exception failure)
+    {
+        IColumnInfo? failing = null;
+        for (var i = 0; i < reader.FieldCount && failing == null; i++)
+        {
+            if (!_columnsByNameCI.TryGetValue(reader.GetName(i), out var column))
+            {
+                continue;
+            }
+
+            try
+            {
+                var value = reader.GetValue(i);
+                if (value is not null && value is not DBNull)
+                {
+                    TypeCoercionHelper.Coerce(value, value.GetType(), column.PropertyInfo.PropertyType);
+                }
+            }
+            catch (Exception)
+            {
+                failing = column;
+            }
+        }
+
+        var target = failing == null
+            ? $"a column into {typeof(TEntity).Name}"
+            : $"column '{failing.Name}' into {typeof(TEntity).Name}.{failing.PropertyInfo.Name} " +
+              $"({failing.PropertyInfo.PropertyType.Name})";
+        return new DataMappingException($"Could not read {target}: {failure.Message}",
+            enums.SupportedDatabase.Unknown, failure);
     }
 
     private HybridRecordsetPlan GetOrBuildRecordsetPlan(ITrackedReader reader)

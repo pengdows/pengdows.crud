@@ -387,6 +387,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool ReadsInt64ThroughGetValue => false;
 
     /// <summary>
+    /// True when the provider returns C# <c>null</c> from <c>GetValue</c> for a DECIMAL outside
+    /// <see cref="decimal"/>'s range instead of throwing (Informix.Net.Core), so tracked readers turn
+    /// that <c>null</c> into an <see cref="OverflowException"/> rather than a silent NULL (TYPE-008).
+    /// </summary>
+    internal virtual bool ReportsOutOfRangeDecimalAsNull => false;
+
+    /// <summary>
+    /// True when the provider decodes every result row while executing the command (before the
+    /// reader is returned), so a stored value its .NET type can't hold surfaces as an
+    /// <see cref="OverflowException"/> from command execution (AdoNetCore.AseClient). The reader
+    /// path reports it as <c>DataMappingException</c> (TYPE-008).
+    /// </summary>
+    internal virtual bool DecodesResultRowsAtExecute => false;
+
+    /// <summary>
     /// True when the engine rounds, rather than truncates, fractional seconds a column can't hold,
     /// so a time or timestamp can be stored later than written (23:59:59.9999999 into TIME(0) as
     /// 24:00:00). The library can't prevent it without the column's precision.

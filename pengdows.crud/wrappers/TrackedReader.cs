@@ -28,6 +28,7 @@ using System.Data.Common;
 using System.Runtime.ExceptionServices;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.wrappers;
@@ -54,6 +55,12 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     // SqlDialect.ReadsInt64ThroughGetValue: Informix.Net.Core's GetInt64 rejects BIGSERIAL.
     private readonly bool _readsInt64ThroughGetValue;
 
+    // SqlDialect.ReportsOutOfRangeDecimalAsNull: Informix.Net.Core returns null for an out-of-range DECIMAL.
+    private readonly bool _reportsOutOfRangeDecimalAsNull;
+
+    private OverflowException OutOfRangeDecimal(int i) =>
+        new($"Column '{_reader.GetName(i)}' holds a value outside System.Decimal's range; the provider returned no value for it.");
+
     internal TrackedReader(
         DbDataReader reader,
         ITrackedConnection connection,
@@ -65,8 +72,10 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         IAsyncDisposable? contextLocker = null,
         IAsyncDisposable? singleConnectionTransactionGate = null,
         Func<Exception, Exception?>? readFailureTranslator = null,
-        bool readsInt64ThroughGetValue = false)
+        bool readsInt64ThroughGetValue = false,
+        bool reportsOutOfRangeDecimalAsNull = false)
     {
+        _reportsOutOfRangeDecimalAsNull = reportsOutOfRangeDecimalAsNull;
         _readFailureTranslator = readFailureTranslator;
         _readsInt64ThroughGetValue = readsInt64ThroughGetValue;
         _reader = reader;
@@ -241,6 +250,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     public decimal GetDecimal(int i)
     {
+        if (_reportsOutOfRangeDecimalAsNull && _reader.GetValue(i) is null)
+        {
+            throw OutOfRangeDecimal(i);
+        }
+
         return _reader.GetDecimal(i);
     }
 
@@ -293,7 +307,17 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     {
         try
         {
-            return _reader.GetValue(i);
+            var value = _reader.GetValue(i);
+            if (_reportsOutOfRangeDecimalAsNull && value is null)
+            {
+                throw OutOfRangeDecimal(i);
+            }
+
+            return value!;
+        }
+        catch (OverflowException)
+        {
+            throw;
         }
         catch (Exception)
         {
@@ -518,6 +542,16 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     private Exception? TranslateReadFailure(Exception exception)
     {
+        // TYPE-008: some providers (FirebirdClient, AdoNetCore.AseClient) decode the whole row inside
+        // Read, so a stored value its .NET type can't hold (e.g. a NUMERIC above decimal.MaxValue)
+        // fails here rather than in a getter. Report it like a getter failure.
+        if (exception is OverflowException or InvalidCastException or FormatException)
+        {
+            return new DataMappingException(
+                $"Could not read the next row: a stored value can't be converted to its .NET type ({exception.Message})",
+                SupportedDatabase.Unknown, exception);
+        }
+
         if (_readFailureTranslator == null || exception is OperationCanceledException)
         {
             return null;
