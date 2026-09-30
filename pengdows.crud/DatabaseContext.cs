@@ -129,7 +129,11 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private ITrackedConnection? _connection = null;
     // PreventDatabaseUnload sentinels: one per enabled pool (writer and, when a dedicated reader
     // connection string exists, reader). Guarded by _sentinelLock; _connection mirrors the first.
-    private readonly List<(ITrackedConnection Connection, ExecutionType ExecutionType)> _sentinels = new();
+    // Copy-on-write: replaced (never mutated) under _sentinelLock, read without a lock. Every
+    // connection acquisition and release under PreventDatabaseUnload reads it, so reads must not
+    // lock or allocate.
+    private (ITrackedConnection Connection, ExecutionType ExecutionType)[] _sentinels =
+        Array.Empty<(ITrackedConnection Connection, ExecutionType ExecutionType)>();
     private readonly object _sentinelLock = new();
     private SemaphoreSlim? _connectionOpenGate;
     private ReusableAsyncLocker? _connectionOpenLocker;
@@ -418,14 +422,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         foreach (var dataSource in retired)
         {
-            try
-            {
-                dataSource.Dispose();
-            }
-            catch
-            {
-                // ignore, as for the current data sources below
-            }
+            DisposeBestEffort(dataSource, "retired data source");
         }
 
         var primaryOwned = _dataSourceProvided ? null : _dataSource;
@@ -441,32 +438,65 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             readerOwned = null;
         }
 
-        try
+        DisposeBestEffort(primaryOwned, "data source");
+        DisposeBestEffort(readerOwned, "reader data source");
+        _dataSource = null;
+        _readerDataSource = null;
+    }
+
+    // Best-effort disposal: a failure must not stop the rest of the shutdown, but it is logged, never
+    // silently swallowed.
+    internal void DisposeBestEffort(IDisposable? resource, string description)
+    {
+        if (resource == null)
         {
-            primaryOwned?.Dispose();
-        }
-        catch
-        {
-            // ignore
+            return;
         }
 
         try
         {
-            readerOwned?.Dispose();
+            resource.Dispose();
         }
-        catch
+        catch (Exception ex)
         {
-            // ignore
+            _logger.LogDebug(ex, "Best-effort disposal of the {Resource} failed.", description);
         }
-        finally
+    }
+
+    internal async ValueTask DisposeBestEffortAsync(object? resource, string description)
+    {
+        try
         {
-            _dataSource = null;
-            _readerDataSource = null;
+            switch (resource)
+            {
+                case IAsyncDisposable asyncDisposable:
+                    await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+                    break;
+                case IDisposable disposable:
+                    disposable.Dispose();
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Best-effort disposal of the {Resource} failed.", description);
         }
     }
 
     private async ValueTask DisposeOwnedDataSourcesAsync()
     {
+        DbDataSource[] retired;
+        lock (_retiredDataSources)
+        {
+            retired = _retiredDataSources.ToArray();
+            _retiredDataSources.Clear();
+        }
+
+        foreach (var dataSource in retired)
+        {
+            await DisposeBestEffortAsync(dataSource, "retired data source").ConfigureAwait(false);
+        }
+
         var primaryOwned = _dataSourceProvided ? null : _dataSource;
         var readerOwned = _readerDataSource;
 
@@ -480,42 +510,10 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             readerOwned = null;
         }
 
-        try
-        {
-            if (primaryOwned is IAsyncDisposable ad)
-            {
-                await ad.DisposeAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                primaryOwned?.Dispose();
-            }
-        }
-        catch
-        {
-            // ignore
-        }
-
-        try
-        {
-            if (readerOwned is IAsyncDisposable rd)
-            {
-                await rd.DisposeAsync().ConfigureAwait(false);
-            }
-            else
-            {
-                readerOwned?.Dispose();
-            }
-        }
-        catch
-        {
-            // ignore
-        }
-        finally
-        {
-            _dataSource = null;
-            _readerDataSource = null;
-        }
+        await DisposeBestEffortAsync(primaryOwned, "data source").ConfigureAwait(false);
+        await DisposeBestEffortAsync(readerOwned, "reader data source").ConfigureAwait(false);
+        _dataSource = null;
+        _readerDataSource = null;
     }
 
     protected override void DisposeManaged()

@@ -213,10 +213,12 @@ internal class FirebirdDialect : SqlDialect
                 null);
             clearAllPoolsMethod?.Invoke(null, null);
         }
-        catch
+        catch (Exception ex)
         {
             // Best-effort — a missed pool reset just means the caller sees the original
-            // "object ... is in use" failure, no worse than before this hook existed.
+            // "object ... is in use" failure, no worse than before this hook existed. Logged so
+            // that failure can be traced back here.
+            Logger.LogDebug(ex, "Firebird pool reset before DDL failed; the DDL may report the object is in use.");
         }
     }
 

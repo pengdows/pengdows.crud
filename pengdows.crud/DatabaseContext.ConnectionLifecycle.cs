@@ -103,12 +103,20 @@ public partial class DatabaseContext
         _connection = connection;
     }
 
-    internal IReadOnlyList<(ITrackedConnection Connection, ExecutionType ExecutionType)> GetSentinelSnapshot()
+    internal IReadOnlyList<(ITrackedConnection Connection, ExecutionType ExecutionType)> GetSentinelSnapshot() =>
+        Volatile.Read(ref _sentinels);
+
+    internal bool IsSentinel(ITrackedConnection connection)
     {
-        lock (_sentinelLock)
+        foreach (var (sentinel, _) in Volatile.Read(ref _sentinels))
         {
-            return _sentinels.ToArray();
+            if (ReferenceEquals(sentinel, connection))
+            {
+                return true;
+            }
         }
+
+        return false;
     }
 
     /// <summary>
@@ -127,14 +135,17 @@ public partial class DatabaseContext
                 }
             }
 
+            var updated = new List<(ITrackedConnection Connection, ExecutionType ExecutionType)>(_sentinels);
+
             // Preserve an already-installed persistent connection when a strategy is
             // initialized directly (outside the normal constructor path).
-            if (_sentinels.Count == 0 && _connection != null && !ReferenceEquals(_connection, connection))
+            if (updated.Count == 0 && _connection != null && !ReferenceEquals(_connection, connection))
             {
-                _sentinels.Add((_connection, executionType));
+                updated.Add((_connection, executionType));
             }
 
-            _sentinels.Add((connection, executionType));
+            updated.Add((connection, executionType));
+            Volatile.Write(ref _sentinels, updated.ToArray());
             _connection ??= connection;
         }
     }
@@ -205,14 +216,8 @@ public partial class DatabaseContext
         foreach (var (connection, _) in sentinels)
         {
             sentinelPools?.Add(connection.ConnectionString);
-            try
-            {
-                connection.Dispose();
-            }
-            catch
-            {
-                // Best effort: a sentinel that fails to close is replaced by lazy repair anyway.
-            }
+            // A sentinel that fails to close is replaced by lazy repair anyway.
+            DisposeBestEffort(connection, "PreventDatabaseUnload sentinel closed for DDL");
         }
 
         return true;
@@ -253,13 +258,15 @@ public partial class DatabaseContext
     {
         lock (_sentinelLock)
         {
-            var index = _sentinels.FindIndex(s => ReferenceEquals(s.Connection, previous));
+            var index = Array.FindIndex(_sentinels, s => ReferenceEquals(s.Connection, previous));
             if (index < 0 || IsDisposed)
             {
                 return false;
             }
 
-            _sentinels[index] = (replacement, executionType);
+            var updated = (((ITrackedConnection Connection, ExecutionType ExecutionType)[])_sentinels.Clone());
+            updated[index] = (replacement, executionType);
+            Volatile.Write(ref _sentinels, updated);
             if (ReferenceEquals(_connection, previous))
             {
                 _connection = replacement;
@@ -317,15 +324,15 @@ public partial class DatabaseContext
         lock (_sentinelLock)
         {
             ITrackedConnection[] connections;
-            if (_sentinels.Count > 0)
+            if (_sentinels.Length > 0)
             {
-                connections = new ITrackedConnection[_sentinels.Count];
-                for (var i = 0; i < _sentinels.Count; i++)
+                connections = new ITrackedConnection[_sentinels.Length];
+                for (var i = 0; i < _sentinels.Length; i++)
                 {
                     connections[i] = _sentinels[i].Connection;
                 }
 
-                _sentinels.Clear();
+                Volatile.Write(ref _sentinels, Array.Empty<(ITrackedConnection Connection, ExecutionType ExecutionType)>());
             }
             else
             {
@@ -341,14 +348,7 @@ public partial class DatabaseContext
     {
         foreach (var connection in TakePersistentConnections())
         {
-            try
-            {
-                connection.Dispose();
-            }
-            catch
-            {
-                // best-effort cleanup during context disposal
-            }
+            DisposeBestEffort(connection, "persistent connection");
         }
     }
 
@@ -356,21 +356,7 @@ public partial class DatabaseContext
     {
         foreach (var connection in TakePersistentConnections())
         {
-            try
-            {
-                if (connection is IAsyncDisposable asyncConnection)
-                {
-                    await asyncConnection.DisposeAsync().ConfigureAwait(false);
-                }
-                else
-                {
-                    connection.Dispose();
-                }
-            }
-            catch
-            {
-                // best-effort cleanup during context disposal
-            }
+            await DisposeBestEffortAsync(connection, "persistent connection").ConfigureAwait(false);
         }
     }
 

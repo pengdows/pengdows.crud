@@ -111,6 +111,109 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
         });
     }
 
+    // Review 2026-09-29 (adversarial type mapping, TYPE-008): a value at the edge of a type's range
+    // or precision must round-trip exactly or be rejected with a clear error. It must never come
+    // back as a different value (a date shifted by the calendar range, a time wrapped past midnight).
+    [SkippableFact]
+    public async Task DateOnly_MinAndMaxValue_RoundTripExactlyOrAreRejected()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            var gateway = new TableGateway<CalendarDay, int>(context);
+            foreach (var (id, value) in new[] { (10, DateOnly.MinValue), (11, DateOnly.MaxValue) })
+            {
+                var row = new CalendarDay { Id = id, Day = value, MaybeDay = value };
+                if (await IsRejectedAsync(provider, $"DateOnly {value:O}", () => gateway.CreateAsync(row, context)))
+                {
+                    continue;
+                }
+
+                var actual = await gateway.RetrieveOneAsync(id, context);
+                Assert.NotNull(actual);
+                Assert.Equal(value, actual!.Day);
+                Assert.Equal(value, actual.MaybeDay);
+            }
+        });
+    }
+
+    [SkippableFact]
+    public async Task TimeOnly_SevenFractionalDigits_NeverWrapsPastMidnight()
+    {
+        await RunTestAgainstProvidersAsync(ProvidersWithTimeOfDayType, async (provider, context) =>
+        {
+            var gateway = new TableGateway<CalendarTime, int>(context);
+            var value = new TimeOnly(23, 59, 59).Add(TimeSpan.FromTicks(9_999_999));
+            var row = new CalendarTime { Id = 10, At = value, MaybeAt = value };
+            if (await IsRejectedAsync(provider, $"TimeOnly {value:O}", () => gateway.CreateAsync(row, context)))
+            {
+                return;
+            }
+
+            if (((pengdows.crud.dialects.SqlDialect)context.Dialect).RoundsFractionalSecondsOnWrite)
+            {
+                // Declared limitation (TiDB, MySQL before 8.0.8): the engine rounds the value up to
+                // 24:00:00, which no TimeOnly can hold, so reading it back must fail loudly rather
+                // than return a wrapped 00:00:00.
+                var failure = await Record.ExceptionAsync(async () => await gateway.RetrieveOneAsync(10, context));
+                Assert.NotNull(failure);
+                Output.WriteLine($"[{provider}] rounds on write; read-back rejected: {failure!.GetType().Name}");
+                return;
+            }
+
+            var actual = await gateway.RetrieveOneAsync(10, context);
+            Assert.NotNull(actual);
+            Output.WriteLine($"[{provider}] {value:O} stored as {actual!.At:O}");
+            // The column's precision may drop fractional digits; it may not round the value into the
+            // next day or above what was written.
+            Assert.InRange(actual.At, new TimeOnly(23, 59, 59), value);
+            Assert.InRange(actual.MaybeAt!.Value, new TimeOnly(23, 59, 59), value);
+        });
+    }
+
+    [SkippableFact]
+    public async Task TimeSpan_OutsideATimeOfDay_RoundTripsExactlyOrIsRejected()
+    {
+        await RunTestAgainstProvidersAsync(ProvidersWithTimeOfDayType, async (provider, context) =>
+        {
+            var gateway = new TableGateway<CalendarDuration, int>(context);
+            foreach (var (id, value) in new[]
+                     {
+                         (20, TimeSpan.FromHours(-1)), (21, TimeSpan.FromHours(24)), (22, TimeSpan.FromHours(25))
+                     })
+            {
+                var row = new CalendarDuration { Id = id, Span = value, MaybeSpan = value };
+                if (await IsRejectedAsync(provider, $"TimeSpan {value:c}", () => gateway.CreateAsync(row, context)))
+                {
+                    continue;
+                }
+
+                var actual = await gateway.RetrieveOneAsync(id, context);
+                Assert.NotNull(actual);
+                Assert.Equal(value, actual!.Span);
+                Assert.Equal(value, actual.MaybeSpan);
+            }
+        });
+    }
+
+    // A rejection is an asserted outcome, not a skip: it must be a clear error (the database's own,
+    // translated, or the library's range check), and it is logged.
+    private async Task<bool> IsRejectedAsync(SupportedDatabase provider, string what, Func<ValueTask<bool>> create)
+    {
+        try
+        {
+            Assert.True(await create());
+            return false;
+        }
+        // OverflowException/FormatException: the provider's own range check at bind time (SqlClient,
+        // pengdows.flatfile), raised before anything is written; clear, and never a wrong value.
+        catch (Exception ex) when (ex is pengdows.crud.exceptions.DatabaseException or ArgumentOutOfRangeException
+                                       or OverflowException or FormatException)
+        {
+            Output.WriteLine($"[{provider}] {what} rejected: {ex.GetType().Name}: {ex.Message}");
+            return true;
+        }
+    }
+
     private static async Task ExecuteAsync(IDatabaseContext context, string sql)
     {
         await using var sc = context.CreateSqlContainer(sql);
@@ -169,6 +272,14 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
         [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
         [Column("event_day", DbType.Date)] public DateOnly Day { get; set; }
         [Column("maybe_day", DbType.Date)] public DateOnly? MaybeDay { get; set; }
+    }
+
+    [Table(TimesTable)]
+    public sealed class CalendarDuration
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("event_time", DbType.Time)] public TimeSpan Span { get; set; }
+        [Column("maybe_time", DbType.Time)] public TimeSpan? MaybeSpan { get; set; }
     }
 
     [Table(TimesTable)]

@@ -219,9 +219,12 @@ public class KeepAliveSentinelReconnectTests
         var originalSentinel = ctx.PersistentConnection!;
         Unwrap(originalSentinel).BreakConnection();
 
-        PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = () =>
+        var strategy = (PreventDatabaseUnloadConnectionStrategy)typeof(DatabaseContext)
+            .GetField("_connectionStrategy", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+            .GetValue(ctx)!;
+        strategy.PostDisposedCheckHook = () =>
         {
-            PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = null; // avoid re-entrancy
+            strategy.PostDisposedCheckHook = null; // avoid re-entrancy
             ctx.Dispose();
         };
 
@@ -236,7 +239,7 @@ public class KeepAliveSentinelReconnectTests
         }
         finally
         {
-            PreventDatabaseUnloadConnectionStrategy.PostDisposedCheckHook = null;
+            strategy.PostDisposedCheckHook = null;
             opConnection?.Dispose();
         }
 

@@ -22,6 +22,27 @@ namespace pengdows.crud.Tests;
 [Collection("TypeRegistry")]
 public sealed class SecurityRegressionTests
 {
+    // Threat note (review 2026-09-29): PreventDatabaseUnload rewrites the connection string (raises
+    // the provider minimum pool size) after construction and rebuilds the owned data sources; the
+    // public, redacted form must be recomputed from the rewritten string and still hide secrets.
+    [Fact]
+    public void ConnectionString_AfterPreventDatabaseUnloadRebuild_IsStillRedacted()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Database=/data/app.fdb;User=app;Password=super-secret;EmulatedProduct=Firebird",
+            DbMode = DbMode.PreventDatabaseUnload
+        };
+
+        using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Firebird));
+
+        Assert.Equal(DbMode.PreventDatabaseUnload, context.ConnectionMode);
+        Assert.DoesNotContain("super-secret", context.ConnectionString, StringComparison.Ordinal);
+        Assert.Contains("Password=REDACTED", context.ConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("MinPoolSize=2", context.ConnectionString.Replace(" ", string.Empty),
+            StringComparison.OrdinalIgnoreCase); // the rewritten string, not the original
+    }
+
     [Fact]
     public void ConnectionString_PublicSurface_ReturnsRedactedValue()
     {

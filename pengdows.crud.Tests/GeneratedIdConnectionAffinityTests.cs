@@ -1,4 +1,7 @@
 using System;
+using System.Collections.Generic;
+using Microsoft.Extensions.Logging.Abstractions;
+using pengdows.crud.dialects;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
@@ -76,50 +79,81 @@ public class GeneratedIdConnectionAffinityTests
             "meaningful value on a connection acquired for reads.");
     }
 
-    // TEST-010's remaining, deeper half: proving affinity to the exact same physical connection
-    // instance as the INSERT, not just "a write-labeled connection somewhere." fakeDb now tracks
-    // executed command text per-connection-instance for all three execution paths (non-query,
-    // reader, and — as of this test — scalar via ExecutedScalarTexts), so this is provable without
-    // any further fakeDb infrastructure: find the connection instance whose ExecutedReaderTexts
-    // contains the compound INSERT, find the one whose ExecutedScalarTexts contains the fallback
-    // last-insert-id query, and assert they are the same object.
-    [Fact]
-    public async Task CreateAsync_CompoundStatementFallback_UsesTheSamePhysicalConnectionAsTheInsert()
+    // TEST-010's remaining half, CORE-016 (fixed 2026-09-29): the fallback id query must run on the
+    // same physical connection as the INSERT. It used to open a new lease, which on a real provider
+    // reads another session's value, a pooled connection's stale value, or 0. fakeDb records executed
+    // text per connection instance, so affinity is provable. Every plan whose fallback follows the
+    // INSERT is covered: CompoundStatement (MySql.Data), ReaderInsertedId (MySqlConnector) and
+    // Returning (PostgreSQL; the fallback runs when RETURNING yields no row).
+    public static IEnumerable<object[]> FallbackPlans()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        yield return new object[] { "CompoundStatement" };
+        yield return new object[] { "ReaderInsertedId" };
+        yield return new object[] { "Returning" };
+    }
+
+    [Theory]
+    [MemberData(nameof(FallbackPlans))]
+    public async Task CreateAsync_GeneratedIdFallback_UsesTheSamePhysicalConnectionAsTheInsert(string plan)
+    {
         var typeMap = new TypeMapRegistry();
         typeMap.Register<GenIdItem>();
-
-        using var ctx = new DatabaseContext(new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=gen-id-affinity-2;EmulatedProduct=MySql"
-        }, factory, null, typeMap);
+        var database = plan == "Returning" ? SupportedDatabase.PostgreSql : SupportedDatabase.MySql;
+        var factory = new fakeDbFactory(database);
+        using var ctx = plan == "ReaderInsertedId"
+            ? new DatabaseContext("Data Source=gen-id-affinity-2;EmulatedProduct=MySql", factory, typeMap,
+                new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, isMySqlConnector: true))
+            : new DatabaseContext(new DatabaseContextConfiguration
+            {
+                ConnectionString = $"Data Source=gen-id-affinity-2;EmulatedProduct={database}"
+            }, factory, null, typeMap);
+        Assert.Equal(plan, ctx.Dialect.GetGeneratedKeyPlan().ToString());
+        var idQuery = ctx.Dialect.GetLastInsertedIdQuery();
 
         var gateway = new TableGateway<GenIdItem, int>(ctx);
-        var entity = new GenIdItem { Name = "same-connection-check" };
+        Assert.True(await gateway.CreateAsync(new GenIdItem { Name = "same-connection-check" }));
 
-        var created = await gateway.CreateAsync(entity);
-        Assert.True(created);
+        static IEnumerable<string> Executed(fakeDbConnection c) =>
+            c.ExecutedNonQueryTexts.Concat(c.ExecutedReaderTexts).Concat(c.ExecutedScalarTexts);
+        var insertConnections = factory.CreatedConnections
+            .Where(c => Executed(c).Any(t => t.Contains("INSERT INTO", StringComparison.OrdinalIgnoreCase)))
+            .ToList();
+        var idConnections = factory.CreatedConnections
+            .Where(c => Executed(c).Any(t => t.Trim() == idQuery.Trim()))
+            .ToList();
 
-        var insertConnection = factory.CreatedConnections.SingleOrDefault(conn =>
-            conn.ExecutedReaderTexts.Any(text => text.Contains("INSERT INTO", StringComparison.OrdinalIgnoreCase)));
-        var fallbackIdConnection = factory.CreatedConnections.SingleOrDefault(conn =>
-            conn != insertConnection &&
-            conn.ExecutedReaderTexts.Any(text => text.Contains("LAST_INSERT_ID", StringComparison.OrdinalIgnoreCase)));
+        var insertConnection = Assert.Single(insertConnections);
+        var idConnection = Assert.Single(idConnections);
+        Assert.Same(insertConnection, idConnection);
+    }
 
-        Assert.NotNull(insertConnection);
+    // Under SingleWriter the pinned connection carries the one write permit; the fallback id query
+    // runs on it and must not wait for a second permit (which would never come).
+    [Fact]
+    public async Task CreateAsync_SingleWriter_FallbackRunsOnThePinnedConnectionWithoutASecondPermit()
+    {
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<GenIdItem>();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=gen-id-single-writer.db;EmulatedProduct=Sqlite",
+            DbMode = DbMode.SingleWriter
+        }, factory, null, typeMap);
+        Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
+        var idQuery = ctx.Dialect.GetLastInsertedIdQuery();
+        var gateway = new TableGateway<GenIdItem, int>(ctx);
 
-        // CORE-016 (docs/planning/future-work.md): confirmed still open, not yet fixed. When the
-        // compound statement's own reader can't navigate to its trailing result set (simulated
-        // here by fakeDbDataReader.NextResult() always returning false), PopulateGeneratedIdAsync's
-        // fallback opens a brand-new connection/session to re-run the session-scoped last-insert-id
-        // query instead of reusing the INSERT's own connection — on a real provider this returns
-        // NULL/stale data, not the value the INSERT just produced. This assertion intentionally
-        // documents the current (buggy) behavior as a locked-down regression gate: if it ever
-        // starts failing because fallbackIdConnection becomes null, that means the fallback now
-        // reuses the INSERT's connection and CORE-016 has been fixed — this test should then be
-        // rewritten to assert same-connection affinity instead of its absence.
-        Assert.NotNull(fallbackIdConnection);
-        Assert.NotSame(insertConnection, fallbackIdConnection);
+        var create = gateway.CreateAsync(new GenIdItem { Name = "single-writer" }).AsTask();
+        var finished = await Task.WhenAny(create, Task.Delay(TimeSpan.FromSeconds(10)));
+
+        Assert.Same(create, finished);
+        Assert.True(await create);
+        static IEnumerable<string> Executed(fakeDbConnection c) =>
+            c.ExecutedNonQueryTexts.Concat(c.ExecutedReaderTexts).Concat(c.ExecutedScalarTexts);
+        var insertConnection = Assert.Single(factory.CreatedConnections,
+            c => Executed(c).Any(t => t.Contains("INSERT INTO", StringComparison.OrdinalIgnoreCase)));
+        var idConnection = Assert.Single(factory.CreatedConnections, c => Executed(c).Any(t => t.Trim() == idQuery.Trim()));
+        Assert.Same(insertConnection, idConnection);
     }
 }

@@ -460,7 +460,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
             }
             else
             {
-                ScheduleBackgroundShutdownDisposal(entry, useAsyncDisposal: false);
+                ScheduleBackgroundShutdownDisposal(entry);
             }
         }
     }
@@ -504,9 +504,10 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                         {
                             _ = entry.LazyContext.Value;
                         }
-                        catch
+                        catch (Exception ex)
                         {
-                            // Construction failed — the completion signal reports null.
+                            // The completion signal reports null; nobody else observes this failure.
+                            LogShutdownConstructionFailure(ex);
                         }
                     });
                 }
@@ -520,19 +521,21 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         }
     }
 
-    private void ScheduleBackgroundShutdownDisposal(TenantContextEntry entry, bool useAsyncDisposal)
+    private void ScheduleBackgroundShutdownDisposal(TenantContextEntry entry)
     {
         ThreadPool.UnsafeQueueUserWorkItem(static state =>
         {
-            var (owner, capturedEntry, capturedUseAsync) = state;
+            var (owner, capturedEntry) = state;
             IDatabaseContext context;
             try
             {
                 context = capturedEntry.LazyContext.Value; // blocks this background thread, never the caller
             }
-            catch
+            catch (Exception ex)
             {
-                return; // Construction faulted (or now fails) — nothing to dispose.
+                // Construction faulted: nothing to dispose, and nobody else observes this failure.
+                owner.LogShutdownConstructionFailure(ex);
+                return;
             }
 
             if (!capturedEntry.TryClaimDisposal())
@@ -540,15 +543,13 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                 return; // Already claimed by a racing Invalidate — see TryClaimDisposal.
             }
 
-            if (capturedUseAsync)
-            {
-                owner.DisposeShutdownContextAsync(context).AsTask().GetAwaiter().GetResult();
-            }
-            else
-            {
-                owner.DisposeShutdownContextSync(context);
-            }
-        }, (this, entry, useAsyncDisposal), preferLocal: false);
+            owner.DisposeShutdownContextSync(context);
+        }, (this, entry), preferLocal: false);
+    }
+
+    private void LogShutdownConstructionFailure(Exception ex)
+    {
+        _logger.LogWarning(ex, "A tenant context that was still being constructed during registry shutdown failed to construct.");
     }
 
     private void DisposeShutdownContextSync(IDatabaseContext context)

@@ -39,15 +39,28 @@ public class GeneratedKeyPlanReachabilityTests
         }
     }
 
+    // GEN-001 (2026-09-29): the gateway now runs a SessionScopedFunction INSERT and its id query on
+    // one pinned connection (GeneratedKeySameConnectionTests), so the plan is safe. Only the dialects
+    // whose engine offers nothing else use it; for every other dialect this gate still holds.
+    private static readonly SupportedDatabase[] PinnedSessionScopedDatabases =
+        { SupportedDatabase.Informix, SupportedDatabase.SapHana, SupportedDatabase.Access };
+
     [Theory]
     [MemberData(nameof(AllSupportedDatabases))]
-    public void GetGeneratedKeyPlan_NeverReturnsSessionScopedFunction(SupportedDatabase database)
+    public void GetGeneratedKeyPlan_SessionScopedFunctionOnlyWhereTheGatewayPinsTheConnection(SupportedDatabase database)
     {
         var factory = new fakeDbFactory(database);
         var dialect = SqlDialectFactory.CreateDialectForType(database, factory, NullLogger.Instance);
 
         var plan = dialect.GetGeneratedKeyPlan();
 
-        Assert.NotEqual(GeneratedKeyPlan.SessionScopedFunction, plan);
+        if (System.Array.IndexOf(PinnedSessionScopedDatabases, database) >= 0)
+        {
+            Assert.Equal(GeneratedKeyPlan.SessionScopedFunction, plan);
+        }
+        else
+        {
+            Assert.NotEqual(GeneratedKeyPlan.SessionScopedFunction, plan);
+        }
     }
 }

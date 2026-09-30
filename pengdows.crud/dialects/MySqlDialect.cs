@@ -82,6 +82,14 @@ internal class MySqlDialect : SqlDialect
     private static readonly Version UpsertAliasVersionThreshold = new(8, 0, 20);
     private static readonly Version MySqlLegacyModeDeprecationThreshold = new(8, 0, 0);
 
+    // MySQL rounds fractional seconds a column can't hold, so TimeOnly 23:59:59.9999999 was stored
+    // in TIME as 24:00:00 and a DATETIME crossed into the next day. TIME_TRUNCATE_FRACTIONAL (MySQL
+    // 8.0.8+) truncates instead, as MariaDB, PostgreSQL, Firebird and SQL Server do. Confirmed live
+    // 2026-09-29: with the mode, 23:59:59.9999999 stores as 23:59:59 (TIME, DATETIME) and
+    // 23:59:59.999 (DATETIME(3)).
+    private const string TimeTruncateFractionalFlag = "TIME_TRUNCATE_FRACTIONAL";
+    private static readonly Version TimeTruncateFractionalMinimum = new(8, 0, 8);
+
     private const int MaxPreparedStatementCountErrorCode = 1461;
     private const string MaxPreparedStatementCountToken = "max_prepared_stmt_count";
     private const int UnsupportedPreparedStatementErrorCode = 1295;
@@ -359,6 +367,10 @@ internal class MySqlDialect : SqlDialect
                 var flags = useLegacyModes
                     ? $"{RequiredSqlModeFlags},{LegacySqlModeFlags}"
                     : RequiredSqlModeFlags;
+                if (SupportsTimeTruncateFractional)
+                {
+                    flags += "," + TimeTruncateFractionalFlag;
+                }
 
                 // Overwrite-only policy: Always set the full sql_mode to our standard baseline.
                 // This is safer than delta interrogation across a pooled connection lifetime.
@@ -476,6 +488,15 @@ internal class MySqlDialect : SqlDialect
     // server's NO_BACKSLASH_ESCAPES status flag and escapes accordingly, so it keeps the mode.
     // (GetFinalSessionSettings builds on GetBaseSessionSettings, so both are covered.)
     protected virtual bool OmitNoBackslashEscapes => !_isMySqlConnector;
+
+    // DatabaseType, not _flavor: MariaDbDialect and TiDbDialect override DatabaseType.
+    /// <summary>MySQL (and Aurora MySQL) 8.0.8+; MariaDB and SingleStore truncate natively.</summary>
+    protected virtual bool SupportsTimeTruncateFractional =>
+        DatabaseType is SupportedDatabase.MySql or SupportedDatabase.AuroraMySql &&
+        IsInitialized && ProductInfo.ParsedVersion is { } version && version >= TimeTruncateFractionalMinimum;
+
+    internal override bool RoundsFractionalSecondsOnWrite =>
+        DatabaseType is SupportedDatabase.MySql or SupportedDatabase.AuroraMySql && !SupportsTimeTruncateFractional;
 
     private static string StripNoBackslashEscapes(string settings)
     {

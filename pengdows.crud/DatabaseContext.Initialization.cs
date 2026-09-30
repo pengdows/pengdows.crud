@@ -700,6 +700,12 @@ public partial class DatabaseContext
         }
     }
 
+
+    // 2.0.x keeps 2.0.5's admission behavior: with no MaxQueuedReads/MaxQueuedWrites a waiting caller
+    // is bounded only by PoolAcquireTimeout, never rejected for queue depth. The cap is opt-in here;
+    // 3.0 makes the governor's default cap the default.
+    private const int UnboundedQueueDepth = int.MaxValue;
+
     private void InitializePoolGovernors()
     {
         if (_dialect == null)
@@ -837,7 +843,7 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: true,
             ownsTurnstile: turnstile != null, // Writers hold turnstile until slot released
-            maxQueueDepth: _maxQueuedWrites);
+            maxQueueDepth: _maxQueuedWrites ?? UnboundedQueueDepth);
 
         _readerGovernor = CreateGovernor(
             PoolLabel.Reader,
@@ -849,7 +855,7 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: false,
             ownsTurnstile: false, // Readers touch-and-release turnstile
-            maxQueueDepth: _maxQueuedReads);
+            maxQueueDepth: _maxQueuedReads ?? UnboundedQueueDepth);
 
         // PreventDatabaseUnload: every sentinel holds one permit from its own pool's governor, and
         // a dedicated reader pool gets its own sentinel so it cannot unload independently.
@@ -1851,14 +1857,7 @@ public partial class DatabaseContext
     private void ReleaseResourcesAfterFailedConstruction()
     {
         DisposePersistentConnections();
-        try
-        {
-            DisposeOwnedDataSources();
-        }
-        catch
-        {
-            // best effort, as in normal disposal
-        }
+        DisposeOwnedDataSources();
 
         _writerGovernor?.Dispose();
         _writerGovernor = null;

@@ -51,6 +51,9 @@ internal sealed class Db2Dialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Db2;
+
+    // Db2 returns a generated key with SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...)).
+    internal override bool InsertReturningWrapsEntireStatement => true;
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 

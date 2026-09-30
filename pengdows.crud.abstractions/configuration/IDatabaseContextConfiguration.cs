@@ -196,8 +196,9 @@ public interface IDatabaseContextConfiguration
     /// <summary>
     /// Maximum number of callers allowed to queue for a write-governor slot before further
     /// callers are rejected immediately with <c>PoolSaturatedException</c>, rather than waiting
-    /// out the full <see cref="PoolAcquireTimeout"/>. <c>null</c> (default) uses the governor's
-    /// built-in default (proportional to <see cref="MaxConcurrentWrites"/>).
+    /// out the full <see cref="PoolAcquireTimeout"/>. <c>0</c> disables queueing. <c>null</c>
+    /// (default) sets no cap on 2.0.x, as in 2.0.5: a waiting caller is bounded only by
+    /// <see cref="PoolAcquireTimeout"/>.
     /// </summary>
     // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
     int? MaxQueuedWrites
@@ -216,8 +217,9 @@ public interface IDatabaseContextConfiguration
     /// <summary>
     /// Maximum number of callers allowed to queue for a read-governor slot before further
     /// callers are rejected immediately with <c>PoolSaturatedException</c>, rather than waiting
-    /// out the full <see cref="PoolAcquireTimeout"/>. <c>null</c> (default) uses the governor's
-    /// built-in default (proportional to <see cref="MaxConcurrentReads"/>).
+    /// out the full <see cref="PoolAcquireTimeout"/>. <c>0</c> disables queueing. <c>null</c>
+    /// (default) sets no cap on 2.0.x, as in 2.0.5: a waiting caller is bounded only by
+    /// <see cref="PoolAcquireTimeout"/>.
     /// </summary>
     // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
     int? MaxQueuedReads

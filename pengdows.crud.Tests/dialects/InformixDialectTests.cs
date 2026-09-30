@@ -76,12 +76,12 @@ public class InformixDialectTests
 
     // CONFIRMED LIVE (2026-09-28): Informix.Net.Core rejects "INSERT ...; SELECT ..." in one
     // command ("Cannot use a select ... in a multi-query prepare"), so CompoundStatement can't be
-    // used; Informix stays on the base CorrelationToken plan until GEN-001 adds a same-connection
-    // primitive (see the comment in InformixDialect).
+    // used; GEN-001: SessionScopedFunction, with the gateway pinning one connection for the INSERT
+    // and the DBINFO query (see the comment in InformixDialect).
     [Fact]
-    public void GeneratedKeyPlan_IsNotCompoundStatement()
+    public void GeneratedKeyPlan_IsSessionScopedFunction_NotCompoundStatement()
     {
-        Assert.Equal(GeneratedKeyPlan.CorrelationToken, CreateDialect().GetGeneratedKeyPlan());
+        Assert.Equal(GeneratedKeyPlan.SessionScopedFunction, CreateDialect().GetGeneratedKeyPlan());
     }
 
     [Fact]

@@ -270,7 +270,8 @@ public class fakeDbCommand : DbCommand
                 var versionResult = GetVersionQueryResult(CommandText, conn.EmulatedProduct);
                 if (versionResult != null)
                 {
-                    return versionResult;
+                    // An explicitly set version answers the product's version query too.
+                    return conn.HasExplicitServerVersion ? conn.ServerVersion : versionResult;
                 }
             }
 
@@ -344,6 +345,11 @@ public class fakeDbCommand : DbCommand
             // it). Confirmed live against Spanner Omni + PGAdapter: it returns an empty string.
             SupportedDatabase.Spanner when normalizedCommand == "SHOW SPANNER.OPTIMIZER_VERSION"
                 => string.Empty,
+
+            // SingleStore is detected by this system variable (standard MySQL/MariaDB/TiDB reject it
+            // as unknown); a SingleStore emulation answers it so detection resolves SingleStore.
+            SupportedDatabase.SingleStore when normalizedCommand == "SELECT @@MEMSQL_VERSION"
+                => "8.9.3",
 
             _ => null
         };

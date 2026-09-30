@@ -63,6 +63,13 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public Exception? ThrowOnCreateConnection { get; set; }
 
     /// <summary>
+    /// Server version every connection this factory creates reports, through
+    /// <see cref="DbConnection.ServerVersion"/> and the product's version query (for example
+    /// <c>SELECT VERSION()</c>). Null keeps fakeDb's canned per-product version.
+    /// </summary>
+    public string? ServerVersion { get; set; }
+
+    /// <summary>
     /// When true, <see cref="CreateConnection"/> returns null instead of a connection —
     /// DbProviderFactory.CreateConnection is documented nullable, and some callers (e.g. a
     /// best-effort pool-reset hook probing for a sample connection) must tolerate a provider that
@@ -235,6 +242,11 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             pre.ThrowOnStateChangeAccessAfterDispose |= ThrowOnStateChangeAccessAfterDispose;
             pre.CommandFactory ??= CommandFactory;
             pre.SetFactoryReference(this);
+            if (ServerVersion != null)
+            {
+                pre.SetServerVersion(ServerVersion);
+            }
+
             _createdConnections.Add(pre);
             return pre;
         }
@@ -292,6 +304,11 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         c.CommandFactory = CommandFactory;
 
         c.SetFactoryReference(this);
+        if (ServerVersion != null)
+        {
+            c.SetServerVersion(ServerVersion);
+        }
+
         _createdConnections.Add(c);
         return c;
     }
@@ -333,6 +350,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public void EnqueueReaderResult(IEnumerable<Dictionary<string, object>> rows)
     {
         var conn = (fakeDbConnection)CreateConnection();
+        // Staged, not handed out: it is recorded when a caller's CreateConnection takes it.
+        _createdConnections.Remove(conn);
         conn.EnqueueReaderResult(rows.Select(static row =>
             row.ToDictionary(static pair => pair.Key, static pair => (object?)pair.Value)));
         _connections.Insert(0, conn);

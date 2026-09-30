@@ -55,14 +55,23 @@ public sealed class SpannerOmniTestContainer : TestContainer
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
-        if (_connectionString is null) throw new InvalidOperationException("Container not started yet.");
+        if (_connectionString is null)
+        {
+            throw new InvalidOperationException("Container not started yet.");
+        }
         return Task.FromResult<IDatabaseContext>(new DatabaseContext(_connectionString, NpgsqlFactory.Instance, new TypeMapRegistry()));
     }
 
     protected override async ValueTask DisposeAsyncCore()
     {
-        if (_adapter is not null) await _adapter.DisposeAsync();
-        if (_omni is not null) await _omni.DisposeAsync();
+        if (_adapter is not null)
+        {
+            await _adapter.DisposeAsync();
+        }
+        if (_omni is not null)
+        {
+            await _omni.DisposeAsync();
+        }
         await _network.DeleteAsync();
     }
 }

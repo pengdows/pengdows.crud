@@ -9,9 +9,9 @@
 // - Isolation levels/profiles live in IsolationResolver on this branch (FlatFile case):
 //   ReadUncommitted/ReadCommitted/RepeatableRead only; Serializable/Snapshot and
 //   StrictConsistency throw (FlatFileTransaction.ValidateIsolationLevel rejects them).
-// - Generated keys: no IDENTITY, no RETURNING, no session last-id function. A column can
-//   DEFAULT NEXT VALUE FOR a sequence, but crud cannot read the value back, so
-//   GetGeneratedKeyPlan's CorrelationToken fallback is correct.
+// - Generated keys: no IDENTITY, no RETURNING, no session last-id function, but ISO sequences: a
+//   key column DEFAULTs NEXT VALUE FOR a sequence, so the id is prefetched (VALUES (NEXT VALUE FOR
+//   "<table>_seq")) and sent in the INSERT, the PrefetchSequence plan (GEN-001).
 // - Session settings: none. The provider has no session state to normalize; identifiers
 //   are ANSI double-quoted natively.
 // - Guids: GuidFormat stays PassThrough; ClrTypeMap/ClrTypeParser handle System.Guid and
@@ -90,6 +90,19 @@ internal class FlatFileDialect : SqlDialect
     // DateTime ("contains parts which are not specific to the DateOnly") or a TimeSpan ("Object must
     // be of type TimeOnly"); confirmed live (TYPE-001).
     internal override bool BindsDateOnlyAndTimeOnlyNatively => true;
+
+    // GEN-001: no IDENTITY/RETURNING/last-id function, but ISO sequences. Confirmed against
+    // pengdows.flatfile 0.2.1-preview.2: VALUES (NEXT VALUE FOR "seq") returns the next value and an
+    // explicit id in the INSERT overrides the column's DEFAULT NEXT VALUE FOR.
+    // CONFIRMED live 2026-09-29 (pengdows.flatfile 0.2.1-preview.2): a TimeSpan of -01:00:00 was
+    // accepted into a TIME column and then failed to read back ("not recognized as a valid
+    // TimeOnly"). TIME holds a time of day, so SqlDialect rejects such a value before binding.
+    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
+
+    public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.PrefetchSequence;
+
+    public override string GetSequenceNextValQuery(string sequenceName) =>
+        $"VALUES (NEXT VALUE FOR {WrapObjectName(sequenceName)})";
 
     // The same validation rejects a DateTime for a DATE column and a TimeSpan for a TIME column, so a
     // value declared DbType.Date/Time binds as the DateOnly/TimeOnly the driver requires.

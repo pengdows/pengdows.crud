@@ -31,15 +31,10 @@
 // - Batch insert: CONFIRMED live that the ANSI multi-row VALUES clause is rejected — same
 //   limitation as Firebird/InterBase/Informix/Access/Sybase ASE. Falls back to one INSERT per entity.
 // - Generated keys: IDENTITY column plus "SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY"
-//   immediately after INSERT on the same connection, CONFIRMED live. Deliberately NOT wired up
-//   as GeneratedKeyPlan.SessionScopedFunction (a session-scoped last-insert-id query is not
-//   guaranteed to land on the same pooled physical connection that ran the INSERT — the exact
-//   two-lease hazard CompoundStatement/ReaderInsertedId/Returning exist to avoid).
-//   CompoundStatement was also CONFIRMED REJECTED live (HANA does not support multiple
-//   semicolon-separated statements in a single command). With SupportsInsertReturning left at
-//   its default false and HasSessionScopedLastIdFunction left at its default false, the base
-//   GetGeneratedKeyPlan() already resolves to the safe universal fallback,
-//   GeneratedKeyPlan.CorrelationToken — no override needed here.
+//   immediately after INSERT on the same connection, CONFIRMED live. CompoundStatement was
+//   CONFIRMED REJECTED live (HANA does not support multiple semicolon-separated statements in a
+//   single command), so this is GeneratedKeyPlan.SessionScopedFunction: the gateway pins one
+//   connection for the INSERT and the id query (GEN-001).
 // - Procedures: CALL proc(args) via SQLSCRIPT, CONFIRMED live including an OUT parameter.
 // - Savepoints: SAVEPOINT / ROLLBACK TO SAVEPOINT / RELEASE SAVEPOINT all CONFIRMED live inside
 //   a real transaction (unlike Oracle, which has no RELEASE SAVEPOINT at all).
@@ -106,6 +101,11 @@ internal sealed class HanaDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.SapHana;
+
+    // GEN-001: the INSERT and CURRENT_IDENTITY_VALUE() run on one connection the gateway pins.
+    public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.SessionScopedFunction;
+
+    public override string GetLastInsertedIdQuery() => "SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY";
 
     // Positional-only parameter markers; confirmed live via DataSourceInformation
     // (ParameterMarkerFormat == "?") and a real positional INSERT.

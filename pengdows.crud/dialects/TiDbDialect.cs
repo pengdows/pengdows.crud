@@ -57,6 +57,13 @@ internal class TiDbDialect : MySqlDialect
     // "O'Brien" -> syntax error). TiDB omits the mode for every driver, as 3.0 does.
     protected override bool OmitNoBackslashEscapes => true;
 
+    // TiDB rejects sql_mode TIME_TRUNCATE_FRACTIONAL ("ERROR 1231: Variable 'sql_mode' can't be set
+    // to the value of 'TIME_TRUNCATE_FRACTIONAL'", confirmed live on v7.5.1) and rounds fractional
+    // seconds: 23:59:59.9999999 stores in TIME as 24:00:00 and in DATETIME as the next day.
+    protected override bool SupportsTimeTruncateFractional => false;
+
+    internal override bool RoundsFractionalSecondsOnWrite => true;
+
     public override string GetBaseSessionSettings()
     {
         return string.Concat(base.GetBaseSessionSettings(), "\nSET tidb_pessimistic_txn_default = ON;");

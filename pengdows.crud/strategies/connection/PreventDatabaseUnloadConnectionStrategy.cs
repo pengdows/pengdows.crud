@@ -60,17 +60,17 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     private readonly object _sentinelRepairLock = new();
     private readonly SemaphoreSlim _sentinelRepairAsyncLock = new(1, 1);
 
-    // Test-only hook: fires synchronously right after the post-open disposed-context re-check
-    // inside sentinel repair, before the replacement is installed. Lets a test deterministically
-    // reproduce "Dispose() happens exactly in this window" — mirrors TrackedConnection.OpenTimingHook.
-    internal static Action? PostDisposedCheckHook;
+    // Test-only hook, per instance: fires synchronously right after the post-open disposed-context
+    // re-check inside sentinel repair, before the replacement is installed. Lets a test
+    // deterministically reproduce "Dispose() happens exactly in this window".
+    internal Action? PostDisposedCheckHook { get; set; }
 
     internal PreventDatabaseUnloadConnectionStrategy(DatabaseContext context) : base(context)
     {
     }
 
     // Parameterless ctor for tests that pass context per call
-    public PreventDatabaseUnloadConnectionStrategy() : base(null!)
+    internal PreventDatabaseUnloadConnectionStrategy() : base(null!)
     {
     }
 
@@ -296,22 +296,13 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
         return connection.State != ConnectionState.Broken && connection.State != ConnectionState.Closed;
     }
 
-    private static void DisposeQuietly(ITrackedConnection connection)
+    // Already broken: best-effort cleanup (disposal releases its pool permit), logged on failure.
+    private void DisposeQuietly(ITrackedConnection connection)
     {
-        try
-        {
-            connection.Dispose();
-        }
-        catch
-        {
-            // Already broken — best-effort cleanup; disposal releases its pool permit.
-        }
+        _context.DisposeBestEffort(connection, "broken PreventDatabaseUnload sentinel");
     }
 
-    private bool IsSentinel(ITrackedConnection connection)
-    {
-        return _context.GetSentinelSnapshot().Any(s => ReferenceEquals(s.Connection, connection));
-    }
+    private bool IsSentinel(ITrackedConnection connection) => _context.IsSentinel(connection);
 
     public override void ReleaseConnection(ITrackedConnection? connection)
     {
@@ -366,8 +357,10 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
 
             return (null, null);
         }
-        catch
+        catch (Exception ex)
         {
+            // Detection falls back to the caller's defaults, but the failure is not silent.
+            _context.Logger.LogWarning(ex, "Database detection through the PreventDatabaseUnload connection failed.");
             return (null, null);
         }
         finally
@@ -389,25 +382,5 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
     {
         _sentinelRepairAsyncLock.Dispose();
         return base.DisposeManagedAsync();
-    }
-}
-
-internal static class PreventDatabaseUnloadConnectionStrategyTestExtensions
-{
-    // Convenience async helpers expected by tests
-    internal static Task<ITrackedConnection> GetConnectionAsync(this PreventDatabaseUnloadConnectionStrategy _,
-        DatabaseContext context, ExecutionType executionType, bool isShared)
-    {
-        var strat = new PreventDatabaseUnloadConnectionStrategy(context);
-        var conn = strat.GetConnection(executionType, isShared);
-        strat.PostInitialize(conn);
-        return Task.FromResult(conn);
-    }
-
-    internal static Task CloseConnectionAsync(this PreventDatabaseUnloadConnectionStrategy _, ITrackedConnection? connection,
-        DatabaseContext context)
-    {
-        var strat = new PreventDatabaseUnloadConnectionStrategy(context);
-        return strat.ReleaseConnectionAsync(connection).AsTask();
     }
 }

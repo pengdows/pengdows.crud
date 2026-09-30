@@ -322,9 +322,24 @@ internal sealed class InformixDialect : SqlDialect
     // - CompoundStatement is REJECTED through Informix.Net.Core: "Cannot use a select or any of the
     //   database statements in a multi-query prepare."
     // - Informix.Net.Core exposes no serial value on IfxCommand (checked by decompiling 4.1501.2).
-    // So the id needs the INSERT and that SELECT on one leased connection, which pengdows has no
-    // primitive for outside a transaction (the same gap as SAP HANA, see HanaDialect). Until then
-    // this stays on the base CorrelationToken plan.
+    // So the id needs the INSERT and that SELECT on one connection: GeneratedKeyPlan.SessionScopedFunction,
+    // for which the gateway pins one connection for both statements (GEN-001).
+    // CONFIRMED live 2026-09-29: the driver wraps a TimeSpan outside a day instead of rejecting it
+    // (1.00:00:00 was stored in DATETIME HOUR TO SECOND as 00:00:00), so SqlDialect rejects one before binding.
+    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
+
+    public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.SessionScopedFunction;
+
+    public override string GetLastInsertedIdQuery() =>
+        "SELECT CASE WHEN DBINFO('bigserial') <> 0 THEN DBINFO('bigserial') " +
+        "WHEN DBINFO('serial8') <> 0 THEN DBINFO('serial8') ELSE DBINFO('sqlca.sqlerrd1') END " +
+        "FROM systables WHERE tabid = 1";
+
+    // CONFIRMED live (2026-09-29, Informix 15 developer image, Informix.Net.Core 4.1501.2):
+    // IfxDataReader.GetInt64 throws InvalidCastException for a BIGSERIAL column although
+    // GetFieldType reports Int64 and GetValue returns an Int64; SERIAL8, INT8 and BIGINT read fine.
+    // Tracked readers therefore read Int64 through GetValue.
+    internal override bool ReadsInt64ThroughGetValue => true;
 
     // CONFIRMED live (Informix 15 developer image, Informix.Net.Core, DB_LOCALE and CLIENT_LOCALE
     // en_US.utf8): CJK and other BMP text round-trips; any supplementary-plane character (an emoji)

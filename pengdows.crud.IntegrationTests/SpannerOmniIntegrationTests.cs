@@ -111,9 +111,18 @@ public sealed class SpannerOmniIntegrationTests : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
-        if (_adapter is not null) await _adapter.DisposeAsync();
-        if (_omni is not null) await _omni.DisposeAsync();
-        if (_network is not null) await _network.DeleteAsync();
+        if (_adapter is not null)
+        {
+            await _adapter.DisposeAsync();
+        }
+        if (_omni is not null)
+        {
+            await _omni.DisposeAsync();
+        }
+        if (_network is not null)
+        {
+            await _network.DeleteAsync();
+        }
     }
 
     [Fact]

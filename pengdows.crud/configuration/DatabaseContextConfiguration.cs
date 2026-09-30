@@ -152,7 +152,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
             {
                 throw new ArgumentOutOfRangeException(nameof(value),
                     $"MaxQueuedWrites must be >= 0 (got {value}). " +
-                    "Use 0 to disable queueing entirely; use null for the governor's built-in default.");
+                    "Use 0 to disable queueing entirely; use null for no cap (wait up to PoolAcquireTimeout).");
             }
 
             _maxQueuedWrites = value;
@@ -169,7 +169,7 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
             {
                 throw new ArgumentOutOfRangeException(nameof(value),
                     $"MaxQueuedReads must be >= 0 (got {value}). " +
-                    "Use 0 to disable queueing entirely; use null for the governor's built-in default.");
+                    "Use 0 to disable queueing entirely; use null for no cap (wait up to PoolAcquireTimeout).");
             }
 
             _maxQueuedReads = value;

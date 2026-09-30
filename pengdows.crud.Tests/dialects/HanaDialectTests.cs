@@ -132,19 +132,14 @@ public class HanaDialectTests
         Assert.Equal(ProcWrappingStyle.Call, CreateDialect().ProcWrappingStyle);
     }
 
-    // "SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY" was confirmed live to work immediately after
-    // INSERT on a single manually-held connection, but is deliberately NOT wired up as
-    // GeneratedKeyPlan.SessionScopedFunction — see HanaDialect's comment above
-    // SupportsIdentityColumns for the two-lease pooled-connection hazard
-    // (GeneratedKeyPlanReachabilityTests.cs) this would reintroduce, and why CompoundStatement
-    // (confirmed rejected live — HANA has no multi-statement command support) isn't a safe
-    // alternative either. Leaving SupportsInsertReturning/HasSessionScopedLastIdFunction at their
-    // base-class defaults (both false) means GetGeneratedKeyPlan() already resolves to the safe
-    // universal fallback.
+    // GEN-001: CURRENT_IDENTITY_VALUE() is session-scoped and HANA rejects multi-statement commands
+    // (confirmed live), so the plan is SessionScopedFunction and the gateway pins one connection for
+    // the INSERT and the id query (GeneratedKeySameConnectionTests).
     [Fact]
-    public void GetGeneratedKeyPlan_IsCorrelationToken()
+    public void GetGeneratedKeyPlan_IsSessionScopedFunction()
     {
-        Assert.Equal(GeneratedKeyPlan.CorrelationToken, CreateDialect().GetGeneratedKeyPlan());
+        Assert.Equal(GeneratedKeyPlan.SessionScopedFunction, CreateDialect().GetGeneratedKeyPlan());
+        Assert.Equal("SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY", CreateDialect().GetLastInsertedIdQuery());
     }
 
     [Fact]

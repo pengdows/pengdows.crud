@@ -392,6 +392,8 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         _serverVersion = version;
     }
 
+    internal bool HasExplicitServerVersion => !string.IsNullOrEmpty(_serverVersion) && _serverVersion != "1.0";
+
     public void SetMaxParameterLimit(int limit)
     {
         _maxParameterLimit = limit;
@@ -996,7 +998,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override async ValueTask DisposeAsync()
     {
-        DisposeCount++;
+        // Not counted here: base.DisposeAsync() below runs Dispose(true), which counts the disposal.
         try
         {
             await CloseAsync();
