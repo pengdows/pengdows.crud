@@ -400,6 +400,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool TimeColumnHoldsOnlyATimeOfDay => false;
 
+    /// <summary>
+    /// True when the database has no way to return a database-generated id other than a
+    /// <c>[CorrelationToken]</c> column (no RETURNING, sequence prefetch or last-id function), so
+    /// <c>CreateAsync</c> refuses such an entity without one instead of leaving its id unset
+    /// (DEC-007). False for the generic dialect, which keeps the old behavior.
+    /// </summary>
+    internal virtual bool RequiresCorrelationTokenForGeneratedIds => false;
+
     public virtual string ParameterMarker => "?";
 
     public virtual string ParameterMarkerAt(int ordinal)

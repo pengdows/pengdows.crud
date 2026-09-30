@@ -196,6 +196,10 @@ internal class SnowflakeDialect : SqlDialect
     // Use client-generated IDs ([Id(true)] with UUID/Snowflake IDs) for reliable key capture.
     public override bool SupportsInsertReturning => false;
 
+    // No RETURNING, no sequence the gateway prefetches, no last-id function: a [CorrelationToken]
+    // column is the only way to read a database-generated id back (DEC-007).
+    internal override bool RequiresCorrelationTokenForGeneratedIds => true;
+
     public override bool SupportsSavepoints => false;
 
     public override bool SupportsDropTableIfExists => true;

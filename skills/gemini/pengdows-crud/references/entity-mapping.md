@@ -283,7 +283,7 @@ public Dictionary<string, object>? Metadata { get; set; }
 
 ### CorrelationTokenAttribute
 
-Marks a property used as a unique correlation token for generated-ID retrieval fallback. Needed only where the dialect's plan is `CorrelationToken` (Snowflake): no `RETURNING`/`OUTPUT`, sequence prefetch or session last-id function. Without it such a dialect leaves a database-generated id unset. See `docs/generated-keys.md`.
+Marks a property used as a unique correlation token for generated-ID retrieval fallback. Needed only where the dialect's plan is `CorrelationToken` (Snowflake): no `RETURNING`/`OUTPUT`, sequence prefetch or session last-id function. Without it `CreateAsync` throws `NotSupportedException` there before writing (DEC-007). See `docs/generated-keys.md`.
 
 ```csharp
 [CorrelationToken]

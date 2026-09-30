@@ -109,6 +109,15 @@ public class InsertReturningTests : DatabaseTestBase
                 Name = uniqueName
             };
 
+            // A dialect whose only generated-id mechanism is a [CorrelationToken] column refuses an
+            // entity without one before writing (DEC-007); covered in detail by the Snowflake test.
+            if (((pengdows.crud.dialects.SqlDialect)context.Dialect).RequiresCorrelationTokenForGeneratedIds)
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.CreateAsync(entity, context));
+                await VerifyRowCountAsync(context, uniqueName, 0);
+                return;
+            }
+
             var created = await helper.CreateAsync(entity, context);
 
             // INSERT should succeed
@@ -263,7 +272,10 @@ CREATE TABLE {table} (
         };
     }
 
-    private static async Task VerifyRowExistsAsync(IDatabaseContext context, string name)
+    private static Task VerifyRowExistsAsync(IDatabaseContext context, string name) =>
+        VerifyRowCountAsync(context, name, 1);
+
+    private static async Task VerifyRowCountAsync(IDatabaseContext context, string name, int expected)
     {
         var table = context.WrapObjectName(TableName);
         var nameColumn = context.Product == SupportedDatabase.Firebird
@@ -280,7 +292,7 @@ WHERE {nameColumn} = ");
         container.AddParameterWithValue("p0", DbType.String, name);
 
         var count = Convert.ToInt32(await container.ExecuteScalarOrNullAsync<int>());
-        Assert.Equal(1, count);
+        Assert.Equal(expected, count);
     }
 
     private static async Task DropTableIfExistsAsync(IDatabaseContext context)
@@ -325,35 +337,22 @@ WHERE {nameColumn} = ");
     /// ID population uses LAST_INSERT_ID() on a best-effort basis (connection-scoped).
     /// </summary>
     [SkippableFact]
-    public async Task Snowflake_AutoIncrement_Insert_RowsExistAfterCreate()
+    public async Task Snowflake_AutoIncrement_WithoutCorrelationToken_RefusesBeforeWriting()
     {
+        // DEC-007: Snowflake has no RETURNING, sequence prefetch or last-id function, so without a
+        // [CorrelationToken] column the id could never be read back. CreateAsync refuses with a
+        // NotSupportedException naming the fix, and nothing is written.
         await RunTestAgainstProvidersAsync(new[] { SupportedDatabase.Snowflake }, async (provider, context) =>
         {
-
             ((TypeMapRegistry)context.GetInternalTypeMapRegistry()).Register<ReturningEntity>();
             var helper = new TableGateway<ReturningEntity, long>(context);
+            var entity = new ReturningEntity { Name = $"sf-autoincrement-{Guid.NewGuid():N}" };
 
-            var entities = Enumerable.Range(0, 3)
-                .Select(i => new ReturningEntity { Name = $"sf-autoincrement-{i}-{Guid.NewGuid():N}" })
-                .ToList();
+            var ex = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+                await helper.CreateAsync(entity, context));
 
-            foreach (var entity in entities)
-            {
-                var created = await helper.CreateAsync(entity, context);
-                Assert.True(created, "CreateAsync should succeed for Snowflake AUTOINCREMENT table");
-            }
-
-            // Verify every row landed in the database (by name — ID population is best-effort)
-            foreach (var entity in entities)
-            {
-                await VerifyRowExistsAsync(context, entity.Name);
-            }
-
-            var ids = entities.Select(e => e.Id).ToList();
-            Output.WriteLine(
-                $"Snowflake AUTOINCREMENT IDs (LAST_INSERT_ID best-effort): [{string.Join(", ", ids)}]");
-            Output.WriteLine("Note: Snowflake has no INSERT...RETURNING; IDs require LAST_INSERT_ID() " +
-                             "which is connection-scoped. Use client-generated IDs for reliable key capture.");
+            Assert.Contains("[CorrelationToken]", ex.Message, StringComparison.Ordinal);
+            await VerifyRowCountAsync(context, entity.Name, 0);
         });
     }
 

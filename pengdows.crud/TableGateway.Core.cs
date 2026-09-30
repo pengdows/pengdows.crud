@@ -230,6 +230,15 @@ public partial class TableGateway<TEntity, TRowID> :
             return true;
         }
 
+        // DEC-007: the correlation token is this dialect's only way to read a generated id back.
+        // Without one the INSERT would succeed and leave the id unset, so refuse before writing.
+        if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn == null &&
+            _idColumn != null && !_idColumn.IsIdWritable &&
+            dialect is SqlDialect { RequiresCorrelationTokenForGeneratedIds: true })
+        {
+            throw MissingCorrelationTokenException(dialect);
+        }
+
         // 3. Handle CORRELATION TOKEN plan
         if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn != null && _idColumn != null)
         {
@@ -440,6 +449,15 @@ public partial class TableGateway<TEntity, TRowID> :
             return true;
         }
 
+        // DEC-007: the correlation token is this dialect's only way to read a generated id back.
+        // Without one the INSERT would succeed and leave the id unset, so refuse before writing.
+        if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn == null &&
+            _idColumn != null && !_idColumn.IsIdWritable &&
+            dialect is SqlDialect { RequiresCorrelationTokenForGeneratedIds: true })
+        {
+            throw MissingCorrelationTokenException(dialect);
+        }
+
         // 3. Handle CORRELATION TOKEN plan
         if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn != null && _idColumn != null)
         {
@@ -619,6 +637,11 @@ public partial class TableGateway<TEntity, TRowID> :
         return await PinnedConnectionLease.AcquireAsync(ctx, ExecutionType.Write, cancellationToken)
             .ConfigureAwait(false);
     }
+
+    private NotSupportedException MissingCorrelationTokenException(ISqlDialect dialect) =>
+        new($"{typeof(TEntity).Name}: {dialect.DatabaseType} can't return a database-generated [Id(false)] " +
+            "value. Add a [CorrelationToken] column (a unique string or Guid the gateway sets and reads " +
+            "the new row back by), or make the id client-provided ([Id] with a value you assign).");
 
     private static void PinTo(ISqlContainer container, PinnedConnectionLease? lease)
     {
