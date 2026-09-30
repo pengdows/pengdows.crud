@@ -768,6 +768,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // Firebird and InterBase override this to true — see FirebirdDialect for the full rationale.
     internal virtual bool RequiresExplicitRollbackAfterFailedWrite => false;
 
+    // Internal, not part of ISqlDialect: true when this dialect can insert a whole batch through
+    // one parameterized, single-row-shaped statement by binding each column to an array of
+    // per-row values (e.g. Oracle's OracleCommand.ArrayBindCount), instead of a multi-row VALUES
+    // list or a container per entity. TableGateway.BuildBatchCreate checks this before
+    // SupportsBatchInsert. An internal execution-strategy choice with no effect on the
+    // caller-visible contract. False for every dialect except Oracle (BP-309).
+    internal virtual bool SupportsArrayBinding => false;
+
+    // Internal, not part of ISqlDialect: called by SqlContainer right after parameters are bound,
+    // before a command built for array binding executes. No-op for every dialect except Oracle —
+    // see OracleDialect for the ArrayBindCount reflection hook (no hard package reference to
+    // Oracle.ManagedDataAccess.Core). Only invoked when SupportsArrayBinding is true.
+    internal virtual void ConfigureArrayBinding(DbCommand cmd, int rowCount)
+    {
+    }
+
     // Internal, not part of ISqlDialect: true when this dialect needs ResetConnectionPoolForDdl
     // called before executing DDL. SqlContainer checks this cheap property first, before doing
     // any string work (Query.ToString() + leading-keyword scan) to detect a DDL statement — false
