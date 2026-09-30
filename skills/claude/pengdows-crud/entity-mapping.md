@@ -120,3 +120,6 @@ public DateTime UpdatedAt { get; set; }
 Explicitly marks a column for JSON serialization/deserialization.
 - Automatically detected for `System.Text.Json` CLR types (`JsonDocument`, `JsonElement`, `JsonNode`, `JsonValue`).
 - Works across all supported database engines.
+
+### `[CorrelationToken]`
+Marks a property used as a unique correlation token for generated-ID retrieval fallback. Needed only where the dialect's plan is `CorrelationToken` (Snowflake): no `RETURNING`/`OUTPUT`, sequence prefetch or session last-id function. Without it `CreateAsync` throws `NotSupportedException` there before writing (DEC-007). See `docs/generated-keys.md`.
