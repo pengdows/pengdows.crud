@@ -1,6 +1,7 @@
 using IBM.Data.Db2;
 using pengdows.crud;
 using pengdows.crud.enums;
+using pengdows.crud.IntegrationTests.Infrastructure;
 using testbed.Db2;
 using Xunit;
 
@@ -20,9 +21,18 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 [Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public class Db2SessionSettingsTests
 {
-    [Fact]
+    // These tests start their own Db2 container, outside IntegrationTestFixture, so they must apply
+    // the run's configuration themselves: skipped when INTEGRATION_ONLY excludes Db2 (they used to run
+    // anyway, and a host that can't load IBM's native client crashed the whole test run). When Db2 is
+    // enabled they run and fail normally if it's unavailable (HARN-006).
+    private static void SkipUnlessDb2IsEnabled() =>
+        Skip.IfNot(IntegrationTestConfiguration.EnabledProviders.Contains(SupportedDatabase.Db2),
+            "Db2 is not enabled for this run (INTEGRATION_ONLY).");
+
+    [SkippableFact]
     public async Task Connection_AppliesBaseSessionSettings_WithoutError()
     {
+        SkipUnlessDb2IsEnabled();
         await using var container = new Db2TestContainer();
         await container.StartAsync();
 
@@ -46,9 +56,10 @@ public class Db2SessionSettingsTests
     /// confirms both registers are back to baseline — proving pengdows prevents session-state
     /// leakage through the Db2 connection pool, not just that initialization doesn't throw.
     /// </summary>
-    [Fact]
+    [SkippableFact]
     public async Task PooledConnectionReuse_CleansContaminatedIsolationAndTemporalRegisters()
     {
+        SkipUnlessDb2IsEnabled();
         await using var container = new Db2TestContainer();
         await container.StartAsync();
 

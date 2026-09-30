@@ -26,7 +26,11 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
     {
         var orchestrator = _orchestrator ?? throw new InvalidOperationException("Test host not initialized");
 
-        var only = ParseList(Environment.GetEnvironmentVariable("TESTBED_ONLY"));
+        // INTEGRATION_ONLY applies here too (as on 3.0): without it this test started every
+        // provider, including an excluded Db2 whose native client can't load on some hosts, which
+        // crashed the whole test run.
+        var only = ParseList(Environment.GetEnvironmentVariable("TESTBED_ONLY") ??
+            Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
         var exclude = ParseList(Environment.GetEnvironmentVariable("TESTBED_EXCLUDE"));
 
         // Informix's native driver (libthcli15a.so) requires LD_LIBRARY_PATH to be set BEFORE the
