@@ -7,20 +7,45 @@
 //   the initial connect (Phase "InitConnect") or read-only connection validation
 //   (Phase "ReadOnlyValidation").
 // - Use cases: network issues, invalid credentials, server unavailable.
-// - Extends Exception directly; message and message+inner-exception constructors.
+// - A ConnectionException (DEC-001, 2026-09-30): catch (ConnectionException) / catch
+//   (DatabaseException) see a failure at construction exactly like the same failure at runtime.
+//   Before, it derived from Exception directly. Constructors, Phase and Role are unchanged.
+// - Carries the underlying failure's Database, SqlState, ErrorCode and IsTransient: from a
+//   translated inner DatabaseException, or SqlState/IsTransient from a provider DbException.
+//   Database is Unknown until detection, which runs after the first connect.
 // - Wraps the underlying provider exception as InnerException.
 // =============================================================================
 
+using System.Data.Common;
+using pengdows.crud.enums;
+
 namespace pengdows.crud.exceptions;
 
-public class ConnectionFailedException : Exception
+public class ConnectionFailedException : ConnectionException
 {
-    public ConnectionFailedException(string message) : base(message)
+    public ConnectionFailedException(string message)
+        : base(message, SupportedDatabase.Unknown)
     {
     }
 
     public ConnectionFailedException(string message, Exception innerException)
-        : base(message, innerException)
+        : base(message,
+            (innerException as DatabaseException)?.Database ?? SupportedDatabase.Unknown,
+            innerException,
+            innerException switch
+            {
+                DatabaseException db => db.SqlState,
+                DbException provider => provider.SqlState,
+                _ => null
+            },
+            (innerException as DatabaseException)?.ErrorCode,
+            constraintName: null,
+            innerException switch
+            {
+                DatabaseException db => db.IsTransient,
+                DbException provider => provider.IsTransient,
+                _ => null
+            })
     {
     }
 

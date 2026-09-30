@@ -196,7 +196,7 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `PoolSaturatedException : TimeoutException` — no governor slot became available within `PoolAcquireTimeout` (includes SingleWriter write-slot waits)
 - `PoolForbiddenException : InvalidOperationException` — connection requested from a pool configured to reject all requests (e.g. the write pool of a `ReadOnly` context)
 - `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
-- `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
+- `ConnectionFailedException : ConnectionException` — startup connection failure (carries `Phase` and `Role`, plus the underlying SQLSTATE/error code/`IsTransient`); since 2.0.6 `catch (ConnectionException)` and `catch (DatabaseException)` see it too
 
 ```csharp
 using pengdows.crud.exceptions;

@@ -465,6 +465,7 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 │   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure (provider translators)
+│   │   ├── ConnectionFailedException       — DatabaseContext construction could not connect (Phase/Role)
 │   │   ├── FileLockContentionException     — embedded-file lock contention (IsTransient = false)
 │   │   └── TooManyConnectionsException     — server reached but at its connection limit (IsTransient = true)
 │   └── TransactionException               — begin/commit/rollback failure
