@@ -508,6 +508,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool BindsSByteAndUnsignedNatively => true;
 
+    /// <summary>
+    /// False when the provider rejects <see cref="DbType.Object"/> as a parameter type
+    /// (Informix.Net.Core: "No mapping exists from DbType Object to a known IfxType"); such a
+    /// parameter's DbType is left unset so the provider infers it from the value (TYPE-004).
+    /// </summary>
+    internal virtual bool AssignsObjectDbType => true;
+
     private static bool TryWidenUnsignedParameter<T>(DbType type, T value, out DbType wideType, out object? wideValue)
     {
         wideType = type switch
@@ -1696,7 +1703,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         if (!handled)
         {
-            parameter.DbType = RemapDbType(type);
+            if (type != DbType.Object || AssignsObjectDbType)
+            {
+                parameter.DbType = RemapDbType(type);
+            }
+
             var preparedValue = PrepareParameterValue(value, type);
             parameter.Value = preparedValue ?? DBNull.Value;
         }

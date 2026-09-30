@@ -19,20 +19,34 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
         [SupportedDatabase.SqlServer, SupportedDatabase.PostgreSql, SupportedDatabase.MySql,
          SupportedDatabase.MariaDb, SupportedDatabase.Sqlite, SupportedDatabase.DuckDB,
          SupportedDatabase.Firebird, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb,
-         SupportedDatabase.TiDb, SupportedDatabase.Db2, SupportedDatabase.Oracle];
+         SupportedDatabase.TiDb, SupportedDatabase.Db2, SupportedDatabase.Oracle,
+         // TYPE-004: every database, not only the first twelve. SAP HANA, InterBase and Snowflake are
+         // opt-in (see IntegrationTestConfiguration) and run only when enabled.
+         SupportedDatabase.Spanner, SupportedDatabase.SybaseASE, SupportedDatabase.Informix,
+         SupportedDatabase.SingleStore, SupportedDatabase.FlatFile, SupportedDatabase.SapHana,
+         SupportedDatabase.InterBase, SupportedDatabase.Snowflake];
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
         var sql = provider switch
         {
             SupportedDatabase.SqlServer => "CREATE TABLE [dbo].[portable_advanced_types] ([id] INT NOT NULL PRIMARY KEY, [payload] NVARCHAR(MAX) NOT NULL, [bytes] VARBINARY(MAX) NOT NULL, [content] VARBINARY(MAX) NOT NULL, [notes] NVARCHAR(MAX) NOT NULL)",
-            SupportedDatabase.PostgreSql or SupportedDatabase.Spanner or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "CREATE TABLE portable_advanced_types (id INT PRIMARY KEY, payload JSONB NOT NULL, bytes BYTEA NOT NULL, content BYTEA NOT NULL, notes TEXT NOT NULL)",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload JSON NOT NULL, bytes LONGBLOB NOT NULL, content LONGBLOB NOT NULL, notes LONGTEXT NOT NULL)",
+            SupportedDatabase.Spanner => "CREATE TABLE portable_advanced_types (id BIGINT PRIMARY KEY, payload JSONB NOT NULL, bytes BYTEA NOT NULL, content BYTEA NOT NULL, notes TEXT NOT NULL)",
+            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "CREATE TABLE portable_advanced_types (id INT PRIMARY KEY, payload JSONB NOT NULL, bytes BYTEA NOT NULL, content BYTEA NOT NULL, notes TEXT NOT NULL)",
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.SingleStore => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload JSON NOT NULL, bytes LONGBLOB NOT NULL, content LONGBLOB NOT NULL, notes LONGTEXT NOT NULL)",
             SupportedDatabase.TiDb => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, bytes LONGBLOB NOT NULL, content LONGBLOB NOT NULL, notes LONGTEXT NOT NULL)",
             SupportedDatabase.DuckDB => "CREATE TABLE portable_advanced_types (id INTEGER PRIMARY KEY, payload JSON NOT NULL, bytes BLOB NOT NULL, content BLOB NOT NULL, notes VARCHAR NOT NULL)",
             SupportedDatabase.Firebird => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER PRIMARY KEY, \"payload\" BLOB SUB_TYPE TEXT NOT NULL, \"bytes\" BLOB SUB_TYPE BINARY NOT NULL, \"content\" BLOB SUB_TYPE BINARY NOT NULL, \"notes\" BLOB SUB_TYPE TEXT NOT NULL)",
             SupportedDatabase.Db2 => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER NOT NULL PRIMARY KEY, \"payload\" CLOB NOT NULL, \"bytes\" BLOB(1M) NOT NULL, \"content\" BLOB(1M) NOT NULL, \"notes\" CLOB NOT NULL)",
             SupportedDatabase.Oracle => "CREATE TABLE \"portable_advanced_types\" (\"id\" NUMBER(10) PRIMARY KEY, \"payload\" CLOB NOT NULL, \"bytes\" BLOB NOT NULL, \"content\" BLOB NOT NULL, \"notes\" CLOB NOT NULL)",
+            SupportedDatabase.SybaseASE => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload TEXT NOT NULL, bytes VARBINARY(255) NOT NULL, content VARBINARY(255) NOT NULL, notes TEXT NOT NULL)",
+            // BYTE, not BLOB: an Informix BLOB (smart large object) rejects a plain binary parameter
+            // and needs an sbspace the developer image lacks (see testbed TestProvider.GetBinaryType).
+            SupportedDatabase.Informix => "CREATE TABLE portable_advanced_types (id INTEGER NOT NULL PRIMARY KEY, payload LVARCHAR(4000) NOT NULL, bytes BYTE NOT NULL, content BYTE NOT NULL, notes LVARCHAR(4000) NOT NULL)",
+            SupportedDatabase.FlatFile => "CREATE TABLE portable_advanced_types (id INTEGER NOT NULL PRIMARY KEY, payload VARCHAR(4000) NOT NULL, bytes BLOB NOT NULL, content BLOB NOT NULL, notes VARCHAR(4000) NOT NULL)",
+            SupportedDatabase.SapHana => "CREATE COLUMN TABLE \"portable_advanced_types\" (\"id\" INTEGER PRIMARY KEY, \"payload\" NCLOB NOT NULL, \"bytes\" BLOB NOT NULL, \"content\" BLOB NOT NULL, \"notes\" NCLOB NOT NULL)",
+            SupportedDatabase.InterBase => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER NOT NULL PRIMARY KEY, \"payload\" BLOB SUB_TYPE TEXT NOT NULL, \"bytes\" BLOB SUB_TYPE BINARY NOT NULL, \"content\" BLOB SUB_TYPE BINARY NOT NULL, \"notes\" BLOB SUB_TYPE TEXT NOT NULL)",
+            SupportedDatabase.Snowflake => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER PRIMARY KEY, \"payload\" VARCHAR NOT NULL, \"bytes\" BINARY NOT NULL, \"content\" BINARY NOT NULL, \"notes\" VARCHAR NOT NULL)",
             _ => "CREATE TABLE portable_advanced_types (id INTEGER PRIMARY KEY, payload TEXT NOT NULL, bytes BLOB NOT NULL, content BLOB NOT NULL, notes TEXT NOT NULL)"
         };
         await using var table = context.CreateSqlContainer(sql);
@@ -64,11 +78,11 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
             var gateway = new TableGateway<PortableAdvancedTypeEntity, int>(context);
             await gateway.CreateAsync(expected, context);
 
-            var rawTable = provider is SupportedDatabase.Firebird or SupportedDatabase.Oracle or SupportedDatabase.Db2
+            var rawTable = provider is SupportedDatabase.Firebird or SupportedDatabase.Oracle or SupportedDatabase.Db2 or SupportedDatabase.SapHana or SupportedDatabase.InterBase or SupportedDatabase.Snowflake
                 ? "\"portable_advanced_types\""
                 : "portable_advanced_types";
-            var rawId = provider is SupportedDatabase.Firebird or SupportedDatabase.Oracle or SupportedDatabase.Db2 ? "\"id\"" : "id";
-            var rawPayload = provider is SupportedDatabase.Firebird or SupportedDatabase.Oracle or SupportedDatabase.Db2 ? "\"payload\"" : "payload";
+            var rawId = provider is SupportedDatabase.Firebird or SupportedDatabase.Oracle or SupportedDatabase.Db2 or SupportedDatabase.SapHana or SupportedDatabase.InterBase or SupportedDatabase.Snowflake ? "\"id\"" : "id";
+            var rawPayload = provider is SupportedDatabase.Firebird or SupportedDatabase.Oracle or SupportedDatabase.Db2 or SupportedDatabase.SapHana or SupportedDatabase.InterBase or SupportedDatabase.Snowflake ? "\"payload\"" : "payload";
             await using (var raw = context.CreateSqlContainer(
                              $"SELECT {rawPayload} FROM {rawTable} WHERE {rawId} = 1"))
             await using (var rawReader = await raw.ExecuteReaderAsync())

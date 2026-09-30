@@ -340,6 +340,37 @@ internal sealed class InformixDialect : SqlDialect
     // C# null (not DBNull), IsDBNull throws OverflowException and GetDecimal NullReferenceException.
     internal override bool ReportsOutOfRangeDecimalAsNull => true;
 
+    // TYPE-004, confirmed live 2026-09-30: IfxParameter rejects DbType.Object ("No mapping exists
+    // from DbType Object to a known IfxType"), so an entity column declared DbType.Object (a Stream
+    // or TextReader property) could not even build its INSERT. Leave the DbType unset and let the
+    // driver infer it from the value, which PrepareParameterValue materializes to byte[]/string.
+    internal override bool AssignsObjectDbType => false;
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (dbType == DbType.Object)
+        {
+            switch (value)
+            {
+                case Stream stream:
+                    if (stream.CanSeek)
+                    {
+                        stream.Seek(0, SeekOrigin.Begin);
+                    }
+
+                    using (var buffer = new MemoryStream())
+                    {
+                        stream.CopyTo(buffer);
+                        return buffer.ToArray();
+                    }
+                case TextReader reader:
+                    return reader.ReadToEnd();
+            }
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
+
     // CONFIRMED live (Informix 15 developer image, Informix.Net.Core, DB_LOCALE and CLIENT_LOCALE
     // en_US.utf8): CJK and other BMP text round-trips; any supplementary-plane character (an emoji)
     // fails with "An illegal character has been found in the statement".
