@@ -262,6 +262,16 @@ internal static class TypeCoercionHelper
     {
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
+        // TYPE-003: text into a char is exactly one character (a space included) or a failure; it
+        // never falls through to a null the caller would unbox.
+        if (underlyingTarget == typeof(char) && value is string charText)
+        {
+            return charText.Length == 1
+                ? charText[0]
+                : throw new FormatException(
+                    $"A char needs exactly one character; the stored text has {charText.Length}.");
+        }
+
         // Handle empty strings for non-string types
         if (value is string s && string.IsNullOrWhiteSpace(s) && underlyingTarget != typeof(string))
         {

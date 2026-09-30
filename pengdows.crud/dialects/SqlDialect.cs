@@ -430,6 +430,42 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual SupportedDatabase TypeMappingProvider => DatabaseType;
 
+    /// <summary>
+    /// False when the provider rejects <see cref="DbType.SByte"/>/<see cref="DbType.UInt16"/>/
+    /// <see cref="DbType.UInt32"/>/<see cref="DbType.UInt64"/> (Npgsql, SqlClient, ODP.NET,
+    /// Informix.Net.Core); such parameters then bind as the smallest signed type that holds the full
+    /// range: Int16, Int32, Int64 and Decimal (TYPE-003).
+    /// </summary>
+    internal virtual bool BindsSByteAndUnsignedNatively => true;
+
+    private static bool TryWidenUnsignedParameter<T>(DbType type, T value, out DbType wideType, out object? wideValue)
+    {
+        wideType = type switch
+        {
+            DbType.SByte => DbType.Int16,
+            DbType.UInt16 => DbType.Int32,
+            DbType.UInt32 => DbType.Int64,
+            DbType.UInt64 => DbType.Decimal,
+            _ => type
+        };
+        if (wideType == type)
+        {
+            wideValue = null;
+            return false;
+        }
+
+        wideValue = value is null || value is DBNull
+            ? null
+            : wideType switch
+            {
+                DbType.Int16 => Convert.ToInt16(value, CultureInfo.InvariantCulture),
+                DbType.Int32 => Convert.ToInt32(value, CultureInfo.InvariantCulture),
+                DbType.Int64 => Convert.ToInt64(value, CultureInfo.InvariantCulture),
+                _ => (object)Convert.ToDecimal(value, CultureInfo.InvariantCulture)
+            };
+        return true;
+    }
+
     public virtual string ParameterMarker => "?";
 
     public virtual string ParameterMarkerAt(int ordinal)
@@ -1488,6 +1524,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
             !(BindsDateOnlyAndTimeOnlyNatively && (type is DbType.Time or DbType.Object)))
         {
             return CreateDbParameter(name, type, timeOnly.ToTimeSpan());
+        }
+
+        // TYPE-003: a char bound as a string type is sent as its one-character string; some providers
+        // mishandle a raw System.Char (Microsoft.Data.Sqlite stored '~' as "", confirmed live).
+        if (value is char character &&
+            type is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength)
+        {
+            return CreateDbParameter(name, type, character.ToString());
+        }
+
+        if (!BindsSByteAndUnsignedNatively && TryWidenUnsignedParameter(type, value, out var wideType, out var wideValue))
+        {
+            return CreateDbParameter(name, wideType, wideValue);
         }
 
         if (TimeColumnHoldsOnlyATimeOfDay && type == DbType.Time && value is TimeSpan span &&

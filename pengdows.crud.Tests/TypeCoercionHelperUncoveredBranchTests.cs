@@ -62,12 +62,14 @@ public class TypeCoercionHelperUncoveredBranchTests
     // target type from an empty/whitespace string (line ~344's false branch and IsNumericClrType's
     // default->false branch, line ~428) — char is not in the explicit special-case list above and
     // is not in IsNumericClrType's TypeCode switch.
+    // TYPE-003 (2026-09-30): char no longer reaches that branch. Its null made the compiled mapper
+    // throw NullReferenceException on unboxing; text into a char is now exactly one character or a
+    // FormatException (reported by the gateway as DataMappingException).
     [Fact]
-    public void Coerce_WhitespaceStringToChar_ReturnsNull()
+    public void Coerce_WhitespaceStringToChar_IsNotOneCharacter_Throws()
     {
-        var result = TypeCoercionHelper.Coerce("   ", typeof(string), typeof(char));
-
-        Assert.Null(result);
+        Assert.Throws<FormatException>(() => TypeCoercionHelper.Coerce("   ", typeof(string), typeof(char)));
+        Assert.Equal(' ', TypeCoercionHelper.Coerce(" ", typeof(string), typeof(char)));
     }
 
     // Same ternary, true side: an unsigned integer type is numeric per IsNumericClrType but has no
