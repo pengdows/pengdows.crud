@@ -283,7 +283,7 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | BP-307 | Opt-in multitenancy call-site analyzer. **Needs a new diagnostic ID** (PGC027 was CompatibilityLeakAnalyzer on 2.0.6) | f34d7bf | **Done** (2026-09-28, UNIFY-001): the analyzer project is now identical on 2.0.6 and 3.0; the compatibility rule is PGC028 and the multitenancy call-site rule PGC029 on both |
 | BP-308 | `ISqlDialect.JoinParenthesization` (with a default implementation; nothing consumes it yet) | 70d3b99 | **Done** on 2.0.6 (2026-09-30, DEC-003): the new `ISqlDialect.JoinParenthesization` member has a default implementation on 2.0.6 (3.0 has none), so existing `ISqlDialect` implementations stay binary compatible |
 | BP-309 | Oracle array-bound `BatchCreate` (ArrayBindCount instead of INSERT ALL) | b30c970 | Open (decide) |
-| BP-310 | Oracle batch UPDATE via MERGE | e639f9a | Open (decide) |
+| BP-310 | Oracle batch UPDATE via MERGE | e639f9a | **Done** on 2.0.6 (2026-09-30, DEC-003): Oracle batch UPDATE via MERGE with a `SELECT ... FROM DUAL UNION ALL` source; on 2.0.6 `[Version]` entities keep the per-row path (the batch SQL there has no version parameters), so 3.0's version-increment follow-up (679c6c1) doesn't apply. Live: `BatchOperationTests.BulkUpdate_500Records_AllUpdated` on Oracle |
 | BP-311 | Async `DatabaseContext.CreateAsync` + `ITenantContextRegistry.GetContextAsync`/`AcquireLeaseAsync` (+ its review fixes: re-entrancy guard, OperationCanceledException wrapping, logger race). About 1000 lines of init rewrite; high risk | eca20ec, 8693e5f | Open (decide) |
 
 ### Integration tests to port with the fixes

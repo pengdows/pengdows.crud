@@ -47,6 +47,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
     private readonly IDatabaseContext _mysqlContext;
     private readonly IDatabaseContext _sqlServerContext;
     private readonly IDatabaseContext _snowflakeContext;
+    private readonly IDatabaseContext _oracleContext;
     private readonly TypeMapRegistry _typeMap;
     private readonly IAuditValueResolver _audit;
 
@@ -76,13 +77,18 @@ public class TableGatewayBatchTests : IAsyncLifetime
         snowflakeFactory.EnableDataPersistence = true;
         _snowflakeContext =
             new DatabaseContext("Account=xyz;EmulatedProduct=Snowflake", snowflakeFactory, _typeMap);
+
+        var oracleFactory = new fakeDbFactory(SupportedDatabase.Oracle);
+        oracleFactory.EnableDataPersistence = true;
+        _oracleContext =
+            new DatabaseContext("Data Source=localhost;EmulatedProduct=Oracle", oracleFactory, _typeMap);
     }
 
     public Task InitializeAsync() => Task.CompletedTask;
 
     public async Task DisposeAsync()
     {
-        foreach (var ctx in new[] { _sqliteContext, _pgContext, _mysqlContext, _sqlServerContext, _snowflakeContext })
+        foreach (var ctx in new[] { _sqliteContext, _pgContext, _mysqlContext, _sqlServerContext, _snowflakeContext, _oracleContext })
         {
             if (ctx is IAsyncDisposable asyncDisp)
                 await asyncDisp.DisposeAsync();
@@ -392,6 +398,27 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.Contains("MERGE INTO", sql);
         Assert.Contains("USING (VALUES", sql);
         Assert.Contains("WHEN MATCHED THEN UPDATE", sql);
+    }
+
+    [Fact]
+    public void BuildBatchUpdate_Oracle_UsesMergeWithUnionAllSource()
+    {
+        var helper = new TableGateway<TestEntitySimple, int>(_oracleContext);
+        var entities = new List<TestEntitySimple>
+        {
+            new() { Id = 1, Name = "updated1" },
+            new() { Id = 2, Name = "updated2" }
+        };
+
+        var containers = helper.BuildBatchUpdate(entities);
+        var sql = containers[0].Query.ToString();
+
+        Assert.Contains("MERGE INTO", sql);
+        Assert.DoesNotContain(" AS t", sql);
+        Assert.Contains("UNION ALL SELECT", sql);
+        Assert.Contains("FROM DUAL", sql);
+        Assert.Contains("WHEN MATCHED THEN UPDATE", sql);
+        Assert.False(sql.TrimEnd().EndsWith(";", StringComparison.Ordinal));
     }
 
     // Regression: BuildBatchUpdate's native multi-row path never mirrored the single-row
