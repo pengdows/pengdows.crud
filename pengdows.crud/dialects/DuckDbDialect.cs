@@ -165,6 +165,9 @@ internal class DuckDbDialect : SqlDialect
         return release <= LastDuckDbNetWithCloseConnectionBug;
     }
 
+    // TYPE-005: DuckDB.NET's HugeInt binding takes only ±(2^127 - 1) (confirmed live); exact text casts.
+    internal override bool BindsWideIntegersAsText => true;
+
     public override bool SupportsMerge => IsVersionAtLeast(1, 4); // MERGE support added in v1.4.0
     public override bool SupportsMergeReturning => IsVersionAtLeast(1, 4); // MERGE RETURNING support added in v1.4.0
 

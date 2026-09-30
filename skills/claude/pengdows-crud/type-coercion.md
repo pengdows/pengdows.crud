@@ -112,6 +112,21 @@ database, with no converter: declare them `[Column("d", DbType.Date)]` and `[Col
   `TimeOnly` (or a `TimeSpan` declared `DbType.Time`) is stored as fixed-width `HH:mm:ss.fffffff` text,
   which sorts and compares in time order and reads back exactly.
 
+## Wide and Provider-Specific Column Types
+
+No value object or converter is needed for these (verified live, TYPE-005; see `docs/advanced-types.md`):
+
+- DuckDB `HUGEINT`/`UHUGEINT` and Firebird `INT128` → `Int128`/`UInt128` (or `BigInteger`, `long`, `decimal`
+  when the value fits). Converted with checked casts; out of range throws `DataMappingException`. Written as
+  `BigInteger`, or as exact text on DuckDB (its driver can't bind the full range).
+- DuckDB `LIST` and PostgreSQL arrays → `T[]` or `List<T>`, coerced element by element. DuckDB `MAP`/`STRUCT`
+  → `Dictionary<,>`.
+- Firebird `DECFLOAT` → `decimal` (or `double`); declare `[Column(..., DbType.VarNumeric)]` so the value binds as
+  `FbDecFloat`. NaN/infinity or a value `decimal` would round throws `DataMappingException` into `decimal`.
+- A stored value with no .NET representation throws `DataMappingException` naming the column, never a raw provider
+  exception or a default: MySQL/MariaDB zero dates, PostgreSQL `numeric` NaN into `decimal`, SQL Server
+  `hierarchyid`/CLR types without `Microsoft.SqlServer.Types` (select `CAST(col AS nvarchar(4000))` into a `string`).
+
 ## JSON Support
 
 Complex objects can be stored as JSON in supported databases:

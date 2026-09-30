@@ -489,6 +489,11 @@ internal class MySqlDialect : SqlDialect
     // (GetFinalSessionSettings builds on GetBaseSessionSettings, so both are covered.)
     protected virtual bool OmitNoBackslashEscapes => !_isMySqlConnector;
 
+    // TYPE-005: MySql.Data and MySqlConnector both throw MySqlConversionException reading a zero
+    // date ('0000-00-00') into DateTime (confirmed live with MySql.Data).
+    internal override bool IsUnreadableStoredValue(Exception exception) =>
+        exception.GetType().Name == "MySqlConversionException";
+
     // Aurora MySQL is a detection label for the MySQL engine (VAR-001): same type mappings.
     internal override SupportedDatabase TypeMappingProvider =>
         DatabaseType == SupportedDatabase.AuroraMySql ? SupportedDatabase.MySql : DatabaseType;
