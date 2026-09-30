@@ -52,6 +52,7 @@
 
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -66,6 +67,30 @@ internal sealed class SpannerDialect : PostgreSqlDialect
         : base(factory, logger, SupportedDatabase.Spanner) { }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Spanner;
+
+    // TYPE-006 (maintainer decision 2026-09-30): Spanner has no time-of-day column type (no TIME;
+    // INTERVAL is query-only), so a time of day is stored as fixed-width text HH:mm:ss.fffffff in a
+    // STRING/VARCHAR column. Fixed width keeps text order equal to time order; reads parse it back.
+    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
+
+    protected override DbType RemapDbType(DbType type) =>
+        type == DbType.Time ? DbType.String : base.RemapDbType(type);
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (dbType == DbType.Time)
+        {
+            switch (value)
+            {
+                case TimeSpan span:
+                    return span.ToString(@"hh\:mm\:ss\.fffffff", CultureInfo.InvariantCulture);
+                case DateTime dateTime:
+                    return dateTime.TimeOfDay.ToString(@"hh\:mm\:ss\.fffffff", CultureInfo.InvariantCulture);
+            }
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
     public override bool SupportsMerge => false;
 
     // CONFIRMED live (Spanner Omni + PGAdapter): a quoted identifier containing a space is rejected

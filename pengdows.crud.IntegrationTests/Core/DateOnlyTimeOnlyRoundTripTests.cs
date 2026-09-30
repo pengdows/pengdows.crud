@@ -20,11 +20,11 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
     private const string DaysTable = "calendar_days";
     private const string TimesTable = "calendar_times";
 
-    // Spanner (PostgreSQL interface) has no time-of-day column type at all: no TIME, and INTERVAL
-    // is query-only. Every other database has one.
+    // Every database: Spanner (PostgreSQL interface) has no time-of-day column type (no TIME;
+    // INTERVAL is query-only), so there the column is fixed-width text HH:mm:ss.fffffff (TYPE-006).
     private static readonly SupportedDatabase[] ProvidersWithTimeOfDayType =
         Enum.GetValues<SupportedDatabase>()
-            .Where(p => p is not SupportedDatabase.Unknown and not SupportedDatabase.Spanner)
+            .Where(p => p is not SupportedDatabase.Unknown)
             .ToArray();
 
     public DateOnlyTimeOnlyRoundTripTests(ITestOutputHelper output, IntegrationTestFixture fixture)
@@ -237,6 +237,7 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
         SupportedDatabase.Sqlite => "TEXT",
         SupportedDatabase.Oracle => "INTERVAL DAY(0) TO SECOND(0)",
         SupportedDatabase.Informix => "DATETIME HOUR TO SECOND",
+        SupportedDatabase.Spanner => "VARCHAR(16)",
         _ => "TIME"
     };
 

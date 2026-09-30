@@ -112,7 +112,9 @@ database, with no converter: declare them `[Column("d", DbType.Date)]` and `[Col
 - A `TimeSpan` outside 00:00:00 to 24:00:00 into `TIME` throws `ArgumentOutOfRangeException` on Sybase
   ASE, Informix and FlatFile, whose drivers would otherwise store a different value; MySQL's `TIME`
   holds ±838 h, and other databases reject it themselves.
-- Spanner has no time-of-day column type, so `TimeOnly` has no native column there (tracked as TYPE-006).
+- Spanner has no time-of-day column type (no `TIME`), so declare a `VARCHAR(16)`/`STRING(16)` column: a
+  `TimeOnly` (or a `TimeSpan` declared `DbType.Time`) is stored as fixed-width `HH:mm:ss.fffffff` text,
+  which sorts and compares in time order and reads back exactly.
 
 ## JSON Support
 
