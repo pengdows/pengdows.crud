@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -16,6 +17,36 @@ internal sealed class SpannerDialect : PostgreSqlDialect
         : base(factory, logger, SupportedDatabase.Spanner) { }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Spanner;
+
+    // TYPE-006 (maintainer decision 2026-09-30): Spanner has no time-of-day column type (no TIME;
+    // INTERVAL is query-only), so a time of day is stored as fixed-width text HH:mm:ss.fffffff in a
+    // STRING/VARCHAR column. Fixed width keeps text order equal to time order; reads parse it back.
+    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
+
+    // Applied after the binding pipeline, whatever it turned the value into (TimeSpan, TimeOnly or
+    // a DateTime anchored to a date). A TimeSpan outside a day was already rejected.
+    internal override void AdjustTemporalParameter(DbParameter parameter, DbType declaredType)
+    {
+        if (declaredType != DbType.Time)
+        {
+            base.AdjustTemporalParameter(parameter, declaredType);
+            return;
+        }
+
+        var timeOfDay = parameter.Value switch
+        {
+            TimeSpan span => span,
+            TimeOnly time => time.ToTimeSpan(),
+            DateTime dateTime => dateTime.TimeOfDay,
+            _ => (TimeSpan?)null
+        };
+        if (timeOfDay is { } value)
+        {
+            parameter.DbType = DbType.String;
+            parameter.Value = value.ToString(@"hh\:mm\:ss\.fffffff", CultureInfo.InvariantCulture);
+        }
+    }
+
     public override bool SupportsMerge => false;
     public override bool SupportsOverridingSystemValue => false;
 
