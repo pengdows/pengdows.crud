@@ -271,6 +271,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
         typeof(char), typeof(string)
     }.ToFrozenSet();
 
+    // A DateTime declared DbType.Date (a DateOnly binds as one) or a TimeSpan declared DbType.Time
+    // binds by the declared column type, as on 2.0.6. The advanced pipeline types them by CLR type,
+    // so a DATE column got DbType.DateTime: timestamptz on Npgsql (rejects an Unspecified DateTime),
+    // datetime on SqlClient (rejects DateOnly.MinValue). Found live forward-porting TYPE-001's tests.
+    private static bool BindsByDeclaredTemporalType(DbType type, Type runtimeType) =>
+        (type == DbType.Date && runtimeType == typeof(DateTime)) ||
+        (type == DbType.Time && runtimeType == typeof(TimeSpan));
+
     protected static AdvancedTypeRegistry AdvancedTypes { get; } = AdvancedTypeRegistry.Shared;
 
     protected SqlDialect(DbProviderFactory factory, ILogger logger)
@@ -1723,7 +1731,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // advanced dispatcher, which preserves legacy mappings and then falls back
         // to the coercion registry and cross-provider binding rules.
         bool handled;
-        if (runtimeType != null && s_primitiveClrTypes.Contains(runtimeType))
+        if (runtimeType != null &&
+            (s_primitiveClrTypes.Contains(runtimeType) || BindsByDeclaredTemporalType(type, runtimeType)))
         {
             handled = false;
         }
