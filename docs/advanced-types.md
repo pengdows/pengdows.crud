@@ -133,6 +133,8 @@ plain .NET type (verified live, TYPE-005).
 | Informix `INTERVAL DAY TO SECOND` | `TimeSpan` | |
 | SQL Server `sql_variant` | `object` | The stored value's own type. |
 | PostgreSQL `BIT(n)` | `BitArray` | |
+| SQL Server 2025 `VECTOR(n)`, Oracle 23ai `VECTOR` | `float[]` (or `double[]`, `List<float>`) with `[Column(..., DbType.Object)]` | Written as exact text (`[1.5,2,-3]`, each element in shortest round-trip form), which both servers convert implicitly; SqlClient and ODP.NET reject a raw `float[]`. Read from ODP.NET's `float[]`, SqlClient 6.1+'s `SqlVector<float>` (exact), or SqlClient 6.0's text. **SqlClient 6.0 prints 8 significant digits**, so about 2% of arbitrary `float` values come back one bit off (and `-0` as `0`); use SqlClient 6.1+ for exact reads. A `float[]` parameter is a `VECTOR_DISTANCE` argument: `CAST({P}p AS VECTOR(n))` on SQL Server, `TO_VECTOR({P}p)` on Oracle. (TYPE-015) |
+| pgvector `vector(n)` | `float[]` | Npgsql binds a `float[]` as `real[]`, which pgvector's assignment cast stores. Npgsql can't read `vector` itself without the `Pgvector.Npgsql` plugin: select `col::real[]`, or build the context from an `NpgsqlDataSource` with `UseVector()`, whose `Pgvector.Vector` then converts to `float[]`. Comparisons need `CAST({P}p AS vector)`. (TYPE-015) |
 
 A stored value with no .NET representation throws `DataMappingException` naming the column, never
 a raw provider exception or a default value: a MySQL/MariaDB zero date (`'0000-00-00'`), a
