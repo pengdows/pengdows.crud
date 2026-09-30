@@ -138,4 +138,56 @@ public class MultitenantIntegrationTests : IAsyncLifetime
 
         return Task.CompletedTask;
     }
+
+    // CORE-017: TenantContextRegistry supports a maxTenantCount cap only as a concrete
+    // constructor argument. MultiTenantOptions had no property for it, and AddMultiTenancy
+    // registered TenantContextRegistry via plain `services.AddSingleton<ITenantContextRegistry,
+    // TenantContextRegistry>()` — implementation-type DI activation supplies the constructor's
+    // optional `int? maxTenantCount = null` parameter with its default, it cannot pull a value
+    // out of configuration for an unregistered type. So the advertised production safety cap
+    // was configurable in the POCO's config section but silently never reached the registry
+    // through the only supported DI entry point. This test proves the standard
+    // `services.AddMultiTenancy(configuration)` path now honors `MultiTenant:MaxTenantCount`.
+    [Fact]
+    public void AddMultiTenancy_HonorsConfiguredMaxTenantCount()
+    {
+        var services = new ServiceCollection();
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["MultiTenant:MaxTenantCount"] = "1",
+                ["MultiTenant:Tenants:0:Name"] = "CapTenantA",
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ConnectionString"] =
+                    "Data Source=cap-tenant-a;EmulatedProduct=Sqlite",
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ProviderName"] =
+                    SupportedDatabase.Sqlite.ToString(),
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:DbMode"] = DbMode.Standard.ToString(),
+                ["MultiTenant:Tenants:0:DatabaseContextConfiguration:ReadWriteMode"] =
+                    ReadWriteMode.ReadWrite.ToString(),
+                ["MultiTenant:Tenants:1:Name"] = "CapTenantB",
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ConnectionString"] =
+                    "Data Source=cap-tenant-b;EmulatedProduct=Sqlite",
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ProviderName"] =
+                    SupportedDatabase.Sqlite.ToString(),
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:DbMode"] = DbMode.Standard.ToString(),
+                ["MultiTenant:Tenants:1:DatabaseContextConfiguration:ReadWriteMode"] =
+                    ReadWriteMode.ReadWrite.ToString()
+            })
+            .Build();
+
+        services.AddKeyedSingleton<DbProviderFactory>(SupportedDatabase.Sqlite.ToString(),
+            (_, _) => new fakeDbFactory(SupportedDatabase.Sqlite));
+        services.AddLogging();
+        services.AddMultiTenancy(configuration);
+
+        using var provider = services.BuildServiceProvider();
+        var registry = provider.GetRequiredService<ITenantContextRegistry>();
+
+        // First tenant admits fine.
+        Assert.NotNull(registry.GetContext("CapTenantA"));
+
+        // Second, distinct tenant must be rejected — the configured cap of 1 is already used.
+        var ex = Assert.Throws<InvalidOperationException>(() => registry.GetContext("CapTenantB"));
+        Assert.Contains("maximum tenant count", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
 }
