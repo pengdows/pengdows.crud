@@ -81,4 +81,11 @@ public sealed record DatabaseMetrics(
     long ErrorConstraintViolations,
     long SessionInitCount,
     double AvgSessionInitMs,
-    double AvgFailedCommandMs = 0d);
+    double AvgFailedCommandMs = 0d)
+{
+    /// <summary>Gets whether the command P95/P99 values contain percentile data.</summary>
+    public bool CommandPercentilesAvailable { get; init; }
+
+    /// <summary>Gets whether the transaction P95/P99 values contain percentile data.</summary>
+    public bool TransactionPercentilesAvailable { get; init; }
+}

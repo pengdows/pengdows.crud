@@ -26,3 +26,24 @@ The current record includes:
 - session-initialization counters
 
 Avoid hard-coding a metric-count claim in docs. The authoritative shape is the `DatabaseMetrics` record in `pengdows.crud.abstractions`.
+
+## Mode contention (`SingleWriter`/`SingleConnection`)
+
+Separate from `DatabaseMetrics`, waiting on the mode lock in `SingleWriter`/`SingleConnection` is tracked by an internal `ModeContentionStats` collector (`pengdows.crud/metrics/ModeContentionStats.cs`) and surfaced publicly only when it times out: a failed wait throws `ModeContentionException` (`pengdows.crud.exceptions`) carrying a public `Snapshot` property (`ModeContentionSnapshot`: `CurrentWaiters`, `PeakWaiters`, `TotalWaits`, `TotalTimeouts`, `TotalWaitTimeTicks`, `AverageWaitTimeTicks`). Note `ModeContentionException` extends `TimeoutException` directly — it is **not** part of the `DatabaseException` hierarchy described in `CLAUDE.md`, so a `catch (DatabaseException)` block will not catch it.
+
+There is also an internal `AttributionStats` collector (read/write request counts, governor-wait/timeout counts) that records `ReadRequests`/`WriteRequests` per operation but has no public accessor today — its governor-wait and mode-wait counters are declared but never incremented, and its snapshot is never read anywhere. It exists in source but isn't a usable feature yet.
+
+## Percentile tracking is opt-in
+
+`DatabaseMetrics` and each `DatabaseRoleMetrics` snapshot expose
+`CommandPercentilesAvailable` and `TransactionPercentilesAvailable`. These flags are true
+only when the corresponding P95/P99 values contain data. They are false when percentile
+tracking is disabled or when no samples have been recorded, so a consumer never has to
+interpret a zero percentile as a valid measurement.
+
+Percentile tracking is enabled with `MetricsOptions.EnableApproxPercentiles`
+(`pengdows.crud.metrics`, public, `init`-only), which defaults to `false`. When disabled,
+the collector does not allocate percentile ring buffers. `MetricsOptions.PercentileWindowSize`
+(default 2048, must be a power of two) controls the sliding window size once enabled. All
+"average" fields (unaffected by this flag) use an EWMA (exponentially weighted moving average)
+with per-metric window sizes rather than a true running mean.

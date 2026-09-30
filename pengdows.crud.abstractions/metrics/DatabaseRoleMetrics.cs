@@ -80,6 +80,12 @@ public sealed record DatabaseRoleMetrics(
     long ErrorConstraintViolations,
     double AvgFailedCommandMs = 0d)
 {
+    /// <summary>Gets whether the command P95/P99 values contain percentile data.</summary>
+    public bool CommandPercentilesAvailable { get; init; }
+
+    /// <summary>Gets whether the transaction P95/P99 values contain percentile data.</summary>
+    public bool TransactionPercentilesAvailable { get; init; }
+
     /// <summary>
     /// Represents an empty role metrics snapshot (no role-specific tracking active).
     /// </summary>

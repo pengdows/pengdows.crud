@@ -255,7 +255,11 @@ public partial class DatabaseContext
             snapshot.ErrorConstraintViolations,
             snapshot.SessionInitCount,
             snapshot.AvgSessionInitMs,
-            snapshot.AvgFailedCommandMs);
+            snapshot.AvgFailedCommandMs)
+        {
+            CommandPercentilesAvailable = snapshot.CommandPercentilesAvailable,
+            TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable
+        };
     }
 
     private static DatabaseRoleMetrics CreateRoleMetrics(in MetricsCollector.MetricsSnapshot snapshot)
@@ -293,7 +297,11 @@ public partial class DatabaseContext
             snapshot.ErrorDeadlocks,
             snapshot.ErrorSerializationFailures,
             snapshot.ErrorConstraintViolations,
-            snapshot.AvgFailedCommandMs);
+            snapshot.AvgFailedCommandMs)
+        {
+            CommandPercentilesAvailable = snapshot.CommandPercentilesAvailable,
+            TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable
+        };
     }
 
     private void OnMetricsCollectorUpdated()
