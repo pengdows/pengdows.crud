@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -68,7 +69,7 @@ public class SqlContainerWriteOperationTests
         container.AddParameterWithValue("p1", DbType.String, "value");
 
         // Act & Assert
-        var exception = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        var exception = await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await container.ExecuteScalarRequiredAsync<int>(ExecutionType.Write));
 
         Assert.Contains("read-only mode", exception.Message, StringComparison.OrdinalIgnoreCase);

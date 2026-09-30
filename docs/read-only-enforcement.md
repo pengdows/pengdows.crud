@@ -34,3 +34,24 @@ The details live in the dialect and connection-lifecycle code, not in a separate
 ### DuckDB exception
 
 On a `ReadWrite` DuckDB context, read-intent operations do not switch to a read-only connection, even when a `ReadOnlyConnectionString` is configured: a DuckDB read-only connection on the same file can lock out concurrent writers. Only an explicit `ReadWriteMode.ReadOnly` context uses read-only DuckDB connections.
+## Read-only violation exceptions
+
+A write attempt is checked against **two separate flags, in sequence**, each throwing a different exception type — a catch block that only handles one will miss the other:
+
+1. **Context-level configuration**: if `context.ReadWriteMode == ReadWriteMode.ReadOnly` (the whole context was configured read-only), throws `NotSupportedException("Write operations are not supported in read-only mode.")`.
+2. **Connection/transaction-scoped intent**: checked second, only if the first check passes. `context.IsReadOnlyConnection` is a *different* flag — set per connection/transaction, e.g. a transaction opened with `ExecutionType.Read` on an otherwise-writable context. If set, throws `InvalidOperationException("Transaction is read-only.")` (`InternalConnectionAccessAssertions.AssertIsWriteConnection`).
+
+These are real, production-active guards (not `Debug.Assert`), checked on every write execution.
+Both library-generated exceptions implement the public `IReadOnlyViolation` marker interface
+(`pengdows.crud.exceptions`). Their existing base types and messages are preserved, so existing
+code catching `NotSupportedException` or `InvalidOperationException` continues to work. New
+code can catch `IReadOnlyViolation` without inspecting exception messages.
+
+## `ReadOnlyViolationException`
+
+For SQLite and DuckDB specifically (`SqliteExceptionTranslator`, `DuckDbExceptionTranslator`),
+a raw provider error indicating a write attempted against a read-only database file is translated
+into `ReadOnlyViolationException` (`pengdows.crud.exceptions`, extends `DatabaseOperationException`
+→ `DatabaseException` — a `catch (DatabaseException)` block catches it). Other dialects that reject
+write intent at transaction-creation time do so via a plain `NotSupportedException` instead (see
+`docs/transactions.md`) — the two mechanisms are not unified into one exception type.

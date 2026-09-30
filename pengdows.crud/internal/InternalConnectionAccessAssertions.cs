@@ -21,7 +21,7 @@ internal static class InternalConnectionAccessAssertions
 
         if (context.IsReadOnlyConnection)
         {
-            throw new InvalidOperationException("Transaction is read-only.");
+            throw new exceptions.ReadOnlyAccessException("Transaction is read-only.");
         }
     }
 }

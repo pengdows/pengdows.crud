@@ -530,7 +530,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     {
         if (_isReadOnly)
         {
-            throw new InvalidOperationException("Transaction is read-only.");
+            throw new exceptions.ReadOnlyAccessException("Transaction is read-only.");
         }
 
         _context.AssertIsWriteConnection();

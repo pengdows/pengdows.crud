@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.exceptions;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -29,7 +30,9 @@ public class ReadOnlyWritePathExceptionTypeTests
         using var context = CreateReadOnlyContext();
         await using var sc = context.CreateSqlContainer("DELETE FROM t");
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await sc.ExecuteNonQueryAsync());
+        var ex = await Assert.ThrowsAsync<ReadOnlyContextException>(async () => await sc.ExecuteNonQueryAsync());
+        Assert.IsAssignableFrom<NotSupportedException>(ex); // existing catch blocks still see it
+        Assert.IsAssignableFrom<IReadOnlyViolation>(ex);
     }
 
     [Fact]
@@ -38,8 +41,10 @@ public class ReadOnlyWritePathExceptionTypeTests
         using var context = CreateReadOnlyContext();
         await using var sc = context.CreateSqlContainer("INSERT INTO t VALUES (1) RETURNING id");
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        var ex = await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await sc.ExecuteScalarRequiredAsync<long>(ExecutionType.Write));
+        Assert.IsAssignableFrom<NotSupportedException>(ex); // existing catch blocks still see it
+        Assert.IsAssignableFrom<IReadOnlyViolation>(ex);
     }
 
     [Fact]
@@ -48,8 +53,10 @@ public class ReadOnlyWritePathExceptionTypeTests
         using var context = CreateReadOnlyContext();
         await using var sc = context.CreateSqlContainer("INSERT INTO t VALUES (1) RETURNING id");
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        var ex = await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await sc.ExecuteReaderAsync(ExecutionType.Write));
+        Assert.IsAssignableFrom<NotSupportedException>(ex); // existing catch blocks still see it
+        Assert.IsAssignableFrom<IReadOnlyViolation>(ex);
     }
 
     [Fact]

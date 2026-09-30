@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -51,7 +52,7 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await container.ExecuteNonQueryAsync());
     }
 
@@ -101,7 +102,7 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        var ex = await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await container.ExecuteScalarOrNullAsync<int?>(ExecutionType.Write));
         Assert.Contains("read-only mode", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -118,7 +119,7 @@ public class SqlContainerIntentTests
         using var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.Sqlite));
         await using var container = context.CreateSqlContainer("SELECT 1");
 
-        var ex = await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        var ex = await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await container.TryExecuteScalarAsync<int>(ExecutionType.Write));
         Assert.Contains("read-only mode", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
@@ -137,8 +138,9 @@ public class SqlContainerIntentTests
 
         // BP-208: the reader write path rejects a read-only context with the same exception type
         // as every other write path (it used to fall through to AssertIsWriteConnection's
-        // InvalidOperationException).
-        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+        // InvalidOperationException). BP-302: that type is ReadOnlyContextException, a
+        // NotSupportedException marked IReadOnlyViolation.
+        await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
             await container.ExecuteReaderAsync(ExecutionType.Write));
     }
 

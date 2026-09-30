@@ -275,7 +275,7 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 | ID | Feature | 3.0 commit | Status |
 |---|---|---|---|
 | BP-301 | Opt-in `EnforceUniqueConnectionString` + warning on duplicate connection strings + hashed pool key + dispose-on-reject (one package, all or nothing) | 8c2d22b, 5aa33b7, 91225cd, 21ccbca | Open (decide) |
-| BP-302 | `ReadOnlyContextException` / `ReadOnlyAccessException` + `IReadOnlyViolation` (subclasses of the types thrown today) | 28cff9c | Open (decide) |
+| BP-302 | `ReadOnlyContextException` / `ReadOnlyAccessException` + `IReadOnlyViolation` (subclasses of the types thrown today) | 28cff9c | **Done** on 2.0.6 (2026-09-30, DEC-003): additive; the new types subclass the ones thrown before, so existing catch blocks still work (only exact-type test assertions such as xUnit `Assert.Throws<NotSupportedException>` see the subtype). 2.0.6's BP-208 reader write path uses `ReadOnlyContextException` too |
 | BP-303 | Metrics: percentile-availability and contention-attribution `init` properties on `DatabaseMetrics`/`DatabaseRoleMetrics`, `PoolStatisticsSnapshot.TotalWaits` (additive `init` props only; the positional-record changes are 3.0-only) | c3e61b1, 1a11ce3 | Open (decide) |
 | BP-304 | `AddDbProviderLoading` DI entry point (the loader ctor is internal, so the feature is unreachable today) | ee13db6 | Open (decide) |
 | BP-305 | Public `DataReaderMapper` | be7756b | Open (decide) |
