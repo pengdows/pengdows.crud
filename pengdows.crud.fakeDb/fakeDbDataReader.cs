@@ -227,6 +227,13 @@ public class fakeDbDataReader : DbDataReader
     /// </summary>
     public ISet<string>? OutOfRangeReturnsNullColumns { get; set; }
 
+    /// <summary>
+    /// Columns whose <see cref="GetFieldType"/> returns <c>null</c> — emulates Microsoft.Data.SqlClient
+    /// on a CLR user-defined type (hierarchyid, geometry) whose assembly (Microsoft.SqlServer.Types)
+    /// isn't loaded (confirmed live 2026-09-30).
+    /// </summary>
+    public ISet<string>? UnresolvedFieldTypeColumns { get; set; }
+
     public override int GetValues(object[] values)
     {
         var count = Math.Min(values.Length, FieldCount);
@@ -397,6 +404,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override Type GetFieldType(int ordinal)
     {
+        if (UnresolvedFieldTypeColumns != null && UnresolvedFieldTypeColumns.Contains(GetName(ordinal)))
+        {
+            return null!; // deliberately violates the contract, as the emulated driver does
+        }
+
         var value = RawValue(ordinal);
         if (value is not null && value is not DBNull)
         {

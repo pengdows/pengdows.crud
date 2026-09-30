@@ -306,6 +306,37 @@ internal class FirebirdDialect : SqlDialect
     // alone), blocking later DDL/DML on the same table from other connections with "lock
     // conflict" / "object ... is in use" until that specific pooled connection happens to be
     // reset or the process exits.
+    // TYPE-005: FirebirdClient binds a DECFLOAT parameter only from its FbDecFloat, and rejects
+    // FbDecFloat for NUMERIC, so a DECFLOAT column is declared DbType.VarNumeric (which FirebirdClient
+    // itself rejects as "Invalid data type") and its value is sent as an exact FbDecFloat.
+    private Type? _decFloatType;
+    private bool _decFloatTypeResolved;
+
+    protected override DbType RemapDbType(DbType type) =>
+        type == DbType.VarNumeric ? DbType.Object : base.RemapDbType(type);
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (dbType == DbType.VarNumeric && value is not null and not DBNull && !FirebirdDecFloat.Is(value) &&
+            ResolveDecFloatType() is { } decFloatType)
+        {
+            return FirebirdDecFloat.From(decFloatType, value);
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
+
+    private Type? ResolveDecFloatType()
+    {
+        if (!Volatile.Read(ref _decFloatTypeResolved))
+        {
+            _decFloatType = FirebirdDecFloat.Resolve(Factory.GetType().Assembly);
+            Volatile.Write(ref _decFloatTypeResolved, true);
+        }
+
+        return _decFloatType;
+    }
+
     internal override bool RequiresExplicitRollbackAfterFailedWrite => true;
 
     internal override bool RequiresConnectionPoolResetForDdl => true;

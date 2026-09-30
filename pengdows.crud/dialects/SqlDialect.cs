@@ -25,6 +25,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
 using System.Globalization;
+using System.Numerics;
 using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
@@ -462,6 +463,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// that <c>null</c> into an <see cref="OverflowException"/> rather than a silent NULL (TYPE-008).
     /// </summary>
     internal virtual bool ReportsOutOfRangeDecimalAsNull => false;
+
+    /// <summary>
+    /// True when <paramref name="exception"/>, raised by the provider while reading one column, means
+    /// the stored value has no .NET representation (a MySQL zero date, a SQL Server CLR type whose
+    /// assembly isn't loaded). Tracked readers report it as <c>DataMappingException</c> naming the
+    /// column (TYPE-005).
+    /// </summary>
+    internal virtual bool IsUnreadableStoredValue(Exception exception) => false;
+
+    /// <summary>
+    /// True when the provider can't bind the full Int128/UInt128 range as BigInteger (DuckDB.NET
+    /// rejects Int128.MinValue and UInt128 above Int128.MaxValue), so both are bound as exact decimal
+    /// text, which the database casts to its 128-bit type (TYPE-005).
+    /// </summary>
+    internal virtual bool BindsWideIntegersAsText => false;
 
     /// <summary>
     /// True when the provider decodes every result row while executing the command (before the
@@ -1627,6 +1643,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
             type is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength)
         {
             return CreateDbParameter(name, type, character.ToString());
+        }
+
+        // TYPE-005: 128-bit integers reach providers as BigInteger, the type DuckDB.NET, FirebirdClient
+        // and Npgsql bind for HUGEINT/INT128/NUMERIC (both rejected a raw Int128, confirmed live).
+        if (value is Int128 int128)
+        {
+            return BindsWideIntegersAsText
+                ? CreateDbParameter(name, DbType.String, int128.ToString(CultureInfo.InvariantCulture))
+                : CreateDbParameter(name, type, (BigInteger)int128);
+        }
+
+        if (value is UInt128 uint128)
+        {
+            return BindsWideIntegersAsText
+                ? CreateDbParameter(name, DbType.String, uint128.ToString(CultureInfo.InvariantCulture))
+                : CreateDbParameter(name, type, (BigInteger)uint128);
         }
 
         if (!BindsSByteAndUnsignedNatively && TryWidenUnsignedParameter(type, value, out var wideType, out var wideValue))

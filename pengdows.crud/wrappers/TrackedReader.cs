@@ -60,6 +60,17 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     // SqlDialect.ReportsOutOfRangeDecimalAsNull: Informix.Net.Core returns null for an out-of-range DECIMAL.
     private readonly bool _reportsOutOfRangeDecimalAsNull;
 
+    // SqlDialect.IsUnreadableStoredValue: a provider exception meaning the stored value has no .NET
+    // representation (TYPE-005).
+    private readonly Func<Exception, bool>? _isUnreadableStoredValue;
+
+    private DataMappingException? UnreadableValue(int i, Exception exception) =>
+        _isUnreadableStoredValue?.Invoke(exception) == true
+            ? new DataMappingException(
+                $"Could not read column '{_reader.GetName(i)}': the stored value has no .NET representation ({exception.Message})",
+                SupportedDatabase.Unknown, exception)
+            : null;
+
     private OverflowException OutOfRangeDecimal(int i) =>
         new($"Column '{_reader.GetName(i)}' holds a value outside System.Decimal's range; the provider returned no value for it.");
 
@@ -75,8 +86,10 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         IAsyncDisposable? singleConnectionTransactionGate = null,
         Func<Exception, Exception?>? readFailureTranslator = null,
         bool readsInt64ThroughGetValue = false,
-        bool reportsOutOfRangeDecimalAsNull = false)
+        bool reportsOutOfRangeDecimalAsNull = false,
+        Func<Exception, bool>? isUnreadableStoredValue = null)
     {
+        _isUnreadableStoredValue = isUnreadableStoredValue;
         _reportsOutOfRangeDecimalAsNull = reportsOutOfRangeDecimalAsNull;
         _readFailureTranslator = readFailureTranslator;
         _readsInt64ThroughGetValue = readsInt64ThroughGetValue;
@@ -307,7 +320,14 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     public string GetString(int i)
     {
-        return _reader.GetString(i);
+        try
+        {
+            return _reader.GetString(i);
+        }
+        catch (Exception ex) when (UnreadableValue(i, ex) is { } unreadable)
+        {
+            throw unreadable;
+        }
     }
 
     public object GetValue(int i)
@@ -326,7 +346,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         {
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Npgsql 9 workaround: GetValue() throws for "timestamp without time zone" columns.
             // GetFieldValue<DateTime>() is the supported Npgsql 9 API for these columns.
@@ -342,6 +362,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             {
             }
 
+            if (UnreadableValue(i, ex) is { } unreadable)
+            {
+                throw unreadable;
+            }
+
             throw;
         }
     }
@@ -353,7 +378,14 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     public bool IsDBNull(int i)
     {
-        return _reader.IsDBNull(i);
+        try
+        {
+            return _reader.IsDBNull(i);
+        }
+        catch (Exception ex) when (UnreadableValue(i, ex) is { } unreadable)
+        {
+            throw unreadable;
+        }
     }
 
     public int FieldCount => _reader.FieldCount;
@@ -578,7 +610,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         {
             return _reader.GetDateTime(i);
         }
-        catch (Exception)
+        catch (Exception ex)
         {
             // Npgsql 9 workaround: for "timestamp without time zone" columns,
             // GetDateTime() may throw. GetFieldValue<DateTime>() is the supported API.
@@ -592,6 +624,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             }
             catch
             {
+            }
+
+            if (UnreadableValue(i, ex) is { } unreadable)
+            {
+                throw unreadable;
             }
 
             throw;
@@ -623,7 +660,9 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
                 }
             }
 
-            return type;
+            // SqlClient returns null for a CLR type whose assembly isn't loaded (hierarchyid without
+            // Microsoft.SqlServer.Types); the value is still read, or reported, through GetValue.
+            return type ?? typeof(object);
         }
         catch (Exception)
         {

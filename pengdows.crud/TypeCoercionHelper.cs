@@ -32,6 +32,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Globalization;
 using System.Linq.Expressions;
+using System.Numerics;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -362,6 +363,13 @@ internal static class TypeCoercionHelper
             return value;
         }
 
+        // TYPE-005: DuckDB.NET and FirebirdClient read HUGEINT/UHUGEINT/INT128 as BigInteger, which
+        // isn't IConvertible. Wide integers convert with checked casts: exact or OverflowException.
+        if (TryCoerceWideInteger(value, underlyingTarget, out var wide))
+        {
+            return wide;
+        }
+
         // Policy-aware type handling (DateTime/DateTimeOffset require policy context)
         if (underlyingTarget == typeof(DateTimeOffset))
         {
@@ -408,6 +416,13 @@ internal static class TypeCoercionHelper
             }
         }
 
+        // TYPE-005: DuckDB.NET reads a LIST as List<T>; an array or list property gets its elements
+        // coerced one by one.
+        if (TryCoerceSequence(value, underlyingTarget, options, out var sequence))
+        {
+            return sequence;
+        }
+
         // Final fallback: Use cached compiled converter for better performance
         try
         {
@@ -417,6 +432,80 @@ internal static class TypeCoercionHelper
         {
             throw new InvalidCastException($"Cannot convert value of type {sourceType} to {targetType}.", ex);
         }
+    }
+
+    private static bool IsWideInteger(Type type) =>
+        type == typeof(BigInteger) || type == typeof(Int128) || type == typeof(UInt128);
+
+    private static bool TryCoerceWideInteger(object value, Type target, out object? result)
+    {
+        result = null;
+        if (!IsWideInteger(value.GetType()) && !IsWideInteger(target))
+        {
+            return false;
+        }
+
+        BigInteger source;
+        switch (value)
+        {
+            case BigInteger big: source = big; break;
+            case Int128 i128: source = i128; break;
+            case UInt128 u128: source = u128; break;
+            case sbyte or byte or short or ushort or int or uint or long or ulong:
+                source = new BigInteger(Convert.ToDecimal(value, CultureInfo.InvariantCulture)); break;
+            case decimal d when decimal.Truncate(d) == d: source = new BigInteger(d); break;
+            case string text: source = BigInteger.Parse(text, NumberStyles.Integer, CultureInfo.InvariantCulture); break;
+            default: return false;
+        }
+
+        result = Type.GetTypeCode(target) switch
+        {
+            TypeCode.SByte => (object)(sbyte)source,
+            TypeCode.Byte => (byte)source,
+            TypeCode.Int16 => (short)source,
+            TypeCode.UInt16 => (ushort)source,
+            TypeCode.Int32 => (int)source,
+            TypeCode.UInt32 => (uint)source,
+            TypeCode.Int64 => (long)source,
+            TypeCode.UInt64 => (ulong)source,
+            TypeCode.Decimal => (decimal)source,
+            TypeCode.Double => (double)source,
+            TypeCode.String => source.ToString(CultureInfo.InvariantCulture),
+            _ when target == typeof(BigInteger) => source,
+            _ when target == typeof(Int128) => (Int128)source,
+            _ when target == typeof(UInt128) => (UInt128)source,
+            _ => null
+        };
+        return result != null;
+    }
+
+    private static bool TryCoerceSequence(object value, Type target, TypeCoercionOptions options, out object? result)
+    {
+        result = null;
+        Type? elementType = target.IsArray ? target.GetElementType()
+            : target.IsGenericType && target.GetGenericTypeDefinition() == typeof(List<>) ? target.GetGenericArguments()[0]
+            : null;
+        if (elementType == null || value is string || value is not System.Collections.IEnumerable items)
+        {
+            return false;
+        }
+
+        var list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType))!;
+        foreach (var item in items)
+        {
+            list.Add(item is null || item is DBNull ? null : Coerce(item, item.GetType(), elementType, options));
+        }
+
+        if (!target.IsArray)
+        {
+            result = list;
+            return true;
+        }
+
+        var array = Array.CreateInstance(elementType, list.Count);
+        list.CopyTo(array, 0);
+        result = array;
+        return true;
     }
 
     private static bool IsNumericClrType(Type type)

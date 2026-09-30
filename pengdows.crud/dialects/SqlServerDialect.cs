@@ -194,6 +194,16 @@ internal class SqlServerDialect : SqlDialect
         return base.CoerceConnectionMode(requested, connectionString, isLocalDb);
     }
 
+    // TYPE-005: SqlClient reads hierarchyid/geometry/geography through Microsoft.SqlServer.Types;
+    // without that assembly GetValue throws FileNotFoundException (confirmed live).
+    internal override bool IsUnreadableStoredValue(Exception exception) =>
+        (exception switch
+        {
+            System.IO.FileNotFoundException missing => missing.FileName,
+            System.IO.FileLoadException unloadable => unloadable.FileName,
+            _ => null
+        })?.StartsWith("Microsoft.SqlServer.Types", StringComparison.OrdinalIgnoreCase) == true;
+
     // SQL Server uses OFFSET/FETCH NEXT syntax only — no LIMIT keyword.
     public override bool SupportsLimitOffset => false;
     public override string ParameterMarker => "@";

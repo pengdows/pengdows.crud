@@ -369,13 +369,14 @@ public sealed class DataReaderMapper : IDataReaderMapper
         for (var i = 0; i < plan.Ordinals.Length; i++)
         {
             var ordinal = plan.Ordinals[i];
-            if (!plan.SkipNullCheck[i] && rdr.IsDBNull(ordinal))
-            {
-                continue;
-            }
-
             try
             {
+                // Inside the try: a provider can fail on the null check itself (TYPE-005).
+                if (!plan.SkipNullCheck[i] && rdr.IsDBNull(ordinal))
+                {
+                    continue;
+                }
+
                 plan.Setters[i](obj, rdr);
             }
             catch (Exception ex)
@@ -745,7 +746,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
     {
         try
         {
-            return reader.GetFieldType(ordinal);
+            // Null for a CLR type whose assembly isn't loaded (SqlClient on hierarchyid).
+            return reader.GetFieldType(ordinal) ?? typeof(object);
         }
         catch (InvalidOperationException)
         {

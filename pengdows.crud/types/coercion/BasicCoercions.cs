@@ -22,6 +22,7 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Text.Json;
+using pengdows.crud.dialects;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types.coercion;
@@ -42,6 +43,7 @@ internal static class BasicCoercions
         registry.Register(new DateOnlyCoercion());
         registry.Register(new TimeOnlyCoercion());
         registry.Register(new DecimalCoercion());
+        registry.Register(new DecFloatDoubleCoercion());
 
         // Binary types
         registry.Register(new ByteArrayCoercion());
@@ -701,6 +703,10 @@ internal class DecimalCoercion : DbCoercion<decimal>
             case decimal d:
                 value = d;
                 return true;
+            // TYPE-005: FirebirdClient's DECFLOAT; exact or throws (see dialects/FirebirdDecFloat.cs).
+            case { } decFloat when FirebirdDecFloat.Is(decFloat):
+                value = FirebirdDecFloat.ToDecimal(decFloat);
+                return true;
             default:
                 try
                 {
@@ -719,6 +725,44 @@ internal class DecimalCoercion : DbCoercion<decimal>
     {
         parameter.Value = value;
         parameter.DbType = DbType.Decimal;
+        return true;
+    }
+}
+
+/// <summary>
+/// TYPE-005: FirebirdClient reads DECFLOAT as FbDecFloat, which isn't IConvertible (see
+/// dialects/FirebirdDecFloat.cs); other values keep the general conversion path.
+/// </summary>
+internal sealed class DecFloatDoubleCoercion : DbCoercion<double>
+{
+    public override bool TryRead(in DbValue src, out double value)
+    {
+        value = 0d;
+        if (src.IsNull)
+        {
+            return false;
+        }
+
+        if (FirebirdDecFloat.Is(src.RawValue))
+        {
+            value = FirebirdDecFloat.ToDouble(src.RawValue!);
+            return true;
+        }
+
+        if (src.RawValue is double d)
+        {
+            value = d;
+            return true;
+        }
+
+        // Anything else keeps the general conversion path.
+        return false;
+    }
+
+    public override bool TryWrite(double value, DbParameter parameter)
+    {
+        parameter.Value = value;
+        parameter.DbType = DbType.Double;
         return true;
     }
 }

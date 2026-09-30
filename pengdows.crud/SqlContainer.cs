@@ -1685,7 +1685,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     ? TranslateDatabaseException(readFailure, operationKind)
                     : null,
                 _dialect is SqlDialect { ReadsInt64ThroughGetValue: true },
-                _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true });
+                _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true },
+                _dialect is SqlDialect unreadableDialect ? unreadableDialect.IsUnreadableStoredValue : null);
             cmd = null;
             singleConnectionTxGate = null; // TrackedReader owns it until reader disposal.
             lockTransferred = true; // TrackedReader now owns both the connection and context locks

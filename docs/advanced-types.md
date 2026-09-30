@@ -96,6 +96,27 @@ for existing code and BCL interop. Don't confuse either with the entity-level `[
 arbitrary POCO property to a JSON column — that's a different, higher-level mechanism than these
 value-object types.
 
+## Provider-specific column types mapped to .NET types
+
+These need no value object: the library converts between the provider's representation and the
+plain .NET type (verified live, TYPE-005).
+
+| Column type | Property type | Notes |
+|---|---|---|
+| DuckDB `HUGEINT` / `UHUGEINT`, Firebird `INT128` | `Int128` / `UInt128` (or `BigInteger`, `long`, `decimal` when the value fits) | Read as `BigInteger` by the provider and converted with checked casts; a value outside the property's range throws `DataMappingException`. Written as `BigInteger` (Firebird, PostgreSQL) or as exact text (DuckDB, whose driver can't bind `Int128.MinValue` or `UInt128` above `Int128.MaxValue`). |
+| DuckDB `LIST` (`INTEGER[]`, `VARCHAR[]`, ...), PostgreSQL arrays | `T[]` or `List<T>` | Elements are coerced one by one. |
+| DuckDB `MAP` / `STRUCT` | `Dictionary<TKey, TValue>` / `Dictionary<string, object>` | Passed through as the provider returns them. |
+| Firebird `DECFLOAT` | `decimal` (or `double`) with `[Column(..., DbType.VarNumeric)]` | FirebirdClient binds a `DECFLOAT` parameter only from its own `FbDecFloat` and never binds a `NUMERIC` from it, so `DbType.VarNumeric` marks the column. Reads are exact: `NaN`/infinity, or a 34-digit value `decimal` would round, throw `DataMappingException` into a `decimal` (a `double` gets `NaN`/infinity). |
+| Informix `INTERVAL DAY TO SECOND` | `TimeSpan` | |
+| SQL Server `sql_variant` | `object` | The stored value's own type. |
+| PostgreSQL `BIT(n)` | `BitArray` | |
+
+A stored value with no .NET representation throws `DataMappingException` naming the column, never
+a raw provider exception or a default value: a MySQL/MariaDB zero date (`'0000-00-00'`), a
+PostgreSQL `numeric` `NaN` read into `decimal`, and a SQL Server `hierarchyid`/CLR type when
+`Microsoft.SqlServer.Types` isn't loaded (select `CAST(col AS nvarchar(4000))` into a `string`
+instead).
+
 ## Not a public extension point
 
 `AdvancedTypeRegistry`, `CoercionRegistry`, and `ProviderTypeMapping` are all `internal`. The
