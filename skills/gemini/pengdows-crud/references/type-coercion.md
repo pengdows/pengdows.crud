@@ -86,6 +86,11 @@ database, with no converter: declare them `[Column("d", DbType.Date)]` and `[Col
 - A `TimeSpan` outside 00:00:00 to 24:00:00 into `TIME` throws `ArgumentOutOfRangeException` on Sybase
   ASE, Informix and FlatFile, whose drivers would otherwise store a different value; MySQL's `TIME`
   holds ±838 h, and other databases reject it themselves.
+- `sbyte`/`ushort`/`uint`/`ulong` bind as the smallest signed type that holds their range (Int16,
+  Int32, Int64, Decimal) where the provider rejects the unsigned `DbType`s (PostgreSQL family, SQL
+  Server, Oracle, Informix, SQLite); declare columns at least that wide (`ulong`: `DECIMAL(20,0)`, or
+  `TEXT` on SQLite, where it is stored as exact text). A `char` bound as a string `DbType` is sent as a
+  one-character string, and stored text that isn't exactly one character fails as `DataMappingException`.
 - Spanner has no time-of-day column type (no `TIME`), so declare a `VARCHAR(16)`/`STRING(16)` column: a
   `TimeOnly` (or a `TimeSpan` declared `DbType.Time`) is stored as fixed-width `HH:mm:ss.fffffff` text,
   which sorts and compares in time order and reads back exactly.

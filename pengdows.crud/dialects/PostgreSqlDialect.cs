@@ -83,6 +83,9 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => _flavor;
 
+    // TYPE-003, confirmed live 2026-09-30: the provider rejects DbType.SByte and the unsigned DbTypes.
+    internal override bool BindsSByteAndUnsignedNatively => false;
+
     // Aurora PostgreSQL is a detection label for the PostgreSQL engine (VAR-001): same type mappings.
     internal override SupportedDatabase TypeMappingProvider =>
         DatabaseType == SupportedDatabase.AuroraPostgreSql ? SupportedDatabase.PostgreSql : DatabaseType;

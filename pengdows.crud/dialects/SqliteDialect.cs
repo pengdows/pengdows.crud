@@ -181,6 +181,11 @@ internal class SqliteDialect : SqlDialect
 
     public override bool SupportsInsertReturning => IsVersionAtLeast(3, 35);
 
+    // TYPE-003, confirmed live 2026-09-30: SByte/UInt16/UInt32 widen to signed integers, which
+    // SQLite stores as-is; UInt64 is bound as exact text in CreateDbParameter (the provider casts it
+    // to Int64 unchecked: ulong.MaxValue was stored as -1).
+    internal override bool BindsSByteAndUnsignedNatively => false;
+
     /// <summary>
     /// SQLite 3.35+ uses the inline RETURNING plan (best option, atomic).
     /// Older SQLite falls to CompoundStatement: INSERT ...; SELECT last_insert_rowid()
@@ -413,6 +418,17 @@ internal class SqliteDialect : SqlDialect
         if (value is Guid guid)
         {
             return base.CreateDbParameter(name, DbType.String, guid.ToString("D"));
+        }
+
+        // TYPE-003: SQLite's integer storage stops at long.MaxValue, the provider casts a UInt64 to
+        // Int64 unchecked, and decimal binding goes through double, so a UInt64 binds as exact text
+        // (declare the column TEXT); reads parse it back exactly.
+        if (type == DbType.UInt64)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.String,
+                value is null || value is DBNull
+                    ? null
+                    : Convert.ToUInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture));
         }
 
         // SQLite stores DECIMAL as REAL (64-bit double). Microsoft.Data.Sqlite cannot bind

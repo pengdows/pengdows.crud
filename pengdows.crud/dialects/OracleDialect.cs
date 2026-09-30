@@ -233,6 +233,9 @@ internal class OracleDialect : SqlDialect
 
     public override bool SupportsBatchUpdate => true;
 
+    // TYPE-003, confirmed live 2026-09-30: the provider rejects DbType.SByte and the unsigned DbTypes.
+    internal override bool BindsSByteAndUnsignedNatively => false;
+
     /// <inheritdoc />
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,

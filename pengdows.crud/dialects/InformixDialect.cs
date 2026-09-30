@@ -333,6 +333,9 @@ internal sealed class InformixDialect : SqlDialect
     // Tracked readers therefore read Int64 through GetValue.
     internal override bool ReadsInt64ThroughGetValue => true;
 
+    // TYPE-003, confirmed live 2026-09-30: the provider rejects DbType.SByte and the unsigned DbTypes.
+    internal override bool BindsSByteAndUnsignedNatively => false;
+
     // CONFIRMED live 2026-09-30: for a DECIMAL value outside System.Decimal's range, GetValue returns
     // C# null (not DBNull), IsDBNull throws OverflowException and GetDecimal NullReferenceException.
     internal override bool ReportsOutOfRangeDecimalAsNull => true;
