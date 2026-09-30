@@ -83,6 +83,10 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => _flavor;
 
+    // Aurora PostgreSQL is a detection label for the PostgreSQL engine (VAR-001): same type mappings.
+    internal override SupportedDatabase TypeMappingProvider =>
+        DatabaseType == SupportedDatabase.AuroraPostgreSql ? SupportedDatabase.PostgreSql : DatabaseType;
+
     // Use '@' parameter marker — ADO.NET standard; avoids Npgsql's '::' cast lookahead
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;

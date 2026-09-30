@@ -132,6 +132,12 @@ public enum SupportedDatabase : ulong
     /// version-string probing and routed to the <see cref="MySql"/> dialect — there is no
     /// separate Aurora MySQL dialect class.
     /// </summary>
+    /// <remarks>
+    /// A detection label: <c>Product</c>/<c>DatabaseType</c> report it, but everything else behaves
+    /// exactly as <see cref="MySql"/> (SQL generation, session settings, isolation levels, type
+    /// mappings, exception translation). Code that branches on the engine should treat both values
+    /// alike, e.g. <c>SupportedDatabase.MySql | SupportedDatabase.AuroraMySql</c>.
+    /// </remarks>
     AuroraMySql = 1UL << 12,
 
     /// <summary>
@@ -139,6 +145,11 @@ public enum SupportedDatabase : ulong
     /// version-string probing and routed to the <see cref="PostgreSql"/> dialect — there is no
     /// separate Aurora PostgreSQL dialect class.
     /// </summary>
+    /// <remarks>
+    /// A detection label: <c>Product</c>/<c>DatabaseType</c> report it, but everything else behaves
+    /// exactly as <see cref="PostgreSql"/> (SQL generation, session settings, isolation levels, type
+    /// mappings including JSON, arrays, ranges and network types, exception translation).
+    /// </remarks>
     AuroraPostgreSql = 1UL << 13,
 
     /// <summary>

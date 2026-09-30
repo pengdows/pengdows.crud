@@ -180,7 +180,10 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         }
 
         _dialect = databaseContext.GetDialect();
-        _coercionOptions = _coercionOptions with { Provider = _dialect.DatabaseType };
+        _coercionOptions = _coercionOptions with
+        {
+            Provider = _dialect is SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : _dialect.DatabaseType
+        };
 
         // CORE-019: _readerPlans and _tableInfo are fixed for the gateway's entire lifetime from
         // whichever context constructs it here — never re-derived from a different context

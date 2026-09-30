@@ -478,6 +478,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool RequiresCorrelationTokenForGeneratedIds => false;
 
+    /// <summary>
+    /// The provider key for type mappings, converters and read coercion: the engine the database
+    /// runs, which is <see cref="DatabaseType"/> except for a detection label such as Aurora
+    /// (VAR-001), whose DatabaseType names the service but whose behavior is its engine's.
+    /// </summary>
+    internal virtual SupportedDatabase TypeMappingProvider => DatabaseType;
+
     public virtual string ParameterMarker => "?";
 
     public virtual string ParameterMarkerAt(int ordinal)
@@ -1620,7 +1627,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         else
         {
             handled = runtimeType != null &&
-                      AdvancedTypes.TryConfigureParameterForDialect(parameter, runtimeType, value, DatabaseType);
+                      AdvancedTypes.TryConfigureParameterForDialect(parameter, runtimeType, value, TypeMappingProvider);
         }
 
         if (!handled)

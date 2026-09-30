@@ -4552,7 +4552,7 @@ pengdows.crud supports 15 directly supported databases via the `SupportedDatabas
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
-> **Aurora variants:** `AuroraMySql` and `AuroraPostgreSql` are managed AWS services with no Docker image. They are detected at runtime via `DatabaseDetectionService` and delegate to the MySQL/PostgreSQL dialect respectively. No separate integration suite is required.
+> **Aurora variants:** `AuroraMySql` and `AuroraPostgreSql` are managed AWS services with no Docker image. They are detection labels: `DatabaseDetectionService` reports them as the context's `Product`, and everything else behaves exactly as MySQL/PostgreSQL — the same dialect class, session settings, isolation levels, type mappings (JSON, arrays, ranges, network types) and exception translation. Code that branches on the engine should treat both values alike (e.g. `Product is SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql`). Until 2.0.6 some of that did not hold: isolation levels, advanced-type mappings and read coercion were keyed on `MySql`/`PostgreSql` only (VAR-001). No separate integration suite is required; 3.0 folds the two values into `MySql`/`PostgreSql` (VAR-002).
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
