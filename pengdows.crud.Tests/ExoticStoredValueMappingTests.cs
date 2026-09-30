@@ -69,7 +69,7 @@ public sealed class ExoticStoredValueMappingTests
     [Fact]
     public void FirebirdDecFloat_CoercesExactlyToDecimalAndDouble()
     {
-        // Gateway hydration coerces with default options, so this must not depend on the provider.
+        // DataReaderMapper coerces with default options, so this must not depend on the provider.
         var firebird = TypeCoercionOptions.Default;
         Assert.Equal(12345.6789m, TypeCoercionHelper.Coerce((FbDecFloat)12345.6789m, typeof(FbDecFloat), typeof(decimal), firebird));
         Assert.Equal(decimal.MaxValue, TypeCoercionHelper.Coerce(new FbDecFloat(new BigInteger(decimal.MaxValue), 0), typeof(FbDecFloat), typeof(decimal), firebird));
@@ -208,8 +208,8 @@ public sealed class ExoticStoredValueMappingTests
             await DataReaderMapper.LoadAsync<Row>(reader, new MapperOptions(Strict: true)));
     }
 
-    // The compiled gateway mapper coerces without provider options, so the live Firebird read
-    // bypassed a provider-scoped coercion.
+    // FbDecFloat conversion is keyed on the value's type, not the provider, so it holds on every
+    // read path, DataReaderMapper (no provider options) included.
     [Fact]
     public async Task RetrieveOneAsync_FirebirdDecFloatColumn_HydratesADecimalProperty()
     {

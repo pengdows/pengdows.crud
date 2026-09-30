@@ -114,7 +114,8 @@ public abstract partial class BaseTableGateway<TEntity>
                 return existingPlan;
             }
 
-            var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes);
+            var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes,
+                coercionOptions: _coercionOptions);
             var plan = new HybridRecordsetPlan(compiledMapper);
 
             // The key must outlive this call (the rented arrays are returned below), so persist
