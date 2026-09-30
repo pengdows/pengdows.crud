@@ -162,11 +162,69 @@ public partial class DatabaseContext
         ITypeMapRegistry typeMapRegistry,
         DbDataSource? dataSource)
     {
+        // BP-311: construction and CreateAsync share one initialization. With useAsync: false every
+        // I/O step takes its blocking provider call, exactly as this constructor always did.
+        InitializeCoreAsync(configuration, factory, loggerFactory, typeMapRegistry, dataSource, false,
+            CancellationToken.None).GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// An uninitialized instance for <see cref="CreateAsync(IDatabaseContextConfiguration, DbDataSource?, DbProviderFactory, ILoggerFactory?, ITypeMapRegistry, CancellationToken)"/>,
+    /// which completes it with <see cref="InitializeAsync"/> before handing it out.
+    /// </summary>
+    private DatabaseContext()
+    {
+    }
+
+    /// <summary>
+    /// The asynchronous half of <see cref="CreateAsync(IDatabaseContextConfiguration, DbProviderFactory, ILoggerFactory?, CancellationToken)"/>:
+    /// the same initialization as the constructor, opening connections and running detection
+    /// probes asynchronously.
+    /// </summary>
+    private Task InitializeAsync(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        DbDataSource? dataSource,
+        CancellationToken cancellationToken)
+    {
+        return InitializeCoreAsync(configuration, factory, loggerFactory, typeMapRegistry, dataSource, true,
+            cancellationToken);
+    }
+
+    /// <summary>
+    /// The one initialization behind every constructor and <c>CreateAsync</c> (BP-311).
+    /// <paramref name="useAsync"/> picks the blocking or asynchronous provider call at each I/O
+    /// step (connection opens, detection probes, session settings, disposal); everything else is
+    /// shared, so the two paths cannot drift apart.
+    /// </summary>
+    private async Task InitializeCoreAsync(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        DbDataSource? dataSource,
+        bool useAsync,
+        CancellationToken cancellationToken)
+    {
+        // Outside the try: a rejected re-initialization must not run failure cleanup against the
+        // live instance's resources.
+        MarkInitializedOrThrow();
+
         ILockerAsync? initLocker = null;
         try
         {
             initLocker = GetLockInternal();
-            initLocker.Lock();
+            if (useAsync)
+            {
+                await initLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                initLocker.Lock();
+            }
+
             if (configuration is null)
             {
                 throw new ArgumentNullException(nameof(configuration));
@@ -178,14 +236,11 @@ public partial class DatabaseContext
             }
 
             ValidateConfiguration(configuration);
+            cancellationToken.ThrowIfCancellationRequested();
 
             _loggerFactory = loggerFactory ?? NullLoggerFactory.Instance;
             _logger = _loggerFactory.CreateLogger<IDatabaseContext>();
-            if (TypeCoercionHelper.Logger is NullLogger)
-            {
-                TypeCoercionHelper.Logger =
-                    _loggerFactory.CreateLogger(nameof(TypeCoercionHelper));
-            }
+            TypeCoercionHelper.SetLoggerIfUnset(_loggerFactory.CreateLogger(nameof(TypeCoercionHelper)));
 
             var normalizedReadWriteMode = configuration.ReadWriteMode;
             var normalizedReadPoolSize = configuration.MaxConcurrentReads;
@@ -288,15 +343,18 @@ public partial class DatabaseContext
                 _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
             }
 
-            var initialConnection = InitializeInternals(configuration);
+            var initialConnection = await InitializeInternalsAsync(configuration, useAsync, cancellationToken)
+                .ConfigureAwait(false);
 
             // Build strategies now that mode is final (moved from InitializeInternals)
             _connectionStrategy = ConnectionStrategyFactory.Create(this, ConnectionMode);
             _procWrappingStrategy = ProcWrappingStrategyFactory.Create(_procWrappingStyle);
 
             // Delegate dialect detection to the strategy
-            var (dialect, dataSourceInfo) =
-                _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
+            var (dialect, dataSourceInfo) = useAsync
+                ? await _connectionStrategy.HandleDialectDetectionAsync(initialConnection, _factory, _loggerFactory,
+                    cancellationToken).ConfigureAwait(false)
+                : _connectionStrategy.HandleDialectDetection(initialConnection, _factory, _loggerFactory);
 
             if (dialect != null && dataSourceInfo != null)
             {
@@ -384,10 +442,18 @@ public partial class DatabaseContext
             if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&
                 HasDedicatedReadConnectionString())
             {
-                TestConnect(_readerConnectionString, "ReadOnlyValidation", "ReadOnly");
+                await TestConnectAsync(_readerConnectionString, "ReadOnlyValidation", "ReadOnly", useAsync,
+                    cancellationToken).ConfigureAwait(false);
             }
 
-            InitializePoolGovernors();
+            if (useAsync)
+            {
+                await InitializePoolGovernorsAsync(true, cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                InitializePoolGovernors();
+            }
 
             if (initialConnection != null)
             {
@@ -410,7 +476,15 @@ public partial class DatabaseContext
                 {
                     try
                     {
-                        ExecuteSessionSettings(target, IsReadOnlyConnection);
+                        if (useAsync)
+                        {
+                            await ExecuteSessionSettingsAsync(target, IsReadOnlyConnection, cancellationToken)
+                                .ConfigureAwait(false);
+                        }
+                        else
+                        {
+                            ExecuteSessionSettings(target, IsReadOnlyConnection);
+                        }
                     }
                     catch
                     {
@@ -432,7 +506,15 @@ public partial class DatabaseContext
             // For Standard and SingleWriter modes, dispose the connection after dialect initialization is complete
             if (ConnectionMode is DbMode.Standard or DbMode.SingleWriter && initialConnection != null)
             {
-                initialConnection.Dispose();
+                if (useAsync)
+                {
+                    await initialConnection.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    initialConnection.Dispose();
+                }
+
                 // Reset counters to "fresh" state after initialization probe
                 Interlocked.Exchange(ref _connectionCount, 0);
                 Interlocked.Exchange(ref _peakOpenConnections, 0);
@@ -465,7 +547,14 @@ public partial class DatabaseContext
         {
             if (initLocker is IAsyncDisposable iad)
             {
-                iad.DisposeAsync().GetAwaiter().GetResult();
+                if (useAsync)
+                {
+                    await iad.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    iad.DisposeAsync().GetAwaiter().GetResult();
+                }
             }
             else if (initLocker is IDisposable id)
             {
@@ -508,7 +597,160 @@ public partial class DatabaseContext
 
     #endregion
 
+    #region CreateAsync
+
+    /// <summary>
+    /// Asynchronously creates and initializes a new <see cref="DatabaseContext"/>: the same
+    /// initialization as the matching constructor, with connection opening, product detection and
+    /// session setup done asynchronously, so the calling thread is not blocked (BP-311).
+    /// </summary>
+    /// <param name="configuration">Context configuration.</param>
+    /// <param name="factory">Provider factory.</param>
+    /// <param name="loggerFactory">Optional logger factory.</param>
+    /// <param name="cancellationToken">Cancels initialization; resources it opened are released.</param>
+    /// <returns>The initialized context.</returns>
+    public static Task<DatabaseContext> CreateAsync(
+        IDatabaseContextConfiguration configuration,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory = null,
+        CancellationToken cancellationToken = default)
+    {
+        return CreateAsync(configuration, null, factory, loggerFactory, new TypeMapRegistry(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronously creates and initializes a new <see cref="DatabaseContext"/> that opens
+    /// connections through <paramref name="dataSource"/> (e.g. an <c>NpgsqlDataSource</c>).
+    /// </summary>
+    /// <param name="configuration">Context configuration.</param>
+    /// <param name="dataSource">Data source for connection creation.</param>
+    /// <param name="factory">Provider factory for parameters and other provider objects.</param>
+    /// <param name="loggerFactory">Optional logger factory.</param>
+    /// <param name="cancellationToken">Cancels initialization.</param>
+    /// <returns>The initialized context.</returns>
+    public static Task<DatabaseContext> CreateAsync(
+        IDatabaseContextConfiguration configuration,
+        DbDataSource dataSource,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (dataSource is null)
+        {
+            throw new ArgumentNullException(nameof(dataSource));
+        }
+
+        return CreateAsync(configuration, dataSource, factory, loggerFactory, new TypeMapRegistry(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronous counterpart of
+    /// <see cref="DatabaseContext(string, string, DbMode, ReadWriteMode, ILoggerFactory?, string?)"/>.
+    /// </summary>
+    /// <param name="connectionString">Database connection string.</param>
+    /// <param name="providerFactory">Provider invariant name registered with <see cref="DbProviderFactories"/>.</param>
+    /// <param name="mode">Connection mode.</param>
+    /// <param name="readWriteMode">Read/write mode.</param>
+    /// <param name="loggerFactory">Optional logger factory.</param>
+    /// <param name="readOnlyConnectionString">Optional read-only connection string.</param>
+    /// <param name="cancellationToken">Cancels initialization.</param>
+    /// <returns>The initialized context.</returns>
+    public static Task<DatabaseContext> CreateAsync(
+        string connectionString,
+        string providerFactory,
+        DbMode mode = DbMode.Best,
+        ReadWriteMode readWriteMode = ReadWriteMode.ReadWrite,
+        ILoggerFactory? loggerFactory = null,
+        string? readOnlyConnectionString = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (connectionString is null)
+        {
+            throw new ArgumentNullException(nameof(connectionString));
+        }
+
+        if (providerFactory is null)
+        {
+            throw new ArgumentNullException(nameof(providerFactory));
+        }
+
+        var config = new DatabaseContextConfiguration
+        {
+            ProviderName = providerFactory,
+            ConnectionString = connectionString,
+            ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
+            ReadWriteMode = readWriteMode,
+            DbMode = mode
+        };
+
+        return CreateAsync(config, null, DbProviderFactories.GetFactory(providerFactory),
+            loggerFactory ?? NullLoggerFactory.Instance, new TypeMapRegistry(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Asynchronous counterpart of <see cref="DatabaseContext(string, DbProviderFactory, string?)"/>.
+    /// </summary>
+    /// <param name="connectionString">Database connection string.</param>
+    /// <param name="factory">Provider factory.</param>
+    /// <param name="readOnlyConnectionString">Optional read-only connection string.</param>
+    /// <param name="cancellationToken">Cancels initialization.</param>
+    /// <returns>The initialized context.</returns>
+    public static Task<DatabaseContext> CreateAsync(
+        string connectionString,
+        DbProviderFactory factory,
+        string? readOnlyConnectionString = null,
+        CancellationToken cancellationToken = default)
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            ReadOnlyConnectionString = readOnlyConnectionString ?? string.Empty,
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        return CreateAsync(config, null, factory, NullLoggerFactory.Instance, new TypeMapRegistry(), cancellationToken);
+    }
+
+    internal static async Task<DatabaseContext> CreateAsync(
+        IDatabaseContextConfiguration configuration,
+        DbDataSource? dataSource,
+        DbProviderFactory factory,
+        ILoggerFactory? loggerFactory,
+        ITypeMapRegistry typeMapRegistry,
+        CancellationToken cancellationToken = default)
+    {
+        var context = new DatabaseContext();
+        // A failed initialization releases what it opened itself (ReleaseResourcesAfterFailedConstruction),
+        // exactly as a failed constructor does; the instance is never handed out.
+        await context.InitializeAsync(configuration, factory, loggerFactory, typeMapRegistry, dataSource,
+            cancellationToken).ConfigureAwait(false);
+        return context;
+    }
+
+    #endregion
+
     #region Initialization Helper Methods
+
+    // 1 once InitializeCoreAsync has started on this instance (BP-311, see MarkInitializedOrThrow).
+    private int _initialized;
+
+    /// <summary>
+    /// Claims this instance's one-time initialization. DatabaseContext is a long-lived singleton;
+    /// the fields initialization assigns can't be <c>readonly</c> now that
+    /// <see cref="InitializeAsync"/> assigns them outside a constructor, so this restores the
+    /// single-assignment guarantee at run time: a second initialization throws before touching
+    /// anything.
+    /// </summary>
+    private void MarkInitializedOrThrow()
+    {
+        if (Interlocked.CompareExchange(ref _initialized, 1, 0) != 0)
+        {
+            throw new InvalidOperationException(
+                "This DatabaseContext instance has already been initialized. DatabaseContext is a " +
+                "singleton per connection string; create a new instance instead of re-initializing one.");
+        }
+    }
 
     private void SetConnectionString(string value)
     {
@@ -520,7 +762,8 @@ public partial class DatabaseContext
         _connectionString = value;
     }
 
-    private ITrackedConnection? InitializeInternals(IDatabaseContextConfiguration config)
+    private async ValueTask<ITrackedConnection?> InitializeInternalsAsync(IDatabaseContextConfiguration config,
+        bool useAsync, CancellationToken cancellationToken)
     {
         // 1) Persist config first
         var rawConnectionString =
@@ -538,9 +781,16 @@ public partial class DatabaseContext
             initConn = FactoryCreateConnection(initExecutionType, _connectionString, true);
             try
             {
-                initConn.Open();
+                if (useAsync)
+                {
+                    await initConn.OpenAsync(cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    initConn.Open();
+                }
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 throw new ConnectionFailedException("Failed to open database connection.", ex)
                 {
@@ -550,8 +800,14 @@ public partial class DatabaseContext
             }
 
             // 3) Detect product/capabilities once
-            var product = DatabaseDetectionService.DetectProduct(initConn, _factory);
-            var topology = DatabaseDetectionService.DetectTopology(product, _connectionString, initConn);
+            var product = useAsync
+                ? await DatabaseDetectionService.DetectProductAsync(initConn, _factory, cancellationToken)
+                    .ConfigureAwait(false)
+                : DatabaseDetectionService.DetectProduct(initConn, _factory);
+            var topology = useAsync
+                ? await DatabaseDetectionService.DetectTopologyAsync(product, _connectionString, initConn,
+                    cancellationToken).ConfigureAwait(false)
+                : DatabaseDetectionService.DetectTopology(product, _connectionString, initConn);
             var isLocalDb = topology.IsLocalDb;
 
             // Optional: RCSI prefetch (SQL Server only)
@@ -564,7 +820,7 @@ public partial class DatabaseContext
                     using var cmd = initConn.CreateCommand();
                     cmd.CommandText =
                         "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()";
-                    var v = cmd.ExecuteScalar();
+                    var v = await ExecuteInitScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false);
                     rcsi = v switch
                     {
                         bool b => b,
@@ -574,7 +830,7 @@ public partial class DatabaseContext
                         _ => Convert.ToInt32(v ?? 0) != 0
                     };
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     /* ignore prefetch failures */
                 }
@@ -583,7 +839,7 @@ public partial class DatabaseContext
                 {
                     using var cmd = initConn.CreateCommand();
                     cmd.CommandText = "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
-                    var value = cmd.ExecuteScalar();
+                    var value = await ExecuteInitScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false);
                     var state = value switch
                     {
                         bool b => b ? 1 : 0,
@@ -594,7 +850,7 @@ public partial class DatabaseContext
                     };
                     snapshotIsolation = state == 1;
                 }
-                catch
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     /* ignore prefetch failures */
                 }
@@ -607,7 +863,10 @@ public partial class DatabaseContext
             {
                 // Only do inline detection for an explicitly requested Standard mode; every other
                 // requested mode (including Best) detects via the main constructor
-                _dataSourceInfo = DataSourceInformation.Create(initConn, _factory, _loggerFactory);
+                _dataSourceInfo = useAsync
+                    ? await DataSourceInformation.CreateAsync(initConn, _factory, _loggerFactory, cancellationToken)
+                        .ConfigureAwait(false)
+                    : DataSourceInformation.Create(initConn, _factory, _loggerFactory);
                 _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
                 Name = _dataSourceInfo.DatabaseProductName;
             }
@@ -676,6 +935,18 @@ public partial class DatabaseContext
         }
     }
 
+    // Init probes run synchronously from the constructor, asynchronously from CreateAsync (BP-311).
+    private static async ValueTask<object?> ExecuteInitScalarAsync(IDbCommand command, bool useAsync,
+        CancellationToken cancellationToken)
+    {
+        if (useAsync && command is DbCommand dbCommand)
+        {
+            return await dbCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        return command.ExecuteScalar();
+    }
+
     private string NormalizeConnectionString(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -716,7 +987,11 @@ public partial class DatabaseContext
     // 3.0 makes the governor's default cap the default.
     private const int UnboundedQueueDepth = int.MaxValue;
 
-    private void InitializePoolGovernors()
+    // useAsync: false never awaits anything incomplete, so this completes synchronously.
+    private void InitializePoolGovernors() =>
+        InitializePoolGovernorsAsync(false, CancellationToken.None).AsTask().GetAwaiter().GetResult();
+
+    private async ValueTask InitializePoolGovernorsAsync(bool useAsync, CancellationToken cancellationToken)
     {
         if (_dialect == null)
         {
@@ -878,7 +1153,15 @@ public partial class DatabaseContext
                 var readSentinel = CreateSentinelConnection(ExecutionType.Read);
                 try
                 {
-                    readSentinel.Open();
+                    if (useAsync)
+                    {
+                        await readSentinel.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    else
+                    {
+                        readSentinel.Open();
+                    }
+
                     RegisterSentinel(readSentinel, ExecutionType.Read);
                 }
                 catch
@@ -890,16 +1173,34 @@ public partial class DatabaseContext
         }
     }
 
-    private void TestConnect(string connectionString, string phase, string role)
+    private async ValueTask TestConnectAsync(string connectionString, string phase, string role, bool useAsync,
+        CancellationToken cancellationToken)
     {
         var isReadOnly = role == "ReadOnly";
         var executionType = isReadOnly ? ExecutionType.Read : ExecutionType.Write;
         try
         {
-            using var conn = FactoryCreateConnection(executionType, connectionString, true);
-            conn.Open();
+            var conn = FactoryCreateConnection(executionType, connectionString, true);
+            if (useAsync)
+            {
+                try
+                {
+                    await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+                }
+                finally
+                {
+                    await conn.DisposeAsync().ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                using (conn)
+                {
+                    conn.Open();
+                }
+            }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             throw new ConnectionFailedException(
                 $"Failed to validate {role.ToLowerInvariant()} connection.", ex)

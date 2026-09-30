@@ -52,6 +52,7 @@ method pengdows.crud.IDatabaseContext::MakeParameterName(System.Data.Common.DbPa
 method pengdows.crud.IDatabaseContext::MakeParameterName(string) -> string
 method pengdows.crud.IDatabaseContext::WrapObjectName(string) -> string
 method pengdows.crud.IDatabaseContextFactory::Create(pengdows.crud.configuration.IDatabaseContextConfiguration, System.Data.Common.DbProviderFactory, Microsoft.Extensions.Logging.ILoggerFactory) -> pengdows.crud.IDatabaseContext
+method pengdows.crud.IDatabaseContextFactory::CreateAsync(pengdows.crud.configuration.IDatabaseContextConfiguration, System.Data.Common.DbProviderFactory, Microsoft.Extensions.Logging.ILoggerFactory, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.IDatabaseContext>
 method pengdows.crud.IEphemeralSecureString::Reveal() -> string
 method pengdows.crud.IEphemeralSecureString::WithRevealed(System.Action`1<string>) -> void
 method pengdows.crud.IEphemeralSecureString::WithRevealedAsync(System.Func`2<string, System.Threading.Tasks.ValueTask>) -> System.Threading.Tasks.ValueTask
@@ -257,7 +258,9 @@ method pengdows.crud.isolation.IIsolationResolver::ResolveWithDetail(pengdows.cr
 method pengdows.crud.isolation.IIsolationResolver::Validate(System.Data.IsolationLevel) -> void
 method pengdows.crud.tenant.ITenantConnectionResolver::GetDatabaseContextConfiguration(string) -> pengdows.crud.configuration.IDatabaseContextConfiguration
 method pengdows.crud.tenant.ITenantContextRegistry::AcquireLease(string) -> pengdows.crud.tenant.ITenantContextLease
+method pengdows.crud.tenant.ITenantContextRegistry::AcquireLeaseAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.tenant.ITenantContextLease>
 method pengdows.crud.tenant.ITenantContextRegistry::GetContext(string) -> pengdows.crud.IDatabaseContext
+method pengdows.crud.tenant.ITenantContextRegistry::GetContextAsync(string, System.Threading.CancellationToken) -> System.Threading.Tasks.Task`1<pengdows.crud.IDatabaseContext>
 method pengdows.crud.tenant.ITenantContextRegistry::Invalidate(string) -> void
 method pengdows.crud.tenant.ITenantContextRegistry::InvalidateAll() -> void
 method pengdows.crud.threading.ILockerAsync::Lock() -> void

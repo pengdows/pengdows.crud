@@ -110,4 +110,33 @@ public class PreventDatabaseUnloadConnectionStrategyBehaviorTests
         Assert.Null(result.dataSourceInfo);
     }
 
+    // Code-review finding (3.0, 8693e5f9): HandleDialectDetectionAsync's bare `catch { return (null, null); }`
+    // swallowed OperationCanceledException instead of propagating it, violating the project's
+    // documented invariant that cancellation is never wrapped/swallowed. A cancelled detection
+    // must throw, not silently fall back to a degraded (null, null) result.
+    [Fact]
+    public async Task HandleDialectDetectionAsync_CancelledDuringOpen_PropagatesOperationCanceledException()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=keepalive-cancel;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(cfg, factory);
+        var strategy = new PreventDatabaseUnloadConnectionStrategy(ctx);
+
+        var trackedConn = ctx.FactoryCreateConnection(cfg.ConnectionString, true);
+        var underlying = (fakeDbConnection)((IInternalConnectionWrapper)trackedConn).UnderlyingConnection;
+        underlying.SetOpenGate(); // never completed -> OpenAsync awaits until cancelled, never opens
+
+        using var cts = new CancellationTokenSource();
+        var detectTask = strategy.HandleDialectDetectionAsync(trackedConn, factory, NullLoggerFactory.Instance, cts.Token);
+
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await detectTask);
+    }
 }

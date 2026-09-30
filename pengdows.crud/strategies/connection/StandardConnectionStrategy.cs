@@ -106,10 +106,38 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
         return ValueTask.CompletedTask;
     }
 
-    public virtual (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
+    public (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
         ITrackedConnection? initConnection,
         DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
+    {
+        // useAsync: false never awaits anything incomplete, so this completes synchronously.
+        return HandleDialectDetectionCoreAsync(initConnection, factory, loggerFactory, false, CancellationToken.None)
+            .GetAwaiter().GetResult();
+    }
+
+    public Task<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)> HandleDialectDetectionAsync(
+        ITrackedConnection? initConnection,
+        DbProviderFactory? factory,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        return HandleDialectDetectionCoreAsync(initConnection, factory, loggerFactory, true, cancellationToken)
+            .AsTask();
+    }
+
+    /// <summary>
+    /// The one detection implementation behind <see cref="HandleDialectDetection"/> and
+    /// <see cref="HandleDialectDetectionAsync"/> (BP-311): <paramref name="useAsync"/> picks the
+    /// blocking or asynchronous provider call at each I/O step.
+    /// </summary>
+    protected virtual async ValueTask<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)>
+        HandleDialectDetectionCoreAsync(
+            ITrackedConnection? initConnection,
+            DbProviderFactory? factory,
+            ILoggerFactory loggerFactory,
+            bool useAsync,
+            CancellationToken cancellationToken)
     {
         // Standard strategy: reuse the initialization connection for detection; DatabaseContext
         // disposes it afterwards (Standard/SingleWriter).
@@ -118,7 +146,10 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
             // When factory is null, fall back to SQL-92 dialect
             if (factory != null)
             {
-                var dialect = SqlDialectFactory.CreateDialect(initConnection, factory, loggerFactory);
+                var dialect = useAsync
+                    ? await SqlDialectFactory.CreateDialectAsync(initConnection, factory, loggerFactory,
+                        cancellationToken).ConfigureAwait(false)
+                    : SqlDialectFactory.CreateDialect(initConnection, factory, loggerFactory);
                 var dataSourceInfo = new DataSourceInformation(dialect);
                 return (dialect, dataSourceInfo);
             }

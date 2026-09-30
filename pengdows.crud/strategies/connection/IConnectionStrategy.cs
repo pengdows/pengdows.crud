@@ -90,4 +90,21 @@ internal interface IConnectionStrategy
         ITrackedConnection? initConnection,
         DbProviderFactory? factory,
         ILoggerFactory loggerFactory);
+
+    /// <summary>
+    /// Asynchronous <see cref="HandleDialectDetection"/> for <c>DatabaseContext.CreateAsync</c>
+    /// (BP-311): opens and detects without blocking the calling thread. Cancellation propagates as
+    /// <see cref="OperationCanceledException"/>; it is never turned into the (null, null) fallback.
+    /// </summary>
+    Task<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)> HandleDialectDetectionAsync(
+        ITrackedConnection? initConnection,
+        DbProviderFactory? factory,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        // Built-in strategies override this with a genuinely asynchronous path; a strategy that
+        // doesn't (e.g. a test double) keeps working by blocking, as before.
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(HandleDialectDetection(initConnection, factory, loggerFactory));
+    }
 }

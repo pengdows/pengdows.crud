@@ -326,10 +326,13 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
             connection != null && IsSentinel(connection) ? connection : null);
     }
 
-    public override (ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo) HandleDialectDetection(
-        ITrackedConnection? initConnection,
-        DbProviderFactory? factory,
-        ILoggerFactory loggerFactory)
+    protected override async ValueTask<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)>
+        HandleDialectDetectionCoreAsync(
+            ITrackedConnection? initConnection,
+            DbProviderFactory? factory,
+            ILoggerFactory loggerFactory,
+            bool useAsync,
+            CancellationToken cancellationToken)
     {
         var detectionTarget = initConnection ?? _context.PersistentConnection;
         var ownsConnection = false;
@@ -345,19 +348,29 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
         {
             if (detectionTarget.State != ConnectionState.Open)
             {
-                detectionTarget.Open();
+                if (useAsync)
+                {
+                    await detectionTarget.OpenAsync(cancellationToken).ConfigureAwait(false);
+                }
+                else
+                {
+                    detectionTarget.Open();
+                }
             }
 
             if (factory != null)
             {
-                var dialect = SqlDialectFactory.CreateDialect(detectionTarget, factory, loggerFactory);
+                var dialect = useAsync
+                    ? await SqlDialectFactory.CreateDialectAsync(detectionTarget, factory, loggerFactory,
+                        cancellationToken).ConfigureAwait(false)
+                    : SqlDialectFactory.CreateDialect(detectionTarget, factory, loggerFactory);
                 var dataSourceInfo = new DataSourceInformation(dialect);
                 return (dialect, dataSourceInfo);
             }
 
             return (null, null);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Detection falls back to the caller's defaults, but the failure is not silent.
             _context.Logger.LogWarning(ex, "Database detection through the PreventDatabaseUnload connection failed.");
@@ -367,7 +380,14 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
         {
             if (ownsConnection && detectionTarget != null)
             {
-                detectionTarget.Dispose();
+                if (useAsync)
+                {
+                    await detectionTarget.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    detectionTarget.Dispose();
+                }
             }
         }
     }

@@ -102,6 +102,25 @@ internal static class DatabaseDetectionService
     /// probes attempted (and why any of them failed) instead of discarding that evidence.
     /// </summary>
     internal static DatabaseDetectionResult DetectFromConnectionWithDetail(IDbConnection? connection)
+        // useAsync: false never awaits anything incomplete, so this completes synchronously.
+        => DetectFromConnectionWithDetailCoreAsync(connection, false, CancellationToken.None).GetAwaiter().GetResult();
+
+    /// <summary>
+    /// Asynchronous <see cref="DetectFromConnection"/> for <c>DatabaseContext.CreateAsync</c>
+    /// (BP-311): the same probes, each command executed with <c>ExecuteScalarAsync</c>.
+    /// </summary>
+    internal static async Task<SupportedDatabase> DetectFromConnectionAsync(IDbConnection? connection,
+        CancellationToken cancellationToken = default)
+        => (await DetectFromConnectionWithDetailCoreAsync(connection, true, cancellationToken).ConfigureAwait(false))
+            .ResolvedProduct;
+
+    /// <summary>
+    /// The one detection implementation behind the sync and async entry points (BP-311):
+    /// <paramref name="useAsync"/> picks <c>ExecuteScalar</c> or <c>ExecuteScalarAsync</c> for each
+    /// probe. Cancellation is never recorded as a failed probe; it propagates.
+    /// </summary>
+    private static async ValueTask<DatabaseDetectionResult> DetectFromConnectionWithDetailCoreAsync(
+        IDbConnection? connection, bool useAsync, CancellationToken cancellationToken)
     {
         var attempts = new List<DetectionProbeAttempt>();
 
@@ -157,7 +176,7 @@ internal static class DatabaseDetectionService
 
                 attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", true, null));
             }
-            catch (Exception ex)
+            catch (Exception ex) when (ex is not OperationCanceledException)
             {
                 // Schema unavailable — continue to flavor detection
                 attempts.Add(new DetectionProbeAttempt("SchemaDataSourceInformation", false, ex.Message));
@@ -166,7 +185,9 @@ internal static class DatabaseDetectionService
             // Step 2: Flavor refinement — runs probes gated on the base product.
             // Aurora MySQL probe only runs for MySql/Unknown base; Aurora PG only for PostgreSql/Unknown.
             // This avoids unnecessary round-trips to SQLite, Oracle, SQL Server, etc.
-            var (flavor, flavorAttempts) = DetectFlavorWithDetail(connection, detected);
+            cancellationToken.ThrowIfCancellationRequested();
+            var (flavor, flavorAttempts) = await DetectFlavorWithDetailCoreAsync(connection, detected, useAsync,
+                cancellationToken).ConfigureAwait(false);
             attempts.AddRange(flavorAttempts);
             if (flavor != SupportedDatabase.Unknown)
             {
@@ -178,7 +199,7 @@ internal static class DatabaseDetectionService
                 return new DatabaseDetectionResult(detected, attempts);
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Fall back to other detection methods
             attempts.Add(new DetectionProbeAttempt("DetectFromConnection", false, ex.Message));
@@ -187,9 +208,12 @@ internal static class DatabaseDetectionService
         return new DatabaseDetectionResult(SupportedDatabase.Unknown, attempts);
     }
 
-    private static (SupportedDatabase Product, List<DetectionProbeAttempt> Attempts) DetectFlavorWithDetail(
-        IDbConnection? connection,
-        SupportedDatabase detected)
+    private static async ValueTask<(SupportedDatabase Product, List<DetectionProbeAttempt> Attempts)>
+        DetectFlavorWithDetailCoreAsync(
+            IDbConnection? connection,
+            SupportedDatabase detected,
+            bool useAsync,
+            CancellationToken cancellationToken)
     {
         var attempts = new List<DetectionProbeAttempt>();
 
@@ -249,13 +273,13 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SELECT @@aurora_version";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", true, null));
                         return (SupportedDatabase.AuroraMySql, attempts);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     /* not aurora mysql */
                     attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", false, ex.Message));
@@ -271,13 +295,13 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SELECT @@memsql_version";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", true, null));
                         return (SupportedDatabase.SingleStore, attempts);
                     }
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     /* not singlestore */
                     attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", false, ex.Message));
@@ -294,7 +318,7 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SELECT version()";
-                    var version = cmd.ExecuteScalar()?.ToString() ?? string.Empty;
+                    var version = (await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false))?.ToString() ?? string.Empty;
 
                     if (version.Contains("TiDB", StringComparison.OrdinalIgnoreCase))
                     {
@@ -315,7 +339,7 @@ internal static class DatabaseDetectionService
 
                     attempts.Add(new DetectionProbeAttempt("SelectVersion", true, null));
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     /* version() not available */
                     attempts.Add(new DetectionProbeAttempt("SelectVersion", false, ex.Message));
@@ -334,14 +358,14 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SHOW SPANNER.OPTIMIZER_VERSION";
-                    if (cmd.ExecuteScalar() is string)
+                    if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string)
                     {
                         attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
                         return (SupportedDatabase.Spanner, attempts);
                     }
                     attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", false, ex.Message));
                 }
@@ -356,7 +380,7 @@ internal static class DatabaseDetectionService
                 {
                     cmd.CommandText =
                         "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
                         return (SupportedDatabase.YugabyteDb, attempts);
@@ -364,7 +388,7 @@ internal static class DatabaseDetectionService
 
                     attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", true, null));
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     /* pg_settings unavailable — very unusual, continue */
                     attempts.Add(new DetectionProbeAttempt("YugabytePgSettings", false, ex.Message));
@@ -379,7 +403,7 @@ internal static class DatabaseDetectionService
                 try
                 {
                     cmd.CommandText = "SELECT aurora_version()";
-                    if (cmd.ExecuteScalar() is string { Length: > 0 })
+                    if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
                         return (SupportedDatabase.AuroraPostgreSql, attempts);
@@ -387,20 +411,34 @@ internal static class DatabaseDetectionService
 
                     attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException)
                 {
                     /* not aurora pg */
                     attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", false, ex.Message));
                 }
             }
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             // Ignore
             attempts.Add(new DetectionProbeAttempt("DetectFlavor", false, ex.Message));
         }
 
         return (SupportedDatabase.Unknown, attempts);
+    }
+
+    // Probe commands run synchronously on the constructor path and asynchronously on
+    // DatabaseContext.CreateAsync's (BP-311).
+    private static async ValueTask<object?> ExecuteScalarAsync(IDbCommand command, bool useAsync,
+        CancellationToken cancellationToken)
+    {
+        if (useAsync && command is DbCommand dbCommand)
+        {
+            return await dbCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+        return command.ExecuteScalar();
     }
 
     /// <summary>
@@ -459,6 +497,16 @@ internal static class DatabaseDetectionService
     }
 
     /// <summary>
+    /// Asynchronous <see cref="DetectProduct"/> (BP-311): probes with <c>ExecuteScalarAsync</c>.
+    /// </summary>
+    internal static async Task<SupportedDatabase> DetectProductAsync(IDbConnection? connection,
+        DbProviderFactory? factory, CancellationToken cancellationToken = default)
+    {
+        var fromConnection = await DetectFromConnectionAsync(connection, cancellationToken).ConfigureAwait(false);
+        return fromConnection != SupportedDatabase.Unknown ? fromConnection : DetectFromFactory(factory);
+    }
+
+    /// <summary>
     /// Detects database topology (LocalDB, embedded, etc.) from connection string.
     /// </summary>
     /// <summary>
@@ -474,6 +522,17 @@ internal static class DatabaseDetectionService
     /// </summary>
     public static DatabaseTopology DetectTopology(SupportedDatabase product, string? connectionString,
         IDbConnection? connection)
+        // useAsync: false never awaits anything incomplete, so this completes synchronously.
+        => DetectTopologyCoreAsync(product, connectionString, connection, false, CancellationToken.None)
+            .GetAwaiter().GetResult();
+
+    /// <summary>Asynchronous <see cref="DetectTopology(SupportedDatabase, string?, IDbConnection?)"/> (BP-311).</summary>
+    internal static Task<DatabaseTopology> DetectTopologyAsync(SupportedDatabase product, string? connectionString,
+        IDbConnection? connection, CancellationToken cancellationToken = default)
+        => DetectTopologyCoreAsync(product, connectionString, connection, true, cancellationToken).AsTask();
+
+    private static async ValueTask<DatabaseTopology> DetectTopologyCoreAsync(SupportedDatabase product,
+        string? connectionString, IDbConnection? connection, bool useAsync, CancellationToken cancellationToken)
     {
         var topology = DetectTopology(product, connectionString);
         if (product != SupportedDatabase.Db2 || connection?.State != ConnectionState.Open)
@@ -485,7 +544,8 @@ internal static class DatabaseDetectionService
         {
             using var command = connection.CreateCommand();
             command.CommandText = Db2LuwProbeSql;
-            return topology with { IsDb2Luw = command.ExecuteScalar() is not null and not DBNull };
+            var result = await ExecuteScalarAsync(command, useAsync, cancellationToken).ConfigureAwait(false);
+            return topology with { IsDb2Luw = result is not null and not DBNull };
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {

@@ -109,9 +109,16 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         /// </summary>
         public bool TryClaimDisposal() => Interlocked.CompareExchange(ref _disposalClaimed, 1, 0) == 0;
 
-        public Lazy<IDatabaseContext> LazyContext { get; }
+        /// <summary>
+        /// Single-flight construction shared by sync and async callers (BP-311). The factory is the
+        /// one chosen by whichever caller admitted the entry: a synchronous caller constructs
+        /// synchronously inside the Lazy (as before, returning a completed task), an asynchronous
+        /// caller only starts <see cref="IDatabaseContextFactory.CreateAsync"/>. So a sync caller
+        /// never blocks on sync-over-async it started itself.
+        /// </summary>
+        public Lazy<Task<IDatabaseContext>> LazyContext { get; }
 
-        // Completed (never faulted) when the factory finishes: the context on success, null on
+        // Completed (never faulted) when construction finishes: the context on success, null on
         // failure. Lets DisposeManagedAsync await an in-flight construction without blocking any
         // thread on Lazy<T>.Value (which blocks synchronously while another thread evaluates it).
         private readonly TaskCompletionSource<IDatabaseContext?> _constructed =
@@ -122,22 +129,27 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         public bool ConstructionStarted => Volatile.Read(ref _constructionStarted) != 0;
 
-        public TenantContextEntry(Func<IDatabaseContext> factory)
+        public TenantContextEntry(Func<Task<IDatabaseContext>> factory)
         {
-            LazyContext = new Lazy<IDatabaseContext>(() =>
+            LazyContext = new Lazy<Task<IDatabaseContext>>(() =>
             {
                 Interlocked.Exchange(ref _constructionStarted, 1);
+                Task<IDatabaseContext> task;
                 try
                 {
-                    var context = factory();
-                    _constructed.TrySetResult(context);
-                    return context;
+                    task = factory();
                 }
-                catch
+                catch (Exception ex)
                 {
-                    _constructed.TrySetResult(null);
-                    throw;
+                    task = Task.FromException<IDatabaseContext>(ex);
                 }
+
+                task.ContinueWith(
+                    static (completed, state) => ((TaskCompletionSource<IDatabaseContext?>)state!)
+                        .TrySetResult(completed.IsCompletedSuccessfully ? completed.Result : null),
+                    _constructed, CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
+                return task;
             }, LazyThreadSafetyMode.ExecutionAndPublication);
         }
 
@@ -217,7 +229,8 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     /// <param name="loggerFactory">Logger factory for the registry and created contexts.</param>
     /// <param name="maxTenantCount">
     /// Optional upper bound on distinct cached tenants. When set and the limit is reached,
-    /// <see cref="GetContext"/> and <see cref="AcquireLease"/> throw <see cref="InvalidOperationException"/> for new tenants.
+    /// <see cref="GetContext"/>, <see cref="GetContextAsync"/>, <see cref="AcquireLease"/> and
+    /// <see cref="AcquireLeaseAsync"/> throw <see cref="InvalidOperationException"/> for new tenants.
     /// Call <see cref="Invalidate"/> or <see cref="InvalidateAll"/> to evict unused entries.
     /// </param>
     public TenantContextRegistry(
@@ -258,7 +271,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     /// outside the lock, so hold time stays negligible even though tenant construction itself may
     /// be slow.
     /// </summary>
-    private TenantContextEntry GetOrCreateEntry(string tenant)
+    private TenantContextEntry GetOrCreateEntry(string tenant, bool constructAsync)
     {
         if (_contexts.TryGetValue(tenant, out var existing))
         {
@@ -281,12 +294,19 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                         "Call Invalidate() or InvalidateAll() to evict unused tenants before adding new ones.");
                 }
 
-                return _contexts.GetOrAdd(tenant, key => new TenantContextEntry(() => CreateDatabaseContext(key)));
+                return _contexts.GetOrAdd(tenant, key => NewEntry(key, constructAsync));
             }
         }
 
-        return _contexts.GetOrAdd(tenant, key => new TenantContextEntry(() => CreateDatabaseContext(key)));
+        return _contexts.GetOrAdd(tenant, key => NewEntry(key, constructAsync));
     }
+
+    // The shared construction never takes a caller's token: one caller cancelling its own wait
+    // must not fail the construction other callers are waiting on (see ResolveEntryAsync).
+    private TenantContextEntry NewEntry(string tenant, bool constructAsync) =>
+        constructAsync
+            ? new TenantContextEntry(() => CreateDatabaseContextAsync(tenant))
+            : new TenantContextEntry(() => Task.FromResult(CreateDatabaseContext(tenant)));
 
     /// <summary>
     /// Resolves an entry's value, removing the entry on a faulted construction so the next
@@ -296,7 +316,9 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
     {
         try
         {
-            return entry.LazyContext.Value;
+            // Completed already unless the entry was admitted by an async caller whose
+            // construction is still in flight; then this waits for it, as Lazy<T>.Value did.
+            return entry.LazyContext.Value.GetAwaiter().GetResult();
         }
         catch
         {
@@ -308,14 +330,48 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         }
     }
 
+    /// <summary>
+    /// Async <see cref="ResolveEntry"/>. Evicts the entry only when the shared construction itself
+    /// failed, not when this caller's own token stopped its wait.
+    /// </summary>
+    private async Task<IDatabaseContext> ResolveEntryAsync(string tenant, TenantContextEntry entry,
+        CancellationToken cancellationToken)
+    {
+        var task = entry.LazyContext.Value;
+        try
+        {
+            return await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            if (task.IsFaulted || task.IsCanceled)
+            {
+                _contexts.TryRemove(new KeyValuePair<string, TenantContextEntry>(tenant, entry));
+            }
+
+            throw;
+        }
+    }
+
     /// <inheritdoc/>
     public IDatabaseContext GetContext(string tenant)
     {
         ThrowIfDisposed();
         ValidateTenant(tenant);
 
-        var entry = GetOrCreateEntry(tenant);
+        var entry = GetOrCreateEntry(tenant, constructAsync: false);
         return ResolveEntry(tenant, entry);
+    }
+
+    /// <inheritdoc/>
+    public Task<IDatabaseContext> GetContextAsync(string tenant, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        ValidateTenant(tenant);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var entry = GetOrCreateEntry(tenant, constructAsync: true);
+        return ResolveEntryAsync(tenant, entry, cancellationToken);
     }
 
     /// <inheritdoc/>
@@ -326,7 +382,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         while (true)
         {
-            var entry = GetOrCreateEntry(tenant);
+            var entry = GetOrCreateEntry(tenant, constructAsync: false);
             if (!entry.TryAddLease())
             {
                 // Entry already committed to disposal — retry against a fresh/current entry.
@@ -337,6 +393,37 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
             try
             {
                 context = ResolveEntry(tenant, entry);
+            }
+            catch
+            {
+                entry.ReleaseLease(this, tenant);
+                throw;
+            }
+
+            return new TenantContextLease(context, entry, this, tenant);
+        }
+    }
+
+    /// <inheritdoc/>
+    public async Task<ITenantContextLease> AcquireLeaseAsync(string tenant, CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        ValidateTenant(tenant);
+
+        while (true)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var entry = GetOrCreateEntry(tenant, constructAsync: true);
+            if (!entry.TryAddLease())
+            {
+                // Entry already committed to disposal — retry against a fresh/current entry.
+                continue;
+            }
+
+            IDatabaseContext context;
+            try
+            {
+                context = await ResolveEntryAsync(tenant, entry, cancellationToken).ConfigureAwait(false);
             }
             catch
             {
@@ -368,21 +455,25 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
     /// <summary>
     /// Actually tears down a tenant's context — always invoked via <see cref="ScheduleDisposeEntry"/>,
-    /// never inline on a lease-releasing/invalidating caller's thread. Blocks on
-    /// <see cref="Lazy{T}.Value"/> exactly like any other caller racing the same construction
-    /// would if it's still in flight elsewhere.
+    /// never inline on a lease-releasing/invalidating caller's thread. If an asynchronous
+    /// construction is still in flight, defers via a continuation instead of blocking.
     /// </summary>
     private void DisposeEntry(string tenant, TenantContextEntry entry)
     {
-        IDatabaseContext context;
-        try
+        var task = entry.LazyContext.Value;
+        if (!task.IsCompleted)
         {
-            context = entry.LazyContext.Value;
+            task.ContinueWith(_ => DisposeEntry(tenant, entry), CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            return;
         }
-        catch
+
+        if (!task.IsCompletedSuccessfully)
         {
-            return; // Faulted construction — nothing to dispose.
+            return; // Faulted/canceled construction — nothing to dispose.
         }
+
+        var context = task.Result;
 
         if (!entry.TryClaimDisposal())
         {
@@ -434,6 +525,19 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         return context;
     }
 
+    private async Task<IDatabaseContext> CreateDatabaseContextAsync(string tenant)
+    {
+        var config = _resolver.GetDatabaseContextConfiguration(tenant);
+
+        var factory = _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
+                      ?? throw new InvalidOperationException($"No factory registered for '{config.ProviderName}'.");
+
+        var context = await _contextFactory.CreateAsync(config, factory, _loggerFactory, CancellationToken.None)
+            .ConfigureAwait(false);
+        ContextCreated?.Invoke(context);
+        return context;
+    }
+
     /// <summary>
     /// Disposes every already-constructed context. An entry still under construction on another
     /// thread at this instant (<see cref="TenantContextEntry.LazyContext"/> not yet
@@ -451,11 +555,12 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         foreach (var entry in entries)
         {
-            if (entry.LazyContext.IsValueCreated)
+            if (entry.LazyContext.IsValueCreated && entry.LazyContext.Value.IsCompleted)
             {
-                if (entry.TryClaimDisposal())
+                var task = entry.LazyContext.Value;
+                if (task.IsCompletedSuccessfully && entry.TryClaimDisposal())
                 {
-                    DisposeShutdownContextSync(entry.LazyContext.Value);
+                    DisposeShutdownContextSync(task.Result);
                 }
             }
             else
@@ -477,11 +582,12 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         foreach (var entry in entries)
         {
-            if (entry.LazyContext.IsValueCreated)
+            if (entry.LazyContext.IsValueCreated && entry.LazyContext.Value.IsCompleted)
             {
-                if (entry.TryClaimDisposal())
+                var task = entry.LazyContext.Value;
+                if (task.IsCompletedSuccessfully && entry.TryClaimDisposal())
                 {
-                    await DisposeShutdownContextAsync(entry.LazyContext.Value).ConfigureAwait(false);
+                    await DisposeShutdownContextAsync(task.Result).ConfigureAwait(false);
                 }
             }
             else
@@ -498,11 +604,11 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                     // GetOrCreateEntry and ResolveEntry). Start it on the pool so the signal is
                     // guaranteed to complete; if a caller starts it first, this simply observes
                     // that caller's result.
-                    _ = Task.Run(() =>
+                    _ = Task.Run(async () =>
                     {
                         try
                         {
-                            _ = entry.LazyContext.Value;
+                            await entry.LazyContext.Value.ConfigureAwait(false);
                         }
                         catch (Exception ex)
                         {
@@ -526,24 +632,27 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         ThreadPool.UnsafeQueueUserWorkItem(static state =>
         {
             var (owner, capturedEntry) = state;
-            IDatabaseContext context;
-            try
+            // Starts construction if nobody has (a synchronous factory then runs on this background
+            // thread, never the caller's); an in-flight async construction is not blocked on.
+            capturedEntry.LazyContext.Value.ContinueWith(static (task, state) =>
             {
-                context = capturedEntry.LazyContext.Value; // blocks this background thread, never the caller
-            }
-            catch (Exception ex)
-            {
-                // Construction faulted: nothing to dispose, and nobody else observes this failure.
-                owner.LogShutdownConstructionFailure(ex);
-                return;
-            }
+                var (registry, shutdownEntry) = ((TenantContextRegistry, TenantContextEntry))state!;
+                if (!task.IsCompletedSuccessfully)
+                {
+                    // Construction faulted: nothing to dispose, and nobody else observes this failure.
+                    registry.LogShutdownConstructionFailure(task.Exception?.GetBaseException()
+                                                            ?? new OperationCanceledException());
+                    return;
+                }
 
-            if (!capturedEntry.TryClaimDisposal())
-            {
-                return; // Already claimed by a racing Invalidate — see TryClaimDisposal.
-            }
+                if (!shutdownEntry.TryClaimDisposal())
+                {
+                    return; // Already claimed by a racing Invalidate — see TryClaimDisposal.
+                }
 
-            owner.DisposeShutdownContextSync(context);
+                registry.DisposeShutdownContextSync(task.Result);
+            }, (owner, capturedEntry), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
         }, (this, entry), preferLocal: false);
     }
 

@@ -93,6 +93,17 @@ internal static class TypeCoercionHelper
     }
 
     /// <summary>
+    /// Adopts <paramref name="logger"/> only if no logger has been set yet, atomically: the first
+    /// <see cref="DatabaseContext"/> to initialize wins for every other context in the process too.
+    /// A check-then-set here raced when contexts are created concurrently (e.g.
+    /// <c>Task.WhenAll</c> over <c>DatabaseContext.CreateAsync</c>, BP-311).
+    /// </summary>
+    internal static void SetLoggerIfUnset(ILogger logger)
+    {
+        System.Threading.Interlocked.CompareExchange(ref _logger, logger, NullLogger.Instance);
+    }
+
+    /// <summary>
     /// Converts a value to the specified target type using a cached compiled delegate.
     /// This is significantly faster than Convert.ChangeType for repeated conversions.
     /// </summary>

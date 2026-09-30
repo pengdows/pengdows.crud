@@ -110,13 +110,39 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
         DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
+        // useAsync: false never awaits anything incomplete, so this completes synchronously.
+        return HandleDialectDetectionCoreAsync(initConnection, factory, loggerFactory, false, CancellationToken.None)
+            .GetAwaiter().GetResult();
+    }
+
+    public Task<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)> HandleDialectDetectionAsync(
+        ITrackedConnection? initConnection,
+        DbProviderFactory? factory,
+        ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        return HandleDialectDetectionCoreAsync(initConnection, factory, loggerFactory, true, cancellationToken)
+            .AsTask();
+    }
+
+    private async ValueTask<(ISqlDialect? dialect, IDataSourceInformation? dataSourceInfo)>
+        HandleDialectDetectionCoreAsync(
+            ITrackedConnection? initConnection,
+            DbProviderFactory? factory,
+            ILoggerFactory loggerFactory,
+            bool useAsync,
+            CancellationToken cancellationToken)
+    {
         // SingleConnection strategy: use the persistent connection for detection
         // The initConnection becomes the single persistent connection, so reuse it
         var connectionForDetection = _context.PersistentConnection ?? initConnection;
 
         if (connectionForDetection != null && factory != null)
         {
-            var dialect = SqlDialectFactory.CreateDialect(connectionForDetection, factory, loggerFactory);
+            var dialect = useAsync
+                ? await SqlDialectFactory.CreateDialectAsync(connectionForDetection, factory, loggerFactory,
+                    cancellationToken).ConfigureAwait(false)
+                : SqlDialectFactory.CreateDialect(connectionForDetection, factory, loggerFactory);
             var dataSourceInfo = new DataSourceInformation(dialect);
             return (dialect, dataSourceInfo);
         }

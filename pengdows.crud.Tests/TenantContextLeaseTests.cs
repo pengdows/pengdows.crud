@@ -12,11 +12,11 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-// A caller holding a bare IDatabaseContext from GetContext has no protection against a
-// concurrent Invalidate/InvalidateAll disposing it. These tests drive the additive
-// ITenantContextRegistry.AcquireLease API, which closes that gap for callers who opt into it:
-// a leased context is guaranteed not to be disposed by Invalidate until every outstanding lease
-// on it has been released.
+// CORE-010: a caller holding a bare IDatabaseContext from GetContext/GetContextAsync has no
+// protection against a concurrent Invalidate/InvalidateAll disposing it. These tests drive the
+// additive ITenantContextRegistry.AcquireLease/AcquireLeaseAsync API, which closes that gap for
+// callers who opt into it: a leased context is guaranteed not to be disposed by Invalidate until
+// every outstanding lease on it has been released.
 public class TenantContextLeaseTests
 {
     private sealed class StubResolver : ITenantConnectionResolver
@@ -77,10 +77,10 @@ public class TenantContextLeaseTests
 
     // A lease's last release/an Invalidate that finds an idle entry both trigger disposal via
     // TenantContextRegistry.ScheduleDisposeEntry, which dispatches onto the thread pool rather
-    // than running inline on the releasing/invalidating caller's thread (necessary because
-    // DatabaseContext disposal can itself block on its own pool-governor drain wait). So
-    // disposal can lag slightly behind the call that triggered it returning; poll with a
-    // generous bound instead of asserting immediately.
+    // than running inline on the releasing/invalidating caller's thread (confirmed necessary
+    // empirically — see ScheduleDisposeEntry's doc comment). So disposal can lag slightly behind
+    // the call that triggered it returning; poll with a generous bound instead of asserting
+    // immediately.
     private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan? timeout = null)
     {
         var deadline = DateTime.UtcNow + (timeout ?? TimeSpan.FromSeconds(5));
@@ -164,16 +164,23 @@ public class TenantContextLeaseTests
     [Fact]
     public async Task AcquireLease_ConcurrentReleaseAndInvalidateHammer_DisposesExactlyOnce()
     {
-        // The exact race an earlier draft of this design could get wrong: a plain
-        // Interlocked.Increment lease counter can't detect "disposal already committed,"
-        // letting a lease resurrect a reference to an already-disposed context. Hammer
-        // AcquireLease/Dispose concurrently with Invalidate and assert the context is only ever
-        // torn down exactly once.
+        // The exact race an earlier draft of this design got wrong: a plain Interlocked.Increment
+        // lease counter can't detect "disposal already committed," letting a lease resurrect a
+        // reference to an already-disposed context. Hammer AcquireLease/Dispose concurrently with
+        // Invalidate and assert the context is only ever torn down exactly once, and every lease
+        // that was successfully handed out was genuinely usable at the moment it was returned.
         //
-        // AcquireLease is synchronous/blocking by design (same contract as GetContext) — driving
-        // it at high fan-out here uses TaskCreationOptions.LongRunning (a dedicated thread per
-        // task) rather than plain Task.Run, to avoid thread-pool starvation from many blocking
-        // calls queued onto the shared pool at once.
+        // AcquireLease is synchronous/blocking by design (see GetContext's identical contract) —
+        // driving it at high fan-out here uses TaskCreationOptions.LongRunning (a dedicated thread
+        // per task) rather than plain Task.Run. Task.Run schedules onto the shared thread pool,
+        // and a blocking call that only one of N queued pool-thread delegates can complete first
+        // (the Lazy<Task<T>> single-flight winner) while the other N-1 block waiting on it is a
+        // classic self-inflicted thread-pool starvation pattern — confirmed directly: the exact
+        // same scenario via plain Task.Run took ~60-90s to resolve (the pool's slow thread-
+        // injection heuristic eventually breaking the cycle) while LongRunning resolves in
+        // milliseconds. That starvation risk is a property of blocking-call-under-Task.Run at high
+        // fan-out in general, not specific to this registry — the pre-existing synchronous
+        // GetContext/Lazy<IDatabaseContext> path has the identical characteristic.
         using var provider = (ServiceProvider)BuildProvider();
         var cfg = MakeConfig();
         var factory = new RealContextFactory();

@@ -31,20 +31,52 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal static class SqlDialectFactory
 {
-    internal static async Task<ISqlDialect> CreateDialectAsync(
+    internal static Task<ISqlDialect> CreateDialectAsync(
         ITrackedConnection connection,
         DbProviderFactory factory,
         ILoggerFactory loggerFactory,
         CancellationToken cancellationToken = default)
     {
+        return CreateDialectCoreAsync(connection, factory, loggerFactory, true, cancellationToken).AsTask();
+    }
+
+    internal static ISqlDialect CreateDialect(
+        ITrackedConnection connection,
+        DbProviderFactory factory)
+    {
+        return CreateDialect(connection, factory, NullLoggerFactory.Instance);
+    }
+
+
+    internal static ISqlDialect CreateDialect(
+        ITrackedConnection connection,
+        DbProviderFactory factory,
+        ILoggerFactory loggerFactory)
+    {
+        return CreateDialectCoreAsync(connection, factory, loggerFactory, false, CancellationToken.None)
+            .GetAwaiter().GetResult();
+    }
+
+    /// <summary>
+    /// The one dialect-creation path (BP-311): <paramref name="useAsync"/> picks synchronous or
+    /// asynchronous product-detection probes, so the constructor path keeps its synchronous probes
+    /// and <c>DatabaseContext.CreateAsync</c> never runs a blocking one.
+    /// </summary>
+    private static async ValueTask<ISqlDialect> CreateDialectCoreAsync(
+        ITrackedConnection connection,
+        DbProviderFactory factory,
+        ILoggerFactory loggerFactory,
+        bool useAsync,
+        CancellationToken cancellationToken)
+    {
         loggerFactory ??= NullLoggerFactory.Instance;
         cancellationToken.ThrowIfCancellationRequested();
         var logger = loggerFactory.CreateLogger<SqlDialect>();
 
-        // Use centralized detection service. Product inference itself has no genuine async I/O
-        // path, so the cancellation token above is only checked cooperatively before starting,
-        // not threaded any deeper into this call.
-        var inferredType = DatabaseDetectionService.DetectProduct(connection, factory);
+        var inferredType = useAsync
+            ? await DatabaseDetectionService.DetectProductAsync(connection, factory, cancellationToken)
+                .ConfigureAwait(false)
+            : DatabaseDetectionService.DetectProduct(connection, factory);
 
         var dialect = CreateDialectForType(inferredType, factory, logger);
         if (dialect is not IInternalSqlDialect internalDialect)
@@ -61,23 +93,6 @@ internal static class SqlDialectFactory
 
         await internalDialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
         return dialect;
-    }
-
-    internal static ISqlDialect CreateDialect(
-        ITrackedConnection connection,
-        DbProviderFactory factory)
-    {
-        return CreateDialectAsync(connection, factory, NullLoggerFactory.Instance).GetAwaiter().GetResult();
-    }
-
-
-    internal static ISqlDialect CreateDialect(
-        ITrackedConnection connection,
-        DbProviderFactory factory,
-        ILoggerFactory loggerFactory)
-    {
-        loggerFactory ??= NullLoggerFactory.Instance;
-        return CreateDialectAsync(connection, factory, loggerFactory).GetAwaiter().GetResult();
     }
 
     public static ISqlDialect CreateDialectForType(

@@ -35,6 +35,44 @@ public interface ITenantContextRegistry
     public ITenantContextLease AcquireLease(string tenant) => new UnprotectedTenantContextLease(GetContext(tenant));
 
     /// <summary>
+    /// Asynchronously retrieves a database context for the specified tenant, sharing the same
+    /// cache as <see cref="GetContext"/>: a tenant resolved through either method is created at
+    /// most once and observed identically by both.
+    /// </summary>
+    /// <remarks>
+    /// <c>TenantContextRegistry</c> creates a not-yet-cached tenant's context through
+    /// <see cref="IDatabaseContextFactory.CreateAsync"/>, so the calling thread is not held for
+    /// connection opening and dialect detection; concurrent callers for the same new tenant share
+    /// one construction. Same bare-reference caveat as <see cref="GetContext"/>; see
+    /// <see cref="AcquireLeaseAsync"/>. The default implementation (for registries written against
+    /// 2.0.5) calls <see cref="GetContext"/>.
+    /// </remarks>
+    /// <param name="tenant">Tenant identifier.</param>
+    /// <param name="cancellationToken">
+    /// Observed while a not-yet-cached tenant's context is being created. Cancelling stops only this
+    /// caller's wait, not a construction other callers share.
+    /// </param>
+    /// <returns>The associated database context.</returns>
+    public Task<IDatabaseContext> GetContextAsync(string tenant, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(GetContext(tenant));
+    }
+
+    /// <summary>
+    /// Asynchronous <see cref="AcquireLease"/>: creates a not-yet-cached tenant's context the way
+    /// <see cref="GetContextAsync"/> does, then leases it.
+    /// </summary>
+    /// <param name="tenant">Tenant identifier.</param>
+    /// <param name="cancellationToken">Same semantics as <see cref="GetContextAsync"/>'s.</param>
+    /// <returns>A lease; dispose it to release the context.</returns>
+    public Task<ITenantContextLease> AcquireLeaseAsync(string tenant, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.FromResult(AcquireLease(tenant));
+    }
+
+    /// <summary>
     /// Removes the cached context for the specified tenant and disposes it — on a background
     /// thread, and only once every outstanding <see cref="AcquireLease"/> lease has been released.
     /// The next call to <see cref="GetContext"/> for this tenant will create a fresh context
