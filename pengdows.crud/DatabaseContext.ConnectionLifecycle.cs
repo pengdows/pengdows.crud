@@ -50,7 +50,22 @@ public partial class DatabaseContext
     /// <inheritdoc/>
     internal ITrackedConnection GetConnection(ExecutionType executionType, bool isShared = false)
     {
+        RecordRequest(executionType);
         return _connectionStrategy.GetConnection(executionType, isShared);
+    }
+
+    // DatabaseMetrics.ReadRequests/WriteRequests: every request the context admits, in every mode
+    // (SingleConnection has no pool governor, so counting at slot acquisition missed it).
+    private void RecordRequest(ExecutionType executionType)
+    {
+        if (executionType == ExecutionType.Read)
+        {
+            _attributionStats.RecordReadRequest();
+        }
+        else
+        {
+            _attributionStats.RecordWriteRequest();
+        }
     }
 
     ITrackedConnection IInternalConnectionProvider.GetConnection(ExecutionType executionType, bool isShared)
@@ -69,6 +84,7 @@ public partial class DatabaseContext
     internal ValueTask<ITrackedConnection> GetConnectionAsync(ExecutionType executionType, bool isShared = false,
         CancellationToken cancellationToken = default)
     {
+        RecordRequest(executionType);
         return _connectionStrategy.GetConnectionAsync(executionType, isShared, cancellationToken);
     }
 
@@ -839,15 +855,6 @@ public partial class DatabaseContext
             return default;
         }
 
-        if (executionType == ExecutionType.Read)
-        {
-            _attributionStats.RecordReadRequest();
-        }
-        else
-        {
-            _attributionStats.RecordWriteRequest();
-        }
-
         var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
         if (governor == null)
         {
@@ -874,15 +881,6 @@ public partial class DatabaseContext
         if (!_effectivePoolGovernorEnabled)
         {
             return default;
-        }
-
-        if (executionType == ExecutionType.Read)
-        {
-            _attributionStats.RecordReadRequest();
-        }
-        else
-        {
-            _attributionStats.RecordWriteRequest();
         }
 
         var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
