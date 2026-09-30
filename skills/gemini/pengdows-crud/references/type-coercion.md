@@ -132,9 +132,11 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   → `Dictionary<,>`.
 - Firebird `DECFLOAT` → `decimal` (or `double`); declare `[Column(..., DbType.VarNumeric)]` so the value binds as
   `FbDecFloat`. NaN/infinity or a value `decimal` would round throws `DataMappingException` into `decimal`.
+- SQL Server `hierarchyid` → `HierarchyId` (or `string`) with no `Microsoft.SqlServer.Types`: written as its text
+  (`/1/2.5/`, converted implicitly by SQL Server; text on other databases), read from the stored encoding (TYPE-016).
 - A stored value with no .NET representation throws `DataMappingException` naming the column, never a raw provider
   exception or a default: MySQL/MariaDB zero dates, PostgreSQL `numeric` NaN into `decimal`, SQL Server
-  `hierarchyid`/CLR types without `Microsoft.SqlServer.Types` (select `CAST(col AS nvarchar(4000))` into a `string`).
+  `geometry`/`geography`/other CLR types without `Microsoft.SqlServer.Types` (select `col.ToString()` instead).
 
 ## JSON Support
 

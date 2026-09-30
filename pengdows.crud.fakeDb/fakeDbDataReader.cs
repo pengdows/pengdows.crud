@@ -203,6 +203,13 @@ public class fakeDbDataReader : DbDataReader
             throw failure;
         }
 
+        if (IsUnloadableUdt(i) && row[keys[i]] is not null && row[keys[i]] is not DBNull)
+        {
+            throw new FileNotFoundException(
+                "Could not load file or assembly 'Microsoft.SqlServer.Types, Version=16.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91'. The system cannot find the file specified.",
+                "Microsoft.SqlServer.Types, Version=16.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91");
+        }
+
         if (OutOfRangeReturnsNullColumns != null && OutOfRangeReturnsNullColumns.Contains(keys[i]))
         {
             return null!; // deliberately violates the contract, as the emulated driver does
@@ -233,6 +240,19 @@ public class fakeDbDataReader : DbDataReader
     /// isn't loaded (confirmed live 2026-09-30).
     /// </summary>
     public ISet<string>? UnresolvedFieldTypeColumns { get; set; }
+
+    /// <summary>
+    /// Columns (name → provider data type name, e.g. <c>master.sys.hierarchyid</c>) that emulate
+    /// Microsoft.Data.SqlClient on a CLR user-defined type whose assembly (Microsoft.SqlServer.Types)
+    /// isn't loaded, as confirmed live on SQL Server 2025 with SqlClient 6.0.2: <see cref="GetFieldType"/>
+    /// returns <c>null</c>, <see cref="GetValue"/> throws <see cref="FileNotFoundException"/> for a
+    /// non-NULL value, <see cref="GetDataTypeName"/> returns the given name, and <see cref="GetBytes"/>
+    /// and <see cref="IsDBNull"/> still work on the stored bytes.
+    /// </summary>
+    public IDictionary<string, string>? UnloadableUdtColumns { get; set; }
+
+    private bool IsUnloadableUdt(int ordinal) =>
+        UnloadableUdtColumns != null && UnloadableUdtColumns.ContainsKey(GetName(ordinal));
 
     public override int GetValues(object[] values)
     {
@@ -281,7 +301,7 @@ public class fakeDbDataReader : DbDataReader
             throw new OverflowException("Value was either too large or too small for a Decimal.");
         }
 
-        var value = GetValue(i);
+        var value = IsUnloadableUdt(i) ? RawValue(i) : GetValue(i);
         return value is null || value == DBNull.Value;
     }
 
@@ -312,7 +332,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
     {
-        var data = GetValue(ordinal);
+        var data = IsUnloadableUdt(ordinal) ? RawValue(ordinal) : GetValue(ordinal);
         if (data is not byte[] bytes)
         {
             // If it's not a byte array, return 0 to indicate no bytes copied
@@ -364,6 +384,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override string GetDataTypeName(int i)
     {
+        if (UnloadableUdtColumns != null && UnloadableUdtColumns.TryGetValue(GetName(i), out var udtName))
+        {
+            return udtName;
+        }
+
         return RawValue(i)?.GetType().Name ?? nameof(DBNull);
     }
 
@@ -404,7 +429,8 @@ public class fakeDbDataReader : DbDataReader
 
     public override Type GetFieldType(int ordinal)
     {
-        if (UnresolvedFieldTypeColumns != null && UnresolvedFieldTypeColumns.Contains(GetName(ordinal)))
+        if ((UnresolvedFieldTypeColumns != null && UnresolvedFieldTypeColumns.Contains(GetName(ordinal)))
+            || IsUnloadableUdt(ordinal))
         {
             return null!; // deliberately violates the contract, as the emulated driver does
         }

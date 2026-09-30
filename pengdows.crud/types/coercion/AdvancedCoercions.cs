@@ -66,6 +66,9 @@ internal static class AdvancedCoercions
         // Concurrency/versioning
         registry.Register(new RowVersionValueCoercion());
 
+        // Hierarchies (TYPE-016)
+        registry.Register(new HierarchyIdCoercion());
+
         // Large object types (LOBs)
         registry.Register(new BlobStreamCoercion());
         registry.Register(new ClobStreamCoercion());
@@ -299,6 +302,53 @@ internal class InetCoercion : DbCoercion<Inet>
     }
 
     public override bool TryWrite([AllowNull] Inet value, DbParameter parameter)
+    {
+        parameter.Value = value.ToString();
+        parameter.DbType = DbType.String;
+        return true;
+    }
+}
+
+/// <summary>
+/// Coercion for <see cref="HierarchyId"/> (TYPE-016): reads SQL Server's stored encoding (what
+/// SqlClient's GetBytes returns without Microsoft.SqlServer.Types), that assembly's SqlHierarchyId,
+/// or the text form; writes the text form, which SQL Server converts to hierarchyid implicitly.
+/// </summary>
+internal class HierarchyIdCoercion : DbCoercion<HierarchyId>
+{
+    public override bool TryRead(in DbValue src, out HierarchyId value)
+    {
+        value = default;
+        if (src.IsNull)
+        {
+            return false;
+        }
+
+        try
+        {
+            switch (src.RawValue)
+            {
+                case HierarchyId hierarchyId:
+                    value = hierarchyId;
+                    return true;
+                case string text:
+                    return HierarchyId.TryParse(text, out value);
+                case byte[] bytes:
+                    value = HierarchyId.FromSqlServerBytes(bytes);
+                    return true;
+                case { } other when other.GetType().Name == "SqlHierarchyId":
+                    return HierarchyId.TryParse(other.ToString(), out value);
+                default:
+                    return false;
+            }
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    public override bool TryWrite([AllowNull] HierarchyId value, DbParameter parameter)
     {
         parameter.Value = value.ToString();
         parameter.DbType = DbType.String;

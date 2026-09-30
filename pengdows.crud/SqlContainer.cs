@@ -1664,7 +1664,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                     : null,
                 _dialect is SqlDialect { ReadsInt64ThroughGetValue: true },
                 _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true },
-                _dialect is SqlDialect unreadableDialect ? unreadableDialect.IsUnreadableStoredValue : null);
+                _dialect is SqlDialect unreadableDialect ? unreadableDialect.IsUnreadableStoredValue : null,
+                _dialect is SqlDialect { ReadsUnresolvedColumns: true } unresolvedDialect ? unresolvedDialect : null);
             cmd = null;
             singleConnectionTxGate = null; // TrackedReader owns it until the reader is disposed
             lockTransferred = true; // TrackedReader now owns both the connection and context locks

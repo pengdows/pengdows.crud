@@ -42,6 +42,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.types;
+using pengdows.crud.types.valueobjects;
 
 #endregion
 
@@ -361,6 +362,12 @@ internal static class TypeCoercionHelper
         if (underlyingTarget == typeof(string) && sourceType == typeof(char[]))
         {
             return new string((char[])value);
+        }
+
+        // TYPE-016: a hierarchyid read as HierarchyId into a string property gets its text form.
+        if (underlyingTarget == typeof(string) && value is HierarchyId hierarchyId)
+        {
+            return hierarchyId.ToString();
         }
 
         // Legacy path: Try advanced converter for backward compatibility

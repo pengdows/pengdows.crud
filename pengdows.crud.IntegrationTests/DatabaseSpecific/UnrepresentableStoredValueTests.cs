@@ -10,8 +10,9 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 
 /// <summary>
 /// TYPE-005: stored values with no .NET representation — a MySQL zero date, a SQL Server
-/// hierarchyid without Microsoft.SqlServer.Types, a PostgreSQL numeric NaN — surface as a
+/// geometry without Microsoft.SqlServer.Types, a PostgreSQL numeric NaN — surface as a
 /// DataMappingException naming the column, never a raw provider exception or a default value.
+/// (hierarchyid, the first SQL Server case, reads as HierarchyId since TYPE-016.)
 /// </summary>
 [Collection("IntegrationTests")]
 public sealed class UnrepresentableStoredValueTests : DatabaseTestBase
@@ -27,7 +28,7 @@ public sealed class UnrepresentableStoredValueTests : DatabaseTestBase
     private static (string Ddl, string Literal) Case(SupportedDatabase provider) => provider switch
     {
         SupportedDatabase.MySql => ("DATETIME", "'0000-00-00 00:00:00'"),
-        SupportedDatabase.SqlServer => ("hierarchyid", "'/1/2/'"),
+        SupportedDatabase.SqlServer => ("geometry", "geometry::Parse('POINT(1 2)')"),
         _ => ("NUMERIC", "'NaN'")
     };
 
@@ -59,7 +60,7 @@ public sealed class UnrepresentableStoredValueTests : DatabaseTestBase
                 SupportedDatabase.MySql => await Assert.ThrowsAsync<DataMappingException>(
                     async () => await new TableGateway<ZeroDateRow, int>(context).RetrieveOneAsync(1, context)),
                 SupportedDatabase.SqlServer => await Assert.ThrowsAsync<DataMappingException>(
-                    async () => await new TableGateway<HierarchyRow, int>(context).RetrieveOneAsync(1, context)),
+                    async () => await new TableGateway<GeometryRow, int>(context).RetrieveOneAsync(1, context)),
                 _ => await Assert.ThrowsAsync<DataMappingException>(
                     async () => await new TableGateway<NaNRow, int>(context).RetrieveOneAsync(1, context)),
             };
@@ -75,7 +76,7 @@ public sealed class UnrepresentableStoredValueTests : DatabaseTestBase
     }
 
     [Table(TableName)]
-    internal sealed class HierarchyRow
+    internal sealed class GeometryRow
     {
         [Id][Column("id", DbType.Int32)] public int Id { get; set; }
         [Column("v", DbType.String)] public string? V { get; set; }
