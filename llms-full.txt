@@ -596,6 +596,7 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 │   ├── ConcurrencyConflictException        — auto-thrown by UpdateAsync on [Version] mismatch
 │   ├── CommandTimeoutException             — command timed out (IsTransient = true)
 │   ├── ConnectionException                 — connection-level failure
+│   │   ├── ConnectionFailedException       — DatabaseContext construction could not connect (Phase/Role)
 │   │   ├── FileLockContentionException     — embedded-file lock contention (IsTransient = false)
 │   │   └── TooManyConnectionsException     — server reached but at its connection limit (IsTransient = true)
 │   ├── ReadOnlyViolationException          — write attempted on a read-only SQLite/DuckDB file (see "Read-only violations" below)
@@ -1174,7 +1175,7 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `PoolSaturatedException : TimeoutException` — internal connection pool exhausted
 - `PoolForbiddenException : InvalidOperationException` — write attempted on read-only context
 - `TransactionModeNotSupportedException : NotSupportedException` — savepoint or read-only tx on unsupported dialect
-- `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
+- `ConnectionFailedException : ConnectionException` — startup connection failure (carries `Phase` and `Role`, plus the underlying SQLSTATE/error code/`IsTransient`), so `catch (ConnectionException)` and `catch (DatabaseException)` see it too
 
 ```csharp
 try

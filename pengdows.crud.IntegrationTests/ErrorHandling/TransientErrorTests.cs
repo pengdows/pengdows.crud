@@ -20,8 +20,8 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 /// IMPORTANT — two distinct "can't connect" exception types exist in pengdows.crud, and this
 /// test exercises the FIRST one:
 /// <list type="number">
-/// <item><see cref="pengdows.crud.exceptions.ConnectionFailedException"/> — NOT a
-/// <see cref="DatabaseException"/> subtype. <c>DatabaseContext</c>'s constructor always eagerly
+/// <item><see cref="pengdows.crud.exceptions.ConnectionFailedException"/> — since 2.0.6 a
+/// <see cref="ConnectionException"/> (DEC-001; it derived from Exception before). <c>DatabaseContext</c>'s constructor always eagerly
 /// opens a probe connection for product/capability detection (see
 /// <c>DatabaseContext.InitializeInternals</c>); if that fails, it throws this directly,
 /// bypassing <c>IDbExceptionTranslator</c> entirely. This is the exception a real caller gets
@@ -58,6 +58,8 @@ public class TransientErrorTests : DatabaseTestBase
 
             Assert.Equal("InitConnect", ex.Phase);
             Assert.NotNull(ex.InnerException);
+            // DEC-001: the same catch (ConnectionException) handles it at construction and at runtime.
+            Assert.IsAssignableFrom<ConnectionException>(ex);
         });
     }
 

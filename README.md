@@ -254,7 +254,7 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `ModeContentionException : TimeoutException` — SingleWriter/SingleConnection lock timed out
 - `PoolSaturatedException : TimeoutException` — internal connection pool exhausted
 - `PoolForbiddenException : InvalidOperationException` — write attempted on read-only context
-- `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
+- `ConnectionFailedException : ConnectionException` — startup connection failure (carries `Phase` and `Role`, plus the underlying SQLSTATE/error code/`IsTransient`), so `catch (ConnectionException)` and `catch (DatabaseException)` see it too
 
 ```csharp
 try
