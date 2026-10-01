@@ -154,31 +154,29 @@ internal static class ProviderParameterFactory
 
         try
         {
-            // Optimize common types for PostgreSQL using cached PropertyInfo
+            // NpgsqlDbType is set by member name, never by number: the numbers are Npgsql's
+            // implementation detail (hard-coded values here had drifted — JSONB was sent as Path,
+            // int[] as BigIntRange, ranges as Abstime).
             if (valueType == typeof(Guid) || valueType == typeof(Guid?))
             {
-                // NpgsqlDbType.Uuid = 27
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 27);
+                SetNpgsqlDbType(parameter, "Uuid");
             }
             else if (valueType == typeof(string[]))
             {
-                // NpgsqlDbType.Array | NpgsqlDbType.Text = (1 << 30) | 16
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, (1 << 30) | 16);
+                SetNpgsqlDbType(parameter, "Array", "Text");
             }
             else if (valueType == typeof(int[]))
             {
-                // NpgsqlDbType.Array | NpgsqlDbType.Integer = (1 << 30) | 1
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, (1 << 30) | 1);
+                SetNpgsqlDbType(parameter, "Array", "Integer");
             }
             else if (IsJsonType(valueType))
             {
-                // NpgsqlDbType.Jsonb = 14 (prefer JSONB for performance)
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 14);
+                // Prefer JSONB for performance.
+                SetNpgsqlDbType(parameter, "Jsonb");
             }
             else if (valueType.Name.Contains("HStore"))
             {
-                // NpgsqlDbType.Hstore = 37
-                _cachedNpgsqlDbTypeProperty.SetValue(parameter, 37);
+                SetNpgsqlDbType(parameter, "Hstore");
 
                 // HStoreCoercion.TryWrite (already run) stringifies to the canonical "key=>value"
                 // text for portable DbType.String bindings, but once NpgsqlDbType.Hstore is set
@@ -207,19 +205,47 @@ internal static class ProviderParameterFactory
         var genericArg = valueType.GetGenericArguments()[0];
         if (genericArg == typeof(int))
         {
-            // NpgsqlDbType.IntegerRange = 33
-            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 33);
+            SetNpgsqlDbType(parameter, "IntegerRange");
+        }
+        else if (genericArg == typeof(long))
+        {
+            SetNpgsqlDbType(parameter, "BigIntRange");
         }
         else if (genericArg == typeof(decimal))
         {
-            // NpgsqlDbType.NumericRange = 34
-            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 34);
+            SetNpgsqlDbType(parameter, "NumericRange");
         }
         else if (genericArg == typeof(DateTime))
         {
-            // NpgsqlDbType.TimestampRange = 35
-            _cachedNpgsqlDbTypeProperty!.SetValue(parameter, 35);
+            SetNpgsqlDbType(parameter, "TimestampRange");
         }
+    }
+
+    /// <summary>
+    /// Sets NpgsqlDbType to the named member (several names are OR-ed together, e.g. Array|Text).
+    /// Does nothing if the property isn't an enum or a name doesn't exist in it.
+    /// </summary>
+    private static void SetNpgsqlDbType(DbParameter parameter, params string[] memberNames)
+    {
+        var property = _cachedNpgsqlDbTypeProperty!;
+        var enumType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
+        if (!enumType.IsEnum)
+        {
+            return;
+        }
+
+        long combined = 0;
+        foreach (var name in memberNames)
+        {
+            if (!Enum.TryParse(enumType, name, ignoreCase: false, out var member))
+            {
+                return;
+            }
+
+            combined |= Convert.ToInt64(member, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        property.SetValue(parameter, Enum.ToObject(enumType, combined));
     }
 
     /// <summary>
@@ -267,8 +293,13 @@ internal static class ProviderParameterFactory
         // MySQL specific optimizations
         if (valueType == typeof(bool) || valueType == typeof(bool?))
         {
-            // Use TINYINT(1) for better compatibility
+            // TINYINT(1) for compatibility. The value must change with the DbType: DbType.Byte
+            // with a raw C# bool left the two disagreeing.
             parameter.DbType = DbType.Byte;
+            if (parameter.Value is bool boolValue)
+            {
+                parameter.Value = boolValue ? (byte)1 : (byte)0;
+            }
         }
         else if (IsJsonType(valueType))
         {
