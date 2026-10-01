@@ -63,7 +63,6 @@ public class ParallelTestOrchestrator
             SupportedDatabase.Firebird => new FirebirdSqlTestContainer(),
             SupportedDatabase.CockroachDb => new CockroachDbTestContainer(),
             SupportedDatabase.DuckDB => new DuckDbTestContainer(),
-            SupportedDatabase.FlatFile => new FlatFileTestContainer(),
             SupportedDatabase.YugabyteDb => new YugabyteTestContainer(),
             SupportedDatabase.TiDb => new TiDBTestContainer(),
             SupportedDatabase.Db2 => new Db2TestContainer(),
@@ -73,8 +72,6 @@ public class ParallelTestOrchestrator
             SupportedDatabase.Informix => new InformixTestContainer(),
             SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
             SupportedDatabase.InterBase when _includeInterBase => new InterBaseTestContainer(),
-            SupportedDatabase.Spanner => new SpannerOmniTestContainer(),
-            SupportedDatabase.SingleStore => new SingleStoreTestContainer(),
             SupportedDatabase.Access when _includeAccess => new AccessTestContainer(),
             _ => null
         };

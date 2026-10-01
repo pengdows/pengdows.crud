@@ -456,15 +456,6 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 await Task.Delay(TimeSpan.FromSeconds(5 * attempt)).ConfigureAwait(false);
             }
         }
-        catch (Exception ex) when (context.Product == SupportedDatabase.Spanner)
-        {
-            if (!await DatabaseSchemaHelper.TryDropSpannerBlockingIndicesAsync(context, ex).ConfigureAwait(false))
-            {
-                throw;
-            }
-
-            await DropTableIfExistsAsync(context, tableName).ConfigureAwait(false);
-        }
     }
 
     protected Task<IDatabaseContext> CreateAdditionalContextAsync(SupportedDatabase provider)

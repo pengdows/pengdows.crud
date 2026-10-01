@@ -162,4 +162,28 @@ public class ParameterBindingTests : DatabaseTestBase
             Assert.NotNull(reader.GetValue(4));
         });
     }
+
+    /// <summary>
+    /// The detected database's dialect renders the parameter marker its provider binds (ported
+    /// from the testbed's VerifyParameterMarker). Positional providers render a bare "?".
+    /// </summary>
+    [SkippableFact]
+    public async Task MakeParameterName_UsesTheDetectedDatabasesMarker()
+    {
+        await RunTestAgainstAllProvidersAsync((provider, context) =>
+        {
+            var expected = provider switch
+            {
+                SupportedDatabase.Snowflake or SupportedDatabase.Oracle or SupportedDatabase.FlatFile => ":",
+                SupportedDatabase.DuckDB => "$",
+                // Informix, SAP HANA and Access drivers bind positionally only.
+                SupportedDatabase.Informix or SupportedDatabase.SapHana or SupportedDatabase.Access => "?",
+                _ => "@"
+            };
+
+            var rendered = context.MakeParameterName("p0");
+            Assert.StartsWith(expected, rendered, StringComparison.Ordinal);
+            return Task.CompletedTask;
+        });
+    }
 }

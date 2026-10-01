@@ -16,16 +16,6 @@ public class SybaseTestProvider : TestProvider
         context = ctx;
     }
 
-    /// <summary>
-    /// This image's ASE instance defaults to the iso_1 (Latin-1) character set rather than a
-    /// Unicode one, so non-ASCII characters in the base class's round-trip strings fail with
-    /// "Error converting characters into server's character set." Override to ASCII-only,
-    /// matching Firebird's equivalent override for the same reason.
-    /// </summary>
-    protected override string RoundTripDescription => "Hello World ASCII round-trip test string";
-
-    protected override string RoundTripFidelityUnicodeText => "Hello World ASCII fidelity test string";
-
     public override async Task CreateTable()
     {
         const string objectIdName = "dbo.test_table";

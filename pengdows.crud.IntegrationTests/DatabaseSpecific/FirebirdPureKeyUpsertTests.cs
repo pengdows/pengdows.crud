@@ -13,7 +13,7 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 /// <c>PrimaryKeyTableGateway&lt;TEntity&gt;.UpsertAsync</c> succeeds for an entity that has ONLY
 /// <c>[PrimaryKey]</c> columns and no other updateable columns — the "pure junction table" case.
 /// <para>
-/// <c>ISqlDialect.SupportsPureKeyUpsert</c> is true only for Firebird, whose
+/// Firebird is the only database whose
 /// <c>UPDATE OR INSERT ... MATCHING (...)</c> syntax has no UPDATE/SET-clause requirement. Every
 /// other dialect's MERGE/ON CONFLICT/ON DUPLICATE KEY syntax requires at least one non-key column
 /// to set, so <see cref="PrimaryKeyTableGateway{TEntity}.BuildUpsert"/> throws
@@ -29,11 +29,6 @@ public class FirebirdPureKeyUpsertTests : DatabaseTestBase
 {
     private const string TableName = "pure_junction_fb";
 
-    protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
-    {
-        return base.GetSupportedProviders().Where(p => p == SupportedDatabase.Firebird).ToList();
-    }
-
     public FirebirdPureKeyUpsertTests(ITestOutputHelper output, IntegrationTestFixture fixture)
         : base(output, fixture)
     {
@@ -41,6 +36,12 @@ public class FirebirdPureKeyUpsertTests : DatabaseTestBase
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
+        // Only Firebird runs this test (see RunTestAgainstProvidersAsync below); the table exists there only.
+        if (provider != SupportedDatabase.Firebird)
+        {
+            return;
+        }
+
         context.RegisterEntity<PureJunctionEntity>();
         await DropTableIfExistsAsync(context, TableName);
         var table = IntegrationObjectNameHelper.Table(context, TableName);
@@ -58,11 +59,8 @@ CREATE TABLE {table} (
     [SkippableFact]
     public Task UpsertAsync_PureKeyEntity_Firebird_Succeeds()
     {
-        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        return RunTestAgainstProvidersAsync(new[] { SupportedDatabase.Firebird }, async (provider, context) =>
         {
-            Assert.True(context.Dialect.SupportsPureKeyUpsert,
-                "This test targets Firebird's SupportsPureKeyUpsert=true capability.");
-
             var gateway = new PrimaryKeyTableGateway<PureJunctionEntity>(context);
             var entity = new PureJunctionEntity { LeftId = 1, RightId = 2 };
 

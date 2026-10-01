@@ -45,8 +45,6 @@ public class TestTableCreator
             SupportedDatabase.YugabyteDb => CreatePostgreSqlTableSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
-            SupportedDatabase.SingleStore => CreateMySqlTableSql(),
-            SupportedDatabase.Spanner => CreateSpannerTableSql(),
             SupportedDatabase.Db2 => CreateDb2TableSql(),
             SupportedDatabase.Informix => CreateInformixTableSql(),
             SupportedDatabase.SybaseASE => CreateSybaseTableSql(),
@@ -121,36 +119,6 @@ public class TestTableCreator
                     {guidCol} TEXT NOT NULL,
                     {binCol} BLOB NOT NULL
                 )",
-            // pengdows.flatfile parses only ISO SQL - "TEXT" (vendor syntax) is rejected;
-            // "VARCHAR(n)" is the standard form. No native GUID type - a plain VARCHAR(36) round-
-            // trips it as a string (FlatFileDialect.GuidFormat => GuidStorageFormat.String).
-            // WITH (NULLTOKEN = ...): without it, NULL and '' both write as an empty CSV field for
-            // VARCHAR columns and round-trip indistinguishably (ClrTypeParser.Parse only treats an
-            // empty field as NULL for non-string columns) - an explicit sentinel makes NULL
-            // distinguishable from '' for text_nullable, as ParameterBindingTests.NullSemantics_
-            // EqualityVsIsNull requires.
-            // datetimeoffset_value is TIMESTAMP WITH TIME ZONE (the genuine ISO/ANSI spelling,
-            // SQL:2008 §6.1), not bare TIMESTAMP: SqlBinder.MapSqlDataTypeToClrType maps plain
-            // "TIMESTAMP" to CLR DateTime, only "TIMESTAMP WITH TIME ZONE" maps to DateTimeOffset
-            // (TIMESTAMPTZ is Postgres vendor shorthand the parser rejects outright as a non-ISO
-            // extension - not usable here at all). Before this fix, a DateTimeOffset value written
-            // into a plain TIMESTAMP column silently dropped its offset, then re-parsed using the
-            // AMBIENT LOCAL system timezone on read-back (confirmed live: an explicit -05:00
-            // offset came back as -06:00, matching this sandbox's own local zone for that date).
-            SupportedDatabase.FlatFile => $@"
-                CREATE TABLE IF NOT EXISTS {table} (
-                    {idCol} BIGINT PRIMARY KEY,
-                    {textCol} VARCHAR(255) NOT NULL,
-                    {unicodeCol} VARCHAR(255) NOT NULL,
-                    {nullCol} VARCHAR(255),
-                    {intCol} INT NOT NULL,
-                    {longCol} BIGINT NOT NULL,
-                    {decimalCol} DECIMAL(18,8) NOT NULL,
-                    {boolCol} BOOLEAN NOT NULL,
-                    {dtoCol} TIMESTAMP WITH TIME ZONE NOT NULL,
-                    {guidCol} VARCHAR(36) NOT NULL,
-                    {binCol} BLOB NOT NULL
-                ) WITH (NULLTOKEN = '<<NULL>>')",
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
@@ -280,22 +248,6 @@ public class TestTableCreator
                     {guidCol} UUID NOT NULL,
                     {binCol} BLOB NOT NULL
                 ) WITH (NULLTOKEN = '<<NULL>>')",
-            // Spanner's PostgreSQL interface rejects a NUMERIC precision/scale modifier and has no
-            // UUID type Npgsql can bind (SpannerDialect stores Guid as a string).
-            SupportedDatabase.Spanner => $@"
-                CREATE TABLE IF NOT EXISTS {table} (
-                    {idCol} BIGINT PRIMARY KEY,
-                    {textCol} VARCHAR(255) NOT NULL,
-                    {unicodeCol} VARCHAR(255) NOT NULL,
-                    {nullCol} VARCHAR(255),
-                    {intCol} INTEGER NOT NULL,
-                    {longCol} BIGINT NOT NULL,
-                    {decimalCol} NUMERIC NOT NULL,
-                    {boolCol} BOOLEAN NOT NULL,
-                    {dtoCol} TIMESTAMPTZ NOT NULL,
-                    {guidCol} VARCHAR(36) NOT NULL,
-                    {binCol} BYTEA NOT NULL
-                )",
             // No CREATE TABLE IF NOT EXISTS (the shared reset drops the table first) and no time
             // zone type: the UTC instant is stored. Db2Dialect stores Guid as a string.
             SupportedDatabase.Db2 => $@"

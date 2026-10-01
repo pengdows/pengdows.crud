@@ -121,4 +121,35 @@ public class SqlContainerReuseTests : DatabaseTestBase
             tx.Commit();
         });
     }
+
+    /// <summary>
+    /// A reader read to EOF and disposed releases its connection cleanly, so the next command on
+    /// the context runs (MySql.Data once failed the follow-up after an EOF disposal; ported from
+    /// the testbed's reader-disposal check and run on every database).
+    /// </summary>
+    [SkippableFact]
+    public async Task Reader_ReadToEndAndDisposed_ThenNextCommandRuns()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            var helper = new TableGateway<TestTable, long>(context, GetAuditResolver());
+            var entity = new TestTable { Id = 3101, Name = NameEnum.Test, Value = 42, Description = "reader-eof" };
+            await helper.CreateAsync(entity, context);
+
+            await using (var select = context.CreateSqlContainer())
+            {
+                select.Query.Append("SELECT ").Append(context.WrapObjectName("id"))
+                    .Append(" FROM ").Append(IntegrationObjectNameHelper.Table(context, "test_table"))
+                    .Append(" WHERE ").Append(context.WrapObjectName("id"))
+                    .Append(" = ").Append(select.MakeParameterName("p0"));
+                select.AddParameterWithValue("p0", DbType.Int64, entity.Id);
+
+                await using var reader = await select.ExecuteReaderAsync();
+                Assert.True(await reader.ReadAsync());
+                Assert.False(await reader.ReadAsync());
+            }
+
+            Assert.NotNull(await helper.RetrieveOneAsync(entity.Id, context));
+        });
+    }
 }

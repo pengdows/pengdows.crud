@@ -72,6 +72,10 @@ public class ConstraintViolationTests : DatabaseTestBase
                 await using var container = helper.BuildCreate(entity2, context);
                 await container.ExecuteNonQueryAsync();
             });
+
+            // The context stays usable after the failed statement (no poisoned connection).
+            var stillThere = await helper.RetrieveOneAsync(entity1.Id, context);
+            Assert.Equal(entity1.Value, stillThere?.Value);
         });
     }
 

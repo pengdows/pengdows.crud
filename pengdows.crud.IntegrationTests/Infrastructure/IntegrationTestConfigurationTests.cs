@@ -55,25 +55,6 @@ public class IntegrationTestConfigurationTests
     }
 
     [Fact]
-    public void GetEnabledProviders_IncludesFlatFile_WhenRequested()
-    {
-        var providers = IntegrationTestConfiguration.GetEnabledProviders(includeSnowflake: false, includeFlatFile: true);
-
-        Assert.Contains(SupportedDatabase.FlatFile, providers);
-    }
-
-    [Theory]
-    [InlineData("FlatFile", true)]
-    [InlineData("flatfile", true)]
-    [InlineData("Sqlite,FlatFile", true)]
-    [InlineData("Sqlite", false)]
-    [InlineData(null, false)]
-    public void ShouldIncludeFlatFile_ReflectsIntegrationOnlyToken(string? integrationOnly, bool expected)
-    {
-        Assert.Equal(expected, IntegrationTestConfiguration.ComputeShouldIncludeFlatFile(integrationOnly));
-    }
-
-    [Fact]
     public void FilterIntegrationOnly_MatchesFlatFile()
     {
         var providers = new[] { SupportedDatabase.Sqlite, SupportedDatabase.FlatFile };
