@@ -347,7 +347,13 @@ internal class ColumnInfo : IColumnInfo
                 }
             }
 
-            if (IsJsonType)
+            if (IsJsonType && current is System.Text.Json.JsonElement { ValueKind: System.Text.Json.JsonValueKind.Undefined })
+            {
+                // default(JsonElement) holds no JSON at all and cannot be serialized; it is SQL NULL.
+                // The gateways read a default-constructed entity while building their templates.
+                value = null;
+            }
+            else if (IsJsonType)
             {
                 // Use precompiled serializer if available, otherwise fall back to TypeCoercionHelper
                 value = JsonSerializer != null
