@@ -27,6 +27,34 @@ public class DbModeTests : DatabaseTestBase
     {
         var tableCreator = new TestTableCreator(context);
         await tableCreator.CreateTestTableAsync();
+        await WaitUntilReadTransactionsCanReadTableAsync(context);
+    }
+
+    // A read transaction can be a snapshot (Oracle's SET TRANSACTION READ ONLY), and Oracle refuses
+    // a snapshot read of a table whose DDL is only moments old (ORA-01466, a retryable
+    // SerializationConflictException). The table was just recreated, so wait until a read
+    // transaction can read it; elsewhere the first attempt succeeds.
+    private async Task WaitUntilReadTransactionsCanReadTableAsync(IDatabaseContext context)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (true)
+        {
+            try
+            {
+                await using var tx = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel,
+                    ExecutionType.Read);
+                var gateway = CreateTableGateway(context);
+                await using var sc = gateway.BuildBaseRetrieve("t", tx);
+                await gateway.LoadListAsync(sc);
+                tx.Commit();
+                return;
+            }
+            catch (pengdows.crud.exceptions.SerializationConflictException ex) when (DateTime.UtcNow < deadline)
+            {
+                Output.WriteLine($"{context.Product}: new table not yet readable by a read transaction: {ex.Message}");
+                await Task.Delay(TimeSpan.FromMilliseconds(500));
+            }
+        }
     }
 
     [SkippableFact]

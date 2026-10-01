@@ -134,3 +134,5 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 | **Firebird** | No | Yes | No | `SET TRANSACTION READ ONLY` |
 
 > **Dual Enforcement:** For PostgreSQL, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool. SQLite and DuckDB rely on the connection-string parameter alone: it is applied when the database file is opened, which is stronger than a session flag any caller could reset.
+
+> **Oracle read-only transactions are snapshots.** `SET TRANSACTION READ ONLY` reads the whole transaction as of its start, and Oracle refuses that read for a table whose DDL is newer than the snapshot, which can include a table created a few seconds earlier (ORA-01466 "table definition has changed"). pengdows.crud raises it as a retryable `SerializationConflictException`; end the transaction and start a new one, as for ORA-08177.

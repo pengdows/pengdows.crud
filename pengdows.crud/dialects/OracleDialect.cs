@@ -617,7 +617,10 @@ internal class OracleDialect : SqlDialect
             return true;
         }
 
-        if (errorCode == 8177)
+        // ORA-01466: a read-only or serializable transaction's snapshot predates the table's last
+        // DDL (e.g. a read-only read of a table created moments earlier). Oracle's remedy is the
+        // same as ORA-08177's: end the transaction and run it again.
+        if (errorCode is 8177 or 1466)
         {
             category = DbErrorCategory.SerializationFailure;
             return true;

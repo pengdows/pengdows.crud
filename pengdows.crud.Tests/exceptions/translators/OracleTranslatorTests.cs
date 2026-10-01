@@ -107,6 +107,17 @@ public class OracleTranslatorTests
         Assert.True(result.IsTransient);
     }
 
+    [Fact]
+    public void SnapshotOlderThanDdl_ORA01466_Maps_SerializationConflictException()
+    {
+        var raw = new NumberedDbException(1466, "ORA-01466: unable to read data - table definition has changed");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Query);
+
+        Assert.IsType<SerializationConflictException>(result);
+        Assert.True(result.IsTransient);
+    }
+
     // ── Timeout ───────────────────────────────────────────────────────────────
 
     [Fact]

@@ -72,6 +72,9 @@ public class ProviderExceptionClassificationCharacterizationTests
     // ---------- Oracle ----------
     [Fact] public void Oracle_Deadlock() => Assert.Equal(DbErrorCategory.Deadlock, Oracle().ClassifyException(new NumberedDbException(60)));
     [Fact] public void Oracle_Serialization() => Assert.Equal(DbErrorCategory.SerializationFailure, Oracle().ClassifyException(new NumberedDbException(8177)));
+    // ORA-01466: a read-only or serializable snapshot older than the table's last DDL; Oracle's
+    // remedy is the same as ORA-08177's — end the transaction and run it again.
+    [Fact] public void Oracle_SnapshotOlderThanDdl() => Assert.Equal(DbErrorCategory.SerializationFailure, Oracle().ClassifyException(new NumberedDbException(1466)));
     [Fact] public void Oracle_Constraint() => Assert.Equal(DbErrorCategory.ConstraintViolation, Oracle().ClassifyException(new NumberedDbException(1)));
 
     // ---------- Sqlite ----------
