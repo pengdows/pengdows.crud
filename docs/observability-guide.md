@@ -19,6 +19,25 @@ Compare three independent numbers before assuming it's the database:
 latency (timeouts, cancellations, errors) never contaminates the success-path
 `Avg`/`P95`/`P99` you'd use for an SLO.
 
+## "Why is this specific reader slow — the database, or my own consumption loop?"
+
+Three EWMA fields on `DatabaseMetrics`/`DatabaseRoleMetrics` decompose a reader's total lease
+into segments that would otherwise look like one number. A reader's command metric
+(`AvgCommandMs`) ends when the provider returns the cursor; these start there:
+
+- `AvgReaderTimeToFirstRowMs` — reader handed back until the first row is read. This is the
+  database producing the first row plus any delay before your code first calls `Read`/`ReadAsync`;
+  slow here with a prompt first `Read` means the database is slow to start streaming results.
+- `AvgReaderConsumptionMs` — first row until the reader is disposed. Slow here means **your own
+  code** is slow to iterate/process rows (network round-trips for large result sets, slow
+  per-row processing, or simply not disposing the reader promptly).
+- `AvgReaderLeaseMs` — the complete lease, through disposal. The reader pins its connection for
+  this whole time, so a large value usually means readers are lingering rather than being
+  disposed promptly.
+
+`pengdows.crud.opentelemetry` exports them as `pengdows.db.client.reader.time_to_first_row.avg`,
+`pengdows.db.client.reader.consumption_duration.avg` and `pengdows.db.client.reader.lease_duration.avg`.
+
 ## "Which tenant/request does this trace/log line belong to?"
 
 `IDatabaseContext.RootId` (a `Guid`, stable for the context's lifetime) is the correlation key

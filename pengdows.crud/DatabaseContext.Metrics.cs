@@ -263,6 +263,9 @@ public partial class DatabaseContext
         {
             CommandPercentilesAvailable = snapshot.CommandPercentilesAvailable,
             TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable,
+            AvgReaderTimeToFirstRowMs = snapshot.AvgReaderTimeToFirstRowMs,
+            AvgReaderConsumptionMs = snapshot.AvgReaderConsumptionMs,
+            AvgReaderLeaseMs = snapshot.AvgReaderLeaseMs,
             ReadRequests = attribution.ReadRequests,
             WriteRequests = attribution.WriteRequests,
             ReadPoolWaits = readPool.TotalWaits,
@@ -312,7 +315,10 @@ public partial class DatabaseContext
             snapshot.AvgFailedCommandMs)
         {
             CommandPercentilesAvailable = snapshot.CommandPercentilesAvailable,
-            TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable
+            TransactionPercentilesAvailable = snapshot.TransactionPercentilesAvailable,
+            AvgReaderTimeToFirstRowMs = snapshot.AvgReaderTimeToFirstRowMs,
+            AvgReaderConsumptionMs = snapshot.AvgReaderConsumptionMs,
+            AvgReaderLeaseMs = snapshot.AvgReaderLeaseMs
         };
     }
 

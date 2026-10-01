@@ -89,6 +89,15 @@ public sealed record DatabaseMetrics(
     /// <summary>Gets whether the transaction P95/P99 values contain percentile data.</summary>
     public bool TransactionPercentilesAvailable { get; init; }
 
+    /// <summary>Gets the exponential weighted moving average from reader acquisition until its first row, in milliseconds.</summary>
+    public double AvgReaderTimeToFirstRowMs { get; init; }
+
+    /// <summary>Gets the exponential weighted moving average from the first row until reader disposal, in milliseconds.</summary>
+    public double AvgReaderConsumptionMs { get; init; }
+
+    /// <summary>Gets the exponential weighted moving average of the complete reader lease lifetime, in milliseconds.</summary>
+    public double AvgReaderLeaseMs { get; init; }
+
     /// <summary>Gets cumulative read/write requests admitted by the context.</summary>
     public long ReadRequests { get; init; }
     public long WriteRequests { get; init; }
