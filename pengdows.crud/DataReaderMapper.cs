@@ -245,10 +245,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
         CancellationToken cancellationToken)
         where T : class, new()
     {
-        var recordReader = GetRecordReader(reader);
+        var recordReader = GetRecordReader(reader, out var unresolved);
         options ??= MapperOptions.Default;
 
-        var plan = GetOrBuildPlan<T>(recordReader, options);
+        var plan = GetOrBuildPlan<T>(recordReader, options, unresolved);
 
         var result = new List<T>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -297,10 +297,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : class, new()
     {
-        var recordReader = GetRecordReader(reader);
+        var recordReader = GetRecordReader(reader, out var unresolved);
         options ??= MapperOptions.Default;
 
-        var plan = GetOrBuildPlan<T>(recordReader, options);
+        var plan = GetOrBuildPlan<T>(recordReader, options, unresolved);
 
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -340,12 +340,16 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
     }
 
-    private static DbDataReader GetRecordReader(ITrackedReader reader)
+    private static DbDataReader GetRecordReader(ITrackedReader reader, out Func<int, Type?>? unresolved)
     {
         ArgumentNullException.ThrowIfNull(reader);
+        unresolved = null;
 
         if (reader is IInternalTrackedReader internalReader)
         {
+            // TYPE-016: the tracked reader knows which columns its dialect reads although the
+            // provider reports no field type for them (hierarchyid without Microsoft.SqlServer.Types).
+            unresolved = internalReader.GetUnresolvedColumnType;
             return internalReader.InnerReader;
         }
 
@@ -400,7 +404,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return obj;
     }
 
-    private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options)
+    private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options,
+        Func<int, Type?>? unresolved = null)
     {
         var type = typeof(T);
         var propertyLookup = GetPropertyLookup(type, options);
@@ -422,9 +427,11 @@ public sealed class DataReaderMapper : IDataReaderMapper
             if (propertyLookup.TryGetValue(name, out var prop))
             {
                 ordinals.Add(i);
-                var fieldType = ResolveFieldType(reader, i);
+                var fieldType = ResolveFieldType(reader, i, unresolved);
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
-                setters.Add(GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i));
+                setters.Add(IsUnresolved(i, unresolved)
+                    ? CreateUnresolvedSetter<T>(prop, fieldType, options.EnumMode, i)
+                    : GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i));
                 properties.Add(prop);
                 // Non-nullable value types cannot hold null at the .NET level. Skip the IsDBNull
                 // guard for these columns — if the DB returns NULL for a non-nullable property,
@@ -454,7 +461,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
     /// rents and returns. Only a genuine miss pays for <see cref="RecordsetShape.Persist"/>'s
     /// real array copies, mirroring BaseTableGateway.Reader.cs's GetOrBuildRecordsetPlan.
     /// </remarks>
-    private static MapperPlan<T> GetOrBuildPlan<T>(DbDataReader reader, IMapperOptions options)
+    private static MapperPlan<T> GetOrBuildPlan<T>(DbDataReader reader, IMapperOptions options,
+        Func<int, Type?>? unresolved = null)
         where T : class, new()
     {
         var fieldCount = reader.FieldCount;
@@ -463,7 +471,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         try
         {
-            PopulateSchemaShapeArrays(reader, options, names, types, fieldCount);
+            PopulateSchemaShapeArrays(reader, options, names, types, fieldCount, unresolved);
 
             // Lookup-only: backed by the rented arrays above, never stored as a dictionary key.
             var lookupShape = new RecordsetShape(names, types, fieldCount);
@@ -477,7 +485,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             // Cache miss: the key must outlive this call, so persist a copy before inserting —
             // the lookup shape's backing arrays get returned to the pool in the finally below.
             var persistedKey = lookupKey with { Shape = lookupShape.Persist() };
-            return (MapperPlan<T>)_planCache.GetOrAdd(persistedKey, _ => BuildPlan<T>(reader, options));
+            return (MapperPlan<T>)_planCache.GetOrAdd(persistedKey, _ => BuildPlan<T>(reader, options, unresolved));
         }
         finally
         {
@@ -487,7 +495,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     }
 
     private static void PopulateSchemaShapeArrays(DbDataReader reader, IMapperOptions options, string[] names,
-        Type[] types, int fieldCount)
+        Type[] types, int fieldCount, Func<int, Type?>? unresolved = null)
     {
         for (var i = 0; i < fieldCount; i++)
         {
@@ -499,7 +507,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             }
 
             names[i] = name;
-            types[i] = ResolveFieldType(reader, i);
+            types[i] = ResolveFieldType(reader, i, unresolved);
         }
     }
 
@@ -509,12 +517,13 @@ public sealed class DataReaderMapper : IDataReaderMapper
     /// external plan-cache key to verify reuse) rather than the pooled lookup-then-persist-on-miss
     /// path <see cref="GetOrBuildPlan{T}"/> uses on the hot path.
     /// </summary>
-    private static RecordsetShape BuildSchemaShape(DbDataReader reader, IMapperOptions options)
+    private static RecordsetShape BuildSchemaShape(DbDataReader reader, IMapperOptions options,
+        Func<int, Type?>? unresolved = null)
     {
         var fieldCount = reader.FieldCount;
         var names = new string[fieldCount];
         var types = new Type[fieldCount];
-        PopulateSchemaShapeArrays(reader, options, names, types, fieldCount);
+        PopulateSchemaShapeArrays(reader, options, names, types, fieldCount, unresolved);
         return new RecordsetShape(names, types, fieldCount);
     }
 
@@ -742,17 +751,31 @@ public sealed class DataReaderMapper : IDataReaderMapper
         };
     }
 
-    private static Type ResolveFieldType(DbDataReader reader, int ordinal)
+    private static Type ResolveFieldType(DbDataReader reader, int ordinal, Func<int, Type?>? unresolved = null)
     {
         try
         {
-            // Null for a CLR type whose assembly isn't loaded (SqlClient on hierarchyid).
-            return reader.GetFieldType(ordinal) ?? typeof(object);
+            // Null for a CLR type whose assembly isn't loaded (SqlClient on hierarchyid); the
+            // dialect may still read it (TYPE-016), otherwise GetValue reports it.
+            return reader.GetFieldType(ordinal) ?? unresolved?.Invoke(ordinal) ?? typeof(object);
         }
         catch (InvalidOperationException)
         {
             return typeof(object);
         }
+    }
+
+    private static bool IsUnresolved(int ordinal, Func<int, Type?>? unresolved) =>
+        unresolved?.Invoke(ordinal) is not null;
+
+    // A column the provider reports no field type for can't use the compiled GetValue/GetFieldValue
+    // setters; it is read by type through UnresolvedColumnReader, then coerced as usual (TYPE-016).
+    private static Action<T, DbDataReader> CreateUnresolvedSetter<T>(PropertyInfo prop, Type fieldType,
+        EnumParseFailureMode enumMode, int ordinal)
+    {
+        var coercer = TypeCoercionHelper.ResolveCoercer(fieldType, prop.PropertyType, enumMode);
+        return (target, reader) =>
+            prop.SetValue(target, coercer(UnresolvedColumnReader.Read(reader, ordinal, fieldType)));
     }
 
     private static object? CoerceValue(

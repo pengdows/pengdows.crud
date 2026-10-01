@@ -28,6 +28,7 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using pengdows.crud.@internal;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
@@ -64,6 +65,33 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     // representation (TYPE-005).
     private readonly Func<Exception, bool>? _isUnreadableStoredValue;
 
+    // SqlDialect.ReadsUnresolvedColumns: the dialect reads some columns the provider reports no
+    // field type for (TYPE-016). Per ordinal, the Type it reads them as or NotUnresolved; resolved
+    // once, since a tracked reader never moves to another result set.
+    private readonly SqlDialect? _unresolvedColumnDialect;
+    private object?[]? _unresolvedColumnTypes;
+    private static readonly object NotUnresolved = new();
+
+    private Type? UnresolvedColumnType(int i)
+    {
+        if (_unresolvedColumnDialect is null)
+        {
+            return null;
+        }
+
+        var cache = _unresolvedColumnTypes ??= new object?[_reader.FieldCount];
+        var entry = cache[i];
+        if (entry is null)
+        {
+            entry = (_reader.GetFieldType(i) is null
+                ? _unresolvedColumnDialect.GetUnresolvedColumnType(_reader.GetDataTypeName(i))
+                : null) ?? NotUnresolved;
+            cache[i] = entry;
+        }
+
+        return entry as Type;
+    }
+
     private DataMappingException? UnreadableValue(int i, Exception exception) =>
         _isUnreadableStoredValue?.Invoke(exception) == true
             ? new DataMappingException(
@@ -87,8 +115,10 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         Func<Exception, Exception?>? readFailureTranslator = null,
         bool readsInt64ThroughGetValue = false,
         bool reportsOutOfRangeDecimalAsNull = false,
-        Func<Exception, bool>? isUnreadableStoredValue = null)
+        Func<Exception, bool>? isUnreadableStoredValue = null,
+        SqlDialect? unresolvedColumnDialect = null)
     {
+        _unresolvedColumnDialect = unresolvedColumnDialect;
         _isUnreadableStoredValue = isUnreadableStoredValue;
         _reportsOutOfRangeDecimalAsNull = reportsOutOfRangeDecimalAsNull;
         _readFailureTranslator = readFailureTranslator;
@@ -106,6 +136,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     DbDataReader IInternalTrackedReader.InnerReader => _reader;
     DbCommand? IInternalTrackedReader.InnerCommand => _command;
+    Type? IInternalTrackedReader.GetUnresolvedColumnType(int ordinal) => UnresolvedColumnType(ordinal);
 
     protected override void DisposeManaged()
     {
@@ -332,6 +363,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     public object GetValue(int i)
     {
+        if (UnresolvedColumnType(i) is { } unresolvedType)
+        {
+            return UnresolvedColumnReader.Read(_reader, i, unresolvedType);
+        }
+
         try
         {
             var value = _reader.GetValue(i);
@@ -662,7 +698,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
             // SqlClient returns null for a CLR type whose assembly isn't loaded (hierarchyid without
             // Microsoft.SqlServer.Types); the value is still read, or reported, through GetValue.
-            return type ?? typeof(object);
+            return type ?? UnresolvedColumnType(i) ?? typeof(object);
         }
         catch (Exception)
         {

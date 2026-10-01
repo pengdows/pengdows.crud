@@ -481,6 +481,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool IsUnreadableStoredValue(Exception exception) => false;
 
     /// <summary>
+    /// True when the dialect can read some columns its provider reports no field type for
+    /// (<see cref="GetUnresolvedColumnType"/>), so tracked readers consult it (TYPE-016).
+    /// </summary>
+    internal virtual bool ReadsUnresolvedColumns => false;
+
+    /// <summary>
+    /// The CLR type a column is read as when the provider reports no field type for it (SqlClient
+    /// on a CLR user-defined type whose assembly isn't loaded), or null when the dialect can't read
+    /// that data type; <c>UnresolvedColumnReader</c> then reads it by that type (TYPE-016).
+    /// </summary>
+    internal virtual Type? GetUnresolvedColumnType(string dataTypeName) => null;
+
+    /// <summary>
     /// True when the provider can't bind the full Int128/UInt128 range as BigInteger (DuckDB.NET
     /// rejects Int128.MinValue and UInt128 above Int128.MaxValue), so both are bound as exact decimal
     /// text, which the database casts to its 128-bit type (TYPE-005).
@@ -1651,6 +1664,16 @@ internal abstract class SqlDialect : IInternalSqlDialect
             type is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength)
         {
             return CreateDbParameter(name, type, character.ToString());
+        }
+
+        // TYPE-016: a HierarchyId is sent as its text form, which SQL Server converts to hierarchyid
+        // implicitly and other databases store as is; declared Binary, it is sent as SQL Server's
+        // stored encoding, which SQL Server also converts implicitly (both confirmed live).
+        if (value is HierarchyId hierarchyId)
+        {
+            return type == DbType.Binary
+                ? CreateDbParameter(name, type, hierarchyId.ToSqlServerBytes())
+                : CreateDbParameter(name, type == DbType.Object ? DbType.String : type, hierarchyId.ToString());
         }
 
         // TYPE-005: 128-bit integers reach providers as BigInteger, the type DuckDB.NET, FirebirdClient

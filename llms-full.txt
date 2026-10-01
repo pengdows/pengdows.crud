@@ -8272,6 +8272,7 @@ reloaded; there is no free write-back for this column shape (tracked in
 | `JsonValue` (`JsonValue.cs`) | Lazy string/`JsonDocument`/`JsonElement` JSON wrapper | Same built-in `coercion/` pipeline as `HStore`, provider-agnostic at the CLR boundary |
 | `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server (UDT), PostgreSQL/PostGIS (WKB via `Binary`) |
 | `RowVersion` (`RowVersion.cs`) | 8-byte optimistic-concurrency token | SQL Server → `rowversion`/`timestamp` |
+| `HierarchyId` (`HierarchyId.cs`) | Node path such as `/1/2.5/` with SQL Server `hierarchyid` semantics (`Level`, `GetAncestor`, `IsDescendantOf`, SQL Server's depth-first ordering) | SQL Server `hierarchyid` without `Microsoft.SqlServer.Types`; text on any other database (TYPE-016, below) |
 
 `JsonDocument` (the BCL type, not `JsonValue`) is also directly mapped in
 `AdvancedTypeRegistry.RegisterJsonMappings` for PostgreSQL/CockroachDB/YugabyteDB (`jsonb`),
@@ -8282,6 +8283,28 @@ for existing code and BCL interop. Don't confuse either with the entity-level `[
 (`pengdows.crud.attributes.JsonAttribute`) documented in `CLAUDE.md`/the wiki, which serializes an
 arbitrary POCO property to a JSON column — that's a different, higher-level mechanism than these
 value-object types.
+
+### `HierarchyId`
+
+A SQL Server `hierarchyid` column maps to `HierarchyId` (or `string`, its text form) with no
+`Microsoft.SqlServer.Types` reference:
+
+```csharp
+[Column("node", DbType.String)] public HierarchyId? Node { get; set; }
+```
+
+- **Write:** sent as its text form (`/1/2.5/`), which SQL Server converts to `hierarchyid`
+  implicitly, in INSERT, UPDATE and WHERE alike. Declared `DbType.Binary`, it is sent as SQL
+  Server's stored encoding instead (also converted implicitly). On other databases the text is
+  stored as is (`VARCHAR`), so the same entity works everywhere.
+- **Read:** without `Microsoft.SqlServer.Types`, SqlClient reports no field type for the column
+  and can't return it from `GetValue`; the SQL Server dialect reads its stored encoding
+  (`GetBytes`) and decodes it. With the assembly loaded, its `SqlHierarchyId` is converted. Text
+  and `byte[]` are accepted as well. Both the gateway and `DataReaderMapper` read it.
+- `CompareTo`/`<` order nodes as SQL Server's `ORDER BY` does; `HierarchyId.Root` (also
+  `default`) is `/`. `ToSqlServerBytes()`/`FromSqlServerBytes()` expose the encoding.
+- Verified live on SQL Server 2025 (every range of the encoding, dotted and negative components,
+  WHERE and ORDER BY).
 
 ## Provider-specific column types mapped to .NET types
 
@@ -8300,9 +8323,9 @@ plain .NET type (verified live, TYPE-005).
 
 A stored value with no .NET representation throws `DataMappingException` naming the column, never
 a raw provider exception or a default value: a MySQL/MariaDB zero date (`'0000-00-00'`), a
-PostgreSQL `numeric` `NaN` read into `decimal`, and a SQL Server `hierarchyid`/CLR type when
-`Microsoft.SqlServer.Types` isn't loaded (select `CAST(col AS nvarchar(4000))` into a `string`
-instead).
+PostgreSQL `numeric` `NaN` read into `decimal`, and a SQL Server `geometry`/`geography` or other CLR
+type when `Microsoft.SqlServer.Types` isn't loaded (select `col.ToString()` or `col.STAsBinary()`
+instead). `hierarchyid` is the exception: it reads as `HierarchyId` (above).
 
 ## Not a public extension point
 

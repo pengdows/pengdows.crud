@@ -629,7 +629,7 @@ public class DataReaderMapperTests
                                      BindingFlags.NonPublic | BindingFlags.Static)
                                  ?? throw new InvalidOperationException("BuildSchemaShape not found");
 
-        var shape = schemaShapeMethod.Invoke(null, new object[] { templateReader, options })!;
+        var shape = schemaShapeMethod.Invoke(null, new object?[] { templateReader, options, null })!;
 
         var planKeyType = typeof(DataReaderMapper)
                               .GetNestedType("PlanCacheKey", BindingFlags.NonPublic)

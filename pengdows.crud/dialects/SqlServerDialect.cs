@@ -27,6 +27,7 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
+using pengdows.crud.types.valueobjects;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -203,6 +204,18 @@ internal class SqlServerDialect : SqlDialect
             System.IO.FileLoadException unloadable => unloadable.FileName,
             _ => null
         })?.StartsWith("Microsoft.SqlServer.Types", StringComparison.OrdinalIgnoreCase) == true;
+
+    // TYPE-016: without Microsoft.SqlServer.Types, SqlClient reports no field type for hierarchyid
+    // (GetDataTypeName "master.sys.hierarchyid") but GetBytes returns its stored encoding, which
+    // UnresolvedColumnReader decodes as a HierarchyId (confirmed live on SQL Server 2025, SqlClient
+    // 6.0.2). geometry/geography use SQL Server's own spatial serialization and stay unreadable.
+    internal override bool ReadsUnresolvedColumns => true;
+
+    internal override Type? GetUnresolvedColumnType(string dataTypeName) =>
+        dataTypeName.Equals("hierarchyid", StringComparison.OrdinalIgnoreCase) ||
+        dataTypeName.EndsWith(".hierarchyid", StringComparison.OrdinalIgnoreCase)
+            ? typeof(HierarchyId)
+            : null;
 
     // SQL Server uses OFFSET/FETCH NEXT syntax only — no LIMIT keyword.
     public override bool SupportsLimitOffset => false;
