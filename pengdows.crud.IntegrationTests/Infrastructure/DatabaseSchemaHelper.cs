@@ -129,7 +129,32 @@ internal static class DatabaseSchemaHelper
         return commands;
     }
 
-    private static async Task TryDropTableAsync(IDatabaseContext context, string tableName)
+    /// <summary>
+    /// Drops <paramref name="tableName"/> if it exists, recovering from two known
+    /// provider-specific failure shapes rather than propagating them: Spanner's refusal to drop a
+    /// table that still has a secondary index (parses the blocking index name(s) out of the error
+    /// and drops them first, then retries), and Firebird's DDL-vs-connection-pooling metadata
+    /// lock. Used both by the shared per-run fixture cleanup (<see cref="DropTablesAsync"/>) and
+    /// by individual test classes' own per-class table recreation
+    /// (<c>DatabaseTestBase.DropTableIfExistsAsync</c>) — a test class that only calls the latter
+    /// without going through this method misses both fallbacks, which is exactly the gap that let
+    /// Spanner/Firebird failures slip through CompositeKeyTests/MergeConflictTests despite this
+    /// method already handling them correctly for the fixture-wide cleanup path.
+    /// </summary>
+    /// <param name="requireActualDrop">
+    /// When <see langword="false"/> (the default, used by <see cref="DropTablesAsync"/>'s own
+    /// fixture-wide reset): Firebird's metadata lock falls back to <c>DELETE FROM</c>, which
+    /// needs no DDL lock at all — sufficient there because that caller only needs the table
+    /// EMPTY, not gone, before the next test's own setup runs. When <see langword="true"/> (used
+    /// by <c>DatabaseTestBase.DropTableIfExistsAsync</c>, whose callers immediately issue a bare
+    /// <c>CREATE TABLE</c> expecting the name to be free): the DELETE fallback is skipped and the
+    /// original exception is rethrown instead, so the caller's own outer retry loop gets a
+    /// genuine re-attempt at the real DROP — settling for "emptied, not dropped" here would leave
+    /// the table behind and turn that immediately-following CREATE TABLE into a hard
+    /// "already exists" failure, which is exactly the regression this parameter exists to avoid.
+    /// </param>
+    internal static async Task TryDropTableAsync(IDatabaseContext context, string tableName,
+        bool requireActualDrop = false)
     {
         var wrapped = IntegrationObjectNameHelper.Table(context, tableName);
         await using var container = context.CreateSqlContainer($"DROP TABLE {wrapped}");
@@ -170,7 +195,7 @@ internal static class DatabaseSchemaHelper
         }
         catch (Exception ex)
         {
-            if (context.Product == SupportedDatabase.Firebird && IsMetadataLock(ex.Message))
+            if (context.Product == SupportedDatabase.Firebird && IsMetadataLock(ex.Message) && !requireActualDrop)
             {
                 if (traceEnabled)
                 {
@@ -178,6 +203,30 @@ internal static class DatabaseSchemaHelper
                         $"DROP fallback-delete table={tableName} elapsedMs={sw!.ElapsedMilliseconds} error={ex.Message}");
                 }
                 await TryDeleteTableAsync(context, tableName);
+                return;
+            }
+
+            // Spanner's PostgreSQL interface refuses to drop a table that still has a
+            // secondary (non-PK) index on it — verified live: "Cannot drop table
+            // merge_records with indices: ux_merge_records_record_key." Real PostgreSQL drops
+            // dependent indices automatically; Spanner requires them dropped first. The message
+            // lists the exact index name(s), so drop each one and retry rather than hardcoding
+            // any particular table/index pair here.
+            if (context.Product == SupportedDatabase.Spanner && TryGetSpannerBlockingIndices(ex.Message) is { Count: > 0 } indices)
+            {
+                foreach (var index in indices)
+                {
+                    await using var dropIndex = context.CreateSqlContainer($"DROP INDEX {context.WrapObjectName(index)}");
+                    await dropIndex.ExecuteNonQueryAsync();
+                }
+
+                if (traceEnabled)
+                {
+                    IntegrationTraceLog.Write(context.Product,
+                        $"DROP fallback-drop-indices table={tableName} indices={string.Join(",", indices)} elapsedMs={sw!.ElapsedMilliseconds}");
+                }
+
+                await TryDropTableAsync(context, tableName, requireActualDrop);
                 return;
             }
 
@@ -302,6 +351,37 @@ internal static class DatabaseSchemaHelper
                || text.Contains("object table")
                || text.Contains("metadata update")
                || text.Contains("table is in use");
+    }
+
+    // Parses Spanner's "Cannot drop table <name> with indices: <idx1>, <idx2>" message shape to
+    // recover the exact index name(s) that need dropping first. Returns null (not empty) when the
+    // message doesn't match at all, so the caller can distinguish "not this error" from "matched,
+    // but somehow zero names" (which would be a parsing bug worth investigating rather than
+    // silently no-op'ing a retry loop).
+    private static List<string>? TryGetSpannerBlockingIndices(string? message)
+    {
+        if (string.IsNullOrEmpty(message))
+        {
+            return null;
+        }
+
+        const string marker = "with indices:";
+        var markerIndex = message.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+        {
+            return null;
+        }
+
+        var tail = message[(markerIndex + marker.Length)..];
+        var end = tail.IndexOfAny(['.', '\n', '\r']);
+        if (end >= 0)
+        {
+            tail = tail[..end];
+        }
+
+        return tail.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(name => name.Length > 0)
+            .ToList();
     }
 
     private static async Task TryDeleteTableAsync(IDatabaseContext context, string tableName)

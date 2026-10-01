@@ -40,8 +40,7 @@ public class AuditFieldTests : DatabaseTestBase
         await DropTableIfExistsAsync(context, "audited_entity");
 
         var createSql = BuildAuditTableSql(provider, context);
-        await using var container = context.CreateSqlContainer(createSql);
-        await container.ExecuteNonQueryAsync();
+        await ExecuteDdlWithTransientRetryAsync(context, createSql);
     }
 
     [SkippableFact]
@@ -250,6 +249,63 @@ public class AuditFieldTests : DatabaseTestBase
         });
     }
 
+    /// <summary>
+    /// Proves, against a REAL SQLite database (not fakeDb), that when <c>CreateAsync</c> fails
+    /// because the database genuinely rejects the write (a real unique-constraint violation on
+    /// the primary key), the audit fields that were mutated in-memory while building the INSERT
+    /// — before the failing execution — are restored to their pre-attempt values rather than left
+    /// showing a fake "success" timestamp/user for a row that was never persisted.
+    /// <para>
+    /// This exercises <c>BaseTableGateway.Audit.cs</c>'s <c>SnapshotAuditFields</c>/
+    /// <c>RestoreAuditFields</c> machinery through the real
+    /// <c>catch { RestoreAuditFields(...); throw; }</c> path in
+    /// <c>TableGateway.Core.cs</c>'s <c>CreateAsync</c> — previously validated only via
+    /// fakeDb-injected exceptions, never a genuine provider-thrown constraint violation.
+    /// </para>
+    /// </summary>
+    [SkippableFact]
+    public Task CreateAsync_RealUniqueConstraintViolation_RestoresAuditFieldsToPreAttemptValues()
+    {
+        return RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider != SupportedDatabase.Sqlite)
+            {
+                Output.WriteLine(
+                    $"{provider}: skipped — this test targets SQLite specifically to validate the " +
+                    "audit-field-restore-on-real-failure path with a fast, dependency-free real engine.");
+                return;
+            }
+
+            var helper = new TableGateway<AuditedEntity, long>(context, GetAuditResolver());
+            var sharedId = Interlocked.Increment(ref _nextId);
+
+            var first = new AuditedEntity { Id = sharedId, Name = "First" };
+            var firstCreated = await helper.CreateAsync(first, context);
+            Assert.True(firstCreated);
+
+            // Second entity reuses the same primary key — CreateAsync will mutate its audit
+            // fields while building the INSERT, then the database will genuinely reject the
+            // write with a real unique-constraint (primary key) violation.
+            var duplicate = new AuditedEntity { Id = sharedId, Name = "Duplicate" };
+            Assert.Equal(default, duplicate.CreatedAt);
+            Assert.Equal(string.Empty, duplicate.CreatedBy);
+            Assert.Equal(default, duplicate.UpdatedAt);
+            Assert.Equal(string.Empty, duplicate.UpdatedBy);
+
+            await Assert.ThrowsAsync<UniqueConstraintViolationException>(async () =>
+                await helper.CreateAsync(duplicate, context));
+
+            // The write never persisted — audit fields must be back to their pre-attempt
+            // (default) values, not showing a fake "success" timestamp/user.
+            Assert.Equal(default, duplicate.CreatedAt);
+            Assert.Equal(string.Empty, duplicate.CreatedBy);
+            Assert.Equal(default, duplicate.UpdatedAt);
+            Assert.Equal(string.Empty, duplicate.UpdatedBy);
+
+            Output.WriteLine($"{provider}: audit fields correctly restored after a real unique constraint violation");
+        });
+    }
+
     private static string BuildAuditTableSql(SupportedDatabase provider, IDatabaseContext context)
     {
         var table = IntegrationObjectNameHelper.Table(context, "audited_entity");
@@ -260,9 +316,9 @@ public class AuditFieldTests : DatabaseTestBase
         var updatedAtColumn = context.WrapObjectName("updated_at");
         var updatedByColumn = context.WrapObjectName("updated_by");
 
-        var idType = GetIdType(provider);
-        var stringType = GetStringType(provider);
-        var dateType = GetDateTimeType(provider);
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var stringType = IntegrationObjectNameHelper.StringType(provider);
+        var dateType = IntegrationObjectNameHelper.DateTimeType(provider);
 
         return $@"
 CREATE TABLE {table} (
@@ -275,45 +331,6 @@ CREATE TABLE {table} (
 )";
     }
 
-    private static string GetIdType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Oracle => "NUMBER(19)",
-            _ => "BIGINT"
-        };
-    }
-
-    private static string GetStringType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "TEXT",
-            SupportedDatabase.SqlServer => "NVARCHAR(255)",
-            SupportedDatabase.Oracle => "VARCHAR2(255)",
-            SupportedDatabase.Firebird => "VARCHAR(255)",
-            _ => "VARCHAR(255)"
-        };
-    }
-
-    private static string GetDateTimeType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "DATETIME",
-            SupportedDatabase.SqlServer => "DATETIME2",
-            SupportedDatabase.MySql => "DATETIME",
-            SupportedDatabase.MariaDb => "DATETIME",
-            SupportedDatabase.SingleStore => "DATETIME(6)",
-            // Spanner's PostgreSQL interface has no plain TIMESTAMP, only TIMESTAMPTZ.
-            SupportedDatabase.Spanner => "TIMESTAMPTZ",
-            SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
-            SupportedDatabase.SybaseASE => "BIGDATETIME",
-            _ => "TIMESTAMP"
-        };
-    }
-
     private static async Task EnsureFirebirdAuditTableAsync(IDatabaseContext context)
     {
         var tableName = "audited_entity";
@@ -321,8 +338,7 @@ CREATE TABLE {table} (
         if (!await FirebirdAuditTableExistsAsync(context))
         {
             var createSql = BuildAuditTableSql(SupportedDatabase.Firebird, context);
-            await using var createContainer = context.CreateSqlContainer(createSql);
-            await createContainer.ExecuteNonQueryAsync();
+            await ExecuteDdlWithTransientRetryAsync(context, createSql);
         }
 
         await using var deleteContainer = context.CreateSqlContainer($"DELETE FROM {wrappedTable}");

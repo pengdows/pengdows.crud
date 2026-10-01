@@ -1,5 +1,12 @@
 ﻿// See https://aka.ms/new-console-template for more information
-
+//
+// Entry point for the testbed's container-provisioning battery (see TestProvider.cs's own class
+// remarks for what "testbed" now covers post-consolidation with pengdows.crud.IntegrationTests):
+// per database, this spins up a real Testcontainers instance, creates the shared test table,
+// runs a scalar-UDF smoke check and the DbMode idle-unload probe, then disposes the container.
+// It is NOT the place to add CRUD/transaction/isolation/error-mapping coverage for a new
+// database — that belongs in pengdows.crud.IntegrationTests. run-integration-tests.sh runs both
+// this program and that xUnit suite as the two halves of "run the integration tests."
 
 #region
 
@@ -43,13 +50,13 @@ await StormGateIntegrationTests.RunAsync();
 Console.WriteLine($"Starting parallel database testing at {DateTime.Now:yyyy-MM-dd HH:mm:ss}");
 Console.WriteLine();
 
-// Use the new parallel orchestrator. Snowflake is opt-in via INCLUDE_SNOWFLAKE=true (requires
-// cloud credentials, no Docker image); SAP HANA is opt-in via INCLUDE_SAPHANA=true (real Docker
-// image, but needs 16-32GB RAM); InterBase is opt-in via INCLUDE_INTERBASE=true (a personal,
-// non-shareable, already-running, externally-managed container — see
-// testbed/InterBase/InterBaseTestContainer.cs's class remarks); Access is opt-in via
-// INCLUDE_ACCESS=true (no Docker image at all, Windows-only, requires the Microsoft Access
-// Database Engine Redistributable — see testbed/Access/AccessTestContainer.cs's class remarks).
+// Use the new parallel orchestrator (Snowflake is opt-in via INCLUDE_SNOWFLAKE=true — cloud-only,
+// no Docker image; SAP HANA is opt-in via INCLUDE_SAPHANA=true — real Docker image, but needs
+// 16-32GB RAM; InterBase is opt-in via INCLUDE_INTERBASE=true — a personal, non-shareable,
+// node-locked Developer Edition license plus a native libgds.so required on this host, see
+// InterBaseTestContainer.cs; Access is opt-in via INCLUDE_ACCESS=true — no Docker image at all,
+// Windows-only and COM-interop-dependent (ADOX), see AccessTestContainer.cs; every other
+// database, Informix included, runs unconditionally)
 var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.ToLower() == "true";
 var includeSapHana = Environment.GetEnvironmentVariable("INCLUDE_SAPHANA")?.ToLower() == "true";
 var includeInterBase = Environment.GetEnvironmentVariable("INCLUDE_INTERBASE")?.ToLower() == "true";
@@ -89,6 +96,7 @@ string? GetArg(string name)
 
 var only = ParseList(GetArg("only") ?? Environment.GetEnvironmentVariable("TESTBED_ONLY"));
 var exclude = ParseList(GetArg("exclude") ?? Environment.GetEnvironmentVariable("TESTBED_EXCLUDE"));
+var versions = ParseList(GetArg("versions") ?? Environment.GetEnvironmentVariable("TESTBED_VERSIONS"));
 
 if (only.Count > 0)
 {
@@ -100,7 +108,12 @@ if (exclude.Count > 0)
     Console.WriteLine($"Filter: exclude => {string.Join(",", exclude)}");
 }
 
-var results = await orchestrator.RunAllTestsAsync(only, exclude);
+if (versions.Count > 0)
+{
+    Console.WriteLine($"Filter: versions => {string.Join(",", versions)}");
+}
+
+var results = await orchestrator.RunAllTestsAsync(only, exclude, versions);
 
 // Optional: Export results for CI/CD
 var successCount  = results.Count(r => r.Success);

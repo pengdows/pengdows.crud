@@ -10,38 +10,57 @@ using pengdows.crud;
 namespace testbed.SingleStore;
 
 /// <summary>
-/// SingleStore's own dev image (<c>ghcr.io/singlestore-labs/singlestoredb-dev</c>), not
-/// <see cref="testbed.MySQL.MySqlTestContainer"/> pointed at a different image: the startup
-/// behavior differs (ported from the 3.0 branch, where it was verified live).
+/// SingleStore's own dev image (<c>ghcr.io/singlestore-labs/singlestoredb-dev</c>), NOT
+/// <see cref="testbed.MySQL.MySqlTestContainer"/> pointed at a different image — confirmed live
+/// (this session) that the two images' startup env vars/behavior genuinely differ:
 /// <list type="bullet">
-///   <item>The root password env var is <c>ROOT_PASSWORD</c>, not MySQL's <c>MYSQL_ROOT_PASSWORD</c>.</item>
-///   <item>There is no bootstrap-database env var like MySQL's <c>MYSQL_DATABASE</c>, so this class
-///   connects with no default database and creates its per-instance database via SQL.</item>
-///   <item>No <c>SINGLESTORE_LICENSE</c> is required: the image self-issues a free developer license
-///   and only logs a capacity WARN for its 2-node (master+leaf) topology.</item>
-///   <item><c>SELECT @@memsql_version</c> is what <c>DatabaseDetectionService</c> probes to tell
-///   SingleStore apart from MySQL (whose <c>VERSION()</c> it imitates).</item>
+///   <item>Root password env var is <c>ROOT_PASSWORD</c>, not MySQL's <c>MYSQL_ROOT_PASSWORD</c>.</item>
+///   <item>No bootstrap-database env var equivalent to MySQL's <c>MYSQL_DATABASE</c> — this class
+///   connects with no default database and creates its per-instance database via SQL instead,
+///   the same way <see cref="testbed.MySQL.MySqlTestContainer"/> creates its own random database
+///   on top of its (different) bootstrap database.</item>
+///   <item>Confirmed live: no <c>SINGLESTORE_LICENSE</c> env var is required to start — the image
+///   self-issues a free "Developer Image edition" license (unlimited expiration, 1 capacity
+///   unit) and logs a capacity-exceeded WARN for its own 2-node (master+leaf) topology, but this
+///   does not prevent ordinary DDL/DML from working. Do not add a license env var here without a
+///   real, live-verified reason to.</item>
+///   <item><c>SELECT VERSION()</c> reports a generic MySQL-compatible <c>5.7.32</c> and
+///   <c>SELECT @@memsql_version</c> reports the real SingleStore version (<c>9.1.1</c> in the
+///   image this was verified against) — this is exactly the discriminator
+///   <c>DatabaseDetectionService</c> already probes for (see docs/supported-databases.md's
+///   SingleStore note), so no extra detection wiring is needed here.</item>
 /// </list>
-/// Single pinned image, no per-version matrix (same as Sybase/Informix/Spanner).
+/// Single pinned image, no per-version matrix (matches the Sybase/Informix/Spanner precedent for
+/// "one container class, no <c>AddDocker</c> version fan-out") — SingleStore doesn't publish a
+/// versioned image matrix the way MySQL/MariaDB/Postgres do.
 /// </summary>
 public class SingleStoreTestContainer : TestContainer
 {
-    private const string Username = "root";
-    private const string Password = "rootpassword";
-    private const int Port = 3306;
     private readonly IContainer _container;
-    // Random per instance so two processes sharing one physical server never see each other's tables.
-    private readonly string _database = "crud_test_" + Guid.NewGuid().ToString("N")[..12];
     private string? _connectionString;
+    // Random per instance so two processes sharing one physical container never see each other's
+    // tables, even if they run concurrently (same rationale as MySqlTestContainer's _database).
+    private readonly string _database = "crud_test_" + TestContainerReuse.NewSuffix();
+    private readonly string _password = "rootpassword";
+    private readonly int _port = 3306;
+    private const string Username = "root";
+    private readonly string _image;
 
     public SingleStoreTestContainer(string? image = null)
     {
-        _container = new ContainerBuilder()
-            .WithImage(image ?? "ghcr.io/singlestore-labs/singlestoredb-dev:latest")
-            .WithEnvironment("ROOT_PASSWORD", Password)
-            .WithPortBinding(Port, true)
-            .WithExposedPort(Port)
-            .Build();
+        _image = image ?? "ghcr.io/singlestore-labs/singlestoredb-dev:latest";
+        var builder = new ContainerBuilder()
+            .WithImage(_image)
+            .WithEnvironment("ROOT_PASSWORD", _password)
+            .WithPortBinding(_port, true)
+            .WithExposedPort(_port);
+
+        if (TestContainerReuse.Enabled)
+        {
+            builder = builder.WithReuse(true);
+        }
+
+        _container = builder.Build();
     }
 
     /// <summary>
@@ -53,9 +72,21 @@ public class SingleStoreTestContainer : TestContainer
 
     public override async Task StartAsync()
     {
-        await _container.StartAsync();
+        if (TestContainerReuse.Enabled)
+        {
+            using var _ = await TestContainerReuse.AcquireStartupLockAsync("singlestore-" + _image);
+            await _container.StartAsync();
+        }
+        else
+        {
+            await _container.StartAsync();
+        }
 
-        var adminConnectionString = BuildConnectionString(database: null);
+        var hostPort = _container.GetMappedPublicPort(_port);
+        // No database specified yet — SingleStore's dev image has no MYSQL_DATABASE-equivalent
+        // bootstrap var, so the admin connection targets no default schema.
+        var adminConnectionString =
+            $@"Server=localhost;Port={hostPort};User ID={Username};Password={_password};AllowPublicKeyRetrieval=True;SslMode=None;";
         await WaitForDbToStart(MySqlConnectorFactory.Instance, adminConnectionString, _container, 180);
 
         await using (var conn = new MySqlConnection(adminConnectionString))
@@ -66,7 +97,8 @@ public class SingleStoreTestContainer : TestContainer
             await cmd.ExecuteNonQueryAsync();
         }
 
-        _connectionString = BuildConnectionString(_database);
+        _connectionString =
+            $@"Server=localhost;Port={hostPort};Database={_database};User ID={Username};Password={_password};AllowPublicKeyRetrieval=True;SslMode=None;";
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
@@ -80,15 +112,30 @@ public class SingleStoreTestContainer : TestContainer
             new DatabaseContext(_connectionString, MySqlConnectorFactory.Instance, new TypeMapRegistry()));
     }
 
-    protected override ValueTask DisposeAsyncCore()
+    protected override async ValueTask DisposeAsyncCore()
     {
-        return _container.DisposeAsync();
-    }
+        if (_connectionString is not null)
+        {
+            try
+            {
+                var hostPort = _container.GetMappedPublicPort(_port);
+                var adminConnectionString =
+                    $@"Server=localhost;Port={hostPort};User ID={Username};Password={_password};AllowPublicKeyRetrieval=True;SslMode=None;";
+                await using var conn = new MySqlConnection(adminConnectionString);
+                await conn.OpenAsync();
+                await using var cmd = conn.CreateCommand();
+                cmd.CommandText = $"DROP DATABASE IF EXISTS `{_database}`";
+                await cmd.ExecuteNonQueryAsync();
+            }
+            catch
+            {
+                // Best-effort: a shared/reused container may already be gone.
+            }
+        }
 
-    private string BuildConnectionString(string? database)
-    {
-        var hostPort = _container.GetMappedPublicPort(Port);
-        var databasePart = database is null ? string.Empty : $"Database={database};";
-        return $"Server=localhost;Port={hostPort};{databasePart}User ID={Username};Password={Password};AllowPublicKeyRetrieval=True;SslMode=None;";
+        if (!TestContainerReuse.Enabled)
+        {
+            await _container.DisposeAsync();
+        }
     }
 }

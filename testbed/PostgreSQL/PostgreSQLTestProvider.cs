@@ -71,7 +71,15 @@ CREATE TABLE {0} (
 
     protected override async Task RunAdditionalTestsAsync()
     {
-        await TestExplicitIdentityUpsertAsync();
+        // GENERATED ALWAYS AS IDENTITY was introduced in PostgreSQL 10
+        if (context.DataSourceInfo.ParsedVersion == null || context.DataSourceInfo.ParsedVersion.Major >= 10)
+        {
+            await TestExplicitIdentityUpsertAsync();
+        }
+        else
+        {
+            CheckSkip("PostgreSql.GeneratedAlwaysIdentity", $"Skipped GENERATED ALWAYS AS IDENTITY test on PostgreSQL {context.DataSourceInfo.DatabaseProductVersion} (requires PostgreSQL 10+)");
+        }
     }
 
     private async Task TestExplicitIdentityUpsertAsync()
@@ -102,7 +110,7 @@ CREATE TABLE {0} (
                 throw new Exception("PostgreSQL explicit identity upsert did not persist the updated value");
             }
 
-            CheckOk("PostgreSQL explicit GENERATED ALWAYS identity upsert: OK");
+            CheckOk("PostgreSql.GeneratedAlwaysIdentity", "PostgreSQL explicit GENERATED ALWAYS identity upsert: OK");
         }
         finally
         {

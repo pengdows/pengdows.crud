@@ -64,7 +64,7 @@ CREATE TABLE {tableName} (
                     "DuckDB RETURNING clause did not populate Id — INSERT ... RETURNING id returned 0 or null");
             }
 
-            CheckOk($"DuckDB RETURNING: CreateAsync populated Id = {entity.Id} via INSERT ... RETURNING");
+            CheckOk("DuckDb.ReturningClause", $"DuckDB RETURNING: CreateAsync populated Id = {entity.Id} via INSERT ... RETURNING");
 
             var retrieved = await gateway.RetrieveOneAsync(entity.Id);
             if (retrieved == null || retrieved.Id != entity.Id)
@@ -73,7 +73,7 @@ CREATE TABLE {tableName} (
                     $"DuckDB RETURNING: RetrieveOneAsync by returned Id {entity.Id} did not find the row");
             }
 
-            CheckOk($"DuckDB RETURNING: RetrieveOneAsync confirmed row exists with Id = {retrieved.Id}");
+            CheckOk("DuckDb.ReturningClauseRetrieve", $"DuckDB RETURNING: RetrieveOneAsync confirmed row exists with Id = {retrieved.Id}");
         }
         finally
         {

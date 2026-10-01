@@ -8,8 +8,12 @@ using Xunit.Abstractions;
 namespace pengdows.crud.IntegrationTests.Core;
 
 /// <summary>
-/// Verifies stored procedure return value capture (SQL Server) and 
-/// correct NotSupported behavior on other providers.
+/// Verifies stored procedure invocation across the providers that support it: SQL Server return
+/// value capture and OUTPUT parameters (<c>ProcWrappingStyle.Exec</c>), correct NotSupported
+/// behavior for return-value capture on every other provider, Db2's CALL-based invocation with a
+/// <c>WITH RETURN TO CALLER</c> cursor result set (<c>ProcWrappingStyle.Call</c>), and the
+/// PostgreSQL family's (PostgreSQL/CockroachDB/YugabyteDB) CALL-based write path for a real
+/// PG11+ procedure with an INOUT parameter (<c>ProcWrappingStyle.PostgreSQL</c>).
 /// </summary>
 [Collection("IntegrationTests")]
 public class StoredProcedureTests : DatabaseTestBase
@@ -315,5 +319,236 @@ public class StoredProcedureTests : DatabaseTestBase
                 await context.CreateSqlContainer($"DROP PROCEDURE {procName}").ExecuteNonQueryAsync();
             }
         });
+    }
+
+    /// <summary>
+    /// Every database whose dialect has a <see cref="ProcWrappingStyle"/> creates, invokes through
+    /// <c>WrapForStoredProc</c>, and drops a real procedure (ported from the testbed's
+    /// TestStoredProcReturnValue when its check battery moved here). A database with a wrapping
+    /// style but no case below fails, so a new database cannot silently go untested; one with
+    /// <see cref="ProcWrappingStyle.None"/> has no procedure support (a capability, not a skip).
+    /// </summary>
+    [SkippableFact]
+    public async Task StoredProc_WrapForStoredProc_InvokesARealProcedureOnEveryProcCapableDatabase()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (context.ProcWrappingStyle == ProcWrappingStyle.None)
+            {
+                Output.WriteLine($"{provider}: capability - ProcWrappingStyle.None, no stored procedure support");
+                return;
+            }
+
+            await using var sc = context.CreateSqlContainer();
+            switch (provider)
+            {
+                case SupportedDatabase.SqlServer:
+                {
+                    var name = context.WrapObjectName("dbo") + context.CompositeIdentifierSeparator +
+                               context.WrapObjectName("ReturnFive");
+                    sc.Query.Append($"CREATE OR ALTER PROCEDURE {name} AS BEGIN RETURN 5 END");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(5, await InvokeAsync(sc, "dbo.ReturnFive", ExecutionType.Read, captureReturn: true));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.Snowflake:
+                {
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE PROCEDURE {name}()\n  RETURNS VARCHAR\n  LANGUAGE SQL\nAS $$\n" +
+                        "  BEGIN\n    RETURN CURRENT_TIMESTAMP()::VARCHAR;\n  END\n$$");
+                    await sc.ExecuteNonQueryAsync();
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var wrapped = sc.WrapForStoredProc(ExecutionType.Read);
+                    sc.Clear();
+                    sc.Query.Append(wrapped);
+                    Assert.False(string.IsNullOrWhiteSpace(await sc.ExecuteScalarOrNullAsync<string>()));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}()");
+                    break;
+                }
+
+                case SupportedDatabase.MySql:
+                case SupportedDatabase.AuroraMySql:
+                case SupportedDatabase.MariaDb:
+                {
+                    // CALL `proc`() returns the body's SELECT as a result set. MySqlConnector and
+                    // MySql.Data both send CREATE PROCEDURE ... BEGIN ... END as one statement.
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append($"CREATE PROCEDURE {name}()\nBEGIN\n  SELECT 42;\nEND");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(42, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Write));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.SingleStore:
+                {
+                    // SingleStore rejects MySQL's bare SELECT body ("unexpected end of function
+                    // definition"); ECHO SELECT returns a result set from a procedure.
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append($"CREATE PROCEDURE {name}() AS\nBEGIN\n  ECHO SELECT 42;\nEND");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(42, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Write));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.SapHana:
+                {
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append(
+                        $"CREATE PROCEDURE {name} ()\nLANGUAGE SQLSCRIPT\nAS\nBEGIN\n" +
+                        "  SELECT 42 AS RESULT_VAL FROM DUMMY;\nEND");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(42, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Read));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.PostgreSql:
+                case SupportedDatabase.AuroraPostgreSql:
+                case SupportedDatabase.CockroachDb:
+                case SupportedDatabase.YugabyteDb:
+                {
+                    // Read path: SELECT * FROM "fn"(); a SQL function works on PostgreSQL,
+                    // CockroachDB 22.2+ and YugabyteDB alike.
+                    var name = context.WrapObjectName("fn_pengdows_test");
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE FUNCTION {name}()\nRETURNS INTEGER\nLANGUAGE SQL\nAS $$\n  SELECT 42;\n$$");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(42, await InvokeAsync(sc, "fn_pengdows_test", ExecutionType.Read));
+                    await DropProcAsync(sc, $"DROP FUNCTION {name}()");
+                    break;
+                }
+
+                case SupportedDatabase.Oracle:
+                {
+                    // BEGIN "proc"; END; — Oracle procedures return no result set; the call must run.
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append($"CREATE OR REPLACE PROCEDURE {name} AS BEGIN NULL; END;");
+                    await sc.ExecuteNonQueryAsync();
+                    sc.Clear();
+                    sc.Query.Append("sp_pengdows_test");
+                    var wrapped = sc.WrapForStoredProc(ExecutionType.Write);
+                    sc.Clear();
+                    sc.Query.Append(wrapped);
+                    await sc.ExecuteNonQueryAsync();
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.Firebird:
+                {
+                    // Selectable procedure (SUSPEND), read as SELECT * FROM "proc".
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append(
+                        $"CREATE OR ALTER PROCEDURE {name}\nRETURNS (result_val INTEGER)\nAS\nBEGIN\n" +
+                        "  result_val = 42;\n  SUSPEND;\nEND");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(42, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Read));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.InterBase:
+                {
+                    // InterBase rejects CREATE OR ALTER PROCEDURE and DROP ... IF EXISTS, so drop a
+                    // leftover first (the database is persistent) and tolerate its absence.
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append($"DROP PROCEDURE {name}");
+                    try
+                    {
+                        await sc.ExecuteNonQueryAsync();
+                    }
+                    catch (pengdows.crud.exceptions.DatabaseException)
+                    {
+                    }
+
+                    sc.Clear();
+                    sc.Query.Append(
+                        $"CREATE PROCEDURE {name}\nRETURNS (result_val INTEGER)\nAS\nBEGIN\n" +
+                        "  result_val = 42;\n  SUSPEND;\nEND");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(42, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Read));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.Db2:
+                {
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append(
+                        $"CREATE OR REPLACE PROCEDURE {name}()\nDYNAMIC RESULT SETS 1\nLANGUAGE SQL\nBEGIN\n" +
+                        "  DECLARE c1 CURSOR WITH RETURN TO CALLER FOR SELECT 42 FROM SYSIBM.SYSDUMMY1;\n" +
+                        "  OPEN c1;\nEND");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(42, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Write));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.SybaseASE:
+                {
+                    // ASE has no CREATE OR ALTER; the single-argument OBJECT_ID() is the form this
+                    // build accepts (the two-argument overload fails, verified live).
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append($"IF OBJECT_ID('sp_pengdows_test') IS NOT NULL DROP PROCEDURE {name}");
+                    await sc.ExecuteNonQueryAsync();
+                    sc.Clear();
+                    sc.Query.Append($"CREATE PROCEDURE {name} AS BEGIN RETURN 5 END");
+                    await sc.ExecuteNonQueryAsync();
+                    Assert.Equal(5, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Read, captureReturn: true));
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                case SupportedDatabase.Informix:
+                {
+                    // EXECUTE PROCEDURE "proc"(?) returns the RETURNING value as a one-row result
+                    // on both the read and the write path (verified live).
+                    var name = context.WrapObjectName("sp_pengdows_test");
+                    sc.Query.Append($"CREATE PROCEDURE {name}(a INT) RETURNING INT;\n  RETURN a + 41;\nEND PROCEDURE");
+                    await sc.ExecuteNonQueryAsync();
+                    foreach (var executionType in new[] { ExecutionType.Read, ExecutionType.Write })
+                    {
+                        sc.Clear();
+                        sc.Query.Append("sp_pengdows_test");
+                        sc.AddParameterWithValue("a", DbType.Int32, 1);
+                        var wrapped = sc.WrapForStoredProc(executionType);
+                        sc.Query.Clear();
+                        sc.Query.Append(wrapped);
+                        Assert.Equal(42, await sc.ExecuteScalarOrNullAsync<int>());
+                    }
+
+                    await DropProcAsync(sc, $"DROP PROCEDURE {name}");
+                    break;
+                }
+
+                default:
+                    Assert.Fail($"{provider} has ProcWrappingStyle.{context.ProcWrappingStyle} but no case here - add one.");
+                    break;
+            }
+        });
+    }
+
+    private static async Task<int?> InvokeAsync(ISqlContainer sc, string procName, ExecutionType executionType,
+        bool captureReturn = false)
+    {
+        sc.Clear();
+        sc.Query.Append(procName);
+        var wrapped = sc.WrapForStoredProc(executionType, captureReturn: captureReturn);
+        sc.Clear();
+        sc.Query.Append(wrapped);
+        return await sc.ExecuteScalarOrNullAsync<int>();
+    }
+
+    private static async Task DropProcAsync(ISqlContainer sc, string dropSql)
+    {
+        sc.Clear();
+        sc.Query.Append(dropSql);
+        await sc.ExecuteNonQueryAsync();
     }
 }

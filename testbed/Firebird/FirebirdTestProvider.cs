@@ -17,14 +17,6 @@ public class FirebirdTestProvider : TestProvider
         this.context = context;
     }
 
-    /// <summary>
-    /// Firebird's default container database uses the NONE character set which only supports
-    /// ASCII. Override the description to ASCII-only; other round-trip assertions still run.
-    /// </summary>
-    protected override string RoundTripDescription => "Hello World ASCII round-trip test string";
-
-    protected override string RoundTripFidelityUnicodeText => "Hello World ASCII fidelity test string";
-
     public override async Task CreateTable()
     {
         var sqlContainer = context.CreateSqlContainer();
@@ -142,7 +134,7 @@ CREATE TABLE {0} (
                 throw new Exception($"[Firebird TZ] plain TIMESTAMP stored '{plainStored}', expected the UTC wall time 2026-02-21 17:34:56");
             }
 
-            CheckOk("  [Firebird] DateTimeOffset into TIMESTAMP and TIMESTAMP WITH TIME ZONE: OK");
+            CheckOk("Firebird.DateTimeOffsetTimeZoneColumns", "  [Firebird] DateTimeOffset into TIMESTAMP and TIMESTAMP WITH TIME ZONE: OK");
         }
         finally
         {

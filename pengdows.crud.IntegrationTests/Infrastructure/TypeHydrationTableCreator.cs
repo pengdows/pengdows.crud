@@ -28,6 +28,13 @@ namespace pengdows.crud.IntegrationTests.Infrastructure;
 ///     CHAR(16) CHARACTER SET OCTETS for guid (binary, 16 bytes); BLOB SUB_TYPE 0 for binary.</item>
 ///   <item>Snowflake: FLOAT4 declared (stored as 64-bit internally); DOUBLE for double;
 ///     TIMESTAMP_NTZ for both date types; VARCHAR(36) for guid; VARBINARY for binary.</item>
+///   <item>FlatFile: REAL for float; DOUBLE for double; TIMESTAMP for DateTime; TIMESTAMP WITH
+///     TIME ZONE (the genuine ISO/ANSI spelling - "TIMESTAMPTZ" is Postgres vendor shorthand the
+///     parser rejects outright) for DateTimeOffset — bare TIMESTAMP maps to CLR DateTime in
+///     SqlBinder.MapSqlDataTypeToClrType, so a DateTimeOffset column declared TIMESTAMP silently
+///     loses its offset (verified live via RoundTripTests/TestTableCreator.
+///     CreateRoundTripTableAsync's identical fix); VARCHAR(36) for guid (no native GUID type);
+///     BLOB for binary.</item>
 /// </list>
 /// </summary>
 public class TypeHydrationTableCreator

@@ -1,11 +1,6 @@
 #region
 
-using System.Data;
-using System.Data.Common;
-using Oracle.ManagedDataAccess.Client;
 using pengdows.crud;
-using pengdows.crud.configuration;
-using pengdows.crud.enums;
 
 #endregion
 
@@ -112,104 +107,4 @@ END;", triggerName, tableName, idColumn, sequenceName);
         await sqlContainer.ExecuteNonQueryAsync();
     }
 
-    /// <summary>
-    /// Validates that Oracle reader and writer connections draw from separate ODP.NET pools.
-    /// Uses Max Pool Size=1 so any pool sharing causes an immediate timeout,
-    /// while separate pools allow both connections to open concurrently.
-    /// </summary>
-    protected override async Task TestPoolIsolation()
-    {
-        // Build a fresh context with a tiny pool to make contention detectable.
-        // Connection Timeout is set to 30s so ODP.NET can establish the first physical
-        // connection to a cold pool. The pool isolation assertion still holds: if the reader
-        // mistakenly shares the writer's pool (Max Pool Size=1, already occupied), the reader
-        // blocks for 30s and the test times out visibly. With separate pools (Metadata Pooling
-        // discriminator), the reader opens from its own empty pool and completes immediately.
-        // Use the raw (non-redacted) connection string so credentials are intact.
-        // testbed has InternalsVisibleTo access to pengdows.crud for this purpose.
-        var rawCs = (_context as DatabaseContext)?.RawConnectionString ?? _context.ConnectionString;
-        var builder = new DbConnectionStringBuilder
-        {
-            ConnectionString = rawCs
-        };
-        builder["Max Pool Size"] = 1;
-        builder["Connection Timeout"] = 30;
-
-        var cfg = new DatabaseContextConfiguration
-        {
-            ConnectionString = builder.ConnectionString,
-            DbMode = DbMode.Standard,
-            ReadWriteMode = ReadWriteMode.ReadWrite
-        };
-
-        await using var ctx = new DatabaseContext(cfg, OracleClientFactory.Instance);
-
-        // Acquire and hold the writer connection (pool now at capacity for writer pool key).
-        var writer = ctx.GetConnection(ExecutionType.Write);
-        await writer.OpenAsync();
-        try
-        {
-            // Reader must come from a separate pool (Metadata Pooling=false) — should not block.
-            var reader = ctx.GetConnection(ExecutionType.Read);
-            await reader.OpenAsync();
-            ctx.CloseAndDisposeConnection(reader);
-        }
-        finally
-        {
-            ctx.CloseAndDisposeConnection(writer);
-        }
-
-        CheckOk("  [PoolIsolation] Reader and writer use separate ODP.NET pools (Metadata Pooling discriminator): OK");
-    }
-
-    /// <summary>
-    /// Oracle uses NUMBER types rather than INT/BIGINT, and requires PL/SQL for conditional DROP.
-    /// </summary>
-    protected override async Task TestIdentifierQuoting()
-    {
-        var wrappedTable = context.WrapObjectName("quote_test");
-        var wrappedId = context.WrapObjectName("id");
-        var wrappedOrder = context.WrapObjectName("order"); // reserved word
-
-        await DropTableIfExistsAsync("quote_test");
-
-        var sc = context.CreateSqlContainer();
-        sc.Query.AppendFormat(
-            "CREATE TABLE {0} ({1} NUMBER(10,0) NOT NULL PRIMARY KEY, {2} NUMBER(10,0) NOT NULL)",
-            wrappedTable, wrappedId, wrappedOrder);
-        await sc.ExecuteNonQueryAsync();
-
-        try
-        {
-            // INSERT
-            sc.Clear();
-            sc.Query.AppendFormat(
-                "INSERT INTO {0} ({1}, {2}) VALUES ({3}, {4})",
-                wrappedTable, wrappedId, wrappedOrder,
-                sc.MakeParameterName("p0"),
-                sc.MakeParameterName("p1"));
-            sc.AddParameterWithValue("p0", DbType.Int32, 1);
-            sc.AddParameterWithValue("p1", DbType.Int32, 42);
-            await sc.ExecuteNonQueryAsync();
-
-            // SELECT
-            sc.Clear();
-            sc.Query.AppendFormat(
-                "SELECT {0} FROM {1} WHERE {2} = {3}",
-                wrappedOrder, wrappedTable, wrappedId,
-                sc.MakeParameterName("p0"));
-            sc.AddParameterWithValue("p0", DbType.Int32, 1);
-            var val = await sc.ExecuteScalarOrNullAsync<int>();
-            if (val != 42)
-                throw new Exception($"[Quoting] Oracle: expected 42 for 'order' column, got {val}");
-
-            Console.WriteLine("  [Quoting] Reserved word 'order' as column name (Oracle NUMBER types): OK");
-        }
-        finally
-        {
-            sc.Clear();
-            sc.Query.AppendFormat("DROP TABLE {0}", wrappedTable);
-            await sc.ExecuteNonQueryAsync();
-        }
-    }
 }

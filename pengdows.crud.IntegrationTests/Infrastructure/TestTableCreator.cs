@@ -27,10 +27,17 @@ public class TestTableCreator
         {
             SupportedDatabase.Sqlite => CreateSqliteTableSql(),
             SupportedDatabase.PostgreSql => CreatePostgreSqlTableSql(),
+            // Spanner's PostgreSQL interface has no plain TIMESTAMP type at all (verified live:
+            // "P0001: Type <timestamp> is not supported.") — only TIMESTAMPTZ, since Spanner
+            // always stores instants in UTC internally. Needs its own DDL, not the shared
+            // PostgreSql/CockroachDb/YugabyteDb TIMESTAMPTZ-aware DDL a few cases below either,
+            // since this table (unlike that one) declares TIMESTAMP.
+            SupportedDatabase.Spanner => CreateSpannerTableSql(),
             SupportedDatabase.SqlServer => CreateSqlServerTableSql(),
             SupportedDatabase.MySql => CreateMySqlTableSql(),
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
             SupportedDatabase.TiDb => CreateMySqlTableSql(),
+            SupportedDatabase.SingleStore => CreateMySqlTableSql(),
             SupportedDatabase.DuckDB => CreateDuckDbTableSql(),
             // pengdows.flatfile parses ISO SQL; the DuckDB DDL is ISO-clean.
             SupportedDatabase.FlatFile => CreateDuckDbTableSql(),
@@ -114,6 +121,36 @@ public class TestTableCreator
                     {guidCol} TEXT NOT NULL,
                     {binCol} BLOB NOT NULL
                 )",
+            // pengdows.flatfile parses only ISO SQL - "TEXT" (vendor syntax) is rejected;
+            // "VARCHAR(n)" is the standard form. No native GUID type - a plain VARCHAR(36) round-
+            // trips it as a string (FlatFileDialect.GuidFormat => GuidStorageFormat.String).
+            // WITH (NULLTOKEN = ...): without it, NULL and '' both write as an empty CSV field for
+            // VARCHAR columns and round-trip indistinguishably (ClrTypeParser.Parse only treats an
+            // empty field as NULL for non-string columns) - an explicit sentinel makes NULL
+            // distinguishable from '' for text_nullable, as ParameterBindingTests.NullSemantics_
+            // EqualityVsIsNull requires.
+            // datetimeoffset_value is TIMESTAMP WITH TIME ZONE (the genuine ISO/ANSI spelling,
+            // SQL:2008 §6.1), not bare TIMESTAMP: SqlBinder.MapSqlDataTypeToClrType maps plain
+            // "TIMESTAMP" to CLR DateTime, only "TIMESTAMP WITH TIME ZONE" maps to DateTimeOffset
+            // (TIMESTAMPTZ is Postgres vendor shorthand the parser rejects outright as a non-ISO
+            // extension - not usable here at all). Before this fix, a DateTimeOffset value written
+            // into a plain TIMESTAMP column silently dropped its offset, then re-parsed using the
+            // AMBIENT LOCAL system timezone on read-back (confirmed live: an explicit -05:00
+            // offset came back as -06:00, matching this sandbox's own local zone for that date).
+            SupportedDatabase.FlatFile => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INT NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMP WITH TIME ZONE NOT NULL,
+                    {guidCol} VARCHAR(36) NOT NULL,
+                    {binCol} BLOB NOT NULL
+                ) WITH (NULLTOKEN = '<<NULL>>')",
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
@@ -126,6 +163,25 @@ public class TestTableCreator
                     {boolCol} BOOLEAN NOT NULL,
                     {dtoCol} TIMESTAMPTZ NOT NULL,
                     {guidCol} UUID NOT NULL,
+                    {binCol} BYTEA NOT NULL
+                )",
+            // Spanner's PostgreSQL interface rejects a precision/scale modifier on NUMERIC/DECIMAL
+            // ("P0001: Type modifier is not supported for type <numeric>.") and doesn't register a
+            // "uuid" type Npgsql recognizes ("The NpgsqlDbType 'Uuid' isn't present in your
+            // database.") — both verified live. See IntegrationObjectNameHelper.DecimalType and
+            // SpannerDialect.GuidFormat for the same two findings applied elsewhere.
+            SupportedDatabase.Spanner => $@"
+                CREATE TABLE IF NOT EXISTS {table} (
+                    {idCol} BIGINT PRIMARY KEY,
+                    {textCol} VARCHAR(255) NOT NULL,
+                    {unicodeCol} VARCHAR(255) NOT NULL,
+                    {nullCol} VARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} NUMERIC NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMPTZ NOT NULL,
+                    {guidCol} VARCHAR(36) NOT NULL,
                     {binCol} BYTEA NOT NULL
                 )",
             SupportedDatabase.Snowflake => $@"
@@ -458,7 +514,8 @@ public class TestTableCreator
                     {0}name{1} NVARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
                 )", qp, qs, table),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => string.Format(@"
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+                or SupportedDatabase.SingleStore => string.Format(@"
                 CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,
@@ -478,6 +535,12 @@ public class TestTableCreator
                             )';
                     END IF;
                 END;", qp, qs, table),
+            SupportedDatabase.Db2 => string.Format(@"
+                CREATE TABLE {2} (
+                    {0}id{1} BIGINT NOT NULL PRIMARY KEY,
+                    {0}name{1} VARCHAR(255) NOT NULL,
+                    {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
+                )", qp, qs, table),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 

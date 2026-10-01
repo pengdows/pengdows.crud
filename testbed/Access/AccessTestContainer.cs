@@ -1,5 +1,7 @@
 using System.Data.OleDb;
 using pengdows.crud;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
 
 namespace testbed.Access;
 
@@ -9,12 +11,13 @@ namespace testbed.Access;
 /// (node-locked license + native library). Opt-in via <c>INCLUDE_ACCESS=true</c> — see
 /// <see cref="ParallelTestOrchestrator"/>'s <c>_includeAccess</c> gate.
 /// <para>
-/// Modeled on <c>SqliteTestContainer</c> (file-based, no Testcontainers/Docker at all — this is
-/// the right template, not <c>InterBaseTestContainer</c>'s externally-managed-container pattern,
-/// since Access needs no persistent external server). One necessary difference from SQLite: ACE
-/// does not auto-create the <c>.accdb</c> file on connect, so <see cref="StartAsync"/> creates it
-/// first via ADOX COM interop — proven live on pengdows.crud 3.0. Windows-only (ADOX COM interop
-/// and the ACE OLE DB provider both require it), guarded with <see cref="OperatingSystem.IsWindows"/>.
+/// Modeled on <see cref="SqliteTestContainer"/> (file-based, no Testcontainers/Docker at all —
+/// this is the right template, not <c>InterBaseTestContainer</c>'s externally-managed-container
+/// pattern, since Access needs no persistent external server). One necessary difference from
+/// SQLite: ACE does not auto-create the <c>.accdb</c> file on connect, so <see cref="StartAsync"/>
+/// creates it first via ADOX COM interop — proven live this session. Windows-only (ADOX COM
+/// interop and the ACE OLE DB provider both require it), guarded with
+/// <see cref="OperatingSystem.IsWindows"/>.
 /// </para>
 /// </summary>
 public class AccessTestContainer : TestContainer
@@ -34,7 +37,7 @@ public class AccessTestContainer : TestContainer
         _connectionString = $"Provider=Microsoft.ACE.OLEDB.16.0;Data Source={_dbFilePath};";
 
         // ACE does not auto-create the file on connect (unlike SQLite) — create it explicitly via
-        // ADOX.Catalog, the proven mechanism for this (confirmed live on pengdows.crud 3.0).
+        // ADOX.Catalog, the proven mechanism for this (confirmed live this session).
         dynamic catalog = Activator.CreateInstance(
             Type.GetTypeFromProgID("ADOX.Catalog")
                 ?? throw new InvalidOperationException(
@@ -46,12 +49,22 @@ public class AccessTestContainer : TestContainer
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
-        if (_connectionString is null)
+        if (_connectionString == null)
         {
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return Task.FromResult<IDatabaseContext>(new DatabaseContext(_connectionString, OleDbFactory.Instance));
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = _connectionString,
+            DbMode = DbMode.Best
+        };
+        var context = new DatabaseContext(
+            config,
+            OleDbFactory.Instance,
+            null,
+            new TypeMapRegistry());
+        return Task.FromResult<IDatabaseContext>(context);
     }
 
     protected override ValueTask DisposeAsyncCore()

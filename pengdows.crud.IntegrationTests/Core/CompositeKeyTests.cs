@@ -2,6 +2,7 @@ using System.Data;
 using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit.Abstractions;
@@ -161,6 +162,18 @@ public class CompositeKeyTests : DatabaseTestBase
                 // no (order_id, product_id) constraint for the database to enforce.
                 Output.WriteLine(
                     $"Skipping duplicate composite key test for {provider}: no unique key beyond the shard key can be declared (SupportsUniqueConstraints = false)");
+                return;
+            }
+
+            // SingleStore cannot express this table's shape at all — see
+            // IntegrationObjectNameHelper.InlineUniqueConstraintClause's SingleStore comment — so
+            // SetupDatabaseAsync creates order_items with no (order_id, product_id) unique
+            // constraint for this provider, and this test's entire premise (the DB rejecting a
+            // duplicate composite key) doesn't apply.
+            if (provider == SupportedDatabase.SingleStore)
+            {
+                Output.WriteLine(
+                    "Skipping duplicate composite key test for SingleStore (no DB-level unique constraint on (order_id, product_id) is possible there — see https://docs.singlestore.com/docs/unique-key-restrictions)");
                 return;
             }
 
@@ -376,6 +389,11 @@ public class CompositeKeyTests : DatabaseTestBase
         await container.ExecuteNonQueryAsync();
     }
 
+    // ExecuteDdlWithTransientRetryAsync moved to DatabaseTestBase — see its doc comment there for
+    // the full Spanner slow-schema-queue / duplicate-index-name-propagation-lag rationale this
+    // class originally documented, now shared with MergeConflictTests and any other class doing
+    // its own DROP/CREATE table recreation cycle.
+
     private static string BuildOrderItemsTableSql(SupportedDatabase provider, IDatabaseContext context)
     {
         var table = IntegrationObjectNameHelper.Table(context, "order_items");
@@ -385,9 +403,9 @@ public class CompositeKeyTests : DatabaseTestBase
         var quantityColumn = context.WrapObjectName("quantity");
         var unitPriceColumn = context.WrapObjectName("unit_price");
 
-        var idType = GetBigIntType(provider);
-        var integerType = GetIntType(provider);
-        var decimalType = GetDecimalType(provider);
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var integerType = IntegrationObjectNameHelper.IntType(provider);
+        var decimalType = IntegrationObjectNameHelper.DecimalType(provider);
 
         return $@"
 CREATE TABLE {table} (
@@ -409,10 +427,10 @@ CREATE TABLE {table} (
         var grantedAtColumn = context.WrapObjectName("granted_at");
         var grantedByColumn = context.WrapObjectName("granted_by");
 
-        var idType = GetBigIntType(provider);
-        var integerType = GetIntType(provider);
-        var dateTimeType = GetDateTimeType(provider);
-        var stringType = GetStringType(provider);
+        var idType = IntegrationObjectNameHelper.BigIntType(provider);
+        var integerType = IntegrationObjectNameHelper.IntType(provider);
+        var dateTimeType = IntegrationObjectNameHelper.DateTimeType(provider);
+        var stringType = IntegrationObjectNameHelper.StringType(provider);
 
         return $@"
 CREATE TABLE {table} (
@@ -423,66 +441,6 @@ CREATE TABLE {table} (
     {grantedAtColumn} {dateTimeType} NOT NULL,
     {grantedByColumn} {stringType}{IntegrationObjectNameHelper.InlineUniqueConstraintClause(context, tenantColumn, userColumn, roleColumn)}
 )";
-    }
-
-    private static string GetIntType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Firebird => "INTEGER",
-            _ => "INT"
-        };
-    }
-
-    private static string GetDecimalType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "NUMERIC(18,2)",
-            // Spanner's PostgreSQL interface rejects a precision/scale modifier on NUMERIC.
-            SupportedDatabase.Spanner => "NUMERIC",
-            _ => "DECIMAL(18,2)"
-        };
-    }
-
-    private static string GetBigIntType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "INTEGER",
-            SupportedDatabase.Oracle => "NUMBER(19)",
-            _ => "BIGINT"
-        };
-    }
-
-    private static string GetStringType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "TEXT",
-            SupportedDatabase.SqlServer => "NVARCHAR(255)",
-            SupportedDatabase.Oracle => "VARCHAR2(255)",
-            SupportedDatabase.Firebird => "VARCHAR(255)",
-            _ => "VARCHAR(255)"
-        };
-    }
-
-    private static string GetDateTimeType(SupportedDatabase provider)
-    {
-        return provider switch
-        {
-            SupportedDatabase.Sqlite => "TEXT",
-            SupportedDatabase.SqlServer => "DATETIME2",
-            SupportedDatabase.MySql => "DATETIME",
-            SupportedDatabase.MariaDb => "DATETIME",
-            SupportedDatabase.SingleStore => "DATETIME(6)",
-            // Spanner's PostgreSQL interface has no plain TIMESTAMP, only TIMESTAMPTZ.
-            SupportedDatabase.Spanner => "TIMESTAMPTZ",
-            SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
-            SupportedDatabase.SybaseASE => "BIGDATETIME",
-            _ => "TIMESTAMP"
-        };
     }
 
     private static async Task<int> DeleteOrderItemAsync(IDatabaseContext context, int orderId, int productId)

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Data.SqlClient;
-using MySql.Data.MySqlClient; // 2.0.6 testbed uses MySql.Data (3.0 switched to MySqlConnector)
+using MySqlConnector;
 using Npgsql;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;

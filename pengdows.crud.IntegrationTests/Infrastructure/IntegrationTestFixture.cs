@@ -11,7 +11,9 @@ internal static class IntegrationTestConfiguration
     public static IReadOnlyList<SupportedDatabase> BaseProviders { get; } = new[]
     {
         SupportedDatabase.Sqlite,
+        SupportedDatabase.FlatFile,
         SupportedDatabase.PostgreSql,
+        SupportedDatabase.Spanner,
         SupportedDatabase.SqlServer,
         SupportedDatabase.MySql,
         SupportedDatabase.MariaDb,

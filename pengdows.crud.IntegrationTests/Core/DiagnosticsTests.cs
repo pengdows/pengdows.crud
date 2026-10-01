@@ -5,6 +5,7 @@ using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
+using pengdows.crud.metrics;
 using testbed;
 using Xunit.Abstractions;
 
@@ -70,10 +71,6 @@ public class DiagnosticsTests : DatabaseTestBase
             await Assert.ThrowsAnyAsync<DatabaseException>(async () => await helper.CreateAsync(duplicate, context));
         });
     }
-
-    // ---- Ported from 3.0 (backport audit, 2026-09-25) ----
-
-    private static long _nextDiagnosticsId = DateTime.UtcNow.Ticks;
 
     /// <summary>
     /// Verifies real span emission on the <c>ActivitySource("pengdows.crud")</c> documented in
@@ -154,4 +151,6 @@ public class DiagnosticsTests : DatabaseTestBase
             }
         });
     }
+
+    private static long _nextDiagnosticsId = DateTime.UtcNow.Ticks;
 }

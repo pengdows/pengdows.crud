@@ -15,13 +15,4 @@ public class InformixTestProvider : TestProvider
         : base(context, serviceProvider)
     {
     }
-
-    // CONFIRMED live against icr.io/informix/informix-developer-database:latest: the container's
-    // default database codeset cannot represent non-ASCII characters ("Inexact character
-    // conversion during translation" on INSERT) - no DB_LOCALE/CLIENT_LOCALE env var or setup
-    // script hook exists on this image to configure a UTF-8 locale at database-creation time, so
-    // (like Firebird's own NONE-charset default) this is a real container-default limitation, not
-    // a pengdows.crud gap. Same ASCII-only override pattern as Firebird/Sybase.
-    protected override string RoundTripDescription => "Hello World ASCII round-trip test string";
-    protected override string RoundTripFidelityUnicodeText => "Hello World ASCII fidelity test string";
 }

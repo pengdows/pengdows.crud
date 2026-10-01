@@ -1,15 +1,18 @@
 using pengdows.crud;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.flatfile;
 
 namespace testbed.FlatFile;
 
 /// <summary>
 /// pengdows.flatfile is an embedded, per-directory file engine with no server process (like
-/// SQLite/DuckDB), so there is no container to start: just a scratch directory. DbMode is left at
-/// Best so FlatFileDialect.CoerceConnectionMode decides the mode, the same way the SQLite/DuckDB
-/// containers do. Forcing a mode here would hide a dialect gap.
+/// SQLite/DuckDB) — no container to start/stop, just a scratch directory. DbMode is left at its
+/// default (Best): FlatFileDialect now overrides CoerceConnectionMode (see its own remarks),
+/// resolving Best to SingleWriter the same way SqliteDialect/DuckDbDialect do — no
+/// test-container-level override needed or wanted, since that would just mask a real dialect gap
+/// the way the prior explicit DbMode.SingleWriter override here did.
 /// </summary>
 public class FlatFileTestContainer : TestContainer
 {
@@ -20,7 +23,7 @@ public class FlatFileTestContainer : TestContainer
     {
         _directoryPath = Path.Combine(Path.GetTempPath(), $"pengdows.integration.flatfile.{Guid.NewGuid():N}");
         Directory.CreateDirectory(_directoryPath);
-        _connectionString = $"path={_directoryPath}";
+        _connectionString = $"Path={_directoryPath}";
         return Task.CompletedTask;
     }
 
@@ -33,8 +36,7 @@ public class FlatFileTestContainer : TestContainer
 
         var config = new DatabaseContextConfiguration
         {
-            ConnectionString = _connectionString,
-            DbMode = DbMode.Best
+            ConnectionString = _connectionString
         };
         var context = new DatabaseContext(
             config,

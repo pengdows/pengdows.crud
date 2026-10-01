@@ -21,7 +21,7 @@ public class FirebirdSqlTestContainer : TestContainer
     private int _port = 3050;
     private string _username = "SYSDBA";
 
-    public FirebirdSqlTestContainer()
+    public FirebirdSqlTestContainer(string? image = null)
     {
         //FIREBIRD_ROOT_PASSWORD
         // 
@@ -36,7 +36,7 @@ public class FirebirdSqlTestContainer : TestContainer
         // FIREBIRD_DATABASE
         //-u SYSDBA
         _container = new ContainerBuilder()
-            .WithImage("firebirdsql/firebird")
+            .WithImage(image ?? "firebirdsql/firebird:3.0.9")
             .WithPortBinding(3050, true)
             .WithEnvironment("ISC_PASSWORD", _password)
             .WithEnvironment("FIREBIRD_ROOT_PASSWORD", _password)
