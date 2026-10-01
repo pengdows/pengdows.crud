@@ -106,6 +106,9 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   → `Dictionary<,>`.
 - Firebird `DECFLOAT` → `decimal` (or `double`); declare `[Column(..., DbType.VarNumeric)]` so the value binds as
   `FbDecFloat`. NaN/infinity or a value `decimal` would round throws `DataMappingException` into `decimal`.
+- Vectors → `float[]` (`DbType.Object`): SQL Server 2025/Oracle 23ai `VECTOR` are written as exact text and read back
+  (SqlClient 6.0's text carries only 8 digits; 6.1+ is exact); pgvector stores a `float[]` but Npgsql reads it only as
+  `col::real[]` or via the `Pgvector.Npgsql` plugin (TYPE-015).
 - SQL Server `hierarchyid` → `HierarchyId` (or `string`) with no `Microsoft.SqlServer.Types`: written as its text
   (`/1/2.5/`, converted implicitly by SQL Server; text on other databases), read from the stored encoding (TYPE-016).
 - A stored value with no .NET representation throws `DataMappingException` naming the column, never a raw provider

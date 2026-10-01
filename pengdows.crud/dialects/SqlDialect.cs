@@ -500,6 +500,38 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool BindsWideIntegersAsText => false;
 
+    private static string FormatVectorText(object vector)
+    {
+        var sb = new System.Text.StringBuilder("[");
+        switch (vector)
+        {
+            case float[] floats:
+                for (var i = 0; i < floats.Length; i++)
+                {
+                    sb.Append(i == 0 ? "" : ",").Append(floats[i].ToString("R", CultureInfo.InvariantCulture));
+                }
+
+                break;
+            case double[] doubles:
+                for (var i = 0; i < doubles.Length; i++)
+                {
+                    sb.Append(i == 0 ? "" : ",").Append(doubles[i].ToString("R", CultureInfo.InvariantCulture));
+                }
+
+                break;
+        }
+
+        return sb.Append(']').ToString();
+    }
+
+    /// <summary>
+    /// True when the database's vector type is bound from text: SqlClient and ODP.NET (without
+    /// OracleDbType.Vector) reject a float[] parameter but both servers convert "[1.5,2,-3]" to
+    /// VECTOR implicitly (confirmed live on SQL Server 2025 and Oracle 23ai/26ai). A float[] or
+    /// double[] is then sent as that text, each element in shortest round-trip form (TYPE-015).
+    /// </summary>
+    internal virtual bool BindsVectorsAsText => false;
+
     /// <summary>
     /// True when the provider decodes every result row while executing the command (before the
     /// reader is returned), so a stored value its .NET type can't hold surfaces as an
@@ -1664,6 +1696,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
             type is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength)
         {
             return CreateDbParameter(name, type, character.ToString());
+        }
+
+        // TYPE-015: a float[]/double[] on a database whose VECTOR binds from text.
+        if (BindsVectorsAsText && value is float[] or double[])
+        {
+            var textType = type is DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength
+                ? type
+                : DbType.String;
+            return CreateDbParameter(name, textType, FormatVectorText(value));
         }
 
         // TYPE-016: a HierarchyId is sent as its text form, which SQL Server converts to hierarchyid

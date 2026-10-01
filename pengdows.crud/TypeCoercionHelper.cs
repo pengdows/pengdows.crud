@@ -492,7 +492,29 @@ internal static class TypeCoercionHelper
         Type? elementType = target.IsArray ? target.GetElementType()
             : target.IsGenericType && target.GetGenericTypeDefinition() == typeof(List<>) ? target.GetGenericArguments()[0]
             : null;
-        if (elementType == null || value is string || value is not System.Collections.IEnumerable items)
+        if (elementType == null)
+        {
+            return false;
+        }
+
+        // TYPE-015: vector columns. SQL Server's VECTOR reads as "[1.5000000e+000,...]" through
+        // SqlClient 6.0 and as SqlVector<T> (Memory) through 6.1+; the Pgvector.Npgsql plugin reads
+        // pgvector as Pgvector.Vector (ToArray()). Each becomes an array, coerced element-wise below.
+        if (value is string text)
+        {
+            if (!IsNumericClrType(Nullable.GetUnderlyingType(elementType) ?? elementType))
+            {
+                return false;
+            }
+
+            value = ParseNumericJsonArray(text);
+        }
+        else if (TryUnwrapProviderVector(value, out var unwrapped))
+        {
+            value = unwrapped;
+        }
+
+        if (value is not System.Collections.IEnumerable items)
         {
             return false;
         }
@@ -513,6 +535,53 @@ internal static class TypeCoercionHelper
         list.CopyTo(array, 0);
         result = array;
         return true;
+    }
+
+    // Numbers kept as their invariant text, so each element parses straight into its target type
+    // (a float gets the nearest float to the printed value, not a double rounded again).
+    private static string[] ParseNumericJsonArray(string text)
+    {
+        using var document = JsonDocument.Parse(text);
+        if (document.RootElement.ValueKind != JsonValueKind.Array)
+        {
+            throw new FormatException("Expected a JSON array of numbers.");
+        }
+
+        var elements = new string[document.RootElement.GetArrayLength()];
+        var i = 0;
+        foreach (var element in document.RootElement.EnumerateArray())
+        {
+            elements[i++] = element.ValueKind == JsonValueKind.Number
+                ? element.GetRawText()
+                : throw new FormatException($"Expected a number but found {element.ValueKind}.");
+        }
+
+        return elements;
+    }
+
+    private static bool TryUnwrapProviderVector(object value,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out object? array)
+    {
+        array = null;
+        var type = value.GetType();
+        object? memory = null;
+        if (type.IsGenericType && type.GetGenericTypeDefinition() is var definition &&
+            (definition == typeof(ReadOnlyMemory<>) || definition == typeof(Memory<>)))
+        {
+            memory = value;
+        }
+        else if (type.Name == "SqlVector`1")
+        {
+            memory = type.GetProperty("Memory")?.GetValue(value);
+        }
+        else if (type.FullName is "Pgvector.Vector")
+        {
+            array = type.GetMethod("ToArray", Type.EmptyTypes)?.Invoke(value, null);
+            return array != null;
+        }
+
+        array = memory?.GetType().GetMethod("ToArray", Type.EmptyTypes)?.Invoke(memory, null);
+        return array != null;
     }
 
     private static bool IsNumericClrType(Type type)

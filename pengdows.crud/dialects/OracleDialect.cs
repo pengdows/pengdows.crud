@@ -236,6 +236,10 @@ internal class OracleDialect : SqlDialect
     // TYPE-003, confirmed live 2026-09-30: the provider rejects DbType.SByte and the unsigned DbTypes.
     internal override bool BindsSByteAndUnsignedNatively => false;
 
+    // TYPE-015: VECTOR binds from "[...]" text; ODP.NET rejects a float[] unless the parameter is
+    // OracleDbType.Vector (ORA-50028, confirmed live on Oracle 26ai with ODP.NET 23.8).
+    internal override bool BindsVectorsAsText => true;
+
     /// <inheritdoc />
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,

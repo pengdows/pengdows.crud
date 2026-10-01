@@ -209,6 +209,9 @@ internal class SqlServerDialect : SqlDialect
     // (GetDataTypeName "master.sys.hierarchyid") but GetBytes returns its stored encoding, which
     // UnresolvedColumnReader decodes as a HierarchyId (confirmed live on SQL Server 2025, SqlClient
     // 6.0.2). geometry/geography use SQL Server's own spatial serialization and stay unreadable.
+    // TYPE-015: VECTOR binds from "[...]" text; SqlClient rejects a float[] parameter.
+    internal override bool BindsVectorsAsText => true;
+
     internal override bool ReadsUnresolvedColumns => true;
 
     internal override Type? GetUnresolvedColumnType(string dataTypeName) =>
