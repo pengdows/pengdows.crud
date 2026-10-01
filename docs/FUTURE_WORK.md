@@ -299,6 +299,13 @@ listed below. The public-API diff was also computed with ApiCompat in both direc
 
 ### Forward-port to 3.0 (2.0.6-only work)
 
+**Paused (maintainer, 2026-10-01): no 3.0 work until 2.0.6 is released; then everything is
+forward-ported in one pass.** At the pause, `origin/3.0-backports` (45702730) carries 20 unvalidated
+forward-port commits through TYPE-015/016/017; `origin/3.0` is unchanged (a6335aac). Still to port
+then: BP-311's 2.0.6 fixes and `AsyncContextCreationTests`, the net8 flaky-test fixes, the Db2
+binding fixes, and anything after. 3.0's testbed pins Firebird 3.0.9 and SQL Server 2022, too old for
+the TYPE-005 Firebird and TYPE-015 SQL Server live tests; choose newer pins then.
+
 **Status: library work done and merged (2026-09-29).** Maintainer asked (2026-09-29) to bring every fix
 into 3.0 and then merge `3.0-backports` into `3.0`. Triage: of 2.0.6's 154 library-touching commits not
 on 3.0 by patch-id, most were already on 3.0 in substance (backports *from* 3.0, or hand-ported in
