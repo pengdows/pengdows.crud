@@ -53,7 +53,8 @@ public class TrackedConnectionAdditionalBranchTests
     public async Task DisposeAsync_SharedConnection_TimesOutAndRetries()
     {
         await using var conn = new fakeDbConnection();
-        await using var tracked = new TrackedConnection(conn, isSharedConnection: true);
+        var retrying = new RetryWarningLogger();
+        await using var tracked = new TrackedConnection(conn, logger: retrying, isSharedConnection: true);
 
         await tracked.OpenAsync();
 
@@ -61,7 +62,11 @@ public class TrackedConnectionAdditionalBranchTests
         await locker.LockAsync();
 
         var disposeTask = tracked.DisposeAsync().AsTask();
-        await Task.Delay(5500);
+        // Release once the first wait has timed out and the retry has begun, not after a fixed
+        // Task.Delay(5500): under a full parallel run that delay overran the whole 10 s retry window
+        // (the test took 21 s), so the dispose correctly gave up and left the connection open.
+        Assert.True(await Task.WhenAny(retrying.Retrying, Task.Delay(TimeSpan.FromSeconds(60))) == retrying.Retrying,
+            "DisposeAsync never timed out and retried.");
         await locker.DisposeAsync();
 
         await disposeTask;
@@ -176,6 +181,26 @@ public class TrackedConnectionAdditionalBranchTests
 
         public override void Rollback()
         {
+        }
+    }
+
+    private sealed class RetryWarningLogger : Microsoft.Extensions.Logging.ILogger<TrackedConnection>
+    {
+        private readonly TaskCompletionSource _retrying = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public Task Retrying => _retrying.Task;
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (formatter(state, exception).Contains("retrying", StringComparison.OrdinalIgnoreCase))
+            {
+                _retrying.TrySetResult();
+            }
         }
     }
 }
