@@ -518,5 +518,17 @@ For multi-tenancy:
 public interface ITenantContextRegistry
 {
     IDatabaseContext GetContext(string tenant);
+    Task<IDatabaseContext> GetContextAsync(string tenant, CancellationToken cancellationToken = default);
+    ITenantContextLease AcquireLease(string tenant);   // protects the context from a concurrent Invalidate
+    Task<ITenantContextLease> AcquireLeaseAsync(string tenant, CancellationToken cancellationToken = default);
+    void Invalidate(string tenant);
+    void InvalidateAll();
+    event Action<IDatabaseContext>? ContextCreated;
+    event Action<IDatabaseContext>? ContextRemoved;
 }
 ```
+
+All four resolution methods share one single-flight cache per tenant: the factory runs once however
+many callers race a new tenant. The async methods build a new tenant through
+`IDatabaseContextFactory.CreateAsync` (`DatabaseContext.CreateAsync`), so the calling thread isn't
+blocked; their token cancels only that caller's wait, never the shared construction.

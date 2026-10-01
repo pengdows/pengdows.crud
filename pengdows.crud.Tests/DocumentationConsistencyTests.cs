@@ -28,22 +28,25 @@ public sealed class DocumentationConsistencyTests
         }
     }
 
+    // Was DoNotAdvertiseAsyncTenantRegistryApis while 2.0.6 lacked them; BP-311 added them, so the
+    // multitenancy docs must now document exactly the async members the interface has.
     [Fact]
-    public void TwoPointZeroSixCurrentDocs_DoNotAdvertiseAsyncTenantRegistryApis()
+    public void MultitenancyDocs_DocumentTheAsyncTenantRegistryApisThatExist()
     {
-        var root = FindRepositoryRoot();
-        var paths = new[]
-        {
-            Path.Combine(root, "llms.txt"),
-            Path.Combine(root, "docs", "connection", "multitenancy.md"),
-            Path.Combine(root, "docs", "connection", "multitenancy-architecture.md")
-        };
+        var registry = typeof(pengdows.crud.tenant.ITenantContextRegistry);
+        Assert.NotNull(registry.GetMethod("GetContextAsync"));
+        Assert.NotNull(registry.GetMethod("AcquireLeaseAsync"));
 
-        foreach (var path in paths)
+        var root = FindRepositoryRoot();
+        foreach (var path in new[]
+                 {
+                     Path.Combine(root, "docs", "connection", "multitenancy.md"),
+                     Path.Combine(root, "docs", "connection", "multitenancy-architecture.md")
+                 })
         {
             var contents = File.ReadAllText(path);
-            Assert.DoesNotContain("AcquireLeaseAsync", contents);
-            Assert.DoesNotContain("GetContextAsync", contents);
+            Assert.Contains("GetContextAsync", contents);
+            Assert.Contains("AcquireLeaseAsync", contents);
         }
     }
 

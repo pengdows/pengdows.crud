@@ -131,3 +131,16 @@ construction), so the orphaned context is disposed shortly *after* `Dispose()` r
 `DisposeAsync()` instead awaits the in-flight construction — without blocking any thread — and
 disposes the resulting context before it completes, so after `await registry.DisposeAsync()` no
 tenant context the registry created is left undisposed.
+
+**Two callers racing to construct the same new tenant.** Every entry point (`GetContext`,
+`GetContextAsync`, `AcquireLease`, `AcquireLeaseAsync`) goes through one cache entry per tenant that
+holds a `Lazy<Task<IDatabaseContext>>`; the factory runs exactly once, whichever entry point admits
+the tenant, and every racer observes the same context. Synchronous admission builds synchronously,
+asynchronous admission through `IDatabaseContextFactory.CreateAsync`, so a synchronous caller never
+waits on sync-over-async it started. The shared construction never carries a caller's
+`CancellationToken`; a cancelled caller stops waiting, the others are unaffected
+(`TenantContextRegistryAsyncTests`: `GetContextAsync_CalledConcurrentlyForSameNewTenant_InvokesFactoryExactlyOnce`,
+`AcquireLeaseAsync_CalledConcurrentlyForSameNewTenant_InvokesFactoryExactlyOnce`,
+`GetContextAsync_ForAlreadyCachedTenant_ReturnsSameInstanceAsSyncGetContext`). An `Invalidate` that
+lands while an asynchronous construction is still in flight disposes the context once it completes
+(a continuation, never a blocked thread).

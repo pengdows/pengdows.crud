@@ -78,6 +78,15 @@ new DatabaseContext(new DatabaseContextConfiguration
 new DatabaseContext(configuration, npgsqlDataSource, NpgsqlFactory.Instance, loggerFactory);
 ```
 
+Every constructor has an asynchronous counterpart that returns the same initialized context
+without blocking the calling thread (async open, detection probes and session setup; cancellation
+propagates as `OperationCanceledException` and releases what initialization opened):
+
+```csharp
+var context = await DatabaseContext.CreateAsync(configuration, NpgsqlFactory.Instance, loggerFactory, ct);
+var context2 = await DatabaseContext.CreateAsync(connectionString, SqlClientFactory.Instance);
+```
+
 ## DI Registration
 
 ```csharp

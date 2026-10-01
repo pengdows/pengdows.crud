@@ -373,6 +373,28 @@ services.AddKeyedSingleton<DatabaseContext>("readwrite", sp =>
     new DatabaseContext(readWriteConnectionString, NpgsqlFactory.Instance));
 ```
 
+### Asynchronous construction (`DatabaseContext.CreateAsync`)
+
+Every public constructor has a `DatabaseContext.CreateAsync(..., cancellationToken)` counterpart
+that returns the same fully initialized context without blocking the calling thread: the
+initialization connection is opened with `OpenAsync`, product/flavor/topology probes and dialect
+detection run with `ExecuteScalarAsync`, and read-only validation, the PreventDatabaseUnload read
+sentinel and SingleConnection session settings are all asynchronous. Both paths run one shared
+initialization (`InitializeCoreAsync`, a `useAsync` flag choosing the provider call at each I/O
+step), so mode coercion, detection results and failure cleanup are identical; the live
+`AsyncContextCreationTests` checks this on every database. Cancellation propagates as
+`OperationCanceledException` (never wrapped in `ConnectionFailedException`) and releases whatever
+initialization had opened. Use it where a host builds contexts on a request path or many at once:
+
+```csharp
+// Singleton registration still applies; build it once, asynchronously, at startup.
+var context = await DatabaseContext.CreateAsync(configuration, NpgsqlFactory.Instance, loggerFactory, ct);
+services.AddSingleton<IDatabaseContext>(context);
+```
+
+`TenantContextRegistry.GetContextAsync`/`AcquireLeaseAsync` use it for tenants (through
+`IDatabaseContextFactory.CreateAsync`; see `docs/connection/multitenancy.md`).
+
 ### WRONG Registrations (DO NOT DO THIS)
 
 **❌ Scoped (per-request)**:

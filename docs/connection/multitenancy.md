@@ -122,22 +122,39 @@ a complete, worked example: a resolver that loads tenant rows from a control-pla
 plain ADO.NET, plus the two-step `Register`-then-`Invalidate` pattern for picking up a single
 tenant's changed configuration.
 
-## Context creation is synchronous and single-flight
+## Context creation: synchronous or asynchronous, always single-flight
 
 `GetContext` is synchronous — for a not-yet-cached tenant, the calling thread blocks for the
-duration of connection/dialect-detection work. There is no async variant on `ITenantContextRegistry`;
-if first-touch construction latency on a request thread matters, warm the tenants you expect to
-serve (call `GetContext` for them at startup or from a background service).
+duration of connection/dialect-detection work. `GetContextAsync(tenant, cancellationToken)` does the
+same lookup-or-create without blocking the calling thread: a not-yet-cached tenant's context is
+built through `IDatabaseContextFactory.CreateAsync`, which the built-in factory implements with
+`DatabaseContext.CreateAsync` (connection opening, product detection and session setup all
+asynchronous).
 
-Concurrent callers racing to construct the *same* not-yet-cached tenant (any mix of `GetContext`
-and `AcquireLease`) single-flight: each tenant's cache entry wraps a
-`Lazy<IDatabaseContext>` under `LazyThreadSafetyMode.ExecutionAndPublication`, so the underlying
-connection/dialect-detection work happens exactly once and every caller converges on the same
-resulting context — never duplicate construction. This matters in a multi-tenant webservice
-specifically because a burst of concurrent first-requests for a brand-new tenant is a real, common
-pattern; single-flighting it avoids paying connection/detection cost N times for N simultaneous
-requests. The other callers block on that one construction; there is no cancellation token to
-abandon the wait.
+```csharp
+var tenantContext = await registry.GetContextAsync(tenantId, cancellationToken);
+```
+
+Concurrent callers racing to construct the *same* not-yet-cached tenant (any mix of `GetContext`,
+`GetContextAsync`, `AcquireLease` and `AcquireLeaseAsync`) single-flight: each tenant's cache entry
+holds one `Lazy<Task<IDatabaseContext>>` under `LazyThreadSafetyMode.ExecutionAndPublication`, so
+the factory runs exactly once and every caller converges on the same context — never duplicate
+construction, never an orphaned duplicate. This matters in a multi-tenant webservice because a
+burst of concurrent first requests for a brand-new tenant is a real, common pattern.
+
+- The caller that admits the tenant decides how it is built: a synchronous caller builds it
+  synchronously (it never blocks on asynchronous work it started itself), an asynchronous caller
+  through `CreateAsync`. Later callers wait on that one construction — synchronous callers by
+  blocking, asynchronous callers by awaiting.
+- `cancellationToken` stops only *this caller's* wait. The shared construction itself runs without
+  any caller's token, so one caller cancelling never fails the construction others are waiting on;
+  the tenant is then cached for the next call.
+- A construction that fails is evicted, so the next call starts a fresh attempt.
+- A custom `ITenantContextRegistry` written against 2.0.5 gets `GetContextAsync`/`AcquireLeaseAsync`
+  from default interface implementations that call `GetContext`/`AcquireLease`.
+
+If first-touch latency still matters, warm the tenants you expect to serve (call
+`GetContextAsync` for them at startup or from a background service).
 
 ## Protecting against concurrent rotation (`AcquireLease`)
 
@@ -150,8 +167,8 @@ completes atomically with respect to a concurrent rotation. `AcquireLease` close
 ```csharp
 using var lease = registry.AcquireLease(tenantId);
 // ITenantContextLease is both IDisposable and IAsyncDisposable, so `await using` works too.
-// Acquisition itself is synchronous: for a not-yet-cached tenant it blocks on construction
-// exactly like GetContext does.
+// AcquireLease blocks on a not-yet-cached tenant's construction exactly like GetContext does;
+// `await using var lease = await registry.AcquireLeaseAsync(tenantId, ct);` doesn't.
 
 await gateway.RetrieveOneAsync(orderId, lease.Context);
 // lease.Context is guaranteed not to be disposed by a concurrent Invalidate/InvalidateAll until
@@ -402,6 +419,9 @@ the cached construction delegate, and the context reference is discarded with th
 implementation by registering it **before** calling `AddMultiTenancy` — `TenantContextRegistry`
 will use it for every context it creates from then on, while tenant resolution and registry
 lifecycle rules (caching, invalidation, events, `maxTenantCount`) stay exactly as documented above.
+`GetContextAsync`/`AcquireLeaseAsync` build contexts through the factory's `CreateAsync`; a
+factory written against 2.0.5 inherits a default `CreateAsync` that calls its `Create`, so it keeps
+working (blocking) until it implements `CreateAsync` itself, e.g. with `DatabaseContext.CreateAsync`.
 A custom factory must return a new, independently owned context on each call — `TenantContextRegistry`
 already caches and disposes contexts per its own lifecycle; a factory that decorates or caches
 contexts itself would double-cache and is not a supported pattern.
