@@ -86,6 +86,12 @@ internal sealed class RowVersionConverter : AdvancedTypeConverter<RowVersion>
 {
     protected override object? ConvertToProvider(RowVersion value, SupportedDatabase provider)
     {
+        // default(RowVersion) holds no bytes: it is SQL NULL, not a value to copy.
+        if (value.Equals(default))
+        {
+            return null;
+        }
+
         return value.ToArray();
     }
 

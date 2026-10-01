@@ -1593,9 +1593,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // RowVersion is an opaque 8-byte version token: bind its raw bytes (re-dispatched
         // virtually so per-dialect byte[] handling still applies), the same DbType.Binary
         // payload every provider already accepts for a byte[] [Version] column.
+        // default(RowVersion) holds no bytes and binds as NULL.
         if (value is RowVersion rowVersion)
         {
-            return CreateDbParameter(name, type, rowVersion.ToArray());
+            byte[]? bytes = rowVersion.Equals(default) ? null : rowVersion.ToArray();
+            return CreateDbParameter(name, type, bytes);
         }
 
         // TYPE-001: DateOnly/TimeOnly bind exactly as the equivalent midnight DateTime / TimeSpan

@@ -353,6 +353,12 @@ internal class ColumnInfo : IColumnInfo
                 // The gateways read a default-constructed entity while building their templates.
                 value = null;
             }
+            else if (IsJsonType && current is types.valueobjects.JsonValue jsonValue)
+            {
+                // A JsonValue already is JSON text. Serializing the struct instead writes its
+                // (nonexistent) public properties: "{}".
+                value = jsonValue.IsDefault ? null : jsonValue.AsString();
+            }
             else if (IsJsonType)
             {
                 // Use precompiled serializer if available, otherwise fall back to TypeCoercionHelper

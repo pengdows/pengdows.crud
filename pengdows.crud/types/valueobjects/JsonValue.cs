@@ -57,6 +57,9 @@ public readonly struct JsonValue : IEquatable<JsonValue>
     /// <summary>
     /// Get the JSON as a string. Lazy serialization if from JsonDocument/JsonElement.
     /// </summary>
+    /// <summary>True for default(JsonValue), which holds no JSON at all.</summary>
+    internal bool IsDefault => _rawJson == null && _document == null && !_element.HasValue;
+
     public string AsString()
     {
         if (_rawJson != null)
