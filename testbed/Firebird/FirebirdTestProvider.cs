@@ -105,6 +105,14 @@ CREATE TABLE {0} (
 
     protected override async Task RunAdditionalTestsAsync()
     {
+        // TIMESTAMP WITH TIME ZONE was introduced in Firebird 4; the matrix also runs 3.0.9.
+        if (context.DataSourceInfo.ParsedVersion is { Major: < 4 })
+        {
+            CheckSkip("Firebird.DateTimeOffsetTimeZoneColumns",
+                $"TIMESTAMP WITH TIME ZONE requires Firebird 4+ (server {context.DataSourceInfo.DatabaseProductVersion})");
+            return;
+        }
+
         var table = context.WrapObjectName("fb_tz_columns");
         await using var sc = context.CreateSqlContainer();
         sc.Query.Append($"RECREATE TABLE {table} ({context.WrapObjectName("id")} BIGINT NOT NULL PRIMARY KEY, " +

@@ -238,8 +238,8 @@ public class TransactionTests : DatabaseTestBase
 
             // Isolation fails up, never down: an unsupported level runs at the weakest supported
             // level at least as strong; only when nothing at or above it exists is it rejected.
-            var nothingAtOrAbove = provider is SupportedDatabase.TiDb or SupportedDatabase.Snowflake
-                or SupportedDatabase.Db2;
+            // 2.0.x ranks Serializable above Snapshot, so Db2's Snapshot fails up to Serializable.
+            var nothingAtOrAbove = provider is SupportedDatabase.TiDb or SupportedDatabase.Snowflake;
             if (nothingAtOrAbove)
             {
                 var ex = Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(unsupported.Value));

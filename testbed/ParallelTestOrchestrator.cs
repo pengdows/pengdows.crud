@@ -548,7 +548,7 @@ public static class TestbedImageMatrix
         // live before adding here.
         ["MySQL"] = [new("8.4.11", "mysql:8.4.11"), new("8.0.36", "mysql:8.0.36"), new("5.7", "mysql:5.7"), new("Percona 8.0", "percona:8.0")],
         ["MariaDB"] = [new("11.4.12", "mariadb:11.4.12"), new("10.11.11", "mariadb:10.11.11"), new("10.4", "mariadb:10.4"), new("10.2", "mariadb:10.2")],
-        ["SQL Server"] = [new("2022-CU25", "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04"), new("2019", "mcr.microsoft.com/mssql/server:2019-latest"), new("2017", "mcr.microsoft.com/mssql/server:2017-latest")],
+        ["SQL Server"] = [new("2025-CU9", "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04"), new("2022-CU25", "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04"), new("2019", "mcr.microsoft.com/mssql/server:2019-latest"), new("2017", "mcr.microsoft.com/mssql/server:2017-latest")],
         ["CockroachDB"] = [new("v25.1.0", "cockroachdb/cockroach:v25.1.0"), new("v24.3.0", "cockroachdb/cockroach:v24.3.0"), new("v23.2.14", "cockroachdb/cockroach:v23.2.14")],
         ["Firebird"] = [new("5.0.2", "firebirdsql/firebird:5.0.2"), new("4.0.5", "firebirdsql/firebird:4.0.5"), new("3.0.9", "firebirdsql/firebird:3.0.9")],
         ["TiDB"] = [new("v8.5.7", "pingcap/tidb:v8.5.7"), new("v7.5.7", "pingcap/tidb:v7.5.7")],

@@ -83,7 +83,10 @@ public sealed class MySqlSpatialRoundTripTests : DatabaseTestBase
 
             var gateway = new TableGateway<MySqlSpatialEntity, int>(context);
 
-            var ex = await Assert.ThrowsAsync<DatabaseOperationException>(
+            // MySql.Data fails server-side (DatabaseOperationException); MySqlConnector refuses the
+            // parameter client-side (NotSupportedException: "Parameter type Geometry is not
+            // supported"). Either way the write fails until TYPE-018 is fixed.
+            var ex = await Assert.ThrowsAnyAsync<Exception>(
                 () => gateway.CreateAsync(entity, context).AsTask());
 
             Assert.Contains("geometry", ex.Message, StringComparison.OrdinalIgnoreCase);

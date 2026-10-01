@@ -100,11 +100,17 @@ internal static class IntegrationObjectNameHelper
         SupportedDatabase.SqlServer => "DATETIME2",
         SupportedDatabase.MySql => "DATETIME",
         SupportedDatabase.MariaDb => "DATETIME",
-        SupportedDatabase.SingleStore => "DATETIME",
+        // DATETIME(6): plain DATETIME drops fractional seconds, so audit timestamps would not
+        // round-trip.
+        SupportedDatabase.SingleStore => "DATETIME(6)",
         // Spanner's PostgreSQL interface has no plain TIMESTAMP type at all (verified live:
         // "P0001: Type <timestamp> is not supported.") — only TIMESTAMPTZ, since Spanner always
         // stores instants in UTC internally.
         SupportedDatabase.Spanner => "TIMESTAMPTZ",
+        // Informix has no TIMESTAMP type; DATETIME needs an explicit qualifier.
+        SupportedDatabase.Informix => "DATETIME YEAR TO FRACTION(5)",
+        // ASE's DATETIME keeps only 1/300 s; BIGDATETIME keeps microseconds.
+        SupportedDatabase.SybaseASE => "BIGDATETIME",
         _ => "TIMESTAMP"
     };
 

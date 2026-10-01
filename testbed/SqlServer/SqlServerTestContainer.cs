@@ -28,7 +28,7 @@ public class SqlServerTestContainer : TestContainer
     //     "Server=localhost;uid=sa;pwd=YourPassword123;Initial Catalog=testdb;TrustServerCertificate=true";
     public SqlServerTestContainer(string? image = null)
     {
-        _image = image ?? "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04";
+        _image = image ?? "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04";
         var builder = new ContainerBuilder()
             .WithImage(_image)
             .WithEnvironment("MSSQL_SA_PASSWORD", _password)

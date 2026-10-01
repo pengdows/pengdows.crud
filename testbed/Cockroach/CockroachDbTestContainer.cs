@@ -79,7 +79,8 @@ public class CockroachDbTestContainer : TestContainer
     /// differently-configured DatabaseContext against it.
     /// </summary>
     public string ConnectionString =>
-        $"Host=localhost;Port={_sqlPort};Username=root;Database=testdb;SSL Mode=disable;";
+        $"Host=localhost;Port={_sqlPort};Username=root;Database={_database};SSL Mode=disable;" +
+        "Timeout=30;CommandTimeout=60;";
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)
     {
@@ -92,9 +93,7 @@ public class CockroachDbTestContainer : TestContainer
         // was implicated in a real "Exception while reading from stream... Timeout during reading
         // attempt" failure observed under heavy parallel Docker load (12 providers' containers
         // competing for CPU) running this exact test suite.
-        var cs = $"Host=localhost;Port={_sqlPort};Username=root;Database={_database};SSL Mode=disable;" +
-                 "Timeout=30;CommandTimeout=60;";
-        var ctx = new DatabaseContext(cs, NpgsqlFactory.Instance);
+        var ctx = new DatabaseContext(ConnectionString, NpgsqlFactory.Instance);
         return Task.FromResult<IDatabaseContext>(ctx);
     }
 

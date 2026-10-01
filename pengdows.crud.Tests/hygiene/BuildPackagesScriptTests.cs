@@ -45,8 +45,8 @@ public class BuildPackagesScriptTests
             ["testbed/PostgreSQL/PostgreSqlTestContainer.cs"] = "postgres:16.4",
             ["testbed/TiDB/TiDBTestContainer.cs"] = "pingcap/tidb:v8.5.7",
             ["testbed/Yugabyte/YugabyteTestContainer.cs"] = "yugabytedb/yugabyte:2025.2.5.2-b5",
-            ["testbed/Firebird/FirebirdSqlTestContainer.cs"] = "firebirdsql/firebird:3.0.9",
-            ["testbed/SqlServer/SqlServerTestContainer.cs"] = "mcr.microsoft.com/mssql/server:2022-CU25-GDR2-ubuntu-22.04",
+            ["testbed/Firebird/FirebirdSqlTestContainer.cs"] = "firebirdsql/firebird:5.0.2",
+            ["testbed/SqlServer/SqlServerTestContainer.cs"] = "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04",
             ["testbed/Oracle/OracleTestContainer.cs"] = "gvenzl/oracle-free:23.26.2-slim-faststart"
         };
 
