@@ -126,7 +126,8 @@ public abstract partial class BaseTableGateway<TEntity>
                 return existingPlan;
             }
 
-            var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes);
+            var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes,
+                coercionOptions: _coercionOptions);
             var plan = new HybridRecordsetPlan(compiledMapper);
 
             // Cache miss: the key must outlive this call, so persist a copy before inserting —

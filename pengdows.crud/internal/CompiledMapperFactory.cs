@@ -37,7 +37,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         string[] fieldNames,
         Type[] fieldTypes,
         Func<string, string>? namePolicy = null,
-        bool strict = false) where TReader : IDataRecord
+        bool strict = false,
+        TypeCoercionOptions? coercionOptions = null) where TReader : IDataRecord
     {
         var readerParam = Expression.Parameter(typeof(TReader), "reader");
         var entityVar = Expression.Variable(typeof(TEntity), "entity");
@@ -121,7 +122,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 {
                     var readBytesMethod = typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.ReadBytes))!;
                     var call = Expression.Call(readBytesMethod, readerParam, ordinalExpr);
-                    valueReadExpr = BuildConversionExpression(call, fieldType, targetType);
+                    valueReadExpr = BuildConversionExpression(call, fieldType, targetType, coercionOptions);
                 }
 
                 var exParam = Expression.Parameter(typeof(Exception), "ex");
@@ -149,7 +150,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 {
                     var getMethod = GetReaderMethod(fieldType);
                     var rawValue = Expression.Call(readerParam, getMethod, ordinalExpr);
-                    var convertedValue = BuildConversionExpression(rawValue, fieldType, underlyingTarget);
+                    var convertedValue = BuildConversionExpression(rawValue, fieldType, underlyingTarget, coercionOptions);
 
                     var mapperMethod = typeof(EnumMappingCache).GetMethod(nameof(EnumMappingCache.ValidateEnumValue))!.MakeGenericMethod(underlyingTarget);
                     enumReadExpr = Expression.Call(mapperMethod, convertedValue);
@@ -176,7 +177,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
                 var readInterval = typeof(IntervalFieldReader).GetMethod(nameof(IntervalFieldReader.Read))!;
                 var rawValue = Expression.Call(readInterval, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType);
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
             else
             {
@@ -222,7 +223,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     // GetReaderMethod fell back to GetValue() which returns System.Object
                     // (e.g. DateTimeOffset — no IDataRecord.GetDateTimeOffset exists).
                     // BuildConversionExpression handles the unboxing + any type conversion.
-                    valueReadExpr = BuildConversionExpression(rawValue, fieldType, targetType);
+                    valueReadExpr = BuildConversionExpression(rawValue, fieldType, targetType, coercionOptions);
                 }
 
                 // Non-nullable value types: skip the IsDBNull guard. The caller's schema
@@ -334,7 +335,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         return method;
     }
 
-    private static Expression BuildConversionExpression(Expression value, Type sourceType, Type targetType)
+    private static Expression BuildConversionExpression(Expression value, Type sourceType, Type targetType,
+        TypeCoercionOptions? coercionOptions)
     {
         var underlyingTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
@@ -386,7 +388,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             boxedValue,
             Expression.Constant(sourceType),
             Expression.Constant(targetType),
-            Expression.Constant(null, typeof(TypeCoercionOptions)));
+            Expression.Constant(coercionOptions, typeof(TypeCoercionOptions)));
 
         return Expression.Convert(coerceCall, targetType);
     }
