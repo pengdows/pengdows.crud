@@ -26,7 +26,7 @@ public sealed class UnsignedDbTypeWideningTests
     {
         SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb,
         SupportedDatabase.Spanner, SupportedDatabase.SqlServer, SupportedDatabase.Oracle,
-        SupportedDatabase.Informix
+        SupportedDatabase.Informix, SupportedDatabase.Db2
     };
 
     [Theory]
@@ -40,6 +40,17 @@ public sealed class UnsignedDbTypeWideningTests
         AssertBinding(dialect.CreateDbParameter("p", DbType.UInt32, uint.MaxValue), DbType.Int64, (long)uint.MaxValue);
         AssertBinding(dialect.CreateDbParameter("p", DbType.UInt64, ulong.MaxValue), DbType.Decimal, (decimal)ulong.MaxValue);
         AssertBinding(dialect.CreateDbParameter<ulong?>("p", DbType.UInt64, null), DbType.Decimal, DBNull.Value);
+    }
+
+    // IBM's Db2 driver treats DbType.Byte as binary data and casts the value to byte[] (InvalidCast
+    // "System.Byte to System.Byte[]", confirmed live), so a byte binds as Int16 there; elsewhere
+    // DbType.Byte is the provider's tinyint and is left alone.
+    [Fact]
+    public void Db2_BindsByteAsInt16()
+    {
+        AssertBinding(Dialect(SupportedDatabase.Db2).CreateDbParameter("p", DbType.Byte, byte.MaxValue), DbType.Int16, (short)byte.MaxValue);
+        AssertBinding(Dialect(SupportedDatabase.Db2).CreateDbParameter<byte?>("p", DbType.Byte, null), DbType.Int16, DBNull.Value);
+        Assert.Equal(DbType.Byte, Dialect(SupportedDatabase.SqlServer).CreateDbParameter("p", DbType.Byte, byte.MaxValue).DbType);
     }
 
     // Microsoft.Data.Sqlite takes UInt64 but casts it to Int64 unchecked (ulong.MaxValue was stored as

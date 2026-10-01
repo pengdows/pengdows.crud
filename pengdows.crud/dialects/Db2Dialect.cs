@@ -54,6 +54,19 @@ internal sealed class Db2Dialect : SqlDialect
 
     // Db2 returns a generated key with SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...)).
     internal override bool InsertReturningWrapsEntireStatement => true;
+
+    // CONFIRMED live 2026-10-01 (Db2 LUW 11.5, Net.IBM.Data.Db2-lnx): the driver rejects
+    // DbType.SByte/UInt16/UInt32/UInt64 ("No mapping exists from DbType UInt16 to a known
+    // DB2Type"), so they bind as the smallest signed type that holds the range (TYPE-003).
+    internal override bool BindsSByteAndUnsignedNatively => false;
+
+    // CONFIRMED live 2026-10-01: DbType.Byte is binary to the driver ("Unable to cast System.Byte
+    // to System.Byte[]"), so a byte binds as Int16 too.
+    internal override bool BindsByteAsBinary => true;
+
+    // CONFIRMED live 2026-10-01: a TimeSpan of 1.01:00:00 into TIME was stored as 01:00:00, so
+    // SqlDialect rejects one outside a day before binding rather than let Db2 store another value.
+    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
     public override string ParameterMarker => "@";
     public override bool SupportsNamedParameters => true;
 

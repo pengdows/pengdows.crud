@@ -30,6 +30,8 @@ public class ValueOutOfRangeTests : DatabaseTestBase
         SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
             or SupportedDatabase.SingleStore => "DECIMAL(65,0)",
         SupportedDatabase.Informix => "DECIMAL(32,0)",
+        // Db2's maximum DECIMAL precision is 31 (SQL0604N on 38); 31 digits still exceed decimal.
+        SupportedDatabase.Db2 => "DECIMAL(31,0)",
         SupportedDatabase.Sqlite or SupportedDatabase.Spanner => "NUMERIC",
         _ => "DECIMAL(38,0)"
     };

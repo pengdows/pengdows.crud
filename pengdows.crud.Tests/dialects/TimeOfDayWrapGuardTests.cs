@@ -31,6 +31,9 @@ public sealed class TimeOfDayWrapGuardTests
     [InlineData(SupportedDatabase.Informix, -1)]
     [InlineData(SupportedDatabase.Informix, 24)]
     [InlineData(SupportedDatabase.Informix, 25)]
+    [InlineData(SupportedDatabase.Db2, -1)]
+    [InlineData(SupportedDatabase.Db2, 24)]
+    [InlineData(SupportedDatabase.Db2, 25)]
     [InlineData(SupportedDatabase.FlatFile, -1)]
     [InlineData(SupportedDatabase.FlatFile, 24)]
     public void TimeSpanOutsideADay_IsRejectedWhereTheDriverWouldWrapIt(SupportedDatabase database, int hours)
@@ -47,6 +50,7 @@ public sealed class TimeOfDayWrapGuardTests
     [Theory]
     [InlineData(SupportedDatabase.SybaseASE)]
     [InlineData(SupportedDatabase.Informix)]
+    [InlineData(SupportedDatabase.Db2)]
     [InlineData(SupportedDatabase.FlatFile)]
     public void TimeOfDayValues_StillBind(SupportedDatabase database)
     {

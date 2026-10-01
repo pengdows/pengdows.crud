@@ -500,6 +500,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool BindsSByteAndUnsignedNatively => true;
 
     /// <summary>
+    /// True when the provider treats <see cref="DbType.Byte"/> as binary data rather than a small
+    /// integer (IBM's Db2 driver casts the value to byte[]), so a byte binds as Int16 (TYPE-003).
+    /// </summary>
+    internal virtual bool BindsByteAsBinary => false;
+
+    /// <summary>
     /// False when the provider rejects <see cref="DbType.Object"/> as a parameter type
     /// (Informix.Net.Core: "No mapping exists from DbType Object to a known IfxType"); such a
     /// parameter's DbType is left unset so the provider infers it from the value (TYPE-004).
@@ -1640,6 +1646,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
         if (!BindsSByteAndUnsignedNatively && TryWidenUnsignedParameter(type, value, out var wideType, out var wideValue))
         {
             return CreateDbParameter(name, wideType, wideValue);
+        }
+
+        if (BindsByteAsBinary && type == DbType.Byte)
+        {
+            return CreateDbParameter(name, DbType.Int16,
+                value is null || value is DBNull ? (short?)null : Convert.ToInt16(value, CultureInfo.InvariantCulture));
         }
 
         if (TimeColumnHoldsOnlyATimeOfDay && type == DbType.Time && value is TimeSpan span &&
