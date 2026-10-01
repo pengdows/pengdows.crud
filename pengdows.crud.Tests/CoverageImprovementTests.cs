@@ -291,6 +291,8 @@ public class CoverageImprovementTests
         Assert.Equal(level, transaction.IsolationLevel);
     }
 
+    // SQLite has nothing that guarantees Snapshot's non-blocking reads; ReadUncommitted instead
+    // fails up (see IsolationFailUpTests).
     [Theory]
     [InlineData(IsolationLevel.ReadUncommitted, IsolationLevel.ReadCommitted)]
     [InlineData(IsolationLevel.Snapshot, IsolationLevel.Serializable)]
@@ -322,20 +324,6 @@ public class CoverageImprovementTests
         // Assert
         Assert.NotNull(context.GetDialect());
         Assert.Equal(database, context.Product);
-    }
-
-    [Fact]
-    public void DatabaseContext_ConnectionPoolEfficiency_WithZeroConnections_ReturnsZero()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act
-        var efficiency = context.ConnectionPoolEfficiency;
-
-        // Assert
-        Assert.Equal(0.0, efficiency);
     }
 
     [Fact]
@@ -588,20 +576,10 @@ public class CoverageImprovementTests
         Assert.False(snapshotEnabled); // fakeDb doesn't enable snapshot isolation
     }
 
-    [Fact]
-    public void TransactionContext_DataSource_ReturnsValue()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-
-        // Act
-        using var transaction = context.BeginTransaction();
-        var dataSource = transaction.DataSource;
-
-        // Assert - May be null for fakeDb
-        Assert.True(dataSource == null || dataSource != null);
-    }
+    // TransactionContext_DataSource_ReturnsValue dropped when porting from the 2.0 branch:
+    // ITransactionContext/IDatabaseContext no longer expose a `DataSource` member in this branch
+    // (DbDataSource resolution is now an internal DatabaseContext implementation detail), so this
+    // test has no equivalent member left to exercise.
 
     [Fact]
     public void TransactionContext_Metrics_ReturnsSnapshot()

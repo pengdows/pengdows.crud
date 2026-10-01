@@ -15,63 +15,13 @@ namespace pengdows.crud.Tests;
 
 public class DuckDbReadIntentConnectionTests
 {
-    private sealed class RecordingConnection : fakeDbConnection
-    {
-        public List<string> ConnectionStrings { get; } = new();
-        public List<string> Commands { get; } = new();
-
-        [AllowNull]
-        public override string ConnectionString
-        {
-            get => base.ConnectionString;
-            set
-            {
-                base.ConnectionString = value;
-                ConnectionStrings.Add(value ?? string.Empty);
-            }
-        }
-
-        protected override DbCommand CreateDbCommand()
-        {
-            var cmd = new RecordingCommand();
-            cmd.Connection = this;
-            return cmd;
-        }
-
-        private class RecordingCommand : fakeDbCommand
-        {
-            protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
-            {
-                var conn = (RecordingConnection)Connection!;
-                conn.Commands.Add(CommandText);
-                return base.ExecuteDbDataReader(behavior);
-            }
-
-            public override Task<int> ExecuteNonQueryAsync(System.Threading.CancellationToken cancellationToken)
-            {
-                var conn = (RecordingConnection)Connection!;
-                conn.Commands.Add(CommandText);
-                return base.ExecuteNonQueryAsync(cancellationToken);
-            }
-        }
-    }
-
-    private sealed class RecordingFactory : DbProviderFactory
-    {
-        public List<RecordingConnection> Connections { get; } = new();
-
-        public override DbConnection CreateConnection()
-        {
-            var conn = new RecordingConnection();
-            Connections.Add(conn);
-            return conn;
-        }
-    }
+    private static IEnumerable<string> AllExecutedTexts(fakeDbFactory factory) =>
+        factory.CreatedConnections.SelectMany(c => c.ExecutedReaderTexts.Concat(c.ExecutedNonQueryTexts));
 
     [Fact]
     public async Task ReadIntent_DuckDb_ReadOnly_UsesConnectionStringParam()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=file.db;EmulatedProduct=DuckDB",
@@ -87,8 +37,8 @@ public class DuckDbReadIntentConnectionTests
         await read.OpenAsync();
         ctx.CloseAndDisposeConnection(read);
 
-        var allConnectionStrings = factory.Connections.SelectMany(c => c.ConnectionStrings);
-        var allCommands = factory.Connections.SelectMany(c => c.Commands);
+        var allConnectionStrings = factory.CreatedConnections.SelectMany(c => c.ConnectionStringHistory);
+        var allCommands = AllExecutedTexts(factory);
 
         // Verify it IS in the connection string
         Assert.Contains(allConnectionStrings,
@@ -102,7 +52,7 @@ public class DuckDbReadIntentConnectionTests
     [Fact]
     public async Task ReadIntent_DuckDb_ReadWrite_DoesNotUseReadOnlySettings()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=file.db;EmulatedProduct=DuckDB",
@@ -118,8 +68,8 @@ public class DuckDbReadIntentConnectionTests
         await write.OpenAsync();
         ctx.CloseAndDisposeConnection(write);
 
-        var allConnectionStrings = factory.Connections.SelectMany(c => c.ConnectionStrings);
-        var allCommands = factory.Connections.SelectMany(c => c.Commands);
+        var allConnectionStrings = factory.CreatedConnections.SelectMany(c => c.ConnectionStringHistory);
+        var allCommands = AllExecutedTexts(factory);
 
         Assert.DoesNotContain(allConnectionStrings,
             cs => cs.Contains("access_mode=READ_ONLY", StringComparison.OrdinalIgnoreCase));

@@ -159,6 +159,7 @@ public class PrimaryKeyTableGatewayTests
             SupportedDatabase.PostgreSql => "Host=localhost;EmulatedProduct=PostgreSql",
             SupportedDatabase.MySql => "Server=localhost;EmulatedProduct=MySql",
             SupportedDatabase.SqlServer => "Server=localhost;EmulatedProduct=SqlServer",
+            SupportedDatabase.Oracle => "Data Source=oracle;EmulatedProduct=Oracle",
             _ => "Data Source=:memory:;EmulatedProduct=Sqlite"
         };
         return new DatabaseContext(cs, factory);
@@ -342,6 +343,52 @@ public class PrimaryKeyTableGatewayTests
         // Must reference the PK columns in the conflict / WHEN MATCHED clause
         Assert.Contains("order_id", sql);
         Assert.Contains("line_number", sql);
+    }
+
+    /// <summary>
+    /// Regression test mirroring the same real bug found for TableGateway (see
+    /// BuildUpsertSqlGenerationTests.BuildUpsert_Merge_BumpsVersion_ForDialectWithoutTargetAlias_QualifiesCurrentValueWithTargetAlias):
+    /// PrimaryKeyTableGateway.Core.cs's MERGE version-increment fragment had the identical bug —
+    /// for dialects where MergeUpdateRequiresTargetAlias is false (PostgreSQL, DuckDB), it emitted
+    /// an unqualified "version" on both sides of the increment, which PostgreSQL's real MERGE
+    /// parser rejects as ambiguous (t.version vs s.version). The RHS must always be qualified with
+    /// the target alias "t.".
+    /// </summary>
+    [Fact]
+    public void BuildUpsert_Merge_BumpsVersion_ForDialectWithoutTargetAlias_QualifiesCurrentValueWithTargetAlias()
+    {
+        using var ctx = MakeContext(SupportedDatabase.PostgreSql);
+        Assert.True(ctx.GetDialect().SupportsMerge, "Test assumes fakeDb's emulated PostgreSQL version satisfies SupportsMerge (>=15).");
+        Assert.False(ctx.GetDialect().MergeUpdateRequiresTargetAlias);
+
+        var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
+        var entity = new VersionedPkEntity { Code = "abc", Value = "v", Version = 1 };
+
+        var sc = gw.BuildUpsert(entity);
+        var sql = sc.Query.ToString();
+        var wrapped = ctx.WrapObjectName("version");
+
+        Assert.Contains($"{wrapped} = t.{wrapped} + 1", sql);
+        Assert.DoesNotContain($" {wrapped} = {wrapped} + 1", sql);
+    }
+
+    [Fact]
+    public void BuildUpsert_OracleMerge_DoesNotAppendStatementTerminator()
+    {
+        using var ctx = MakeContext(SupportedDatabase.Oracle);
+        var gw = new PrimaryKeyTableGateway<OrderLine>(ctx);
+
+        using var container = gw.BuildUpsert(new OrderLine
+        {
+            OrderId = 1,
+            LineNumber = 1,
+            ProductCode = "oracle-safe",
+            Quantity = 1
+        });
+
+        var sql = container.Query.ToString().TrimEnd();
+        Assert.StartsWith("MERGE INTO", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.False(sql.EndsWith(";", StringComparison.Ordinal));
     }
 
     [Fact]

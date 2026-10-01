@@ -196,6 +196,35 @@ public class BenchmarkFairnessTests
         });
     }
 
+    // A "*_Dapper" method name proves nothing about what the method body actually does — this
+    // exact gap let DeleteInsertCycle_Dapper() silently become a byte-for-byte copy of
+    // DeleteInsertCycle_EntityFramework() (EfBenchContext + ExecuteSqlRawAsync twice), making the
+    // "Dapper" and "EntityFramework" columns of that benchmark measure the same thing. The
+    // existing name-presence checks above passed the whole time. This test scopes the assertion
+    // to the method's own body (via brace matching, not just substring search over the whole
+    // file) so a future copy-paste of the wrong framework's implementation into a "_Dapper"
+    // method fails loudly instead of silently.
+    [Fact]
+    public void EqualFootingCrudBenchmarks_DeleteInsertCycleDapper_ActuallyUsesDapper()
+    {
+        const string fileName = "EqualFootingCrudBenchmarks.cs";
+        var text = LoadBenchmarkText(fileName);
+
+        var body = ExtractMethodBody(fileName, text, "public async Task<int> DeleteInsertCycle_Dapper()");
+
+        AssertAllPresent(fileName, body, new[]
+        {
+            "SqliteConnection",
+            "ExecuteAsync"
+        });
+
+        AssertAllAbsent(fileName, body, new[]
+        {
+            "EfBenchContext",
+            "ExecuteSqlRawAsync"
+        });
+    }
+
     [Fact]
     public void PostgreSqlEqualFootingBenchmarks_SplitDeleteOnlyFromDeleteInsertCycle()
     {
@@ -508,7 +537,7 @@ public class BenchmarkFairnessTests
             "mysql:8.0",
             "MySqlClientFactory.Instance",
             "[Params(32, 64, 128, 256)]",
-            "RunConcurrentWithErrors"
+            "RunConcurrentWithTimeout"
         });
     }
 
@@ -577,6 +606,42 @@ public class BenchmarkFairnessTests
             $"{fileName} should not contain: {string.Join(", ", present)}");
     }
 
+    /// <summary>
+    /// Extracts just one method's body (via brace matching from its signature's first '{' to the
+    /// matching '}') so a check can be scoped to that method instead of the whole file — a
+    /// whole-file substring check can't tell "this token appears in this specific method" from
+    /// "this token appears somewhere else in the file for a legitimately different benchmark".
+    /// </summary>
+    private static string ExtractMethodBody(string fileName, string text, string methodSignature)
+    {
+        var sigIndex = text.IndexOf(methodSignature, StringComparison.Ordinal);
+        Assert.True(sigIndex >= 0, $"{fileName}: could not find method signature '{methodSignature}'");
+
+        var braceStart = text.IndexOf('{', sigIndex);
+        Assert.True(braceStart >= 0, $"{fileName}: could not find opening brace for '{methodSignature}'");
+
+        var depth = 0;
+        var i = braceStart;
+        for (; i < text.Length; i++)
+        {
+            if (text[i] == '{')
+            {
+                depth++;
+            }
+            else if (text[i] == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    break;
+                }
+            }
+        }
+
+        Assert.True(depth == 0, $"{fileName}: unbalanced braces while extracting '{methodSignature}'");
+        return text.Substring(braceStart, i - braceStart + 1);
+    }
+
     // =========================================================================
     // PostgreSqlConnectionGovernanceBenchmarks password hardening
     // These tests were RED when "postgres" was hardcoded (PR #155 Copilot review P0).
@@ -636,7 +701,7 @@ public class BenchmarkFairnessTests
             "P50",
             "P95",
             "P99",
-            "StormGate failure count"
+            "StormGate"
         });
     }
 }

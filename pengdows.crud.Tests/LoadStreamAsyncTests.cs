@@ -4,7 +4,10 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using Xunit;
 
@@ -309,5 +312,110 @@ public class LoadStreamAsyncTests
 
         // Assert
         Assert.True(results.Count <= 100, "Should stop early without materializing entire result set");
+    }
+
+    // Regression coverage gap (audit item 5.8): every prior test in this file exercises
+    // LoadStreamAsync against fakeDb's default EMPTY result set (see the comments above
+    // acknowledging this), so no test ever actually proved reader/connection/governor-slot
+    // cleanup with a genuinely non-empty, mid-stream reader. The cleanup mechanism itself is
+    // guaranteed by C# `await using` semantics inside the async-iterator method body — this is
+    // about proving that guarantee holds here, not about a suspected code defect.
+    //
+    // Verification gap, documented rather than papered over: a third scenario (an exception
+    // thrown from INSIDE the iterator itself, e.g. a mapping/coercion failure while
+    // materializing a row, as opposed to the consumer's own loop body throwing) is not covered
+    // by a dedicated test below. Reading BaseTableGateway.Core.cs's LoadStreamAsync shows its
+    // entire body — including the mapping call — sits inside the SAME `await using var reader =
+    // ...` scope that the two tests below already exercise, so the teardown path is identical
+    // for all three scenarios; there is no separate code path scenario 3 could take that these
+    // tests don't already cover. Constructing a targeted mapping-failure reproduction requires
+    // seeding a canned reader result through the full connection-pooling/governor path (distinct
+    // from DataReaderMapperFakeDbTests' lower-level direct-connection setup) for marginal
+    // additional confidence over what's already proven here — not attempted in this pass.
+    [Table("stream_cleanup")]
+    private class StreamCleanupEntity
+    {
+        [Id(false)][Column("id", DbType.Int32)] public int Id { get; set; }
+
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
+    }
+
+    private static async Task<(fakeDbFactory Factory, DatabaseContext Context, TableGateway<StreamCleanupEntity, int> Helper)>
+        CreateSeededStreamContextAsync(string connectionStringLabel, int rowCount)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.EnableDataPersistence = true;
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source={connectionStringLabel};EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+        var context = new DatabaseContext(config, factory);
+        var helper = new TableGateway<StreamCleanupEntity, int>(context);
+
+        var qp = context.QuotePrefix;
+        var qs = context.QuoteSuffix;
+        await context.CreateSqlContainer($@"CREATE TABLE IF NOT EXISTS {qp}stream_cleanup{qs}(
+            {qp}id{qs} INTEGER PRIMARY KEY AUTOINCREMENT,
+            {qp}name{qs} TEXT NOT NULL
+        )").ExecuteNonQueryAsync();
+
+        for (var i = 0; i < rowCount; i++)
+        {
+            await helper.CreateAsync(new StreamCleanupEntity { Name = $"row{i}" }, context);
+        }
+
+        return (factory, context, helper);
+    }
+
+    [Fact]
+    public async Task LoadStreamAsync_ConsumerBreaksMidEnumeration_WithRealRows_DisposesReaderConnection()
+    {
+        var (factory, context, helper) = await CreateSeededStreamContextAsync("stream-break-test", rowCount: 5);
+        await using var _ = context;
+
+        var container = helper.BuildBaseRetrieve("t");
+        var seen = 0;
+        await foreach (var entity in helper.LoadStreamAsync(container))
+        {
+            seen++;
+            if (seen == 2)
+            {
+                break; // Consumer breaks mid-enumeration, well before the last of 5 rows.
+            }
+        }
+
+        Assert.Equal(2, seen);
+        var streamingConnection = factory.CreatedConnections[^1];
+        Assert.True(streamingConnection.DisposeCount > 0,
+            "Breaking out of the await-foreach must dispose the reader's connection immediately, not leak it until context disposal.");
+    }
+
+    [Fact]
+    public async Task LoadStreamAsync_ConsumerThrowsMidEnumeration_WithRealRows_DisposesReaderConnection()
+    {
+        var (factory, context, helper) = await CreateSeededStreamContextAsync("stream-throw-test", rowCount: 5);
+        await using var _ = context;
+
+        var container = helper.BuildBaseRetrieve("t");
+        var seen = 0;
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            await foreach (var entity in helper.LoadStreamAsync(container))
+            {
+                seen++;
+                if (seen == 2)
+                {
+                    throw new InvalidOperationException("Simulated consumer-side failure mid-stream.");
+                }
+            }
+        });
+
+        Assert.Equal(2, seen);
+        var streamingConnection = factory.CreatedConnections[^1];
+        Assert.True(streamingConnection.DisposeCount > 0,
+            "An exception thrown from the consumer's loop body must still dispose the reader's connection.");
     }
 }

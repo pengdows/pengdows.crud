@@ -25,10 +25,14 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.@internal;
 using pengdows.crud.attributes;
+using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.metrics;
 using pengdows.crud.threading;
@@ -342,6 +346,15 @@ public class TableGatewayBatchTests : IAsyncLifetime
         Assert.Contains("ON CONFLICT", sql);
         Assert.Contains("DO UPDATE SET", sql);
         Assert.Contains("VALUES", sql);
+
+        // Regression: fakeDb's canned Postgres version (15.0) makes PostgreSqlDialect.SupportsMerge
+        // true. The batch dispatch (TableGateway.Batch.cs) always prefers ON CONFLICT over MERGE for
+        // batches — there is no batch-MERGE implementation — but the cached SET-clause fragment was
+        // built using the SAME precedence as the single-entity dispatch (SupportsMerge first), so it
+        // wrongly used the MERGE convention's "s." incoming-row alias, which doesn't exist in an
+        // ON CONFLICT statement. Must use EXCLUDED.<col>, never "= s.".
+        Assert.Contains("EXCLUDED.", sql);
+        Assert.DoesNotContain(" = s.", sql, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -635,6 +648,102 @@ public class TableGatewayBatchTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task BatchUpsertAsync_SqlServer_OneEntityHasStaleVersion_ThrowsConcurrencyConflictExceptionAndRestoresAudit()
+    {
+        // Regression: like BatchUpdateAsync, BatchUpsertAsync's loop only ever accumulated
+        // totalAffected. For SQL Server (MERGE, per-entity fallback bucket — see BuildBatchUpsert),
+        // the WHEN MATCHED AND version guard is always present, so 0-rows-from-MERGE reliably means
+        // a real conflict, exactly like single-entity UpsertAsync's own already-correct check
+        // (UpsertAsyncTests.UpsertAsync_SqlServer_StaleVersion_ThrowsConcurrencyConflictException).
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<VersionedUpsertBatchEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var connection = new fakeDbConnection();
+        connection.EnqueueNonQueryResult(1); // entity a: MERGE matches, succeeds
+        connection.EnqueueNonQueryResult(0); // entity b: version mismatch → 0 rows from MERGE
+        factory.Connections.Add(connection);
+        var audit = new StubAuditValueResolver("batch-upsert-conflict-user");
+        await using var context = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = "Data Source=test;EmulatedProduct=SqlServer", DbMode = DbMode.SingleConnection
+            },
+            factory, NullLoggerFactory.Instance, typeMap);
+        var helper = new TableGateway<VersionedUpsertBatchEntity, int>(context, audit);
+
+        var a = new VersionedUpsertBatchEntity { Id = 1, Name = "a", Version = 1 };
+        var b = new VersionedUpsertBatchEntity { Id = 2, Name = "b", Version = 999 };
+        var bLastUpdatedByBeforeCall = b.LastUpdatedBy;
+
+        await Assert.ThrowsAsync<ConcurrencyConflictException>(
+            () => helper.BatchUpsertAsync(new[] { a, b }, context).AsTask());
+
+        Assert.Equal(bLastUpdatedByBeforeCall, b.LastUpdatedBy);
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_MySql_ZeroAffectedRow_DoesNotThrow()
+    {
+        // MySQL's ON DUPLICATE KEY UPDATE has no version-guard WHERE clause, and the driver
+        // reports 0-affected for a row whose column values didn't actually change (a routine
+        // no-op upsert) — not a conflict. The conflict-detection fix for BatchUpsertAsync must not
+        // treat this as ConcurrencyConflictException.
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<VersionedUpsertBatchEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        var connection = new fakeDbConnection();
+        connection.EnqueueNonQueryResult(1); // entity a: inserted/changed
+        connection.EnqueueNonQueryResult(0); // entity b: no-op update (values unchanged), not a conflict
+        factory.Connections.Add(connection);
+        await using var context = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = "Server=localhost;EmulatedProduct=MySql", DbMode = DbMode.SingleConnection
+            },
+            factory, NullLoggerFactory.Instance, typeMap);
+        var helper = new TableGateway<VersionedUpsertBatchEntity, int>(context);
+
+        var a = new VersionedUpsertBatchEntity { Id = 1, Name = "a", Version = 1 };
+        var b = new VersionedUpsertBatchEntity { Id = 2, Name = "b", Version = 1 };
+
+        var ex = await Record.ExceptionAsync(() => helper.BatchUpsertAsync(new[] { a, b }, context).AsTask());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_Firebird_ZeroAffectedRow_DoesNotThrow_MatchingSingleEntityUpsertAsync()
+    {
+        // Firebird's UPDATE OR INSERT ... MATCHING never emits a version-guard predicate
+        // (EmitsAnsiMergeSyntax is false for Firebird), so a 0-affected row there can't reliably
+        // mean "version mismatch" - single-entity UpsertAsync already excludes Firebird from this
+        // detection (TableGateway.Upsert.cs's canDetect check requires SupportsOnConflictWhere OR
+        // (SupportsMerge AND EmitsAnsiMergeSyntax)). The batch path must agree with the
+        // single-entity path for the same dialect, not disagree.
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<VersionedUpsertBatchEntity>();
+        var factory = new fakeDbFactory(SupportedDatabase.Firebird);
+        var connection = new fakeDbConnection();
+        connection.EnqueueNonQueryResult(1); // entity a: succeeds
+        connection.EnqueueNonQueryResult(0); // entity b: e.g. a BEFORE trigger silently skipped it
+        factory.Connections.Add(connection);
+        await using var context = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = "Data Source=test;EmulatedProduct=Firebird", DbMode = DbMode.SingleConnection
+            },
+            factory, NullLoggerFactory.Instance, typeMap);
+        var helper = new TableGateway<VersionedUpsertBatchEntity, int>(context);
+
+        var a = new VersionedUpsertBatchEntity { Id = 1, Name = "a", Version = 1 };
+        var b = new VersionedUpsertBatchEntity { Id = 2, Name = "b", Version = 1 };
+
+        var ex = await Record.ExceptionAsync(() => helper.BatchUpsertAsync(new[] { a, b }, context).AsTask());
+
+        Assert.Null(ex);
+    }
+
+    [Fact]
     public async Task BatchUpsertAsync_MultipleEntities_DisposesBuiltContainers()
     {
         await using var recordingContext = new RecordingBatchContext((DatabaseContext)_pgContext);
@@ -731,6 +840,48 @@ public class TableGatewayBatchTests : IAsyncLifetime
             Assert.Contains("UPDATE", container.LastCommandText);
             Assert.DoesNotContain("INSERT INTO", container.LastCommandText);
         });
+    }
+
+    [Fact]
+    public async Task BatchUpdateAsync_Success_WritesIncrementedVersionBackToEveryEntity()
+    {
+        // Regression: only single-entity UpdateAsync called WriteBackIncrementedVersion
+        // (TableGateway.Core.cs). After a successful BatchUpdateAsync, entities kept their
+        // pre-update in-memory Version — a later single UpdateAsync on the same entity would then
+        // build its WHERE clause from the stale value and throw a spurious ConcurrencyConflictException.
+        var typeMap = new TypeMapRegistry();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        factory.EnableDataPersistence = true;
+        await using var context =
+            new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory, typeMap);
+        var audit = new StubAuditValueResolver("batch-writeback-user");
+        typeMap.Register<VersionedBatchEntity>();
+
+        var qp = context.QuotePrefix;
+        var qs = context.QuoteSuffix;
+        await context.CreateSqlContainer($@"CREATE TABLE IF NOT EXISTS {qp}versioned_batch{qs}(
+            {qp}id{qs} INTEGER PRIMARY KEY AUTOINCREMENT,
+            {qp}name{qs} TEXT NOT NULL,
+            {qp}version{qs} INTEGER NOT NULL DEFAULT 0,
+            {qp}last_updated_by{qs} TEXT
+        )").ExecuteNonQueryAsync();
+
+        var helper = new TableGateway<VersionedBatchEntity, int>(context, audit);
+        var a = new VersionedBatchEntity { Name = "a" };
+        var b = new VersionedBatchEntity { Name = "b" };
+        await helper.CreateAsync(a, context);
+        await helper.CreateAsync(b, context);
+        Assert.Equal(1, a.Version);
+        Assert.Equal(1, b.Version);
+
+        a.Name = "a-updated";
+        b.Name = "b-updated";
+
+        var affected = await helper.BatchUpdateAsync(new[] { a, b }, context);
+
+        Assert.Equal(2, affected);
+        Assert.Equal(2, a.Version);
+        Assert.Equal(2, b.Version);
     }
 
     // =========================================================================
@@ -971,6 +1122,56 @@ public class TableGatewayBatchTests : IAsyncLifetime
         [Column("value", DbType.String)] public string Value { get; set; } = string.Empty;
     }
 
+    [Table("versioned_batch")]
+    public class VersionedBatchEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
+
+        [Version]
+        [Column("version", DbType.Int32)]
+        public int Version { get; set; }
+
+        [LastUpdatedBy]
+        [Column("last_updated_by", DbType.String)]
+        public string LastUpdatedBy { get; set; } = string.Empty;
+    }
+
+    [Table("opaque_versioned_batch")]
+    public class OpaqueVersionedBatchEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
+
+        [Version]
+        [Column("version", DbType.Binary)]
+        public byte[] Version { get; set; } = Array.Empty<byte>();
+    }
+
+    [Table("versioned_upsert_batch")]
+    public class VersionedUpsertBatchEntity
+    {
+        [Id]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
+
+        [Version]
+        [Column("version", DbType.Int32)]
+        public int Version { get; set; }
+
+        [LastUpdatedBy]
+        [Column("last_updated_by", DbType.String)]
+        public string LastUpdatedBy { get; set; } = string.Empty;
+    }
+
     private sealed class RecordingBatchContext : IDatabaseContext, IInternalConnectionProvider, ITypeMapAccessor
     {
         private readonly DatabaseContext _context;
@@ -985,11 +1186,11 @@ public class TableGatewayBatchTests : IAsyncLifetime
         public DbMode ConnectionMode => _context.ConnectionMode;
         public Guid RootId => _context.RootId;
         public ReadWriteMode ReadWriteMode => _context.ReadWriteMode;
+        public DbDataSource? DataSource => _context.DataSource;
         public string ConnectionString => _context.ConnectionString;
 
         public string Name => _context.Name;
 
-        public DbDataSource? DataSource => _context.DataSource;
         public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
         public TimeSpan? ModeLockTimeout => _context.ModeLockTimeout;
         public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;

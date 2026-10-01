@@ -475,9 +475,9 @@ public class SessionSettingsEnforcementTests
     [Fact]
     public void PostgreSql_WithNativeDataSource_SkipsPerCheckoutSessionSettings()
     {
-        // Arrange — use a factory that exposes CreateDataSource, returning a
-        // TestDataSource that is NOT GenericDbDataSource.
-        var factory = new NativeDataSourceFactory();
+        // Arrange — SupportsNativeDataSource makes CreateDataSource return a FakeDbDataSource,
+        // which is NOT GenericDbDataSource, simulating what Npgsql does at runtime.
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql) { SupportsNativeDataSource = true };
         var context = new DatabaseContext(
             "Host=localhost;Database=test;EmulatedProduct=PostgreSql", factory);
 
@@ -491,68 +491,5 @@ public class SessionSettingsEnforcementTests
             .Where(cmd => cmd.StartsWith("SET ", StringComparison.OrdinalIgnoreCase))
             .ToList();
         Assert.Empty(allCommands);
-    }
-
-    // =========================================================================
-    // Test helpers
-    // =========================================================================
-
-    /// <summary>
-    /// A factory whose <c>CreateDataSource</c> returns a custom (non-Generic) DataSource,
-    /// simulating what Npgsql does at runtime.
-    /// </summary>
-    private sealed class NativeDataSourceFactory : DbProviderFactory
-    {
-        private readonly List<fakeDbConnection> _connections = new();
-        public IReadOnlyList<fakeDbConnection> CreatedConnections => _connections;
-
-        public override DbConnection CreateConnection()
-        {
-            var c = new fakeDbConnection();
-            _connections.Add(c);
-            return c;
-        }
-
-        public override DbConnectionStringBuilder CreateConnectionStringBuilder()
-            => new DbConnectionStringBuilder();
-
-        // Exposes CreateDataSource so TryCreateProviderDataSource picks it up via reflection.
-        public DbDataSource CreateDataSource(DbConnectionStringBuilder builder)
-            => new NativeTestDataSource(builder.ConnectionString ?? string.Empty, this);
-    }
-
-    private sealed class NativeTestDataSource : DbDataSource
-    {
-        private readonly string _cs;
-        private readonly NativeDataSourceFactory _factory;
-
-        public NativeTestDataSource(string cs, NativeDataSourceFactory factory)
-        {
-            _cs = cs;
-            _factory = factory;
-        }
-
-        public override string ConnectionString => _cs;
-
-        protected override DbConnection CreateDbConnection()
-        {
-            var c = (fakeDbConnection)_factory.CreateConnection();
-            c.ConnectionString = _cs;
-            return c;
-        }
-
-        protected override DbConnection OpenDbConnection()
-        {
-            var c = CreateDbConnection();
-            c.Open();
-            return c;
-        }
-
-        protected override async ValueTask<DbConnection> OpenDbConnectionAsync(CancellationToken ct)
-        {
-            var c = CreateDbConnection();
-            await c.OpenAsync(ct);
-            return c;
-        }
     }
 }

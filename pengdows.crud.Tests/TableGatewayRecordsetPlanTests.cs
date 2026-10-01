@@ -48,6 +48,105 @@ public class TableGatewayRecordsetPlanTests : SqlLiteContextTestBase
         reader2.Read();
         var e2 = helper.MapReaderToObject(reader2);
         Assert.Equal("123", e2.Name);
+
+        // TEST-009: the test name promised "BuildsSeparatePlans" but nothing here actually
+        // checked the cache — both assertions above could pass even if a single, generically
+        // coercing plan were reused for both readers. RecordsetShape.Equals compares _types[i]
+        // before _names[i] at each position, so a differing CLR type at the same column index
+        // must produce a cache miss and a second entry; assert that directly.
+        Assert.Equal(2, GetReaderPlanCacheCount(helper));
+    }
+
+    // TEST-009: RecordsetShape.Equals iterates by index, comparing name AND type at each
+    // position — this is what makes it order-sensitive. Two shapes with the exact same column
+    // names and types but in a DIFFERENT ORDER must NOT be treated as the same shape: a shared
+    // plan compiled once for one ordinal layout, reused verbatim against a reader whose columns
+    // are actually in a different physical order, would read the wrong provider value into the
+    // wrong property without any exception ever being thrown.
+    [Fact]
+    public void MapReaderToObject_ReorderedColumns_BuildsSeparatePlans()
+    {
+        var helper = new TableGateway<NameEntity, int>(Context);
+
+        var idFirst = new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Id"] = 1,
+                ["Name"] = "Alice"
+            }
+        };
+        using var readerIdFirst = new FakeTrackedReader(idFirst);
+        readerIdFirst.Read();
+        var e1 = helper.MapReaderToObject(readerIdFirst);
+        Assert.Equal(1, e1.Id);
+        Assert.Equal("Alice", e1.Name);
+
+        // Same column names and types, same fieldCount — just declared in the opposite order.
+        // fakeDbDataReader's Dictionary-backed row preserves insertion order for GetName(i).
+        var nameFirst = new[]
+        {
+            new Dictionary<string, object>
+            {
+                ["Name"] = "Bob",
+                ["Id"] = 2
+            }
+        };
+        using var readerNameFirst = new FakeTrackedReader(nameFirst);
+        readerNameFirst.Read();
+        var e2 = helper.MapReaderToObject(readerNameFirst);
+        Assert.Equal(2, e2.Id);
+        Assert.Equal("Bob", e2.Name);
+
+        Assert.Equal(2, GetReaderPlanCacheCount(helper));
+    }
+
+    /// <summary>
+    /// Reproduces RecordsetShape.GetHashCode()'s exact algorithm (fieldCount, then each field's
+    /// name via StringComparer.OrdinalIgnoreCase, then its type) to find two distinct three-column
+    /// shapes — "Id"(int)/"Name"(string)/extraName(int) — whose extra column name differs but
+    /// whose overall hash collides, for whatever seed System.HashCode is using in this process.
+    /// </summary>
+    private static (string ExtraNameA, string ExtraNameB) FindDistinctExtraColumnNamesWithCollidingHash()
+    {
+        var seen = new Dictionary<int, string>();
+        for (var i = 0; i < 2_000_000; i++)
+        {
+            var extraName = "Extra" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            var hash = ComputeShapeHash(extraName);
+
+            if (seen.TryGetValue(hash, out var existingExtraName))
+            {
+                if (!string.Equals(existingExtraName, extraName, StringComparison.OrdinalIgnoreCase))
+                {
+                    return (existingExtraName, extraName);
+                }
+
+                continue;
+            }
+
+            seen[hash] = extraName;
+        }
+
+        throw new InvalidOperationException(
+            "Could not find a hash collision within the search budget — this would need a larger " +
+            "budget or a different search strategy, not a change to the production fix.");
+    }
+
+    private static int ComputeShapeHash(string extraColumnName)
+    {
+        var names = new[] { "Id", "Name", extraColumnName };
+        var types = new[] { typeof(int), typeof(string), typeof(int) };
+
+        var hashBuilder = new HashCode();
+        hashBuilder.Add(names.Length);
+        for (var i = 0; i < names.Length; i++)
+        {
+            hashBuilder.Add(names[i], StringComparer.OrdinalIgnoreCase);
+            hashBuilder.Add(types[i]);
+        }
+
+        return hashBuilder.ToHashCode();
     }
 
     // BP-102 (3.0 4399d3a, CORE-013): reader plans were keyed by a bare 32-bit HashCode widened
@@ -78,34 +177,6 @@ public class TableGatewayRecordsetPlanTests : SqlLiteContextTestBase
         Assert.Equal("Bob", entityB.Name);
 
         Assert.Equal(2, GetReaderPlanCacheCount(helper));
-    }
-
-    private static (string ExtraNameA, string ExtraNameB) FindDistinctExtraColumnNamesWithCollidingHash()
-    {
-        var seen = new Dictionary<int, string>();
-        for (var i = 0; i < 2_000_000; i++)
-        {
-            var extraName = "Extra" + i.ToString(System.Globalization.CultureInfo.InvariantCulture);
-            var names = new[] { "Id", "Name", extraName };
-            var types = new[] { typeof(int), typeof(string), typeof(int) };
-            var hashBuilder = new HashCode();
-            hashBuilder.Add(names.Length);
-            for (var f = 0; f < names.Length; f++)
-            {
-                hashBuilder.Add(names[f], StringComparer.OrdinalIgnoreCase);
-                hashBuilder.Add(types[f]);
-            }
-
-            var hash = hashBuilder.ToHashCode();
-            if (seen.TryGetValue(hash, out var existing))
-            {
-                return (existing, extraName);
-            }
-
-            seen[hash] = extraName;
-        }
-
-        throw new InvalidOperationException("Could not find a hash collision within the search budget.");
     }
 
     private static int GetReaderPlanCacheCount(TableGateway<NameEntity, int> helper)

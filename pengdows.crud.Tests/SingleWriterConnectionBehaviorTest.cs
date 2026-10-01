@@ -14,68 +14,7 @@ namespace pengdows.crud.Tests;
 
 public class SingleWriterConnectionBehaviorTest
 {
-    private sealed class RecordingConnection : fakeDbConnection
-    {
-        public List<string> Commands { get; } = new();
-        public List<string> ConnectionStrings { get; } = new();
-
-        protected override DbCommand CreateDbCommand()
-        {
-            return new RecordingCommand(this, Commands);
-        }
-
-        [AllowNull]
-        public override string ConnectionString
-        {
-            get => base.ConnectionString;
-            set
-            {
-                var normalized = value ?? string.Empty;
-                ConnectionStrings.Add(normalized);
-                base.ConnectionString = normalized;
-            }
-        }
-    }
-
-    private sealed class RecordingCommand : fakeDbCommand
-    {
-        private readonly List<string> _commands;
-
-        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection)
-        {
-            _commands = commands;
-        }
-
-        public override int ExecuteNonQuery()
-        {
-            _commands.Add(CommandText);
-            return base.ExecuteNonQuery();
-        }
-    }
-
-    private sealed class RecordingFactory : DbProviderFactory
-    {
-        public List<RecordingConnection> Connections { get; } = new();
-
-        public override DbConnection CreateConnection()
-        {
-            var conn = new RecordingConnection();
-            Connections.Add(conn);
-            return conn;
-        }
-
-        public override DbCommand CreateCommand()
-        {
-            return new fakeDbCommand();
-        }
-
-        public override DbParameter CreateParameter()
-        {
-            return new fakeDbParameter();
-        }
-    }
-
-    private static DatabaseContext CreateSingleWriterContext(RecordingFactory factory)
+    private static DatabaseContext CreateSingleWriterContext(fakeDbFactory factory)
     {
         var config = new DatabaseContextConfiguration
         {
@@ -89,18 +28,18 @@ public class SingleWriterConnectionBehaviorTest
     [Fact]
     public async Task SingleWriter_AllNewConnections_ShouldBeReadOnly()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateSingleWriterContext(factory);
 
-        var initialCount = factory.Connections.Count;
+        var initialCount = factory.CreatedConnections.Count;
 
         // Acquire a write connection and assert it remains writable
         var writeConn = ctx.GetConnection(ExecutionType.Write);
         await writeConn.OpenAsync();
         ctx.CloseAndDisposeConnection(writeConn);
 
-        Assert.True(factory.Connections.Count > initialCount);
-        var writeConnection = factory.Connections.Last();
+        Assert.True(factory.CreatedConnections.Count > initialCount);
+        var writeConnection = factory.CreatedConnections.Last();
 
         // Acquire two read connections, each of which should be read-only via connection string
         for (var i = 0; i < 2; i++)
@@ -109,8 +48,8 @@ public class SingleWriterConnectionBehaviorTest
             await readConn.OpenAsync();
             ctx.CloseAndDisposeConnection(readConn);
 
-            var readOnlyConnection = factory.Connections.Last();
-            Assert.Contains(readOnlyConnection.ConnectionStrings,
+            var readOnlyConnection = factory.CreatedConnections.Last();
+            Assert.Contains(readOnlyConnection.ConnectionStringHistory,
                 cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
         }
     }
@@ -118,32 +57,32 @@ public class SingleWriterConnectionBehaviorTest
     [Fact]
     public async Task SingleWriter_WriteTransaction_UsesWritableConnection()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateSingleWriterContext(factory);
 
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Write);
 
-        Assert.True(factory.Connections.Count >= 1);
-        var writeConnection = factory.Connections.Last();
+        Assert.True(factory.CreatedConnections.Count >= 1);
+        var writeConnection = factory.CreatedConnections.Last();
     }
 
     [Fact]
     public async Task SingleWriter_ReadConnectionsStayReadOnly()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateSingleWriterContext(factory);
 
         var writeConn = ctx.GetConnection(ExecutionType.Write);
         await writeConn.OpenAsync();
         ctx.CloseAndDisposeConnection(writeConn);
-        var writerConnection = factory.Connections.Last();
+        var writerConnection = factory.CreatedConnections.Last();
 
         var readConn = ctx.GetConnection(ExecutionType.Read);
         await readConn.OpenAsync();
         ctx.CloseAndDisposeConnection(readConn);
-        var readOnlyConnection = factory.Connections.Last();
+        var readOnlyConnection = factory.CreatedConnections.Last();
 
-        Assert.Contains(readOnlyConnection.ConnectionStrings,
+        Assert.Contains(readOnlyConnection.ConnectionStringHistory,
             cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
     }
 }

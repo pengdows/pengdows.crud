@@ -24,9 +24,9 @@ public sealed class DataSourcePromotionTests
         var context = new DatabaseContext(config, factory);
 
         // Assert
-        Assert.NotNull(context.DataSource);
+        Assert.NotNull(context.GetInternalDataSource());
         // Should be our generic wrapper since fakeDbFactory doesn't have a native one
-        Assert.IsType<GenericDbDataSource>(context.DataSource);
+        Assert.IsType<GenericDbDataSource>(context.GetInternalDataSource());
     }
 
     [Fact]

@@ -20,6 +20,10 @@ public class ValueObjectCoverageTests
     [Fact]
     public void PostgreSqlInterval_FromTimeSpan_PreservesPrecision()
     {
+        // Ported from the 2.0 branch. Production behavior differs from 2.0: FromTimeSpan splits
+        // whole days into Days and only the sub-day remainder into Microseconds (rather than
+        // putting the span's total ticks into Microseconds while also setting Days) — see
+        // PostgreSqlInterval.FromTimeSpan(). Updated to assert the current split.
         var span = TimeSpan.FromDays(3) + TimeSpan.FromMinutes(5);
         var converted = PostgreSqlInterval.FromTimeSpan(span);
         Assert.Equal(3, converted.Days);

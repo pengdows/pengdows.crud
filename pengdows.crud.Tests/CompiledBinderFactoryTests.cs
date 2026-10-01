@@ -192,4 +192,13 @@ public class CompiledBinderFactoryTests
         Assert.Single(parameters);
         Assert.Equal((int)Status.Inactive, Convert.ToInt32(parameters[0].Value));
     }
+
+    private static string InvokeSerializeJsonValue(object value, JsonSerializerOptions options)
+    {
+        var method = typeof(CompiledBinderFactory<BinderEntity>).GetMethod(
+            "SerializeJsonValue",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+        return (string)method.Invoke(null, new[] { value, options })!;
+    }
+
 }

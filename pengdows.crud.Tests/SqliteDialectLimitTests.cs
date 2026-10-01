@@ -75,27 +75,6 @@ public class SqliteDialectLimitTests
         Assert.Equal("SQLite", product);
     }
 
-    [Theory]
-    [InlineData(3, 45, SqlStandardLevel.Sql2016)]
-    [InlineData(3, 35, SqlStandardLevel.Sql2011)]
-    [InlineData(3, 25, SqlStandardLevel.Sql2008)]
-    [InlineData(3, 8, SqlStandardLevel.Sql2003)]
-    [InlineData(4, 0, SqlStandardLevel.Sql92)]
-    public void DetermineStandardCompliance_MapsExpectedLevels(int major, int minor, SqlStandardLevel expected)
-    {
-        var dialect = new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance);
-
-        var result = dialect.DetermineStandardCompliance(new Version(major, minor));
-
-        Assert.Equal(expected, result);
-    }
-
-    [Fact]
-    public void DetermineStandardCompliance_NullVersion_ReturnsSql92()
-    {
-        var dialect = new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger<SqliteDialect>.Instance);
-        Assert.Equal(SqlStandardLevel.Sql92, dialect.DetermineStandardCompliance(null));
-    }
 
     [Fact]
     public void IsUniqueViolation_UsesSpecificSqliteCodesOrMessages()

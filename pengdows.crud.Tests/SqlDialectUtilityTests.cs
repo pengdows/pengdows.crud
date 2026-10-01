@@ -77,21 +77,6 @@ public class SqlDialectUtilityTests
         Assert.Equal("Firebird", result);
     }
 
-    [Fact]
-    public void DetermineStandardCompliance_CallsImplementation()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Firebird.ToString());
-        var dialect = new FirebirdDialect(factory, NullLogger.Instance);
-
-        var method = dialect.GetType().GetMethod(
-            "DetermineStandardCompliance",
-            BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
-
-        var result = (SqlStandardLevel)method!.Invoke(dialect, new object?[] { null })!;
-
-        Assert.Equal(SqlStandardLevel.Sql92, result);
-    }
-
     private static bool IsPrime(int number)
     {
         if (number < 2)

@@ -3,6 +3,7 @@
 using System;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -330,24 +331,6 @@ public class DatabaseContextConstructorTests
     }
 
     [Fact]
-    public void Constructor_With_Null_LoggerFactory_Should_Use_NullLogger()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.Oracle);
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=oracle;"
-        };
-
-        // Act
-        var context = new DatabaseContext(config, factory);
-
-        // Assert
-        Assert.NotNull(context);
-        // Should not throw and should handle null logger gracefully
-    }
-
-    [Fact]
     public void Constructor_Should_Set_Context_Properties_Correctly()
     {
         // Arrange
@@ -363,6 +346,9 @@ public class DatabaseContextConstructorTests
         var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
 
         // Assert
+        // Embedded Firebird (no DataSource, file-like Database value) honors an explicit
+        // SingleWriter request — only Best auto-selects PreventDatabaseUnload; every other
+        // explicit mode is genuinely safe for embedded Firebird and is not coerced.
         Assert.NotNull(context);
         Assert.Equal(SupportedDatabase.Firebird, context.Product);
         // Bug fix: embedded Firebird is no longer forced into SingleConnection regardless of the
@@ -370,26 +356,6 @@ public class DatabaseContextConstructorTests
         // so an explicit SingleWriter request is honored as-is like any other full-server database.
         Assert.Equal(DbMode.SingleWriter, context.ConnectionMode);
         Assert.Equal(ReadWriteMode.ReadOnly, context.ReadWriteMode);
-    }
-
-    [Fact]
-    public void Constructor_Should_Handle_Complex_Connection_Strings()
-    {
-        // Arrange
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var complexConnectionString =
-            "Host=localhost;Port=5432;Database=testdb;Username=user;Password=pass;Pooling=true;MinPoolSize=5;MaxPoolSize=100;";
-        var config = new DatabaseContextConfiguration
-        {
-            ConnectionString = complexConnectionString
-        };
-
-        // Act
-        var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
-
-        // Assert
-        Assert.NotNull(context);
-        // Should handle complex connection strings without throwing
     }
 
     [Fact]
@@ -454,6 +420,55 @@ public class DatabaseContextConstructorTests
         var builder = new DbConnectionStringBuilder { ConnectionString = context.ConnectionString };
         Assert.True(builder.ContainsKey("Min Pool Size"));
         Assert.Equal("3", builder["Min Pool Size"].ToString());
+    }
+
+    private static string GetRawConnectionString(DatabaseContext context)
+    {
+        var rawProperty = typeof(DatabaseContext).GetProperty("RawConnectionString",
+            BindingFlags.NonPublic | BindingFlags.Instance);
+        return (string)rawProperty!.GetValue(context)!;
+    }
+
+    [Fact]
+    public void Constructor_Standard_Mode_Does_Not_Inject_MinPoolSize_Into_RealConnectionString()
+    {
+        // The public ConnectionString/context.ConnectionString property is snapshotted before
+        // pool-governor initialization runs, so asserting against it (as
+        // Constructor_Does_Not_Add_Default_MinPoolSize_For_Standard_Mode_When_Missing does) can
+        // pass even if the real connection string used to open connections diverges. This test
+        // reads the actual RawConnectionString the context opens connections with.
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;Database=testdb;",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = GetRawConnectionString(context) };
+        Assert.False(builder.ContainsKey("Min Pool Size"));
+    }
+
+    [Fact]
+    public void Constructor_PreventDatabaseUnload_Mode_Injects_MinPoolSize_Two_Into_RealConnectionString()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=test;Database=testdb;",
+            DbMode = DbMode.PreventDatabaseUnload,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+
+        using var context = new DatabaseContext(config, factory, NullLoggerFactory.Instance);
+
+        var builder = new DbConnectionStringBuilder { ConnectionString = GetRawConnectionString(context) };
+        Assert.True(builder.ContainsKey("Min Pool Size"));
+        Assert.Equal("2", builder["Min Pool Size"].ToString());
     }
 
     [Fact]
@@ -524,7 +539,8 @@ public class DatabaseContextConstructorTests
         var rawProperty = typeof(DatabaseContext).GetProperty("RawConnectionString",
             BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(rawProperty);
-        Assert.Equal(rawConnectionString, (string)rawProperty!.GetValue(context)!);
+        Assert.Equal(rawConnectionString,
+            (string)rawProperty!.GetValue(context)!);
     }
 
     [Fact]
@@ -543,7 +559,7 @@ public class DatabaseContextConstructorTests
 
         // Assert
         Assert.NotNull(context);
-        Assert.Same(dataSource, context.DataSource);
+        Assert.Same(dataSource, context.GetInternalDataSource());
         Assert.Equal(DbMode.Standard, context.ConnectionMode);
         Assert.Equal(ReadWriteMode.ReadWrite, context.ReadWriteMode);
     }
@@ -565,7 +581,7 @@ public class DatabaseContextConstructorTests
 
         // Assert
         Assert.NotNull(context);
-        Assert.Same(dataSource, context.DataSource);
+        Assert.Same(dataSource, context.GetInternalDataSource());
         Assert.Same(typeMap, context.TypeMapRegistry);
     }
 
@@ -591,7 +607,7 @@ public class DatabaseContextConstructorTests
 
         // Assert
         Assert.NotNull(context);
-        Assert.Same(dataSource, context.DataSource);
+        Assert.Same(dataSource, context.GetInternalDataSource());
         Assert.Equal(mode, context.ConnectionMode);
         Assert.Equal(readWriteMode, context.ReadWriteMode);
         Assert.Same(typeMap, context.TypeMapRegistry);

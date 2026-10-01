@@ -96,6 +96,32 @@ public class DatabaseDetectionFlavorTests
     }
 
     [Fact]
+    public void DetectProduct_IdentifiesSpanner_ViaOptimizerVersionProbe()
+    {
+        // Cloud Spanner's PostgreSQL interface (PGAdapter) exposes a Spanner-only setting,
+        // SPANNER.OPTIMIZER_VERSION, that ordinary PostgreSQL has no concept of. Verified live
+        // against a real Spanner Omni + PGAdapter instance: `SHOW SPANNER.OPTIMIZER_VERSION`
+        // returns one row (an empty string on a fresh instance, not null/an error), which is what
+        // distinguishes it from plain PostgreSQL for this synchronous detection path.
+        //
+        // This exercises DatabaseDetectionService.DetectProduct's SYNCHRONOUS path
+        // (DetectFlavorWithDetail) specifically — the one DatabaseContext's normal constructor
+        // uses. The async twin (DetectFlavorWithDetailAsync, used by DataSourceInformation.
+        // CreateAsync) already had this probe; the sync twin did not, so any DatabaseContext
+        // built the ordinary (synchronous) way against real Spanner silently fell through to
+        // plain PostgreSql and never got SpannerDialect's overrides.
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var connection = (fakeDbConnection)factory.CreateConnection();
+
+        connection.EmulatedProduct = SupportedDatabase.Unknown;
+        connection.SetScalarResultForCommand("SHOW SPANNER.OPTIMIZER_VERSION", string.Empty);
+
+        var detected = DatabaseDetectionService.DetectProduct(connection, factory);
+
+        Assert.Equal(SupportedDatabase.Spanner, detected);
+    }
+
+    [Fact]
     public void PostgreSqlDialect_CockroachDb_DoesNotSupportMerge()
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);

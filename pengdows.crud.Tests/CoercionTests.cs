@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
+using pengdows.crud.fakeDb;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.valueobjects;
 using Xunit;
@@ -57,7 +58,7 @@ public class CoercionTests
     public void GuidCoercion_ShouldWriteToParameter()
     {
         var guid = Guid.NewGuid();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success = _registry.TryWrite(guid, parameter);
 
@@ -144,7 +145,7 @@ public class CoercionTests
     public void JsonValueCoercion_ShouldWriteAsString()
     {
         var jsonValue = new JsonValue("{\"key\":\"value\"}");
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success = _registry.TryWrite(jsonValue, parameter);
 
@@ -193,7 +194,7 @@ public class CoercionTests
             ["key3"] = "value with spaces"
         };
         var hstore = new HStore(data);
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success = _registry.TryWrite(hstore, parameter);
 
@@ -230,7 +231,7 @@ public class CoercionTests
         var start = new DateTime(2023, 1, 1);
         var end = new DateTime(2023, 12, 31);
         var range = new Range<DateTime>(start, end, true, false);
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success = _registry.TryWrite(range, parameter);
 
@@ -357,7 +358,7 @@ public class CoercionTests
     public void DateTimeOffsetCoercion_ShouldWriteWithCorrectDbType()
     {
         var dto = DateTimeOffset.Now;
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success = _registry.TryWrite(dto, parameter);
 
@@ -439,38 +440,4 @@ public class CoercionTests
     }
 
     #endregion
-
-    private class TestDbParameter : DbParameter
-    {
-        private string _parameterName = string.Empty;
-        private string _sourceColumn = string.Empty;
-
-        public override DbType DbType { get; set; }
-        public override ParameterDirection Direction { get; set; }
-        public override bool IsNullable { get; set; }
-
-        [AllowNull]
-        public override string ParameterName
-        {
-            get => _parameterName;
-            set => _parameterName = value ?? string.Empty;
-        }
-
-        public override int Size { get; set; }
-
-        [AllowNull]
-        public override string SourceColumn
-        {
-            get => _sourceColumn;
-            set => _sourceColumn = value ?? string.Empty;
-        }
-
-        public override bool SourceColumnNullMapping { get; set; }
-        [AllowNull] public override object Value { get; set; } = DBNull.Value;
-
-        public override void ResetDbType()
-        {
-            DbType = DbType.Object;
-        }
-    }
 }

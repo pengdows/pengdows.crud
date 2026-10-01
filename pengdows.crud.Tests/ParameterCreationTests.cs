@@ -20,9 +20,10 @@ public class ParameterCreationTests
     [Fact]
     public void CreateDbParameter_WithDecimal_SetsPrecisionToAtLeast18AndExactScale()
     {
-        // Precision is set to max(inferred, 18) so SqlClient 6.x accepts any value
-        // that fits a standard DECIMAL(18,x) column.  Scale is set to the value's
-        // natural fractional digits to avoid silent rounding.
+        // Precision is set to max(inferred, 18), the industry-convention DECIMAL(18,x) shape
+        // (see SqlDialect.CreateDbParameter's comment for why — not a confirmed SqlClient
+        // version-specific requirement, despite how this used to be worded here). Scale is set
+        // to the value's natural fractional digits to avoid silent rounding.
         var dialect = CreateDialect();
         var p = dialect.CreateDbParameter(null, DbType.Decimal, 123.45m);
         // 123.45m: inferred precision=5 (3 integer + 2 fractional), scale=2

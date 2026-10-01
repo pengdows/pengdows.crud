@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
+using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests.dialects;
@@ -18,6 +22,39 @@ public class YugabyteDbDialectTests
 
     private static YugabyteDbDialect CreateDialect() =>
         new(new fakeDbFactory(SupportedDatabase.YugabyteDb), NullLogger.Instance);
+
+    [Fact]
+    public async Task SupportsXmlTypes_IsTrue()
+    {
+        // Unlike CockroachDB, YugabyteDB's YSQL layer genuinely reuses PostgreSQL's own query
+        // layer - confirmed live against a real yugabytedb/yugabyte container (v2.x):
+        // `CREATE TABLE t (x xml)` succeeded. Correctly inherited from PostgreSqlDialect, which
+        // gates this on IsVersionAtLeast(8, 3) - so the dialect must be initialized with a real
+        // version for this to resolve true (pre-init, like every other IsVersionAtLeast-gated
+        // flag, it correctly reports false).
+        var factory = new fakeDbFactory(SupportedDatabase.YugabyteDb);
+        var conn = factory.CreateConnection();
+        conn.ConnectionString = "Host=localhost;EmulatedProduct=YugabyteDb";
+        var scalars = new Dictionary<string, object>
+        {
+            ["SELECT version()"] = "PostgreSQL 15.12-YB-2.25.2.0-b0 on x86_64-pc-linux-gnu"
+        };
+        var schema = DataSourceInformation.BuildEmptySchema(
+            "PostgreSQL", "15.12", "@p[0-9]+", "@{0}", 63, @"@\w+", @"@\w+", true);
+        var tracked = new FakeTrackedConnection(conn, schema, scalars);
+        var dialect = CreateDialect();
+        await dialect.DetectDatabaseInfoAsync(tracked);
+
+        Assert.True(dialect.SupportsXmlTypes);
+    }
+
+    [Fact]
+    public void SupportsUserDefinedTypes_IsTrue()
+    {
+        // Confirmed live: `CREATE TYPE my_udt AS (a int, b text)` succeeded against a real
+        // YugabyteDB container. Correctly inherited from PostgreSqlDialect.
+        Assert.True(CreateDialect().SupportsUserDefinedTypes);
+    }
 
     // Regression: YugabyteDB inherits PostgreSqlDialect but the base SqlDialect
     // switch only matched SupportedDatabase.PostgreSql, leaving YugabyteDb to the

@@ -16,6 +16,14 @@ public class ParameterBindingRulesTests
         Value = 1
     }
 
+    // NpgsqlDbType-shaped stub: ProviderParameterFactory's Npgsql optimizations gate on the
+    // parameter's runtime type name starting with "Npgsql" (see ProviderParameterFactoryTests'
+    // identically-shaped NpgsqlParameterStub) before touching this property via reflection.
+    private sealed class NpgsqlParameterStub : fakeDbParameter
+    {
+        public int NpgsqlDbType { get; set; }
+    }
+
     [Fact]
     public void ApplyBindingRules_DateTime_SetsDbType()
     {

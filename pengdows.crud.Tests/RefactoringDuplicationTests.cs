@@ -319,8 +319,17 @@ public class RefactoringDuplicationTests
     public void LogSessionSettingsResult_ExposedToSubclasses_ViaTestDialect()
     {
         // Verify the protected helper is accessible from subclasses
-        var result = TestableDialect.CallLogSessionSettingsResult(_logger);
+        var result = TestableDialect.CallLogSessionSettingsResult(_logger, "SET ANSI_NULLS ON;");
         Assert.NotNull(result);
+    }
+
+    [Fact]
+    public void LogSessionSettingsResult_EmptySettings_LogsAlreadyCompliantBranch()
+    {
+        // When there are no pending changes, LogSessionSettingsResult must take the
+        // "already compliant" logging branch instead of the "applying changes" one.
+        var result = TestableDialect.CallLogSessionSettingsResult(_logger, string.Empty);
+        Assert.Equal(string.Empty, result);
     }
 
     /// <summary>
@@ -335,12 +344,12 @@ public class RefactoringDuplicationTests
         public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;
         public override string ParameterMarker => "@";
 
-        public static string CallLogSessionSettingsResult(ILogger logger)
+        public static string CallLogSessionSettingsResult(ILogger logger, string settings)
         {
             var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
             var dialect = new TestableDialect(factory, logger);
             var result = new SessionSettingsResult(
-                "SET ANSI_NULLS ON;",
+                settings,
                 new Dictionary<string, string> { ["ANSI_NULLS"] = "OFF" },
                 false);
             dialect.LogSessionSettingsResult(result, "Test");

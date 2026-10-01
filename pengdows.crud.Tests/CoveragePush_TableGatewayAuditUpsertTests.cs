@@ -193,6 +193,7 @@ public sealed class CoveragePush_TableGatewayAuditUpsertTests
         public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }
         public bool IsVersion { get; set; }
+        public bool IsOpaqueVersionColumn { get; set; }
         public bool IsCreatedBy { get; set; }
         public bool IsCreatedOn { get; set; }
         public bool IsLastUpdatedBy { get; set; }

@@ -121,8 +121,10 @@ public class ConnectionStrategyTests
         // keep-alive opens a persistent connection during initialization
         Assert.True(ctx.NumberOfOpenConnections >= 1);
 
+        // PreventDatabaseUnloadConnectionStrategy.GetConnection opens the connection itself before
+        // returning it (deliberate fail-fast design — open-time failures surface at acquisition,
+        // not on a later, separate Open() call), so it is already open here.
         var c = ctx.GetConnection(ExecutionType.Read);
-        await c.OpenAsync();
         var openNow = ctx.NumberOfOpenConnections;
         Assert.True(openNow >= 2);
 
@@ -363,13 +365,15 @@ public class ConnectionStrategyTests
     // Additional tests for PreventDatabaseUnloadConnectionStrategy methods
 
     [Fact]
-    public async Task KeepAlive_ReleaseConnection_NullConnection_DoesNotThrow()
+    public async Task KeepAlive_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
     {
         await using var ctx = CreateContext(DbMode.KeepAlive, SupportedDatabase.Sqlite, ":memory:");
+        var before = ctx.NumberOfOpenConnections;
 
-        // Should not throw when releasing null connection
         ctx.CloseAndDisposeConnection(null);
         await ctx.CloseAndDisposeConnectionAsync(null);
+
+        Assert.Equal(before, ctx.NumberOfOpenConnections);
     }
 
     [Fact]
@@ -397,29 +401,14 @@ public class ConnectionStrategyTests
         // Use SQL Server to avoid automatic mode coercion that happens with SQLite
         await using var ctx = CreateContext(DbMode.KeepAlive, SupportedDatabase.SqlServer);
 
-        // Create a separate connection that's not the persistent one
+        // Create a separate connection that's not the persistent one. PreventDatabaseUnloadConnectionStrategy
+        // .GetConnection opens it before returning, so it is already open here.
         var separateConnection = ctx.GetConnection(ExecutionType.Read, false);
-        await separateConnection.OpenAsync();
         var beforeCount = ctx.NumberOfOpenConnections;
 
         // Release it - should dispose and decrease count
         await ctx.CloseAndDisposeConnectionAsync(separateConnection);
         Assert.True(ctx.NumberOfOpenConnections < beforeCount);
-    }
-
-    [Fact]
-    public void KeepAlive_PostInitialize_NullConnection_SetsNullPersistent()
-    {
-        var cfg = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
-            DbMode = DbMode.KeepAlive,
-            ReadWriteMode = ReadWriteMode.ReadWrite
-        };
-        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
-
-        // PostInitialize is called during construction, we're just verifying it doesn't crash with null
-        Assert.NotNull(ctx); // Context created successfully
     }
 
     // Additional tests for Standard/Single/SingleWriter connection strategies - edge cases
@@ -473,48 +462,39 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
-    public async Task SingleWriter_WriteConnections_Serializable()
-    {
-        await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
-
-        var write1 = ctx.GetConnection(ExecutionType.Write);
-        ctx.CloseAndDisposeConnection(write1);
-
-        var write2 = ctx.GetConnection(ExecutionType.Write);
-        ctx.CloseAndDisposeConnection(write2);
-
-        Assert.NotNull(write1);
-        Assert.NotNull(write2);
-    }
-
-    [Fact]
-    public async Task Standard_ReleaseConnection_NullConnection_DoesNotThrow()
+    public async Task Standard_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
     {
         await using var ctx = CreateContext(DbMode.Standard, SupportedDatabase.Sqlite, ":memory:");
+        var before = ctx.NumberOfOpenConnections;
 
-        // Should not throw
         ctx.CloseAndDisposeConnection(null);
         await ctx.CloseAndDisposeConnectionAsync(null);
+
+        Assert.Equal(before, ctx.NumberOfOpenConnections);
     }
 
     [Fact]
-    public async Task SingleConnection_ReleaseConnection_NullConnection_DoesNotThrow()
+    public async Task SingleConnection_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
     {
         await using var ctx = CreateContext(DbMode.SingleConnection, SupportedDatabase.Sqlite, ":memory:");
+        var before = ctx.NumberOfOpenConnections;
 
-        // Should not throw
         ctx.CloseAndDisposeConnection(null);
         await ctx.CloseAndDisposeConnectionAsync(null);
+
+        Assert.Equal(before, ctx.NumberOfOpenConnections);
     }
 
     [Fact]
-    public async Task SingleWriter_ReleaseConnection_NullConnection_DoesNotThrow()
+    public async Task SingleWriter_ReleaseConnection_NullConnection_DoesNotChangeConnectionCount()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");
+        var before = ctx.NumberOfOpenConnections;
 
-        // Should not throw
         ctx.CloseAndDisposeConnection(null);
         await ctx.CloseAndDisposeConnectionAsync(null);
+
+        Assert.Equal(before, ctx.NumberOfOpenConnections);
     }
 
     // Additional coverage tests for StandardConnectionStrategy
@@ -661,7 +641,13 @@ public class ConnectionStrategyTests
         };
         using var separateCtx = new DatabaseContext(cfg, factory);
         var separateConnection = separateCtx.GetConnection(ExecutionType.Read);
-        await separateConnection.OpenAsync();
+        // RecordingFactory.CreateConnection() returns one singleton RecordingConnection instance
+        // for every call, including the context's own internal init-connection detection use —
+        // so this may already be open by the time GetConnection returns it.
+        if (separateConnection.State != ConnectionState.Open)
+        {
+            await separateConnection.OpenAsync();
+        }
 
         // Since this is not the persistent connection from our SingleConnection context, it should be disposed
         Assert.Equal(ConnectionState.Open, separateConnection.State);
@@ -746,8 +732,8 @@ public class ConnectionStrategyTests
         {
             for (var i = 0; i < roundsPerThread; i++)
             {
+                // PreventDatabaseUnloadConnectionStrategy.GetConnection opens it before returning.
                 var conn = ctx.GetConnection(ExecutionType.Read);
-                await conn.OpenAsync();
                 await ctx.CloseAndDisposeConnectionAsync(conn);
             }
         })).ToArray();

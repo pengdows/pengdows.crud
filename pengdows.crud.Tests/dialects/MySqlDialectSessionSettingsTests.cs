@@ -32,4 +32,38 @@ public class MySqlDialectSessionSettingsTests
         Assert.Contains("sql_mode", settings, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("ANSI_QUOTES", settings, StringComparison.OrdinalIgnoreCase);
     }
+
+    [Fact]
+    public void GetFinalSessionSettings_ReadOnlyFalse_AppendsReadWriteIntent()
+    {
+        var dialect = new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance);
+
+        var settings = dialect.GetFinalSessionSettings(readOnly: false);
+
+        Assert.Contains(dialect.GetBaseSessionSettings().TrimEnd(';'), settings, StringComparison.Ordinal);
+        Assert.Contains("transaction_read_only = 0", settings, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void GetFinalSessionSettings_ReadOnlyTrue_AppendsReadOnlyIntent()
+    {
+        var dialect = new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance);
+
+        var settings = dialect.GetFinalSessionSettings(readOnly: true);
+
+        Assert.Contains("transaction_read_only = 1", settings, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void PrepareConnectionStringForDataSource_NullOrWhitespace_ReturnsInputUnchanged(string? input)
+    {
+        var dialect = new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance);
+
+        var result = dialect.PrepareConnectionStringForDataSource(input!);
+
+        Assert.Equal(input, result);
+    }
 }

@@ -29,8 +29,8 @@ public class DatabaseContextDataSourceTests
         var factory = new DataSourceCapableFactory();
         using var ctx = new DatabaseContext("Data Source=:memory:", factory);
 
-        Assert.NotNull(ctx.DataSource);
-        Assert.IsType<TestDataSource>(ctx.DataSource);
+        Assert.NotNull(ctx.GetInternalDataSource());
+        Assert.IsType<TestDataSource>(ctx.GetInternalDataSource());
     }
 
     [Fact]

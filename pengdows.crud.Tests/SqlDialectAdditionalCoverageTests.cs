@@ -14,6 +14,12 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+// Ported from the 2.0 (backport/multitenancy-lease-fixes) branch. Two tests exercising
+// SqlStandardLevel / IDatabaseProductInfo.StandardCompliance / GetMajorVersionToStandardMapping /
+// DetermineStandardCompliance were dropped: that whole standard-compliance-level concept does not
+// exist anywhere in this branch's production code (SqlDialect.cs / IDatabaseProductInfo.cs) — see
+// this repo's CLAUDE.md note tracking cross-branch feature parity gaps. Everything else here still
+// applies against 3.0's SqlDialect API and was preserved.
 public class SqlDialectAdditionalCoverageTests
 {
     [Fact]
@@ -85,7 +91,6 @@ public class SqlDialectAdditionalCoverageTests
         Assert.True(dialect.IsInitialized);
         Assert.Equal("Unknown", dialect.ProductInfo.ProductName);
         Assert.Equal(SupportedDatabase.Unknown, dialect.ProductInfo.DatabaseType);
-        Assert.Equal(SqlStandardLevel.Sql92, dialect.ProductInfo.StandardCompliance);
         Assert.Contains("SQL-92", dialect.GetCompatibilityWarning(), StringComparison.OrdinalIgnoreCase);
     }
 
@@ -189,7 +194,6 @@ public class SqlDialectAdditionalCoverageTests
         var info = await dialect.CallDetectDatabaseInfoAsync(tracked);
 
         Assert.Equal("Unknown", info.ProductName);
-        Assert.Equal(SqlStandardLevel.Sql92, info.StandardCompliance);
     }
 
     [Fact]
@@ -223,18 +227,6 @@ public class SqlDialectAdditionalCoverageTests
 
         var name = dialect.GenerateRandomName(10, 3);
         Assert.True(name.Length <= 3);
-    }
-
-    [Fact]
-    public void DetermineStandardCompliance_UsesMapping()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var mapping = new Dictionary<int, SqlStandardLevel> { [2] = SqlStandardLevel.Sql2011 };
-        var dialect = new MappingDialect(factory, NullLoggerFactory.Instance.CreateLogger<MappingDialect>(), mapping);
-
-        var level = dialect.DetermineStandardCompliance(new Version(3, 0, 0));
-        Assert.Equal(SqlStandardLevel.Sql2011, level);
-        Assert.Equal(SqlStandardLevel.Sql92, dialect.DetermineStandardCompliance(null));
     }
 
     private static FakeTrackedConnection CreateTrackedConnection(
@@ -297,7 +289,7 @@ public class SqlDialectAdditionalCoverageTests
             return "SET BASE SETTINGS";
         }
 
-        public override string GetReadOnlyConnectionParameter()
+        public override string? GetReadOnlyConnectionParameter()
         {
             return "Mode=ReadOnly";
         }
@@ -317,22 +309,6 @@ public class SqlDialectAdditionalCoverageTests
         public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
         {
             throw new InvalidOperationException("boom");
-        }
-    }
-
-    private sealed class MappingDialect : TestableDialect
-    {
-        private readonly Dictionary<int, SqlStandardLevel> _mapping;
-
-        public MappingDialect(DbProviderFactory factory, ILogger logger, Dictionary<int, SqlStandardLevel> mapping)
-            : base(factory, logger)
-        {
-            _mapping = mapping;
-        }
-
-        public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping()
-        {
-            return _mapping;
         }
     }
 }

@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using Xunit;
+using pengdows.crud.fakeDb;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.valueobjects;
 
@@ -185,7 +186,7 @@ public class MissingCoercionTests
     public void BooleanCoercion_TryWrite_True_SetsCorrectly()
     {
         var coercion = new BooleanCoercion();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success = coercion.TryWrite(true, parameter);
 
@@ -291,7 +292,7 @@ public class MissingCoercionTests
     public void DateTimeCoercion_TryWrite_DateTime_SetsCorrectly()
     {
         var coercion = new DateTimeCoercion();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
         var dateTime = DateTime.UtcNow;
 
         var success = coercion.TryWrite(dateTime, parameter);
@@ -369,7 +370,7 @@ public class MissingCoercionTests
     public void DecimalCoercion_TryWrite_Decimal_SetsCorrectly()
     {
         var coercion = new DecimalCoercion();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success = coercion.TryWrite(123.45m, parameter);
 
@@ -473,7 +474,7 @@ public class MissingCoercionTests
     public void JsonDocumentCoercion_TryWrite_JsonDocument_SetsCorrectly()
     {
         var coercion = new JsonDocumentCoercion();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
         using var doc = JsonDocument.Parse("{\"test\":true}");
 
         var success = coercion.TryWrite(doc, parameter);
@@ -487,7 +488,7 @@ public class MissingCoercionTests
     public void JsonDocumentCoercion_TryWrite_Null_SetsDbNull()
     {
         var coercion = new JsonDocumentCoercion();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
 
         var success = coercion.TryWrite(null, parameter);
 
@@ -591,7 +592,7 @@ public class MissingCoercionTests
     public void JsonElementCoercion_TryWrite_JsonElement_SetsCorrectly()
     {
         var coercion = new JsonElementCoercion();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
         using var doc = JsonDocument.Parse("{\"test\":true}");
 
         var success = coercion.TryWrite(doc.RootElement, parameter);
@@ -661,7 +662,7 @@ public class MissingCoercionTests
     public void PostgreSqlIntervalCoercion_TryWrite_Interval_SetsCorrectly()
     {
         var coercion = new PostgreSqlIntervalCoercion();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
         var interval = new PostgreSqlInterval(1, 2, 3600000000); // 1 month, 2 days, 1 hour in microseconds
 
         var success = coercion.TryWrite(interval, parameter);
@@ -744,7 +745,7 @@ public class MissingCoercionTests
     public void RowVersionValueCoercion_TryWrite_RowVersion_SetsCorrectly()
     {
         var coercion = new RowVersionValueCoercion();
-        var parameter = new TestDbParameter();
+        var parameter = new fakeDbParameter();
         var bytes = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 };
         var rowVersion = new RowVersion(bytes);
 
@@ -757,38 +758,4 @@ public class MissingCoercionTests
     }
 
     #endregion
-
-    private class TestDbParameter : DbParameter
-    {
-        private string _parameterName = string.Empty;
-        private string _sourceColumn = string.Empty;
-
-        public override DbType DbType { get; set; }
-        public override ParameterDirection Direction { get; set; }
-        public override bool IsNullable { get; set; }
-
-        [AllowNull]
-        public override string ParameterName
-        {
-            get => _parameterName;
-            set => _parameterName = value ?? string.Empty;
-        }
-
-        public override int Size { get; set; }
-
-        [AllowNull]
-        public override string SourceColumn
-        {
-            get => _sourceColumn;
-            set => _sourceColumn = value ?? string.Empty;
-        }
-
-        public override bool SourceColumnNullMapping { get; set; }
-        [AllowNull] public override object Value { get; set; } = DBNull.Value;
-
-        public override void ResetDbType()
-        {
-            DbType = DbType.Object;
-        }
-    }
 }

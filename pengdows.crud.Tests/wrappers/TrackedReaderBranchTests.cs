@@ -212,6 +212,35 @@ public class TrackedReaderBranchTests
         }
     }
 
+    private sealed class ThrowingDisposeLocker : IAsyncDisposable, IDisposable
+    {
+        public void Dispose()
+        {
+            throw new InvalidOperationException("connection locker dispose failed");
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            throw new InvalidOperationException("connection locker dispose failed");
+        }
+    }
+
+    private sealed class SpyLocker : IAsyncDisposable, IDisposable
+    {
+        public bool WasDisposed { get; private set; }
+
+        public void Dispose()
+        {
+            WasDisposed = true;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            WasDisposed = true;
+            return ValueTask.CompletedTask;
+        }
+    }
+
     private sealed class ReadFalseDisposeThrowReader : fakeDbDataReader
     {
         public ReadFalseDisposeThrowReader() : base(Array.Empty<Dictionary<string, object>>())
@@ -413,32 +442,4 @@ public class TrackedReaderBranchTests
         }
     }
 
-    private sealed class ThrowingDisposeLocker : IAsyncDisposable, IDisposable
-    {
-        public void Dispose()
-        {
-            throw new InvalidOperationException("connection locker dispose failed");
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            throw new InvalidOperationException("connection locker dispose failed");
-        }
-    }
-
-    private sealed class SpyLocker : IAsyncDisposable, IDisposable
-    {
-        public bool WasDisposed { get; private set; }
-
-        public void Dispose()
-        {
-            WasDisposed = true;
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            WasDisposed = true;
-            return ValueTask.CompletedTask;
-        }
-    }
 }

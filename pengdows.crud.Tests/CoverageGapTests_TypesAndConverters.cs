@@ -614,6 +614,16 @@ public class CoverageGapTests_TypesAndConverters
 
     #region PostgreSqlIntervalConverter Tests
 
+    // Ported from the 2.0 branch. Production behavior differs from 2.0: ConvertToProvider for
+    // PostgreSql/CockroachDb/YugabyteDb now returns a plain TimeSpan (via
+    // PostgreSqlInterval.ToTimeSpan(), i.e. Days + sub-day TimeComponent) instead of an ISO 8601
+    // string — Npgsql binds PostgreSQL INTERVAL values from TimeSpan directly, and the Months
+    // component is documented as intentionally dropped in that conversion (see
+    // PostgreSqlIntervalConverter.cs / PostgreSqlInterval.ToTimeSpan() remarks). The
+    // "FormatIso8601_*" tests below are updated to assert the current TimeSpan-producing contract
+    // (including that Months is dropped) rather than ISO 8601 text, preserving the original intent
+    // of exercising each interval-component combination.
+
     [Fact]
     public void PostgreSqlIntervalConverter_ConvertToProvider_NonPostgres_ReturnsValue()
     {
@@ -1425,7 +1435,7 @@ public class CoverageGapTests_TypesAndConverters
         var result = coercion.TryRead(src, out var value);
 
         Assert.False(result);
-        Assert.True(value.IsEmpty);
+        Assert.Equal(Range<int>.Empty, value);
     }
 
     [Fact]
@@ -1772,6 +1782,10 @@ public class CoverageGapTests_TypesAndConverters
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_UnknownType_ReturnsFalse()
     {
+        // Ported from the 2.0 branch. Production behavior differs from 2.0: TryRead now has a
+        // dedicated `int`/`long` branch (ODP.NET's numeric total-months representation for
+        // INTERVAL YEAR TO MONTH — see AdvancedCoercions.cs), so an int is no longer "unknown".
+        // Use a type with no handling at all (double) to keep exercising the default/unknown path.
         var coercion = new IntervalYearMonthCoercion();
         var src = new DbValue(42d); // BP-124: int/long now map to total months
 

@@ -199,6 +199,23 @@ public class DialectBatchSqlTests
     }
 
     [Fact]
+    public void PostgreSqlDialect_BuildBatchUpdateSql_CompositeKey_JoinsPredicatesWithAnd()
+    {
+        // With more than one key column, the WHERE clause's per-column predicates must be
+        // AND-joined — the single-key fixture used everywhere else in this file never exercises
+        // that join at all.
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
+        var query = new SqlQueryBuilder();
+        var compositeKeyColumns = new List<string> { "\"tenant_id\"", "\"id\"" };
+
+        dialect.BuildBatchUpdateSql("\"my_table\"", _columns, compositeKeyColumns, 1, query, GetStandardValues());
+        var sql = NormalizeSql(query.ToString());
+        _output.WriteLine(sql);
+
+        Assert.Contains("WHERE t.\"tenant_id\" = s.\"tenant_id\" AND t.\"id\" = s.\"id\"", sql);
+    }
+
+    [Fact]
     public void SqlServerDialect_BuildBatchUpdateSql_UsesMerge()
     {
         // SQL Server: MERGE INTO t AS t USING (VALUES ...) AS s(key,col...) ON t.key=s.key WHEN MATCHED THEN UPDATE SET col=s.col;
@@ -235,6 +252,21 @@ public class DialectBatchSqlTests
         Assert.Contains("FROM (VALUES (:b0, :b1, :b2))", sql);
         Assert.Contains("AS s(\"id\", \"name\", \"age\")", sql);
         Assert.Contains("WHERE \"my_table\".\"id\" = s.\"id\"", sql);
+    }
+
+    [Fact]
+    public void SnowflakeDialect_BuildBatchUpdateSql_CompositeKey_JoinsPredicatesWithAnd()
+    {
+        var dialect = new SnowflakeDialect(new fakeDbFactory(SupportedDatabase.Snowflake), NullLogger.Instance);
+        var query = new SqlQueryBuilder();
+        var compositeKeyColumns = new List<string> { "\"tenant_id\"", "\"id\"" };
+
+        dialect.BuildBatchUpdateSql("\"my_table\"", _columns, compositeKeyColumns, 1, query, GetStandardValues());
+        var sql = NormalizeSql(query.ToString());
+        _output.WriteLine(sql);
+
+        Assert.Contains(
+            "WHERE \"my_table\".\"tenant_id\" = s.\"tenant_id\" AND \"my_table\".\"id\" = s.\"id\"", sql);
     }
 
     [Fact]

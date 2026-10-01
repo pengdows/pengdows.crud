@@ -4,7 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class TestProjectHygieneTests
+public class TestProjectHygieneLegacyTests
 {
     [Fact]
     public void TestProjectDoesNotDeclareMocksFolder()

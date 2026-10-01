@@ -4,7 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class RunBenchmarksScriptTests
+public class RunBenchmarksScriptLegacyTests
 {
     [Fact]
     public void RunBenchmarksScript_UsesInProcessBenchmarkExecution()

@@ -47,6 +47,15 @@ public class TableGatewayUpsertTests
         Assert.Contains("\"version\" = t.\"version\" + 1", sql);
         Assert.True(sql.Contains("ON CONFLICT") || sql.Contains("MERGE INTO"),
             "Expected Postgres upsert to use ON CONFLICT or MERGE.");
+        if (sql.Contains("MERGE INTO"))
+        {
+            Assert.Contains("\"version\" = t.\"version\" + 1", sql);
+        }
+        else
+        {
+            Assert.Contains("\"version\" = \"version\" + 1", sql);
+        }
+
         Assert.Equal(1, entity.Version);
     }
 

@@ -76,6 +76,34 @@ public class SqlContainerWriteOperationTests
     }
 
     [Fact]
+    public async Task ExecuteReaderAsync_WithWriteExecutionType_Should_Throw_IReadOnlyViolation_In_ReadOnly_Mode()
+    {
+        // Regression: ExecuteReaderAsyncInternal's write-execution-type path (used by
+        // BuildCreateWithReturning's generated-key retrieval, e.g. reading an OUTPUT/RETURNING
+        // result set back) only called _context.AssertIsWriteConnection() — which DOES correctly
+        // reject a ReadOnly-configured context (via _isWriteConnection), but with a bare
+        // InvalidOperationException, not one of the three documented IReadOnlyViolation-marked
+        // exception types. A caller following the documented pattern
+        // (catch (IReadOnlyViolation) { ... }) would NOT catch this one path, unlike every other
+        // write path in this file. The write is not actually a bypass (rejection does occur
+        // before any provider command executes) — this closes the exception-TYPE contract gap.
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        var context = new DatabaseContext(config, factory);
+        var container = context.CreateSqlContainer("INSERT INTO test OUTPUT INSERTED.id VALUES (@p1)");
+        container.AddParameterWithValue("p1", DbType.String, "value");
+
+        var ex = await Assert.ThrowsAsync<ReadOnlyContextException>(async () =>
+            await container.ExecuteReaderAsync(ExecutionType.Write));
+
+        Assert.IsAssignableFrom<IReadOnlyViolation>(ex);
+    }
+
+    [Fact]
     public async Task ExecuteScalarRequiredAsync_Should_Handle_Null_Result_For_Nullable_Type()
     {
         // Arrange

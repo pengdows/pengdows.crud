@@ -58,6 +58,10 @@ public class AdvancedConvertersCoverageTests
     [Fact]
     public void MacAddressConverter_FormatsForPostgres_AndReadsPhysicalAddress()
     {
+        // Ported from the 2.0 branch. Production behavior differs from 2.0: ConvertToProvider now
+        // returns the underlying PhysicalAddress for every provider (including PostgreSQL) rather
+        // than a colon-separated string — Npgsql's macaddr handler binds from PhysicalAddress
+        // directly (see MacAddressConverter.cs remarks). Updated to assert the current contract.
         var converter = new MacAddressConverter();
         var mac = MacAddress.Parse("00:11:22:33:44:55");
 
@@ -76,6 +80,11 @@ public class AdvancedConvertersCoverageTests
     [Fact]
     public void IntervalYearMonthConverter_FormatsIso_ForOracle()
     {
+        // Ported from the 2.0 branch. Production behavior differs from 2.0: ConvertToProvider for
+        // Oracle now renders Oracle's native INTERVAL YEAR TO MONTH literal syntax (+YYYY-MM) rather
+        // than an ISO 8601 string (see IntervalYearMonthConverter.FormatOracle). ISO 8601 is still
+        // used for PostgreSQL/Spanner/CockroachDb, and FromProviderValue still parses ISO text
+        // regardless of provider, so the round-trip assertion below is unchanged.
         var converter = new IntervalYearMonthConverter();
         var interval = new IntervalYearMonth(2, 3);
 
@@ -91,6 +100,11 @@ public class AdvancedConvertersCoverageTests
     [Fact]
     public void IntervalDaySecondConverter_FormatsIso_ForOracle()
     {
+        // Ported from the 2.0 branch. Production behavior differs from 2.0: ConvertToProvider for
+        // Oracle now renders Oracle's native INTERVAL DAY TO SECOND literal syntax
+        // (+DDDDDDDDD HH:MM:SS.ffffff) rather than an ISO 8601 string (see
+        // IntervalDaySecondConverter.FormatOracle). FromProviderValue still parses ISO text
+        // regardless of provider, so the round-trip assertion below is unchanged.
         var converter = new IntervalDaySecondConverter();
         var interval = new IntervalDaySecond(1, new TimeSpan(2, 3, 4));
 

@@ -70,17 +70,6 @@ public class OracleDialectAdditionalTests
         return new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLogger<OracleDialect>.Instance);
     }
 
-    [Theory]
-    [InlineData(21, SqlStandardLevel.Sql2016)]
-    [InlineData(19, SqlStandardLevel.Sql2016)]
-    [InlineData(12, SqlStandardLevel.Sql2008)]
-    [InlineData(11, SqlStandardLevel.Sql2003)]
-    [InlineData(10, SqlStandardLevel.Sql99)]
-    public void DetermineStandardCompliance_ByMajor(int major, SqlStandardLevel expected)
-    {
-        var d = CreateDialect();
-        Assert.Equal(expected, d.DetermineStandardCompliance(new Version(major, 0)));
-    }
 
     [Fact]
     public void GetConnectionSessionSettings_DoesNotAppendReadOnly_ForOracle()

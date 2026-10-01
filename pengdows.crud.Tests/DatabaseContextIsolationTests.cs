@@ -1,11 +1,13 @@
 #region
 
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
+using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
-using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using Xunit;
 
@@ -19,8 +21,10 @@ public class DatabaseContextIsolationTests
     [InlineData(SupportedDatabase.SqlServer, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Snapshot)]
     [InlineData(SupportedDatabase.SqlServer, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.SqlServer, IsolationProfile.FastWithRisks, IsolationLevel.ReadUncommitted)]
+    [InlineData(SupportedDatabase.PostgreSql, IsolationProfile.SafeNonBlockingReads, IsolationLevel.RepeatableRead)]
     [InlineData(SupportedDatabase.PostgreSql, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.PostgreSql, IsolationProfile.FastWithRisks, IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.YugabyteDb, IsolationProfile.SafeNonBlockingReads, IsolationLevel.RepeatableRead)]
     [InlineData(SupportedDatabase.CockroachDb, IsolationProfile.StrictConsistency, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.CockroachDb, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Serializable)]
     [InlineData(SupportedDatabase.DuckDB, IsolationProfile.SafeNonBlockingReads, IsolationLevel.Serializable)]
@@ -99,6 +103,33 @@ public class DatabaseContextIsolationTests
         Assert.NotNull(tx);
     }
 
+    // CockroachDbDialect.GetSupportedIsolationLevels() returns only {Serializable}. This used to
+    // be masked for the native IsolationLevel overload by a hardcoded silent upgrade in
+    // TransactionContext's constructor (`if (context.Product == SupportedDatabase.CockroachDb)
+    // isolationLevel = IsolationLevel.Serializable`) — removed when IsolationResolver's
+    // per-database switches were replaced with dialect-owned data, so an unsupported native
+    // level is now rejected like any other database's unsupported level instead of silently
+    // substituted. Locks down that this is the actual, current, intentional behavior.
+    [Fact]
+    public void BeginTransaction_NativeIsolationLevel_CockroachDb_UnsupportedLevel_FailsUpToSerializable()
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.CockroachDb}",
+            new fakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
+
+        using var tx = context.BeginTransaction(IsolationLevel.ReadCommitted);
+        Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
+    }
+
+    [Fact]
+    public void BeginTransaction_NativeIsolationLevel_CockroachDb_Serializable_Succeeds()
+    {
+        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.CockroachDb}",
+            new fakeDbFactory(SupportedDatabase.CockroachDb.ToString()));
+
+        using var tx = context.BeginTransaction(IsolationLevel.Serializable);
+        Assert.NotNull(tx);
+    }
+
     [Fact]
     public void BeginTransaction_ProfileSupported_CockroachDb_And_DuckDB()
     {
@@ -141,5 +172,80 @@ public class DatabaseContextIsolationTests
         var supported = context.GetSupportedIsolationLevels();
 
         Assert.Equal(expectedSupported, supported.Contains(level));
+    }
+
+    [Fact]
+    public void BeginTransaction_StrictConsistency_NotDegradedOnSqlServer_DoesNotLogWarning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer.ToString());
+        var loggerFactory = new RecordingLoggerFactory();
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory, loggerFactory);
+
+        using var tx = context.BeginTransaction(IsolationProfile.StrictConsistency);
+
+        Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
+        Assert.DoesNotContain(loggerFactory.Entries, e =>
+            e.Level == LogLevel.Warning &&
+            e.Message.Contains("degraded", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private sealed class RecordingLoggerFactory : ILoggerFactory
+    {
+        public List<(LogLevel Level, string Message)> Entries { get; } = new();
+
+        public ILogger CreateLogger(string categoryName)
+        {
+            return new RecordingLogger(Entries);
+        }
+
+        public void AddProvider(ILoggerProvider provider)
+        {
+        }
+
+        public void Dispose()
+        {
+        }
+
+        private sealed class RecordingLogger : ILogger
+        {
+            private readonly List<(LogLevel Level, string Message)> _entries;
+
+            public RecordingLogger(List<(LogLevel Level, string Message)> entries)
+            {
+                _entries = entries;
+            }
+
+            public IDisposable BeginScope<TState>(TState state) where TState : notnull
+            {
+                return NoopDisposable.Instance;
+            }
+
+            public bool IsEnabled(LogLevel logLevel)
+            {
+                return true;
+            }
+
+            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception,
+                Func<TState, Exception?, string> formatter)
+            {
+                _entries.Add((logLevel, formatter(state, exception)));
+            }
+
+            private sealed class NoopDisposable : IDisposable
+            {
+                public static readonly NoopDisposable Instance = new();
+
+                public void Dispose()
+                {
+                }
+            }
+        }
     }
 }

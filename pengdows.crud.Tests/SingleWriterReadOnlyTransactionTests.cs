@@ -17,68 +17,7 @@ namespace pengdows.crud.Tests;
 
 public class SingleWriterReadOnlyTransactionTests
 {
-    private sealed class RecordingConnection : fakeDbConnection
-    {
-        public List<string> Commands { get; } = new();
-        public List<string> ConnectionStrings { get; } = new();
-
-        protected override DbCommand CreateDbCommand()
-        {
-            return new RecordingCommand(this, Commands);
-        }
-
-        [System.Diagnostics.CodeAnalysis.AllowNull]
-        public override string ConnectionString
-        {
-            get => base.ConnectionString;
-            set
-            {
-                var normalized = value ?? string.Empty;
-                ConnectionStrings.Add(normalized);
-                base.ConnectionString = normalized;
-            }
-        }
-    }
-
-    private sealed class RecordingCommand : fakeDbCommand
-    {
-        private readonly List<string> _commands;
-
-        public RecordingCommand(fakeDbConnection connection, List<string> commands) : base(connection)
-        {
-            _commands = commands;
-        }
-
-        public override int ExecuteNonQuery()
-        {
-            _commands.Add(CommandText);
-            return base.ExecuteNonQuery();
-        }
-    }
-
-    private sealed class RecordingFactory : DbProviderFactory
-    {
-        public List<RecordingConnection> Connections { get; } = new();
-
-        public override DbConnection CreateConnection()
-        {
-            var conn = new RecordingConnection();
-            Connections.Add(conn);
-            return conn;
-        }
-
-        public override DbCommand CreateCommand()
-        {
-            return new fakeDbCommand();
-        }
-
-        public override DbParameter CreateParameter()
-        {
-            return new fakeDbParameter();
-        }
-    }
-
-    private static DatabaseContext CreateContext(RecordingFactory factory)
+    private static DatabaseContext CreateContext(fakeDbFactory factory)
     {
         var config = new DatabaseContextConfiguration
         {
@@ -92,16 +31,16 @@ public class SingleWriterReadOnlyTransactionTests
     [Fact]
     public async Task ReadOnlyTransaction_AppliesReadOnlyPreamble()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateContext(factory);
 
         await using (ctx.BeginTransaction(executionType: ExecutionType.Read))
         {
         }
 
-        Assert.True(factory.Connections.Count >= 1);
+        Assert.True(factory.CreatedConnections.Count >= 1);
         // SQLite read-only is enforced via Mode=ReadOnly in the connection string, not PRAGMA query_only
-        var allConnectionStrings = factory.Connections.SelectMany(c => c.ConnectionStrings).ToList();
+        var allConnectionStrings = factory.CreatedConnections.SelectMany(c => c.ConnectionStringHistory).ToList();
         Assert.Contains(allConnectionStrings,
             cs => cs.Contains("Mode=ReadOnly", StringComparison.OrdinalIgnoreCase));
     }
@@ -109,14 +48,14 @@ public class SingleWriterReadOnlyTransactionTests
     [Fact]
     public async Task ReadWriteTransaction_UsesWriterConnection()
     {
-        var factory = new RecordingFactory();
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         await using var ctx = CreateContext(factory);
 
         await using (ctx.BeginTransaction(executionType: ExecutionType.Write))
         {
         }
 
-        Assert.True(factory.Connections.Count >= 1);
-        var writerConnection = factory.Connections.Last();
+        Assert.True(factory.CreatedConnections.Count >= 1);
+        var writerConnection = factory.CreatedConnections.Last();
     }
 }

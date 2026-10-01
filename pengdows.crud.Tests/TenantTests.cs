@@ -84,6 +84,72 @@ public class TenantTests
         }
     }
 
+    // Deterministically pauses inside Create() so a test can inject a race (Invalidate,
+    // registry Dispose) between the moment GetContext installs the Lazy and the moment its
+    // factory delegate actually completes.
+    private sealed class BlockingContextFactory : IDatabaseContextFactory
+    {
+        private readonly SemaphoreSlim _creationStarted;
+        private readonly SemaphoreSlim _proceedWithCreation;
+        private int _callCount;
+
+        public BlockingContextFactory(SemaphoreSlim creationStarted, SemaphoreSlim proceedWithCreation)
+        {
+            _creationStarted = creationStarted;
+            _proceedWithCreation = proceedWithCreation;
+        }
+
+        public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            // Only the first call blocks — a fixed implementation may retry and call this
+            // factory again after disposing an orphan, and a naive test double that blocks on
+            // every call would deadlock that (correct) retry forever on an already-consumed
+            // semaphore instead of exercising it.
+            if (Interlocked.Increment(ref _callCount) == 1)
+            {
+                _creationStarted.Release();
+                _proceedWithCreation.Wait();
+            }
+
+            return new DatabaseContext(configuration, factory, loggerFactory);
+        }
+    }
+
+    // TEST-008: like BlockingContextFactory, but blocks on a caller-chosen call number (not
+    // always the first) and exposes the observed call count — needed to force a genuine race
+    // specifically on a RECREATION after an initial, uneventful creation, rather than on the
+    // very first call ever made to the factory.
+    private sealed class BlockingOnNthCallContextFactory : IDatabaseContextFactory
+    {
+        private readonly int _blockOnCall;
+        private readonly SemaphoreSlim _creationStarted;
+        private readonly SemaphoreSlim _proceedWithCreation;
+        private int _callCount;
+
+        public int CallCount => Volatile.Read(ref _callCount);
+
+        public BlockingOnNthCallContextFactory(int blockOnCall, SemaphoreSlim creationStarted,
+            SemaphoreSlim proceedWithCreation)
+        {
+            _blockOnCall = blockOnCall;
+            _creationStarted = creationStarted;
+            _proceedWithCreation = proceedWithCreation;
+        }
+
+        public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+            ILoggerFactory loggerFactory)
+        {
+            if (Interlocked.Increment(ref _callCount) == _blockOnCall)
+            {
+                _creationStarted.Release();
+                _proceedWithCreation.Wait();
+            }
+
+            return new DatabaseContext(configuration, factory, loggerFactory);
+        }
+    }
+
     [Fact]
     public async Task TenantContextRegistry_ResolvesContextFromKeyedFactory()
     {

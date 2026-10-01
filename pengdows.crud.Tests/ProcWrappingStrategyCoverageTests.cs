@@ -16,7 +16,7 @@ namespace pengdows.crud.Tests;
 
 // ── ExecProcWrappingStrategy (SQL Server / Sybase) ─────────────────────────
 
-public sealed class ExecProcWrappingStrategyCoverageTests
+public sealed class ExecProcWrappingStrategyLegacyCoverageTests
 {
     private static readonly ExecProcWrappingStrategy Strategy = new();
 
@@ -61,7 +61,7 @@ public sealed class ExecProcWrappingStrategyCoverageTests
 
 // ── CallProcWrappingStrategy (MySQL / MariaDB / DB2) ─────────────────────
 
-public sealed class CallProcWrappingStrategyCoverageTests
+public sealed class CallProcWrappingStrategyLegacyCoverageTests
 {
     private static readonly CallProcWrappingStrategy Strategy = new();
 
@@ -98,7 +98,7 @@ public sealed class CallProcWrappingStrategyCoverageTests
 
 // ── OracleProcWrappingStrategy ─────────────────────────────────────────────
 
-public sealed class OracleProcWrappingStrategyCoverageTests
+public sealed class OracleProcWrappingStrategyLegacyCoverageTests
 {
     private static readonly OracleProcWrappingStrategy Strategy = new();
 
@@ -142,7 +142,7 @@ public sealed class OracleProcWrappingStrategyCoverageTests
 
 // ── ExecuteProcedureWrappingStrategy (Firebird) ──────────────────────────
 
-public sealed class ExecuteProcedureWrappingStrategyCoverageTests
+public sealed class ExecuteProcedureWrappingStrategyLegacyCoverageTests
 {
     private static readonly ExecuteProcedureWrappingStrategy Strategy = new();
 
@@ -193,7 +193,7 @@ public sealed class ExecuteProcedureWrappingStrategyCoverageTests
 
 // ── PostgresProcWrappingStrategy ──────────────────────────────────────────
 
-public sealed class PostgresProcWrappingStrategyCoverageTests
+public sealed class PostgresProcWrappingStrategyLegacyCoverageTests
 {
     private static readonly PostgresProcWrappingStrategy Strategy = new();
 
@@ -247,7 +247,7 @@ file class WpEntity
     [Column("name", DbType.String)] public string Name { get; set; } = string.Empty;
 }
 
-public sealed class SqlContainerWrapForStoredProcTests
+public sealed class SqlContainerWrapForStoredProcLegacyTests
 {
     private static DatabaseContext CreateContext(SupportedDatabase db) =>
         new($"Data Source=test;EmulatedProduct={db}", new fakeDbFactory(db));

@@ -306,7 +306,8 @@ public class TransactionContextTests
         bool throwOnCommit = false,
         bool throwOnRollback = false,
         bool isReadOnlyContext = false,
-        ISqlDialect? dialectOverride = null)
+        ISqlDialect? dialectOverride = null,
+        MetricsCollector? metricsCollector = null)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Unknown);
         var connection = new TrackedConnection(
@@ -316,7 +317,7 @@ public class TransactionContextTests
         var dialect = dialectOverride ??
                       new Sql92Dialect(factory, NullLogger<SqlDialect>.Instance);
 
-        return new TestDatabaseContext(connection, dialect, isReadOnlyContext);
+        return new TestDatabaseContext(connection, dialect, isReadOnlyContext, metricsCollector);
     }
 
     private sealed class TestDatabaseContext : IDatabaseContext, IInternalConnectionProvider,
@@ -328,10 +329,12 @@ public class TransactionContextTests
         private readonly TypeMapRegistry _typeMapRegistry = new();
         private readonly DatabaseMetrics _metrics;
         private readonly bool _isReadOnlyContext;
+        private readonly MetricsCollector? _metricsCollector;
         private bool _disposed;
         private EventHandler<DatabaseMetrics>? _metricsUpdated;
 
-        public TestDatabaseContext(ITrackedConnection connection, ISqlDialect dialect, bool isReadOnlyContext)
+        public TestDatabaseContext(ITrackedConnection connection, ISqlDialect dialect, bool isReadOnlyContext,
+            MetricsCollector? metricsCollector = null)
         {
             _connection = connection;
             _dialect = dialect;
@@ -339,6 +342,7 @@ public class TransactionContextTests
             _dataSourceInfo = new DataSourceInformation(_dialect);
             _metrics = BuildEmptyMetrics();
             _isReadOnlyContext = isReadOnlyContext;
+            _metricsCollector = metricsCollector;
         }
 
         public bool ConnectionReleased { get; private set; }
@@ -529,11 +533,11 @@ public class TransactionContextTests
 
         MetricsCollector? IMetricsCollectorAccessor.MetricsCollector => null;
 
-        MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => null;
+        MetricsCollector? IMetricsCollectorAccessor.ReadMetricsCollector => _metricsCollector;
 
-        MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => null;
+        MetricsCollector? IMetricsCollectorAccessor.WriteMetricsCollector => _metricsCollector;
 
-        MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType) => null;
+        MetricsCollector? IMetricsCollectorAccessor.GetMetricsCollector(ExecutionType executionType) => _metricsCollector;
 
         public ITypeMapRegistry TypeMapRegistry => _typeMapRegistry;
 
@@ -558,16 +562,17 @@ public class TransactionContextTests
         {
         }
 
+        public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
+        {
+            throw new InvalidOperationException("Simulated read-only session configuration failure.");
+        }
+
         public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
             CancellationToken cancellationToken = default)
         {
             throw new InvalidOperationException("Simulated read-only session configuration failure.");
         }
 
-        public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
-        {
-            throw new InvalidOperationException("Simulated read-only session configuration failure.");
-        }
     }
 
     private sealed class ThrowingConnection : fakeDbConnection
@@ -988,6 +993,54 @@ public class TransactionContextTests
         Assert.True(e1 is null ^ e2 is null);
         Assert.IsType<InvalidOperationException>(e1 ?? e2!);
         Assert.Equal(1, strategy.ReleaseCount);
+    }
+
+    // TEST-013: a cancellation observed before CompleteTransactionWithWaitAsync's completion
+    // lock is even acquired must leave the transaction fully untouched — _completedState never
+    // flips, neither Commit nor Rollback's action ever runs, and OperationCanceledException
+    // propagates as-is (never wrapped — see CLAUDE.md's exception hierarchy notes). This proves
+    // a caller who catches the cancellation and retries with a fresh token gets a transaction
+    // that behaves exactly as if the cancelled call never happened, not a corrupted half-state.
+    [Fact]
+    public async Task CommitAsync_WithAlreadyCancelledToken_LeavesTransactionFullyUntouched_ThenCommitSucceeds()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => tx.CommitAsync(cts.Token).AsTask());
+
+        Assert.False(tx.WasCommitted);
+        Assert.False(tx.WasRolledBack);
+        Assert.False(tx.IsCompleted);
+
+        // The transaction must still be fully usable — a subsequent, non-cancelled commit
+        // succeeds normally, proving the cancelled attempt left no residual state behind.
+        tx.Commit();
+        Assert.True(tx.WasCommitted);
+    }
+
+    [Fact]
+    public async Task RollbackAsync_WithAlreadyCancelledToken_LeavesTransactionFullyUntouched_ThenRollbackSucceeds()
+    {
+        var context = CreateContext(SupportedDatabase.Sqlite);
+        using var tx = context.BeginTransaction();
+
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(
+            () => tx.RollbackAsync(cts.Token).AsTask());
+
+        Assert.False(tx.WasCommitted);
+        Assert.False(tx.WasRolledBack);
+        Assert.False(tx.IsCompleted);
+
+        tx.Rollback();
+        Assert.True(tx.WasRolledBack);
     }
 
     [Fact]

@@ -4,7 +4,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class NuGetRestoreHygieneTests
+public class NuGetRestoreHygieneLegacyTests
 {
     [Fact]
     public void RepoContainsTrackedLocalArtifactsPackageSourceDirectory()

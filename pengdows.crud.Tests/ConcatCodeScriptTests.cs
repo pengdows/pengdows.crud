@@ -5,7 +5,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class ConcatCodeScriptTests
+public class ConcatCodeScriptLegacyTests
 {
     [Fact]
     public void ConcatCodeScript_RestrictsExtensionsToCsAndXml()

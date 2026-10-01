@@ -292,6 +292,10 @@ public sealed class PatchCoverageRegressionTests
 
     private static TransactionContext CreateSyntheticTransactionContext(DatabaseContext context)
     {
+        // 3.0 added a 7th constructor parameter (singleConnectionTransactionGate, an ILockerAsync)
+        // vs. the 2.0 branch's 6-parameter signature — already acquired by the static creation
+        // path in production; a no-op locker is correct here since this synthetic instance
+        // bypasses that path entirely.
         var ctor = typeof(TransactionContext).GetConstructor(
             AnyInstance,
             null,

@@ -4,7 +4,9 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class BuildPackagesScriptTests
+// Ported from the 2.0 (backport/multitenancy-lease-fixes) branch. Renamed to avoid a class-name
+// collision with the existing, more comprehensive hygiene/BuildPackagesScriptTests.cs in this branch.
+public class BuildPackagesScriptLegacyTests
 {
     [Fact]
     public void BuildScript_ListsAllRequiredPackages()

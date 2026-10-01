@@ -56,31 +56,12 @@ public class CoercionRegistryAndMiscEdgeCaseTests
         Assert.Null(value);
     }
 
-    [Fact]
-    public void CoercionRegistry_ProviderSpecific_PrefersOverGeneral()
-    {
-        var registry = new CoercionRegistry();
-
-        // Register a general coercion and a provider-specific one
-        var generalCoercion = new TestCoercion("general");
-        var providerCoercion = new TestCoercion("provider");
-
-        registry.Register<TestRegisteredType>(generalCoercion);
-        registry.Register<TestRegisteredType>(SupportedDatabase.PostgreSql, providerCoercion);
-
-        // Without provider, gets general
-        var general = registry.GetCoercion(typeof(TestRegisteredType));
-        Assert.NotNull(general);
-
-        // With provider, gets provider-specific
-        var specific = registry.GetCoercion(typeof(TestRegisteredType), SupportedDatabase.PostgreSql);
-        Assert.NotNull(specific);
-        Assert.NotSame(general, specific);
-
-        // With a different provider, falls back to general
-        var fallback = registry.GetCoercion(typeof(TestRegisteredType), SupportedDatabase.MySql);
-        Assert.Same(general, fallback);
-    }
+    // CoercionRegistry_ProviderSpecific_PrefersOverGeneral removed along with the feature it
+    // tested: CoercionRegistry's provider-specific Register<T>(SupportedDatabase, IDbCoercion<T>)
+    // overload had zero production callers anywhere in the codebase — nothing ever populated it
+    // to configure real per-database behavior, only this one test exercised the mechanism itself
+    // in isolation. Per-provider coercion variation is handled by AdvancedTypeRegistry's
+    // RegisterMapping<T> system instead, which runs before CoercionRegistry is ever consulted.
 
     [Fact]
     public void CoercionRegistry_TryRead_RegisteredType_Succeeds()
@@ -479,35 +460,6 @@ public class CoercionRegistryAndMiscEdgeCaseTests
 
     private class UnregisteredType
     {
-    }
-
-    private struct TestRegisteredType
-    {
-    }
-
-    /// <summary>
-    /// Test coercion for verifying provider-specific preference.
-    /// </summary>
-    private class TestCoercion : DbCoercion<TestRegisteredType>
-    {
-        private readonly string _name;
-
-        public TestCoercion(string name)
-        {
-            _name = name;
-        }
-
-        public override bool TryRead(in DbValue src, out TestRegisteredType value)
-        {
-            value = default;
-            return !src.IsNull;
-        }
-
-        public override bool TryWrite(TestRegisteredType value, System.Data.Common.DbParameter parameter)
-        {
-            parameter.Value = _name;
-            return true;
-        }
     }
 
     /// <summary>

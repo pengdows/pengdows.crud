@@ -80,42 +80,11 @@ public class CoveragePush_DialectMissingPathsTests
         Assert.Contains("ConnectionReset", result, StringComparison.OrdinalIgnoreCase);
     }
 
-    // =========================================================================
-    // MySqlDialect — DetermineStandardCompliance version branches (lines 337-340)
-    // =========================================================================
-
-    [Fact]
-    public void MySql_DetermineStandardCompliance_Version6_ReturnsSql2003()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.MySql);
-        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
-
-        // Line 337: >= 6 → Sql2003
-        var result = dialect.DetermineStandardCompliance(new Version(6, 0, 0));
-        Assert.Equal(SqlStandardLevel.Sql2003, result);
-    }
-
-    [Fact]
-    public void MySql_DetermineStandardCompliance_Version5_ReturnsSql99()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.MySql);
-        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
-
-        // Line 338: >= 5 → Sql99
-        var result = dialect.DetermineStandardCompliance(new Version(5, 7, 0));
-        Assert.Equal(SqlStandardLevel.Sql99, result);
-    }
-
-    [Fact]
-    public void MySql_DetermineStandardCompliance_OldVersion_ReturnsSql92()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.MySql);
-        var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
-
-        // Line 339: _ → Sql92
-        var result = dialect.DetermineStandardCompliance(new Version(4, 0, 0));
-        Assert.Equal(SqlStandardLevel.Sql92, result);
-    }
+    // MySql_DetermineStandardCompliance_* (3 tests) dropped when porting from the 2.0 branch:
+    // MySqlDialect.DetermineStandardCompliance / SqlStandardLevel do not exist anywhere in this
+    // branch's production code — the standard-compliance-level concept was removed entirely (see
+    // SqlDialect.cs / IDatabaseProductInfo.cs; also noted against SqlDialectAdditionalCoverageTests.cs
+    // and the skipped SqlStandardComplianceTests.cs/SqlStandardLevelTests.cs).
 
     // =========================================================================
     // MySqlDialect — TryEnterReadOnlyTransactionAsync (line 369)

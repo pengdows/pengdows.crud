@@ -128,6 +128,31 @@ public class DbModeCoercionLoggingTests
     }
 
     [Fact]
+    public void TiDb_BestMode_AutoSelectsStandard_WithFullServerReason()
+    {
+        // Regression: TiDb (and every other distributed/cloud variant not on the old hardcoded
+        // "full server" case list) used to fall to CoerceMode's `default` branch and get the
+        // misleading "Unknown provider: Best defaults to Standard" info message even though it's
+        // a fully-supported client-server database. Now that the default branch asks the dialect
+        // (ISqlDialect.IsClientServerDatabase), it reports "Full server" instead — same fix
+        // already applied for Db2, generalized so it doesn't need a per-database case anymore.
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=TiDb",
+            ProviderName = SupportedDatabase.TiDb.ToString(),
+            DbMode = DbMode.Best
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.TiDb), lf);
+        Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Full server: Best selects Standard"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Unknown provider"));
+    }
+
+    [Fact]
     public void SqliteFile_StandardMode_CoercesToSingleWriter_WithWarning()
     {
         var provider = new ListLoggerProvider();
@@ -205,6 +230,44 @@ public class DbModeCoercionLoggingTests
             e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 
+
+    [Fact]
+    public void FirebirdClientServer_BestMode_SelectsPreventDatabaseUnload_SameAsEmbedded()
+    {
+        // CoerceMode makes no embedded-vs-client-server distinction for Firebird: Best selects
+        // PreventDatabaseUnload for both (see FirebirdEmbedded_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo).
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=localhost;Database=test;EmulatedProduct=Firebird",
+            ProviderName = SupportedDatabase.Firebird.ToString(),
+            DbMode = DbMode.Best
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
+        Assert.Equal(DbMode.PreventDatabaseUnload, ctx.ConnectionMode);
+        Assert.Contains(provider.Entries,
+            e => e.Level == LogLevel.Information && e.Message.Contains("Best selects PreventDatabaseUnload"));
+        Assert.DoesNotContain(provider.Entries,
+            e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+    }
+
+    [Fact]
+    public void SqliteIsolatedMemory_KeepAliveMode_CoercesToSingleConnection_WithWarning()
+    {
+        var provider = new ListLoggerProvider();
+        using var lf = new LoggerFactory(new[] { provider });
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            DbMode = DbMode.KeepAlive
+        };
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), lf);
+        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
+        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
+    }
+
     [Fact]
     public void FirebirdEmbedded_BestMode_AutoSelectsPreventDatabaseUnload_WithInfo()
     {
@@ -243,21 +306,5 @@ public class DbModeCoercionLoggingTests
         using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Firebird), lf);
         Assert.Equal(DbMode.Standard, ctx.ConnectionMode);
         Assert.DoesNotContain(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
-    }
-
-    [Fact]
-    public void SqliteIsolatedMemory_KeepAliveMode_CoercesToSingleConnection_WithWarning()
-    {
-        var provider = new ListLoggerProvider();
-        using var lf = new LoggerFactory(new[] { provider });
-        var cfg = new DatabaseContextConfiguration
-        {
-            ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite",
-            ProviderName = SupportedDatabase.Sqlite.ToString(),
-            DbMode = DbMode.KeepAlive
-        };
-        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite), lf);
-        Assert.Equal(DbMode.SingleConnection, ctx.ConnectionMode);
-        Assert.Contains(provider.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("DbMode override"));
     }
 }

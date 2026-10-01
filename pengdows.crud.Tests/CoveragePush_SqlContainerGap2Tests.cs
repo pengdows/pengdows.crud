@@ -91,6 +91,13 @@ public class CoveragePush_SqlContainerGap2Tests : SqlLiteContextTestBase
         Assert.Equal(DbErrorCategory.Unknown, CallClassifyTranslatedException(ex));
     }
 
+    [Fact]
+    public void ClassifyTranslatedException_AmbiguousResultException_ReturnsAmbiguousResult()
+    {
+        var ex = new AmbiguousResultException("ambiguous", SupportedDatabase.CockroachDb);
+        Assert.Equal(DbErrorCategory.AmbiguousResult, CallClassifyTranslatedException(ex));
+    }
+
     // =========================================================================
     // TicksToMicroseconds with zero/negative (line 1930)
     // =========================================================================
@@ -113,10 +120,4 @@ public class CoveragePush_SqlContainerGap2Tests : SqlLiteContextTestBase
         Assert.Equal(0d, CallSqlContainerTicksToMicroseconds(-100L));
     }
 
-    [Fact]
-    public void ClassifyTranslatedException_AmbiguousResultException_ReturnsAmbiguousResult()
-    {
-        var ex = new AmbiguousResultException("ambiguous", SupportedDatabase.CockroachDb);
-        Assert.Equal(DbErrorCategory.AmbiguousResult, CallClassifyTranslatedException(ex));
-    }
 }

@@ -20,6 +20,15 @@ public class CockroachDbDialectTests
         new(new fakeDbFactory(SupportedDatabase.CockroachDb), NullLogger.Instance);
 
     [Fact]
+    public void SupportsUserDefinedTypes_IsTrue()
+    {
+        // Unlike xml, CockroachDB does support CREATE TYPE composite types - confirmed live
+        // (`CREATE TYPE my_udt AS (a int, b text)` succeeded). Correctly inherited from
+        // PostgreSqlDialect with no override needed.
+        Assert.True(CreateDialect().SupportsUserDefinedTypes);
+    }
+
+    [Fact]
     public void PrepareConnectionStringForDataSource_BakesBasePostgreSqlSettings()
     {
         var dialect = CreateDialect();
@@ -125,4 +134,5 @@ public class CockroachDbDialectTests
         Assert.Contains("RETURNING", result, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("\"Id\"", result);
     }
+
 }

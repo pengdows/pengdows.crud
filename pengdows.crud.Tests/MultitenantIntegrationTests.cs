@@ -15,7 +15,7 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 [Table("Users")]
-public class User
+public class MultitenantIntegrationUser
 {
     [Id][Column("Id", DbType.Int32)] public int Id { get; set; }
 
@@ -34,7 +34,7 @@ public class User
     public int Version { get; set; }
 }
 
-public class AuditValueResolver : IAuditValueResolver
+public class MultitenantIntegrationAuditValueResolver : IAuditValueResolver
 {
     public IAuditValues Resolve()
     {

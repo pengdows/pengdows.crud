@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types;
 using pengdows.crud.types.converters;
@@ -159,7 +160,7 @@ public class JsonDocumentConverterTests
     {
         var registry = new AdvancedTypeRegistry(includeDefaults: true);
         var doc = JsonDocument.Parse("{\"hello\":\"world\"}");
-        var param = new TestDbParameter();
+        var param = new fakeDbParameter();
 
         var result = registry.TryConfigureParameter(param, typeof(JsonDocument), doc,
             SupportedDatabase.PostgreSql);
@@ -171,38 +172,4 @@ public class JsonDocumentConverterTests
         doc.Dispose();
     }
 
-    private class TestDbParameter : DbParameter
-    {
-        public override DbType DbType { get; set; }
-        public override ParameterDirection Direction { get; set; }
-        public override bool IsNullable { get; set; }
-
-        [AllowNull]
-        public override string ParameterName
-        {
-            get => _parameterName;
-            set => _parameterName = value ?? string.Empty;
-        }
-
-        private string _parameterName = string.Empty;
-
-        public override int Size { get; set; }
-
-        [AllowNull]
-        public override string SourceColumn
-        {
-            get => _sourceColumn;
-            set => _sourceColumn = value ?? string.Empty;
-        }
-
-        private string _sourceColumn = string.Empty;
-
-        public override bool SourceColumnNullMapping { get; set; }
-        [AllowNull] public override object Value { get; set; } = DBNull.Value;
-
-        public override void ResetDbType()
-        {
-            DbType = DbType.Object;
-        }
-    }
 }

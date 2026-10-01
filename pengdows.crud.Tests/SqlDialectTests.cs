@@ -8,6 +8,7 @@ using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
+using pengdows.crud.types.valueobjects;
 using Xunit;
 
 namespace pengdows.crud.Tests;

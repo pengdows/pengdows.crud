@@ -51,7 +51,11 @@ public class MinPoolSizeBehaviorTests
 
     /// <summary>
     /// Tests that full server databases HONOR explicit KeepAlive mode (users can force it for testing)
-    /// Even though Standard is more functional, KeepAlive can be forced
+    /// Even though Standard is more functional, KeepAlive can be forced.
+    /// KeepAlive is a compatibility alias for PreventDatabaseUnload (same underlying enum value):
+    /// its sentinel permanently occupies one governor slot, so the provider pool needs a minimum
+    /// of 2 to guarantee capacity for both the sentinel and ordinary work — see
+    /// PreventDatabaseUnloadTests for the equivalent assertion under the non-obsolete name.
     /// </summary>
     [Theory]
     [InlineData(SupportedDatabase.SqlServer)]
