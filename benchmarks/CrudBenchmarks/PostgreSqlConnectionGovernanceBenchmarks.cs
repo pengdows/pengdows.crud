@@ -18,21 +18,33 @@ namespace CrudBenchmarks;
 /// server's max_connections limit — and how StormGate prevents the crash.
 ///
 /// The postgres container is started with max_connections=25.
-/// All benchmarks run 200 operations at 100-way parallelism — 4× the server limit.
+/// All benchmarks run 200 operations at 100-way parallelism — 4× the server limit,
+/// repeated across (WarmupCount=1 + IterationCount=3) × InvocationCount=5 = 20
+/// invocations per method, for 4,000 attempted operations per method per run.
 ///
-/// Without a connection governor:
+/// Without a connection governor, Dapper and EF Core fail for TWO DIFFERENT REASONS —
+/// confirmed against the raw correctness-fragment JSON on 2026-08-27, not assumed:
 ///   - Dapper: the Npgsql pool (max 100) attempts to open 100 physical connections.
-///     PostgreSQL rejects any beyond 25 with error 53300 "sorry, too many clients already".
-///     Result: immediate exception storm → benchmark fails → NA.
-///   - EF Core: same pool behaviour, same crash.
+///     PostgreSQL itself rejects any beyond 25 with SQLSTATE 53300 "sorry, too many
+///     clients already" — a hard, server-side PostgresException. Measured: 1,950/4,000
+///     (48.75%) failed this way. This is not tunable from the client; it's the server's
+///     own admission limit being hit directly.
+///   - EF Core: fails earlier and differently — its own Npgsql pool throws a CLIENT-side
+///     InvalidOperationException (pool timeout waiting for an available connection) before
+///     most attempts even reach the server. Measured: 2,158/4,000 (53.95%) failed this way.
+///     This IS tunable (Npgsql's pool `Timeout`/`Connection Idle Lifetime`), so it is a
+///     softer, configuration-dependent failure mode, not proof of the same server rejection
+///     Dapper hits. Do not describe these as "the same crash."
 ///
 /// With StormGate (20 permits, well below the server's 25-connection limit):
 ///   - At most 20 concurrent connection opens ever reach the server.
 ///   - The remaining 80 concurrent tasks wait in the semaphore queue.
-///   - Zero rejected connections, zero errors, measured throughput with latency numbers.
+///   - Measured: 0/4,000 failures for Dapper_StormGate.
 ///
-/// The message: one NuGet package and three lines of setup is the difference
-/// between "crashes under load" and "queues and completes".
+/// The headline number is the failure count going to zero (1,950 → 0, 2,158 → 0), not a
+/// derived "Nx faster" ratio — Dapper_Uncontrolled's raw mean latency is inflated by the
+/// cost of throwing/catching a PostgresException on roughly half of all attempts, so a
+/// mean-latency ratio against it overstates StormGate's real per-query speedup.
 /// </summary>
 [OptInBenchmark]
 [MemoryDiagnoser]
@@ -44,6 +56,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private const string FrameworkEntityFramework = "EntityFramework";
     private const string ScenarioUncontrolled = "Uncontrolled";
     private const string ScenarioGoverned = "Governed";
+    private const string ScenarioGovernedEf = "GovernedEf";
     private const int PgMaxConnections = 25;   // deliberately low — below default Npgsql pool max
     private const int StormGatePermits = 20;   // well under server limit; tasks queue, not crash
     private const int Parallelism = 100;       // 4× the server limit — enough to saturate it
@@ -67,6 +80,14 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private string _querySql = null!;
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
     private readonly ConcurrentBag<long> _stormGateLatencyTicks = new();
+    private readonly ConcurrentBag<long> _efStormGateLatencyTicks = new();
+
+    // Total attempted operations across every invocation/iteration in THIS process (one
+    // process per [Benchmark] method). Written into the correctness fragment's metadata so
+    // the denominator behind a failure count is a recorded fact, not something inferred from
+    // BenchmarkDotNet job config after the fact (that inference was needed once already —
+    // see benchmarks/CrudBenchmarks/results — and shouldn't be needed again).
+    private long _attempted;
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -113,10 +134,12 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     // Expected result: NA (exception storm from 53300 "too many clients already").
 
     [Benchmark]
+    [CorrectnessIdentity(FrameworkDapper, ScenarioUncontrolled)]
     public async Task Dapper_Uncontrolled()
     {
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
+            Interlocked.Increment(ref _attempted);
             await using var conn = await _dapperDataSource.OpenConnectionAsync();
             var item = await conn.QueryFirstOrDefaultAsync<GovItem>(_querySql);
             if (item == null)
@@ -132,10 +155,12 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     // Expected result: succeeds with measured throughput.
 
     [Benchmark(Baseline = true)]
+    [CorrectnessIdentity(FrameworkStormGate, ScenarioGoverned)]
     public async Task Dapper_StormGate()
     {
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
+            Interlocked.Increment(ref _attempted);
             var stopwatch = Stopwatch.StartNew();
             await using var conn = await _stormGate.OpenAsync();
             var item = await conn.QueryFirstOrDefaultAsync<GovItem>(_querySql);
@@ -154,10 +179,12 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     // Expected result: NA (same 53300 crash).
 
     [Benchmark]
+    [CorrectnessIdentity(FrameworkEntityFramework, ScenarioUncontrolled)]
     public async Task EF_Uncontrolled()
     {
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
+            Interlocked.Increment(ref _attempted);
             await using var ctx = new GovEfDbContext(_efOptions);
             var item = await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync();
             if (item == null)
@@ -165,6 +192,35 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
                 MarkInvalid(ScenarioUncontrolled, FrameworkEntityFramework, "Query returned null");
             }
         }, ex => MarkInvalid(ScenarioUncontrolled, FrameworkEntityFramework, $"Exception: {ex.GetType().Name}"));
+    }
+
+    // ── EF Core + StormGate ───────────────────────────────────────────────────
+    // Completes the 2x2 matrix (Dapper/EF x Uncontrolled/Governed). Routes EF through a
+    // StormGate-issued DbConnection via UseNpgsql(DbConnection) instead of letting EF manage
+    // its own Npgsql pool, so the same 20-permit admission limit applies to EF as to Dapper.
+    // Expected result: succeeds with measured throughput, same as Dapper_StormGate.
+
+    [Benchmark]
+    [CorrectnessIdentity(FrameworkStormGate, ScenarioGovernedEf)]
+    public async Task EF_StormGate()
+    {
+        await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
+        {
+            Interlocked.Increment(ref _attempted);
+            var stopwatch = Stopwatch.StartNew();
+            await using var conn = await _stormGate.OpenAsync();
+            var options = new DbContextOptionsBuilder<GovEfDbContext>()
+                .UseNpgsql(conn)
+                .Options;
+            await using var ctx = new GovEfDbContext(options);
+            var item = await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync();
+            stopwatch.Stop();
+            _efStormGateLatencyTicks.Add(stopwatch.ElapsedTicks);
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGovernedEf, FrameworkStormGate, "Query returned null");
+            }
+        }, ex => MarkInvalid(ScenarioGovernedEf, FrameworkStormGate, $"Exception: {ex.GetType().Name}"));
     }
 
     // ── Setup helpers ─────────────────────────────────────────────────────────
@@ -214,7 +270,9 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
                     pair.Key.Framework,
                     pair.Key.Reason,
                     pair.Value))
-                .ToArray());
+                .ToArray(),
+            Interlocked.Read(ref _attempted));
+        Console.WriteLine($"[GOV] process {Environment.ProcessId} attempted {Interlocked.Read(ref _attempted)} operations");
         WriteLatencySidecar();
 
         _stormGate.Dispose();
@@ -253,15 +311,16 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             return sorted[Math.Max(0, Math.Min(idx, sorted.Length - 1))];
         }
 
-        var stormGateFailureCount = _correctnessIssues
-            .Where(kvp => kvp.Key.Framework == FrameworkStormGate)
-            .Sum(kvp => kvp.Value);
-        var dapperFailureCount = _correctnessIssues
-            .Where(kvp => kvp.Key.Framework == FrameworkDapper)
-            .Sum(kvp => kvp.Value);
-        var efFailureCount = _correctnessIssues
-            .Where(kvp => kvp.Key.Framework == FrameworkEntityFramework)
-            .Sum(kvp => kvp.Value);
+        var efStormGateTicks = _efStormGateLatencyTicks.ToArray();
+        Array.Sort(efStormGateTicks);
+
+        // Each process runs exactly one [Benchmark] method, so _attempted and every entry in
+        // _correctnessIssues here belong to that single method's own (scenario, framework) —
+        // this is a per-process snapshot, not a merged view. The merged, cross-process view
+        // lives in the correctness-fragments/*.json files (see BenchmarkCorrectnessArtifacts).
+        var attempted = Interlocked.Read(ref _attempted);
+        var failedThisProcess = _correctnessIssues.Sum(kvp => (long)kvp.Value);
+        var failureRate = attempted == 0 ? 0.0 : (double)failedThisProcess / attempted * 100.0;
 
         var sb = new StringBuilder();
         sb.AppendLine("# PostgreSqlConnectionGovernanceBenchmarks — Governed Latency");
@@ -271,6 +330,17 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         sb.AppendLine($"Parallelism: {Parallelism}");
         sb.AppendLine($"Operations per run: {OperationsPerRun}");
         sb.AppendLine();
+        sb.AppendLine("## This process");
+        sb.AppendLine();
+        sb.AppendLine($"Attempted: {attempted}");
+        sb.AppendLine($"Failed: {failedThisProcess} ({failureRate:F2}%)");
+        sb.AppendLine();
+        sb.AppendLine("Note: each [Benchmark] method runs in its own process (BenchmarkDotNet's "
+            + "out-of-process toolchain), so this file only ever reflects ONE method per run. "
+            + "For the merged, all-methods view, read correctness-fragments/*.json directly.");
+        sb.AppendLine();
+        sb.AppendLine("## Dapper_StormGate latency (this process, if it ran here)");
+        sb.AppendLine();
         sb.AppendLine("| Metric | Value |");
         sb.AppendLine("|--------|-------|");
         sb.AppendLine($"| P50 | {TicksToMs(Percentile(ticks, 50)):F3} ms |");
@@ -278,15 +348,27 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         sb.AppendLine($"| P99 | {TicksToMs(Percentile(ticks, 99)):F3} ms |");
         sb.AppendLine($"| Max | {(ticks.Length == 0 ? 0 : TicksToMs(ticks[^1])):F3} ms |");
         sb.AppendLine();
-        sb.AppendLine($"StormGate failure count: {stormGateFailureCount}");
-        sb.AppendLine($"Dapper uncontrolled failure count: {dapperFailureCount}");
-        sb.AppendLine($"EF uncontrolled failure count: {efFailureCount}");
+        sb.AppendLine("## EF_StormGate latency (this process, if it ran here)");
+        sb.AppendLine();
+        sb.AppendLine("| Metric | Value |");
+        sb.AppendLine("|--------|-------|");
+        sb.AppendLine($"| P50 | {TicksToMs(Percentile(efStormGateTicks, 50)):F3} ms |");
+        sb.AppendLine($"| P95 | {TicksToMs(Percentile(efStormGateTicks, 95)):F3} ms |");
+        sb.AppendLine($"| P99 | {TicksToMs(Percentile(efStormGateTicks, 99)):F3} ms |");
+        sb.AppendLine($"| Max | {(efStormGateTicks.Length == 0 ? 0 : TicksToMs(efStormGateTicks[^1])):F3} ms |");
 
         try
         {
-            var dir = Path.Combine("BenchmarkDotNet.Artifacts", "results");
+            // Same durability fix as BenchmarkMetricsWriter/BenchmarkCorrectnessArtifacts: the
+            // out-of-process toolchain's CWD is a generated directory BenchmarkDotNet deletes
+            // during its own cleanup, so a relative path here is unrecoverable. This file was
+            // confirmed missing entirely after the 2026-08-27 run for exactly this reason.
+            var dir = Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
+                ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, $"{nameof(PostgreSqlConnectionGovernanceBenchmarks)}-latency.md");
+            // Per-process file name (like the correctness fragments) — a shared name would
+            // have the same last-process-wins overwrite bug already fixed for correctness data.
+            var path = Path.Combine(dir, $"{nameof(PostgreSqlConnectionGovernanceBenchmarks)}-{Environment.ProcessId}-latency.md");
             File.WriteAllText(path, sb.ToString());
             Console.WriteLine($"[PostgreSqlConnectionGovernanceBenchmarks] Wrote {path}");
         }

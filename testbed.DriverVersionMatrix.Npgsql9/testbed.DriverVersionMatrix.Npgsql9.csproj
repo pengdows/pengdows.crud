@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+    </PropertyGroup>
+
+    <!--
+      FEAT-008 (docs/planning/future-work.md): verifies PostgreSqlDialect.cs's
+      PrepareParameterValue comment ("Npgsql 6+ requires DateTimeOffset to be UTC when writing to
+      timestamptz") against 9.0.3 — the same version testbed/pengdows.crud.Tests already depend
+      on, representing the "6+" side of the claimed boundary. Sibling of
+      testbed.DriverVersionMatrix.Npgsql5, which pins the last 5.x release, 5.0.18, for the
+      pre-"6+" side. One project can't reference two versions of the same NuGet package.
+    -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0"/>
+        <PackageReference Include="Npgsql" Version="9.0.3"/>
+        <PackageReference Include="Testcontainers" Version="4.4.0"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="coverlet.collector" Version="6.0.4">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
+</Project>

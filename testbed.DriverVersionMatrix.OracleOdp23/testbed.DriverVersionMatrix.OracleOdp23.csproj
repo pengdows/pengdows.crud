@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+    </PropertyGroup>
+
+    <!--
+      FEAT-008 (docs/planning/future-work.md): verifies OracleDialect.cs's DbType.Guid rejection
+      claim against the newest 23.x Oracle.ManagedDataAccess.Core release, 23.26.300. No live
+      database needed — OracleParameter.DbType's setter rejects DbType.Guid client-side,
+      immediately, no connection required. Sibling of testbed.DriverVersionMatrix.OracleOdp321,
+      which pins the oldest tested 21c-line release (packaged as 3.21.x), confirming this is a
+      driver-version-independent fact, not "23.x"-specific as originally documented. One project
+      can't reference two versions of the same NuGet package. (The DbType.Boolean half of the
+      original claim turned out to be a server-version story, not a driver-version one — see
+      OracleGuidDbTypeTests.cs's header comment and testbed's Oracle test provider.)
+    -->
+    <ItemGroup>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0"/>
+        <PackageReference Include="Oracle.ManagedDataAccess.Core" Version="23.26.300"/>
+        <PackageReference Include="xunit" Version="2.9.3"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+        <PackageReference Include="coverlet.collector" Version="6.0.4">
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+            <PrivateAssets>all</PrivateAssets>
+        </PackageReference>
+    </ItemGroup>
+
+</Project>

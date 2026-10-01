@@ -95,11 +95,17 @@ dotnet run -c Release -- --job long   # More iterations, more accurate
 - **CloningPerformanceTest**: SqlContainer cloning vs traditional approach
 - **WeirdTypeCoercionBenchmarks**: Edge case type conversions
 
+### SQLite (In-Memory / File)
+
+- **HydrationHotPathBenchmarks**: Pure row materialization hot-path comparison (100, 1,000, 5,000 rows) isolating mapping speed from connection acquisition
+- **SQLiteWriteContentionBenchmarks**: Concurrency resilience benchmark stressing 100 concurrent writers under aggressive `busy_timeout=10ms` locks
+
 ### SQL Server Required (Testcontainers - automatic)
 
 - **IndexedViewBenchmarks**: Indexed view performance
 - **AutomaticViewMatchingBenchmarks**: SQL Server query optimizer view matching
 - **SqlServerBenchmarks**: SQL Server specific features
+- **SqlServerHydrationHotPathBenchmarks**: Network row hydration performance against SQL Server 2022
 - **MaterializedViewBenchmarks**: Materialized view patterns
 
 ### PostgreSQL Required (Testcontainers - automatic)
@@ -122,6 +128,8 @@ dotnet run -c Release -- --job long   # More iterations, more accurate
 
 ## Notable Benchmarks
 
+- **HydrationHotPathBenchmarks**: Pure row hydration throughput on SQLite, excluding connection acquisition (~35–36% faster than Dapper, ~50% lower allocations — see [results/hydration-hotpath-run-2026-08-13.md](./results/hydration-hotpath-run-2026-08-13.md); does not generalize to SQL Server, see [results/sqlserver-hydration-hotpath-run-2026-08-13.md](./results/sqlserver-hydration-hotpath-run-2026-08-13.md))
+- **SQLiteWriteContentionBenchmarks**: 100-writer lock contention resilience (0 lock exceptions under SingleWriter turnstile vs 268 in Dapper and 348 in EF Core)
 - **PagilaBenchmarks**: Basic CRUD operations vs Dapper/EF using PostgreSQL
 - **IndexedViewBenchmarks**: Demonstrates pengdows.crud's indexed view advantages over EF
 - **SqlServerBenchmarks**: SQL Server specific features and optimizations

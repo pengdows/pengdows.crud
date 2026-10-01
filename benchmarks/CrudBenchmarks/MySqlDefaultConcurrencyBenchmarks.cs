@@ -64,8 +64,10 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
     private long _maxKnownId;
     private long _lastSuccessCount;
     private long _lastErrorCount;
+    private long _lastTimeoutCount;
     private int _errorLogCount;
     private string _currentScenario = string.Empty;
+    private static readonly TimeSpan PerOperationTimeout = TimeSpan.FromSeconds(5);
 
     private const int OperationsPerRun = 2000;
     [Params(32, 64, 128, 256)] public int Parallelism;
@@ -143,8 +145,9 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
     {
         var attempted = Math.Max(OperationsPerRun, 1);
         var errorRate = (_lastErrorCount * 100.0) / attempted;
+        var timeoutRate = (_lastTimeoutCount * 100.0) / attempted;
         Console.WriteLine(
-            $"[MYSQL-CONCURRENCY] Provider={Provider}, scenario={_currentScenario}, parallelism={Parallelism}, operations={OperationsPerRun}, success={_lastSuccessCount}, errors={_lastErrorCount}, errorRate={errorRate:F2}%");
+            $"[MYSQL-CONCURRENCY] Provider={Provider}, scenario={_currentScenario}, parallelism={Parallelism}, operations={OperationsPerRun}, success={_lastSuccessCount}, errors={_lastErrorCount}, errorRate={errorRate:F2}%, timeouts={_lastTimeoutCount}, timeoutRate={timeoutRate:F2}%");
     }
 
     [Benchmark]
@@ -168,65 +171,81 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
         await RunScenarioAsync(ExecuteRandomAsync);
     }
 
-    private async Task RunScenarioAsync(Func<Task> operation)
+    private async Task RunScenarioAsync(Func<CancellationToken, Task> operation)
     {
         _lastSuccessCount = 0;
         _lastErrorCount = 0;
+        _lastTimeoutCount = 0;
         _errorLogCount = 0;
 
-        await BenchmarkConcurrency.RunConcurrentWithErrors(
+        // Real CancellationToken-driven per-operation timeout, not just relying on the
+        // provider's own timeout handling — see BenchmarkConcurrency.RunConcurrentWithTimeout's
+        // doc comment for why this exists (a 2026-08-27 incident: MySqlData hung badly enough
+        // under 128-way parallelism that the WHOLE batch, not any single operation, exceeded
+        // BenchmarkDotNet's own in-process watchdog and aborted the entire run).
+        await BenchmarkConcurrency.RunConcurrentWithTimeout(
             OperationsPerRun,
             Parallelism,
-            async () =>
+            PerOperationTimeout,
+            async ct =>
             {
-                await operation();
+                await operation(ct);
                 Interlocked.Increment(ref _lastSuccessCount);
             },
             ex =>
             {
                 Interlocked.Increment(ref _lastErrorCount);
                 LogSampleError(ex);
+            },
+            () =>
+            {
+                Interlocked.Increment(ref _lastTimeoutCount);
+                LogSampleError(new TimeoutException(
+                    $"Operation exceeded the {PerOperationTimeout.TotalSeconds}s per-operation " +
+                    $"timeout (Provider={Provider}, Parallelism={Parallelism})"));
             });
+
+        WriteHangEvidenceIfAny();
     }
 
-    private async Task ExecuteReadAsync()
+    private async Task ExecuteReadAsync(CancellationToken ct)
     {
         var maxId = Math.Max(1, Volatile.Read(ref _maxKnownId));
         var id = Random.Shared.NextInt64(1, maxId + 1);
-        _ = await _gateway.RetrieveOneAsync(id);
+        _ = await _gateway.RetrieveOneAsync(id, cancellationToken: ct);
     }
 
-    private async Task ExecuteWriteAsync()
+    private async Task ExecuteWriteAsync(CancellationToken ct)
     {
         await _gateway.CreateAsync(new MySqlBenchAccessRow
         {
             Payload = Random.Shared.Next(1, 1_000_000),
             Workload = "write",
             UpdatedUtc = DateTime.UtcNow
-        });
+        }, cancellationToken: ct);
 
         Interlocked.Increment(ref _maxKnownId);
     }
 
-    private async Task ExecuteRandomAsync()
+    private async Task ExecuteRandomAsync(CancellationToken ct)
     {
         var roll = Random.Shared.Next(100);
         if (roll < 55)
         {
-            await ExecuteReadAsync();
+            await ExecuteReadAsync(ct);
             return;
         }
 
         if (roll < 85)
         {
-            await ExecuteWriteAsync();
+            await ExecuteWriteAsync(ct);
             return;
         }
 
-        await ExecuteUpdateAsync();
+        await ExecuteUpdateAsync(ct);
     }
 
-    private async Task ExecuteUpdateAsync()
+    private async Task ExecuteUpdateAsync(CancellationToken ct)
     {
         var maxId = Math.Max(1, Volatile.Read(ref _maxKnownId));
         var id = Random.Shared.NextInt64(1, maxId + 1);
@@ -255,7 +274,48 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
         var idParam = container.AddParameterWithValue("id", DbType.Int64, id);
         container.Query.Append(container.MakeParameterName(idParam));
 
-        _ = await container.ExecuteNonQueryAsync();
+        _ = await container.ExecuteNonQueryAsync(CommandType.Text, ct);
+    }
+
+    /// <summary>
+    /// Writes a durable artifact when a hang/timeout is observed, so a driver defect like the
+    /// 2026-08-27 MySqlData incident is captured as evidence (exception type, provider,
+    /// parallelism, driver package version) instead of relying on anyone's memory of having
+    /// seen it before — see BenchmarkConcurrency.RunConcurrentWithTimeout's doc comment.
+    /// </summary>
+    private void WriteHangEvidenceIfAny()
+    {
+        if (Interlocked.Read(ref _lastTimeoutCount) == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var dir = Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
+                ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir,
+                $"{nameof(MySqlDefaultConcurrencyBenchmarks)}-hang-evidence-{Provider}-{Parallelism}-{Environment.ProcessId}.md");
+            var driverVersion = _providerFactory.GetType().Assembly.GetName().Version?.ToString() ?? "unknown";
+            var text =
+                $"# MySqlDefaultConcurrencyBenchmarks — timeout/hang evidence\n\n" +
+                $"Scenario: {_currentScenario}\n" +
+                $"Provider: {Provider} (assembly version {driverVersion})\n" +
+                $"Parallelism: {Parallelism}\n" +
+                $"Per-operation timeout: {PerOperationTimeout.TotalSeconds}s\n" +
+                $"Operations attempted: {OperationsPerRun}\n" +
+                $"Timed out: {_lastTimeoutCount}\n" +
+                $"Other errors: {_lastErrorCount}\n" +
+                $"Succeeded: {_lastSuccessCount}\n" +
+                $"Captured: {DateTime.UtcNow:O}\n";
+            File.WriteAllText(path, text);
+            Console.WriteLine($"[MYSQL-CONCURRENCY] Wrote hang evidence: {path}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[MYSQL-CONCURRENCY] Failed to write hang evidence: {ex.Message}");
+        }
     }
 
     private async Task WaitForReadyAsync()

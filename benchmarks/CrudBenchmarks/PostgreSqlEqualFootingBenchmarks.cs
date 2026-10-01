@@ -69,6 +69,16 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     private ISqlContainer _deleteSc = null!;
     private ISqlContainer _aggregateSc = null!;
 
+    // The fixed (non-varying) column values baked into _updateSc's BenchEntity below — reused by
+    // Update_Dapper/Update_EntityFramework so their UPDATE statements set the same 5 columns
+    // pengdows' full-entity BuildUpdateAsync generates, not just salary. See the review note this
+    // addresses (Update equal-footing SQL asymmetry): the prior single-column Dapper/EF SQL did
+    // materially less work per call than pengdows', biasing the comparison.
+    private const string UpdateFixedName = "Updated";
+    private const int UpdateFixedAge = 25;
+    private const bool UpdateFixedIsActive = true;
+    private string _updateFixedCreatedAt = null!;
+
     [Params(1, 10, 100)] public int RecordCount { get; set; }
 
     // ========================================================================
@@ -178,14 +188,15 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
 
         // Update — full entity UPDATE; loop sets SetParameterValue("s2", salary) + ("k0", id)
         // Column SET order: name=s0, age=s1, salary=s2, is_active=s3, created_at=s4; WHERE id=k0
+        _updateFixedCreatedAt = DateTime.UtcNow.ToString("O");
         _updateSc = await _gateway.BuildUpdateAsync(new BenchEntity
         {
             Id = 1,
-            Name = "Updated",
-            Age = 25,
+            Name = UpdateFixedName,
+            Age = UpdateFixedAge,
             Salary = 50000.0,
-            IsActive = true,
-            CreatedAt = DateTime.UtcNow.ToString("O")
+            IsActive = UpdateFixedIsActive,
+            CreatedAt = _updateFixedCreatedAt
         });
 
         // Delete insert side — explicit id required since SERIAL would otherwise auto-assign.
@@ -244,7 +255,9 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
         const string readListSql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
-        const string updateSql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
+        // Must match Update_Dapper/Update_EntityFramework's UpdateSql exactly, so this pre-warm
+        // pass primes Npgsql's auto-prepare cache for the SQL text actually measured.
+        const string updateSql = UpdateSql;
         const string deleteInsertSql =
             "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
         const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
@@ -321,7 +334,15 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
                 await conn.QueryAsync<DapperBenchEntity>(readListSql, new { Age = 0, Limit = RecordCount });
                 await conn.QueryAsync<DapperBenchEntity>(filteredQuerySql,
                     new { IsActive = true, MinAge = 20, MaxAge = 60, Limit = RecordCount });
-                await conn.ExecuteAsync(updateSql, new { Salary = 60000.0 + pw, Id = (pw % SeedRows) + 1 });
+                await conn.ExecuteAsync(updateSql, new
+                {
+                    Name = UpdateFixedName,
+                    Age = UpdateFixedAge,
+                    Salary = 60000.0 + pw,
+                    IsActive = UpdateFixedIsActive,
+                    CreatedAt = _updateFixedCreatedAt,
+                    Id = (pw % SeedRows) + 1
+                });
                 await conn.ExecuteAsync(deleteInsertSql, new
                 {
                     Id = prewarmDeleteIdBase + pw,
@@ -369,7 +390,11 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
                     .AsNoTracking()
                     .ToListAsync();
                 await efCtx.Database.ExecuteSqlRawAsync(updateSql,
+                    new NpgsqlParameter("Name", UpdateFixedName),
+                    new NpgsqlParameter("Age", UpdateFixedAge),
                     new NpgsqlParameter("Salary", 60000.0 + pw),
+                    new NpgsqlParameter("IsActive", UpdateFixedIsActive),
+                    new NpgsqlParameter("CreatedAt", _updateFixedCreatedAt),
                     new NpgsqlParameter("Id", (pw % SeedRows) + 1));
                 await efCtx.Database.ExecuteSqlRawAsync(deleteInsertSql,
                     new NpgsqlParameter("Id", prewarmDeleteIdBase + pw),
@@ -610,16 +635,29 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         return count;
     }
 
+    // Sets the same 5 columns as Update_Pengdows (name, age, salary, is_active, created_at) —
+    // only salary and id vary per iteration, matching _updateSc's fixed values. See
+    // UpdateFixedName/UpdateFixedAge/UpdateFixedIsActive/_updateFixedCreatedAt.
+    private const string UpdateSql =
+        "UPDATE benchmark SET name = @Name, age = @Age, salary = @Salary, is_active = @IsActive, created_at = @CreatedAt WHERE id = @Id";
+
     [Benchmark]
     public async Task<int> Update_Dapper()
     {
-        const string sql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
             await using var conn = await GetDapperEqualConnection();
-            count += await conn.ExecuteAsync(sql,
-                new { Salary = 60000.0 + i, Id = (i % SeedRows) + 1 });
+            count += await conn.ExecuteAsync(UpdateSql,
+                new
+                {
+                    Name = UpdateFixedName,
+                    Age = UpdateFixedAge,
+                    Salary = 60000.0 + i,
+                    IsActive = UpdateFixedIsActive,
+                    CreatedAt = _updateFixedCreatedAt,
+                    Id = (i % SeedRows) + 1
+                });
         }
 
         return count;
@@ -628,13 +666,16 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<int> Update_EntityFramework()
     {
-        const string sql = "UPDATE benchmark SET salary = @Salary WHERE id = @Id";
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
             await using var ctx = new EfPgBenchContext(_efOptions);
-            count += await ctx.Database.ExecuteSqlRawAsync(sql,
+            count += await ctx.Database.ExecuteSqlRawAsync(UpdateSql,
+                new NpgsqlParameter("Name", UpdateFixedName),
+                new NpgsqlParameter("Age", UpdateFixedAge),
                 new NpgsqlParameter("Salary", 60000.0 + i),
+                new NpgsqlParameter("IsActive", UpdateFixedIsActive),
+                new NpgsqlParameter("CreatedAt", _updateFixedCreatedAt),
                 new NpgsqlParameter("Id", (i % SeedRows) + 1));
         }
 
@@ -999,11 +1040,23 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<long> ConnectionHoldTime_Dapper()
     {
+        // Boundary matches Pengdows: the watch stops only after the connection has been
+        // released back to the pool, not before disposal runs. An `await using` declaration
+        // defers DisposeAsync() to end-of-method, which would stop the watch before paying that
+        // cost — see the review note this fix addresses (ConnectionHoldTime stopwatch
+        // boundary asymmetry).
         var sw = Stopwatch.StartNew();
-        await using var conn = await GetDapperEqualConnection();
-        await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
-            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
-            new { Id = 1 });
+        var conn = await GetDapperEqualConnection();
+        try
+        {
+            await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
+                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
+                new { Id = 1 });
+        }
+        finally
+        {
+            await conn.DisposeAsync();
+        }
         sw.Stop();
         return sw.ElapsedTicks;
     }
@@ -1011,14 +1064,22 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     [Benchmark]
     public async Task<long> ConnectionHoldTime_EntityFramework()
     {
+        // See ConnectionHoldTime_Dapper: same fix, same reason.
         var sw = Stopwatch.StartNew();
-        await using var ctx = new EfPgBenchContext(_efOptions);
-        await ctx.Benchmarks
-            .FromSqlRaw(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
-                new NpgsqlParameter("Id", 1))
-            .AsNoTracking()
-            .FirstOrDefaultAsync();
+        var ctx = new EfPgBenchContext(_efOptions);
+        try
+        {
+            await ctx.Benchmarks
+                .FromSqlRaw(
+                    "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
+                    new NpgsqlParameter("Id", 1))
+                .AsNoTracking()
+                .FirstOrDefaultAsync();
+        }
+        finally
+        {
+            await ctx.DisposeAsync();
+        }
         sw.Stop();
         return sw.ElapsedTicks;
     }
