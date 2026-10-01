@@ -2,7 +2,6 @@
 
 using System;
 using System.Data;
-using System.Data.Common;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
@@ -201,6 +200,30 @@ public class DuckDbDialectAdvancedTests
         var version = _dialect.ParseVersion(versionString!);
 
         Assert.Null(version);
+    }
+
+    [Theory]
+    [InlineData(1, 0, 0, SqlStandardLevel.Sql2016)]
+    [InlineData(0, 9, 0, SqlStandardLevel.Sql2016)]
+    [InlineData(0, 8, 0, SqlStandardLevel.Sql2011)]
+    [InlineData(0, 6, 0, SqlStandardLevel.Sql2008)]
+    [InlineData(0, 4, 0, SqlStandardLevel.Sql2003)]
+    public void DetermineStandardCompliance_Should_Return_Correct_Level_For_Version(int major, int minor, int patch,
+        SqlStandardLevel expected)
+    {
+        var version = new Version(major, minor, patch);
+
+        var compliance = _dialect.DetermineStandardCompliance(version);
+
+        Assert.Equal(expected, compliance);
+    }
+
+    [Fact]
+    public void DetermineStandardCompliance_Should_Return_Sql2016_For_Null_Version()
+    {
+        var compliance = _dialect.DetermineStandardCompliance(null);
+
+        Assert.Equal(SqlStandardLevel.Sql2016, compliance);
     }
 
     [Fact]
@@ -407,6 +430,17 @@ public class DuckDbDialectAdvancedTests
         Assert.Contains("RETURNING", sc.Query.ToString(), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Table("duckdb_auto_id_entity")]
+    private class DuckDbAutoIdEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("name", DbType.String)]
+        public string Name { get; set; } = string.Empty;
+    }
+
     // TryClassifyProviderException's generic SqlState-class-23 fallback and its "Constraint
     // Error" message fallback are both checked only after SqlDialect.ClassifyException has
     // already ruled out IsUniqueViolation/IsForeignKeyViolation/IsNotNullViolation/
@@ -431,17 +465,6 @@ public class DuckDbDialectAdvancedTests
         var info = _dialect.AnalyzeException(ex);
 
         Assert.Equal(DbErrorCategory.ConstraintViolation, info.Category);
-    }
-
-    [Table("duckdb_auto_id_entity")]
-    private class DuckDbAutoIdEntity
-    {
-        [Id(false)]
-        [Column("id", DbType.Int32)]
-        public int Id { get; set; }
-
-        [Column("name", DbType.String)]
-        public string Name { get; set; } = string.Empty;
     }
 
     private sealed class DuckDbTestDbException : System.Data.Common.DbException

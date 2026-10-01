@@ -5,6 +5,7 @@ using System.Data;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using Xunit;
@@ -81,13 +82,37 @@ public class InvalidTransactionTypeTests
     // Read-only context must reject write-mode transaction requests
     // -------------------------------------------------------------------------
 
+    [Fact]
+    public void BeginTransaction_ReadOnlyContext_DefaultIsWrite_ThrowsNotSupportedException()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        Assert.Throws<NotSupportedException>(() => context.BeginTransaction());
+    }
+
+    [Fact]
+    public void BeginTransaction_ReadOnlyContext_ExplicitWriteExecutionType_ThrowsNotSupportedException()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        Assert.Throws<NotSupportedException>(() =>
+            context.BeginTransaction(executionType: ExecutionType.Write));
+    }
+
     // -------------------------------------------------------------------------
     // Async path mirrors sync path for the same validations
     // -------------------------------------------------------------------------
 
-    // Regression: PostgreSQL's REPEATABLE READ is a correct, non-blocking exact match for
-    // SafeNonBlockingReads (MVCC snapshot, no phantom reads within the transaction) — see
-    // PostgreSqlDialect.GetIsolationProfileMapping/GetIsolationGuarantees. This must not throw.
     [Fact]
     public async Task BeginTransactionAsync_PostgreSql_SafeNonBlockingReads_UsesRepeatableRead()
     {
@@ -100,25 +125,26 @@ public class InvalidTransactionTypeTests
     }
 
     [Fact]
-    public async Task BeginTransactionAsync_UnsupportedIsolationLevel_FailsUp()
+    public async Task BeginTransactionAsync_UnsupportedIsolationLevel_ThrowsInvalidOperationException()
     {
         var context = new DatabaseContext(
             $"Data Source=test;EmulatedProduct={SupportedDatabase.Snowflake}",
             new fakeDbFactory(SupportedDatabase.Snowflake));
 
-        await using var tx = await context.BeginTransactionAsync(IsolationLevel.ReadUncommitted);
-        Assert.Equal(IsolationLevel.ReadCommitted, tx.IsolationLevel);
-    }
-
-    [Fact]
-    public async Task BeginTransactionAsync_NothingAtOrAboveRequestedLevel_ThrowsInvalidOperationException()
-    {
-        var context = new DatabaseContext(
-            $"Data Source=test;EmulatedProduct={SupportedDatabase.TiDb}",
-            new fakeDbFactory(SupportedDatabase.TiDb));
-
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
             await context.BeginTransactionAsync(IsolationLevel.Serializable));
     }
 
+    [Fact]
+    public async Task BeginTransactionAsync_ReadOnlyContext_ThrowsNotSupportedException()
+    {
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test",
+            ReadWriteMode = ReadWriteMode.ReadOnly
+        };
+        var context = new DatabaseContext(config, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await context.BeginTransactionAsync());
+    }
 }

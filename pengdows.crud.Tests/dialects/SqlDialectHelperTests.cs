@@ -120,12 +120,7 @@ public class SqlDialectHelperTests
     [Fact]
     public void GetNaturalKeyLookupQuery_IncludesSqlServerTopClause()
     {
-        // Real SqlServerDialect, not the generic DatabaseType-claiming stub: after the
-        // switch(DatabaseType)-to-virtual-override refactor (CLAUDE.md checklist item 10),
-        // dispatch is by actual runtime type, not by a stub merely overriding DatabaseType to
-        // claim "I am SqlServer" — see NaturalKeyLookupQueryCharacterizationTests.cs for the
-        // full per-dialect exact-SQL characterization this refactor was verified against.
-        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLoggerFactory.Instance.CreateLogger(nameof(SqlServerDialect)));
+        var dialect = CreateNaturalKeyDialect(SupportedDatabase.SqlServer, true);
         var sql = dialect.GetNaturalKeyLookupQuery("orders", "id", new[] { "name" }, new[] { ":name" });
 
         Assert.Contains("SELECT TOP 1", sql, StringComparison.OrdinalIgnoreCase);
@@ -148,11 +143,6 @@ public class SqlDialectHelperTests
     [Fact]
     public void GetNaturalKeyLookupQuery_AppendsLimitForNonSqlServer()
     {
-        // Deliberately still the generic stub, not a real PostgreSqlDialect: this tests the base
-        // class's own generic fallback (SupportsIdentityColumns=true, no dialect-specific
-        // override) in isolation. No real dialect happens to have exactly that combination today
-        // (real PostgreSqlDialect.SupportsIdentityColumns is false), so the stub is the only way
-        // to exercise this base-class code path at all.
         var dialect = CreateNaturalKeyDialect(SupportedDatabase.PostgreSql, true);
         var sql = dialect.GetNaturalKeyLookupQuery("customers", "id", new[] { "email" }, new[] { ":email" });
 
@@ -161,21 +151,12 @@ public class SqlDialectHelperTests
     }
 
     [Fact]
-    public void GetNaturalKeyLookupQuery_UsesFetchFirstForOracle()
+    public void GetNaturalKeyLookupQuery_AddsRowNumForOracle()
     {
-        // Real OracleDialect. Oracle's actual, current behavior uses modern ANSI "FETCH FIRST 1
-        // ROWS ONLY", not "ROWNUM = 1" — OracleDialect has its own override for this (see
-        // NaturalKeyLookupQueryCharacterizationTests.cs for the exact-SQL characterization the
-        // switch-to-virtual-override refactor was verified against). The generic stub this test
-        // used to construct (claiming DatabaseType=Oracle without being OracleDialect) got the
-        // base class's now-removed literal "AND ROWNUM = 1" switch case instead — a case that was
-        // already unreachable in production before this refactor, since a real OracleDialect
-        // instance's own override always ran first.
-        var dialect = new OracleDialect(new fakeDbFactory(SupportedDatabase.Oracle), NullLoggerFactory.Instance.CreateLogger(nameof(OracleDialect)));
+        var dialect = CreateNaturalKeyDialect(SupportedDatabase.Oracle, true);
         var sql = dialect.GetNaturalKeyLookupQuery("items", "id", new[] { "sku" }, new[] { ":sku" });
 
-        Assert.Contains("FETCH FIRST 1 ROWS ONLY", sql, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("ROWNUM", sql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("AND ROWNUM = 1", sql, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -708,7 +689,6 @@ public class SqlDialectHelperTests
         public bool IsCorrelationToken { get; set; }
         public int PkOrder { get; set; }
         public bool IsVersion { get; set; }
-        public bool IsOpaqueVersionColumn => PropertyInfo.PropertyType == typeof(byte[]) || PropertyInfo.PropertyType == typeof(pengdows.crud.types.valueobjects.RowVersion);
         public bool IsCreatedBy { get; set; }
         public bool IsCreatedOn { get; set; }
         public bool IsLastUpdatedBy { get; set; }
