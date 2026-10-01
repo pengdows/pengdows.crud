@@ -199,7 +199,7 @@ public partial class TableGateway<TEntity, TRowID> :
             PinTo(sc, idLease);
 
             object? generatedId;
-            if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            if (dialect.RequiresOutputParameterForReturning())
             {
                 await sc.ExecuteNonQueryAsync(ExecutionType.Write).ConfigureAwait(false);
 
@@ -416,7 +416,7 @@ public partial class TableGateway<TEntity, TRowID> :
             PinTo(sc, idLease);
 
             object? generatedId;
-            if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            if (dialect.RequiresOutputParameterForReturning())
             {
                 await sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.Text, cancellationToken)
                     .ConfigureAwait(false);
@@ -961,19 +961,16 @@ public partial class TableGateway<TEntity, TRowID> :
         {
             idWrapped = dialect.WrapSimpleName(_idColumn.Name);
 
-            if (dialect.DatabaseType == SupportedDatabase.SqlServer)
+            if (dialect.InsertReturningClauseBeforeValues)
             {
-                // A bare "OUTPUT INSERTED.id" is rejected by SQL Server when the target table has
-                // an enabled trigger. The OUTPUT ... INTO @table-variable form works whether or
-                // not a trigger is present, so it's applied unconditionally rather than trying to
-                // detect triggers at SQL-generation time.
+                // The dialect owns its generated-key protocol (SQL Server captures the id INTO a
+                // table variable so triggers on the target table don't break it).
                 var clause = dialect.RenderInsertReturningClause(idWrapped);
-                const string outputTable = "@__pengdows_output";
-                prefixClause = $"DECLARE {outputTable} TABLE ({idWrapped} sql_variant); ";
-                outputClause = $"{clause} INTO {outputTable} ({idWrapped})";
-                returningClause = $"; SELECT {idWrapped} FROM {outputTable}";
+                (prefixClause, outputClause, returningClause) = dialect is IInternalSqlDialect internalDialect
+                    ? internalDialect.RenderOutputInsertClauses(idWrapped, clause)
+                    : (string.Empty, clause, string.Empty);
             }
-            else if (dialect.DatabaseType == SupportedDatabase.Oracle)
+            else if (dialect.RequiresOutputParameterForReturning())
             {
                 var clause = dialect.RenderInsertReturningClause(idWrapped);
                 returningClause = clause.Replace("?", dialect.MakeParameterName(OracleReturningParameterName),

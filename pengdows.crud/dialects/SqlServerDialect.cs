@@ -341,6 +341,18 @@ internal class SqlServerDialect : SqlDialect
 
     public override bool InsertReturningClauseBeforeValues => true;
 
+    // A plain "OUTPUT INSERTED.col" is rejected when the target table has an enabled trigger. The
+    // OUTPUT ... INTO @table-variable form works whether or not a trigger is present, so it is used
+    // unconditionally rather than detecting triggers at SQL-generation time.
+    public override (string Prefix, string Output, string Returning) RenderOutputInsertClauses(string idWrapped,
+        string clause)
+    {
+        const string outputTable = "@__pengdows_output";
+        return ($"DECLARE {outputTable} TABLE ({idWrapped} sql_variant); ",
+            $"{clause} INTO {outputTable} ({idWrapped})",
+            $"; SELECT {idWrapped} FROM {outputTable}");
+    }
+
     public override string GetInsertReturningClause(string idColumnName)
     {
         return $"OUTPUT INSERTED.{WrapObjectName(idColumnName)}";

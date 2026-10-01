@@ -113,6 +113,33 @@ internal static class InternalSqlDialectExtensions
     }
 
     /// <summary>
+    /// See <see cref="IInternalSqlDialect.EmitsAnsiMergeSyntax"/>; true for a dialect that isn't an
+    /// internal one (e.g. a test double).
+    /// </summary>
+    internal static bool EmitsAnsiMergeSyntax(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.EmitsAnsiMergeSyntax;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.SupportsPureKeyUpsert"/>; false for a dialect that isn't an
+    /// internal one (e.g. a test double).
+    /// </summary>
+    internal static bool SupportsPureKeyUpsert(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect && internalDialect.SupportsPureKeyUpsert;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.RequiresOutputParameterForReturning"/>; false for a dialect
+    /// that isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool RequiresOutputParameterForReturning(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect && internalDialect.RequiresOutputParameterForReturning;
+    }
+
+    /// <summary>
     /// See <see cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>; true for a dialect
     /// that isn't an internal one (e.g. a test double).
     /// </summary>

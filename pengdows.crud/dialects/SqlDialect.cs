@@ -803,6 +803,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <inheritdoc cref="IInternalSqlDialect.SupportsMergeMatchedCondition"/>
     public virtual bool SupportsMergeMatchedCondition => true;
 
+    /// <inheritdoc cref="IInternalSqlDialect.EmitsAnsiMergeSyntax"/>
+    public virtual bool EmitsAnsiMergeSyntax => true;
+
+    /// <inheritdoc cref="IInternalSqlDialect.SupportsPureKeyUpsert"/>
+    public virtual bool SupportsPureKeyUpsert => false;
+
+    /// <inheritdoc cref="IInternalSqlDialect.RequiresOutputParameterForReturning"/>
+    public virtual bool RequiresOutputParameterForReturning => false;
+
+    /// <inheritdoc cref="IInternalSqlDialect.RenderOutputInsertClauses"/>
+    public virtual (string Prefix, string Output, string Returning) RenderOutputInsertClauses(string idWrapped,
+        string clause) => (string.Empty, clause, string.Empty);
+
     /// <inheritdoc cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>
     public virtual bool MergeUpsertReportsSkippedVersionRow => true;
 

@@ -61,9 +61,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
             throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
         }
 
-        // Firebird uses UPDATE OR INSERT MATCHING which has no UPDATE SET clause — allowed for pure-PK entities.
-        // All other dialects require at least one non-PK updateable column.
-        if (ctx.DataSourceInfo.Product != SupportedDatabase.Firebird)
+        // Only a dialect whose upsert needs no SET clause (Firebird's UPDATE OR INSERT MATCHING) can
+        // upsert an entity whose only columns are its primary key.
+        if (!GetDialect(ctx).SupportsPureKeyUpsert())
         {
             var dialect = GetDialect(ctx);
             var template = GetPkTemplatesForDialect(dialect);
@@ -360,7 +360,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
     private ISqlContainer BuildPkUpsertMerge(TEntity entity, IDatabaseContext context)
     {
-        if (context.DataSourceInfo.Product == SupportedDatabase.Firebird)
+        if (!GetDialect(context).EmitsAnsiMergeSyntax())
         {
             return BuildPkFirebirdMergeUpsert(entity, context);
         }

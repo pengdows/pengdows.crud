@@ -304,6 +304,9 @@ internal class OracleDialect : SqlDialect
 
     public override bool SupportsInsertReturning => true;
 
+    // RETURNING ... INTO binds the generated id through an ADO.NET output parameter, not a result set.
+    public override bool RequiresOutputParameterForReturning => true;
+
     public override GeneratedKeyPlan GetGeneratedKeyPlan()
     {
         return GeneratedKeyPlan.Returning;

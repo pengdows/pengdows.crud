@@ -350,7 +350,7 @@ public partial class TableGateway<TEntity, TRowID>
     private ISqlContainer BuildUpsertMerge(TEntity entity, IDatabaseContext context)
     {
         var ctx = context ?? _context;
-        if (ctx.DataSourceInfo.Product == SupportedDatabase.Firebird)
+        if (!GetDialect(ctx).EmitsAnsiMergeSyntax())
         {
             return BuildFirebirdMergeUpsert(entity, ctx);
         }

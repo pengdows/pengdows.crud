@@ -24,6 +24,35 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool SupportsMergeMatchedCondition => true;
 
     /// <summary>
+    /// False when the dialect's MERGE support is not ANSI <c>MERGE ... WHEN MATCHED</c> but
+    /// Firebird's <c>UPDATE OR INSERT ... MATCHING</c>, which the gateways render separately.
+    /// </summary>
+    bool EmitsAnsiMergeSyntax => true;
+
+    /// <summary>
+    /// True when the dialect's upsert statement needs no SET clause, so an entity whose only
+    /// columns are its key columns can be upserted (Firebird's <c>UPDATE OR INSERT</c>). Every
+    /// other upsert form needs at least one non-key column to update.
+    /// </summary>
+    bool SupportsPureKeyUpsert => false;
+
+    /// <summary>
+    /// True when the generated id comes back through an ADO.NET output parameter
+    /// (Oracle's <c>RETURNING ... INTO</c>) rather than a result set.
+    /// </summary>
+    bool RequiresOutputParameterForReturning => false;
+
+    /// <summary>
+    /// Splits an insert-returning clause that renders before VALUES
+    /// (<see cref="ISqlDialect.InsertReturningClauseBeforeValues"/>) into prefix/output/returning
+    /// pieces. Default: the whole clause before VALUES. SQL Server overrides it to capture the id
+    /// INTO a table variable, since a plain <c>OUTPUT INSERTED.col</c> breaks on a table with an
+    /// enabled trigger.
+    /// </summary>
+    (string Prefix, string Output, string Returning) RenderOutputInsertClauses(string idWrapped, string clause)
+        => (string.Empty, clause, string.Empty);
+
+    /// <summary>
     /// True when a MERGE upsert whose version-guarded matched branch skips a stale row reports that
     /// row as 0 rows affected, so the gateways can raise ConcurrencyConflictException. False where
     /// rows affected can't reveal the skip: Firebird's UPDATE OR INSERT carries no guard, and Sybase

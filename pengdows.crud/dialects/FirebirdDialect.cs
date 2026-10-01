@@ -258,6 +258,12 @@ internal class FirebirdDialect : SqlDialect
     // The gateways upsert with UPDATE OR INSERT here, which carries no [Version] guard, so rows
     // affected never reveals a stale version.
     public override bool MergeUpsertReportsSkippedVersionRow => false;
+
+    // Firebird's "MERGE" path is UPDATE OR INSERT ... MATCHING, not ANSI MERGE, and it needs no
+    // SET clause, so it can upsert an entity whose only columns are its key columns.
+    public override bool EmitsAnsiMergeSyntax => false;
+
+    public override bool SupportsPureKeyUpsert => true;
     public override bool SupportsWindowFunctions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 3;
     public override bool SupportsCommonTableExpressions => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
     public override bool SupportsJsonTypes => false;
