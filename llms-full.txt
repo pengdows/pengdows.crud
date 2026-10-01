@@ -725,8 +725,8 @@ var results = await helper.LoadListAsync(sc);
 1. **Enum value** — add to `pengdows.crud.abstractions/enums/SupportedDatabase.cs`
 2. **Dialect** — create `pengdows.crud/dialects/<Name>Dialect.cs`, register in `SqlDialectFactory.cs`
 3. **Test container** — create `testbed/<Name>/<Name>TestContainer.cs` (start, get context, dispose)
-4. **Test provider** — create `testbed/<Name>/<Name>TestProvider.cs` (override `CreateTable()`; override `TestUpsertCapability()` etc. only when the database has a documented limitation)
-5. **Always-on registration** — add to the `configurations` list in `ParallelTestOrchestrator.GetTestConfigurations()` (not in an opt-in block)
+4. **Test provider** — create `testbed/<Name>/<Name>TestProvider.cs` and override `CreateTable()`. The testbed's base `RunTest()` only does what needs the live container: table creation, the scalar-UDF check, and the `DbMode`/`PreventDatabaseUnload` idle-unload probe, plus a `RunAdditionalTestsAsync()` hook for a check that needs the container itself rather than a connection string. Everything else — CRUD round trips, parameter binding, transactions/isolation, stored procedures, upsert/error-mapping/quoting probes, pool isolation, kill-connection rollback — belongs in `pengdows.crud.IntegrationTests` (`Core/`, `ErrorHandling/`, `DatabaseSpecific/`) as `[SkippableFact]`s on `DatabaseTestBase`, which run against every enabled database. A new database usually needs a case in `IntegrationTests/Infrastructure/TestTableCreator.cs`/`TypeHydrationTableCreator.cs` and in `StoredProcedureTests.StoredProc_WrapForStoredProc_InvokesARealProcedureOnEveryProcCapableDatabase` (which fails for a proc-capable database with no case)
+5. **Always-on registration** — register it in `ParallelTestOrchestrator.GetTestConfigurations()` with `AddDocker` (plus its image list in `TestbedImageMatrix`) or `AddLocal` for a single pinned/local image — not in an opt-in block
 6. **Unit tests** — add dialect-level unit tests in `pengdows.crud.Tests/dialects/`
 
 ### Easy-to-miss spots (found the hard way with Db2 — check these every time)
@@ -1876,9 +1876,9 @@ Most data access layers test either against superficial mocks or against SQLite 
    - A large, deterministic unit suite (CI enforces a minimum line-coverage threshold) that needs no network or database server.
    - Deterministically stress-tests connection state machines, pool slot saturation, cancellation races, transaction savepoint rollbacks, and disposal leases without network or disk overhead.
 
-2. **`testbed/` (Multi-Engine Real Conformance Suite via Testcontainers)**:
-   - Always-on real engines: SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, Firebird, TiDB, YugabyteDB; Oracle and Snowflake are opt-in (`INCLUDE_ORACLE`/`INCLUDE_SNOWFLAKE`). Aurora MySQL/PostgreSQL are covered through their MySQL/PostgreSQL paths. See `testbed/readme.md`.
-   - A shared conformance matrix (`TestProvider.cs`) runs identical behavioral contracts against every engine (CRUD, transactions, stored procedure wrapping, and the other checks listed in the testbed readme).
+2. **`testbed/` + `pengdows.crud.IntegrationTests` (Multi-Engine Real Conformance Suite via Testcontainers)**:
+   - Always-on real engines: every database that runs in Docker or in-process — SQLite, DuckDB, FlatFile, PostgreSQL (plus the Citus, TimescaleDB and Fujitsu Enterprise Postgres forks), MySQL (plus Percona), MariaDB, SQL Server, CockroachDB, Firebird, TiDB, YugabyteDB, Oracle, Db2, Sybase ASE, Informix, Spanner and SingleStore, the testbed across several server versions each; Snowflake, SAP HANA, InterBase and Access are opt-in. Aurora MySQL/PostgreSQL are covered through their MySQL/PostgreSQL paths. See `testbed/readme.md`.
+   - `pengdows.crud.IntegrationTests` runs identical behavioral contracts against every enabled engine (CRUD and round-trip fidelity, transactions and isolation, savepoints, stored procedure wrapping, upsert, typed exception mapping, identifier quoting); the testbed adds the container-level checks (table creation, UDFs, the idle-unload probe).
 
 3. **`InterfaceApiCheck` (Public Surface Governance)**:
    - Compares the public interface surface of `pengdows.crud.abstractions` against a checked-in baseline (`pengdows.crud.abstractions/ApiBaseline/interfaces.txt`).

@@ -70,9 +70,9 @@ Most data access layers test either against superficial mocks or against SQLite 
    - A large, deterministic unit suite (CI enforces a minimum line-coverage threshold) that needs no network or database server.
    - Deterministically stress-tests connection state machines, pool slot saturation, cancellation races, transaction savepoint rollbacks, and disposal leases without network or disk overhead.
 
-2. **`testbed/` (Multi-Engine Real Conformance Suite via Testcontainers)**:
-   - Always-on real engines: SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server, CockroachDB, Firebird, TiDB, YugabyteDB; Oracle and Snowflake are opt-in (`INCLUDE_ORACLE`/`INCLUDE_SNOWFLAKE`). Aurora MySQL/PostgreSQL are covered through their MySQL/PostgreSQL paths. See `testbed/readme.md`.
-   - A shared conformance matrix (`TestProvider.cs`) runs identical behavioral contracts against every engine (CRUD, transactions, stored procedure wrapping, and the other checks listed in the testbed readme).
+2. **`testbed/` + `pengdows.crud.IntegrationTests` (Multi-Engine Real Conformance Suite via Testcontainers)**:
+   - Always-on real engines: every database that runs in Docker or in-process — SQLite, DuckDB, FlatFile, PostgreSQL (plus the Citus, TimescaleDB and Fujitsu Enterprise Postgres forks), MySQL (plus Percona), MariaDB, SQL Server, CockroachDB, Firebird, TiDB, YugabyteDB, Oracle, Db2, Sybase ASE, Informix, Spanner and SingleStore, the testbed across several server versions each; Snowflake, SAP HANA, InterBase and Access are opt-in. Aurora MySQL/PostgreSQL are covered through their MySQL/PostgreSQL paths. See `testbed/readme.md`.
+   - `pengdows.crud.IntegrationTests` runs identical behavioral contracts against every enabled engine (CRUD and round-trip fidelity, transactions and isolation, savepoints, stored procedure wrapping, upsert, typed exception mapping, identifier quoting); the testbed adds the container-level checks (table creation, UDFs, the idle-unload probe).
 
 3. **`InterfaceApiCheck` (Public Surface Governance)**:
    - Compares the public interface surface of `pengdows.crud.abstractions` against a checked-in baseline (`pengdows.crud.abstractions/ApiBaseline/interfaces.txt`).

@@ -715,8 +715,8 @@ var results = await helper.LoadListAsync(sc);
 1. **Enum value** — add to `pengdows.crud.abstractions/enums/SupportedDatabase.cs`
 2. **Dialect** — create `pengdows.crud/dialects/<Name>Dialect.cs`, register in `SqlDialectFactory.cs`
 3. **Test container** — create `testbed/<Name>/<Name>TestContainer.cs` (start, get context, dispose)
-4. **Test provider** — create `testbed/<Name>/<Name>TestProvider.cs` (override `CreateTable()`; override `TestUpsertCapability()` etc. only when the database has a documented limitation)
-5. **Always-on registration** — add to the `configurations` list in `ParallelTestOrchestrator.GetTestConfigurations()` (not in an opt-in block)
+4. **Test provider** — create `testbed/<Name>/<Name>TestProvider.cs` and override `CreateTable()`. The testbed's base `RunTest()` only does what needs the live container: table creation, the scalar-UDF check, and the `DbMode`/`PreventDatabaseUnload` idle-unload probe, plus a `RunAdditionalTestsAsync()` hook for a check that needs the container itself rather than a connection string. Everything else — CRUD round trips, parameter binding, transactions/isolation, stored procedures, upsert/error-mapping/quoting probes, pool isolation, kill-connection rollback — belongs in `pengdows.crud.IntegrationTests` (`Core/`, `ErrorHandling/`, `DatabaseSpecific/`) as `[SkippableFact]`s on `DatabaseTestBase`, which run against every enabled database. A new database usually needs a case in `IntegrationTests/Infrastructure/TestTableCreator.cs`/`TypeHydrationTableCreator.cs` and in `StoredProcedureTests.StoredProc_WrapForStoredProc_InvokesARealProcedureOnEveryProcCapableDatabase` (which fails for a proc-capable database with no case)
+5. **Always-on registration** — register it in `ParallelTestOrchestrator.GetTestConfigurations()` with `AddDocker` (plus its image list in `TestbedImageMatrix`) or `AddLocal` for a single pinned/local image — not in an opt-in block
 6. **Unit tests** — add dialect-level unit tests in `pengdows.crud.Tests/dialects/`
 
 ### Easy-to-miss spots (found the hard way with Db2 — check these every time)
