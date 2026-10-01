@@ -3,6 +3,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -54,12 +55,14 @@ public class TransactionReadOnlyFailureGateTests
         Assert.Throws<InvalidOperationException>(() =>
             context.BeginTransaction(IsolationLevel.Serializable, ExecutionType.Read));
 
-        // With the gate leaked this blocks; bound the wait so the test fails instead of hanging.
-        var next = Task.Run(() =>
+        // With the gate leaked this blocks; bound the wait so the test fails instead of hanging. A
+        // dedicated thread (LongRunning), not the thread pool: under a full parallel run a pooled work
+        // item can wait seconds to start, which read as a leaked gate (seen once on net10).
+        var next = Task.Factory.StartNew(() =>
         {
             using var tx = context.BeginTransaction(IsolationLevel.Serializable, ExecutionType.Write);
             tx.Commit();
-        });
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         var finished = await Task.WhenAny(next, Task.Delay(TimeSpan.FromSeconds(5)));
 
         Assert.Same(next, finished);

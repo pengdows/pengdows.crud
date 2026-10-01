@@ -103,7 +103,10 @@ public class CodeReviewFixTests
         await using var tx = context.BeginTransaction();
         // This should complete promptly (the sync path has a timeout, async should too)
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-        var commitTask = Task.Run(() => tx.Commit(), cts.Token);
+        // A dedicated thread, so the bound measures the commit, not how long a starved thread pool
+        // takes to start a work item under a full parallel run.
+        var commitTask = Task.Factory.StartNew(() => tx.Commit(), cts.Token, TaskCreationOptions.LongRunning,
+            TaskScheduler.Default);
         var completed = await Task.WhenAny(commitTask, Task.Delay(TimeSpan.FromSeconds(5)));
         Assert.Equal(commitTask, completed); // Should complete, not timeout
     }

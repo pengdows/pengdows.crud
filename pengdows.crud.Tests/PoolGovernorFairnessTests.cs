@@ -141,22 +141,32 @@ public sealed class PoolGovernorFairnessTests
         // Let readers run for a bit
         await Task.Delay(100);
 
-        // Act: Writer tries to acquire
+        // Act: Writer tries to acquire. Fairness is measured in reader acquisitions, not wall-clock
+        // time: once the writer holds the turnstile, only the readers already past it (at most the
+        // 3 loops here) can still acquire, while a starved writer would watch them cycle
+        // indefinitely. A wall-clock bound alone failed under a full parallel run, where every
+        // continuation here waits for a pool thread.
+        var readersBeforeWriter = 0;
+        var readersWhenWriterAcquired = 0;
         var writerTask = Task.Run(async () =>
         {
+            readersBeforeWriter = Volatile.Read(ref readerCount);
             await using var slot = await writerGovernor.AcquireAsync();
+            readersWhenWriterAcquired = Volatile.Read(ref readerCount);
             writerCompleted = true;
         });
 
-        // Assert: Writer should complete within bounded time (not starved)
-        var completedInTime = await Task.WhenAny(writerTask, Task.Delay(TimeSpan.FromSeconds(5))) == writerTask;
+        // Generous hang guard only; the fairness assertion is the reader count below.
+        var completedInTime = await Task.WhenAny(writerTask, Task.Delay(TimeSpan.FromSeconds(30))) == writerTask;
 
         cts.Cancel();
         await Task.WhenAll(readerTasks.ToArray());
 
-        Assert.True(completedInTime, "Writer should complete within bounded time - was starved by readers");
+        Assert.True(completedInTime, "Writer never acquired - starved by readers");
         Assert.True(writerCompleted, "Writer task should have completed");
         Assert.True(readerCount > 0, "Some readers should have completed");
+        Assert.True(readersWhenWriterAcquired - readersBeforeWriter <= 6,
+            $"{readersWhenWriterAcquired - readersBeforeWriter} reader acquisitions overtook the waiting writer.");
     }
 
     [Fact]

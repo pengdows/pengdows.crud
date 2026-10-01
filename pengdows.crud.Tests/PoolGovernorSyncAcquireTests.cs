@@ -220,24 +220,28 @@ public sealed class PoolGovernorSyncAcquireTests
     // its own genuinely-timed Wait(semRemaining, ...) call — which then succeeds once the holder
     // releases, rather than either failing outright or succeeding on one of the immediate checks.
     [Fact]
-    public async Task Acquire_SlotBusyThenReleasedWithinTimeout_SucceedsViaTimedSemaphoreWait()
+    public void Acquire_SlotBusyThenReleasedWithinTimeout_SucceedsViaTimedSemaphoreWait()
     {
         using var governor = new PoolGovernor(PoolLabel.Reader, "timed-wait-key", 1,
             TimeSpan.FromSeconds(10));
 
         var holderSlot = governor.Acquire();
 
-        var releaseAfter = Task.Run(async () =>
+        // A dedicated thread, not Task.Run + Task.Delay: the Acquire() below blocks this (thread-pool)
+        // thread, and under a full parallel run the pool can be starved long enough that a pooled
+        // release never runs inside the 10 s timeout (seen once in 10 net8 runs as PoolSaturatedException).
+        var releaser = new Thread(() =>
         {
-            await Task.Delay(100);
+            Thread.Sleep(100);
             holderSlot.Dispose();
-        });
+        }) { IsBackground = true };
+        releaser.Start();
 
         var sw = Stopwatch.StartNew();
         using var acquiredSlot = governor.Acquire();
         sw.Stop();
 
-        await releaseAfter;
+        releaser.Join();
 
         Assert.True(sw.ElapsedMilliseconds >= 80,
             $"Expected Acquire() to have genuinely waited for the release (~100ms), but it returned after {sw.ElapsedMilliseconds}ms.");
