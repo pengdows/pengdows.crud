@@ -49,6 +49,9 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class SqlServerDialect : SqlDialect
 {
+    // TYPE-002: uniqueidentifier stores (and CAST to binary(16) yields) .NET's mixed-endian order.
+    internal override bool StoresGuidBytesBigEndian => false;
+
     private const string RcsiQuery =
         "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()";
 

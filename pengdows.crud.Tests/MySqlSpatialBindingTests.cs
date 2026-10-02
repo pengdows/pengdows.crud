@@ -94,6 +94,32 @@ public class MySqlSpatialBindingTests
         Assert.Equal(wkb, row.Geog.WellKnownBinary.ToArray());
     }
 
+    // TYPE-002 (found live): DataReaderMapper resolved its conversions without the database, so
+    // MySQL's internal format reached the generic WKB reader and the SRID prefix stayed in the WKB.
+    [Fact]
+    public async Task DataReaderMapper_MySqlInternalFormat_HydratesSridAndWkb()
+    {
+        var wkb = Wkb(1, w => Point(w, 10, 20));
+        var factory = new fakeDbFactory(SupportedDatabase.MySql);
+        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.MySql });
+        var execConn = new fakeDbConnection { EmulatedProduct = SupportedDatabase.MySql };
+        execConn.EnqueueReaderResult(new[]
+        {
+            new Dictionary<string, object?> { ["id"] = 1, ["geom"] = Prefixed(3857, wkb), ["geog"] = Prefixed(4326, wkb) }
+        });
+        factory.Connections.Add(execConn);
+        await using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, new TypeMapRegistry());
+        await using var sc = ctx.CreateSqlContainer("SELECT id, geom, geog FROM spatial_rows");
+        await using var reader = await sc.ExecuteReaderAsync();
+
+        var row = Assert.Single(await DataReaderMapper.LoadAsync<Row>(reader, new MapperOptions(ColumnsOnly: true)));
+
+        Assert.Equal(3857, row.Geom!.Srid);
+        Assert.Equal(wkb, row.Geom.WellKnownBinary.ToArray());
+        Assert.Equal(4326, row.Geog!.Srid);
+        Assert.Equal(wkb, row.Geog.WellKnownBinary.ToArray());
+    }
+
     private static ISqlContainer BuildCreate(SupportedDatabase product, Row row)
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product));

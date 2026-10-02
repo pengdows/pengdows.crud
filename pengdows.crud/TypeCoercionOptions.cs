@@ -15,4 +15,17 @@ public sealed record TypeCoercionOptions(
 {
     public static TypeCoercionOptions Default { get; } = new(TimeMappingPolicy.PreferDateTimeOffset,
         JsonPassThrough.PreferDocument, SupportedDatabase.Unknown);
+
+    /// <summary>
+    /// Byte order of a Guid stored as 16 bytes (<c>SqlDialect.StoresGuidBytesBigEndian</c>): RFC 4122
+    /// big-endian when true, .NET's mixed-endian <see cref="Guid.ToByteArray()"/> order when false.
+    /// </summary>
+    internal bool GuidBytesBigEndian { get; init; }
+
+    /// <summary>The coercion options a dialect's values are read with.</summary>
+    internal static TypeCoercionOptions For(dialects.ISqlDialect dialect) => Default with
+    {
+        Provider = dialect is dialects.SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : dialect.DatabaseType,
+        GuidBytesBigEndian = dialect is not dialects.SqlDialect { StoresGuidBytesBigEndian: false }
+    };
 }

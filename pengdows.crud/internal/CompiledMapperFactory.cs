@@ -101,8 +101,11 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 if (targetType == typeof(Guid) || targetType == typeof(Guid?))
                 {
-                    var readGuidMethod = typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.ReadGuidFromBytes))!;
-                    valueReadExpr = Expression.Call(readGuidMethod, readerParam, ordinalExpr);
+                    // In the dialect's Guid byte order (SqlDialect.StoresGuidBytesBigEndian, TYPE-002).
+                    var readGuidMethod = typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.ReadGuidFromBytes),
+                        new[] { typeof(IDataRecord), typeof(int), typeof(bool) })!;
+                    valueReadExpr = Expression.Call(readGuidMethod, readerParam, ordinalExpr,
+                        Expression.Constant(coercionOptions?.GuidBytesBigEndian ?? false));
                     if (targetType == typeof(Guid?))
                     {
                         valueReadExpr = Expression.Convert(valueReadExpr, typeof(Guid?));

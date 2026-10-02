@@ -361,6 +361,11 @@ internal static class TypeCoercionHelper
             return CoerceDateTime(value, options);
         }
 
+        if (underlyingTarget == typeof(Guid) && TryDecodeGuidBytes(value, options.GuidBytesBigEndian, out var guidValue))
+        {
+            return guidValue;
+        }
+
         // Primary path: Use unified CoercionRegistry system for other types
         var dbValue = new types.coercion.DbValue(value, sourceType);
         if (types.coercion.CoercionRegistry.Shared.TryRead(dbValue, underlyingTarget, out var coercedValue,
@@ -407,6 +412,27 @@ internal static class TypeCoercionHelper
         catch (Exception ex)
         {
             throw new InvalidCastException($"Cannot convert value of type {sourceType} to {targetType}.", ex);
+        }
+    }
+
+    /// <summary>A Guid from its 16 stored bytes in the given byte order.</summary>
+    public static Guid GuidFromBytes(byte[] bytes, bool bigEndian) => new(bytes, bigEndian);
+
+    // A 16-byte value read into a Guid is decoded in the dialect's Guid byte order (TYPE-002);
+    // the registered Guid coercion only knows .NET's mixed-endian order.
+    private static bool TryDecodeGuidBytes(object value, bool bigEndian, out object guid)
+    {
+        switch (value)
+        {
+            case byte[] { Length: 16 } bytes:
+                guid = new Guid(bytes, bigEndian);
+                return true;
+            case ReadOnlyMemory<byte> { Length: 16 } memory:
+                guid = new Guid(memory.Span, bigEndian);
+                return true;
+            default:
+                guid = null!;
+                return false;
         }
     }
 
@@ -1112,6 +1138,9 @@ internal static class TypeCoercionHelper
             return value => value == null ? null : CoerceDateTime(value, options);
         }
 
+        var guidBytesBigEndian = options.GuidBytesBigEndian;
+        var decodesGuidBytes = runtimeTarget == typeof(Guid);
+
         // Try to resolve a registered coercion once; if found, the returned
         // delegate calls TryRead directly — no registry scan at runtime.
         var coercion = types.coercion.CoercionRegistry.Shared.GetCoercion(runtimeTarget, provider);
@@ -1122,6 +1151,11 @@ internal static class TypeCoercionHelper
                 if (value == null)
                 {
                     return null;
+                }
+
+                if (decodesGuidBytes && TryDecodeGuidBytes(value, guidBytesBigEndian, out var guid))
+                {
+                    return guid;
                 }
 
                 var dbValue = new types.coercion.DbValue(value, sourceType ?? value.GetType());
@@ -1149,8 +1183,20 @@ internal static class TypeCoercionHelper
     internal static Func<object?, object?> ResolveCoercer(
         Type sourceType,
         Type targetType,
-        EnumParseFailureMode parseMode)
+        EnumParseFailureMode parseMode) => ResolveCoercer(sourceType, targetType, parseMode, null);
+
+    /// <summary>
+    /// As <see cref="ResolveCoercer(Type, Type, EnumParseFailureMode)"/>, converting with the
+    /// reader's dialect options: its provider-specific coercions and Guid byte order (TYPE-002).
+    /// </summary>
+    internal static Func<object?, object?> ResolveCoercer(
+        Type sourceType,
+        Type targetType,
+        EnumParseFailureMode parseMode,
+        TypeCoercionOptions? options)
     {
+        var provider = options?.Provider ?? SupportedDatabase.Unknown;
+        var guidBytesBigEndian = options?.GuidBytesBigEndian ?? false;
         var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
         if (TryGetEnumType(targetType, out var enumType))
@@ -1176,7 +1222,7 @@ internal static class TypeCoercionHelper
             return value => Utils.IsNullOrDbNull(value) ? null : value;
         }
 
-        var coercion = types.coercion.CoercionRegistry.Shared.GetCoercion(runtimeTarget, SupportedDatabase.Unknown);
+        var coercion = types.coercion.CoercionRegistry.Shared.GetCoercion(runtimeTarget, provider);
         if (coercion != null)
         {
             return value =>
@@ -1184,6 +1230,11 @@ internal static class TypeCoercionHelper
                 if (Utils.IsNullOrDbNull(value))
                 {
                     return null;
+                }
+
+                if (runtimeTarget == typeof(Guid) && TryDecodeGuidBytes(value!, guidBytesBigEndian, out var guid))
+                {
+                    return guid;
                 }
 
                 var dbValue = new types.coercion.DbValue(value!, sourceType);
@@ -1196,9 +1247,10 @@ internal static class TypeCoercionHelper
             };
         }
 
+        var coerceOptions = options ?? TypeCoercionOptions.Default;
         return value => Utils.IsNullOrDbNull(value)
             ? null
-            : Coerce(value!, sourceType, targetType, TypeCoercionOptions.Default);
+            : Coerce(value!, sourceType, targetType, coerceOptions);
     }
 
     /// <summary>
@@ -1263,7 +1315,13 @@ internal static class TypeCoercionHelper
     /// Reads a GUID from a binary column without allocating a byte array.
     /// Optimized for SQLite and other providers that store GUIDs as BLOBs.
     /// </summary>
-    public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal)
+    public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal) => ReadGuidFromBytes(reader, ordinal, false);
+
+    /// <summary>
+    /// Reads a GUID from a binary column in the given byte order (RFC 4122 big-endian or .NET's
+    /// mixed-endian order; <c>SqlDialect.StoresGuidBytesBigEndian</c>).
+    /// </summary>
+    public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal, bool bigEndian)
     {
         var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(16);
         try
@@ -1273,7 +1331,7 @@ internal static class TypeCoercionHelper
             {
                 throw new exceptions.InvalidValueException("Binary column does not contain 16 bytes for a GUID.");
             }
-            return new Guid(temp.AsSpan(0, 16));
+            return new Guid(temp.AsSpan(0, 16), bigEndian);
         }
         finally
         {

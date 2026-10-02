@@ -778,7 +778,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <c>CHAR(16) CHARACTER SET OCTETS</c>), or add a matching read-side coercion.
     /// </para>
     /// </summary>
-    protected virtual byte[] SerializeGuidAsBinary(Guid guid) => guid.ToByteArray();
+    protected virtual byte[] SerializeGuidAsBinary(Guid guid) => guid.ToByteArray(StoresGuidBytesBigEndian);
+
+    /// <summary>
+    /// Byte order of a Guid stored as 16 bytes (a Guid declared <see cref="DbType.Binary"/>, and a
+    /// 16-byte column read into a Guid): RFC 4122 big-endian by default, as MySQL's
+    /// UUID_TO_BIN/BIN_TO_UUID and most databases' own UUID bytes; false where the database's GUID
+    /// bytes use .NET's mixed-endian <see cref="Guid.ToByteArray()"/> order (TYPE-002).
+    /// </summary>
+    internal virtual bool StoresGuidBytesBigEndian => true;
 
     // SQL standard parameter name pattern (SQL-92)
     public virtual Regex ParameterNamePattern => new("^[a-zA-Z][a-zA-Z0-9_]*$", RegexOptions.Compiled);
@@ -1659,6 +1667,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             byte[]? bytes = rowVersion.Equals(default) ? null : rowVersion.ToArray();
             return CreateDbParameter(name, type, bytes);
+        }
+
+        // TYPE-002: a Guid declared Binary is sent as its 16 bytes in the database's Guid byte order
+        // (StoresGuidBytesBigEndian), whatever the dialect's own Guid handling.
+        if (value is Guid binaryGuid && type == DbType.Binary)
+        {
+            return CreateDbParameter(name, type, SerializeGuidAsBinary(binaryGuid));
         }
 
         // TYPE-001: DateOnly/TimeOnly bind exactly as the equivalent midnight DateTime / TimeSpan

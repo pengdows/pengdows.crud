@@ -174,7 +174,8 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         _dialect = databaseContext.GetDialect();
         _coercionOptions = _coercionOptions with
         {
-            Provider = _dialect is SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : _dialect.DatabaseType
+            Provider = _dialect is SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : _dialect.DatabaseType,
+            GuidBytesBigEndian = TypeCoercionOptions.For(_dialect).GuidBytesBigEndian
         };
         _readerPlans = new BoundedCache<RecordsetShape, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
 

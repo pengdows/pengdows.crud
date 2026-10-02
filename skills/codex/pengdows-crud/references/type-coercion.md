@@ -114,6 +114,9 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
 - DuckDB `HUGEINT`/`UHUGEINT` and Firebird `INT128` → `Int128`/`UInt128` (or `BigInteger`, `long`, `decimal`
   when the value fits). Converted with checked casts; out of range throws `DataMappingException`. Written as
   `BigInteger`, or as exact text on DuckDB (its driver can't bind the full range).
+- A `Guid` declared `DbType.Binary` is stored as 16 bytes in the database's Guid byte order: RFC 4122 big-endian by
+  default (MySQL family's `UUID_TO_BIN`, PostgreSQL, SQLite, Firebird, ...), .NET `ToByteArray()` order on SQL Server,
+  Oracle and Sybase ASE; 16-byte columns read into a `Guid` decode the same way (changed in 2.0.6, TYPE-002).
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.

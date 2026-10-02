@@ -23,10 +23,10 @@
 //   SingleStore, Sybase ASE 16.x, Google Cloud Spanner (PostgreSQL dialect only — pengdows.crud
 //   has no GoogleSQL-dialect Spanner support, so that type list is intentionally not modeled
 //   here), Informix 14.10, SAP HANA (Cloud QRC 2/2026, with the platform/legacy addendum), and
-//   InterBase 15, plus PostgreSQL (shared by Aurora PostgreSQL) and SQL Server 2025, live-verified
-//   by TypeRoundTripMatrixTests (TYPE-002). Every other pengdows.crud-supported database (MySQL,
-//   MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora
-//   MySQL) is deliberately left unpopulated rather than guessed — extend this
+//   InterBase 15, plus PostgreSQL (shared by Aurora PostgreSQL), SQL Server 2025 and the MySQL
+//   family (MySQL/Aurora MySQL, MariaDB, TiDB), live-verified by TypeRoundTripMatrixTests
+//   (TYPE-002). Every other pengdows.crud-supported database (Oracle, SQLite, DuckDB, Firebird,
+//   CockroachDB, YugabyteDB, Snowflake) is deliberately left unpopulated rather than guessed — extend this
 //   catalog with the same sourcing discipline (a citable reference or a live-verified fact) when
 //   one of those is needed, not by assumption from a "similar" engine.
 // - Two real cases prove a flat name -> DbType dictionary is insufficient, which is why this
@@ -109,6 +109,9 @@ public static class DatabaseTypeCatalog
         SupportedDatabase.InterBase => InterBaseTypes,
         SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => PostgreSqlTypes,
         SupportedDatabase.SqlServer => SqlServerTypes,
+        SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => MySqlTypes,
+        SupportedDatabase.MariaDb => MariaDbTypes,
+        SupportedDatabase.TiDb => TiDbTypes,
         SupportedDatabase.Access => AccessTypes,
         _ => Array.Empty<ColumnTypeDescriptor>()
     };
@@ -348,6 +351,154 @@ public static class DatabaseTypeCatalog
             Notes: "Server-generated; covered by the [Version] tests."),
         new("SQL_VARIANT", ColumnTypeCategory.Other, Notes: "No single CLR type."),
     };
+
+    // ── MySQL 8.4 family (MySQL, Aurora MySQL, MariaDB 11.4, TiDB 8.5) ────────
+    // Source: MySQL 8.4 Reference Manual chapter 13 "Data Types"; MariaDB "Data Types"; TiDB
+    // "Data Types" (no spatial types). Samples respect each type's range (TIMESTAMP 1970-2038, TIME
+    // ±838:59:59) and are whole microseconds (fractions beyond the column's precision are
+    // truncated). Live-verified by TypeRoundTripMatrixTests (TYPE-002).
+    private static readonly ColumnTypeDescriptor[] MySqlCommonTypes =
+    {
+        new("TINYINT", ColumnTypeCategory.ExactNumeric,
+            Declaration: "TINYINT", ClrType: typeof(sbyte), DbType: System.Data.DbType.SByte, Sample: sbyte.MinValue),
+        new("TINYINT UNSIGNED", ColumnTypeCategory.ExactNumeric, IsUnsigned: true,
+            Declaration: "TINYINT UNSIGNED", ClrType: typeof(byte), DbType: System.Data.DbType.Byte, Sample: byte.MaxValue),
+        new("BOOLEAN", ColumnTypeCategory.Boolean, Aliases: new[] { "BOOL", "TINYINT(1)" },
+            Declaration: "BOOLEAN", ClrType: typeof(bool), DbType: System.Data.DbType.Boolean, Sample: true),
+        new("SMALLINT", ColumnTypeCategory.ExactNumeric,
+            Declaration: "SMALLINT", ClrType: typeof(short), DbType: System.Data.DbType.Int16, Sample: short.MinValue),
+        new("SMALLINT UNSIGNED", ColumnTypeCategory.ExactNumeric, IsUnsigned: true,
+            Declaration: "SMALLINT UNSIGNED", ClrType: typeof(ushort), DbType: System.Data.DbType.UInt16, Sample: ushort.MaxValue),
+        new("MEDIUMINT", ColumnTypeCategory.ExactNumeric,
+            Declaration: "MEDIUMINT", ClrType: typeof(int), DbType: System.Data.DbType.Int32, Sample: -8388608),
+        new("MEDIUMINT UNSIGNED", ColumnTypeCategory.ExactNumeric, IsUnsigned: true,
+            Declaration: "MEDIUMINT UNSIGNED", ClrType: typeof(uint), DbType: System.Data.DbType.UInt32, Sample: 16777215u),
+        new("INT", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "INTEGER" },
+            Declaration: "INT", ClrType: typeof(int), DbType: System.Data.DbType.Int32, Sample: int.MinValue),
+        new("INT UNSIGNED", ColumnTypeCategory.ExactNumeric, IsUnsigned: true,
+            Declaration: "INT UNSIGNED", ClrType: typeof(uint), DbType: System.Data.DbType.UInt32, Sample: uint.MaxValue),
+        new("BIGINT", ColumnTypeCategory.ExactNumeric,
+            Declaration: "BIGINT", ClrType: typeof(long), DbType: System.Data.DbType.Int64, Sample: long.MinValue),
+        new("BIGINT UNSIGNED", ColumnTypeCategory.ExactNumeric, IsUnsigned: true,
+            Declaration: "BIGINT UNSIGNED", ClrType: typeof(ulong), DbType: System.Data.DbType.UInt64, Sample: ulong.MaxValue),
+        new("DECIMAL(p,s)", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "NUMERIC(p,s)", "DEC(p,s)", "FIXED(p,s)" },
+            Declaration: "DECIMAL(38,10)", ClrType: typeof(decimal), DbType: System.Data.DbType.Decimal, Sample: -1234567890123456.0123456789m),
+        new("FLOAT", ColumnTypeCategory.ApproximateNumeric,
+            Declaration: "FLOAT", ClrType: typeof(float), DbType: System.Data.DbType.Single, Sample: 1.5f),
+        new("DOUBLE", ColumnTypeCategory.ApproximateNumeric, Aliases: new[] { "DOUBLE PRECISION", "REAL" },
+            Declaration: "DOUBLE", ClrType: typeof(double), DbType: System.Data.DbType.Double, Sample: -1.25e300),
+        new("BIT(1)", ColumnTypeCategory.Boolean,
+            Declaration: "BIT(1)", ClrType: typeof(bool), DbType: System.Data.DbType.Boolean, Sample: true),
+        new("BIT(64)", ColumnTypeCategory.Binary,
+            Declaration: "BIT(64)", ClrType: typeof(ulong), DbType: System.Data.DbType.UInt64, Sample: 0x8000_0000_0000_0001UL),
+        new("CHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "CHAR(10)", ClrType: typeof(string), DbType: System.Data.DbType.StringFixedLength, Sample: "abcdefghij"),
+        new("VARCHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "VARCHAR(50)", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "héllo wörld ✓ 😀"),
+        new("TINYTEXT", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "TINYTEXT", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "tiny text"),
+        new("TEXT", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "TEXT", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: new string('é', 9000)),
+        new("MEDIUMTEXT", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "MEDIUMTEXT", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: new string('m', 70000)),
+        new("LONGTEXT", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "LONGTEXT", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "long text"),
+        new("BINARY(n)", ColumnTypeCategory.Binary, IsBinary: true,
+            Declaration: "BINARY(5)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 0, 1, 2, 0xFE, 0xFF }),
+        new("VARBINARY(n)", ColumnTypeCategory.Binary, IsBinary: true,
+            Declaration: "VARBINARY(50)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 9, 0, 7 }),
+        new("TINYBLOB", ColumnTypeCategory.Lob, IsBinary: true, IsLob: true,
+            Declaration: "TINYBLOB", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 1, 2, 3 }),
+        new("BLOB", ColumnTypeCategory.Lob, IsBinary: true, IsLob: true,
+            Declaration: "BLOB", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: Enumerable.Range(0, 9000).Select(i => (byte)i).ToArray()),
+        new("MEDIUMBLOB", ColumnTypeCategory.Lob, IsBinary: true, IsLob: true,
+            Declaration: "MEDIUMBLOB", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: Enumerable.Range(0, 70000).Select(i => (byte)i).ToArray()),
+        new("LONGBLOB", ColumnTypeCategory.Lob, IsBinary: true, IsLob: true,
+            Declaration: "LONGBLOB", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 0xFF, 0 }),
+        new("DATE", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATE", ClrType: typeof(DateOnly), DbType: System.Data.DbType.Date, Sample: new DateOnly(2026, 10, 1)),
+        new("TIME(n)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "TIME(6)", ClrType: typeof(TimeOnly), DbType: System.Data.DbType.Time, Sample: new TimeOnly(13, 45, 30, 123, 456)),
+        new("TIME(n) (duration)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "TIME(6)", ClrType: typeof(TimeSpan), DbType: System.Data.DbType.Time,
+            Sample: new TimeSpan(34, 59, 59).Add(TimeSpan.FromMicroseconds(1)).Negate(),
+            Notes: "MySQL TIME is a duration (-838:59:59 to 838:59:59), not only a time of day."),
+        new("DATETIME(n)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATETIME(6)", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, 123, 456, DateTimeKind.Utc)),
+        new("TIMESTAMP(n)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "TIMESTAMP(6) NULL", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, 123, 456, DateTimeKind.Utc)),
+        new("DATETIME(n) (DateTimeOffset)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATETIME(6)", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset,
+            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, 123, 456, TimeSpan.Zero),
+            Notes: "No offset is stored; a UTC instant round-trips."),
+        new("YEAR", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "YEAR", ClrType: typeof(short), DbType: System.Data.DbType.Int16, Sample: (short)2026),
+        new("ENUM", ColumnTypeCategory.Character,
+            Declaration: "ENUM('red','green','blue')", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "green"),
+        new("SET", ColumnTypeCategory.Character,
+            Declaration: "SET('a','b','c')", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "a,c"),
+        new("JSON", ColumnTypeCategory.Json,
+            Declaration: "JSON", ClrType: typeof(pengdows.crud.types.valueobjects.JsonValue), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.JsonValue("{\"a\":1,\"b\":[true,null]}"), Comparable: false),
+        new("CHAR(36) (Guid)", ColumnTypeCategory.Other,
+            Declaration: "CHAR(36)", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
+        new("BINARY(16) (Guid)", ColumnTypeCategory.Other,
+            Declaration: "BINARY(16)", ClrType: typeof(Guid), DbType: System.Data.DbType.Binary, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
+    };
+
+    private static readonly ColumnTypeDescriptor[] MySqlSpatialTypes =
+    {
+        new("GEOMETRY", ColumnTypeCategory.Spatial,
+            Declaration: "GEOMETRY", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POLYGON((0 0, 4 0, 4 4, 0 0))", 0), Comparable: false),
+        new("POINT", ColumnTypeCategory.Spatial,
+            Declaration: "POINT", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POINT(1 2)", 0), Comparable: false),
+        new("LINESTRING", ColumnTypeCategory.Spatial,
+            Declaration: "LINESTRING", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("LINESTRING(0 0, 1 1, 2 0)", 0), Comparable: false),
+        new("POLYGON", ColumnTypeCategory.Spatial,
+            Declaration: "POLYGON", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POLYGON((0 0, 4 0, 4 4, 0 0), (1 1, 2 1, 1 2, 1 1))", 0), Comparable: false),
+        new("MULTIPOINT", ColumnTypeCategory.Spatial,
+            Declaration: "MULTIPOINT", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("MULTIPOINT((1 2), (3 4))", 0), Comparable: false),
+        new("MULTILINESTRING", ColumnTypeCategory.Spatial,
+            Declaration: "MULTILINESTRING", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("MULTILINESTRING((0 0, 1 1), (2 2, 3 3))", 0), Comparable: false),
+        new("MULTIPOLYGON", ColumnTypeCategory.Spatial,
+            Declaration: "MULTIPOLYGON", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("MULTIPOLYGON(((0 0, 1 0, 1 1, 0 0)), ((5 5, 6 5, 6 6, 5 5)))", 0), Comparable: false),
+        new("GEOMETRYCOLLECTION", ColumnTypeCategory.Spatial,
+            Declaration: "GEOMETRYCOLLECTION", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("GEOMETRYCOLLECTION(POINT(1 2), LINESTRING(0 0, 1 1))", 0), Comparable: false),
+        new("GEOMETRY SRID 4326 (Geography)", ColumnTypeCategory.Spatial,
+            Declaration: "GEOMETRY SRID 4326", ClrType: typeof(pengdows.crud.types.valueobjects.Geography), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geography.FromWellKnownText("POINT(-87.6298 41.8781)", 4326), Comparable: false,
+            Notes: "MySQL has no separate geography type; geodetic values live in a GEOMETRY column with SRID 4326."),
+    };
+
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> MySqlTypes = MySqlCommonTypes.Concat(MySqlSpatialTypes).ToArray();
+
+    // MariaDB 11.4: the MySQL list (JSON is an alias for LONGTEXT with a JSON_VALID check; a SRID
+    // column attribute isn't supported) plus its own UUID/INET4/INET6.
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> MariaDbTypes = MySqlCommonTypes
+        .Concat(MySqlSpatialTypes.Where(e => e.ClrType != typeof(pengdows.crud.types.valueobjects.Geography)))
+        .Concat(new ColumnTypeDescriptor[]
+        {
+            new("UUID", ColumnTypeCategory.Other, MinVersion: "10.7",
+                Declaration: "UUID", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
+            new("INET4", ColumnTypeCategory.Other, MinVersion: "10.10",
+                Declaration: "INET4", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "192.168.1.20"),
+            new("INET6", ColumnTypeCategory.Other, MinVersion: "10.5",
+                Declaration: "INET6", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "2001:db8::1"),
+        })
+        .ToArray();
+
+    // TiDB 8.5: the MySQL list without spatial types (unsupported).
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> TiDbTypes = MySqlCommonTypes;
 
     // ── Db2 LUW 11.5.x ──────────────────────────────────────────────────────
     // Source: IBM Db2 11.5 SQL reference (data types / CREATE TABLE). Special cases NOT modeled

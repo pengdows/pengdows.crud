@@ -38,6 +38,9 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class SybaseAseDialect : SqlDialect
 {
+    // TYPE-002: AseClient writes a Guid to BINARY(16) in .NET's mixed-endian ToByteArray order.
+    internal override bool StoresGuidBytesBigEndian => false;
+
     internal SybaseAseDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {

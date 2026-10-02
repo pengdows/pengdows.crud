@@ -70,6 +70,9 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     // field type for (TYPE-016). Per ordinal, the Type it reads them as or NotUnresolved; resolved
     // once, since a tracked reader never moves to another result set.
     private readonly SqlDialect? _unresolvedColumnDialect;
+
+    // The dialect's coercion options: DataReaderMapper resolves provider-specific coercions with them.
+    private readonly TypeCoercionOptions _coercionOptions;
     private object?[]? _unresolvedColumnTypes;
     private static readonly object NotUnresolved = new();
 
@@ -117,8 +120,10 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         bool readsInt64ThroughGetValue = false,
         bool reportsOutOfRangeDecimalAsNull = false,
         Func<Exception, bool>? isUnreadableStoredValue = null,
-        SqlDialect? unresolvedColumnDialect = null)
+        SqlDialect? unresolvedColumnDialect = null,
+        TypeCoercionOptions? coercionOptions = null)
     {
+        _coercionOptions = coercionOptions ?? TypeCoercionOptions.Default;
         _unresolvedColumnDialect = unresolvedColumnDialect;
         _isUnreadableStoredValue = isUnreadableStoredValue;
         _reportsOutOfRangeDecimalAsNull = reportsOutOfRangeDecimalAsNull;
@@ -138,6 +143,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     DbDataReader IInternalTrackedReader.InnerReader => _reader;
     DbCommand? IInternalTrackedReader.InnerCommand => _command;
     Type? IInternalTrackedReader.GetUnresolvedColumnType(int ordinal) => UnresolvedColumnType(ordinal);
+    TypeCoercionOptions IInternalTrackedReader.CoercionOptions => _coercionOptions;
 
     protected override void DisposeManaged()
     {

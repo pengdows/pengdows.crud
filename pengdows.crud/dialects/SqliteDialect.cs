@@ -374,7 +374,8 @@ internal class SqliteDialect : SqlDialect
             return base.CreateDbParameter(name, DbType.String, span.ToString("c", CultureInfo.InvariantCulture));
         }
 
-        if (value is Guid guid)
+        // A Guid declared Binary is stored as its 16 bytes (base CreateDbParameter, TYPE-002).
+        if (value is Guid guid && type != DbType.Binary)
         {
             return base.CreateDbParameter(name, DbType.String, guid.ToString("D"));
         }

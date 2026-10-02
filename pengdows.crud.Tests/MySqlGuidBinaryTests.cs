@@ -43,7 +43,8 @@ public class MySqlGuidBinaryTests
         {
             new Dictionary<string, object>
             {
-                ["id"] = expected.ToByteArray()
+                // MySQL's Guid bytes are RFC 4122 big-endian, as UUID_TO_BIN writes them (TYPE-002).
+                ["id"] = expected.ToByteArray(bigEndian: true)
             }
         };
 

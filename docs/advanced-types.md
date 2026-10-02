@@ -119,6 +119,25 @@ A SQL Server `hierarchyid` column maps to `HierarchyId` (or `string`, its text f
 - Verified live on SQL Server 2025 (every range of the encoding, dotted and negative components,
   WHERE and ORDER BY).
 
+### Guids in 16-byte binary columns
+
+Declare a `Guid` property `[Column(..., DbType.Binary)]` to store it as 16 bytes (`BINARY(16)`,
+`RAW(16)`, `BLOB`, ...). The bytes are in the database's own Guid byte order, and a 16-byte column read
+into a `Guid` is decoded the same way, through the gateway and `DataReaderMapper` alike:
+
+- **RFC 4122 big-endian** (the default): MySQL, MariaDB, TiDB and SingleStore (the order of
+  `UUID_TO_BIN`/`BIN_TO_UUID` and MySqlConnector's `GuidFormat=Binary16`), Firebird, PostgreSQL,
+  SQLite, DuckDB and every other database.
+- **.NET `Guid.ToByteArray()` order** (mixed-endian): SQL Server (`uniqueidentifier`'s own byte
+  layout), Oracle (ODP.NET's `RAW(16)` Guids) and Sybase ASE (AseClient's `BINARY(16)` Guids).
+
+**Changed in 2.0.6:** earlier releases refused a `Guid` declared `DbType.Binary` and always decoded
+16 bytes in .NET order. On the RFC 4122 databases, bytes your application wrote itself with
+`guid.ToByteArray()` now read as a different Guid. Rewrite them with `ToByteArray(bigEndian: true)`,
+or read the column into `byte[]` and call `new Guid(bytes)`. Data written by `UUID_TO_BIN()` or by
+MySqlConnector's `Binary16` format now reads correctly. A `Guid` declared `DbType.Guid` is unchanged
+(each dialect's native UUID type or text).
+
 ### SQL Server `geometry` / `geography`
 
 `Geometry` and `Geography` properties map to SQL Server's spatial columns with no

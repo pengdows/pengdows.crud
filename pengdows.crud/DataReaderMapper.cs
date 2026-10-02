@@ -133,9 +133,6 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static readonly MethodInfo _guidParseMethod =
         typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
 
-    private static readonly ConstructorInfo _guidFromBytesConstructor =
-        typeof(Guid).GetConstructor(new[] { typeof(byte[]) })!;
-
     internal DataReaderMapper()
     {
     }
@@ -144,7 +141,14 @@ public sealed class DataReaderMapper : IDataReaderMapper
         Type Type,
         RecordsetShape Shape,
         bool ColumnsOnly,
-        EnumParseFailureMode EnumMode);
+        EnumParseFailureMode EnumMode,
+        TypeCoercionOptions? Coercion)
+    {
+        public PlanCacheKey(Type type, RecordsetShape shape, bool columnsOnly, EnumParseFailureMode enumMode)
+            : this(type, shape, columnsOnly, enumMode, null)
+        {
+        }
+    }
 
     public static ValueTask<List<T>> LoadObjectsFromDataReaderAsync<T>(
         ITrackedReader reader,
@@ -243,12 +247,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
         CancellationToken cancellationToken)
         where T : class, new()
     {
-        var recordReader = GetRecordReader(reader, out var unresolved);
+        var recordReader = GetRecordReader(reader, out var unresolved, out var coercion);
         options ??= MapperOptions.Default;
 
         var shape = BuildSchemaShape(recordReader, options, unresolved);
-        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved));
+        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode, coercion);
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved, coercion));
 
         var result = new List<T>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -299,12 +303,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : class, new()
     {
-        var recordReader = GetRecordReader(reader, out var unresolved);
+        var recordReader = GetRecordReader(reader, out var unresolved, out var coercion);
         options ??= MapperOptions.Default;
 
         var shape = BuildSchemaShape(recordReader, options, unresolved);
-        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved));
+        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode, coercion);
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved, coercion));
 
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -347,16 +351,21 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
     }
 
-    private static DbDataReader GetRecordReader(ITrackedReader reader, out Func<int, Type?>? unresolved)
+    private static DbDataReader GetRecordReader(ITrackedReader reader, out Func<int, Type?>? unresolved,
+        out TypeCoercionOptions? coercion)
     {
         ArgumentNullException.ThrowIfNull(reader);
         unresolved = null;
+        coercion = null;
 
         if (reader is IInternalTrackedReader internalReader)
         {
             // TYPE-016: the tracked reader knows which columns its dialect reads although the
             // provider reports no field type for them (hierarchyid without Microsoft.SqlServer.Types).
             unresolved = internalReader.GetUnresolvedColumnType;
+            // TYPE-002: provider-specific coercions (e.g. MySQL's SRID-prefixed spatial format)
+            // apply here as they do through the gateway.
+            coercion = internalReader.CoercionOptions;
             return internalReader.InnerReader;
         }
 
@@ -412,7 +421,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     }
 
     private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options,
-        Func<int, Type?>? unresolved = null)
+        Func<int, Type?>? unresolved = null, TypeCoercionOptions? coercion = null)
     {
         var type = typeof(T);
         var propertyLookup = GetPropertyLookup(type, options);
@@ -437,8 +446,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var fieldType = ResolveFieldType(reader, i, unresolved);
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
                 setters.Add(IsUnresolved(i, unresolved)
-                    ? CreateUnresolvedSetter<T>(prop, fieldType, options.EnumMode, i)
-                    : GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i));
+                    ? CreateUnresolvedSetter<T>(prop, fieldType, options.EnumMode, i, coercion)
+                    : GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i, coercion));
                 properties.Add(prop);
                 // Non-nullable value types cannot hold null at the .NET level. Skip the IsDBNull
                 // guard for these columns — if the DB returns NULL for a non-nullable property,
@@ -489,9 +498,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
         Type fieldType,
         bool requiresCoercion,
         EnumParseFailureMode enumMode,
-        int ordinal)
+        int ordinal,
+        TypeCoercionOptions? coercion)
     {
-        var key = new SetterCacheKey(typeof(T), prop, fieldType, requiresCoercion, enumMode, ordinal);
+        var key = new SetterCacheKey(typeof(T), prop, fieldType, requiresCoercion, enumMode, ordinal, coercion);
         return (Action<T, DbDataReader>)_setterCache.GetOrAdd(key, static k => CompileSetter<T>(k));
     }
 
@@ -512,7 +522,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var readInet = typeof(InetFieldReader).GetMethod(nameof(InetFieldReader.Read))!;
             var rawValue = Expression.Call(readInet, Expression.Convert(readerParam, typeof(IDataRecord)),
                 Expression.Constant(key.Ordinal));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode);
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
         else if (key.FieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
@@ -522,7 +532,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var readWide = typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.Read))!;
             var rawValue = Expression.Call(readWide, Expression.Convert(readerParam, typeof(IDataRecord)),
                 Expression.Constant(key.Ordinal));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode);
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
         else if (underlyingTarget == typeof(types.valueobjects.PostgreSqlInterval))
@@ -532,7 +542,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var readInterval = typeof(IntervalFieldReader).GetMethod(nameof(IntervalFieldReader.Read))!;
             var rawValue = Expression.Call(readInterval, Expression.Convert(readerParam, typeof(IDataRecord)),
                 Expression.Constant(key.Ordinal));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode);
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
         else if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(key.FieldType))
@@ -551,7 +561,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 // Fallback: GetValue() returns boxed object; coercer returns boxed result; then unbox.
                 var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
                 var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
-                var coercer = TypeCoercionHelper.ResolveCoercer(key.FieldType, targetType, key.EnumMode);
+                var coercer = TypeCoercionHelper.ResolveCoercer(key.FieldType, targetType, key.EnumMode, key.Coercion);
                 var invokeCoercer = Expression.Invoke(Expression.Constant(coercer), rawValue);
                 valueExpression = Expression.Convert(invokeCoercer, targetType);
             }
@@ -757,9 +767,9 @@ public sealed class DataReaderMapper : IDataReaderMapper
     // A column the provider reports no field type for can't use the compiled GetValue/GetFieldValue
     // setters; it is read by type through UnresolvedColumnReader, then coerced as usual (TYPE-016).
     private static Action<T, DbDataReader> CreateUnresolvedSetter<T>(PropertyInfo prop, Type fieldType,
-        EnumParseFailureMode enumMode, int ordinal)
+        EnumParseFailureMode enumMode, int ordinal, TypeCoercionOptions? coercion)
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(fieldType, prop.PropertyType, enumMode);
+        var coercer = TypeCoercionHelper.ResolveCoercer(fieldType, prop.PropertyType, enumMode, coercion);
         return (target, reader) =>
             prop.SetValue(target, coercer(UnresolvedColumnReader.Read(reader, ordinal, fieldType)));
     }
@@ -844,7 +854,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
         Type FieldType,
         bool RequiresCoercion,
         EnumParseFailureMode EnumMode,
-        int Ordinal);
+        int Ordinal,
+        TypeCoercionOptions? Coercion);
 
     private readonly record struct PropertyLookupCacheKey(Type Type, bool ColumnsOnly);
 
@@ -969,18 +980,15 @@ public sealed class DataReaderMapper : IDataReaderMapper
             return true;
         }
 
-        // byte[] → Guid / Guid?
-        // NOTE: new Guid(byte[]) uses .NET's mixed-endian layout (Data1/2/3 little-endian).
-        // This is correct when the driver returns raw bytes from a column that was written
-        // with the base SqlDialect.SerializeGuidAsBinary (also mixed-endian).
-        // If a dialect overrides SerializeGuidAsBinary to write big-endian bytes (e.g. Firebird),
-        // its driver MUST return a native Guid for the column — not byte[] — so this path is
-        // never reached and the byte-order mismatch never occurs.
+        // byte[] → Guid / Guid?, in the dialect's Guid byte order (SqlDialect.StoresGuidBytesBigEndian,
+        // TYPE-002); a reader with no dialect uses .NET's mixed-endian order.
         if (fieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
         {
             var getBytes = _getFieldValueGenericMethod.MakeGenericMethod(typeof(byte[]));
             var rawBytes = Expression.Call(readerParam, getBytes, ordinalConst);
-            var newGuid = Expression.New(_guidFromBytesConstructor, rawBytes);
+            var newGuid = Expression.Call(
+                typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.GuidFromBytes))!,
+                rawBytes, Expression.Constant(key.Coercion?.GuidBytesBigEndian ?? false));
             valueExpression = isNullable ? Expression.Convert(newGuid, targetType) : newGuid;
             return true;
         }

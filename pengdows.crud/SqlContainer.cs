@@ -219,10 +219,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return accessor.GetMetricsCollector(executionType) ?? accessor.MetricsCollector;
     }
 
-    private TypeCoercionOptions DefaultCoercionOptions => TypeCoercionOptions.Default with
-    {
-        Provider = _dialect is SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : _dialect.DatabaseType
-    };
+    private TypeCoercionOptions DefaultCoercionOptions => TypeCoercionOptions.For(_dialect);
 
     ISqlDialect ISqlDialectProvider.Dialect => _dialect;
 
@@ -1665,7 +1662,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 _dialect is SqlDialect { ReadsInt64ThroughGetValue: true },
                 _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true },
                 _dialect is SqlDialect unreadableDialect ? unreadableDialect.IsUnreadableStoredValue : null,
-                _dialect is SqlDialect { ReadsUnresolvedColumns: true } unresolvedDialect ? unresolvedDialect : null);
+                _dialect is SqlDialect { ReadsUnresolvedColumns: true } unresolvedDialect ? unresolvedDialect : null,
+                DefaultCoercionOptions);
             cmd = null;
             singleConnectionTxGate = null; // TrackedReader owns it until the reader is disposed
             lockTransferred = true; // TrackedReader now owns both the connection and context locks

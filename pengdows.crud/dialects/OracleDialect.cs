@@ -42,6 +42,9 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class OracleDialect : SqlDialect
 {
+    // TYPE-002: ODP.NET writes a Guid to RAW(16) in .NET's mixed-endian ToByteArray order.
+    internal override bool StoresGuidBytesBigEndian => false;
+
     internal OracleDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {

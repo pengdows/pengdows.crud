@@ -79,7 +79,8 @@ public class CompiledMapperFactoryUncoveredBranchTests
     {
         var guid = Guid.NewGuid();
         var (factory, typeMap) = MakeFactory(
-            new Dictionary<string, object?> { ["Id"] = 1, ["GuidBytes"] = guid.ToByteArray() });
+            // SQLite's Guid bytes are RFC 4122 big-endian, the default byte order (TYPE-002).
+            new Dictionary<string, object?> { ["Id"] = 1, ["GuidBytes"] = guid.ToByteArray(bigEndian: true) });
         typeMap.Register<NullableGuidFromBytesEntity>();
 
         using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", factory, typeMap);

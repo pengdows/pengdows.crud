@@ -70,7 +70,7 @@ internal static class DbTypeValidator
             [DbType.Guid] = new HashSet<Type> { typeof(Guid), typeof(string), typeof(byte[]) }.ToFrozenSet(),
 
             [DbType.Binary] = new HashSet<Type>
-                { typeof(byte[]), typeof(ArraySegment<byte>), typeof(ReadOnlyMemory<byte>), typeof(Stream) }.ToFrozenSet(),
+                { typeof(byte[]), typeof(ArraySegment<byte>), typeof(ReadOnlyMemory<byte>), typeof(Stream), typeof(Guid) }.ToFrozenSet(),
 
             [DbType.Object] = FrozenSet<Type>.Empty, // Accept anything for DbType.Object
         }.ToFrozenDictionary();
