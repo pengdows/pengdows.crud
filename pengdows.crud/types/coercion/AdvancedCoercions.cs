@@ -653,6 +653,14 @@ internal class PostgreSqlRangeIntCoercion : DbCoercion<Range<int>>
                     return false;
                 }
             default:
+                // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
+                if (src.RawValue is not null &&
+                    RangeConverters.Int.TryConvertFromProvider(src.RawValue, SupportedDatabase.PostgreSql, out var converted))
+                {
+                    value = converted;
+                    return true;
+                }
+
                 value = Range<int>.Empty;
                 return false;
         }
@@ -696,6 +704,14 @@ internal class PostgreSqlRangeDateTimeCoercion : DbCoercion<Range<DateTime>>
                     return false;
                 }
             default:
+                // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
+                if (src.RawValue is not null &&
+                    RangeConverters.DateTime.TryConvertFromProvider(src.RawValue, SupportedDatabase.PostgreSql, out var converted))
+                {
+                    value = converted;
+                    return true;
+                }
+
                 value = Range<DateTime>.Empty;
                 return false;
         }
@@ -739,6 +755,14 @@ internal class PostgreSqlRangeLongCoercion : DbCoercion<Range<long>>
                     return false;
                 }
             default:
+                // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
+                if (src.RawValue is not null &&
+                    RangeConverters.Long.TryConvertFromProvider(src.RawValue, SupportedDatabase.PostgreSql, out var converted))
+                {
+                    value = converted;
+                    return true;
+                }
+
                 value = Range<long>.Empty;
                 return false;
         }
@@ -988,4 +1012,11 @@ internal sealed class MySqlGeographyCoercion : DbCoercion<Geography>
         parameter.Value = value is null ? DBNull.Value : MySqlSpatialFormat.Join(value);
         return true;
     }
+}
+
+internal static class RangeConverters
+{
+    public static readonly PostgreSqlRangeConverter<int> Int = new();
+    public static readonly PostgreSqlRangeConverter<long> Long = new();
+    public static readonly PostgreSqlRangeConverter<DateTime> DateTime = new();
 }

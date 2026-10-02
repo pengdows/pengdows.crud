@@ -161,6 +161,14 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     valueReadExpr = Expression.TryCatch(finalEnumExpr, catchBlock);
                 }
             }
+            else if ((Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.Inet))
+            {
+                // Npgsql's GetValue() returns IPAddress for inet columns, dropping the netmask; read
+                // NpgsqlInet instead.
+                var readInet = typeof(InetFieldReader).GetMethod(nameof(InetFieldReader.Read))!;
+                var rawValue = Expression.Call(readInet, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+            }
             else if ((Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.PostgreSqlInterval))
             {
                 // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months

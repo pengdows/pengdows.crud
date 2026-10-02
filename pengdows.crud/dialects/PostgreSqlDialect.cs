@@ -101,6 +101,19 @@ internal class PostgreSqlDialect : SqlDialect
     // DataTypeName (e.g. 'bigint') after its value becomes an array, and Npgsql 9 rejects that:
     // "Writing values of 'System.Int64[]' is not supported for parameters having DataTypeName
     // 'bigint'" (confirmed live). Retype it as Array | element.
+    // Npgsql maps DbType.DateTime2 to timestamp without time zone and refuses a DateTime with
+    // Kind=Utc for it. pengdows stores UTC wall time there, so the same instant goes out with
+    // Kind=Unspecified (TYPE-002). DbType.DateTime is timestamptz in Npgsql and keeps Kind=Utc.
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        if (type == DbType.DateTime2 && value is DateTime { Kind: DateTimeKind.Utc } utc)
+        {
+            return base.CreateDbParameter(name, type, DateTime.SpecifyKind(utc, DateTimeKind.Unspecified));
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
+
     internal override void ConfigureSetValuedParameter(DbParameter parameter, Array value)
     {
         var property = parameter.GetType().GetProperty(NpgsqlDbTypeProperty);
