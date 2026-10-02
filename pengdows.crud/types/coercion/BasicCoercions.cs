@@ -707,6 +707,11 @@ internal class DecimalCoercion : DbCoercion<decimal>
             case { } decFloat when FirebirdDecFloat.Is(decFloat):
                 value = FirebirdDecFloat.ToDecimal(decFloat);
                 return true;
+            // Decimal text may carry an exponent ("-1.23456789012346e+15", as SQLite held a decimal
+            // bound as a double before TYPE-002); Convert.ToDecimal rejects it.
+            case string text when decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed):
+                value = parsed;
+                return true;
             default:
                 try
                 {

@@ -439,8 +439,22 @@ internal static class TypeCoercionHelper
     // A registered coercion (e.g. decimal's) that declines a value falls back here. Wide integers
     // (BigInteger, Int128, UInt128) aren't IConvertible, so they take the checked TYPE-005 casts:
     // exact or OverflowException, as through Coerce.
-    private static object ConvertRegisteredFallback(object value, Type target) =>
-        TryCoerceWideInteger(value, target, out var wide) ? wide! : ConvertWithCache(value, target);
+    // A sequence (DuckDB.NET's List<T> for a LIST column) takes the element-by-element conversion
+    // too (TYPE-002).
+    private static object ConvertRegisteredFallback(object value, Type target, TypeCoercionOptions? options = null)
+    {
+        if (TryCoerceWideInteger(value, target, out var wide))
+        {
+            return wide!;
+        }
+
+        if (TryCoerceSequence(value, target, options ?? TypeCoercionOptions.Default, out var sequence))
+        {
+            return sequence!;
+        }
+
+        return ConvertWithCache(value, target);
+    }
 
     private static bool IsWideInteger(Type type) =>
         type == typeof(BigInteger) || type == typeof(Int128) || type == typeof(UInt128);
@@ -1165,7 +1179,7 @@ internal static class TypeCoercionHelper
                 }
 
                 // Fallback to robust conversion cache
-                return ConvertRegisteredFallback(value, runtimeTarget);
+                return ConvertRegisteredFallback(value, runtimeTarget, options);
             };
         }
 
@@ -1243,7 +1257,7 @@ internal static class TypeCoercionHelper
                     return result;
                 }
 
-                return ConvertRegisteredFallback(value!, runtimeTarget);
+                return ConvertRegisteredFallback(value!, runtimeTarget, options);
             };
         }
 

@@ -578,6 +578,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             parameter.DbType = DbType.String;
         }
+
+        if (parameter.Value is string text)
+        {
+            parameter.Size = Math.Max(text.Length, 1);
+        }
     }
 
     public virtual bool SupportsSetValuedParameters => false;
@@ -1871,9 +1876,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         if (!valueIsNull)
         {
-            if (value is string s && (parameter.DbType == DbType.String || parameter.DbType == DbType.AnsiString ||
-                                      parameter.DbType == DbType.StringFixedLength ||
-                                      parameter.DbType == DbType.AnsiStringFixedLength))
+            // Every string value is sized to fit, whatever its DbType: a pooled parameter is reset to
+            // an explicit Size of 0, and Microsoft.Data.Sqlite truncates text to an explicit size (a
+            // string bound as DbType.Object was stored as "", confirmed live, TYPE-002).
+            if (value is string s && parameter.Value is string)
             {
                 parameter.Size = Math.Max(s.Length, 1);
             }

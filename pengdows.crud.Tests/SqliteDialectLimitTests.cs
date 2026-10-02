@@ -43,7 +43,7 @@ public class SqliteDialectLimitTests
     [InlineData(-99999999.99999999)]
     [InlineData(0.0)]
     [InlineData(1.0)]
-    public void CreateDbParameter_Decimal_StoresAsDouble(double rawValue)
+    public void CreateDbParameter_Decimal_BindsExactText(double rawValue)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
@@ -51,11 +51,10 @@ public class SqliteDialectLimitTests
 
         var p = dialect.CreateDbParameter("col_decimal", DbType.Decimal, decimalValue);
 
-        // SQLite stores DECIMAL as REAL (double). The parameter must use DbType.Double
-        // so Microsoft.Data.Sqlite can bind the value correctly — DbType.Decimal causes
-        // the driver to store 0 instead of the actual value.
-        Assert.Equal(DbType.Double, p.DbType);
-        Assert.Equal((double)decimalValue, (double)p.Value!);
+        // TYPE-002: exact invariant text, never a double (which lost digits, confirmed live); a
+        // REAL/NUMERIC column still converts it by affinity.
+        Assert.Equal(DbType.String, p.DbType);
+        Assert.Equal(decimalValue.ToString(System.Globalization.CultureInfo.InvariantCulture), p.Value);
     }
 
     [Fact]

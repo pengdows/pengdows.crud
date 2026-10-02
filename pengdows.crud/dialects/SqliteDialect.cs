@@ -391,13 +391,14 @@ internal class SqliteDialect : SqlDialect
                     : Convert.ToUInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture));
         }
 
-        // SQLite stores DECIMAL as REAL (64-bit double). Microsoft.Data.Sqlite cannot bind
-        // DbType.Decimal correctly — the driver stores 0 instead of the actual value.
-        // Only convert when the caller declared DbType.Decimal; other mismatches (e.g.
-        // DbType.String + decimal) fall through to the base validator so they still throw.
+        // TYPE-002, confirmed live (Microsoft.Data.Sqlite 9): a decimal bound as a double lost its
+        // digits (-1234567890123456.0123456789 was stored as "-1.23456789012346e+15"). Exact
+        // invariant text keeps every digit in a TEXT column; a REAL/NUMERIC column converts it by
+        // affinity, as it did the double. Only when the caller declared DbType.Decimal; other
+        // mismatches (e.g. DbType.String + decimal) fall through to the base validator and throw.
         if (value is decimal decValue && type == DbType.Decimal)
         {
-            return base.CreateDbParameter(name, DbType.Double, (double)decValue);
+            return base.CreateDbParameter(name, DbType.String, decValue.ToString(CultureInfo.InvariantCulture));
         }
 
         var p = base.CreateDbParameter(name, type, value);
@@ -409,6 +410,12 @@ internal class SqliteDialect : SqlDialect
 
         return p;
     }
+
+    // A decimal reassigned through SetParameterValue gets the same exact text CreateDbParameter binds.
+    public override object? PrepareParameterValue(object? value, DbType dbType) =>
+        value is decimal d && dbType is DbType.String or DbType.Decimal
+            ? d.ToString(CultureInfo.InvariantCulture)
+            : base.PrepareParameterValue(value, dbType);
 
     // Connection pooling properties for SQLite (provider-aware)
     public override bool SupportsExternalPooling =>

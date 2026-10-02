@@ -131,6 +131,8 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
 - A `Guid` declared `DbType.Binary` is stored as 16 bytes in the database's Guid byte order: RFC 4122 big-endian by
   default (MySQL family's `UUID_TO_BIN`, PostgreSQL, SQLite, Firebird, ...), .NET `ToByteArray()` order on SQL Server,
   Oracle and Sybase ASE; 16-byte columns read into a `Guid` decode the same way (changed in 2.0.6, TYPE-002).
+- SQLite: a `decimal` binds as exact invariant text (declare the column `TEXT` to keep every digit; `REAL`/`NUMERIC`
+  convert by affinity); a DuckDB `LIST` maps to `T[]`/`List<T>` through `DataReaderMapper` as through the gateway.
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.
