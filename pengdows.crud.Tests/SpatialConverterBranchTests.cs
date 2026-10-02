@@ -79,7 +79,7 @@ public class SpatialConverterBranchTests
         var mysqlBytes = converter.ToProviderValue(wkt, SupportedDatabase.MySql);
         Assert.IsType<byte[]>(mysqlBytes);
 
-        Assert.Throws<InvalidOperationException>(() => converter.ToProviderValue(geo, SupportedDatabase.MySql));
+        Assert.Throws<NotSupportedException>(() => converter.ToProviderValue(geo, SupportedDatabase.MySql));
     }
 
     [Fact]

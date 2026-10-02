@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Buffers.Binary;
 using pengdows.crud.enums;
@@ -88,16 +89,17 @@ public class SpatialConverterEdgeCaseTests
     }
 
     [Fact]
-    public void ConvertToProvider_MySql_WktPath_ReturnsUtf8Bytes()
+    public void ConvertToProvider_MySql_WktPath_ReturnsSridPrefixedWkb()
     {
+        // MySQL's internal format: 4-byte little-endian SRID, then WKB (encoded from the WKT).
         var converter = new GeometryConverter();
         var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
         var result = converter.ToProviderValue(geometry, SupportedDatabase.MySql);
-        Assert.IsType<byte[]>(result);
-        var bytes = (byte[])result!;
-        var text = System.Text.Encoding.UTF8.GetString(bytes);
-        Assert.Equal("POINT(1 2)", text);
+
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 1, 1, 0, 0, 0 }
+            .Concat(BitConverter.GetBytes(1.0)).Concat(BitConverter.GetBytes(2.0)).ToArray(),
+            Assert.IsType<byte[]>(result));
     }
 
     [Fact]
@@ -400,7 +402,7 @@ public class SpatialConverterEdgeCaseTests
         var converter = new GeometryConverter();
         var geometry = Geometry.FromWellKnownBinary(Array.Empty<byte>(), 0);
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<NotSupportedException>(() =>
             converter.ToProviderValue(geometry, SupportedDatabase.MySql));
     }
 

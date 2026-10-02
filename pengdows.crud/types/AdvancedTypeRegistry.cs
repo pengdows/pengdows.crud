@@ -569,6 +569,20 @@ internal class AdvancedTypeRegistry
 
     private void RegisterSpatialMappings()
     {
+        // MySQL family: GEOMETRY columns take the server's internal format (4-byte SRID + WKB)
+        // as plain binary; SpatialConverter produces it. Without a mapping the value object
+        // itself reached the driver (TYPE-018).
+        var mySqlSpatial = new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => param.DbType = DbType.Binary
+        };
+        foreach (var provider in new[] { SupportedDatabase.MySql, SupportedDatabase.MariaDb, SupportedDatabase.AuroraMySql })
+        {
+            RegisterMapping<Geometry>(provider, mySqlSpatial);
+            RegisterMapping<Geography>(provider, mySqlSpatial);
+        }
+
         // SQL Server Geometry
         RegisterMapping<Geometry>(SupportedDatabase.SqlServer, new ProviderTypeMapping
         {

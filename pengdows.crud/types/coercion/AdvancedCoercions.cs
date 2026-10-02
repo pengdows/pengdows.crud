@@ -57,6 +57,12 @@ internal static class AdvancedCoercions
         // Spatial types
         registry.Register(new GeometryCoercion());
         registry.Register(new GeographyCoercion());
+        // MySQL family: the server's internal format, a 4-byte little-endian SRID then WKB (TYPE-018).
+        foreach (var provider in new[] { SupportedDatabase.MySql, SupportedDatabase.MariaDb, SupportedDatabase.AuroraMySql })
+        {
+            registry.Register(provider, new MySqlGeometryCoercion());
+            registry.Register(provider, new MySqlGeographyCoercion());
+        }
 
         // Range types (generic)
         registry.Register(new PostgreSqlRangeIntCoercion());
@@ -889,6 +895,97 @@ internal class ClobStreamCoercion : DbCoercion<TextReader>
     {
         parameter.Value = value;
         parameter.DbType = DbType.String;
+        return true;
+    }
+}
+
+/// <summary>
+/// MySQL-family GEOMETRY: the server's internal format, a 4-byte little-endian SRID followed by
+/// standard WKB, on both read and write (TYPE-018).
+/// </summary>
+internal static class MySqlSpatialFormat
+{
+    public static bool TrySplit(object? raw, out int srid, out byte[] wkb)
+    {
+        if (raw is byte[] bytes && bytes.Length > 4)
+        {
+            srid = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes);
+            wkb = bytes.AsSpan(4).ToArray();
+            return true;
+        }
+
+        srid = 0;
+        wkb = Array.Empty<byte>();
+        return false;
+    }
+
+    public static byte[] Join(SpatialValue value)
+    {
+        byte[] wkb;
+        if (!value.WellKnownBinary.IsEmpty)
+        {
+            GeometryConverter.ExtractSridFromEwkb(value.WellKnownBinary.Span, out _, out wkb);
+        }
+        else if (!string.IsNullOrEmpty(value.WellKnownText))
+        {
+            wkb = WellKnownTextEncoder.Encode(value.WellKnownText);
+        }
+        else
+        {
+            throw new NotSupportedException(
+                "MySQL spatial values need WKB or WKT; a GeoJSON-only value cannot be written. " +
+                "Create it with FromWellKnownText or FromWellKnownBinary.");
+        }
+
+        var internalFormat = new byte[4 + wkb.Length];
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(internalFormat, value.Srid);
+        wkb.CopyTo(internalFormat, 4);
+        return internalFormat;
+    }
+}
+
+internal sealed class MySqlGeometryCoercion : DbCoercion<Geometry>
+{
+    private static readonly GeometryCoercion Fallback = new();
+
+    public override bool TryRead(in DbValue src, out Geometry value)
+    {
+        if (MySqlSpatialFormat.TrySplit(src.RawValue, out var srid, out var wkb))
+        {
+            value = Geometry.FromWellKnownBinary(wkb, srid);
+            return true;
+        }
+
+        return Fallback.TryRead(src, out value);
+    }
+
+    public override bool TryWrite([AllowNull] Geometry value, DbParameter parameter)
+    {
+        parameter.DbType = DbType.Binary;
+        parameter.Value = value is null ? DBNull.Value : MySqlSpatialFormat.Join(value);
+        return true;
+    }
+}
+
+internal sealed class MySqlGeographyCoercion : DbCoercion<Geography>
+{
+    private static readonly GeographyCoercion Fallback = new();
+
+    public override bool TryRead(in DbValue src, out Geography value)
+    {
+        if (MySqlSpatialFormat.TrySplit(src.RawValue, out var srid, out var wkb))
+        {
+            value = Geography.FromWellKnownBinary(wkb, srid);
+            return true;
+        }
+
+        return Fallback.TryRead(src, out value);
+    }
+
+    public override bool TryWrite([AllowNull] Geography value, DbParameter parameter)
+    {
+        parameter.DbType = DbType.Binary;
+        parameter.Value = value is null ? DBNull.Value : MySqlSpatialFormat.Join(value);
         return true;
     }
 }

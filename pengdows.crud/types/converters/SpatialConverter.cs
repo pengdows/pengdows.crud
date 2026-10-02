@@ -70,7 +70,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             SupportedDatabase.SqlServer => CreateSqlServerSpatial(value),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 => CreatePostgresSpatial(value),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb => CreateMySqlSpatial(value),
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql => CreateMySqlSpatial(value),
             SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException(
                 "Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
             _ => ExtractDefaultSpatial(value)
@@ -230,20 +230,11 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         return node.ToJsonString();
     }
 
-    private object? CreateMySqlSpatial(SpatialValue value)
-    {
-        if (!value.WellKnownBinary.IsEmpty)
-        {
-            return value.WellKnownBinary.ToArray();
-        }
-
-        if (!string.IsNullOrEmpty(value.WellKnownText))
-        {
-            return Encoding.UTF8.GetBytes(value.WellKnownText);
-        }
-
-        throw new InvalidOperationException("MySQL spatial values require WKB or WKT data.");
-    }
+    // MySQL/MariaDB store a geometry in their internal format: a 4-byte little-endian SRID
+    // followed by standard WKB. Raw WKT bytes or bare WKB are rejected ("Cannot get geometry
+    // object from data you send to the GEOMETRY field").
+    private static object? CreateMySqlSpatial(SpatialValue value) =>
+        pengdows.crud.types.coercion.MySqlSpatialFormat.Join(value);
 
     private object? ExtractDefaultSpatial(SpatialValue value)
     {
@@ -262,6 +253,14 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
 
     private TSpatial FromWellKnownBinary(byte[] bytes, SupportedDatabase provider)
     {
+        // MySQL/MariaDB return their internal format: a 4-byte little-endian SRID, then WKB.
+        if (provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql
+            && bytes.Length > 4)
+        {
+            var srid = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes);
+            return FromBinaryWithSrid(bytes.AsSpan(4), srid, bytes);
+        }
+
         return FromBinary(bytes, provider);
     }
 

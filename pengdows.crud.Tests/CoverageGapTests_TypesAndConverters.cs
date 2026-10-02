@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Data;
 using System.Data.Common;
@@ -1067,16 +1068,17 @@ public class CoverageGapTests_TypesAndConverters
     }
 
     [Fact]
-    public void SpatialConverter_ConvertToProvider_MySql_WKT_ReturnsUtf8Bytes()
+    public void SpatialConverter_ConvertToProvider_MySql_WKT_ReturnsSridPrefixedWkb()
     {
+        // MySQL's internal format: 4-byte little-endian SRID, then WKB (encoded from the WKT).
         var converter = new GeometryConverter();
-        var geom = Geometry.FromWellKnownText("POINT(1 2)", 0);
+        var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
-        var result = converter.ToProviderValue(geom, SupportedDatabase.MySql);
+        var providerValue = converter.ToProviderValue(geometry, SupportedDatabase.MySql);
 
-        Assert.IsType<byte[]>(result);
-        var text = Encoding.UTF8.GetString((byte[])result!);
-        Assert.Equal("POINT(1 2)", text);
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 1, 1, 0, 0, 0 }
+            .Concat(BitConverter.GetBytes(1.0)).Concat(BitConverter.GetBytes(2.0)).ToArray(),
+            Assert.IsType<byte[]>(providerValue));
     }
 
     [Fact]
@@ -1170,7 +1172,7 @@ public class CoverageGapTests_TypesAndConverters
         var json = "{\"type\":\"Point\",\"coordinates\":[0,0]}";
         var geom = Geometry.FromGeoJson(json, 0);
 
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<NotSupportedException>(() =>
             converter.ToProviderValue(geom, SupportedDatabase.MySql));
     }
 

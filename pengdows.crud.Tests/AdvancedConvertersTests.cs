@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.IO;
 using System.Net;
@@ -110,12 +111,15 @@ public class AdvancedConvertersTests
     [Fact]
     public void SpatialConverter_FormatsForMySql()
     {
+        // MySQL's internal format: 4-byte little-endian SRID, then WKB (encoded from the WKT).
         var converter = new GeometryConverter();
         var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
         var providerValue = converter.ToProviderValue(geometry, SupportedDatabase.MySql);
-        Assert.IsType<byte[]>(providerValue);
-        Assert.Equal(Encoding.UTF8.GetBytes("POINT(1 2)"), (byte[])providerValue!);
+
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 1, 1, 0, 0, 0 }
+            .Concat(BitConverter.GetBytes(1.0)).Concat(BitConverter.GetBytes(2.0)).ToArray(),
+            Assert.IsType<byte[]>(providerValue));
     }
 
     [Fact]

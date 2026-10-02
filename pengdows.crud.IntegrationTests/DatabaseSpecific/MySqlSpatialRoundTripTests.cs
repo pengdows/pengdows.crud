@@ -27,10 +27,11 @@ public sealed class MySqlSpatialRoundTripTests : DatabaseTestBase
     }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
-        new[] { SupportedDatabase.MySql };
+        new[] { SupportedDatabase.MySql, SupportedDatabase.MariaDb };
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
+        await DropTableIfExistsAsync(context, "spatial_roundtrip");
         await using var table = context.CreateSqlContainer($"""
             CREATE TABLE IF NOT EXISTS {IntegrationObjectNameHelper.Table(context, "spatial_roundtrip")} (
                 id              INTEGER PRIMARY KEY,
@@ -42,59 +43,56 @@ public sealed class MySqlSpatialRoundTripTests : DatabaseTestBase
     }
 
     /// <summary>
-    /// CONFIRMED LIVE BUG, tracked here rather than left silently unimplemented (deliberately not
-    /// fixed in this pass — see reasoning below):
-    /// <c>SpatialConverter.CreateMySqlSpatial</c> (in <c>pengdows.crud/types/coercion/</c> — no,
-    /// actually <c>pengdows.crud/types/converters/SpatialConverter.cs</c>) has two independent
-    /// write-side defects for MySQL, both reproduced against a real MySQL 8 container:
-    /// <list type="number">
-    /// <item>The WKT branch UTF8-encodes the literal well-known-text string (e.g. the ASCII bytes
-    /// of <c>"POINT(10 20)"</c>) and sends that directly as the GEOMETRY column's binary value —
-    /// MySQL does not accept raw WKT text as column bytes without an <c>ST_GeomFromText(...)</c>
-    /// SQL-function wrapper, so this is not "slightly wrong," it sends fundamentally the wrong
-    /// payload shape.</item>
-    /// <item>The WKB branch sends <c>value.WellKnownBinary</c> unmodified — real, valid WKB — but
-    /// MySQL's actual column storage format prepends a mandatory 4-byte little-endian SRID before
-    /// the WKB body ("MySQL internal geometry format"); without that prefix the server rejects it
-    /// identically.</item>
-    /// </list>
-    /// Both fail with the same live-confirmed server error: <c>"Cannot get geometry object from
-    /// data you send to the GEOMETRY field"</c>. A correct fix needs a real WKT→WKB encoder (for
-    /// every WKT shape <c>Geometry</c>/<c>Geography</c> document supporting — Point, LineString,
-    /// Polygon, and the Multi*/Collection variants) AND a matching MySQL-specific 4-byte-SRID
-    /// prepend-on-write / strip-on-read pair (the read side has the mirror-image gap: MySQL
-    /// returns that same SRID-prefixed format from <c>GetValue()</c>, which
-    /// <c>SpatialConverter.TryConvertFromProvider</c>'s generic <c>byte[]</c> branch would also
-    /// misparse as if it were pure WKB). That is a real, feature-sized fix — out of scope for an
-    /// integration-test-coverage pass — so this test proves and locks down the CURRENT (broken)
-    /// behavior rather than silently omitting MySQL spatial coverage entirely.
+    /// TYPE-018: Geometry/Geography are written in MySQL's internal format (a 4-byte
+    /// little-endian SRID followed by WKB, encoded from WKT when the value only has text) and read
+    /// back from it. Before the fix MySqlConnector refused the value object outright and MySql.Data
+    /// sent raw WKT bytes, which the server rejects ("Cannot get geometry object from data you
+    /// send to the GEOMETRY field").
     /// </summary>
     [SkippableFact]
-    public async Task MySqlSpatialTypes_WriteThroughCrudMapper_CurrentlyFailsServerSide()
+    public async Task MySqlSpatialTypes_RoundTripThroughCrudMapper()
     {
-        await RunTestAgainstProviderAsync(SupportedDatabase.MySql, async context =>
+        await RunTestAgainstProvidersAsync(new[] { SupportedDatabase.MySql, SupportedDatabase.MariaDb }, async (provider, context) =>
         {
+            var geographyWkb = BuildPointWkb(-87.6298, 41.8781);
             var entity = new MySqlSpatialEntity
             {
                 Id = 1,
-                GeometryValue = Geometry.FromWellKnownText("POINT(10 20)", 0),
-                GeographyValue = Geography.FromWellKnownText("POINT(-87.6298 41.8781)", 4326)
+                GeometryValue = Geometry.FromWellKnownText("POLYGON((0 0, 4 0, 4 4, 0 0))", 0),
+                GeographyValue = Geography.FromWellKnownBinary(geographyWkb, 4326)
             };
 
             var gateway = new TableGateway<MySqlSpatialEntity, int>(context);
+            Assert.True(await gateway.CreateAsync(entity, context));
 
-            // MySql.Data fails server-side (DatabaseOperationException); MySqlConnector refuses the
-            // parameter client-side (NotSupportedException: "Parameter type Geometry is not
-            // supported"). Either way the write fails until TYPE-018 is fixed.
-            var ex = await Assert.ThrowsAnyAsync<Exception>(
-                () => gateway.CreateAsync(entity, context).AsTask());
+            await using (var check = context.CreateSqlContainer(
+                             "SELECT ST_AsText(geometry_value), ST_SRID(geometry_value), ST_SRID(geography_value) " +
+                             $"FROM {IntegrationObjectNameHelper.Table(context, "spatial_roundtrip")} WHERE id = 1"))
+            await using (var reader = await check.ExecuteReaderAsync())
+            {
+                Assert.True(await reader.ReadAsync());
+                Assert.Equal("POLYGON((0 0,4 0,4 4,0 0))", reader.GetString(0));
+                Assert.Equal(0L, Convert.ToInt64(reader.GetValue(1)));
+                Assert.Equal(4326L, Convert.ToInt64(reader.GetValue(2)));
+            }
 
-            Assert.Contains("geometry", ex.Message, StringComparison.OrdinalIgnoreCase);
-
-            Output.WriteLine(
-                "MySql: confirmed spatial write still fails server-side (tracked bug, not yet " +
-                "fixed) — " + ex.Message);
+            var loaded = await gateway.RetrieveOneAsync(1, context);
+            Assert.NotNull(loaded);
+            Assert.Equal(0, loaded!.GeometryValue.Srid);
+            Assert.Equal(4326, loaded.GeographyValue.Srid);
+            Assert.Equal(geographyWkb, loaded.GeographyValue.WellKnownBinary.ToArray());
+            Output.WriteLine($"{provider}: Geometry (WKT polygon) and Geography (WKB point, SRID 4326) round-tripped");
         });
+    }
+
+    private static byte[] BuildPointWkb(double x, double y)
+    {
+        var wkb = new byte[21];
+        wkb[0] = 1;
+        BitConverter.GetBytes(1u).CopyTo(wkb, 1);
+        BitConverter.GetBytes(x).CopyTo(wkb, 5);
+        BitConverter.GetBytes(y).CopyTo(wkb, 13);
+        return wkb;
     }
 }
 

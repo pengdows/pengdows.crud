@@ -1,3 +1,4 @@
+using System.Linq;
 using System;
 using System.Buffers.Binary;
 using System.IO;
@@ -217,15 +218,17 @@ public class AdvancedTypeConverterTests
     }
 
     [Fact]
-    public void GeometryConverter_ToProviderValue_MySqlWithWkt_ReturnsUtf8Bytes()
+    public void GeometryConverter_ToProviderValue_MySqlWithWkt_ReturnsSridPrefixedWkb()
     {
-        var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
+        // MySQL's internal format: 4-byte little-endian SRID, then WKB (encoded from the WKT).
         var converter = new GeometryConverter();
+        var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
-        var providerValue = converter.ToProviderValue(geometry, SupportedDatabase.MySql) as byte[];
+        var providerValue = converter.ToProviderValue(geometry, SupportedDatabase.MySql);
 
-        Assert.NotNull(providerValue);
-        Assert.Equal("POINT(1 2)", Encoding.UTF8.GetString(providerValue!));
+        Assert.Equal(new byte[] { 0, 0, 0, 0, 1, 1, 0, 0, 0 }
+            .Concat(BitConverter.GetBytes(1.0)).Concat(BitConverter.GetBytes(2.0)).ToArray(),
+            Assert.IsType<byte[]>(providerValue));
     }
 
     [Fact]
