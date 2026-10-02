@@ -928,6 +928,13 @@ internal static class TypeCoercionHelper
             return doc.RootElement.Clone();
         }
 
+        if (actualTarget == typeof(types.valueobjects.JsonValue))
+        {
+            // The JSON text itself, never JsonSerializer.Deserialize into the struct (TYPE-019).
+            var text = ExtractJsonString(value, serializerOptions);
+            return string.IsNullOrWhiteSpace(text) ? null : (object)new types.valueobjects.JsonValue(text);
+        }
+
         if (actualTarget == typeof(JsonNode))
         {
             var text = ExtractJsonString(value, serializerOptions);

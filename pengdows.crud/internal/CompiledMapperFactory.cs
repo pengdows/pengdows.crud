@@ -78,9 +78,20 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
                 var jsonStr = Expression.Call(readerParam, getString, ordinalExpr);
 
-                // Use JsonSerializer.Deserialize<T>(string, JsonSerializerOptions)
-                var deserializeMethod = ResolveJsonDeserializeMethod(targetType);
-                valueReadExpr = Expression.Call(deserializeMethod, jsonStr, Expression.Constant(column.JsonSerializerOptions));
+                var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
+                if (underlying == typeof(types.valueobjects.JsonValue))
+                {
+                    // A JsonValue holds the JSON text itself. Deserializing into the struct (it has no
+                    // settable properties) returned an empty default (TYPE-019).
+                    var ctor = typeof(types.valueobjects.JsonValue).GetConstructor(new[] { typeof(string) })!;
+                    valueReadExpr = Expression.Convert(Expression.New(ctor, jsonStr), targetType);
+                }
+                else
+                {
+                    // Use JsonSerializer.Deserialize<T>(string, JsonSerializerOptions)
+                    var deserializeMethod = ResolveJsonDeserializeMethod(targetType);
+                    valueReadExpr = Expression.Call(deserializeMethod, jsonStr, Expression.Constant(column.JsonSerializerOptions));
+                }
 
                 // For JSON, we return default (null for objects) on error to match old behavior
                 var catchBlock = Expression.Catch(typeof(JsonException), Expression.Default(targetType));
