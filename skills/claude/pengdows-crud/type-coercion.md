@@ -119,6 +119,9 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
 - DuckDB `HUGEINT`/`UHUGEINT` and Firebird `INT128` → `Int128`/`UInt128` (or `BigInteger`, `long`, `decimal`
   when the value fits). Converted with checked casts; out of range throws `DataMappingException`. Written as
   `BigInteger`, or as exact text on DuckDB (its driver can't bind the full range).
+- Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
+  `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
+  property that can't hold it throws `DataMappingException`.
 - DuckDB `LIST` and PostgreSQL arrays → `T[]` or `List<T>`, coerced element by element. DuckDB `MAP`/`STRUCT`
   → `Dictionary<,>`.
 - Firebird `DECFLOAT` → `decimal` (or `double`); declare `[Column(..., DbType.VarNumeric)]` so the value binds as

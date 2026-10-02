@@ -215,8 +215,31 @@ public class fakeDbDataReader : DbDataReader
             return null!; // deliberately violates the contract, as the emulated driver does
         }
 
+        if (IsInt64TextColumn(i) && row[keys[i]] is string text)
+        {
+            return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var whole)
+                ? whole
+                : throw Int64TextOverflow(text);
+        }
+
         return row[keys[i]];
     }
+
+    /// <summary>
+    /// Columns that emulate Snowflake.Data 5.x on a scale-0 NUMBER (confirmed live 2026-10-02): the
+    /// stored value is the number's text; <see cref="GetFieldType"/> reports <see cref="long"/>;
+    /// <see cref="GetValue"/>, <see cref="GetInt64"/> and <c>GetFieldValue</c> return the
+    /// <see cref="long"/> or, beyond its range, throw <see cref="OverflowException"/>
+    /// ("Use GetString() to handle very large values"); <see cref="GetString"/> returns the text,
+    /// <see cref="GetDecimal"/> the value when <see cref="decimal"/> holds it, and
+    /// <see cref="IsDBNull"/> works whatever the value.
+    /// </summary>
+    public ISet<string>? Int64TextColumns { get; set; }
+
+    private bool IsInt64TextColumn(int i) => Int64TextColumns != null && Int64TextColumns.Contains(GetName(i));
+
+    private static OverflowException Int64TextOverflow(string text) =>
+        new($"Error converting '{text} to Int64'. Use GetString() to handle very large values");
 
     /// <summary>
     /// Columns whose reads (<see cref="GetValue"/> and every typed getter built on it) throw the
@@ -301,7 +324,7 @@ public class fakeDbDataReader : DbDataReader
             throw new OverflowException("Value was either too large or too small for a Decimal.");
         }
 
-        var value = IsUnloadableUdt(i) ? RawValue(i) : GetValue(i);
+        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) ? RawValue(i) : GetValue(i);
         return value is null || value == DBNull.Value;
     }
 
@@ -407,6 +430,13 @@ public class fakeDbDataReader : DbDataReader
 
     public override decimal GetDecimal(int i)
     {
+        if (IsInt64TextColumn(i) && RawValue(i) is string text)
+        {
+            return decimal.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
+                ? value
+                : throw new OverflowException($"Error converting '{text} to Decimal'. Use GetString() to handle very large values");
+        }
+
         return (decimal)GetValue(i);
     }
 
@@ -433,6 +463,11 @@ public class fakeDbDataReader : DbDataReader
             || IsUnloadableUdt(ordinal))
         {
             return null!; // deliberately violates the contract, as the emulated driver does
+        }
+
+        if (IsInt64TextColumn(ordinal))
+        {
+            return typeof(long);
         }
 
         var value = RawValue(ordinal);
@@ -493,6 +528,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override string GetString(int i)
     {
+        if (IsInt64TextColumn(i) && RawValue(i) is string text)
+        {
+            return text;
+        }
+
         return (string)GetValue(i);
     }
 

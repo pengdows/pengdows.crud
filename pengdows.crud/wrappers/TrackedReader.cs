@@ -375,6 +375,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
             return value!;
         }
+        catch (OverflowException) when (WideIntegerFieldReader.TryReadText(_reader, i, out var wide))
+        {
+            // Snowflake.Data reports a scale-0 NUMBER as Int64 and overflows beyond it.
+            return wide;
+        }
         catch (OverflowException)
         {
             throw;

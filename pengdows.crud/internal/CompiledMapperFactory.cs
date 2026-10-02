@@ -169,6 +169,14 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var rawValue = Expression.Call(readInet, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
+            else if (fieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
+            {
+                // A column reported as Int64 may hold more (Snowflake.Data reports every scale-0
+                // NUMBER as Int64 and overflows beyond it); read it as BigInteger when it does.
+                var readWide = typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.Read))!;
+                var rawValue = Expression.Call(readWide, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+            }
             else if ((Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.PostgreSqlInterval))
             {
                 // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months

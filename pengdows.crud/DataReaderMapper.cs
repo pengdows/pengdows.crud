@@ -515,6 +515,16 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
+        else if (key.FieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
+        {
+            // A column reported as Int64 may hold more (Snowflake.Data reports every scale-0 NUMBER
+            // as Int64 and overflows beyond it); read it as BigInteger when it does.
+            var readWide = typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.Read))!;
+            var rawValue = Expression.Call(readWide, Expression.Convert(readerParam, typeof(IDataRecord)),
+                Expression.Constant(key.Ordinal));
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode);
+            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+        }
         else if (underlyingTarget == typeof(types.valueobjects.PostgreSqlInterval))
         {
             // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months

@@ -410,6 +410,12 @@ internal static class TypeCoercionHelper
         }
     }
 
+    // A registered coercion (e.g. decimal's) that declines a value falls back here. Wide integers
+    // (BigInteger, Int128, UInt128) aren't IConvertible, so they take the checked TYPE-005 casts:
+    // exact or OverflowException, as through Coerce.
+    private static object ConvertRegisteredFallback(object value, Type target) =>
+        TryCoerceWideInteger(value, target, out var wide) ? wide! : ConvertWithCache(value, target);
+
     private static bool IsWideInteger(Type type) =>
         type == typeof(BigInteger) || type == typeof(Int128) || type == typeof(UInt128);
 
@@ -445,7 +451,10 @@ internal static class TypeCoercionHelper
             TypeCode.Int64 => (long)source,
             TypeCode.UInt64 => (ulong)source,
             TypeCode.Decimal => (decimal)source,
-            TypeCode.Double => (double)source,
+            // (double)BigInteger truncates; parsing the exact digits rounds to nearest, like
+            // (double)decimal does.
+            TypeCode.Double => double.Parse(source.ToString(CultureInfo.InvariantCulture), NumberStyles.Integer,
+                CultureInfo.InvariantCulture),
             TypeCode.String => source.ToString(CultureInfo.InvariantCulture),
             _ when target == typeof(BigInteger) => source,
             _ when target == typeof(Int128) => (Int128)source,
@@ -1122,7 +1131,7 @@ internal static class TypeCoercionHelper
                 }
 
                 // Fallback to robust conversion cache
-                return ConvertWithCache(value, runtimeTarget);
+                return ConvertRegisteredFallback(value, runtimeTarget);
             };
         }
 
@@ -1183,7 +1192,7 @@ internal static class TypeCoercionHelper
                     return result;
                 }
 
-                return ConvertWithCache(value!, runtimeTarget);
+                return ConvertRegisteredFallback(value!, runtimeTarget);
             };
         }
 
