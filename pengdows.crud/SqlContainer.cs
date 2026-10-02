@@ -644,8 +644,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             parameter.Size = Math.Max(str.Length, 1);
         }
 
-        // Do not adjust Precision/Scale for decimal parameters here.
-        // See SqlDialect.CreateDbParameter for the rationale.
+        // A decimal keeps the caller's Precision/Scale unless the new value needs more, and is sent
+        // without trailing zeros (as SqlDialect.CreateDbParameter does): with the first value's
+        // smaller Precision, SAP HANA refused a larger value or, given trailing zeros, cut it short
+        // silently (confirmed live).
+        if (parameter.DbType == DbType.Decimal && parameter.Value is decimal dec)
+        {
+            var (precision, scale) = DecimalHelpers.Infer(dec);
+            if (((decimal.GetBits(dec)[3] >> 16) & 0x7F) > scale)
+            {
+                parameter.Value = decimal.Round(dec, scale);
+            }
+
+            var newScale = Math.Max(parameter.Scale, (byte)scale);
+            parameter.Scale = newScale;
+            parameter.Precision = (byte)Math.Max(parameter.Precision, precision - scale + newScale);
+        }
     }
 
     public object? GetParameterValue(string parameterName)

@@ -36,6 +36,8 @@ public sealed class TimeOfDayWrapGuardTests
     [InlineData(SupportedDatabase.Db2, 25)]
     [InlineData(SupportedDatabase.FlatFile, -1)]
     [InlineData(SupportedDatabase.FlatFile, 24)]
+    [InlineData(SupportedDatabase.SapHana, -1)]
+    [InlineData(SupportedDatabase.SapHana, 24)]
     public void TimeSpanOutsideADay_IsRejectedWhereTheDriverWouldWrapIt(SupportedDatabase database, int hours)
     {
         var dialect = Dialect(database);
@@ -52,6 +54,7 @@ public sealed class TimeOfDayWrapGuardTests
     [InlineData(SupportedDatabase.Informix)]
     [InlineData(SupportedDatabase.Db2)]
     [InlineData(SupportedDatabase.FlatFile)]
+    [InlineData(SupportedDatabase.SapHana)]
     public void TimeOfDayValues_StillBind(SupportedDatabase database)
     {
         var dialect = Dialect(database);

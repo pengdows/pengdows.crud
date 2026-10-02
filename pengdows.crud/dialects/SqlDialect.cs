@@ -1972,6 +1972,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
             var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
             parameter.Precision = (byte)Math.Max(inferredPrecision, 18);
             parameter.Scale = (byte)inferredScale;
+
+            // Send the value without trailing zeros so its own scale matches Scale. The SAP HANA
+            // driver mis-sends one that doesn't: 12345678901234567.00m at Precision 18 / Scale 0
+            // was stored as 2345678901234567, silently (confirmed live). Same number either way.
+            if (((decimal.GetBits(dec)[3] >> 16) & 0x7F) > inferredScale)
+            {
+                parameter.Value = decimal.Round(dec, inferredScale);
+            }
         }
 
         if (traceTimings)

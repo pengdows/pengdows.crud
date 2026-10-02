@@ -243,6 +243,11 @@ public class fakeDbDataReader : DbDataReader
                 : throw Int64TextOverflow(text);
         }
 
+        if (IsProviderDecimal(i) && row[keys[i]] is decimal providerDecimal)
+        {
+            return new fakeDbProviderDecimal(providerDecimal);
+        }
+
         return row[keys[i]];
     }
 
@@ -344,6 +349,17 @@ public class fakeDbDataReader : DbDataReader
     /// wall time with no offset (for TIMESTAMP_TZ the real driver throws instead).
     /// </summary>
     public ISet<string>? DateTimeOffsetReportedAsDateTimeColumns { get; set; }
+
+    /// <summary>
+    /// Columns holding a <see cref="decimal"/> that emulate Sap.Data.Hana.Net on DECIMAL/SMALLDECIMAL
+    /// (confirmed live): <see cref="GetFieldType"/> reports <see cref="decimal"/>, <see cref="GetValue"/>
+    /// returns a provider-specific <see cref="IConvertible"/> wrapper (<see cref="fakeDbProviderDecimal"/>),
+    /// so <c>GetFieldValue&lt;decimal&gt;</c> throws <see cref="InvalidCastException"/>, and
+    /// <see cref="GetDecimal"/> returns the value.
+    /// </summary>
+    public ISet<string>? ProviderDecimalColumns { get; set; }
+
+    private bool IsProviderDecimal(int i) => ProviderDecimalColumns != null && ProviderDecimalColumns.Contains(GetName(i));
 
     private bool IsDateTimeOffsetReportedAsDateTime(int i) =>
         DateTimeOffsetReportedAsDateTimeColumns != null && DateTimeOffsetReportedAsDateTimeColumns.Contains(GetName(i));
@@ -549,6 +565,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override decimal GetDecimal(int i)
     {
+        if (IsProviderDecimal(i) && RawValue(i) is decimal providerDecimal)
+        {
+            return providerDecimal;
+        }
+
         if (IsInt64TextColumn(i) && RawValue(i) is string text)
         {
             return decimal.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)

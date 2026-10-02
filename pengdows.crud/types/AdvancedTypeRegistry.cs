@@ -584,7 +584,7 @@ internal class AdvancedTypeRegistry
         // SQL Server: a big-endian SRID + WKB as varbinary, which the gateway SQL turns into the
         // geometry/geography with STGeomFromWKB (SqlServerDialect.RenderColumnArgument, TYPE-002).
         // A UDT parameter would need Microsoft.SqlServer.Types, whose spatial code is Windows-only.
-        var sqlServerSpatial = new ProviderTypeMapping
+        var binarySpatial = new ProviderTypeMapping
         {
             DbType = DbType.Binary,
             ConfigureParameter = (param, value) => param.DbType = DbType.Binary
@@ -601,8 +601,12 @@ internal class AdvancedTypeRegistry
         RegisterMapping<Geometry>(SupportedDatabase.Snowflake, textSpatial);
         RegisterMapping<Geography>(SupportedDatabase.Snowflake, textSpatial);
 
-        RegisterMapping<Geometry>(SupportedDatabase.SqlServer, sqlServerSpatial);
-        RegisterMapping<Geography>(SupportedDatabase.SqlServer, sqlServerSpatial);
+        // SAP HANA: ST_GEOMETRY takes WKB as VARBINARY (TYPE-002).
+        RegisterMapping<Geometry>(SupportedDatabase.SapHana, binarySpatial);
+        RegisterMapping<Geography>(SupportedDatabase.SapHana, binarySpatial);
+
+        RegisterMapping<Geometry>(SupportedDatabase.SqlServer, binarySpatial);
+        RegisterMapping<Geography>(SupportedDatabase.SqlServer, binarySpatial);
 
         // PostgreSQL family (PostGIS, CockroachDB's built-in spatial types): EWKB bytes, produced
         // by SpatialConverter. Geometry was registered for PostgreSQL only and Geography for none, so

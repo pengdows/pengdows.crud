@@ -26,7 +26,7 @@ public sealed class UnsignedDbTypeWideningTests
     {
         SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb,
         SupportedDatabase.Spanner, SupportedDatabase.SqlServer, SupportedDatabase.Oracle,
-        SupportedDatabase.Informix, SupportedDatabase.Db2
+        SupportedDatabase.Informix, SupportedDatabase.Db2, SupportedDatabase.SapHana
     };
 
     [Theory]

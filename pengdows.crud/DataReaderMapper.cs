@@ -614,6 +614,13 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
                 rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
             }
+            else if (key.FieldType == typeof(decimal))
+            {
+                // Sap.Data.Hana's GetValue returns its own HanaDecimal, so GetFieldValue<decimal> (a cast
+                // of it) throws; GetDecimal returns the value (TYPE-002).
+                var getDecimalMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetDecimal))!;
+                rawValue = Expression.Call(readerParam, getDecimalMethod, Expression.Constant(key.Ordinal));
+            }
             else
             {
                 var getFieldValueMethod = _getFieldValueGenericMethod.MakeGenericMethod(key.FieldType);

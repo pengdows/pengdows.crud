@@ -83,6 +83,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
                 : throw new NotSupportedException(
                     "SingleStore spatial values are written as WKT; create the value with FromWellKnownText."),
             SupportedDatabase.Snowflake => CreateSnowflakeSpatial(value),
+            SupportedDatabase.SapHana => CreateWkb(value, "SAP HANA"),
             SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException(
                 "Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
             _ => ExtractDefaultSpatial(value)
@@ -170,6 +171,25 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
 
         throw new NotSupportedException(
             "PostgreSQL-family spatial values need WKB or WKT; a GeoJSON-only value cannot be written. " +
+            "Create it with FromWellKnownText or FromWellKnownBinary.");
+    }
+
+    // SAP HANA's ST_GEOMETRY takes plain WKB as VARBINARY (it refuses WKT text) and stores the
+    // column's SRID (TYPE-002). WKT is encoded to WKB.
+    private static byte[] CreateWkb(SpatialValue value, string database)
+    {
+        if (!value.WellKnownBinary.IsEmpty)
+        {
+            return value.WellKnownBinary.ToArray();
+        }
+
+        if (!string.IsNullOrEmpty(value.WellKnownText))
+        {
+            return WellKnownTextEncoder.Encode(value.WellKnownText);
+        }
+
+        throw new NotSupportedException(
+            database + " spatial values need WKB or WKT; a GeoJSON-only value cannot be written. " +
             "Create it with FromWellKnownText or FromWellKnownBinary.");
     }
 

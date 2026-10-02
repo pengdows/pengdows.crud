@@ -150,6 +150,18 @@ internal sealed class HanaDialect : SqlDialect
     // native UUID-shaped member.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
+    // HanaParameter rejects DbType.Object ("No mapping exists from DbType Object to a known
+    // HanaDbType", confirmed live, TYPE-002); the driver infers the type from the value.
+    internal override bool AssignsObjectDbType => false;
+
+    // HanaParameter rejects DbType.SByte and the unsigned DbTypes ("No mapping exists from DbType
+    // SByte to a known HanaDbType", confirmed live); they bind widened to a signed type.
+    internal override bool BindsSByteAndUnsignedNatively => false;
+
+    // TIME holds only a time of day: a TimeSpan of 1.00:00:00 was stored as 00:00:00, silently
+    // (confirmed live), so one outside a day is rejected before binding.
+    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
+
     /// <summary>
     /// HANA rejects the base "USING (VALUES (...)) AS s (col1, col2, ...)" row-constructor MERGE
     /// source outright (CONFIRMED live), but accepts an Oracle/DUAL-shaped

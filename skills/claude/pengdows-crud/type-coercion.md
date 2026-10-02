@@ -105,7 +105,7 @@ database, with no converter: declare them `[Column("d", DbType.Date)]` and `[Col
   holds ±838 h, and other databases reject it themselves.
 - `sbyte`/`ushort`/`uint`/`ulong` bind as the smallest signed type that holds their range (Int16,
   Int32, Int64, Decimal) where the provider rejects the unsigned `DbType`s (PostgreSQL family, SQL
-  Server, Oracle, Informix, SQLite); declare columns at least that wide (`ulong`: `DECIMAL(20,0)`, or
+  Server, Oracle, Informix, Db2, SAP HANA, SQLite); declare columns at least that wide (`ulong`: `DECIMAL(20,0)`, or
   `TEXT` on SQLite, where it is stored as exact text). A `char` bound as a string `DbType` is sent as a
   one-character string, and stored text that isn't exactly one character fails as `DataMappingException`.
 - Spanner has no time-of-day column type (no `TIME`), so declare a `VARCHAR(16)`/`STRING(16)` column: a
@@ -137,6 +137,8 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
 - Snowflake: `VARIANT`/`OBJECT`/`ARRAY` written as `PARSE_JSON(:p)`, with inserts/MERGE source/batch update values from a
   `SELECT` (Snowflake refuses it in `VALUES`); spatial as EWKT both ways; `TIMESTAMP_LTZ`/`TZ` read as the exact
   `DateTimeOffset`. `VECTOR` needs the column's type (TYPE-020).
+- SAP HANA: `HanaDecimal` read with `GetDecimal`; decimals sent without trailing zeros (the driver silently cut
+  digits otherwise); spatial as WKB; `TIMESTAMP` limited to microseconds by the driver (TYPE-022); `BINTEXT` as text.
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.
