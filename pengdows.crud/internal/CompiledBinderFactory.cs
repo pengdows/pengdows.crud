@@ -72,7 +72,7 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
                 finalValueExpr);
 
             // Add to list: parameters.Add(param)
-            expressions.Add(Expression.Call(listParam, listAddMethod, createParamCall));
+            expressions.Add(Expression.Call(listParam, listAddMethod, MarkJson(createParamCall, column, dialect)));
             expressions.Add(Expression.PostIncrementAssign(countVar));
         }
 
@@ -153,7 +153,7 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
                 finalValueExpr);
 
             var thenBlock = Expression.Block(
-                Expression.Call(listParam, listAddMethod, createParamCall),
+                Expression.Call(listParam, listAddMethod, MarkJson(createParamCall, column, dialect)),
                 Expression.PostIncrementAssign(countVar)
             );
 
@@ -164,6 +164,28 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
 
         var block = Expression.Block(new[] { countVar }, expressions);
         return Expression.Lambda<UpdateBinder>(block, updatedParam, originalParam, listParam).Compile();
+    }
+
+    // A JSON column's parameter gets the same dialect marking the uncompiled paths apply
+    // (TryMarkJsonParameter): text DbType, plus Npgsql's jsonb metadata on PostgreSQL.
+    private static Expression MarkJson(Expression createParamCall, IColumnInfo column, ISqlDialect dialect)
+    {
+        if (!column.IsJsonType)
+        {
+            return createParamCall;
+        }
+
+        return Expression.Call(
+            typeof(CompiledBinderFactory<TEntity>).GetMethod(nameof(MarkJsonParameter),
+                BindingFlags.NonPublic | BindingFlags.Static)!,
+            Expression.Constant(dialect, typeof(ISqlDialect)), createParamCall,
+            Expression.Constant(column, typeof(IColumnInfo)));
+    }
+
+    private static DbParameter MarkJsonParameter(ISqlDialect dialect, DbParameter parameter, IColumnInfo column)
+    {
+        dialect.TryMarkJsonParameter(parameter, column);
+        return parameter;
     }
 
     private static MethodInfo ResolveGenericCreateDbParameter()

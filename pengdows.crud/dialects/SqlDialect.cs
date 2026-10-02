@@ -564,6 +564,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             throw new ArgumentNullException(nameof(parameter));
         }
+
+        // The JSON value is bound as its serialized text. Left as DbType.Object, SqlClient sends
+        // sql_variant, which a SQL Server json column refuses (confirmed live, TYPE-002).
+        if (parameter.DbType == DbType.Object)
+        {
+            parameter.DbType = DbType.String;
+        }
     }
 
     public virtual bool SupportsSetValuedParameters => false;
