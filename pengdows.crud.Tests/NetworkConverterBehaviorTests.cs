@@ -64,6 +64,47 @@ public class NetworkConverterBehaviorTests
         Assert.Equal("10.0.0.1/8", providerValue);
     }
 
+    // TYPE-002 (found live): Npgsql reports a host address stored without a prefix as netmask 32
+    // (/128 for IPv6). PostgreSQL's own text form omits a full-length mask, so it reads as no
+    // prefix, equal to the Inet that was written.
+    [Theory]
+    [InlineData("192.168.1.20", (byte)32)]
+    [InlineData("2001:db8::1", (byte)128)]
+    public void InetConverter_FullLengthNetmask_ReadsAsNoPrefix(string address, byte netmask)
+    {
+        var shim = new NpgsqlInetShim(IPAddress.Parse(address), netmask);
+
+        Assert.True(new InetConverter().TryConvertFromProvider(shim, SupportedDatabase.PostgreSql, out var inet));
+
+        Assert.Null(inet.PrefixLength);
+        Assert.Equal(Inet.Parse(address), inet);
+    }
+
+    [Theory]
+    [InlineData("192.168.1.20", (byte)32)]
+    [InlineData("2001:db8::1", (byte)128)]
+    public void InetCoercion_FullLengthNetmask_ReadsAsNoPrefix(string address, byte netmask)
+    {
+        var shim = new NpgsqlInetShim(IPAddress.Parse(address), netmask);
+
+        Assert.True(new pengdows.crud.types.coercion.InetCoercion().TryRead(
+            new pengdows.crud.types.coercion.DbValue(shim), out var inet));
+
+        Assert.Null(inet.PrefixLength);
+        Assert.Equal(Inet.Parse(address), inet);
+    }
+
+    [Fact]
+    public void InetCoercion_ShorterNetmask_KeepsThePrefix()
+    {
+        var shim = new NpgsqlInetShim(IPAddress.Parse("192.168.1.10"), 24);
+
+        Assert.True(new pengdows.crud.types.coercion.InetCoercion().TryRead(
+            new pengdows.crud.types.coercion.DbValue(shim), out var inet));
+
+        Assert.Equal<int?>(24, inet.PrefixLength);
+    }
+
     private sealed class NpgsqlMacAddressShim
     {
         public NpgsqlMacAddressShim(PhysicalAddress address)

@@ -28,6 +28,17 @@ namespace pengdows.crud.types.valueobjects;
 /// </remarks>
 public readonly struct Inet : IEquatable<Inet>
 {
+    /// <summary>
+    /// The prefix a provider's netmask stands for: none for a full-length mask (/32 IPv4, /128
+    /// IPv6), which is how Npgsql reports an address stored without a prefix and which PostgreSQL's
+    /// own text form omits (TYPE-002).
+    /// </summary>
+    internal static Inet FromProvider(IPAddress address, byte? netmask)
+    {
+        var full = address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetworkV6 ? 128 : 32;
+        return new Inet(address, netmask == full ? null : netmask);
+    }
+
     public Inet(IPAddress address, byte? prefixLength = null)
     {
         Address = address ?? throw new ArgumentNullException(nameof(address));

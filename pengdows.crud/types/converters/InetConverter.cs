@@ -154,7 +154,7 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
                     return true;
                 }
 
-                result = new Inet(addressValue, prefix);
+                result = Inet.FromProvider(addressValue, prefix);
                 return true;
             }
         }

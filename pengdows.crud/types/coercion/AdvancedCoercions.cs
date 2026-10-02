@@ -297,7 +297,7 @@ internal class InetCoercion : DbCoercion<Inet>
                             prefix = netmask;
                         }
 
-                        value = new Inet(addr, prefix);
+                        value = Inet.FromProvider(addr, prefix);
                         return true;
                     }
                 }
