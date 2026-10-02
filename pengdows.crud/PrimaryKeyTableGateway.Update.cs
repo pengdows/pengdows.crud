@@ -265,10 +265,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             {
                 var pName = counters.NextSet();
                 var param = dialect.CreateDbParameter(pName, col.DbType, value);
-                if (col.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(param, col);
-                }
+                dialect.MarkColumnParameter(param, col);
 
                 parameters.Add(param);
                 sc.Query.Append(template.UpdateColumnWrappedNames[i]);

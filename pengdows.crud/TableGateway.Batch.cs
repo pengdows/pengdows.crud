@@ -343,7 +343,9 @@ public partial class TableGateway<TEntity, TRowID>
                     {
                         continue;
                     }
-                    sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
+                    var batchParam = dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val);
+                    dialect.MarkColumnParameter(batchParam, col);
+                    sc.AddParameter(batchParam);
                 }
 
                 foreach (var col in updateableColumns)
@@ -353,7 +355,9 @@ public partial class TableGateway<TEntity, TRowID>
                     {
                         continue;
                     }
-                    sc.AddParameter(dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val));
+                    var batchParam = dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val);
+                    dialect.MarkColumnParameter(batchParam, col);
+                    sc.AddParameter(batchParam);
                 }
             }
 
@@ -610,10 +614,7 @@ public partial class TableGateway<TEntity, TRowID>
 
                 var name = counters.NextBatch();
                 var p = dialect.CreateDbParameter(name, column.DbType, value);
-                if (column.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(p, column);
-                }
+                dialect.MarkColumnParameter(p, column);
 
                 sc.AddParameter(p);
             }
@@ -671,10 +672,7 @@ public partial class TableGateway<TEntity, TRowID>
             // instead of duplicating it for array binding specifically.
             var firstValue = column.MakeParameterValueFromField(chunk[0]);
             var p = dialect.CreateDbParameter(name, column.DbType, firstValue);
-            if (column.IsJsonType)
-            {
-                dialect.TryMarkJsonParameter(p, column);
-            }
+            dialect.MarkColumnParameter(p, column);
 
             var values = new object[chunk.Count];
             values[0] = p.Value ?? DBNull.Value;

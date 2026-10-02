@@ -63,7 +63,8 @@ public class SpatialConverterEdgeCaseTests
         var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
         var result = converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql);
-        Assert.Equal("POINT(1 2)", result);
+        // TYPE-002: bound as bytea, so WKT is encoded to WKB (verified live on PostGIS).
+        Assert.Equal(WellKnownTextEncoder.Encode("POINT(1 2)"), result);
     }
 
     [Fact]
@@ -73,8 +74,9 @@ public class SpatialConverterEdgeCaseTests
         var json = "{\"type\":\"Point\",\"coordinates\":[1,2]}";
         var geometry = Geometry.FromGeoJson(json, 0);
 
-        var result = converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql);
-        Assert.Equal(json, result);
+        // TYPE-002: GeoJSON text can't be bound as bytea (verified live on PostGIS).
+
+        Assert.Throws<NotSupportedException>(() => converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql));
     }
 
     [Fact]
@@ -369,7 +371,8 @@ public class SpatialConverterEdgeCaseTests
         var geography = Geography.FromWellKnownText("POINT(1 2)", 4326);
 
         var result = converter.ToProviderValue(geography, SupportedDatabase.PostgreSql);
-        Assert.Equal("SRID=4326;POINT(1 2)", result);
+        // TYPE-002: bound as bytea, so WKT is encoded to EWKB (verified live on PostGIS).
+        Assert.Equal(GeometryConverter.AddSridToWkb(WellKnownTextEncoder.Encode("POINT(1 2)"), 4326), result);
     }
 
     [Fact]
@@ -392,7 +395,7 @@ public class SpatialConverterEdgeCaseTests
         var geometry = Geometry.FromWellKnownBinary(Array.Empty<byte>(), 0);
 
         // Postgres path: no WKB, no WKT, no GeoJSON
-        Assert.Throws<InvalidOperationException>(() =>
+        Assert.Throws<NotSupportedException>(() =>
             converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql));
     }
 

@@ -1,5 +1,4 @@
 using System.Data;
-using pengdows.crud.types.converters;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.@internal;
@@ -23,21 +22,28 @@ internal static class UnresolvedColumnReader
         {
             // SqlClient without Microsoft.SqlServer.Types: GetValue throws, GetBytes returns
             // SQL Server's stored encoding (confirmed live).
-            var bytes = new byte[record.GetBytes(ordinal, 0, null, 0, 0)];
-            record.GetBytes(ordinal, 0, bytes, 0, bytes.Length);
-            return HierarchyId.FromSqlServerBytes(bytes);
-        }
-
-        if (type == typeof(Geometry) || type == typeof(Geography))
-        {
-            // Same for geometry/geography; GetBytes returns SQL Server's stored spatial encoding.
-            var stored = new byte[record.GetBytes(ordinal, 0, null, 0, 0)];
-            record.GetBytes(ordinal, 0, stored, 0, stored.Length);
-            var geography = type == typeof(Geography);
-            var (srid, wkb) = SqlServerSpatialFormat.Decode(stored, geography);
-            return geography ? Geography.FromWellKnownBinary(wkb, srid) : Geometry.FromWellKnownBinary(wkb, srid);
+            return HierarchyId.FromSqlServerBytes(ReadBytes(record, ordinal));
         }
 
         throw new NotSupportedException($"No reader for an unresolved column read as {type.Name}.");
+    }
+
+    /// <summary>The column's whole binary value through GetBytes, which works when GetValue can't.</summary>
+    public static byte[] ReadBytes(IDataRecord record, int ordinal)
+    {
+        var bytes = new byte[record.GetBytes(ordinal, 0, null, 0, 0)];
+        var read = 0L;
+        while (read < bytes.Length)
+        {
+            var chunk = record.GetBytes(ordinal, read, bytes, (int)read, bytes.Length - (int)read);
+            if (chunk <= 0)
+            {
+                break;
+            }
+
+            read += chunk;
+        }
+
+        return bytes;
     }
 }

@@ -119,6 +119,10 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   Oracle and Sybase ASE; 16-byte columns read into a `Guid` decode the same way (changed in 2.0.6, TYPE-002).
 - SQLite: a `decimal` binds as exact invariant text (declare the column `TEXT` to keep every digit; `REAL`/`NUMERIC`
   convert by affinity); a DuckDB `LIST` maps to `T[]`/`List<T>` through `DataReaderMapper` as through the gateway.
+- PostgreSQL family: `Geometry`/`Geography` bind EWKB (WKT encoded; GeoJSON-only refused) and PostGIS/`vector` columns
+  read without the NetTopologySuite/pgvector plugins (binary value via `GetBytes`); a C# enum into a PG `ENUM` column is
+  sent untyped on PostgreSQL/YugabyteDB (CockroachDB accepts text) (string properties, PG 15+ MERGE upserts and custom `WHERE` still need `CAST`); `DateTimeOffset` with
+  `DbType.Time` is `timetz`; CockroachDB runs multi-statement commands unprepared (TYPE-002).
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.

@@ -149,7 +149,19 @@ internal sealed class GeometryConverter : SpatialConverter<Geometry>
             ? BinaryPrimitives.ReadInt32LittleEndian(source.Slice(5, 4))
             : BinaryPrimitives.ReadInt32BigEndian(source.Slice(5, 4));
 
-        normalized = source.ToArray();
+        // Plain WKB: the SRID flag cleared and the 4 SRID bytes removed (TYPE-002).
+        normalized = new byte[source.Length - 4];
+        normalized[0] = source[0];
+        if (littleEndian)
+        {
+            BinaryPrimitives.WriteUInt32LittleEndian(normalized.AsSpan(1, 4), type & ~sridFlag);
+        }
+        else
+        {
+            BinaryPrimitives.WriteUInt32BigEndian(normalized.AsSpan(1, 4), type & ~sridFlag);
+        }
+
+        source[9..].CopyTo(normalized.AsSpan(5));
     }
 
     private static (int srid, string text) ExtractSridFromText(string text)

@@ -166,11 +166,11 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
         return Expression.Lambda<UpdateBinder>(block, updatedParam, originalParam, listParam).Compile();
     }
 
-    // A JSON column's parameter gets the same dialect marking the uncompiled paths apply
-    // (TryMarkJsonParameter): text DbType, plus Npgsql's jsonb metadata on PostgreSQL.
+    // A JSON or enum column's parameter gets the same dialect marking the uncompiled paths apply
+    // (MarkColumnParameter): JSON's text DbType and Npgsql jsonb metadata, an untyped enum on PostgreSQL.
     private static Expression MarkJson(Expression createParamCall, IColumnInfo column, ISqlDialect dialect)
     {
-        if (!column.IsJsonType)
+        if (!column.IsJsonType && !column.IsEnum)
         {
             return createParamCall;
         }
@@ -184,7 +184,7 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
 
     private static DbParameter MarkJsonParameter(ISqlDialect dialect, DbParameter parameter, IColumnInfo column)
     {
-        dialect.TryMarkJsonParameter(parameter, column);
+        dialect.MarkColumnParameter(parameter, column);
         return parameter;
     }
 

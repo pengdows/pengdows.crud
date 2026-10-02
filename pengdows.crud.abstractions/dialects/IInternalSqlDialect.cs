@@ -104,6 +104,19 @@ internal interface IInternalSqlDialect : ISqlDialect
     void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column);
 
     /// <summary>
+    /// Stamps provider metadata a column's parameter needs on every gateway write path: a JSON
+    /// column's (<see cref="TryMarkJsonParameter"/>), and whatever else the dialect requires (the
+    /// PostgreSQL family sends a C# enum's parameter untyped, TYPE-002).
+    /// </summary>
+    void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        if (column.IsJsonType)
+        {
+            TryMarkJsonParameter(parameter, column);
+        }
+    }
+
+    /// <summary>
     /// True when a column's value is written as an expression around its parameter placeholder
     /// (<see cref="RenderColumnArgument"/>) rather than the bare placeholder: a JSON column's cast,
     /// or a value the database must build itself (SQL Server geometry/geography).

@@ -87,13 +87,27 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         var entry = cache[i];
         if (entry is null)
         {
-            entry = (_reader.GetFieldType(i) is null
+            entry = (ProviderFieldTypeIsUnknown(i)
                 ? _unresolvedColumnDialect.GetUnresolvedColumnType(_reader.GetDataTypeName(i))
                 : null) ?? NotUnresolved;
             cache[i] = entry;
         }
 
         return entry as Type;
+    }
+
+    // SqlClient returns null for a CLR type whose assembly isn't loaded; Npgsql throws for a type it
+    // has no handler for (PostGIS without NetTopologySuite).
+    private bool ProviderFieldTypeIsUnknown(int i)
+    {
+        try
+        {
+            return _reader.GetFieldType(i) is null;
+        }
+        catch (InvalidCastException)
+        {
+            return true;
+        }
     }
 
     private DataMappingException? UnreadableValue(int i, Exception exception) =>
@@ -143,6 +157,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     DbDataReader IInternalTrackedReader.InnerReader => _reader;
     DbCommand? IInternalTrackedReader.InnerCommand => _command;
     Type? IInternalTrackedReader.GetUnresolvedColumnType(int ordinal) => UnresolvedColumnType(ordinal);
+
+    object IInternalTrackedReader.ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type) =>
+        record.IsDBNull(ordinal) ? DBNull.Value
+        : _unresolvedColumnDialect is { } dialect ? dialect.ReadUnresolvedColumn(record, ordinal, type)
+        : UnresolvedColumnReader.Read(record, ordinal, type);
     TypeCoercionOptions IInternalTrackedReader.CoercionOptions => _coercionOptions;
 
     protected override void DisposeManaged()
@@ -368,7 +387,9 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     {
         if (UnresolvedColumnType(i) is { } unresolvedType)
         {
-            return UnresolvedColumnReader.Read(_reader, i, unresolvedType);
+            return _reader.IsDBNull(i)
+                ? DBNull.Value
+                : _unresolvedColumnDialect!.ReadUnresolvedColumn(_reader, i, unresolvedType);
         }
 
         try
@@ -704,7 +725,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             // Microsoft.SqlServer.Types); the value is still read, or reported, through GetValue.
             return type ?? UnresolvedColumnType(i) ?? typeof(object);
         }
-        catch (Exception)
+        catch (InvalidCastException) when (UnresolvedColumnType(i) is { } unresolvedType)
+        {
+            return unresolvedType;
+        }
+        catch (Exception ex)
         {
             // Npgsql 9 workaround: some types (like timestamp) are not supported via standard GetFieldType
             try
@@ -717,6 +742,13 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             }
             catch
             {
+            }
+
+            // A type the provider has no handler for (an extension type Npgsql can't read) is reported
+            // as object; reading it then fails as a DataMappingException naming the column.
+            if (ex is InvalidCastException)
+            {
+                return typeof(object);
             }
 
             throw;

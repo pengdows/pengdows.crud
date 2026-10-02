@@ -74,7 +74,11 @@ public class fakeDbCommand : DbCommand
 
     public override void Prepare()
     {
+        PrepareCount++;
     }
+
+    /// <summary>Number of times <see cref="Prepare"/> was called on this command.</summary>
+    public int PrepareCount { get; private set; }
 
     private fakeDbConnection? FakeConnection => Connection as fakeDbConnection;
 

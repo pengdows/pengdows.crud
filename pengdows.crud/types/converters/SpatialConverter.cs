@@ -136,17 +136,16 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             return AddSridToWkb(value.WellKnownBinary.Span, value.Srid);
         }
 
+        // The PostgreSQL family binds spatial values as bytea (EWKB); EWKT or GeoJSON text sent there
+        // could never be read as a geometry (TYPE-002). WKT is encoded to WKB.
         if (!string.IsNullOrEmpty(value.WellKnownText))
         {
-            return AddSridToWkt(value.WellKnownText, value.Srid);
+            return AddSridToWkb(WellKnownTextEncoder.Encode(value.WellKnownText), value.Srid);
         }
 
-        if (!string.IsNullOrEmpty(value.GeoJson))
-        {
-            return AddSridToGeoJson(value.GeoJson, value.Srid);
-        }
-
-        throw new InvalidOperationException("Spatial value did not contain WKB, WKT, or GeoJSON data.");
+        throw new NotSupportedException(
+            "PostgreSQL-family spatial values need WKB or WKT; a GeoJSON-only value cannot be written. " +
+            "Create it with FromWellKnownText or FromWellKnownBinary.");
     }
 
     internal static byte[] AddSridToWkb(ReadOnlySpan<byte> wkb, int srid)

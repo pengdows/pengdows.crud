@@ -404,10 +404,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             var value = col.MakeParameterValueFromField(entity);
             var param = dialect.CreateDbParameter(pName, col.DbType, value);
 
-            if (col.IsJsonType)
-            {
-                dialect.TryMarkJsonParameter(param, col);
-            }
+            dialect.MarkColumnParameter(param, col);
 
             if (dialect.RendersColumnArgument(col))
             {

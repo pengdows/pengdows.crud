@@ -592,16 +592,19 @@ internal class AdvancedTypeRegistry
         RegisterMapping<Geometry>(SupportedDatabase.SqlServer, sqlServerSpatial);
         RegisterMapping<Geography>(SupportedDatabase.SqlServer, sqlServerSpatial);
 
-        // PostgreSQL PostGIS Geometry
-        RegisterMapping<Geometry>(SupportedDatabase.PostgreSql, new ProviderTypeMapping
+        // PostgreSQL family (PostGIS, CockroachDB's built-in spatial types): EWKB bytes, produced
+        // by SpatialConverter. Geometry was registered for PostgreSQL only and Geography for none, so
+        // elsewhere the value object reached Npgsql (TYPE-002).
+        var pgSpatial = new ProviderTypeMapping
         {
             DbType = DbType.Binary,
-            ConfigureParameter = (param, value) =>
-            {
-                param.DbType = DbType.Binary;
-                // Value should be converted to WKB by converter
-            }
-        });
+            ConfigureParameter = (param, value) => param.DbType = DbType.Binary
+        };
+        foreach (var provider in new[] { SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb })
+        {
+            RegisterMapping<Geometry>(provider, pgSpatial);
+            RegisterMapping<Geography>(provider, pgSpatial);
+        }
     }
 
     private void RegisterArrayMappings()
@@ -763,6 +766,7 @@ internal class AdvancedTypeRegistry
             }
         };
         RegisterMapping<HStore>(SupportedDatabase.PostgreSql, pgHStore);
+        RegisterMapping<HStore>(SupportedDatabase.YugabyteDb, pgHStore);
     }
 
     private void RegisterTemporalMappings()

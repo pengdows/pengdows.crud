@@ -24,9 +24,9 @@
 //   has no GoogleSQL-dialect Spanner support, so that type list is intentionally not modeled
 //   here), Informix 14.10, SAP HANA (Cloud QRC 2/2026, with the platform/legacy addendum), and
 //   InterBase 15, plus PostgreSQL (shared by Aurora PostgreSQL), SQL Server 2025 and the MySQL
-//   family (MySQL/Aurora MySQL, MariaDB, TiDB), SQLite and DuckDB, live-verified by
-//   TypeRoundTripMatrixTests (TYPE-002). Every other pengdows.crud-supported database (Oracle,
-//   Firebird, CockroachDB, YugabyteDB, Snowflake) is deliberately left unpopulated rather than guessed — extend this
+//   family (MySQL/Aurora MySQL, MariaDB, TiDB), SQLite, DuckDB, CockroachDB and YugabyteDB,
+//   live-verified by TypeRoundTripMatrixTests (TYPE-002). Every other pengdows.crud-supported
+//   database (Oracle, Firebird, Snowflake) is deliberately left unpopulated rather than guessed — extend this
 //   catalog with the same sourcing discipline (a citable reference or a live-verified fact) when
 //   one of those is needed, not by assumption from a "similar" engine.
 // - Two real cases prove a flat name -> DbType dictionary is insufficient, which is why this
@@ -66,6 +66,14 @@ public enum ColumnTypeCategory
 /// Describes one column-capable (or deliberately NOT column-capable — see <see cref="CanDeclareColumn"/>)
 /// type for one database engine. See this file's header for scope and sourcing discipline.
 /// </summary>
+/// <summary>Labels of the user-defined ENUM the catalog declares (PostgreSQL's pengdows_mood).</summary>
+public enum CatalogMood
+{
+    sad,
+    ok,
+    happy
+}
+
 public sealed record ColumnTypeDescriptor(
     string CanonicalName,
     ColumnTypeCategory Category,
@@ -90,7 +98,9 @@ public sealed record ColumnTypeDescriptor(
     Type? ClrType = null,
     System.Data.DbType? DbType = null,
     object? Sample = null,
-    bool Comparable = true);
+    bool Comparable = true,
+    // SQL the matrix runs before declaring the column (an extension or a user-defined type it needs).
+    string? Setup = null);
 
 public static class DatabaseTypeCatalog
 {
@@ -108,6 +118,8 @@ public static class DatabaseTypeCatalog
         SupportedDatabase.SapHana => HanaTypes,
         SupportedDatabase.InterBase => InterBaseTypes,
         SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => PostgreSqlTypes,
+        SupportedDatabase.YugabyteDb => YugabyteDbTypes,
+        SupportedDatabase.CockroachDb => CockroachDbTypes,
         SupportedDatabase.SqlServer => SqlServerTypes,
         SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => MySqlTypes,
         SupportedDatabase.MariaDb => MariaDbTypes,
@@ -261,9 +273,100 @@ public static class DatabaseTypeCatalog
             Declaration: "INTEGER[]", ClrType: typeof(int[]), DbType: System.Data.DbType.Object, Sample: new[] { 1, -2, 3 }),
         new("TEXT[]", ColumnTypeCategory.Array, IsArray: true,
             Declaration: "TEXT[]", ClrType: typeof(string[]), DbType: System.Data.DbType.Object, Sample: new[] { "a", "b c" }),
-        new("POINT", ColumnTypeCategory.Spatial, Notes: "Geometric types (point, line, lseg, box, path, polygon, circle) have no pengdows CLR type."),
-        new("BIT(n)", ColumnTypeCategory.Other, Aliases: new[] { "BIT VARYING(n)" }, Notes: "No pengdows CLR mapping."),
-        new("TSVECTOR", ColumnTypeCategory.Other, Aliases: new[] { "TSQUERY" }, Notes: "Text-search types; no pengdows CLR mapping."),
+        new("INT8RANGE", ColumnTypeCategory.Other,
+            Declaration: "INT8RANGE", ClrType: typeof(pengdows.crud.types.valueobjects.Range<long>), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.Range<long>(long.MinValue + 1, 0L, true, false)),
+        new("NUMRANGE", ColumnTypeCategory.Other,
+            Declaration: "NUMRANGE", ClrType: typeof(pengdows.crud.types.valueobjects.Range<decimal>), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.Range<decimal>(-1.5m, 99.25m, true, true)),
+        new("TSRANGE", ColumnTypeCategory.Other,
+            Declaration: "TSRANGE", ClrType: typeof(pengdows.crud.types.valueobjects.Range<DateTime>), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.Range<DateTime>(new DateTime(2026, 1, 1), new DateTime(2026, 10, 1, 13, 45, 30), true, false)),
+        new("TSTZRANGE", ColumnTypeCategory.Other,
+            Declaration: "TSTZRANGE", ClrType: typeof(pengdows.crud.types.valueobjects.Range<DateTimeOffset>), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.Range<DateTimeOffset>(new DateTimeOffset(2026, 1, 1, 0, 0, 0, TimeSpan.Zero),
+                new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.Zero), true, false)),
+        new("DATERANGE", ColumnTypeCategory.Other,
+            Declaration: "DATERANGE", ClrType: typeof(pengdows.crud.types.valueobjects.Range<DateOnly>), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.Range<DateOnly>(new DateOnly(2026, 1, 1), new DateOnly(2026, 10, 2), true, false)),
+        new("MACADDR8", ColumnTypeCategory.Other,
+            Declaration: "MACADDR8", ClrType: typeof(pengdows.crud.types.valueobjects.MacAddress), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.MacAddress.Parse("08:00:2b:01:02:03:04:05")),
+        new("TIMESTAMPTZ (DateTime)", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
+            Declaration: "TIMESTAMPTZ(6)", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, 123, 456, DateTimeKind.Utc)),
+        new("TIMETZ", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
+            Declaration: "TIMETZ(6)", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.Time,
+            Sample: new DateTimeOffset(1, 1, 2, 13, 45, 30, 123, TimeSpan.FromHours(-5)),
+            Notes: "Npgsql reads a timetz as a DateTimeOffset on 0001-01-02."),
+        new("INTERVAL (months)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "INTERVAL", ClrType: typeof(pengdows.crud.types.valueobjects.PostgreSqlInterval), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.PostgreSqlInterval(14, 3, 3_723_000_456L)),
+        new("BIT(n)", ColumnTypeCategory.Binary,
+            Declaration: "BIT(10)", ClrType: typeof(System.Collections.BitArray), DbType: System.Data.DbType.Object,
+            Sample: new System.Collections.BitArray(new[] { true, false, true, true, false, false, true, false, true, true })),
+        new("VARBIT(n)", ColumnTypeCategory.Binary, Aliases: new[] { "BIT VARYING(n)" },
+            Declaration: "VARBIT(16)", ClrType: typeof(System.Collections.BitArray), DbType: System.Data.DbType.Object,
+            Sample: new System.Collections.BitArray(new[] { false, true, true })),
+        new("OID", ColumnTypeCategory.ExactNumeric, IsUnsigned: true,
+            Declaration: "OID", ClrType: typeof(uint), DbType: System.Data.DbType.UInt32, Sample: uint.MaxValue),
+        new("\"char\"", ColumnTypeCategory.Character,
+            Declaration: "\"char\"", ClrType: typeof(char), DbType: System.Data.DbType.StringFixedLength, Sample: 'q'),
+        new("NAME", ColumnTypeCategory.Character,
+            Declaration: "NAME", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "identifier_name"),
+        new("SERIAL", ColumnTypeCategory.ExactNumeric, IsAutoGenerated: true, Aliases: new[] { "SMALLSERIAL", "BIGSERIAL" },
+            Declaration: "SERIAL", ClrType: typeof(int), DbType: System.Data.DbType.Int32, Sample: 123),
+        new("BIGINT[]", ColumnTypeCategory.Array, IsArray: true,
+            Declaration: "BIGINT[]", ClrType: typeof(long[]), DbType: System.Data.DbType.Object, Sample: new[] { long.MinValue, 0L, long.MaxValue }),
+        new("UUID[]", ColumnTypeCategory.Array, IsArray: true,
+            Declaration: "UUID[]", ClrType: typeof(Guid[]), DbType: System.Data.DbType.Object,
+            Sample: new[] { new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc"), Guid.Empty }),
+        new("BOOLEAN[]", ColumnTypeCategory.Array, IsArray: true,
+            Declaration: "BOOLEAN[]", ClrType: typeof(bool[]), DbType: System.Data.DbType.Object, Sample: new[] { true, false }),
+        new("NUMERIC[]", ColumnTypeCategory.Array, IsArray: true,
+            Declaration: "NUMERIC[]", ClrType: typeof(decimal[]), DbType: System.Data.DbType.Object, Sample: new[] { 1.5m, -2.25m }),
+        new("DOUBLE PRECISION[]", ColumnTypeCategory.Array, IsArray: true,
+            Declaration: "DOUBLE PRECISION[]", ClrType: typeof(double[]), DbType: System.Data.DbType.Object, Sample: new[] { 1.5, -1.25e300 }),
+        new("ENUM", ColumnTypeCategory.UserDefined, IsUserDefined: true,
+            Declaration: "pengdows_mood", ClrType: typeof(CatalogMood), DbType: System.Data.DbType.String, Sample: CatalogMood.happy,
+            Comparable: false,
+            Notes: "A C# enum is written untyped so PostgreSQL applies the enum type; a string property, a MERGE upsert " +
+                   "(PostgreSQL 15+) and WHERE in your own SQL still need CAST(@p AS type) (TYPE-002; 3.0 will name the type).",
+            Setup: "DROP TABLE IF EXISTS type_rt; DROP TYPE IF EXISTS pengdows_mood; CREATE TYPE pengdows_mood AS ENUM ('sad', 'ok', 'happy')"),
+        new("HSTORE", ColumnTypeCategory.Other,
+            Declaration: "HSTORE", ClrType: typeof(pengdows.crud.types.valueobjects.HStore), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.HStore.Parse("\"a\"=>\"1\", \"b\"=>NULL"), Comparable: false,
+            Setup: "CREATE EXTENSION IF NOT EXISTS hstore"),
+        new("POINT", ColumnTypeCategory.Spatial,
+            Declaration: "POINT", ClrType: typeof(NpgsqlTypes.NpgsqlPoint), DbType: System.Data.DbType.Object,
+            Sample: new NpgsqlTypes.NpgsqlPoint(1.5, -2), Comparable: false, Notes: "Npgsql's own geometric types."),
+        new("LSEG", ColumnTypeCategory.Spatial,
+            Declaration: "LSEG", ClrType: typeof(NpgsqlTypes.NpgsqlLSeg), DbType: System.Data.DbType.Object,
+            Sample: new NpgsqlTypes.NpgsqlLSeg(0, 0, 1, 1), Comparable: false),
+        new("BOX", ColumnTypeCategory.Spatial,
+            Declaration: "BOX", ClrType: typeof(NpgsqlTypes.NpgsqlBox), DbType: System.Data.DbType.Object,
+            Sample: new NpgsqlTypes.NpgsqlBox(2, 2, 0, 0), Comparable: false),
+        new("PATH", ColumnTypeCategory.Spatial,
+            Declaration: "PATH", ClrType: typeof(NpgsqlTypes.NpgsqlPath), DbType: System.Data.DbType.Object,
+            Sample: new NpgsqlTypes.NpgsqlPath(new[] { new NpgsqlTypes.NpgsqlPoint(0, 0), new NpgsqlTypes.NpgsqlPoint(1, 1) }, false), Comparable: false),
+        new("POLYGON", ColumnTypeCategory.Spatial,
+            Declaration: "POLYGON", ClrType: typeof(NpgsqlTypes.NpgsqlPolygon), DbType: System.Data.DbType.Object,
+            Sample: new NpgsqlTypes.NpgsqlPolygon(new[] { new NpgsqlTypes.NpgsqlPoint(0, 0), new NpgsqlTypes.NpgsqlPoint(4, 0), new NpgsqlTypes.NpgsqlPoint(4, 4) }), Comparable: false),
+        new("LINE", ColumnTypeCategory.Spatial,
+            Declaration: "LINE", ClrType: typeof(NpgsqlTypes.NpgsqlLine), DbType: System.Data.DbType.Object,
+            Sample: new NpgsqlTypes.NpgsqlLine(1, -1, 0), Comparable: false),
+        new("CIRCLE", ColumnTypeCategory.Spatial,
+            Declaration: "CIRCLE", ClrType: typeof(NpgsqlTypes.NpgsqlCircle), DbType: System.Data.DbType.Object,
+            Sample: new NpgsqlTypes.NpgsqlCircle(1, 2, 3), Comparable: false),
+        new("TSVECTOR", ColumnTypeCategory.Other,
+            Declaration: "TSVECTOR", ClrType: typeof(NpgsqlTypes.NpgsqlTsVector), DbType: System.Data.DbType.Object,
+            Sample: NpgsqlTypes.NpgsqlTsVector.Parse("a fat cat"), Comparable: false),
+        new("TSQUERY", ColumnTypeCategory.Other,
+            Declaration: "TSQUERY", ClrType: typeof(NpgsqlTypes.NpgsqlTsQuery), DbType: System.Data.DbType.Object,
+            Sample: NpgsqlTypes.NpgsqlTsQuery.Parse("fat & cat"), Comparable: false),
+        new("PG_LSN", ColumnTypeCategory.Other,
+            Declaration: "PG_LSN", ClrType: typeof(NpgsqlTypes.NpgsqlLogSequenceNumber), DbType: System.Data.DbType.Object,
+            Sample: NpgsqlTypes.NpgsqlLogSequenceNumber.Parse("16/B374D848")),
     };
 
     // ── SQL Server 2025 ─────────────────────────────────────────────────────
@@ -621,6 +724,39 @@ public static class DatabaseTypeCatalog
         new("BIT", ColumnTypeCategory.Binary, Aliases: new[] { "BITSTRING" }, Notes: "No natural CLR type; read as its text."),
         new("MAP / STRUCT / UNION", ColumnTypeCategory.UserDefined, Notes: "Read as Dictionary (DuckDbWideAndListTypeRoundTripTests); not written through parameters."),
     };
+
+    // ── YugabyteDB 2.x (YSQL) ───────────────────────────────────────────────
+    // YSQL reuses PostgreSQL's query layer, so it takes the PostgreSQL list; XML is not built in
+    // ("0A000: unsupported XML feature", confirmed live). Live-verified by TypeRoundTripMatrixTests.
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> YugabyteDbTypes = PostgreSqlTypes
+        .Where(e => e.CanonicalName != "XML")
+        .ToArray();
+
+    // ── CockroachDB 25.x ────────────────────────────────────────────────────
+    // Source: cockroachlabs.com "Data Types". The PostgreSQL list minus what CockroachDB doesn't
+    // implement (MONEY, XML, ranges, CIDR/MACADDR, geometric types, hstore), plus its native
+    // spatial and VECTOR types. Live-verified by TypeRoundTripMatrixTests (TYPE-002).
+    private static readonly string[] CockroachDbUnsupported =
+    {
+        "MONEY", "XML", "CIDR", "MACADDR", "MACADDR8", "INT4RANGE", "INT8RANGE", "NUMRANGE", "TSRANGE",
+        "TSTZRANGE", "DATERANGE", "HSTORE", "POINT", "LSEG", "BOX", "PATH", "POLYGON", "LINE", "CIRCLE"
+    };
+
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> CockroachDbTypes = PostgreSqlTypes
+        .Where(e => !CockroachDbUnsupported.Contains(e.CanonicalName))
+        .Concat(new ColumnTypeDescriptor[]
+        {
+            new("GEOMETRY", ColumnTypeCategory.Spatial,
+                Declaration: "GEOMETRY", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+                Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POLYGON((0 0, 4 0, 4 4, 0 0))", 3857), Comparable: false),
+            new("GEOGRAPHY", ColumnTypeCategory.Spatial,
+                Declaration: "GEOGRAPHY", ClrType: typeof(pengdows.crud.types.valueobjects.Geography), DbType: System.Data.DbType.Object,
+                Sample: pengdows.crud.types.valueobjects.Geography.FromWellKnownText("POINT(-87.6298 41.8781)", 4326), Comparable: false),
+            new("VECTOR(n)", ColumnTypeCategory.Vector, MinVersion: "24.2",
+                Declaration: "VECTOR(3)", ClrType: typeof(float[]), DbType: System.Data.DbType.Object,
+                Sample: new[] { 1.5f, 2f, -3f }, Comparable: false),
+        })
+        .ToArray();
 
     // ── Db2 LUW 11.5.x ──────────────────────────────────────────────────────
     // Source: IBM Db2 11.5 SQL reference (data types / CREATE TABLE). Special cases NOT modeled

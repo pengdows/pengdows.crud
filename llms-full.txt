@@ -8212,12 +8212,13 @@ provider/type combinations listed below and exercised by the unit and provider i
 It does not claim that an arbitrary third-party ADO.NET extension type can be converted without a
 registered implementation.
 
-For PostgreSQL-family spatial values, the CRUD coercion path writes binary values as EWKB when an
-SRID is present and restores that SRID when reading the EWKB payload. WKT writes use EWKT. The
-converter boundary also formats GeoJSON with a `crs` member, but GeoJSON is not a native write
-format for the ordinary gateway coercion path. The current live regression uses PostgreSQL
-`BYTEA` to verify the EWKB wire payload; a PostGIS-extension column test remains provider-image
-specific and is not implied by the ordinary PostgreSQL test.
+For PostgreSQL-family spatial values (PostGIS `geometry`/`geography`, CockroachDB's built-in spatial
+types), the gateway binds EWKB (WKB with the SRID); a value built from WKT is encoded to WKB first,
+and a GeoJSON-only value can't be written (`NotSupportedException`). Reads need no NetTopologySuite
+plugin: Npgsql has no handler for these types without it, so the dialect reads the column's EWKB
+through `GetBytes` and splits off the SRID. `WellKnownBinary` is always plain WKB and the SRID is
+`Srid` (2.0.5 kept the EWKB SRID flag in `WellKnownBinary`). Verified live on PostGIS 3.5
+(`PostGisRoundTripTests`) and CockroachDB 25.1 (TYPE-002).
 
 ## Usage pattern
 
@@ -8268,7 +8269,7 @@ public RowVersion Rv { get; set; }
 | `IntervalDaySecond` (`IntervalDaySecond.cs`) | Oracle `INTERVAL DAY TO SECOND` | Oracle only |
 | `HStore` (`HStore.cs`) | PostgreSQL key/value column | Built-in `coercion/` pipeline (`ProviderParameterFactory`/`BasicCoercions`), provider-agnostic at the CLR boundary |
 | `JsonValue` (`JsonValue.cs`) | Lazy string/`JsonDocument`/`JsonElement` JSON wrapper | Same built-in `coercion/` pipeline as `HStore`, provider-agnostic at the CLR boundary |
-| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server `geometry`/`geography` without `Microsoft.SqlServer.Types` (below); PostgreSQL/CockroachDB/YugabyteDB spatial paths for both (binary writes use EWKB when an SRID is present; WKT/GeoJSON retain SRID in EWKT/`crs`); MySQL/MariaDB `GEOMETRY` in the server's internal format (4-byte SRID + WKB, WKT encoded to WKB; a GeoJSON-only value can't be written there) |
+| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server `geometry`/`geography` without `Microsoft.SqlServer.Types` (below); PostgreSQL/CockroachDB/YugabyteDB for both as EWKB (WKT encoded to WKB, read without NetTopologySuite; a GeoJSON-only value can't be written); MySQL/MariaDB `GEOMETRY` in the server's internal format (4-byte SRID + WKB, WKT encoded to WKB; a GeoJSON-only value can't be written there) |
 | `RowVersion` (`RowVersion.cs`) | 8-byte optimistic-concurrency token | SQL Server → `rowversion`/`timestamp` |
 | `HierarchyId` (`HierarchyId.cs`) | Node path such as `/1/2.5/` with SQL Server `hierarchyid` semantics (`Level`, `GetAncestor`, `IsDescendantOf`, SQL Server's depth-first ordering) | SQL Server `hierarchyid` without `Microsoft.SqlServer.Types`; text on any other database (TYPE-016, below) |
 
@@ -8370,7 +8371,10 @@ plain .NET type (verified live, TYPE-005).
 | SQL Server `sql_variant` | `object` | The stored value's own type. |
 | PostgreSQL `BIT(n)` | `BitArray` | |
 | SQL Server 2025 `VECTOR(n)`, Oracle 23ai `VECTOR` | `float[]` (or `double[]`, `List<float>`) with `[Column(..., DbType.Object)]` | Written as exact text (`[1.5,2,-3]`, each element in shortest round-trip form), which both servers convert implicitly; SqlClient and ODP.NET reject a raw `float[]`. Read from ODP.NET's `float[]`, SqlClient 6.1+'s `SqlVector<float>` (exact), or SqlClient 6.0's text. **SqlClient 6.0 prints 8 significant digits**, so about 2% of arbitrary `float` values come back one bit off (and `-0` as `0`); use SqlClient 6.1+ for exact reads. A `float[]` parameter is a `VECTOR_DISTANCE` argument: `CAST({P}p AS VECTOR(n))` on SQL Server, `TO_VECTOR({P}p)` on Oracle. (TYPE-015) |
-| pgvector `vector(n)` | `float[]` | Npgsql binds a `float[]` as `real[]`, which pgvector's assignment cast stores. Npgsql can't read `vector` itself without the `Pgvector.Npgsql` plugin: select `col::real[]`, or build the context from an `NpgsqlDataSource` with `UseVector()`, whose `Pgvector.Vector` then converts to `float[]`. Comparisons need `CAST({P}p AS vector)`. (TYPE-015) |
+| pgvector `vector(n)` | `float[]` | Npgsql binds a `float[]` as `real[]`, which pgvector's assignment cast stores. Npgsql has no handler for `vector` without the `Pgvector.Npgsql` plugin, so the dialect reads the column's binary value through `GetBytes` (no plugin or `::real[]` cast needed; the plugin's `Pgvector.Vector` also converts). Same on CockroachDB's `VECTOR`. Comparisons need `CAST({P}p AS vector)`. (TYPE-015, TYPE-002) |
+| PostgreSQL user-defined `ENUM` | a C# enum with `DbType.String` | Sent untyped on PostgreSQL and YugabyteDB, so the server applies the enum type (a text parameter is refused: "column is of type mood but expression is of type text"). CockroachDB accepts text into an ENUM column (and refuses untyped values in a `VALUES` list), so it keeps text. Not yet covered: a plain `string` property, a MERGE upsert on PostgreSQL 15+ (its `VALUES` list types the value as text), and `WHERE` in your own SQL; use `CAST({P}p AS mood)` there. 3.0 will let the column name the type. (TYPE-002) |
+| PostgreSQL `timetz` | `DateTimeOffset` with `DbType.Time` | Sent as `time with time zone` with its offset kept (as `DbType.DateTimeOffset` it would be `timestamptz`, which `WHERE` can't compare to a `timetz`). |
+| PostgreSQL `pg_lsn` | `NpgsqlTypes.NpgsqlLogSequenceNumber` | Npgsql can't infer the type from the value; the dialect names it. Npgsql's own geometric types (`NpgsqlPoint`, `NpgsqlBox`, ...) and `NpgsqlTsVector`/`NpgsqlTsQuery` pass through as is. |
 
 A stored value with no .NET representation throws `DataMappingException` naming the column, never
 a raw provider exception or a default value: a MySQL/MariaDB zero date (`'0000-00-00'`), a

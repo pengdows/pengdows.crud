@@ -1982,6 +1982,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
+        if (_dialect is SqlDialect { PreparesMultiStatementCommands: false } &&
+            SqlStatementScanner.HasMultipleStatements(sqlText))
+        {
+            return;
+        }
+
         try
         {
             cmd.Prepare();

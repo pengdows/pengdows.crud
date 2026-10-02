@@ -416,6 +416,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual Type? GetUnresolvedColumnType(string dataTypeName) => null;
 
     /// <summary>
+    /// Reads a column <see cref="GetUnresolvedColumnType"/> named, as that type; the dialect knows
+    /// its database's encoding (SQL Server's stored spatial format, PostgreSQL's EWKB).
+    /// </summary>
+    internal virtual object ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type) =>
+        UnresolvedColumnReader.Read(record, ordinal, type);
+
+    /// <summary>
     /// True when the provider can't bind the full Int128/UInt128 range as BigInteger (DuckDB.NET
     /// rejects Int128.MinValue and UInt128 above Int128.MaxValue), so both are bound as exact decimal
     /// text, which the database casts to its 128-bit type (TYPE-005).
@@ -556,6 +563,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual string RenderJsonArgument(string parameterMarker, IColumnInfo column)
     {
         return parameterMarker;
+    }
+
+    /// <inheritdoc cref="IInternalSqlDialect.MarkColumnParameter"/>
+    public virtual void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        if (column.IsJsonType)
+        {
+            TryMarkJsonParameter(parameter, column);
+        }
     }
 
     /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>
@@ -752,6 +768,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual string QuoteSuffix => "\""; // SQL-92 standard
     public virtual string CompositeIdentifierSeparator => "."; // SQL-92 standard
     public virtual bool PrepareStatements => false;
+
+    /// <summary>
+    /// False when a prepared command holding more than one statement fails on execute (CockroachDB:
+    /// "34000: unknown portal"); such a command then runs unprepared.
+    /// </summary>
+    internal virtual bool PreparesMultiStatementCommands => true;
 
     // Overridden by MySqlDialect to veto prepare after error 1461 fires, even when ForceManualPrepare is set.
     public virtual bool IsPrepareExhausted => false;

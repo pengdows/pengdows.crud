@@ -203,6 +203,11 @@ public class fakeDbDataReader : DbDataReader
             throw failure;
         }
 
+        if (IsHandlerlessColumn(i))
+        {
+            throw HandlerlessRead(i, "System.Object");
+        }
+
         if (IsUnloadableUdt(i) && row[keys[i]] is not null && row[keys[i]] is not DBNull)
         {
             throw new FileNotFoundException(
@@ -274,6 +279,22 @@ public class fakeDbDataReader : DbDataReader
     /// </summary>
     public IDictionary<string, string>? UnloadableUdtColumns { get; set; }
 
+    /// <summary>
+    /// Columns (name → PostgreSQL data type name, e.g. <c>public.geometry</c>) that emulate Npgsql 9 on
+    /// a type it has no handler for (PostGIS geometry/geography without NetTopologySuite, pgvector's
+    /// vector without its plugin), as confirmed live: <see cref="GetFieldType"/>, <see cref="GetValue"/>
+    /// and <c>GetFieldValue</c> throw <see cref="InvalidCastException"/> ("Reading as 'System.Object' is
+    /// not supported for fields having DataTypeName '...'"), while <see cref="GetDataTypeName"/>,
+    /// <see cref="GetBytes"/> (the binary wire value) and <see cref="IsDBNull"/> work.
+    /// </summary>
+    public IDictionary<string, string>? HandlerlessColumns { get; set; }
+
+    private bool IsHandlerlessColumn(int ordinal) =>
+        HandlerlessColumns != null && HandlerlessColumns.ContainsKey(GetName(ordinal));
+
+    private InvalidCastException HandlerlessRead(int ordinal, string clrType) =>
+        new($"Reading as '{clrType}' is not supported for fields having DataTypeName '{HandlerlessColumns![GetName(ordinal)]}'");
+
     private bool IsUnloadableUdt(int ordinal) =>
         UnloadableUdtColumns != null && UnloadableUdtColumns.ContainsKey(GetName(ordinal));
 
@@ -324,7 +345,7 @@ public class fakeDbDataReader : DbDataReader
             throw new OverflowException("Value was either too large or too small for a Decimal.");
         }
 
-        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) ? RawValue(i) : GetValue(i);
+        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsHandlerlessColumn(i) ? RawValue(i) : GetValue(i);
         return value is null || value == DBNull.Value;
     }
 
@@ -355,7 +376,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
     {
-        var data = IsUnloadableUdt(ordinal) ? RawValue(ordinal) : GetValue(ordinal);
+        var data = IsUnloadableUdt(ordinal) || IsHandlerlessColumn(ordinal) ? RawValue(ordinal) : GetValue(ordinal);
         if (data is not byte[] bytes)
         {
             // If it's not a byte array, return 0 to indicate no bytes copied
@@ -412,6 +433,11 @@ public class fakeDbDataReader : DbDataReader
             return udtName;
         }
 
+        if (HandlerlessColumns != null && HandlerlessColumns.TryGetValue(GetName(i), out var pgTypeName))
+        {
+            return pgTypeName;
+        }
+
         return RawValue(i)?.GetType().Name ?? nameof(DBNull);
     }
 
@@ -459,6 +485,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override Type GetFieldType(int ordinal)
     {
+        if (IsHandlerlessColumn(ordinal))
+        {
+            throw HandlerlessRead(ordinal, "System.Object");
+        }
+
         if ((UnresolvedFieldTypeColumns != null && UnresolvedFieldTypeColumns.Contains(GetName(ordinal)))
             || IsUnloadableUdt(ordinal))
         {

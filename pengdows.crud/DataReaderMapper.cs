@@ -247,12 +247,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
         CancellationToken cancellationToken)
         where T : class, new()
     {
-        var recordReader = GetRecordReader(reader, out var unresolved, out var coercion);
+        var recordReader = GetRecordReader(reader, out var unresolved, out var coercion, out var unresolvedReader);
         options ??= MapperOptions.Default;
 
         var shape = BuildSchemaShape(recordReader, options, unresolved);
         var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode, coercion);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved, coercion));
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved, coercion, unresolvedReader));
 
         var result = new List<T>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -303,12 +303,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
         [EnumeratorCancellation] CancellationToken cancellationToken)
         where T : class, new()
     {
-        var recordReader = GetRecordReader(reader, out var unresolved, out var coercion);
+        var recordReader = GetRecordReader(reader, out var unresolved, out var coercion, out var unresolvedReader);
         options ??= MapperOptions.Default;
 
         var shape = BuildSchemaShape(recordReader, options, unresolved);
         var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode, coercion);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved, coercion));
+        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved, coercion, unresolvedReader));
 
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -352,11 +352,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
     }
 
     private static DbDataReader GetRecordReader(ITrackedReader reader, out Func<int, Type?>? unresolved,
-        out TypeCoercionOptions? coercion)
+        out TypeCoercionOptions? coercion, out Func<IDataRecord, int, Type, object>? unresolvedReader)
     {
         ArgumentNullException.ThrowIfNull(reader);
         unresolved = null;
         coercion = null;
+        unresolvedReader = null;
 
         if (reader is IInternalTrackedReader internalReader)
         {
@@ -366,6 +367,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             // TYPE-002: provider-specific coercions (e.g. MySQL's SRID-prefixed spatial format)
             // apply here as they do through the gateway.
             coercion = internalReader.CoercionOptions;
+            unresolvedReader = internalReader.ReadUnresolvedColumn;
             return internalReader.InnerReader;
         }
 
@@ -421,7 +423,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
     }
 
     private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options,
-        Func<int, Type?>? unresolved = null, TypeCoercionOptions? coercion = null)
+        Func<int, Type?>? unresolved = null, TypeCoercionOptions? coercion = null,
+        Func<IDataRecord, int, Type, object>? unresolvedReader = null)
     {
         var type = typeof(T);
         var propertyLookup = GetPropertyLookup(type, options);
@@ -446,7 +449,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var fieldType = ResolveFieldType(reader, i, unresolved);
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
                 setters.Add(IsUnresolved(i, unresolved)
-                    ? CreateUnresolvedSetter<T>(prop, fieldType, options.EnumMode, i, coercion)
+                    ? CreateUnresolvedSetter<T>(prop, fieldType, options.EnumMode, i, coercion, unresolvedReader)
                     : GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i, coercion));
                 properties.Add(prop);
                 // Non-nullable value types cannot hold null at the .NET level. Skip the IsDBNull
@@ -755,6 +758,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
             // dialect may still read it (TYPE-016), otherwise GetValue reports it.
             return reader.GetFieldType(ordinal) ?? unresolved?.Invoke(ordinal) ?? typeof(object);
         }
+        catch (InvalidCastException)
+        {
+            // Npgsql throws for a type it has no handler for (PostGIS without NetTopologySuite);
+            // the dialect may still read it (TYPE-002).
+            return unresolved?.Invoke(ordinal) ?? typeof(object);
+        }
         catch (InvalidOperationException)
         {
             return typeof(object);
@@ -767,11 +776,13 @@ public sealed class DataReaderMapper : IDataReaderMapper
     // A column the provider reports no field type for can't use the compiled GetValue/GetFieldValue
     // setters; it is read by type through UnresolvedColumnReader, then coerced as usual (TYPE-016).
     private static Action<T, DbDataReader> CreateUnresolvedSetter<T>(PropertyInfo prop, Type fieldType,
-        EnumParseFailureMode enumMode, int ordinal, TypeCoercionOptions? coercion)
+        EnumParseFailureMode enumMode, int ordinal, TypeCoercionOptions? coercion,
+        Func<IDataRecord, int, Type, object>? unresolvedReader)
     {
         var coercer = TypeCoercionHelper.ResolveCoercer(fieldType, prop.PropertyType, enumMode, coercion);
+        var read = unresolvedReader ?? UnresolvedColumnReader.Read;
         return (target, reader) =>
-            prop.SetValue(target, coercer(UnresolvedColumnReader.Read(reader, ordinal, fieldType)));
+            prop.SetValue(target, reader.IsDBNull(ordinal) ? null : coercer(read(reader, ordinal, fieldType)));
     }
 
     private static object? CoerceValue(

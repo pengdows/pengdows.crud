@@ -241,10 +241,7 @@ public partial class TableGateway<TEntity, TRowID>
             {
                 var name = counters.NextSet();
                 var param = dialect.CreateDbParameter(name, column.DbType, newValue);
-                if (column.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(param, column);
-                }
+                dialect.MarkColumnParameter(param, column);
 
                 parameters.Add(param);
 
@@ -446,10 +443,7 @@ public partial class TableGateway<TEntity, TRowID>
                 {
                     var name = counters.NextSet();
                     var param = dialect.CreateDbParameter(name, column.DbType, newValue);
-                    if (column.IsJsonType)
-                    {
-                        dialect.TryMarkJsonParameter(param, column);
-                    }
+                    dialect.MarkColumnParameter(param, column);
 
                     parameters.Add(param);
 

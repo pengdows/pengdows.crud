@@ -857,10 +857,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
             var paramName = sqlTemplate.InsertParameterNames[i];
             var param = dialect.CreateDbParameter(paramName, column.DbType, value);
-            if (column.IsJsonType)
-            {
-                dialect.TryMarkJsonParameter(param, column);
-            }
+            dialect.MarkColumnParameter(param, column);
 
             sc.AddParameter(param);
 

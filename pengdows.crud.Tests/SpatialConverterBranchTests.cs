@@ -72,9 +72,10 @@ public class SpatialConverterBranchTests
         var geo = Geometry.FromGeoJson("{\"type\":\"Point\"}", 4326);
 
         Assert.IsType<byte[]>(converter.ToProviderValue(wkb, SupportedDatabase.PostgreSql));
-        Assert.Equal("SRID=4326;POINT(1 2)", converter.ToProviderValue(wkt, SupportedDatabase.PostgreSql));
-        Assert.Contains("\"name\":\"EPSG:4326\"",
-            Assert.IsType<string>(converter.ToProviderValue(geo, SupportedDatabase.PostgreSql)));
+        // TYPE-002: bound as bytea, so WKT is encoded to EWKB; GeoJSON text can't be sent as bytea.
+        Assert.Equal(GeometryConverter.AddSridToWkb(WellKnownTextEncoder.Encode("POINT(1 2)"), 4326),
+            converter.ToProviderValue(wkt, SupportedDatabase.PostgreSql));
+        Assert.Throws<NotSupportedException>(() => converter.ToProviderValue(geo, SupportedDatabase.PostgreSql));
 
         var mysqlBytes = converter.ToProviderValue(wkt, SupportedDatabase.MySql);
         Assert.IsType<byte[]>(mysqlBytes);
@@ -90,7 +91,7 @@ public class SpatialConverterBranchTests
 
         var result = converter.ToProviderValue(wkt, SupportedDatabase.YugabyteDb);
 
-        Assert.Equal("SRID=4326;POINT(1 2)", result);
+        Assert.Equal(GeometryConverter.AddSridToWkb(WellKnownTextEncoder.Encode("POINT(1 2)"), 4326), result);
     }
 
     [Fact]

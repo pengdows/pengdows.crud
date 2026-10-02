@@ -111,6 +111,25 @@ internal class PostgreSqlDialect : SqlDialect
             return base.CreateDbParameter(name, type, DateTime.SpecifyKind(utc, DateTimeKind.Unspecified));
         }
 
+        // TYPE-002: a DateTimeOffset declared DbType.Time is a time with an offset (timetz), sent with
+        // its offset; as timestamptz, "WHERE v = @p" on a timetz column has no operator (confirmed live).
+        if (type == DbType.Time && value is DateTimeOffset timeWithOffset)
+        {
+            var timetz = base.CreateDbParameter<object?>(name, DbType.Object, null);
+            timetz.Value = timeWithOffset;
+            SetNpgsqlParameterType(timetz, "TimeTz", "time with time zone");
+            return timetz;
+        }
+
+        // TYPE-002, confirmed live (Npgsql 9): Npgsql can't infer pg_lsn from an
+        // NpgsqlLogSequenceNumber and refuses the parameter unless the type is named.
+        if (value is not null && value.GetType().FullName == "NpgsqlTypes.NpgsqlLogSequenceNumber")
+        {
+            var lsn = base.CreateDbParameter(name, type, value);
+            SetNpgsqlParameterType(lsn, "PgLsn", "pg_lsn");
+            return lsn;
+        }
+
         return base.CreateDbParameter(name, type, value);
     }
 
@@ -298,6 +317,79 @@ internal class PostgreSqlDialect : SqlDialect
     public override string RenderJsonArgument(string parameterMarker, IColumnInfo column)
     {
         return string.Concat(parameterMarker, "::jsonb");
+    }
+
+    // TYPE-002, confirmed live (PostgreSQL 17): a C# enum's name sent as a text parameter is refused
+    // by a user-defined ENUM column ("column is of type mood but expression is of type text").
+    // Untyped, the server applies the column's type, so the same property also writes to a text
+    // column. Known gap: a MERGE upsert's VALUES list still types it as text (3.0 will name the type).
+    // TYPE-002, confirmed live (PostGIS 3.5, CockroachDB 25.1, Npgsql 9): with no NetTopologySuite or
+    // pgvector plugin, Npgsql has no handler for geometry/geography/vector and GetFieldType/GetValue
+    // throw, but GetBytes returns the binary wire value: EWKB, or pgvector's format.
+    internal override bool ReadsUnresolvedColumns => true;
+
+    internal override Type? GetUnresolvedColumnType(string dataTypeName)
+    {
+        var name = dataTypeName.Contains('.') ? dataTypeName[(dataTypeName.LastIndexOf('.') + 1)..] : dataTypeName;
+        return name.ToLowerInvariant() switch
+        {
+            "geometry" => typeof(types.valueobjects.Geometry),
+            "geography" => typeof(types.valueobjects.Geography),
+            "vector" => typeof(float[]),
+            _ => null
+        };
+    }
+
+    internal override object ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type)
+    {
+        var bytes = UnresolvedColumnReader.ReadBytes(record, ordinal);
+        if (type == typeof(float[]))
+        {
+            // pgvector's binary format: int16 dimensions, int16 unused, then big-endian float4s.
+            var dimensions = System.Buffers.Binary.BinaryPrimitives.ReadInt16BigEndian(bytes);
+            var vector = new float[dimensions];
+            for (var i = 0; i < dimensions; i++)
+            {
+                vector[i] = System.Buffers.Binary.BinaryPrimitives.ReadSingleBigEndian(bytes.AsSpan(4 + 4 * i));
+            }
+
+            return vector;
+        }
+
+        if (type == typeof(types.valueobjects.Geometry) || type == typeof(types.valueobjects.Geography))
+        {
+            types.converters.GeometryConverter.ExtractSridFromEwkb(bytes, out var srid, out var wkb);
+            return type == typeof(types.valueobjects.Geography)
+                ? types.valueobjects.Geography.FromWellKnownBinary(wkb, srid == 0 ? 4326 : srid)
+                : types.valueobjects.Geometry.FromWellKnownBinary(wkb, srid);
+        }
+
+        return base.ReadUnresolvedColumn(record, ordinal, type);
+    }
+
+    public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        base.MarkColumnParameter(parameter, column);
+        if (column.IsEnum && column.EnumAsString && SendsEnumParametersUntyped)
+        {
+            SetNpgsqlDbTypeOnly(parameter, "Unknown");
+        }
+    }
+
+    /// <summary>
+    /// True when a C# enum's name is sent untyped so a user-defined ENUM column accepts it.
+    /// CockroachDB assigns text to an ENUM itself and refuses an untyped value in a VALUES list.
+    /// </summary>
+    internal virtual bool SendsEnumParametersUntyped => true;
+
+    private static void SetNpgsqlDbTypeOnly(DbParameter parameter, string npgsqlDbTypeName)
+    {
+        var property = parameter.GetType().GetProperty(NpgsqlDbTypeProperty);
+        if (property != null && property.PropertyType.IsEnum &&
+            Enum.TryParse(property.PropertyType, npgsqlDbTypeName, true, out var value))
+        {
+            property.SetValue(parameter, value);
+        }
     }
 
     public override void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column)

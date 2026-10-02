@@ -359,8 +359,14 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     public override DbParameter CreateParameter()
     {
-        return new fakeDbParameter();
+        return EmulatesNpgsqlParameterMetadata ? new fakeDbNpgsqlParameter() : new fakeDbParameter();
     }
+
+    /// <summary>
+    /// When true, parameters carry Npgsql's provider metadata properties (<c>NpgsqlDbType</c> and
+    /// <c>DataTypeName</c>), so tests can see what a dialect stamps on them for Npgsql.
+    /// </summary>
+    public bool EmulatesNpgsqlParameterMetadata { get; set; }
 
     public override DbDataSource CreateDataSource(string connectionString)
     {

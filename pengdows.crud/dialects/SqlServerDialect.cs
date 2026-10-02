@@ -169,6 +169,19 @@ internal class SqlServerDialect : SqlDialect
         : IsUdt(dataTypeName, "geography") ? typeof(Geography)
         : null;
 
+    internal override object ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type)
+    {
+        if (type != typeof(Geometry) && type != typeof(Geography))
+        {
+            return base.ReadUnresolvedColumn(record, ordinal, type);
+        }
+
+        // GetBytes returns SQL Server's stored spatial encoding (TYPE-002).
+        var geography = type == typeof(Geography);
+        var (srid, wkb) = types.converters.SqlServerSpatialFormat.Decode(UnresolvedColumnReader.ReadBytes(record, ordinal), geography);
+        return geography ? Geography.FromWellKnownBinary(wkb, srid) : Geometry.FromWellKnownBinary(wkb, srid);
+    }
+
     private static bool IsUdt(string dataTypeName, string name) =>
         dataTypeName.Equals(name, StringComparison.OrdinalIgnoreCase) ||
         (dataTypeName.EndsWith(name, StringComparison.OrdinalIgnoreCase) &&

@@ -1006,8 +1006,8 @@ public class CoverageGapTests_TypesAndConverters
 
         var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
 
-        Assert.IsType<string>(result);
-        Assert.Equal("SRID=4326;POINT(0 0)", result);
+        // TYPE-002: bound as bytea, so WKT is encoded to EWKB (verified live on PostGIS).
+        Assert.Equal(GeometryConverter.AddSridToWkb(WellKnownTextEncoder.Encode("POINT(0 0)"), 4326), result);
     }
 
     [Fact]
@@ -1018,7 +1018,7 @@ public class CoverageGapTests_TypesAndConverters
 
         var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
 
-        Assert.Equal("SRID=4326;POINT(0 0)", result);
+        Assert.Equal(GeometryConverter.AddSridToWkb(WellKnownTextEncoder.Encode("POINT(0 0)"), 4326), result);
     }
 
     [Fact]
@@ -1049,10 +1049,9 @@ public class CoverageGapTests_TypesAndConverters
         var json = "{\"type\":\"Point\",\"coordinates\":[0,0]}";
         var geog = Geography.FromGeoJson(json, 4326);
 
-        var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
+        // TYPE-002: GeoJSON text can't be bound as bytea (verified live on PostGIS).
 
-        Assert.IsType<string>(result);
-        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(result));
+        Assert.Throws<NotSupportedException>(() => converter.ToProviderValue(geog, SupportedDatabase.PostgreSql));
     }
 
     [Fact]
@@ -1953,9 +1952,9 @@ public class CoverageGapTests_TypesAndConverters
         var json = "{\"type\":\"Point\",\"coordinates\":[0,0]}";
         var geog = Geography.FromGeoJson(json, 4326);
 
-        var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
+        // TYPE-002: GeoJSON text can't be bound as bytea (verified live on PostGIS).
 
-        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(result));
+        Assert.Throws<NotSupportedException>(() => converter.ToProviderValue(geog, SupportedDatabase.PostgreSql));
     }
 
     #endregion

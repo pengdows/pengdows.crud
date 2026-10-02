@@ -22,6 +22,12 @@ internal interface IInternalTrackedReader
     Type? GetUnresolvedColumnType(int ordinal);
 
     /// <summary>
+    /// Reads a column <see cref="GetUnresolvedColumnType"/> named, through the dialect that knows
+    /// its database's encoding (<c>SqlDialect.ReadUnresolvedColumn</c>).
+    /// </summary>
+    object ReadUnresolvedColumn(System.Data.IDataRecord record, int ordinal, Type type);
+
+    /// <summary>
     /// The coercion options of the dialect that produced this reader (its type-mapping provider and
     /// Guid byte order), so callers that read <see cref="InnerReader"/> directly convert values as
     /// the gateway does (TYPE-002).

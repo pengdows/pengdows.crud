@@ -60,8 +60,20 @@ public sealed class PgvectorRoundTripTests : DatabaseTestBase
                 var back = await gateway.LoadListAsync(read);
                 Assert.Equal(rows.Select(r => r.Embedding), back.Select(r => r.Embedding));
 
-                // Without the plugin the column itself is unreadable; that fails loudly.
-                await Assert.ThrowsAnyAsync<Exception>(async () => await gateway.RetrieveOneAsync(1, context));
+                // TYPE-002: without the plugin Npgsql can't read vector, but its binary value comes
+                // through GetBytes and the dialect decodes it, so the column reads directly too.
+                foreach (var row in rows)
+                {
+                    Assert.Equal(row.Embedding, (await gateway.RetrieveOneAsync(row.Id, context))!.Embedding);
+                }
+
+                await using (var plain = context.CreateSqlContainer(
+                                 "SELECT \"id\" AS \"Id\", \"embedding\" AS \"Embedding\" FROM \"pgvector_rows\" WHERE \"id\" = 1"))
+                await using (var reader = await plain.ExecuteReaderAsync())
+                {
+                    var mapped = Assert.Single(await DataReaderMapper.LoadAsync<PgvectorRow>(reader, MapperOptions.Default));
+                    Assert.Equal(rows[0].Embedding, mapped.Embedding);
+                }
             }
             finally
             {

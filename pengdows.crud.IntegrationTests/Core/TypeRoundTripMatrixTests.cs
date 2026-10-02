@@ -46,6 +46,22 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
             var failures = new List<string>();
             foreach (var entry in entries)
             {
+                if (entry.Setup != null)
+                {
+                    // Before the type's own context: Npgsql loads a data source's type catalog once,
+                    // so an extension or user-defined type must exist before that context is created.
+                    try
+                    {
+                        await using var setup = context.CreateSqlContainer(entry.Setup);
+                        await setup.ExecuteNonQueryAsync();
+                    }
+                    catch (Exception ex)
+                    {
+                        failures.Add($"{entry.Declaration ?? entry.CanonicalName}: setup: {Describe(ex)}");
+                        continue;
+                    }
+                }
+
                 // A fresh context (and pool) per type: the table is recreated with a different
                 // column type each time, and a pooled connection's prepared plans for the same SQL
                 // text would otherwise fail with "cached plan must not change result type".
@@ -193,6 +209,9 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
                 return actual is DateTime a && a.Ticks == dt.Ticks;
             case DateTimeOffset dto:
                 return actual is DateTimeOffset b && b.UtcTicks == dto.UtcTicks;
+            case BitArray bits:
+                return actual is BitArray readBits && bits.Length == readBits.Length &&
+                       Enumerable.Range(0, bits.Length).All(i => bits[i] == readBits[i]);
             case pengdows.crud.types.valueobjects.SpatialValue spatial:
                 return actual is pengdows.crud.types.valueobjects.SpatialValue read &&
                        read.GetType() == spatial.GetType() && read.Srid == spatial.Srid &&

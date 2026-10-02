@@ -385,10 +385,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             var col = insertableColumns[i];
             var value = col.MakeParameterValueFromField(entity);
             var param = dialect.CreateDbParameter(pName, col.DbType, value);
-            if (col.IsJsonType)
-            {
-                dialect.TryMarkJsonParameter(param, col);
-            }
+            dialect.MarkColumnParameter(param, col);
 
             parameters.Add(param);
         }
@@ -500,10 +497,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 var col = insertableColumns[i];
                 var value = col.MakeParameterValueFromField(entity);
                 var param = dialect.CreateDbParameter(pName, col.DbType, value);
-                if (col.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(param, col);
-                }
+                dialect.MarkColumnParameter(param, col);
 
                 if (dialect.RendersColumnArgument(col))
                 {
@@ -682,10 +676,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
                 var name = counters.NextBatch();
                 var p = dialect.CreateDbParameter(name, column.DbType, value);
-                if (column.IsJsonType)
-                {
-                    dialect.TryMarkJsonParameter(p, column);
-                }
+                dialect.MarkColumnParameter(p, column);
 
                 sc.AddParameter(p);
             }

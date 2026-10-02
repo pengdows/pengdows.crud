@@ -121,6 +121,11 @@ internal static class InternalSqlDialectExtensions
         dialect.BuildBatchUpdateSql(tableName, columnNames, keyColumns, rowCount, query, getValue);
     }
 
+    internal static void MarkColumnParameter(this ISqlDialect dialect, DbParameter parameter, IColumnInfo column)
+    {
+        GetInternal(dialect).MarkColumnParameter(parameter, column);
+    }
+
     internal static bool RendersColumnArgument(this ISqlDialect dialect, IColumnInfo column)
     {
         return GetInternal(dialect).RendersColumnArgument(column);

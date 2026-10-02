@@ -167,7 +167,9 @@ public class AdvancedTypeConverterTests
 
         Assert.True(success);
         Assert.Equal(4326, result.Srid);
-        Assert.True(result.WellKnownBinary.Span.SequenceEqual(wkb));
+        // TYPE-002: WellKnownBinary is plain WKB (SRID flag and bytes removed); the SRID is Srid.
+        Assert.Equal(wkb.Length - 4, result.WellKnownBinary.Length);
+        Assert.Equal(wkb, converter.ToProviderValue(result, SupportedDatabase.PostgreSql));
     }
 
     [Fact]
@@ -251,9 +253,9 @@ public class AdvancedTypeConverterTests
         var geometry = Geometry.FromGeoJson(geoJson, 4326);
         var converter = new GeometryConverter();
 
-        var providerValue = converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql);
+        // TYPE-002: GeoJSON text can't be bound as bytea (verified live on PostGIS).
 
-        Assert.Contains("\"name\":\"EPSG:4326\"", Assert.IsType<string>(providerValue));
+        Assert.Throws<NotSupportedException>(() => converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql));
     }
 
     [Fact]

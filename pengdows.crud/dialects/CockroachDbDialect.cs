@@ -25,6 +25,15 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class CockroachDbDialect : PostgreSqlDialect
 {
+    // Confirmed live (CockroachDB 25.1, Npgsql 9): a prepared multi-statement command fails with
+    // "34000: unknown portal" on execute; unprepared it runs.
+    internal override bool PreparesMultiStatementCommands => false;
+
+    // Confirmed live (CockroachDB 25.1): a text parameter assigns to an ENUM column, while an
+    // untyped one in a VALUES list (the batch update's source) fails with "could not determine data
+    // type of placeholder".
+    internal override bool SendsEnumParametersUntyped => false;
+
     internal CockroachDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger, SupportedDatabase.CockroachDb)
     {
