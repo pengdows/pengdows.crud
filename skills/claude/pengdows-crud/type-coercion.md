@@ -131,6 +131,12 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
 - Oracle: `double`/`float` bind as `BINARY_DOUBLE`/`BINARY_FLOAT`; NUMBER beyond `decimal` reads into `double`; LONG data
   is fetched with the row; `DbType.DateTime2`/`DbType.Xml` are remapped. Firebird: `TIME WITH TIME ZONE` from a
   `DateTimeOffset` with `DbType.Time`; `BINARY`/`VARBINARY` read as `byte[]` (TYPE-002).
+- SingleStore: spatial as WKT (`GEOGRAPHYPOINT` ~1e-7°), `VECTOR` written as JSON text / read from packed float32.
+  Spanner: Guid sent untyped, uuid read from bytes, arrays read with nullable elements. Known gaps: Informix `TEXT`/`BSON`
+  and `BOOLEAN` in `WHERE` (TYPE-020), Informix time-of-day fractions and ASE `BIGDATETIME`/`BIGTIME` (driver, TYPE-022).
+- Snowflake: `VARIANT`/`OBJECT`/`ARRAY` written as `PARSE_JSON(:p)`, with inserts/MERGE source/batch update values from a
+  `SELECT` (Snowflake refuses it in `VALUES`); spatial as EWKT both ways; `TIMESTAMP_LTZ`/`TZ` read as the exact
+  `DateTimeOffset`. `VECTOR` needs the column's type (TYPE-020).
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.

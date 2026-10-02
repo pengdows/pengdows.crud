@@ -870,9 +870,10 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         // Insert OUTPUT placeholder (for SQL Server) between column list and VALUES
+        var fromSelect = dialect.InsertsFromSelect(sqlTemplate.InsertColumns);
         sc.Query.Append(')')
             .Append(OutputClausePlaceholder)
-            .Append(" VALUES (");
+            .Append(fromSelect ? " SELECT " : " VALUES (");
 
         for (var i = 0; i < sqlTemplate.InsertColumns.Count; i++)
         {
@@ -894,8 +895,12 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         // Insert RETURNING placeholder (for PostgreSQL/SQLite/etc) after VALUES
-        sc.Query.Append(')')
-            .Append(ReturningClausePlaceholder);
+        if (!fromSelect)
+        {
+            sc.Query.Append(')');
+        }
+
+        sc.Query.Append(ReturningClausePlaceholder);
 
         return (sc, dialect);
     }

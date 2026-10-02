@@ -172,6 +172,33 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var rawValue = Expression.Call(readInet, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
+            else if (fieldType == typeof(DateTime) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(DateTimeOffset))
+            {
+                // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact
+                // DateTimeOffset, while GetDateTime gives local wall time or throws (TYPE-002): read the
+                // value, which converts as before when it is a DateTime.
+                var getValue = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue))!;
+                var rawValue = Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), getValue, ordinalExpr);
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+            }
+            else if (fieldType == typeof(object) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(Guid))
+            {
+                // A column the provider can't return (Npgsql on Spanner's uuid) is read from its bytes.
+                var readGuid = typeof(ProviderValueFieldReader).GetMethod(nameof(ProviderValueFieldReader.ReadGuid))!;
+                var rawValue = Expression.Call(readGuid, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr,
+                    Expression.Constant(coercionOptions?.GuidBytesBigEndian ?? false));
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+            }
+            else if (ProviderValueFieldReader.IsValueTypeArray(Nullable.GetUnderlyingType(targetType) ?? targetType) &&
+                     (fieldType == typeof(Array) || fieldType.IsArray))
+            {
+                // Npgsql refuses some arrays as non-nullable elements (Spanner reports System.Array); read
+                // them with the property's element type, nullable.
+                var readArray = typeof(ProviderValueFieldReader).GetMethod(nameof(ProviderValueFieldReader.ReadArray))!;
+                var rawValue = Expression.Call(readArray, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr,
+                    Expression.Constant((Nullable.GetUnderlyingType(targetType) ?? targetType).GetElementType()!, typeof(Type)));
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+            }
             else if (fieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
             {
                 // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).

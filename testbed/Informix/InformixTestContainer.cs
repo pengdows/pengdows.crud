@@ -119,6 +119,20 @@ public class InformixTestContainer : TestContainer
 
             await Task.Delay(1000);
         }
+
+        // CONFIRMED live: the image names a default smart-blob space (SBSPACENAME sbspace) but never
+        // creates it, so every BLOB/CLOB write failed with "Invalid default sbspace name (sbspace)".
+        var sbspace = await _container.ExecAsync(new[]
+        {
+            "bash", "-c",
+            "source /opt/ibm/scripts/informix_inf.env && " +
+            "touch /opt/ibm/data/spaces/sbspace.000 && chmod 660 /opt/ibm/data/spaces/sbspace.000 && " +
+            "onspaces -c -S sbspace -p /opt/ibm/data/spaces/sbspace.000 -o 0 -s 100000 -Df 'LOGGING=ON'"
+        });
+        if (sbspace.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"Informix sbspace creation failed: {sbspace.Stdout} {sbspace.Stderr}");
+        }
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)

@@ -213,6 +213,17 @@ public class fakeDbDataReader : DbDataReader
             throw new InvalidCastException("Specified cast is not valid.");
         }
 
+        if (IsUnknownTypeColumn(i) && row[keys[i]] is byte[])
+        {
+            throw new InvalidCastException("Reading as 'System.Object' is not supported for fields having DataTypeName '-'");
+        }
+
+        if (IsNullableElementArray(i) && row[keys[i]] is Array)
+        {
+            throw new InvalidCastException(
+                "Cannot read a non-nullable collection of elements because the returned array contains nulls. Call GetFieldValue with a nullable collection type instead.");
+        }
+
         if (IsUnloadableUdt(i) && row[keys[i]] is not null && row[keys[i]] is not DBNull)
         {
             throw new FileNotFoundException(
@@ -309,6 +320,49 @@ public class fakeDbDataReader : DbDataReader
     /// </summary>
     public ISet<string>? BinaryReportedAsStringColumns { get; set; }
 
+    /// <summary>
+    /// Columns holding a <see cref="byte"/>[] that emulate Npgsql 9 on Spanner's uuid (confirmed live):
+    /// <see cref="GetFieldType"/> reports <see cref="object"/> and <see cref="GetDataTypeName"/>
+    /// ".&lt;unknown&gt;", <see cref="GetValue"/> throws <see cref="InvalidCastException"/>, and
+    /// <see cref="GetBytes"/> returns the binary wire value.
+    /// </summary>
+    public ISet<string>? UnknownTypeColumns { get; set; }
+
+    /// <summary>
+    /// Columns holding a nullable-element array (e.g. <c>long?[]</c>) that emulate Npgsql 9 on Spanner's
+    /// arrays (confirmed live): <see cref="GetFieldType"/> reports <see cref="Array"/>, while
+    /// <see cref="GetValue"/> and <c>GetFieldValue</c> of that type throw <see cref="InvalidCastException"/>
+    /// ("Cannot read a non-nullable collection of elements because the returned array contains nulls")
+    /// and <c>GetFieldValue</c> of the nullable-element array returns it.
+    /// </summary>
+    public ISet<string>? NullableElementArrayColumns { get; set; }
+
+    /// <summary>
+    /// Columns holding a <see cref="DateTimeOffset"/> that emulate Snowflake.Data on TIMESTAMP_LTZ /
+    /// TIMESTAMP_TZ (confirmed live): <see cref="GetFieldType"/> reports <see cref="DateTime"/>,
+    /// <see cref="GetValue"/> returns the DateTimeOffset, and <see cref="GetDateTime"/> returns its local
+    /// wall time with no offset (for TIMESTAMP_TZ the real driver throws instead).
+    /// </summary>
+    public ISet<string>? DateTimeOffsetReportedAsDateTimeColumns { get; set; }
+
+    private bool IsDateTimeOffsetReportedAsDateTime(int i) =>
+        DateTimeOffsetReportedAsDateTimeColumns != null && DateTimeOffsetReportedAsDateTimeColumns.Contains(GetName(i));
+
+    private bool IsUnknownTypeColumn(int i) => UnknownTypeColumns != null && UnknownTypeColumns.Contains(GetName(i));
+
+    private bool IsNullableElementArray(int i) =>
+        NullableElementArrayColumns != null && NullableElementArrayColumns.Contains(GetName(i));
+
+    public override T GetFieldValue<T>(int ordinal)
+    {
+        if (IsNullableElementArray(ordinal) && RawValue(ordinal) is Array stored && stored.GetType() == typeof(T))
+        {
+            return (T)(object)stored;
+        }
+
+        return base.GetFieldValue<T>(ordinal);
+    }
+
     private bool IsDoubleBeyondDecimal(int i) => DoubleBeyondDecimalColumns != null && DoubleBeyondDecimalColumns.Contains(GetName(i));
 
     private bool IsBinaryReportedAsString(int i) => BinaryReportedAsStringColumns != null && BinaryReportedAsStringColumns.Contains(GetName(i));
@@ -369,7 +423,8 @@ public class fakeDbDataReader : DbDataReader
             throw new OverflowException("Value was either too large or too small for a Decimal.");
         }
 
-        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsHandlerlessColumn(i) || IsDoubleBeyondDecimal(i)
+        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsHandlerlessColumn(i) || IsDoubleBeyondDecimal(i) ||
+                    IsUnknownTypeColumn(i) || IsNullableElementArray(i)
             ? RawValue(i)
             : GetValue(i);
         return value is null || value == DBNull.Value;
@@ -402,7 +457,9 @@ public class fakeDbDataReader : DbDataReader
 
     public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
     {
-        var data = IsUnloadableUdt(ordinal) || IsHandlerlessColumn(ordinal) ? RawValue(ordinal) : GetValue(ordinal);
+        var data = IsUnloadableUdt(ordinal) || IsHandlerlessColumn(ordinal) || IsUnknownTypeColumn(ordinal)
+            ? RawValue(ordinal)
+            : GetValue(ordinal);
         if (data is not byte[] bytes)
         {
             // If it's not a byte array, return 0 to indicate no bytes copied
@@ -464,11 +521,21 @@ public class fakeDbDataReader : DbDataReader
             return pgTypeName;
         }
 
+        if (IsUnknownTypeColumn(i))
+        {
+            return ".<unknown>";
+        }
+
         return RawValue(i)?.GetType().Name ?? nameof(DBNull);
     }
 
     public override DateTime GetDateTime(int i)
     {
+        if (IsDateTimeOffsetReportedAsDateTime(i) && RawValue(i) is DateTimeOffset offsetValue)
+        {
+            return DateTime.SpecifyKind(offsetValue.DateTime, DateTimeKind.Unspecified);
+        }
+
         var value = GetValue(i);
         return value switch
         {
@@ -524,6 +591,21 @@ public class fakeDbDataReader : DbDataReader
         if (IsDoubleBeyondDecimal(ordinal))
         {
             return typeof(decimal);
+        }
+
+        if (IsUnknownTypeColumn(ordinal))
+        {
+            return typeof(object);
+        }
+
+        if (IsDateTimeOffsetReportedAsDateTime(ordinal))
+        {
+            return typeof(DateTime);
+        }
+
+        if (IsNullableElementArray(ordinal))
+        {
+            return typeof(Array);
         }
 
         if (IsBinaryReportedAsString(ordinal))

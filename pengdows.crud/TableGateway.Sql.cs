@@ -164,8 +164,9 @@ public partial class TableGateway<TEntity, TRowID>
             valuePlaceholders.Add(placeholder);
         }
 
-        var insertSql =
-            $"INSERT INTO {BuildWrappedTableName(dialect)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
+        var insertSql = dialect.InsertsFromSelect(insertColumns)
+            ? $"INSERT INTO {BuildWrappedTableName(dialect)} ({string.Join(", ", wrappedCols)}) SELECT {string.Join(", ", valuePlaceholders)}"
+            : $"INSERT INTO {BuildWrappedTableName(dialect)} ({string.Join(", ", wrappedCols)}) VALUES ({string.Join(", ", valuePlaceholders)})";
 
         // Upsert columns: align with insertable columns (exclude non-insertable, non-writable Id, audit rules)
         var upsertColumns = insertColumns;

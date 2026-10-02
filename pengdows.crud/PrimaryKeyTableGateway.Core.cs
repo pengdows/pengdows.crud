@@ -390,7 +390,8 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             sc.Query.Append(dialect.WrapSimpleName(insertableColumns[i].Name));
         }
 
-        sc.Query.Append(") VALUES (");
+        var fromSelect = dialect.InsertsFromSelect(insertableColumns);
+        sc.Query.Append(fromSelect ? ") SELECT " : ") VALUES (");
 
         for (var i = 0; i < insertableColumns.Count; i++)
         {
@@ -418,7 +419,11 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             parameters.Add(param);
         }
 
-        sc.Query.Append(')');
+        if (!fromSelect)
+        {
+            sc.Query.Append(')');
+        }
+
         return parameters;
     }
 }

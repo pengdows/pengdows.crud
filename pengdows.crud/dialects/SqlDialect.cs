@@ -581,6 +581,35 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
         column.IsJsonType ? RenderJsonArgument(parameterMarker, column) : parameterMarker;
 
+    /// <summary>
+    /// False when the database refuses a function call (<see cref="RenderColumnArgument"/>) inside
+    /// INSERT ... VALUES (Snowflake: PARSE_JSON(:p)). The gateways then take the row's values from a
+    /// SELECT (UNION ALL for several rows) whenever a column renders one.
+    /// </summary>
+    internal virtual bool AllowsColumnArgumentsInValues => true;
+
+    /// <summary>
+    /// True when an insert of these columns must take its values from a SELECT
+    /// (<see cref="AllowsColumnArgumentsInValues"/>).
+    /// </summary>
+    internal bool InsertsFromSelect(IReadOnlyList<IColumnInfo>? columns)
+    {
+        if (AllowsColumnArgumentsInValues || columns == null)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (RendersColumnArgument(columns[i]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public virtual void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column)
     {
         if (parameter == null)
@@ -702,17 +731,26 @@ internal abstract class SqlDialect : IInternalSqlDialect
             query.Append(columnNames[i]);
         }
 
-        query.Append(") VALUES ");
+        var fromSelect = InsertsFromSelect(columns);
+        query.Append(fromSelect ? ")" : ") VALUES ");
 
         var paramIdx = 0;
         for (var row = 0; row < rowCount; row++)
         {
-            if (row > 0)
+            if (fromSelect)
             {
-                query.Append(", ");
+                query.Append(row > 0 ? " UNION ALL SELECT " : " SELECT ");
+            }
+            else
+            {
+                if (row > 0)
+                {
+                    query.Append(", ");
+                }
+
+                query.Append('(');
             }
 
-            query.Append('(');
             for (var col = 0; col < columnNames.Count; col++)
             {
                 if (col > 0)
@@ -731,7 +769,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 }
             }
 
-            query.Append(')');
+            if (!fromSelect)
+            {
+                query.Append(')');
+            }
         }
     }
 

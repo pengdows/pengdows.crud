@@ -98,19 +98,10 @@ public class ProviderMatrixCompletenessTests
         AssertStatusSetMatches(report, MatrixStatus.ExemptByDesign, KnownExemptLiveRoundTripConfiguration, "live-round-trip-configuration EXEMPT");
     }
 
-    // The 15 databases DatabaseTypeCatalog.cs's own file header documents as "deliberately left
-    // unpopulated rather than guessed" (14 named there) plus FlatFile, which that header doesn't
-    // mention at all — a genuine gap in the catalog's own scope statement, not a duplicate entry.
-    // Access is the same kind of gap: it isn't named in that header either, and has no populated
-    // entry — not yet sourced/verified, same sourcing-discipline reason as the other 15.
-    // TYPE-002 removes each database as its catalog is populated and verified live
-    // (PostgreSQL/Aurora PostgreSQL, SQL Server, MySQL/Aurora MySQL/MariaDB/TiDB, SQLite, DuckDB, CockroachDB, YugabyteDB, Oracle, Firebird).
+    // TYPE-002 populated and live-verified every database's catalog (2026-10-02); SAP HANA and
+    // InterBase are catalogued from their references but opt-in, so not run here.
     private static readonly IReadOnlySet<SupportedDatabase> KnownMissingTypeCatalogEntries =
-        new HashSet<SupportedDatabase>
-        {
-            SupportedDatabase.Snowflake,
-            SupportedDatabase.FlatFile,
-        };
+        new HashSet<SupportedDatabase>();
 
     [Fact]
     public void ProviderMatrix_TypeCatalogCoverage_MatchesKnownState()

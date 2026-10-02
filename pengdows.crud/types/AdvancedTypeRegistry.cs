@@ -589,6 +589,18 @@ internal class AdvancedTypeRegistry
             DbType = DbType.Binary,
             ConfigureParameter = (param, value) => param.DbType = DbType.Binary
         };
+        // SingleStore: GEOGRAPHY/GEOGRAPHYPOINT take WKT text (TYPE-002), not MySQL's internal format.
+        var textSpatial = new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) => param.DbType = DbType.String
+        };
+        RegisterMapping<Geometry>(SupportedDatabase.SingleStore, textSpatial);
+        RegisterMapping<Geography>(SupportedDatabase.SingleStore, textSpatial);
+        // Snowflake: text too, carrying EWKT (or EWKB hex / GeoJSON) (TYPE-002).
+        RegisterMapping<Geometry>(SupportedDatabase.Snowflake, textSpatial);
+        RegisterMapping<Geography>(SupportedDatabase.Snowflake, textSpatial);
+
         RegisterMapping<Geometry>(SupportedDatabase.SqlServer, sqlServerSpatial);
         RegisterMapping<Geography>(SupportedDatabase.SqlServer, sqlServerSpatial);
 

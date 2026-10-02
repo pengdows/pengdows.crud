@@ -136,6 +136,15 @@ internal static class InternalSqlDialectExtensions
         return GetInternal(dialect).RenderColumnArgument(parameterMarker, column);
     }
 
+    /// <summary>
+    /// True when an insert of these columns takes its values from a SELECT rather than VALUES
+    /// (<see cref="SqlDialect.AllowsColumnArgumentsInValues"/>).
+    /// </summary>
+    internal static bool InsertsFromSelect(this ISqlDialect dialect, IReadOnlyList<IColumnInfo> columns)
+    {
+        return dialect is SqlDialect sqlDialect && sqlDialect.InsertsFromSelect(columns);
+    }
+
     internal static string RenderMergeSource(this ISqlDialect dialect, IReadOnlyList<IColumnInfo> columns,
         IReadOnlyList<string> parameterNames)
     {

@@ -44,7 +44,7 @@ namespace pengdows.crud.dialects;
 internal class SnowflakeDialect : SqlDialect
 {
     private const string CanonicalSessionSettings =
-        "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, LOCK_TIMEOUT = 30000;";
+        "ALTER SESSION SET TIMEZONE = 'UTC', TIMESTAMP_OUTPUT_FORMAT = 'YYYY-MM-DD HH24:MI:SS.FF3', CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ, GEOGRAPHY_OUTPUT_FORMAT = 'EWKT', GEOMETRY_OUTPUT_FORMAT = 'EWKT', LOCK_TIMEOUT = 30000;";
 
     internal SnowflakeDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
@@ -93,9 +93,67 @@ internal class SnowflakeDialect : SqlDialect
 
     public override bool SupportsBatchUpdate => true;
 
+    // VARIANT/OBJECT/ARRAY: Snowflake.Data can't bind them ("Snowflake type VARIANT is not supported
+    // for parameters"), so a JSON value is bound as text and parsed server-side. Snowflake refuses
+    // PARSE_JSON(:p) inside INSERT ... VALUES but takes it in a SELECT, so writes carrying one take
+    // their values from a SELECT (all confirmed live, TYPE-002).
+    public override string RenderJsonArgument(string parameterMarker, IColumnInfo column) =>
+        string.Concat("PARSE_JSON(", parameterMarker, ")");
+
+    internal override bool AllowsColumnArgumentsInValues => false;
+
+    /// <summary>
+    /// "USING (SELECT :p AS col, ...) AS s": the base "USING (VALUES (...))" source can't carry
+    /// PARSE_JSON(:p); a SELECT can, for every column.
+    /// </summary>
+    public override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        ArgumentNullException.ThrowIfNull(parameterNames);
+        if (columns.Count != parameterNames.Count)
+        {
+            throw new ArgumentException("Column and parameter counts must match.");
+        }
+
+        var select = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                select.Append(", ");
+            }
+
+            select.Append(RenderColumnArgument(MakeParameterName(parameterNames[i]), columns[i]));
+            select.Append(" AS ");
+            select.Append(WrapObjectName(columns[i].Name));
+        }
+
+        return string.Concat("USING (SELECT ", select.ToString(), ") AS s");
+    }
+
+    internal override void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query, Func<int, int, object?>? getValue, IReadOnlyList<IColumnInfo> columns)
+    {
+        AppendAnsiBatchInsert(tableName, columnNames, rowCount, query, getValue, columns);
+    }
+
     /// <inheritdoc />
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
+    {
+        AppendBatchUpdate(tableName, columnNames, keyColumns, rowCount, query, getValue, null);
+    }
+
+    internal override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo> columns)
+    {
+        AppendBatchUpdate(tableName, columnNames, keyColumns, rowCount, query, getValue, columns);
+    }
+
+    private void AppendBatchUpdate(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo>? columns)
     {
         if (rowCount <= 0)
         {
@@ -123,20 +181,31 @@ internal class SnowflakeDialect : SqlDialect
             query.Append(columnNames[i]);
         }
 
-        query.Append(" FROM (VALUES ");
-
         var allCols = new List<string>(keyColumns);
         allCols.AddRange(columnNames);
+
+        // FROM (SELECT :b0 AS pk, PARSE_JSON(:b1) AS col UNION ALL SELECT ...) AS s when a column
+        // renders an argument, which VALUES can't hold.
+        var fromSelect = InsertsFromSelect(columns);
+        query.Append(fromSelect ? " FROM (" : " FROM (VALUES ");
 
         var paramIdx = 0;
         for (var row = 0; row < rowCount; row++)
         {
-            if (row > 0)
+            if (fromSelect)
             {
-                query.Append(", ");
+                query.Append(row > 0 ? " UNION ALL SELECT " : "SELECT ");
+            }
+            else
+            {
+                if (row > 0)
+                {
+                    query.Append(", ");
+                }
+
+                query.Append('(');
             }
 
-            query.Append('(');
             for (var col = 0; col < allCols.Count; col++)
             {
                 if (col > 0)
@@ -151,27 +220,41 @@ internal class SnowflakeDialect : SqlDialect
                 }
                 else
                 {
-                    query.Append(ParameterMarker);
-                    query.Append('b');
-                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    AppendBatchValue(query, columns, col, paramIdx++);
+                }
+
+                if (fromSelect)
+                {
+                    query.Append(" AS ");
+                    query.Append(allCols[col]);
                 }
             }
 
-            query.Append(')');
+            if (!fromSelect)
+            {
+                query.Append(')');
+            }
         }
 
-        query.Append(") AS s(");
-        for (var i = 0; i < allCols.Count; i++)
+        if (fromSelect)
         {
-            if (i > 0)
+            query.Append(") AS s WHERE ");
+        }
+        else
+        {
+            query.Append(") AS s(");
+            for (var i = 0; i < allCols.Count; i++)
             {
-                query.Append(", ");
+                if (i > 0)
+                {
+                    query.Append(", ");
+                }
+
+                query.Append(allCols[i]);
             }
 
-            query.Append(allCols[i]);
+            query.Append(") WHERE ");
         }
-
-        query.Append(") WHERE ");
         for (var i = 0; i < keyColumns.Count; i++)
         {
             if (i > 0)

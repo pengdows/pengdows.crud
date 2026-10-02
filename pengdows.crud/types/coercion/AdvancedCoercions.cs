@@ -64,6 +64,9 @@ internal static class AdvancedCoercions
             registry.Register(provider, new MySqlGeographyCoercion());
         }
 
+        // SingleStore returns a VECTOR(n) as packed little-endian float32 (TYPE-002).
+        registry.Register(SupportedDatabase.SingleStore, new PackedFloat32VectorCoercion());
+
         // Range types (generic)
         registry.Register(new PostgreSqlRangeIntCoercion());
         registry.Register(new PostgreSqlRangeDateTimeCoercion());
@@ -1019,4 +1022,34 @@ internal static class RangeConverters
     public static readonly PostgreSqlRangeConverter<int> Int = new();
     public static readonly PostgreSqlRangeConverter<long> Long = new();
     public static readonly PostgreSqlRangeConverter<DateTime> DateTime = new();
+}
+
+/// <summary>
+/// SingleStore VECTOR(n) (F32): read as packed little-endian float32 bytes (confirmed live); written
+/// as JSON array text (SqlDialect.BindsVectorsAsText).
+/// </summary>
+internal sealed class PackedFloat32VectorCoercion : DbCoercion<float[]>
+{
+    public override bool TryRead(in DbValue src, out float[] value)
+    {
+        if (src.RawValue is byte[] bytes && bytes.Length % 4 == 0)
+        {
+            value = new float[bytes.Length / 4];
+            for (var i = 0; i < value.Length; i++)
+            {
+                value[i] = System.Buffers.Binary.BinaryPrimitives.ReadSingleLittleEndian(bytes.AsSpan(4 * i));
+            }
+
+            return true;
+        }
+
+        value = null!;
+        return false;
+    }
+
+    public override bool TryWrite([AllowNull] float[] value, DbParameter parameter)
+    {
+        parameter.Value = value is null ? DBNull.Value : value;
+        return true;
+    }
 }

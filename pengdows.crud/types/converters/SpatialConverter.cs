@@ -78,6 +78,11 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 => CreatePostgresSpatial(value),
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql => CreateMySqlSpatial(value),
+            SupportedDatabase.SingleStore => !string.IsNullOrEmpty(value.WellKnownText)
+                ? value.WellKnownText
+                : throw new NotSupportedException(
+                    "SingleStore spatial values are written as WKT; create the value with FromWellKnownText."),
+            SupportedDatabase.Snowflake => CreateSnowflakeSpatial(value),
             SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException(
                 "Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
             _ => ExtractDefaultSpatial(value)
@@ -128,6 +133,26 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
     protected abstract TSpatial FromTextInternal(string text, SupportedDatabase provider);
     protected abstract TSpatial FromGeoJsonInternal(string json, SupportedDatabase provider);
     protected abstract TSpatial WrapWithProvider(TSpatial spatial, object providerValue);
+
+    // Snowflake parses WKT, EWKT, (E)WKB hex and GeoJSON text into GEOGRAPHY/GEOMETRY (TYPE-002);
+    // EWKT and EWKB keep the SRID.
+    private static string CreateSnowflakeSpatial(SpatialValue value)
+    {
+        if (!string.IsNullOrEmpty(value.WellKnownText))
+        {
+            return value.WellKnownText.StartsWith("SRID=", StringComparison.OrdinalIgnoreCase)
+                ? value.WellKnownText
+                : string.Concat("SRID=", value.Srid.ToString(System.Globalization.CultureInfo.InvariantCulture), ";",
+                    value.WellKnownText);
+        }
+
+        if (!value.WellKnownBinary.IsEmpty)
+        {
+            return Convert.ToHexString(AddSridToWkb(value.WellKnownBinary.Span, value.Srid));
+        }
+
+        return value.GeoJson ?? throw new NotSupportedException("The spatial value has no WKT, WKB or GeoJSON.");
+    }
 
     private object? CreatePostgresSpatial(SpatialValue value)
     {

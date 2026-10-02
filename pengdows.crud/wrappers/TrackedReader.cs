@@ -402,6 +402,11 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
             return value!;
         }
+        catch (InvalidCastException) when (ProviderValueFieldReader.TryReadNullableElementArray(_reader, i, out var array))
+        {
+            // Npgsql refuses some arrays as non-nullable elements (Spanner, TYPE-002).
+            return array;
+        }
         catch (OverflowException) when (WideIntegerFieldReader.TryReadText(_reader, i, out var wide))
         {
             // Snowflake.Data reports a scale-0 NUMBER as Int64 and overflows beyond it.

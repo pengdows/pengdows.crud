@@ -131,6 +131,20 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     // native Guid/UUID wire support (Sqlite/Oracle/Snowflake/Db2/DuckDB/Firebird).
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
+    // TYPE-002, confirmed live (Spanner emulator, Npgsql 9): a uuid column refuses the Guid's text as
+    // a text parameter ("column is of type uuid but expression is of type text"); untyped, Spanner
+    // takes it for a uuid column and a varchar(36) column alike.
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        var parameter = base.CreateDbParameter(name, type, value);
+        if (type == DbType.Guid && value is Guid)
+        {
+            SetNpgsqlDbTypeOnly(parameter, "Unknown");
+        }
+
+        return parameter;
+    }
+
     // Spanner returns SqlState "P0001" (a generic raise-exception code) for EVERY constraint
     // violation, not the ANSI class-23 codes real PostgreSQL uses — verified live against a real
     // Spanner Omni + PGAdapter instance. Inheriting PostgreSqlDialect's pure SqlState-based checks

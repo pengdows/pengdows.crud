@@ -528,6 +528,34 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
+        else if (key.FieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset))
+        {
+            // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact
+            // DateTimeOffset (TYPE-002); read the value.
+            var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
+            var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
+            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+        }
+        else if (key.FieldType == typeof(object) && underlyingTarget == typeof(Guid))
+        {
+            // A column the provider can't return (Npgsql on Spanner's uuid) is read from its bytes.
+            var readGuid = typeof(ProviderValueFieldReader).GetMethod(nameof(ProviderValueFieldReader.ReadGuid))!;
+            var rawValue = Expression.Call(readGuid, Expression.Convert(readerParam, typeof(IDataRecord)),
+                Expression.Constant(key.Ordinal), Expression.Constant(key.Coercion?.GuidBytesBigEndian ?? false));
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
+            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+        }
+        else if (ProviderValueFieldReader.IsValueTypeArray(underlyingTarget) &&
+                 (key.FieldType == typeof(Array) || key.FieldType.IsArray))
+        {
+            // Npgsql refuses some arrays as non-nullable elements (Spanner); read them with nullable ones.
+            var readArray = typeof(ProviderValueFieldReader).GetMethod(nameof(ProviderValueFieldReader.ReadArray))!;
+            var rawValue = Expression.Call(readArray, Expression.Convert(readerParam, typeof(IDataRecord)),
+                Expression.Constant(key.Ordinal), Expression.Constant(underlyingTarget.GetElementType()!, typeof(Type)));
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
+            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+        }
         else if (key.FieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
         {
             // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).

@@ -382,7 +382,7 @@ internal class PostgreSqlDialect : SqlDialect
     /// </summary>
     internal virtual bool SendsEnumParametersUntyped => true;
 
-    private static void SetNpgsqlDbTypeOnly(DbParameter parameter, string npgsqlDbTypeName)
+    private protected static void SetNpgsqlDbTypeOnly(DbParameter parameter, string npgsqlDbTypeName)
     {
         var property = parameter.GetType().GetProperty(NpgsqlDbTypeProperty);
         if (property != null && property.PropertyType.IsEnum &&

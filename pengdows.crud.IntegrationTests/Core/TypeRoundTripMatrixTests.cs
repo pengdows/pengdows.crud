@@ -91,9 +91,9 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         {
             await DropTableIfExistsAsync(context, TableName);
             await using (var create = context.CreateSqlContainer(
-                             $"CREATE TABLE {IntegrationObjectNameHelper.Table(context, TableName)} (" +
+                             $"CREATE {TableKind(provider)}TABLE {IntegrationObjectNameHelper.Table(context, TableName)} (" +
                              $"{context.WrapObjectName("id")} {IntegrationObjectNameHelper.IntType(provider)} NOT NULL PRIMARY KEY, " +
-                             $"{context.WrapObjectName("v")} {entry.Declaration}{NullableSuffix(provider)}){TableSuffix(provider)}"))
+                             $"{context.WrapObjectName("v")} {entry.Declaration}{NullableSuffix(provider, entry.Declaration!)}){TableSuffix(provider)}"))
             {
                 await create.ExecuteNonQueryAsync();
             }
@@ -138,7 +138,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
             }
 
             var actual = valueProperty.GetValue(loaded);
-            if (!SameValue(entry.Sample, actual))
+            if (!SameValue(entry.Sample, actual, Provider(context)))
             {
                 return $"gateway read: wrote {Show(entry.Sample)}, read {Show(actual)}";
             }
@@ -156,7 +156,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
                 .Append(IntegrationObjectNameHelper.Table(context, TableName));
             await using var reader = await select.ExecuteReaderAsync();
             var mapped = await DataReaderMapper.LoadObjectsFromDataReaderAsync<MappedValue<T>>(reader);
-            if (mapped.Count != 1 || !SameValue(entry.Sample, mapped[0].V))
+            if (mapped.Count != 1 || !SameValue(entry.Sample, mapped[0].V, Provider(context)))
             {
                 return $"DataReaderMapper: wrote {Show(entry.Sample)}, read {Show(mapped.Count == 1 ? mapped[0].V : null)}";
             }
@@ -194,16 +194,36 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
 
     // Sybase ASE columns are NOT NULL unless declared NULL; every other database defaults to
     // nullable and some (Firebird, Informix) reject an explicit NULL constraint.
-    private static string NullableSuffix(SupportedDatabase provider) =>
-        provider == SupportedDatabase.SybaseASE ? " NULL" : string.Empty;
+    // A declaration that states its own nullability (ASE BIT can't be NULL) is left as is.
+    private static string NullableSuffix(SupportedDatabase provider, string declaration) =>
+        provider == SupportedDatabase.SybaseASE && !declaration.Contains("NULL", StringComparison.OrdinalIgnoreCase)
+            ? " NULL"
+            : string.Empty;
+
+    // SingleStore's default columnar tables can't hold GEOGRAPHY; a rowstore table holds every type.
+    private static string TableKind(SupportedDatabase provider) =>
+        provider == SupportedDatabase.SingleStore ? "ROWSTORE " : string.Empty;
 
     // Oracle's test user's default tablespace is SYSTEM, where JSON/XMLTYPE/VECTOR/SecureFiles LOBs
     // can't be created (ORA-43853); VectorRoundTripTests does the same.
     private static string TableSuffix(SupportedDatabase provider) =>
         provider == SupportedDatabase.Oracle ? " TABLESPACE USERS" : string.Empty;
 
-    private static bool SameValue(object? expected, object? actual)
+    private static SupportedDatabase Provider(IDatabaseContext context) => context.Product;
+
+    private static bool SameValue(object? expected, object? actual, SupportedDatabase provider)
     {
+        // SingleStore's GEOGRAPHYPOINT stores coordinates to about 1e-7 degrees (lossy by design,
+        // confirmed live: POINT(0 0) reads back as 3.6e-8); compare points within that.
+        if (provider == SupportedDatabase.SingleStore &&
+            expected is pengdows.crud.types.valueobjects.SpatialValue p1 && actual is pengdows.crud.types.valueobjects.SpatialValue p2 &&
+            SpatialWkb(p1) is { Length: 21 } wkb1 && SpatialWkb(p2) is { Length: 21 } wkb2 && wkb1[1] == 1 && wkb2[1] == 1)
+        {
+            return p1.Srid == p2.Srid &&
+                   Math.Abs(BitConverter.ToDouble(wkb1, 5) - BitConverter.ToDouble(wkb2, 5)) < 1e-6 &&
+                   Math.Abs(BitConverter.ToDouble(wkb1, 13) - BitConverter.ToDouble(wkb2, 13)) < 1e-6;
+        }
+
         switch (expected)
         {
             case null:
@@ -251,6 +271,8 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         byte[] b => "0x" + Convert.ToHexString(b),
         IEnumerable e and not string => "[" + string.Join(", ", e.Cast<object?>()) + "]",
         DateTime d => d.ToString("O"),
+        TimeOnly time => time.ToString("HH:mm:ss.fffffff"),
+        TimeSpan span => span.ToString("c"),
         DateTimeOffset d => d.ToString("O"),
         _ => $"{value} ({value.GetType().Name})"
     };

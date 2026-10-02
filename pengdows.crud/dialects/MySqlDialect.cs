@@ -494,6 +494,9 @@ internal class MySqlDialect : SqlDialect
     internal override bool IsUnreadableStoredValue(Exception exception) =>
         exception.GetType().Name == "MySqlConversionException";
 
+    // SingleStore's VECTOR takes a JSON array as text; MySqlConnector refuses a float[] (TYPE-002).
+    internal override bool BindsVectorsAsText => DatabaseType == SupportedDatabase.SingleStore;
+
     // Aurora MySQL is a detection label for the MySQL engine (VAR-001): same type mappings.
     internal override SupportedDatabase TypeMappingProvider =>
         DatabaseType == SupportedDatabase.AuroraMySql ? SupportedDatabase.MySql : DatabaseType;
