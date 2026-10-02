@@ -595,6 +595,16 @@ internal class FirebirdDialect : SqlDialect
                 targetValue = boolValue ? (short)1 : (short)0;
             }
         }
+        else if (type == DbType.Time && value is DateTimeOffset timeWithOffset && IsInitialized &&
+                 ProductInfo.ParsedVersion?.Major >= 4 &&
+                 FirebirdZonedDateTimeInterop.CreateUtcTime(timeWithOffset, Factory.GetType().Assembly) is { } zonedTime)
+        {
+            // TYPE-002: a DateTimeOffset declared DbType.Time is a TIME WITH TIME ZONE value, sent as an
+            // FbZonedTime holding the UTC time (FirebirdClient rejects a TimeSpan there: "Incorrect time
+            // zone value", and accepts named zones only, confirmed live).
+            targetType = DbType.Object;
+            targetValue = zonedTime;
+        }
         else if (type == DbType.DateTimeOffset)
         {
             // FirebirdClient rejects DbType.DateTimeOffset outright ("Invalid data type: 27").

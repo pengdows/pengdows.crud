@@ -93,7 +93,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
             await using (var create = context.CreateSqlContainer(
                              $"CREATE TABLE {IntegrationObjectNameHelper.Table(context, TableName)} (" +
                              $"{context.WrapObjectName("id")} {IntegrationObjectNameHelper.IntType(provider)} NOT NULL PRIMARY KEY, " +
-                             $"{context.WrapObjectName("v")} {entry.Declaration}{NullableSuffix(provider)})"))
+                             $"{context.WrapObjectName("v")} {entry.Declaration}{NullableSuffix(provider)}){TableSuffix(provider)}"))
             {
                 await create.ExecuteNonQueryAsync();
             }
@@ -197,6 +197,11 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
     private static string NullableSuffix(SupportedDatabase provider) =>
         provider == SupportedDatabase.SybaseASE ? " NULL" : string.Empty;
 
+    // Oracle's test user's default tablespace is SYSTEM, where JSON/XMLTYPE/VECTOR/SecureFiles LOBs
+    // can't be created (ORA-43853); VectorRoundTripTests does the same.
+    private static string TableSuffix(SupportedDatabase provider) =>
+        provider == SupportedDatabase.Oracle ? " TABLESPACE USERS" : string.Empty;
+
     private static bool SameValue(object? expected, object? actual)
     {
         switch (expected)
@@ -219,6 +224,10 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
             case pengdows.crud.types.valueobjects.JsonValue json:
                 return actual is pengdows.crud.types.valueobjects.JsonValue j &&
                        JsonNode.DeepEquals(JsonNode.Parse(json.AsString()), JsonNode.Parse(j.AsString()));
+            // XML columns may reformat the document (Oracle XMLTYPE adds whitespace): compare as XML.
+            case string xml when xml.TrimStart().StartsWith('<') && actual is string readXml:
+                return System.Xml.Linq.XNode.DeepEquals(System.Xml.Linq.XElement.Parse(xml),
+                    System.Xml.Linq.XElement.Parse(readXml.Trim()));
             case string s when s.TrimStart().StartsWith('{') && actual is string t:
                 return JsonNode.DeepEquals(JsonNode.Parse(s), JsonNode.Parse(t));
             case IStructuralEquatable structural when actual != null:
@@ -238,6 +247,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
     {
         pengdows.crud.types.valueobjects.SpatialValue s => $"SRID {s.Srid} 0x{Convert.ToHexString(SpatialWkb(s))}",
         null => "null",
+        string text => $"[{text}] ({text.Length} chars)",
         byte[] b => "0x" + Convert.ToHexString(b),
         IEnumerable e and not string => "[" + string.Join(", ", e.Cast<object?>()) + "]",
         DateTime d => d.ToString("O"),
@@ -254,7 +264,24 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         }
 
         var message = (root.Message ?? string.Empty).Replace('\n', ' ');
-        return $"{root.GetType().Name}: {(message.Length > 220 ? message[..220] + "…" : message)}";
+        var described = $"{root.GetType().Name}: {(message.Length > 220 ? message[..220] + "…" : message)}";
+        if (Environment.GetEnvironmentVariable("TYPE_MATRIX_STACKS") != "1")
+        {
+            return described;
+        }
+
+        // Diagnostics: the innermost exception's top pengdows frames.
+        var innermost = ex;
+        while (innermost.InnerException != null)
+        {
+            innermost = innermost.InnerException;
+        }
+
+        var frames = (innermost.StackTrace ?? string.Empty).Split('\n')
+            .Where(f => f.Contains("pengdows.crud.", StringComparison.Ordinal) && !f.Contains("IntegrationTests"))
+            .Take(4)
+            .Select(f => f.Trim());
+        return $"{described} [{innermost.GetType().Name}: {innermost.Message.Split('\n')[0]} | {string.Join(" | ", frames)}]";
     }
 
     private sealed class MappedValue<T>

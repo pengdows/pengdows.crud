@@ -208,6 +208,11 @@ public class fakeDbDataReader : DbDataReader
             throw HandlerlessRead(i, "System.Object");
         }
 
+        if (IsDoubleBeyondDecimal(i) && row[keys[i]] is double)
+        {
+            throw new InvalidCastException("Specified cast is not valid.");
+        }
+
         if (IsUnloadableUdt(i) && row[keys[i]] is not null && row[keys[i]] is not DBNull)
         {
             throw new FileNotFoundException(
@@ -289,6 +294,25 @@ public class fakeDbDataReader : DbDataReader
     /// </summary>
     public IDictionary<string, string>? HandlerlessColumns { get; set; }
 
+    /// <summary>
+    /// Columns holding a <see cref="double"/> beyond <see cref="decimal"/>'s range that emulate ODP.NET
+    /// on a NUMBER/FLOAT column (confirmed live, Oracle 23ai): <see cref="GetFieldType"/> reports
+    /// <see cref="decimal"/>, <see cref="GetValue"/> and <see cref="GetDecimal"/> throw
+    /// <see cref="InvalidCastException"/>, and <see cref="GetDouble"/> returns the value.
+    /// </summary>
+    public ISet<string>? DoubleBeyondDecimalColumns { get; set; }
+
+    /// <summary>
+    /// Columns holding a <see cref="byte"/>[] that emulate FirebirdClient 10 on BINARY/VARBINARY
+    /// (confirmed live, Firebird 5): <see cref="GetFieldType"/> reports <see cref="string"/> while
+    /// <see cref="GetValue"/> returns the bytes.
+    /// </summary>
+    public ISet<string>? BinaryReportedAsStringColumns { get; set; }
+
+    private bool IsDoubleBeyondDecimal(int i) => DoubleBeyondDecimalColumns != null && DoubleBeyondDecimalColumns.Contains(GetName(i));
+
+    private bool IsBinaryReportedAsString(int i) => BinaryReportedAsStringColumns != null && BinaryReportedAsStringColumns.Contains(GetName(i));
+
     private bool IsHandlerlessColumn(int ordinal) =>
         HandlerlessColumns != null && HandlerlessColumns.ContainsKey(GetName(ordinal));
 
@@ -345,7 +369,9 @@ public class fakeDbDataReader : DbDataReader
             throw new OverflowException("Value was either too large or too small for a Decimal.");
         }
 
-        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsHandlerlessColumn(i) ? RawValue(i) : GetValue(i);
+        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsHandlerlessColumn(i) || IsDoubleBeyondDecimal(i)
+            ? RawValue(i)
+            : GetValue(i);
         return value is null || value == DBNull.Value;
     }
 
@@ -468,6 +494,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override double GetDouble(int i)
     {
+        if (IsDoubleBeyondDecimal(i) && RawValue(i) is double value)
+        {
+            return value;
+        }
+
         return (double)GetValue(i);
     }
 
@@ -488,6 +519,16 @@ public class fakeDbDataReader : DbDataReader
         if (IsHandlerlessColumn(ordinal))
         {
             throw HandlerlessRead(ordinal, "System.Object");
+        }
+
+        if (IsDoubleBeyondDecimal(ordinal))
+        {
+            return typeof(decimal);
+        }
+
+        if (IsBinaryReportedAsString(ordinal))
+        {
+            return typeof(string);
         }
 
         if ((UnresolvedFieldTypeColumns != null && UnresolvedFieldTypeColumns.Contains(GetName(ordinal)))

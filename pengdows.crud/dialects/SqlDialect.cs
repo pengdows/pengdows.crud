@@ -1014,6 +1014,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // before a command built for array binding executes. No-op for every dialect except Oracle —
     // see OracleDialect for the ArrayBindCount reflection hook (no hard package reference to
     // Oracle.ManagedDataAccess.Core). Only invoked when SupportsArrayBinding is true.
+    /// <summary>Provider settings every command needs (Oracle fetches LONG data with the row).</summary>
+    internal virtual void ConfigureCommand(DbCommand command)
+    {
+    }
+
     internal virtual void ConfigureArrayBinding(DbCommand cmd, int rowCount)
     {
     }

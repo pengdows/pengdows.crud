@@ -723,8 +723,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                               ?? throw new InvalidOperationException("Transaction is not a transaction");
         }
 
-        return cmd as DbCommand
-               ?? throw new InvalidOperationException("Command is not a DbCommand");
+        var dbCommand = cmd as DbCommand
+                        ?? throw new InvalidOperationException("Command is not a DbCommand");
+        if (_dialect is SqlDialect configuringDialect)
+        {
+            configuringDialect.ConfigureCommand(dbCommand);
+        }
+
+        return dbCommand;
     }
 
     private void AddParametersToCommand(DbCommand dbCommand)

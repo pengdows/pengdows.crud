@@ -806,6 +806,9 @@ internal static class TypeCoercionHelper
             case not null when FirebirdZonedDateTimeInterop.TryGetInstant(value, out var zoned):
                 // Firebird TIMESTAMP WITH TIME ZONE columns are returned as FbZonedDateTime.
                 return zoned;
+            case not null when FirebirdZonedDateTimeInterop.TryGetTime(value, out var zonedTime):
+                // Firebird TIME WITH TIME ZONE columns are returned as FbZonedTime (TYPE-002).
+                return zonedTime;
             case DateTime dt:
                 return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
                     ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)

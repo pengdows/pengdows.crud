@@ -24,9 +24,9 @@
 //   has no GoogleSQL-dialect Spanner support, so that type list is intentionally not modeled
 //   here), Informix 14.10, SAP HANA (Cloud QRC 2/2026, with the platform/legacy addendum), and
 //   InterBase 15, plus PostgreSQL (shared by Aurora PostgreSQL), SQL Server 2025 and the MySQL
-//   family (MySQL/Aurora MySQL, MariaDB, TiDB), SQLite, DuckDB, CockroachDB and YugabyteDB,
-//   live-verified by TypeRoundTripMatrixTests (TYPE-002). Every other pengdows.crud-supported
-//   database (Oracle, Firebird, Snowflake) is deliberately left unpopulated rather than guessed — extend this
+//   family (MySQL/Aurora MySQL, MariaDB, TiDB), SQLite, DuckDB, CockroachDB, YugabyteDB, Oracle 23ai
+//   and Firebird 5, live-verified by TypeRoundTripMatrixTests (TYPE-002). Every other
+//   pengdows.crud-supported database (Snowflake) is deliberately left unpopulated rather than guessed — extend this
 //   catalog with the same sourcing discipline (a citable reference or a live-verified fact) when
 //   one of those is needed, not by assumption from a "similar" engine.
 // - Two real cases prove a flat name -> DbType dictionary is insufficient, which is why this
@@ -120,6 +120,8 @@ public static class DatabaseTypeCatalog
         SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => PostgreSqlTypes,
         SupportedDatabase.YugabyteDb => YugabyteDbTypes,
         SupportedDatabase.CockroachDb => CockroachDbTypes,
+        SupportedDatabase.Oracle => OracleTypes,
+        SupportedDatabase.Firebird => FirebirdTypes,
         SupportedDatabase.SqlServer => SqlServerTypes,
         SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => MySqlTypes,
         SupportedDatabase.MariaDb => MariaDbTypes,
@@ -757,6 +759,155 @@ public static class DatabaseTypeCatalog
                 Sample: new[] { 1.5f, 2f, -3f }, Comparable: false),
         })
         .ToArray();
+
+    // ── Oracle 23ai (ODP.NET Managed) ───────────────────────────────────────
+    // Source: Oracle Database 23ai SQL Language Reference, "Data Types". An empty VARCHAR2 is NULL in
+    // Oracle, so no sample is ''. SDO_GEOMETRY (an object type ODP.NET reads only through a custom UDT
+    // class) and ROWID/UROWID (server-assigned) carry no ClrType. Live-verified by
+    // TypeRoundTripMatrixTests (TYPE-002).
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> OracleTypes = new ColumnTypeDescriptor[]
+    {
+        new("NUMBER(3) (byte)", ColumnTypeCategory.ExactNumeric,
+            Declaration: "NUMBER(3)", ClrType: typeof(byte), DbType: System.Data.DbType.Byte, Sample: byte.MaxValue),
+        new("NUMBER(5)", ColumnTypeCategory.ExactNumeric,
+            Declaration: "NUMBER(5)", ClrType: typeof(short), DbType: System.Data.DbType.Int16, Sample: short.MinValue),
+        new("NUMBER(10)", ColumnTypeCategory.ExactNumeric,
+            Declaration: "NUMBER(10)", ClrType: typeof(int), DbType: System.Data.DbType.Int32, Sample: int.MinValue),
+        new("NUMBER(19)", ColumnTypeCategory.ExactNumeric,
+            Declaration: "NUMBER(19)", ClrType: typeof(long), DbType: System.Data.DbType.Int64, Sample: long.MinValue),
+        new("NUMBER(20) (ulong)", ColumnTypeCategory.ExactNumeric, IsUnsigned: true,
+            Declaration: "NUMBER(20)", ClrType: typeof(ulong), DbType: System.Data.DbType.UInt64, Sample: ulong.MaxValue),
+        new("NUMBER(p,s)", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "DECIMAL(p,s)", "NUMERIC(p,s)" },
+            Declaration: "NUMBER(38,10)", ClrType: typeof(decimal), DbType: System.Data.DbType.Decimal, Sample: -1234567890123456.0123456789m),
+        new("NUMBER", ColumnTypeCategory.ExactNumeric,
+            Declaration: "NUMBER", ClrType: typeof(decimal), DbType: System.Data.DbType.Decimal, Sample: 79228162514264337593543950335m),
+        new("BINARY_FLOAT", ColumnTypeCategory.ApproximateNumeric,
+            Declaration: "BINARY_FLOAT", ClrType: typeof(float), DbType: System.Data.DbType.Single, Sample: 1.5f),
+        new("BINARY_DOUBLE", ColumnTypeCategory.ApproximateNumeric,
+            Declaration: "BINARY_DOUBLE", ClrType: typeof(double), DbType: System.Data.DbType.Double, Sample: -1.25e300),
+        new("FLOAT(126)", ColumnTypeCategory.ApproximateNumeric, Aliases: new[] { "FLOAT", "DOUBLE PRECISION" },
+            Declaration: "FLOAT(126)", ClrType: typeof(double), DbType: System.Data.DbType.Double, Sample: 1.25e100,
+            Notes: "A decimal floating point (NUMBER), not IEEE: about 38 significant digits."),
+        new("BOOLEAN", ColumnTypeCategory.Boolean, MinVersion: "23",
+            Declaration: "BOOLEAN", ClrType: typeof(bool), DbType: System.Data.DbType.Boolean, Sample: true),
+        new("NUMBER(1) (bool)", ColumnTypeCategory.Boolean,
+            Declaration: "NUMBER(1)", ClrType: typeof(bool), DbType: System.Data.DbType.Boolean, Sample: true),
+        new("CHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "CHAR(10)", ClrType: typeof(string), DbType: System.Data.DbType.AnsiStringFixedLength, Sample: "abcdefghij"),
+        new("NCHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "NCHAR(10)", ClrType: typeof(string), DbType: System.Data.DbType.StringFixedLength, Sample: "ábcdéfghíj"),
+        new("VARCHAR2(n)", ColumnTypeCategory.Character, Aliases: new[] { "VARCHAR(n)" },
+            Declaration: "VARCHAR2(50)", ClrType: typeof(string), DbType: System.Data.DbType.AnsiString, Sample: "plain ascii text"),
+        new("NVARCHAR2(n)", ColumnTypeCategory.Character,
+            Declaration: "NVARCHAR2(50)", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "héllo wörld ✓ 😀"),
+        new("CLOB", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "CLOB", ClrType: typeof(string), DbType: System.Data.DbType.AnsiString, Sample: new string('x', 9000), Comparable: false),
+        new("NCLOB", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "NCLOB", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: new string('é', 9000), Comparable: false),
+        new("LONG", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "LONG", ClrType: typeof(string), DbType: System.Data.DbType.AnsiString, Sample: "deprecated long text", Comparable: false),
+        new("RAW(n)", ColumnTypeCategory.Binary, IsBinary: true,
+            Declaration: "RAW(50)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 0, 1, 2, 0xFE, 0xFF }),
+        new("BLOB", ColumnTypeCategory.Lob, IsBinary: true, IsLob: true,
+            Declaration: "BLOB", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary,
+            Sample: Enumerable.Range(0, 9000).Select(i => (byte)i).ToArray(), Comparable: false),
+        new("LONG RAW", ColumnTypeCategory.Lob, IsBinary: true, IsLob: true,
+            Declaration: "LONG RAW", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 7, 0, 7 }, Comparable: false),
+        new("RAW(16) (Guid)", ColumnTypeCategory.Other,
+            Declaration: "RAW(16)", ClrType: typeof(Guid), DbType: System.Data.DbType.Binary, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
+        new("VARCHAR2(36) (Guid)", ColumnTypeCategory.Other,
+            Declaration: "VARCHAR2(36)", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
+        new("DATE", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATE", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, DateTimeKind.Utc), Notes: "A date and time to the second."),
+        new("DATE (DateOnly)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATE", ClrType: typeof(DateOnly), DbType: System.Data.DbType.Date, Sample: new DateOnly(2026, 10, 1)),
+        new("TIMESTAMP(n)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "TIMESTAMP(7)", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime2,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, DateTimeKind.Utc).AddTicks(1234567)),
+        new("TIMESTAMP(n) WITH TIME ZONE", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
+            Declaration: "TIMESTAMP(7) WITH TIME ZONE", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset,
+            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5)).AddTicks(1234567)),
+        new("TIMESTAMP(n) WITH LOCAL TIME ZONE", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "TIMESTAMP(6) WITH LOCAL TIME ZONE", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, 123, 456, DateTimeKind.Utc)),
+        new("INTERVAL DAY TO SECOND", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "INTERVAL DAY(9) TO SECOND(7)", ClrType: typeof(TimeSpan), DbType: System.Data.DbType.Object,
+            Sample: new TimeSpan(3, 4, 5, 6).Add(TimeSpan.FromTicks(1234567))),
+        new("INTERVAL DAY TO SECOND (value object)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "INTERVAL DAY(9) TO SECOND(6)", ClrType: typeof(pengdows.crud.types.valueobjects.IntervalDaySecond), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.IntervalDaySecond(3, new TimeSpan(4, 5, 6))),
+        new("INTERVAL YEAR TO MONTH", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "INTERVAL YEAR(9) TO MONTH", ClrType: typeof(pengdows.crud.types.valueobjects.IntervalYearMonth), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.IntervalYearMonth(2, 5)),
+        new("JSON", ColumnTypeCategory.Json, MinVersion: "21",
+            Declaration: "JSON", ClrType: typeof(pengdows.crud.types.valueobjects.JsonValue), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.JsonValue("{\"a\":1}"), Comparable: false),
+        new("XMLTYPE", ColumnTypeCategory.Other,
+            Declaration: "XMLTYPE", ClrType: typeof(string), DbType: System.Data.DbType.Xml, Sample: "<a b=\"1\">x</a>", Comparable: false),
+        new("VECTOR(n)", ColumnTypeCategory.Vector, MinVersion: "23",
+            Declaration: "VECTOR(3, FLOAT32)", ClrType: typeof(float[]), DbType: System.Data.DbType.Object,
+            Sample: new[] { 1.5f, 2f, -3f }, Comparable: false),
+        new("SDO_GEOMETRY", ColumnTypeCategory.Spatial, Notes: "Oracle object type; see TYPE-021."),
+        new("ROWID", ColumnTypeCategory.Other, Aliases: new[] { "UROWID" }, Notes: "Server-assigned row address."),
+    };
+
+    // ── Firebird 5 (FirebirdClient) ─────────────────────────────────────────
+    // Source: Firebird 5.0 Language Reference, "Data Types and Subtypes". Live-verified by
+    // TypeRoundTripMatrixTests (TYPE-002).
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> FirebirdTypes = new ColumnTypeDescriptor[]
+    {
+        new("SMALLINT", ColumnTypeCategory.ExactNumeric,
+            Declaration: "SMALLINT", ClrType: typeof(short), DbType: System.Data.DbType.Int16, Sample: short.MinValue),
+        new("INTEGER", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "INT" },
+            Declaration: "INTEGER", ClrType: typeof(int), DbType: System.Data.DbType.Int32, Sample: int.MinValue),
+        new("BIGINT", ColumnTypeCategory.ExactNumeric,
+            Declaration: "BIGINT", ClrType: typeof(long), DbType: System.Data.DbType.Int64, Sample: long.MinValue),
+        new("INT128", ColumnTypeCategory.ExactNumeric, MinVersion: "4",
+            Declaration: "INT128", ClrType: typeof(Int128), DbType: System.Data.DbType.Object, Sample: Int128.MinValue),
+        new("NUMERIC(p,s)", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "DECIMAL(p,s)" },
+            Declaration: "NUMERIC(38,10)", ClrType: typeof(decimal), DbType: System.Data.DbType.Decimal, Sample: -1234567890123456.0123456789m),
+        new("NUMERIC(18,4)", ColumnTypeCategory.ExactNumeric,
+            Declaration: "NUMERIC(18,4)", ClrType: typeof(decimal), DbType: System.Data.DbType.Decimal, Sample: 12345678901234.5678m),
+        new("DECFLOAT(34)", ColumnTypeCategory.ExactNumeric, MinVersion: "4",
+            Declaration: "DECFLOAT(34)", ClrType: typeof(decimal), DbType: System.Data.DbType.VarNumeric, Sample: -1234567890123456.0123456789m),
+        new("FLOAT", ColumnTypeCategory.ApproximateNumeric,
+            Declaration: "FLOAT", ClrType: typeof(float), DbType: System.Data.DbType.Single, Sample: 1.5f),
+        new("DOUBLE PRECISION", ColumnTypeCategory.ApproximateNumeric,
+            Declaration: "DOUBLE PRECISION", ClrType: typeof(double), DbType: System.Data.DbType.Double, Sample: -1.25e300),
+        new("BOOLEAN", ColumnTypeCategory.Boolean, MinVersion: "3",
+            Declaration: "BOOLEAN", ClrType: typeof(bool), DbType: System.Data.DbType.Boolean, Sample: true),
+        new("CHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "CHAR(10)", ClrType: typeof(string), DbType: System.Data.DbType.StringFixedLength, Sample: "abcdefghij"),
+        new("VARCHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "VARCHAR(50)", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "héllo wörld ✓ 😀"),
+        new("BLOB SUB_TYPE TEXT", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "BLOB SUB_TYPE TEXT", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: new string('é', 9000), Comparable: false),
+        new("BLOB SUB_TYPE BINARY", ColumnTypeCategory.Lob, IsLob: true, IsBinary: true, Aliases: new[] { "BLOB" },
+            Declaration: "BLOB SUB_TYPE BINARY", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary,
+            Sample: Enumerable.Range(0, 9000).Select(i => (byte)i).ToArray(), Comparable: false),
+        new("VARBINARY(n)", ColumnTypeCategory.Binary, IsBinary: true, MinVersion: "4", Aliases: new[] { "VARCHAR(n) CHARACTER SET OCTETS" },
+            Declaration: "VARBINARY(50)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 0, 1, 2, 0xFE, 0xFF }),
+        new("BINARY(n)", ColumnTypeCategory.Binary, IsBinary: true, MinVersion: "4", Aliases: new[] { "CHAR(n) CHARACTER SET OCTETS" },
+            Declaration: "BINARY(5)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 9, 8, 7, 6, 5 }),
+        new("CHAR(16) CHARACTER SET OCTETS (Guid)", ColumnTypeCategory.Other,
+            Declaration: "CHAR(16) CHARACTER SET OCTETS", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
+        new("DATE", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATE", ClrType: typeof(DateOnly), DbType: System.Data.DbType.Date, Sample: new DateOnly(2026, 10, 1)),
+        new("TIME", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "TIME", ClrType: typeof(TimeOnly), DbType: System.Data.DbType.Time, Sample: new TimeOnly(13, 45, 30, 123).Add(TimeSpan.FromTicks(4000))),
+        new("TIMESTAMP", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "TIMESTAMP", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, 123, DateTimeKind.Utc).AddTicks(4000),
+            Notes: "Fractions of a second to 100 microseconds."),
+        new("TIMESTAMP WITH TIME ZONE", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true, MinVersion: "4",
+            Declaration: "TIMESTAMP WITH TIME ZONE", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset,
+            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, 123, TimeSpan.Zero)),
+        new("TIME WITH TIME ZONE", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true, MinVersion: "4",
+            Declaration: "TIME WITH TIME ZONE", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.Time,
+            Sample: new DateTimeOffset(1, 1, 1, 13, 45, 30, TimeSpan.FromHours(-5)),
+            Notes: "Stored as the UTC time; reads back as a DateTimeOffset on 0001-01-01 at UTC."),
+    };
 
     // ── Db2 LUW 11.5.x ──────────────────────────────────────────────────────
     // Source: IBM Db2 11.5 SQL reference (data types / CREATE TABLE). Special cases NOT modeled

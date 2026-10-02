@@ -80,6 +80,11 @@ public class fakeDbCommand : DbCommand
     /// <summary>Number of times <see cref="Prepare"/> was called on this command.</summary>
     public int PrepareCount { get; private set; }
 
+    /// <summary>
+    /// Mirrors ODP.NET's <c>OracleCommand.InitialLONGFetchSize</c>, so tests can see what a dialect sets.
+    /// </summary>
+    public int InitialLONGFetchSize { get; set; }
+
     private fakeDbConnection? FakeConnection => Connection as fakeDbConnection;
 
     /// <summary>

@@ -172,6 +172,22 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var rawValue = Expression.Call(readInet, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
+            else if (fieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
+            {
+                // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).
+                var readDouble = typeof(NumericFieldReader).GetMethod(nameof(NumericFieldReader.ReadDouble))!;
+                var rawValue = Expression.Call(readDouble, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                valueReadExpr = BuildConversionExpression(Expression.Convert(rawValue, typeof(object)), typeof(object),
+                    targetType, coercionOptions);
+            }
+            else if (fieldType == typeof(string) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(byte[]))
+            {
+                // FirebirdClient reports BINARY/VARBINARY as string but returns byte[] (TYPE-002): read
+                // the value, which converts as before when it really is text.
+                var getValue = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue))!;
+                var rawValue = Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), getValue, ordinalExpr);
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+            }
             else if (fieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
             {
                 // A column reported as Int64 may hold more (Snowflake.Data reports every scale-0

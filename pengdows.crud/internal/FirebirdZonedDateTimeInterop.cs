@@ -22,8 +22,46 @@ internal static class FirebirdZonedDateTimeInterop
 {
     private const string TypeName = "FirebirdSql.Data.Types.FbZonedDateTime";
     private const string AssemblyQualifiedTypeName = TypeName + ", FirebirdSql.Data.FirebirdClient";
+    private const string TimeTypeName = "FirebirdSql.Data.Types.FbZonedTime";
 
     private static readonly Lazy<Type?> ByName = new(() => Type.GetType(AssemblyQualifiedTypeName, throwOnError: false));
+    private static readonly Lazy<Type?> TimeByName =
+        new(() => Type.GetType(TimeTypeName + ", FirebirdSql.Data.FirebirdClient", throwOnError: false));
+
+    /// <summary>
+    /// Builds an FbZonedTime holding <paramref name="value"/>'s UTC time of day in zone "UTC" (for TIME
+    /// WITH TIME ZONE; the driver accepts named zones only, confirmed live), or null when the driver
+    /// type is unavailable.
+    /// </summary>
+    internal static object? CreateUtcTime(DateTimeOffset value, Assembly? providerAssembly)
+    {
+        var type = providerAssembly?.GetType(TimeTypeName, throwOnError: false) ?? TimeByName.Value;
+        var ctor = type?.GetConstructor(new[] { typeof(TimeSpan), typeof(string) });
+        return ctor?.Invoke(new object[] { value.UtcDateTime.TimeOfDay, "UTC" });
+    }
+
+    /// <summary>
+    /// Reads an FbZonedTime (returned for TIME WITH TIME ZONE columns) as a DateTimeOffset on
+    /// 0001-01-01: its UTC time, expressed at its offset when the value carries one.
+    /// </summary>
+    internal static bool TryGetTime(object value, out DateTimeOffset time)
+    {
+        var type = value.GetType();
+        if (!string.Equals(type.FullName, TimeTypeName, StringComparison.Ordinal)
+            || type.GetProperty("Time")?.GetValue(value) is not TimeSpan utcTime)
+        {
+            time = default;
+            return false;
+        }
+
+        time = new DateTimeOffset(DateTime.MinValue.Add(utcTime), TimeSpan.Zero);
+        if (type.GetProperty("Offset")?.GetValue(value) is TimeSpan offset && offset != TimeSpan.Zero)
+        {
+            time = time.ToOffset(offset);
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Builds an FbZonedDateTime holding <paramref name="value"/>'s UTC instant in zone "UTC", or
@@ -39,7 +77,7 @@ internal static class FirebirdZonedDateTimeInterop
     /// <summary>True when <paramref name="value"/> is an FbZonedDateTime.</summary>
     internal static bool IsZoned(object? value)
     {
-        return value != null && string.Equals(value.GetType().FullName, TypeName, StringComparison.Ordinal);
+        return value != null && value.GetType().FullName is TypeName or TimeTypeName;
     }
 
     /// <summary>

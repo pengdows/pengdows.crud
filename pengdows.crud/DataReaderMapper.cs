@@ -528,6 +528,15 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
+        else if (key.FieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
+        {
+            // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).
+            var readDouble = typeof(NumericFieldReader).GetMethod(nameof(NumericFieldReader.ReadDouble))!;
+            var rawValue = Expression.Convert(Expression.Call(readDouble, Expression.Convert(readerParam, typeof(IDataRecord)),
+                Expression.Constant(key.Ordinal)), typeof(object));
+            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
+            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+        }
         else if (key.FieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
         {
             // A column reported as Int64 may hold more (Snowflake.Data reports every scale-0 NUMBER

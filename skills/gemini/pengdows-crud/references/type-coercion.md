@@ -137,6 +137,9 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   read without the NetTopologySuite/pgvector plugins (binary value via `GetBytes`); a C# enum into a PG `ENUM` column is
   sent untyped on PostgreSQL/YugabyteDB (CockroachDB accepts text) (string properties, PG 15+ MERGE upserts and custom `WHERE` still need `CAST`); `DateTimeOffset` with
   `DbType.Time` is `timetz`; CockroachDB runs multi-statement commands unprepared (TYPE-002).
+- Oracle: `double`/`float` bind as `BINARY_DOUBLE`/`BINARY_FLOAT`; NUMBER beyond `decimal` reads into `double`; LONG data
+  is fetched with the row; `DbType.DateTime2`/`DbType.Xml` are remapped. Firebird: `TIME WITH TIME ZONE` from a
+  `DateTimeOffset` with `DbType.Time`; `BINARY`/`VARBINARY` read as `byte[]` (TYPE-002).
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.

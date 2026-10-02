@@ -564,12 +564,46 @@ internal class OracleDialect : SqlDialect
 
     // Oracle ODP.NET 23.x throws ArgumentException for DbType.Boolean and DbType.Guid.
     // Remap to safe native types; ApplyGuidFormat then serializes the Guid to VARCHAR2(36).
+    // TYPE-002, confirmed live (ODP.NET 23.8): DbType.DateTime2 and DbType.Xml are rejected too ("Value
+    // does not fall within the expected range"); DbType.DateTime is TIMESTAMP (all 7 fraction digits)
+    // and VARCHAR2 text converts to XMLTYPE.
     protected override DbType RemapDbType(DbType type) => type switch
     {
         DbType.Boolean => DbType.Int16,
         DbType.Guid => DbType.String,
+        DbType.DateTime2 => DbType.DateTime,
+        DbType.Xml => DbType.String,
         _ => type
     };
+
+    // TYPE-002, confirmed live: ODP.NET binds DbType.Double/Single as NUMBER, so a double beyond
+    // NUMBER's 1e126 overflowed on bind. System.Double/Single are IEEE: BINARY_DOUBLE/BINARY_FLOAT,
+    // which also store into NUMBER/FLOAT columns and compare with them.
+    private static void BindAsBinaryFloatingPoint(DbParameter parameter, DbType type)
+    {
+        var property = parameter.GetType().GetProperty("OracleDbType");
+        if (property == null || !property.PropertyType.IsEnum)
+        {
+            return;
+        }
+
+        var name = type == DbType.Double ? "BinaryDouble" : "BinaryFloat";
+        if (Enum.TryParse(property.PropertyType, name, false, out var value))
+        {
+            property.SetValue(parameter, value);
+        }
+    }
+
+    // ODP.NET reads LONG/LONG RAW as empty unless the select list has the row's key or ROWID, or
+    // InitialLONGFetchSize is -1 (fetch it all with the row), confirmed live (TYPE-002).
+    internal override void ConfigureCommand(DbCommand command)
+    {
+        var property = command.GetType().GetProperty("InitialLONGFetchSize");
+        if (property != null && property.PropertyType == typeof(int) && property.CanWrite)
+        {
+            property.SetValue(command, -1);
+        }
+    }
 
     // Oracle has no TIME type; a time of day binds as INTERVAL DAY TO SECOND (TYPE-001). A value is
     // mapped by AdvancedTypeRegistry; a NULL declared DbType.Time must be too, since ODP.NET turns
@@ -578,6 +612,10 @@ internal class OracleDialect : SqlDialect
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         var parameter = base.CreateDbParameter(name, type, value);
+        if (type is DbType.Double or DbType.Single)
+        {
+            BindAsBinaryFloatingPoint(parameter, type);
+        }
         if (type == DbType.Time)
         {
             parameter.DbType = DbType.Object;
