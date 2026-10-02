@@ -148,8 +148,8 @@ public class AdvancedTypeRegistryTests
 
         Assert.NotNull(geometryMapping);
         Assert.NotNull(geographyMapping);
-        Assert.Equal(DbType.Object, geometryMapping.DbType);
-        Assert.Equal(DbType.Object, geographyMapping.DbType);
+        Assert.Equal(DbType.Binary, geometryMapping.DbType);
+        Assert.Equal(DbType.Binary, geographyMapping.DbType);
     }
 
     [Fact]

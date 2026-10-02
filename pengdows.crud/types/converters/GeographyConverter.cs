@@ -6,7 +6,7 @@
 // - Converts between database spatial values and Geography value objects.
 // - Supports geodetic coordinates on Earth's surface with spherical calculations.
 // - Provider-specific:
-//   * SQL Server: GEOGRAPHY type (SqlGeography from Microsoft.SqlServer.Types)
+//   * SQL Server: GEOGRAPHY type, no Microsoft.SqlServer.Types needed (SqlServerSpatialFormat)
 //   * PostgreSQL: PostGIS GEOGRAPHY (WGS84 SRID 4326 default)
 //   * MySQL: No native geography; use GEOMETRY with SRID 4326
 //   * Oracle: SDO_GEOMETRY with geodetic coordinate system
@@ -34,7 +34,7 @@ namespace pengdows.crud.types.converters;
 /// <remarks>
 /// <para><strong>Provider-specific behavior:</strong></para>
 /// <list type="bullet">
-/// <item><description><strong>SQL Server:</strong> Maps to GEOGRAPHY type. Uses SqlGeography from Microsoft.SqlServer.Types. Always uses ellipsoidal calculations.</description></item>
+/// <item><description><strong>SQL Server:</strong> Maps to GEOGRAPHY type. Written as SRID-prefixed WKB built server-side with STGeomFromWKB, read from the stored encoding; Microsoft.SqlServer.Types is not needed (a loaded SqlGeography is still read). Always uses ellipsoidal calculations.</description></item>
 /// <item><description><strong>PostgreSQL:</strong> Maps to PostGIS GEOGRAPHY type. Uses WGS84 (SRID 4326) by default for lat/lon.</description></item>
 /// <item><description><strong>MySQL:</strong> No native geography type. Use GEOMETRY with SRID 4326 and application-level geodetic functions.</description></item>
 /// <item><description><strong>Oracle:</strong> Uses SDO_GEOMETRY with geodetic coordinate system.</description></item>

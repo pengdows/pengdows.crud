@@ -6,7 +6,7 @@
 // - Abstract base for GeometryConverter and GeographyConverter.
 // - Supports WKB/EWKB, WKT/EWKT, and GeoJSON formats with SRID handling.
 // - ConvertToProvider(): Creates provider-specific spatial objects:
-//   * SQL Server: SqlGeometry/SqlGeography via reflection
+//   * SQL Server: big-endian SRID + WKB, built into the instance server-side (SqlServerSpatialFormat)
 //   * PostgreSQL/CockroachDB/YugabyteDB: byte[] (stored WKB/EWKB bytes) or string (WKT/GeoJSON)
 //   * MySQL: byte[] (WKB) or UTF-8 encoded WKT
 //   * Oracle: Requires ProviderValue to be set with SDO_GEOMETRY
@@ -37,7 +37,7 @@ namespace pengdows.crud.types.converters;
 /// <remarks>
 /// <para><strong>Provider-specific behavior:</strong></para>
 /// <list type="bullet">
-/// <item><description><strong>SQL Server:</strong> Uses Microsoft.SqlServer.Types (SqlGeometry/SqlGeography). Supports WKB, WKT, SRID.</description></item>
+/// <item><description><strong>SQL Server:</strong> No Microsoft.SqlServer.Types needed: written as a big-endian SRID + WKB that the gateway SQL turns into the instance with STGeomFromWKB, read from SQL Server's stored encoding. Supports WKB, WKT, SRID.</description></item>
 /// <item><description><strong>PostgreSQL:</strong> Uses PostGIS extension. Supports EWKB (Extended WKB with SRID), EWKT, WKB, WKT. Requires PostGIS installed.</description></item>
 /// <item><description><strong>CockroachDB:</strong> PostGIS-compatible spatial types.</description></item>
 /// <item><description><strong>MySQL:</strong> Uses native spatial types (GEOMETRY, POINT, etc.) with WKB format.</description></item>
@@ -50,7 +50,7 @@ namespace pengdows.crud.types.converters;
 /// <item><description>Provider-specific types → Automatic detection and conversion (SqlGeometry, PostGIS types, etc.)</description></item>
 /// </list>
 /// <para><strong>Output formats to database:</strong> Automatically selects optimal format per provider
-/// (stored WKB bytes for PostgreSQL, provider types for SQL Server/Oracle, WKB for MySQL).</para>
+/// (stored WKB bytes for PostgreSQL, SRID-prefixed WKB for SQL Server and MySQL, provider types for Oracle).</para>
 /// <para><strong>SRID handling:</strong> Spatial Reference System Identifier specifies coordinate system.
 /// Default is 0 (unspecified) for Geometry; GeographyConverter defaults to 4326 on read. Common: 4326 (WGS84 lat/lon for GPS), 3857 (Web Mercator).</para>
 /// <para><strong>Thread safety:</strong> Converter instances are thread-safe. Spatial value objects are immutable and thread-safe.</para>
@@ -60,6 +60,14 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
 {
     protected override object? ConvertToProvider(TSpatial value, SupportedDatabase provider)
     {
+        // SQL Server builds the instance itself from a big-endian SRID + WKB
+        // (SqlServerDialect.RenderColumnArgument), including from a SqlGeometry/SqlGeography read
+        // with Microsoft.SqlServer.Types loaded, whose WKB and SRID the value already carries.
+        if (provider == SupportedDatabase.SqlServer)
+        {
+            return SqlServerSpatialFormat.ToConstructorArgument(value);
+        }
+
         if (value.ProviderValue != null)
         {
             return value.ProviderValue;
@@ -67,7 +75,6 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
 
         return provider switch
         {
-            SupportedDatabase.SqlServer => CreateSqlServerSpatial(value),
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 => CreatePostgresSpatial(value),
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql => CreateMySqlSpatial(value),
@@ -121,37 +128,6 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
     protected abstract TSpatial FromTextInternal(string text, SupportedDatabase provider);
     protected abstract TSpatial FromGeoJsonInternal(string json, SupportedDatabase provider);
     protected abstract TSpatial WrapWithProvider(TSpatial spatial, object providerValue);
-
-    private object? CreateSqlServerSpatial(SpatialValue value)
-    {
-        var sqlGeometryType = Type.GetType("Microsoft.SqlServer.Types.SqlGeometry, Microsoft.SqlServer.Types");
-        var sqlGeographyType = Type.GetType("Microsoft.SqlServer.Types.SqlGeography, Microsoft.SqlServer.Types");
-
-        var targetType = typeof(Geometry).IsAssignableFrom(value.GetType()) ? sqlGeometryType : sqlGeographyType;
-        if (targetType == null)
-        {
-            throw new InvalidOperationException(
-                "Microsoft.SqlServer.Types is required for SQL Server spatial parameters. Reference the package or provide a provider-specific instance.");
-        }
-
-        // Microsoft.SqlServer.Types: STGeomFromWKB(SqlBytes, int srid) / STGeomFromText(SqlChars, int srid)
-        // on both SqlGeometry and SqlGeography. SqlBytes/SqlChars are System.Data.SqlTypes (BCL).
-        if (!value.WellKnownBinary.IsEmpty)
-        {
-            return targetType.GetMethod("STGeomFromWKB", new[] { typeof(SqlBytes), typeof(int) })
-                !.Invoke(null, new object[] { new SqlBytes(value.WellKnownBinary.ToArray()), value.Srid });
-        }
-
-        // SQL Server only accepts WKB or WKT; GeoJSON is not WKT and would fail to parse.
-        if (string.IsNullOrWhiteSpace(value.WellKnownText))
-        {
-            throw new InvalidOperationException(
-                "SQL Server spatial parameters require WKB or WKT; this value has neither (GeoJSON is not supported for SQL Server).");
-        }
-
-        return targetType.GetMethod("STGeomFromText", new[] { typeof(SqlChars), typeof(int) })
-            !.Invoke(null, new object[] { new SqlChars(value.WellKnownText.ToCharArray()), value.Srid });
-    }
 
     private object? CreatePostgresSpatial(SpatialValue value)
     {

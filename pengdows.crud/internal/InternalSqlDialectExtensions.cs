@@ -88,6 +88,49 @@ internal static class InternalSqlDialectExtensions
         GetInternal(dialect).TryMarkJsonParameter(parameter, column);
     }
 
+    /// <summary>
+    /// The gateways' multi-row insert with column metadata (<see cref="SqlDialect"/>'s internal
+    /// overload); a dialect that isn't a <see cref="SqlDialect"/> gets the public builder.
+    /// </summary>
+    internal static void BuildBatchInsertSql(this ISqlDialect dialect, string tableName,
+        IReadOnlyList<string> columnNames, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo> columns)
+    {
+        if (dialect is SqlDialect sqlDialect)
+        {
+            sqlDialect.BuildBatchInsertSql(tableName, columnNames, rowCount, query, getValue, columns);
+            return;
+        }
+
+        dialect.BuildBatchInsertSql(tableName, columnNames, rowCount, query, getValue);
+    }
+
+    /// <summary>
+    /// The gateways' batch update with column metadata (key columns, then updated columns).
+    /// </summary>
+    internal static void BuildBatchUpdateSql(this ISqlDialect dialect, string tableName,
+        IReadOnlyList<string> columnNames, IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query,
+        Func<int, int, object?>? getValue, IReadOnlyList<IColumnInfo> columns)
+    {
+        if (dialect is SqlDialect sqlDialect)
+        {
+            sqlDialect.BuildBatchUpdateSql(tableName, columnNames, keyColumns, rowCount, query, getValue, columns);
+            return;
+        }
+
+        dialect.BuildBatchUpdateSql(tableName, columnNames, keyColumns, rowCount, query, getValue);
+    }
+
+    internal static bool RendersColumnArgument(this ISqlDialect dialect, IColumnInfo column)
+    {
+        return GetInternal(dialect).RendersColumnArgument(column);
+    }
+
+    internal static string RenderColumnArgument(this ISqlDialect dialect, string parameterMarker, IColumnInfo column)
+    {
+        return GetInternal(dialect).RenderColumnArgument(parameterMarker, column);
+    }
+
     internal static string RenderMergeSource(this ISqlDialect dialect, IReadOnlyList<IColumnInfo> columns,
         IReadOnlyList<string> parameterNames)
     {

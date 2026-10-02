@@ -212,39 +212,43 @@ public class AdvancedTypeRegistryExtensiveTests
     #region Spatial Mappings Testing
 
     [Fact]
-    public void Geometry_SqlServer_ConfiguresUdt()
+    public void Geometry_SqlServer_ConfiguresBinary()
     {
+        // TYPE-002: bound as SRID-prefixed WKB varbinary, never a UDT (which would need
+        // Microsoft.SqlServer.Types); the gateway SQL builds the geometry server-side.
         var registry = AdvancedTypeRegistry.Shared;
         var mapping = registry.GetMapping(typeof(Geometry), SupportedDatabase.SqlServer);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.Object, mapping.DbType);
+        Assert.Equal(DbType.Binary, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new SqlServerLikeParameter();
-        // Use null to test the configuration path - the actual value doesn't matter for parameter setup
         mapping.ConfigureParameter(param, null);
 
-        Assert.Equal(MockSqlDbType.Udt, param.SqlDbType);
-        Assert.Equal("geometry", param.UdtTypeName);
+        Assert.Equal(DbType.Binary, param.DbType);
+        Assert.NotEqual(MockSqlDbType.Udt, param.SqlDbType);
+        Assert.Null(param.UdtTypeName);
     }
 
     [Fact]
-    public void Geography_SqlServer_ConfiguresUdt()
+    public void Geography_SqlServer_ConfiguresBinary()
     {
+        // TYPE-002: bound as SRID-prefixed WKB varbinary, never a UDT (which would need
+        // Microsoft.SqlServer.Types); the gateway SQL builds the geography server-side.
         var registry = AdvancedTypeRegistry.Shared;
         var mapping = registry.GetMapping(typeof(Geography), SupportedDatabase.SqlServer);
 
         Assert.NotNull(mapping);
-        Assert.Equal(DbType.Object, mapping.DbType);
+        Assert.Equal(DbType.Binary, mapping.DbType);
         Assert.NotNull(mapping.ConfigureParameter);
 
         var param = new SqlServerLikeParameter();
-        // Use null to test the configuration path - the actual value doesn't matter for parameter setup
         mapping.ConfigureParameter(param, null);
 
-        Assert.Equal(MockSqlDbType.Udt, param.SqlDbType);
-        Assert.Equal("geography", param.UdtTypeName);
+        Assert.Equal(DbType.Binary, param.DbType);
+        Assert.NotEqual(MockSqlDbType.Udt, param.SqlDbType);
+        Assert.Null(param.UdtTypeName);
     }
 
     [Fact]

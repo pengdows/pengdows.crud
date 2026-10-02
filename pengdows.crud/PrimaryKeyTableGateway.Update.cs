@@ -273,9 +273,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 parameters.Add(param);
                 sc.Query.Append(template.UpdateColumnWrappedNames[i]);
                 sc.Query.Append(SqlFragments.EqualsOp);
-                if (col.IsJsonType)
+                if (dialect.RendersColumnArgument(col))
                 {
-                    sc.Query.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(pName), col));
+                    sc.Query.Append(dialect.RenderColumnArgument(dialect.MakeParameterName(pName), col));
                 }
                 else if (dialect.SupportsNamedParameters)
                 {

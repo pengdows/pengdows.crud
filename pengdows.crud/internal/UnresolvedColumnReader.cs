@@ -1,4 +1,5 @@
 using System.Data;
+using pengdows.crud.types.converters;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.@internal;
@@ -25,6 +26,16 @@ internal static class UnresolvedColumnReader
             var bytes = new byte[record.GetBytes(ordinal, 0, null, 0, 0)];
             record.GetBytes(ordinal, 0, bytes, 0, bytes.Length);
             return HierarchyId.FromSqlServerBytes(bytes);
+        }
+
+        if (type == typeof(Geometry) || type == typeof(Geography))
+        {
+            // Same for geometry/geography; GetBytes returns SQL Server's stored spatial encoding.
+            var stored = new byte[record.GetBytes(ordinal, 0, null, 0, 0)];
+            record.GetBytes(ordinal, 0, stored, 0, stored.Length);
+            var geography = type == typeof(Geography);
+            var (srid, wkb) = SqlServerSpatialFormat.Decode(stored, geography);
+            return geography ? Geography.FromWellKnownBinary(wkb, srid) : Geometry.FromWellKnownBinary(wkb, srid);
         }
 
         throw new NotSupportedException($"No reader for an unresolved column read as {type.Name}.");

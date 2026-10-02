@@ -8268,7 +8268,7 @@ public RowVersion Rv { get; set; }
 | `IntervalDaySecond` (`IntervalDaySecond.cs`) | Oracle `INTERVAL DAY TO SECOND` | Oracle only |
 | `HStore` (`HStore.cs`) | PostgreSQL key/value column | Built-in `coercion/` pipeline (`ProviderParameterFactory`/`BasicCoercions`), provider-agnostic at the CLR boundary |
 | `JsonValue` (`JsonValue.cs`) | Lazy string/`JsonDocument`/`JsonElement` JSON wrapper | Same built-in `coercion/` pipeline as `HStore`, provider-agnostic at the CLR boundary |
-| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server (UDT) for both; PostgreSQL/CockroachDB/YugabyteDB spatial paths for both (binary writes use EWKB when an SRID is present; WKT/GeoJSON retain SRID in EWKT/`crs`); MySQL/MariaDB `GEOMETRY` in the server's internal format (4-byte SRID + WKB, WKT encoded to WKB; a GeoJSON-only value can't be written there) |
+| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server `geometry`/`geography` without `Microsoft.SqlServer.Types` (below); PostgreSQL/CockroachDB/YugabyteDB spatial paths for both (binary writes use EWKB when an SRID is present; WKT/GeoJSON retain SRID in EWKT/`crs`); MySQL/MariaDB `GEOMETRY` in the server's internal format (4-byte SRID + WKB, WKT encoded to WKB; a GeoJSON-only value can't be written there) |
 | `RowVersion` (`RowVersion.cs`) | 8-byte optimistic-concurrency token | SQL Server → `rowversion`/`timestamp` |
 | `HierarchyId` (`HierarchyId.cs`) | Node path such as `/1/2.5/` with SQL Server `hierarchyid` semantics (`Level`, `GetAncestor`, `IsDescendantOf`, SQL Server's depth-first ordering) | SQL Server `hierarchyid` without `Microsoft.SqlServer.Types`; text on any other database (TYPE-016, below) |
 
@@ -8304,6 +8304,36 @@ A SQL Server `hierarchyid` column maps to `HierarchyId` (or `string`, its text f
 - Verified live on SQL Server 2025 (every range of the encoding, dotted and negative components,
   WHERE and ORDER BY).
 
+### SQL Server `geometry` / `geography`
+
+`Geometry` and `Geography` properties map to SQL Server's spatial columns with no
+`Microsoft.SqlServer.Types` reference. That package validates every shape but a point in native
+code that only ships for Windows (`PlatformNotSupportedException` elsewhere).
+
+```csharp
+[Column("shape", DbType.Object)] public Geometry? Shape { get; set; }
+[Column("location", DbType.Object)] public Geography? Location { get; set; }
+```
+
+- **Write:** the parameter is the SRID (4 bytes, big-endian) followed by the value's WKB (WKT is
+  encoded to WKB; a GeoJSON-only value can't be written). The gateways write the column's value as
+  `CASE WHEN @p IS NULL THEN NULL ELSE geometry::STGeomFromWKB(SUBSTRING(CAST(@p AS varbinary(max)), 5,
+  DATALENGTH(@p)), CAST(SUBSTRING(CAST(@p AS varbinary(max)), 1, 4) AS int)) END` (`geography::` for a
+  `Geography`), in single-row and batch INSERT, UPDATE and MERGE alike. SQL Server builds the
+  instance itself, so the SRID is kept and validity is the server's verdict: an invalid polygon is
+  stored and reports `STIsValid() = 0`. SQL Server's stored encoding is never sent instead,
+  because SQL Server trusts its validity flag. An invalid polygon sent as valid reported area 0;
+  a valid one sent as invalid refused `STArea()`. In your own SQL, use the same expression around
+  a spatial parameter.
+- **Read:** without the package SqlClient's `GetValue` throws, so the dialect reads the stored
+  encoding (`GetBytes`) and decodes it to WKB and SRID. Geography stores latitude first; the WKB is
+  longitude (x) first. Points, line strings, polygons, their multi forms and collections, and
+  Z/M coordinates (as ISO WKB) are read. Curves (`CIRCULARSTRING`, `COMPOUNDCURVE`, `CURVEPOLYGON`)
+  and `FULLGLOBE` have no WKB form and throw `DataMappingException`. With the package loaded, its
+  `SqlGeometry`/`SqlGeography` is converted. Both the gateway and `DataReaderMapper` read it.
+- Verified live on SQL Server 2025: every gateway write path, SRIDs other than 0/4326, an invalid
+  polygon, NULLs, and reads (TYPE-002).
+
 ## Provider-specific column types mapped to .NET types
 
 These need no value object: the library converts between the provider's representation and the
@@ -8323,9 +8353,9 @@ plain .NET type (verified live, TYPE-005).
 
 A stored value with no .NET representation throws `DataMappingException` naming the column, never
 a raw provider exception or a default value: a MySQL/MariaDB zero date (`'0000-00-00'`), a
-PostgreSQL `numeric` `NaN` read into `decimal`, and a SQL Server `geometry`/`geography` or other CLR
-type when `Microsoft.SqlServer.Types` isn't loaded (select `col.ToString()` or `col.STAsBinary()`
-instead). `hierarchyid` is the exception: it reads as `HierarchyId` (above).
+PostgreSQL `numeric` `NaN` read into `decimal`, a SQL Server curve or `FULLGLOBE`, and a SQL Server
+user CLR type when its assembly isn't loaded (select `col.ToString()` instead). `hierarchyid`,
+`geometry` and `geography` are read without `Microsoft.SqlServer.Types` (above).
 
 ## Not a public extension point
 

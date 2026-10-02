@@ -193,6 +193,10 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
                 return actual is DateTime a && a.Ticks == dt.Ticks;
             case DateTimeOffset dto:
                 return actual is DateTimeOffset b && b.UtcTicks == dto.UtcTicks;
+            case pengdows.crud.types.valueobjects.SpatialValue spatial:
+                return actual is pengdows.crud.types.valueobjects.SpatialValue read &&
+                       read.GetType() == spatial.GetType() && read.Srid == spatial.Srid &&
+                       SpatialWkb(spatial).AsSpan().SequenceEqual(SpatialWkb(read));
             case pengdows.crud.types.valueobjects.JsonValue json:
                 return actual is pengdows.crud.types.valueobjects.JsonValue j &&
                        JsonNode.DeepEquals(JsonNode.Parse(json.AsString()), JsonNode.Parse(j.AsString()));
@@ -205,8 +209,15 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         }
     }
 
+    // A spatial value built from WKT and one read back as WKB are the same shape when their WKB is.
+    private static byte[] SpatialWkb(pengdows.crud.types.valueobjects.SpatialValue value) =>
+        value.WellKnownBinary.IsEmpty
+            ? pengdows.crud.types.converters.WellKnownTextEncoder.Encode(value.WellKnownText!)
+            : value.WellKnownBinary.ToArray();
+
     private static string Show(object? value) => value switch
     {
+        pengdows.crud.types.valueobjects.SpatialValue s => $"SRID {s.Srid} 0x{Convert.ToHexString(SpatialWkb(s))}",
         null => "null",
         byte[] b => "0x" + Convert.ToHexString(b),
         IEnumerable e and not string => "[" + string.Join(", ", e.Cast<object?>()) + "]",

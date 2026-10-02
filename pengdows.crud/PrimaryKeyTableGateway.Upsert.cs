@@ -503,7 +503,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 if (col.IsJsonType)
                 {
                     dialect.TryMarkJsonParameter(param, col);
-                    valSb.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(pName), col));
+                }
+
+                if (dialect.RendersColumnArgument(col))
+                {
+                    valSb.Append(dialect.RenderColumnArgument(dialect.MakeParameterName(pName), col));
                 }
                 else
                 {
@@ -661,7 +665,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
-            (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]));
+            (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]), insertableColumns);
 
         for (var row = 0; row < chunk.Count; row++)
         {

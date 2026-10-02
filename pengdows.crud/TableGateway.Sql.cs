@@ -156,9 +156,9 @@ public partial class TableGateway<TEntity, TRowID>
             var name = $"i{i}";
             paramNames.Add(name);
             var placeholder = dialect.MakeParameterName(name);
-            if (insertColumns[i].IsJsonType)
+            if (dialect.RendersColumnArgument(insertColumns[i]))
             {
-                placeholder = dialect.RenderJsonArgument(placeholder, insertColumns[i]);
+                placeholder = dialect.RenderColumnArgument(placeholder, insertColumns[i]);
             }
 
             valuePlaceholders.Add(placeholder);

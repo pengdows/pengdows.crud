@@ -104,6 +104,20 @@ internal interface IInternalSqlDialect : ISqlDialect
     void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column);
 
     /// <summary>
+    /// True when a column's value is written as an expression around its parameter placeholder
+    /// (<see cref="RenderColumnArgument"/>) rather than the bare placeholder: a JSON column's cast,
+    /// or a value the database must build itself (SQL Server geometry/geography).
+    /// </summary>
+    bool RendersColumnArgument(IColumnInfo column) => column.IsJsonType;
+
+    /// <summary>
+    /// Renders the value expression a column is written with, given its parameter placeholder.
+    /// Default: <see cref="RenderJsonArgument"/> for a JSON column, otherwise the placeholder.
+    /// </summary>
+    string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        column.IsJsonType ? RenderJsonArgument(parameterMarker, column) : parameterMarker;
+
+    /// <summary>
     /// Builds the MERGE source clause (USING ...) for MERGE-based upserts.
     /// </summary>
     string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
@@ -129,9 +143,9 @@ internal interface IInternalSqlDialect : ISqlDialect
         for (var i = 0; i < columns.Count; i++)
         {
             var placeholder = MakeParameterName(parameterNames[i]);
-            if (columns[i].IsJsonType)
+            if (RendersColumnArgument(columns[i]))
             {
-                placeholder = RenderJsonArgument(placeholder, columns[i]);
+                placeholder = RenderColumnArgument(placeholder, columns[i]);
             }
 
             values[i] = placeholder;

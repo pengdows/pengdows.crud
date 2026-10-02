@@ -250,10 +250,10 @@ public partial class TableGateway<TEntity, TRowID>
 
                 queryTarget.Append(template.UpdateColumnWrappedNames[i]);
                 queryTarget.Append(SqlFragments.EqualsOp);
-                if (column.IsJsonType)
+                if (dialect.RendersColumnArgument(column))
                 {
                     // JSON columns need the full marker string for wrapping — rare path
-                    queryTarget.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
+                    queryTarget.Append(dialect.RenderColumnArgument(dialect.MakeParameterName(name), column));
                 }
                 else if (supportsNamed)
                 {
@@ -455,9 +455,9 @@ public partial class TableGateway<TEntity, TRowID>
 
                     clause.Append(template.UpdateColumnWrappedNames[i]);
                     clause.Append(SqlFragments.EqualsOp);
-                    if (column.IsJsonType)
+                    if (dialect.RendersColumnArgument(column))
                     {
-                        clause.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(name), column));
+                        clause.Append(dialect.RenderColumnArgument(dialect.MakeParameterName(name), column));
                     }
                     else if (supportsNamed)
                     {

@@ -69,10 +69,10 @@ public class DatabaseTypeCatalogTests
     [Fact]
     public void GetColumnTypes_UnpopulatedDatabase_ReturnsEmptyRatherThanThrowing()
     {
-        // e.g. SqlServer is a real, fully supported dialect but deliberately not yet catalogued
-        // here (see DatabaseTypeCatalog.cs's file header on sourcing discipline) — querying it
-        // should return "nothing catalogued yet", not fail.
-        var types = DatabaseTypeCatalog.GetColumnTypes(SupportedDatabase.SqlServer);
+        // e.g. FlatFile is a real, supported dialect but not yet catalogued here (see
+        // DatabaseTypeCatalog.cs's file header on sourcing discipline) — querying it should
+        // return "nothing catalogued yet", not fail.
+        var types = DatabaseTypeCatalog.GetColumnTypes(SupportedDatabase.FlatFile);
         Assert.Empty(types);
     }
 

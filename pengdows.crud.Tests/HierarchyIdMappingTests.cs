@@ -117,7 +117,8 @@ public sealed class HierarchyIdMappingTests
             new Dictionary<string, object> { ["id"] = 1, ["path"] = new byte[] { 0xE6, 0x10 } }
         })
         {
-            UnloadableUdtColumns = new Dictionary<string, string> { ["path"] = "master.sys.geometry" }
+            // A user CLR type: no reader knows its encoding.
+            UnloadableUdtColumns = new Dictionary<string, string> { ["path"] = "shop.dbo.ShoeSize" }
         });
         var gateway = new TableGateway<PathRow, int>(context);
 

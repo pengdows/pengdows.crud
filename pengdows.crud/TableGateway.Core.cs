@@ -886,9 +886,9 @@ public partial class TableGateway<TEntity, TRowID> :
             }
 
             var paramName = sqlTemplate.InsertParameterNames[i];
-            if (column.IsJsonType)
+            if (dialect.RendersColumnArgument(column))
             {
-                sc.Query.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(paramName), column));
+                sc.Query.Append(dialect.RenderColumnArgument(dialect.MakeParameterName(paramName), column));
             }
             else
             {

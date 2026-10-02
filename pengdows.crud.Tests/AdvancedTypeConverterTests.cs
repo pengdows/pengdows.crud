@@ -798,9 +798,22 @@ public class AdvancedTypeConverterTests
         var providerObj = new object();
         geometry = geometry.WithProviderValue(providerObj);
 
-        var result = converter.ToProviderValue(geometry, SupportedDatabase.SqlServer);
+        var result = converter.ToProviderValue(geometry, SupportedDatabase.PostgreSql);
 
         Assert.Same(providerObj, result);
+    }
+
+    [Fact]
+    public void GeometryConverter_ToProviderValue_SqlServer_WritesWkbEvenWithAProviderValue()
+    {
+        // SQL Server's gateway SQL builds the instance from SRID-prefixed WKB (TYPE-002), so a
+        // provider object is not passed through.
+        var converter = new GeometryConverter();
+        var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0).WithProviderValue(new object());
+
+        var result = converter.ToProviderValue(geometry, SupportedDatabase.SqlServer);
+
+        Assert.IsType<byte[]>(result);
     }
 
     [Fact]

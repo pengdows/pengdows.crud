@@ -182,9 +182,9 @@ internal sealed class HanaDialect : SqlDialect
             }
 
             var placeholder = MakeParameterName(parameterNames[i]);
-            if (columns[i].IsJsonType)
+            if (RendersColumnArgument(columns[i]))
             {
-                placeholder = RenderJsonArgument(placeholder, columns[i]);
+                placeholder = RenderColumnArgument(placeholder, columns[i]);
             }
 
             select.Append(placeholder);

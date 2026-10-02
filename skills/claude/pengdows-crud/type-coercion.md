@@ -128,9 +128,13 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   `col::real[]` or via the `Pgvector.Npgsql` plugin (TYPE-015).
 - SQL Server `hierarchyid` → `HierarchyId` (or `string`) with no `Microsoft.SqlServer.Types`: written as its text
   (`/1/2.5/`, converted implicitly by SQL Server; text on other databases), read from the stored encoding (TYPE-016).
+- SQL Server `geometry`/`geography` → `Geometry`/`Geography` with no `Microsoft.SqlServer.Types` (its validation is
+  Windows-only native code): written as a big-endian SRID + WKB that the gateway SQL turns into the instance with
+  `STGeomFromWKB`, so the server validates it and keeps the SRID; read by decoding the stored encoding. Curves and
+  `FULLGLOBE` have no WKB form and throw `DataMappingException` (TYPE-002).
 - A stored value with no .NET representation throws `DataMappingException` naming the column, never a raw provider
   exception or a default: MySQL/MariaDB zero dates, PostgreSQL `numeric` NaN into `decimal`, SQL Server
-  `geometry`/`geography`/other CLR types without `Microsoft.SqlServer.Types` (select `col.ToString()` instead).
+  curves/`FULLGLOBE`, user CLR types without their assembly (select `col.ToString()` instead).
 
 ## JSON Support
 

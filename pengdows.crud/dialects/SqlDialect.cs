@@ -558,6 +558,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return parameterMarker;
     }
 
+    /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>
+    public virtual bool RendersColumnArgument(IColumnInfo column) => column.IsJsonType;
+
+    /// <inheritdoc cref="IInternalSqlDialect.RenderColumnArgument"/>
+    public virtual string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        column.IsJsonType ? RenderJsonArgument(parameterMarker, column) : parameterMarker;
+
     public virtual void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column)
     {
         if (parameter == null)
@@ -613,6 +620,38 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
         ISqlQueryBuilder query, Func<int, int, object?>? getValue)
     {
+        AppendAnsiBatchInsert(tableName, columnNames, rowCount, query, getValue, null);
+    }
+
+    /// <summary>
+    /// The gateways' multi-row insert, given each column's metadata so a dialect can write a value
+    /// as an expression around its placeholder (<see cref="RenderColumnArgument"/>). Default: the
+    /// public builder, unchanged.
+    /// </summary>
+    internal virtual void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query, Func<int, int, object?>? getValue, IReadOnlyList<IColumnInfo> columns)
+    {
+        BuildBatchInsertSql(tableName, columnNames, rowCount, query, getValue);
+    }
+
+    /// <summary>
+    /// The gateways' batch update, given the metadata of the key columns followed by the updated
+    /// columns (the order of <paramref name="getValue"/>'s column index). Default: the public builder.
+    /// </summary>
+    internal virtual void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo> columns)
+    {
+        BuildBatchUpdateSql(tableName, columnNames, keyColumns, rowCount, query, getValue);
+    }
+
+    /// <summary>
+    /// Appends an ANSI multi-row INSERT ... VALUES; with <paramref name="columns"/>, each value is
+    /// written through <see cref="RenderColumnArgument"/> where the dialect asks for it.
+    /// </summary>
+    private protected void AppendAnsiBatchInsert(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query, Func<int, int, object?>? getValue, IReadOnlyList<IColumnInfo>? columns)
+    {
         if (string.IsNullOrWhiteSpace(tableName))
         {
             throw new ArgumentException("Table name cannot be null or empty.", nameof(tableName));
@@ -667,14 +706,29 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 }
                 else
                 {
-                    query.Append(ParameterMarker);
-                    query.Append('b');
-                    query.Append(paramIdx++.ToString(CultureInfo.InvariantCulture));
+                    AppendBatchValue(query, columns, col, paramIdx++);
                 }
             }
 
             query.Append(')');
         }
+    }
+
+    /// <summary>
+    /// Appends batch parameter b{index}, wrapped by <see cref="RenderColumnArgument"/> when the
+    /// column's dialect asks for it.
+    /// </summary>
+    private protected void AppendBatchValue(ISqlQueryBuilder query, IReadOnlyList<IColumnInfo>? columns, int column,
+        int index)
+    {
+        var name = string.Concat(ParameterMarker, "b", index.ToString(CultureInfo.InvariantCulture));
+        if (columns != null && RendersColumnArgument(columns[column]))
+        {
+            query.Append(RenderColumnArgument(name, columns[column]));
+            return;
+        }
+
+        query.Append(name);
     }
 
     public virtual int MaxOutputParameters => 0;
@@ -1440,9 +1494,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
             }
 
             var placeholder = MakeParameterName(parameterNames[i]);
-            if (columns[i].IsJsonType)
+            if (RendersColumnArgument(columns[i]))
             {
-                placeholder = RenderJsonArgument(placeholder, columns[i]);
+                placeholder = RenderColumnArgument(placeholder, columns[i]);
             }
 
             values.Append(placeholder);

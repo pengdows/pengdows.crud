@@ -217,9 +217,9 @@ public partial class TableGateway<TEntity, TRowID>
 
                 var pName = template.UpsertParameterNames[i];
                 var placeholder = dialect.MakeParameterName(pName);
-                if (template.UpsertColumns[i].IsJsonType)
+                if (dialect.RendersColumnArgument(template.UpsertColumns[i]))
                 {
-                    placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
+                    placeholder = dialect.RenderColumnArgument(placeholder, template.UpsertColumns[i]);
                 }
 
                 valSb.Append(placeholder);
@@ -308,9 +308,9 @@ public partial class TableGateway<TEntity, TRowID>
 
                 var pName = template.UpsertParameterNames[i];
                 var placeholder = dialect.MakeParameterName(pName);
-                if (template.UpsertColumns[i].IsJsonType)
+                if (dialect.RendersColumnArgument(template.UpsertColumns[i]))
                 {
-                    placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
+                    placeholder = dialect.RenderColumnArgument(placeholder, template.UpsertColumns[i]);
                 }
 
                 valSb.Append(placeholder);
@@ -502,9 +502,9 @@ public partial class TableGateway<TEntity, TRowID>
 
                 var pName = template.UpsertParameterNames[i];
                 var placeholder = dialect.MakeParameterName(pName);
-                if (template.UpsertColumns[i].IsJsonType)
+                if (dialect.RendersColumnArgument(template.UpsertColumns[i]))
                 {
-                    placeholder = dialect.RenderJsonArgument(placeholder, template.UpsertColumns[i]);
+                    placeholder = dialect.RenderColumnArgument(placeholder, template.UpsertColumns[i]);
                 }
 
                 valSb.Append(placeholder);

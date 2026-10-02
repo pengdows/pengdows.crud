@@ -154,17 +154,22 @@ internal class SqlServerDialect : SqlDialect
     // TYPE-016: without Microsoft.SqlServer.Types, SqlClient reports no field type for hierarchyid
     // (GetDataTypeName "master.sys.hierarchyid") but GetBytes returns its stored encoding, which
     // UnresolvedColumnReader decodes as a HierarchyId (confirmed live on SQL Server 2025, SqlClient
-    // 6.0.2). geometry/geography use SQL Server's own spatial serialization and stay unreadable.
+    // 6.0.2). geometry/geography read the same way and SqlServerSpatialFormat decodes them (TYPE-002).
     // TYPE-015: VECTOR binds from "[...]" text; SqlClient rejects a float[] parameter.
     internal override bool BindsVectorsAsText => true;
 
     internal override bool ReadsUnresolvedColumns => true;
 
     internal override Type? GetUnresolvedColumnType(string dataTypeName) =>
-        dataTypeName.Equals("hierarchyid", StringComparison.OrdinalIgnoreCase) ||
-        dataTypeName.EndsWith(".hierarchyid", StringComparison.OrdinalIgnoreCase)
-            ? typeof(HierarchyId)
-            : null;
+        IsUdt(dataTypeName, "hierarchyid") ? typeof(HierarchyId)
+        : IsUdt(dataTypeName, "geometry") ? typeof(Geometry)
+        : IsUdt(dataTypeName, "geography") ? typeof(Geography)
+        : null;
+
+    private static bool IsUdt(string dataTypeName, string name) =>
+        dataTypeName.Equals(name, StringComparison.OrdinalIgnoreCase) ||
+        (dataTypeName.EndsWith(name, StringComparison.OrdinalIgnoreCase) &&
+         dataTypeName.Length > name.Length && dataTypeName[dataTypeName.Length - name.Length - 1] == '.');
 
     // SQL Server uses OFFSET/FETCH NEXT syntax only — no LIMIT keyword.
     public override bool SupportsLimitOffset => false;
@@ -223,6 +228,63 @@ internal class SqlServerDialect : SqlDialect
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
     {
+        AppendBatchMerge(tableName, columnNames, keyColumns, rowCount, query, getValue, null);
+    }
+
+    internal override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo> columns)
+    {
+        AppendBatchMerge(tableName, columnNames, keyColumns, rowCount, query, getValue, columns);
+    }
+
+    internal override void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query, Func<int, int, object?>? getValue, IReadOnlyList<IColumnInfo> columns)
+    {
+        AppendAnsiBatchInsert(tableName, columnNames, rowCount, query, getValue, columns);
+    }
+
+    // TYPE-002: geometry/geography are built by the server from a big-endian SRID + WKB
+    // (SqlServerSpatialFormat.ToConstructorArgument), so SQL Server validates the instance and keeps
+    // its SRID without Microsoft.SqlServer.Types. Its stored encoding can't be sent instead: SQL
+    // Server trusts that encoding's validity flag (an invalid polygon flagged valid reported area 0;
+    // one flagged invalid refused STArea), confirmed live on SQL Server 2025.
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        SpatialConstructor(column) != null || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column)
+    {
+        var type = SpatialConstructor(column);
+        if (type == null)
+        {
+            return base.RenderColumnArgument(parameterMarker, column);
+        }
+
+        // A NULL value binds as DbType.Object, which SqlClient sends as sql_variant: SUBSTRING rejects
+        // a sql_variant and STGeomFromWKB a NULL argument (both confirmed live), hence the cast and
+        // the CASE.
+        var bytes = string.Concat("CAST(", parameterMarker, " AS varbinary(max))");
+        return string.Concat("CASE WHEN ", parameterMarker, " IS NULL THEN NULL ELSE ", type,
+            "::STGeomFromWKB(SUBSTRING(", bytes, ", 5, DATALENGTH(", parameterMarker, ")), CAST(SUBSTRING(", bytes,
+            ", 1, 4) AS int)) END");
+    }
+
+    private static string? SpatialConstructor(IColumnInfo column)
+    {
+        var type = column.PropertyInfo.PropertyType;
+        type = Nullable.GetUnderlyingType(type) ?? type;
+        if (typeof(Geography).IsAssignableFrom(type))
+        {
+            return "geography";
+        }
+
+        return typeof(Geometry).IsAssignableFrom(type) ? "geometry" : null;
+    }
+
+    private void AppendBatchMerge(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo>? columns)
+    {
         if (rowCount <= 0)
         {
             return;
@@ -264,9 +326,7 @@ internal class SqlServerDialect : SqlDialect
                 }
                 else
                 {
-                    query.Append(ParameterMarker);
-                    query.Append('b');
-                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    AppendBatchValue(query, columns, col, paramIdx++);
                 }
             }
 

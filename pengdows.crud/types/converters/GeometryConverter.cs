@@ -6,7 +6,7 @@
 // - Converts between database spatial values and Geometry value objects.
 // - Supports 2D/3D/4D geometries in Cartesian (flat-earth) coordinate systems.
 // - Provider-specific:
-//   * SQL Server: GEOMETRY type (SqlGeometry from Microsoft.SqlServer.Types)
+//   * SQL Server: GEOMETRY type, no Microsoft.SqlServer.Types needed (SqlServerSpatialFormat)
 //   * PostgreSQL: PostGIS GEOMETRY (WKB/EWKB/WKT/EWKT)
 //   * MySQL: GEOMETRY, POINT, LINESTRING, POLYGON types
 //   * Oracle: SDO_GEOMETRY with coordinate system
@@ -33,7 +33,7 @@ namespace pengdows.crud.types.converters;
 /// <remarks>
 /// <para><strong>Provider-specific behavior:</strong></para>
 /// <list type="bullet">
-/// <item><description><strong>SQL Server:</strong> Maps to GEOMETRY type. Uses SqlGeometry from Microsoft.SqlServer.Types.</description></item>
+/// <item><description><strong>SQL Server:</strong> Maps to GEOMETRY type. Written as SRID-prefixed WKB built server-side with STGeomFromWKB, read from the stored encoding; Microsoft.SqlServer.Types is not needed (a loaded SqlGeometry is still read).</description></item>
 /// <item><description><strong>PostgreSQL:</strong> Maps to PostGIS GEOMETRY type. Supports all OGC geometry types.</description></item>
 /// <item><description><strong>MySQL:</strong> Maps to GEOMETRY, POINT, LINESTRING, POLYGON types.</description></item>
 /// <item><description><strong>Oracle:</strong> Maps to SDO_GEOMETRY with coordinate system.</description></item>

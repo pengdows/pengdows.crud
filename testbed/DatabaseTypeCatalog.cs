@@ -23,9 +23,10 @@
 //   SingleStore, Sybase ASE 16.x, Google Cloud Spanner (PostgreSQL dialect only — pengdows.crud
 //   has no GoogleSQL-dialect Spanner support, so that type list is intentionally not modeled
 //   here), Informix 14.10, SAP HANA (Cloud QRC 2/2026, with the platform/legacy addendum), and
-//   InterBase 15. Every other pengdows.crud-supported database (SQL Server, PostgreSQL, MySQL,
+//   InterBase 15, plus PostgreSQL (shared by Aurora PostgreSQL) and SQL Server 2025, live-verified
+//   by TypeRoundTripMatrixTests (TYPE-002). Every other pengdows.crud-supported database (MySQL,
 //   MariaDB, Oracle, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora
-//   MySQL, Aurora PostgreSQL) is deliberately left unpopulated rather than guessed — extend this
+//   MySQL) is deliberately left unpopulated rather than guessed — extend this
 //   catalog with the same sourcing discipline (a citable reference or a live-verified fact) when
 //   one of those is needed, not by assumption from a "similar" engine.
 // - Two real cases prove a flat name -> DbType dictionary is insufficient, which is why this
@@ -107,6 +108,7 @@ public static class DatabaseTypeCatalog
         SupportedDatabase.SapHana => HanaTypes,
         SupportedDatabase.InterBase => InterBaseTypes,
         SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => PostgreSqlTypes,
+        SupportedDatabase.SqlServer => SqlServerTypes,
         _ => Array.Empty<ColumnTypeDescriptor>()
     };
 
@@ -184,6 +186,94 @@ public static class DatabaseTypeCatalog
         new("POINT", ColumnTypeCategory.Spatial, Notes: "Geometric types (point, line, lseg, box, path, polygon, circle) have no pengdows CLR type."),
         new("BIT(n)", ColumnTypeCategory.Other, Aliases: new[] { "BIT VARYING(n)" }, Notes: "No pengdows CLR mapping."),
         new("TSVECTOR", ColumnTypeCategory.Other, Aliases: new[] { "TSQUERY" }, Notes: "Text-search types; no pengdows CLR mapping."),
+    };
+
+    // ── SQL Server 2025 ─────────────────────────────────────────────────────
+    // Source: Microsoft Learn, "Data types (Transact-SQL)". Samples respect each type's
+    // precision (datetime 1/300 s, smalldatetime 1 min). rowversion is server-generated and
+    // sql_variant has no single CLR type, so neither carries a ClrType. Live-verified by
+    // TypeRoundTripMatrixTests against SQL Server 2025 (json/vector need 2025).
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> SqlServerTypes = new ColumnTypeDescriptor[]
+    {
+        new("BIT", ColumnTypeCategory.Boolean,
+            Declaration: "BIT", ClrType: typeof(bool), DbType: System.Data.DbType.Boolean, Sample: true),
+        new("TINYINT", ColumnTypeCategory.ExactNumeric, IsUnsigned: true,
+            Declaration: "TINYINT", ClrType: typeof(byte), DbType: System.Data.DbType.Byte, Sample: (byte)255),
+        new("SMALLINT", ColumnTypeCategory.ExactNumeric,
+            Declaration: "SMALLINT", ClrType: typeof(short), DbType: System.Data.DbType.Int16, Sample: short.MinValue),
+        new("INT", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "INTEGER" },
+            Declaration: "INT", ClrType: typeof(int), DbType: System.Data.DbType.Int32, Sample: int.MinValue),
+        new("BIGINT", ColumnTypeCategory.ExactNumeric,
+            Declaration: "BIGINT", ClrType: typeof(long), DbType: System.Data.DbType.Int64, Sample: long.MaxValue),
+        new("DECIMAL(p,s)", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "NUMERIC(p,s)" },
+            Declaration: "DECIMAL(38,10)", ClrType: typeof(decimal), DbType: System.Data.DbType.Decimal, Sample: 1234567890123456.0123456789m),
+        new("MONEY", ColumnTypeCategory.ExactNumeric,
+            Declaration: "MONEY", ClrType: typeof(decimal), DbType: System.Data.DbType.Currency, Sample: 922337203685477.5807m),
+        new("SMALLMONEY", ColumnTypeCategory.ExactNumeric,
+            Declaration: "SMALLMONEY", ClrType: typeof(decimal), DbType: System.Data.DbType.Currency, Sample: -214748.3648m),
+        new("REAL", ColumnTypeCategory.ApproximateNumeric, Aliases: new[] { "FLOAT(24)" },
+            Declaration: "REAL", ClrType: typeof(float), DbType: System.Data.DbType.Single, Sample: 1.5f),
+        new("FLOAT", ColumnTypeCategory.ApproximateNumeric, Aliases: new[] { "FLOAT(53)", "DOUBLE PRECISION" },
+            Declaration: "FLOAT", ClrType: typeof(double), DbType: System.Data.DbType.Double, Sample: -1.25e300),
+        new("CHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "CHAR(10)", ClrType: typeof(string), DbType: System.Data.DbType.AnsiStringFixedLength, Sample: "abcdefghij"),
+        new("VARCHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "VARCHAR(50)", ClrType: typeof(string), DbType: System.Data.DbType.AnsiString, Sample: "plain ascii text"),
+        new("VARCHAR(MAX)", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "VARCHAR(MAX)", ClrType: typeof(string), DbType: System.Data.DbType.AnsiString, Sample: new string('x', 9000)),
+        new("NCHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "NCHAR(10)", ClrType: typeof(string), DbType: System.Data.DbType.StringFixedLength, Sample: "ábcdéfghíj"),
+        new("NVARCHAR(n)", ColumnTypeCategory.Character,
+            Declaration: "NVARCHAR(50)", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "héllo wörld ✓"),
+        new("NVARCHAR(MAX)", ColumnTypeCategory.Lob, IsLob: true,
+            Declaration: "NVARCHAR(MAX)", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: new string('é', 9000)),
+        new("TEXT", ColumnTypeCategory.Lob, IsLob: true, Aliases: new[] { "NTEXT", "IMAGE" },
+            Declaration: "TEXT", ClrType: typeof(string), DbType: System.Data.DbType.AnsiString, Sample: "legacy text", Comparable: false,
+            Notes: "Deprecated LOB types; no = operator."),
+        new("BINARY(n)", ColumnTypeCategory.Binary, IsBinary: true,
+            Declaration: "BINARY(5)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 0, 1, 2, 0xFE, 0xFF }),
+        new("VARBINARY(n)", ColumnTypeCategory.Binary, IsBinary: true,
+            Declaration: "VARBINARY(50)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: new byte[] { 9, 8, 7 }),
+        new("VARBINARY(MAX)", ColumnTypeCategory.Lob, IsBinary: true, IsLob: true,
+            Declaration: "VARBINARY(MAX)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary, Sample: Enumerable.Range(0, 9000).Select(i => (byte)i).ToArray()),
+        new("DATE", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATE", ClrType: typeof(DateOnly), DbType: System.Data.DbType.Date, Sample: new DateOnly(2026, 10, 1)),
+        new("TIME(n)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "TIME(7)", ClrType: typeof(TimeOnly), DbType: System.Data.DbType.Time, Sample: new TimeOnly(13, 45, 30, 123, 456)),
+        new("DATETIME", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATETIME", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, DateTimeKind.Utc)),
+        new("SMALLDATETIME", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "SMALLDATETIME", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 0, DateTimeKind.Utc)),
+        new("DATETIME2(n)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATETIME2(7)", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime2,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, 123, 456, DateTimeKind.Utc).AddTicks(7)),
+        new("DATETIMEOFFSET(n)", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
+            Declaration: "DATETIMEOFFSET(7)", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset,
+            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, 123, 456, TimeSpan.FromHours(-5))),
+        new("UNIQUEIDENTIFIER", ColumnTypeCategory.Other,
+            Declaration: "UNIQUEIDENTIFIER", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
+        new("XML", ColumnTypeCategory.Other,
+            Declaration: "XML", ClrType: typeof(string), DbType: System.Data.DbType.Xml, Sample: "<a b=\"1\">x</a>", Comparable: false,
+            Notes: "No = operator for xml."),
+        new("JSON", ColumnTypeCategory.Json, MinVersion: "2025",
+            Declaration: "JSON", ClrType: typeof(pengdows.crud.types.valueobjects.JsonValue), DbType: System.Data.DbType.Object,
+            Sample: new pengdows.crud.types.valueobjects.JsonValue("{\"a\":1}"), Comparable: false),
+        new("HIERARCHYID", ColumnTypeCategory.Other,
+            Declaration: "HIERARCHYID", ClrType: typeof(pengdows.crud.types.valueobjects.HierarchyId), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.HierarchyId.Parse("/1/3/")),
+        new("GEOMETRY", ColumnTypeCategory.Spatial,
+            Declaration: "GEOMETRY", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POINT (1 2)", 0), Comparable: false),
+        new("GEOGRAPHY", ColumnTypeCategory.Spatial,
+            Declaration: "GEOGRAPHY", ClrType: typeof(pengdows.crud.types.valueobjects.Geography), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geography.FromWellKnownText("POINT (-87.6298 41.8781)", 4326), Comparable: false),
+        new("VECTOR(n)", ColumnTypeCategory.Vector, MinVersion: "2025",
+            Declaration: "VECTOR(3)", ClrType: typeof(float[]), DbType: System.Data.DbType.Object, Sample: new[] { 1f, 2f, 3.5f }, Comparable: false),
+        new("ROWVERSION", ColumnTypeCategory.RowVersion, IsAutoGenerated: true, Aliases: new[] { "TIMESTAMP" },
+            Notes: "Server-generated; covered by the [Version] tests."),
+        new("SQL_VARIANT", ColumnTypeCategory.Other, Notes: "No single CLR type."),
     };
 
     // ── Db2 LUW 11.5.x ──────────────────────────────────────────────────────

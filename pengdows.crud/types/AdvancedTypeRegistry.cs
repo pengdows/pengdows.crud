@@ -131,8 +131,6 @@ internal class AdvancedTypeRegistry
     private static class SqlServerNames
     {
         public const string DbTypeProperty = "SqlDbType";
-        public const string Udt = "Udt";
-        public const string UdtTypeName = "UdtTypeName";
         public const string Timestamp = "Timestamp";
     }
 
@@ -583,27 +581,16 @@ internal class AdvancedTypeRegistry
             RegisterMapping<Geography>(provider, mySqlSpatial);
         }
 
-        // SQL Server Geometry
-        RegisterMapping<Geometry>(SupportedDatabase.SqlServer, new ProviderTypeMapping
+        // SQL Server: a big-endian SRID + WKB as varbinary, which the gateway SQL turns into the
+        // geometry/geography with STGeomFromWKB (SqlServerDialect.RenderColumnArgument, TYPE-002).
+        // A UDT parameter would need Microsoft.SqlServer.Types, whose spatial code is Windows-only.
+        var sqlServerSpatial = new ProviderTypeMapping
         {
-            DbType = DbType.Object,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, SqlServerNames.DbTypeProperty, SqlServerNames.Udt);
-                param.GetType().GetProperty(SqlServerNames.UdtTypeName)?.SetValue(param, "geometry");
-            }
-        });
-
-        // SQL Server Geography
-        RegisterMapping<Geography>(SupportedDatabase.SqlServer, new ProviderTypeMapping
-        {
-            DbType = DbType.Object,
-            ConfigureParameter = (param, value) =>
-            {
-                SetEnumProperty(param, SqlServerNames.DbTypeProperty, SqlServerNames.Udt);
-                param.GetType().GetProperty(SqlServerNames.UdtTypeName)?.SetValue(param, "geography");
-            }
-        });
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => param.DbType = DbType.Binary
+        };
+        RegisterMapping<Geometry>(SupportedDatabase.SqlServer, sqlServerSpatial);
+        RegisterMapping<Geography>(SupportedDatabase.SqlServer, sqlServerSpatial);
 
         // PostgreSQL PostGIS Geometry
         RegisterMapping<Geometry>(SupportedDatabase.PostgreSql, new ProviderTypeMapping

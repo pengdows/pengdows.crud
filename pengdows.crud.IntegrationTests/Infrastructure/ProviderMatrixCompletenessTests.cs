@@ -103,11 +103,11 @@ public class ProviderMatrixCompletenessTests
     // mention at all — a genuine gap in the catalog's own scope statement, not a duplicate entry.
     // Access is the same kind of gap: it isn't named in that header either, and has no populated
     // entry — not yet sourced/verified, same sourcing-discipline reason as the other 15.
+    // TYPE-002 removes each database as its catalog is populated and verified live
+    // (PostgreSQL/Aurora PostgreSQL, SQL Server).
     private static readonly IReadOnlySet<SupportedDatabase> KnownMissingTypeCatalogEntries =
         new HashSet<SupportedDatabase>
         {
-            SupportedDatabase.PostgreSql,
-            SupportedDatabase.SqlServer,
             SupportedDatabase.Oracle,
             SupportedDatabase.Firebird,
             SupportedDatabase.CockroachDb,
@@ -119,7 +119,6 @@ public class ProviderMatrixCompletenessTests
             SupportedDatabase.TiDb,
             SupportedDatabase.Snowflake,
             SupportedDatabase.AuroraMySql,
-            SupportedDatabase.AuroraPostgreSql,
             SupportedDatabase.FlatFile,
             SupportedDatabase.Access,
         };

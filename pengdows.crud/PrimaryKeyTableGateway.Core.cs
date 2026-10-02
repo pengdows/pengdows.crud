@@ -407,7 +407,11 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             if (col.IsJsonType)
             {
                 dialect.TryMarkJsonParameter(param, col);
-                sc.Query.Append(dialect.RenderJsonArgument(dialect.MakeParameterName(pName), col));
+            }
+
+            if (dialect.RendersColumnArgument(col))
+            {
+                sc.Query.Append(dialect.RenderColumnArgument(dialect.MakeParameterName(pName), col));
             }
             else
             {

@@ -329,7 +329,7 @@ public partial class TableGateway<TEntity, TRowID>
                     }
 
                     return colInfo.MakeParameterValueFromField(entity);
-                });
+                }, keyColumns.Concat(updateableColumns).ToList());
 
             // Value binding
             for (var row = 0; row < chunk.Count; row++)
@@ -583,7 +583,7 @@ public partial class TableGateway<TEntity, TRowID>
 
         // Delegate structure to dialect (ANSI VALUES, Oracle INSERT ALL, etc.)
         dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
-            (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]));
+            (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]), insertableColumns);
 
         if (overridesSystemIdentity)
         {
