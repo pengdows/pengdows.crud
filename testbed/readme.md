@@ -61,7 +61,7 @@ TiDB, YugabyteDB, Oracle, IBM Db2 LUW, SingleStore, Sybase ASE, Informix
 | Snowflake | `INCLUDE_SNOWFLAKE=true` | Cloud-only, requires credentials |
 | SAP HANA | `INCLUDE_SAPHANA=true` | Real Docker image, but a working container needs 16-32GB RAM — far beyond a standard CI runner and every database above |
 | InterBase | `INCLUDE_INTERBASE=true` | A personal, non-shareable, node-locked Developer Edition license (registration state lives in a persistent volume, not the image) plus a native `libgds.so` required on the host running the testbed process — see `InterBaseTestContainer.cs` |
-| Access | `INCLUDE_ACCESS=true` | No Docker image exists at all — Access isn't a server process. Windows-only (the ACE OLE DB provider and the ADOX COM interop used to create the `.accdb` file both require it) — see `AccessTestContainer.cs` |
+| Access | runs automatically on Windows | No Docker image exists at all — Access isn't a server process. Windows-only (the ACE OLE DB provider and the ADOX COM interop used to create the `.accdb` file both require it) — see `AccessTestContainer.cs` |
 
 > **SAP HANA**: `HanaTestContainer`/`HanaTestProvider` spin up `saplabs/hanaexpress`, single pinned
 > image (no version matrix — see `HanaTestContainer.cs`). Confirmed live: full CRUD lifecycle and
@@ -75,7 +75,7 @@ TiDB, YugabyteDB, Oracle, IBM Db2 LUW, SingleStore, Sybase ASE, Informix
 > `TableGateway` CRUD round-trip, a real duplicate-key insert correctly throwing
 > `UniqueConstraintViolationException`, `UpsertAsync` correctly throwing `NotSupportedException`
 > (Access has no server-side upsert mechanism at all), and that `OleDbFactory` alone never implies
-> Access. Run in isolation: `INCLUDE_ACCESS=true dotnet run -c Release -f net10.0 --project testbed -- --only "Access"`.
+> Access. Run in isolation: `dotnet run -c Release -f net10.0 --project testbed -- --only "Access"`.
 
 ---
 
@@ -184,7 +184,7 @@ testbed/
 ├── Snowflake/                        Opt-in (INCLUDE_SNOWFLAKE=true)
 ├── SapHana/                          Opt-in (INCLUDE_SAPHANA=true)
 ├── InterBase/                        Opt-in (INCLUDE_INTERBASE=true)
-└── Access/                           Opt-in (INCLUDE_ACCESS=true)
+└── Access/                           Runs automatically on Windows
 ```
 
 `TestProvider.cs`'s own detailed responsibilities (CreateTable, scalar-UDF check, idle-unload

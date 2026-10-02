@@ -37,6 +37,38 @@ public class IntegrationTestConfigurationTests
         Assert.Equal(includeInterBase, providers.Contains(SupportedDatabase.InterBase));
     }
 
+    // Access (Windows-only, no Docker image) is added only when the caller asks (ShouldIncludeAccess supplies OperatingSystem.IsWindows()).
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetEnabledProviders_IncludesAccess_OnlyWhenRequested(bool includeAccess)
+    {
+        var providers = IntegrationTestConfiguration.GetEnabledProviders(
+            includeSnowflake: false, includeAccess: includeAccess);
+
+        Assert.Equal(includeAccess, providers.Contains(SupportedDatabase.Access));
+    }
+
+    // Access is on exactly when the OS is Windows (ACE OLE DB + ADOX); no env var involved.
+    [Theory]
+    [InlineData(null)]
+    [InlineData("false")]
+    [InlineData("true")]
+    public void ShouldIncludeAccess_FollowsTheOperatingSystem_IgnoringIncludeAccess(string? envValue)
+    {
+        var original = Environment.GetEnvironmentVariable("INCLUDE_ACCESS");
+        try
+        {
+            Environment.SetEnvironmentVariable("INCLUDE_ACCESS", envValue);
+
+            Assert.Equal(OperatingSystem.IsWindows(), IntegrationTestConfiguration.ShouldIncludeAccess);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("INCLUDE_ACCESS", original);
+        }
+    }
+
     [Fact]
     public void GetEnabledProviders_AlwaysIncludesOracle()
     {

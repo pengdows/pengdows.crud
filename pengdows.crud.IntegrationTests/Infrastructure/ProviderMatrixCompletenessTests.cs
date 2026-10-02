@@ -120,7 +120,6 @@ public class ProviderMatrixCompletenessTests
             SupportedDatabase.Snowflake,
             SupportedDatabase.AuroraMySql,
             SupportedDatabase.FlatFile,
-            SupportedDatabase.Access,
         };
 
     [Fact]

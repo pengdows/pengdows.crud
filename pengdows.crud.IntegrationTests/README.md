@@ -163,7 +163,7 @@ opt-in databases, which `IntegrationMatrixTests` does not enable:
 - `INCLUDE_SAPHANA=true` — SAP HANA (Docker image, needs 16-32GB RAM)
 - `INCLUDE_INTERBASE=true` — InterBase (a pre-registered, licensed, already-running container; also needs
   `LD_LIBRARY_PATH` pointing to a directory containing `libgds.so`)
-- `INCLUDE_ACCESS=true` — Microsoft Access (Windows only; requires the Access Database Engine Redistributable)
+- Microsoft Access runs automatically on Windows (requires the Access Database Engine Redistributable); no env var
 
 #### Snowflake Configuration
 

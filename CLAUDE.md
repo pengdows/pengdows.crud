@@ -737,7 +737,7 @@ Only databases that **cannot run in a standard Docker container / CI runner** ma
 - `INCLUDE_SNOWFLAKE=true` — cloud-only, requires credentials
 - `INCLUDE_SAPHANA=true` — Docker image needs 16-32GB RAM
 - `INCLUDE_INTERBASE=true` — personal, node-locked Developer Edition license
-- `INCLUDE_ACCESS=true` — Windows-only, no Docker image
+- Access — no Docker image; runs automatically whenever the OS is Windows (no env var)
 
 All other databases must run automatically with no env var gating.
 

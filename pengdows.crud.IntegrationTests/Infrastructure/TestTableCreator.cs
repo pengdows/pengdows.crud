@@ -48,6 +48,7 @@ public class TestTableCreator
             SupportedDatabase.Db2 => CreateDb2TableSql(),
             SupportedDatabase.Informix => CreateInformixTableSql(),
             SupportedDatabase.SybaseASE => CreateSybaseTableSql(),
+            SupportedDatabase.Access => CreateAccessTableSql(),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -498,6 +499,27 @@ public class TestTableCreator
 
         await using var container = _context.CreateSqlContainer(sql);
         await container.ExecuteNonQueryAsync();
+    }
+
+    // Access (Jet/ACE) DDL: LONG is the 32-bit integer, YESNO the boolean, MEMO the unbounded text,
+    // no CREATE TABLE IF NOT EXISTS (the shared reset drops the table first), and "value" is a
+    // reserved word so every column name is wrapped.
+    private string CreateAccessTableSql()
+    {
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        var w = (string name) => _context.WrapObjectName(name);
+        return $@"
+        CREATE TABLE {table} (
+            {w("id")} LONG NOT NULL PRIMARY KEY,
+            {w("name")} TEXT(255) NOT NULL,
+            {w("value")} LONG NOT NULL,
+            {w("description")} MEMO,
+            {w("is_active")} YESNO NOT NULL,
+            {w("created_at")} DATETIME NOT NULL,
+            {w("created_by")} TEXT(255),
+            {w("updated_at")} DATETIME,
+            {w("updated_by")} TEXT(255)
+        )";
     }
 
     private string CreateSqliteTableSql()

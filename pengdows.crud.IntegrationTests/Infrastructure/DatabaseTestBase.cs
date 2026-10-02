@@ -541,6 +541,11 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             return "requires INCLUDE_INTERBASE=true to enable InterBase tests";
         }
 
+        if (provider == SupportedDatabase.Access && !IntegrationTestConfiguration.ShouldIncludeAccess)
+        {
+            return "Access tests run only on Windows";
+        }
+
         return "provider is not in the enabled list for this test run";
     }
 

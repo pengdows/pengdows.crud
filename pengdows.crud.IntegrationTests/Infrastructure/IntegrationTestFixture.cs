@@ -38,7 +38,8 @@ internal static class IntegrationTestConfiguration
 
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>
         FilterIntegrationOnly(
-            GetEnabledProviders(ShouldIncludeSnowflake, ShouldIncludeSapHana, ShouldIncludeInterBase),
+            GetEnabledProviders(ShouldIncludeSnowflake, ShouldIncludeSapHana, ShouldIncludeInterBase,
+                ShouldIncludeAccess),
             Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
 
     public static bool ShouldIncludeSnowflake =>
@@ -55,10 +56,19 @@ internal static class IntegrationTestConfiguration
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_INTERBASE"), "true",
             StringComparison.OrdinalIgnoreCase);
 
+    // Access has no Docker image and is Windows-only (ACE OLE DB + ADOX COM interop), so it is
+    // on exactly when the OS is Windows - no environment variable.
+    public static bool ShouldIncludeAccess => OperatingSystem.IsWindows();
+
     internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeSnowflake,
-        bool includeSapHana = false, bool includeInterBase = false)
+        bool includeSapHana = false, bool includeInterBase = false, bool includeAccess = false)
     {
         var providers = BaseProviders.ToList();
+
+        if (includeAccess)
+        {
+            providers.Add(SupportedDatabase.Access);
+        }
 
         if (includeSnowflake)
         {
@@ -139,7 +149,8 @@ public class IntegrationTestFixture : IAsyncLifetime
             _host.Services,
             IntegrationTestConfiguration.ShouldIncludeSnowflake,
             includeSapHana: IntegrationTestConfiguration.ShouldIncludeSapHana,
-            includeInterBase: IntegrationTestConfiguration.ShouldIncludeInterBase);
+            includeInterBase: IntegrationTestConfiguration.ShouldIncludeInterBase,
+            includeAccess: IntegrationTestConfiguration.ShouldIncludeAccess);
 
         foreach (var provider in IntegrationTestConfiguration.EnabledProviders)
         {

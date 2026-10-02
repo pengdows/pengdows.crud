@@ -316,13 +316,14 @@ internal sealed class AccessDialect : SqlDialect
     // No ADO.NET-invocable stored procedures. Deliberate decision, not an unexamined default.
     public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
-    // Access has no native UUID/GUID type — store as a client-generated string, matching every
-    // other dialect without native UUID column support. CONFIRMED live: a Guid parameter bound
-    // via ApplyGuidFormat's DbType.String reassignment (not DbType.Guid) round-trips correctly;
-    // also confirmed live that a decimal parameter binds correctly against a CURRENCY column as
-    // either DbType.Decimal or DbType.Currency — neither has the DbType.DateTime-style
+    // Access HAS a native GUID column type (a.k.a. ReplicationID / UNIQUEIDENTIFIER in DDL).
+    // CONFIRMED live: `guid_col = ?` matches only when the parameter is a real Guid (OleDbType.Guid)
+    // or a braced string; an unbraced string parameter matches 0 rows. So the Guid is passed
+    // through as DbType.Guid (GuidStorageFormat.PassThrough, the base default). A Guid written to a text
+    // column is stored braced ("{...}", 38 characters), so such a column must be TEXT(38) or
+    // larger; TEXT(36) overflows (confirmed live). Also confirmed live that a decimal parameter binds correctly against a CURRENCY
+    // column as either DbType.Decimal or DbType.Currency — neither has the DbType.DateTime-style
     // OleDbType-mapping problem found elsewhere in this file.
-    protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
@@ -340,7 +341,37 @@ internal sealed class AccessDialect : SqlDialect
             return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
         }
 
-        return base.CreateDbParameter(name, type, value);
+        // CONFIRMED live (ACE with native Large Number): an OleDbType.BigInt parameter is rejected
+        // ("data value could not be converted ...") against BIGINT and DECIMAL(19,0) columns. A
+        // Decimal parameter writes and reads back the exact Int64 but never matches in `v = ?`; a
+        // Double parameter matches, and is exact up to 2^53. So bind a Double when the value is
+        // exactly representable and a Decimal beyond that (writes stay exact; an equality filter on
+        // such a value cannot match through a parameter). Null is remapped too.
+        if (type == DbType.Int64)
+        {
+            const long ExactDoubleLimit = 1L << 53;
+            if (value is long l)
+            {
+                return l is >= -ExactDoubleLimit and <= ExactDoubleLimit
+                    ? base.CreateDbParameter<object?>(name, DbType.Double, (double)l)
+                    : base.CreateDbParameter<object?>(name, DbType.Decimal, (decimal)l);
+            }
+
+            return base.CreateDbParameter<object?>(name, DbType.Double, DBNull.Value);
+        }
+
+        var parameter = base.CreateDbParameter(name, type, value);
+
+        // Access is a positional provider, so the base class's common conversions rewrite a Guid
+        // to a string; restore the native Guid (see the Guid note above - an unbraced string never
+        // matches a GUID column).
+        if (type == DbType.Guid && value is Guid guid)
+        {
+            parameter.DbType = DbType.Guid;
+            parameter.Value = guid;
+        }
+
+        return parameter;
     }
 
     // Isolation-level data (CONFIRMED live: RepeatableRead/Serializable/Snapshot all throw

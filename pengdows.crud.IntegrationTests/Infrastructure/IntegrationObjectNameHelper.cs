@@ -67,6 +67,8 @@ internal static class IntegrationObjectNameHelper
     {
         SupportedDatabase.Sqlite => "INTEGER",
         SupportedDatabase.Firebird => "INTEGER",
+        // Access DDL: LONG is the 32-bit integer (INT is a 16-bit SHORT).
+        SupportedDatabase.Access => "LONG",
         _ => "INT"
     };
 

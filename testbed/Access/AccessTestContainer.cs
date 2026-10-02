@@ -8,7 +8,7 @@ namespace testbed.Access;
 /// <summary>
 /// Microsoft Access (Jet/ACE) has no Docker image at all — a fourth, distinct opt-in
 /// justification alongside Snowflake (cloud credentials), SAP HANA (16-32GB RAM), and InterBase
-/// (node-locked license + native library). Opt-in via <c>INCLUDE_ACCESS=true</c> — see
+/// (node-locked license + native library). Runs whenever the OS is Windows — see
 /// <see cref="ParallelTestOrchestrator"/>'s <c>_includeAccess</c> gate.
 /// <para>
 /// Modeled on <see cref="SqliteTestContainer"/> (file-based, no Testcontainers/Docker at all —

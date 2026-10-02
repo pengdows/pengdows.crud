@@ -109,7 +109,80 @@ public static class DatabaseTypeCatalog
         SupportedDatabase.InterBase => InterBaseTypes,
         SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => PostgreSqlTypes,
         SupportedDatabase.SqlServer => SqlServerTypes,
+        SupportedDatabase.Access => AccessTypes,
         _ => Array.Empty<ColumnTypeDescriptor>()
+    };
+
+    // ── Microsoft Access (Jet/ACE, .accdb via Microsoft.ACE.OLEDB.16.0) ───────
+    // Source: Microsoft Learn, "Data types for Access desktop databases" and the Jet/ACE DDL type
+    // names accepted by CREATE TABLE. Live-verified by TypeRoundTripMatrixTests when
+    // run on Windows. COUNTER (AutoNumber) is server-generated, and OLE Object / Attachment /
+    // Hyperlink are not plain column declarations a DAL writes through DDL, so they carry no ClrType.
+    private static readonly IReadOnlyList<ColumnTypeDescriptor> AccessTypes = new ColumnTypeDescriptor[]
+    {
+        new("YESNO", ColumnTypeCategory.Boolean, Aliases: new[] { "BIT", "LOGICAL", "BOOLEAN" },
+            Declaration: "YESNO", ClrType: typeof(bool), DbType: System.Data.DbType.Boolean, Sample: true),
+        new("BYTE", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "TINYINT", "INTEGER1" }, IsUnsigned: true,
+            Declaration: "BYTE", ClrType: typeof(byte), DbType: System.Data.DbType.Byte, Sample: byte.MaxValue),
+        new("SHORT", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "SMALLINT", "INTEGER2" },
+            Declaration: "SHORT", ClrType: typeof(short), DbType: System.Data.DbType.Int16, Sample: short.MinValue),
+        new("LONG", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "INTEGER", "INT", "INTEGER4" },
+            Declaration: "LONG", ClrType: typeof(int), DbType: System.Data.DbType.Int32, Sample: int.MinValue),
+        new("SINGLE", ColumnTypeCategory.ApproximateNumeric, Aliases: new[] { "REAL", "FLOAT4", "IEEESINGLE" },
+            Declaration: "SINGLE", ClrType: typeof(float), DbType: System.Data.DbType.Single, Sample: 1.5f),
+        new("DOUBLE", ColumnTypeCategory.ApproximateNumeric, Aliases: new[] { "FLOAT", "FLOAT8", "IEEEDOUBLE", "NUMBER" },
+            Declaration: "DOUBLE", ClrType: typeof(double), DbType: System.Data.DbType.Double, Sample: -1.25e300),
+        new("CURRENCY", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "MONEY" },
+            Declaration: "CURRENCY", ClrType: typeof(decimal), DbType: System.Data.DbType.Currency, Sample: 12345.6789m),
+        new("DECIMAL(p,s)", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "NUMERIC(p,s)", "DEC(p,s)" },
+            Declaration: "DECIMAL(28,10)", ClrType: typeof(decimal), DbType: System.Data.DbType.Decimal, Sample: 123456789012345.0123456789m),
+        new("DATETIME", ColumnTypeCategory.Temporal, Aliases: new[] { "DATE", "TIME", "TIMESTAMP" }, IsTemporal: true,
+            Declaration: "DATETIME", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
+            Sample: new DateTime(2026, 10, 1, 13, 45, 30, DateTimeKind.Unspecified),
+            Notes: "Stored as a double; sub-second precision is not preserved."),
+        new("TEXT(n)", ColumnTypeCategory.Character, Aliases: new[] { "VARCHAR(n)", "CHAR(n)", "SHORT TEXT" },
+            Declaration: "TEXT(255)", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "héllo wörld ✓"),
+        new("MEMO", ColumnTypeCategory.Lob, Aliases: new[] { "LONGTEXT", "LONGCHAR", "NOTE", "LONG TEXT" }, IsLob: true,
+            Declaration: "MEMO", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: new string('x', 5000),
+            Comparable: false, Notes: "Memo fields cannot be compared with = in a WHERE clause."),
+        new("GUID", ColumnTypeCategory.Other, Aliases: new[] { "UNIQUEIDENTIFIER" },
+            Declaration: "GUID", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid,
+            Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
+        new("BIGINT", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "LARGE NUMBER" },
+            Declaration: "BIGINT", ClrType: typeof(long), DbType: System.Data.DbType.Int64, Sample: 1L << 53,
+            Notes: "Access's native 64-bit Large Number. Creatable by DDL only on the newer ACE build (an older 16.0.5320 " +
+                   "refused it with a syntax error); LARGEINT is not accepted."),
+        new("BIGINT (full range)", ColumnTypeCategory.ExactNumeric,
+            Declaration: "BIGINT", ClrType: typeof(long), DbType: System.Data.DbType.Int64, Sample: long.MaxValue, Comparable: false,
+            Notes: "Writes and reads the exact long.MaxValue. WHERE v = @p cannot match a value above 2^53 (live-verified: " +
+                   "a Decimal parameter writes exactly but never matches an equality; a Double parameter matches but is lossy)."),
+        new("DECIMAL(19,0) (64-bit integer)", ColumnTypeCategory.ExactNumeric,
+            Declaration: "DECIMAL(19,0)", ClrType: typeof(long), DbType: System.Data.DbType.Int64, Sample: long.MaxValue,
+            Notes: "How a .NET long was stored before Large Number was available; still holds the full long range."),
+        new("HYPERLINK", ColumnTypeCategory.Character,
+            CanDeclareColumn: false,
+            Notes: "A MEMO column with the Hyperlink attribute (created through DAO, not DDL); round-trips through the gateway as text (AccessComplexTypeTests)."),
+        new("ATTACHMENT", ColumnTypeCategory.Other, CanDeclareColumn: false, CanReturnFromQuery: false,
+            Notes: "Created through DAO, not DDL. Read as child columns (v.FileName, v.FileData); written only with INSERT INTO t (v.FileName) SELECT ... FROM t WHERE ... against an existing row (AccessComplexTypeTests)."),
+        new("OLE OBJECT", ColumnTypeCategory.Lob, Aliases: new[] { "GENERAL", "LONGBINARY" }, IsLob: true, IsBinary: true,
+            Notes: "Same storage as LONGBINARY; covered by that entry."),
+        new("DATETIME (DateOnly)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATETIME", ClrType: typeof(DateOnly), DbType: System.Data.DbType.Date, Sample: new DateOnly(2026, 10, 1)),
+        new("DATETIME (TimeOnly)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "DATETIME", ClrType: typeof(TimeOnly), DbType: System.Data.DbType.Time, Sample: new TimeOnly(13, 45, 30)),
+        new("DATETIME (DateTimeOffset)", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
+            Declaration: "DATETIME", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset,
+            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.Zero)),
+        new("COUNTER (explicit value)", ColumnTypeCategory.ExactNumeric, IsAutoGenerated: true,
+            Declaration: "COUNTER", ClrType: typeof(int), DbType: System.Data.DbType.Int32, Sample: 123),
+        new("BINARY(n)", ColumnTypeCategory.Binary, Aliases: new[] { "VARBINARY(n)", "BINARY VARYING(n)" }, IsBinary: true,
+            Declaration: "BINARY(16)", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary,
+            Sample: new byte[] { 0, 1, 2, 0xFE, 0xFF, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 }),
+        new("LONGBINARY", ColumnTypeCategory.Lob, Aliases: new[] { "IMAGE", "GENERAL", "OLEOBJECT" }, IsLob: true, IsBinary: true,
+            Declaration: "LONGBINARY", ClrType: typeof(byte[]), DbType: System.Data.DbType.Binary,
+            Sample: new byte[] { 0, 1, 2, 0xFE, 0xFF }, Comparable: false),
+        new("COUNTER", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "AUTOINCREMENT" }, IsAutoGenerated: true,
+            Notes: "AutoNumber; server-generated, so not written through the gateway."),
     };
 
     // ── PostgreSQL 16 ───────────────────────────────────────────────────────

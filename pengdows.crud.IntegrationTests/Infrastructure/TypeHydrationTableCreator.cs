@@ -78,6 +78,7 @@ public class TypeHydrationTableCreator
             SupportedDatabase.SybaseASE => CreateSybaseSql(),
             SupportedDatabase.SapHana => CreateHanaSql(),
             SupportedDatabase.InterBase => CreateInterBaseSql(),
+            SupportedDatabase.Access => CreateAccessSql(),
             _ => throw new NotSupportedException(
                 $"Database {_context.Product} is not supported by TypeHydrationTableCreator")
         };
@@ -460,6 +461,36 @@ END;", qp, qs, table);
     {w("col_binary")}         VARBINARY(256),
     {w("col_enum_int")}       INTEGER         NOT NULL,
     {w("col_enum_str")}       NVARCHAR(50)    NOT NULL
+)";
+    }
+
+    // Access (Jet/ACE): LONG is the 32-bit integer, SHORT 16-bit, SINGLE/DOUBLE the IEEE floats,
+    // YESNO the boolean, DATETIME a double with no time zone (UTC instant stored) and no sub-second
+    // precision, col_long is the native Large Number BIGINT (needs a current ACE build; LONG is only 32-bit), Guid in the native GUID column type (AccessDialect binds a real Guid), LONGBINARY for
+    // binary, MEMO for unbounded text. Every column name is wrapped ("value"-style reserved words).
+    private string CreateAccessSql()
+    {
+        var table = IntegrationObjectNameHelper.Table(_context, "type_hydration");
+        var w = (string name) => _context.WrapObjectName(name);
+        return $@"CREATE TABLE {table} (
+    {w("id")}                 LONG            NOT NULL PRIMARY KEY,
+    {w("col_string")}         MEMO            NOT NULL,
+    {w("col_string_null")}    MEMO,
+    {w("col_short")}          SHORT           NOT NULL,
+    {w("col_int")}            LONG            NOT NULL,
+    {w("col_int_null")}       LONG,
+    {w("col_long")}           BIGINT          NOT NULL,
+    {w("col_float")}          SINGLE          NOT NULL,
+    {w("col_double")}         DOUBLE          NOT NULL,
+    {w("col_decimal")}        DECIMAL(18,8)   NOT NULL,
+    {w("col_bool")}           YESNO           NOT NULL,
+    {w("col_bool_null")}      LONG,
+    {w("col_datetime")}       DATETIME        NOT NULL,
+    {w("col_datetimeoffset")} DATETIME        NOT NULL,
+    {w("col_guid")}           GUID            NOT NULL,
+    {w("col_binary")}         LONGBINARY,
+    {w("col_enum_int")}       LONG            NOT NULL,
+    {w("col_enum_str")}       TEXT(50)        NOT NULL
 )";
     }
 

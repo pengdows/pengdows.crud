@@ -827,6 +827,15 @@ public class ConstraintViolationTests : DatabaseTestBase
                     {0}name{1} VARCHAR(255) NOT NULL,
                     CONSTRAINT fk_test_related FOREIGN KEY ({0}test_table_id{1}) REFERENCES {0}test_table{1}({0}id{1})
                 )", qp, qs),
+            // Access: COUNTER is the AutoNumber column; no CREATE TABLE IF NOT EXISTS (the shared
+            // reset drops test_related first). test_table_id is LONG to match test_table's id.
+            SupportedDatabase.Access => string.Format(@"
+                CREATE TABLE {0}test_related{1} (
+                    {0}id{1} COUNTER NOT NULL PRIMARY KEY,
+                    {0}test_table_id{1} LONG NOT NULL,
+                    {0}name{1} TEXT(255) NOT NULL,
+                    CONSTRAINT fk_test_related FOREIGN KEY ({0}test_table_id{1}) REFERENCES {0}test_table{1}({0}id{1})
+                )", qp, qs),
             _ => throw new NotSupportedException($"Provider {provider} not supported for related table")
         };
 
@@ -936,6 +945,8 @@ public class ConstraintViolationTests : DatabaseTestBase
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT UNIQUE ({0}name{1}) CONSTRAINT uq_name", qp, qs),
             SupportedDatabase.SybaseASE =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT uq_name UNIQUE ({0}name{1})", qp, qs),
+            SupportedDatabase.Access =>
+                string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT uq_name UNIQUE ({0}name{1})", qp, qs),
             _ => null
         };
 
@@ -987,6 +998,10 @@ public class ConstraintViolationTests : DatabaseTestBase
             // Informix names a constraint after its definition.
             SupportedDatabase.Informix =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT CHECK ({0}value{1} >= 0) CONSTRAINT chk_value_positive", qp, qs),
+            // Access/ACE accepts table-level CHECK through OLE DB (ANSI-92 mode); "value" is reserved,
+            // hence the wrapped column.
+            SupportedDatabase.Access =>
+                string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT chk_value_positive CHECK ({0}value{1} >= 0)", qp, qs),
             SupportedDatabase.SybaseASE =>
                 string.Format("ALTER TABLE {0}test_table{1} ADD CONSTRAINT chk_value_positive CHECK ({0}value{1} >= 0)", qp, qs),
             _ => null

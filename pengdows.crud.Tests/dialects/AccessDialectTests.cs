@@ -293,18 +293,57 @@ public class AccessDialectTests
         public override DbParameter CreateParameter() => new OleDbLikeParameter();
     }
 
-    // CONFIRMED live: a Guid parameter bound via the DbType.String reassignment round-trips
-    // correctly — Access has no native UUID/GUID type.
+    // CONFIRMED live: Access has a native GUID column type, and `guid_col = ?` only matches a Guid
+    // bound as a real Guid (OleDbType.Guid); an unbraced string parameter matches 0 rows. So the
+    // Guid is passed through, not reassigned to DbType.String.
     [Fact]
-    public void GuidFormat_IsString()
+    public void Guid_IsBoundAsANativeGuid()
     {
         var d = CreateDialect();
         var guid = Guid.Parse("12345678-1234-1234-1234-123456789abc");
         var param = d.CreateDbParameter("p", DbType.Guid, guid);
-        Assert.Equal(DbType.String, param.DbType);
-        Assert.Equal("12345678-1234-1234-1234-123456789abc", param.Value?.ToString());
+        Assert.Equal(DbType.Guid, param.DbType);
+        Assert.Equal(guid, param.Value);
     }
 
+    // CONFIRMED live (ACE with native Large Number): an OleDbType.BigInt parameter is rejected
+    // ("data value could not be converted") against BIGINT and DECIMAL(19,0) columns. A Decimal
+    // parameter writes and reads back the exact Int64 but never matches in `v = ?`; a Double
+    // parameter matches, and is exact for any value up to 2^53. So a long is bound as a Double
+    // when exactly representable and as a Decimal beyond that.
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(5L)]
+    [InlineData(-5L)]
+    [InlineData(4000000000L)]
+    [InlineData(9007199254740992L)]
+    [InlineData(-9007199254740992L)]
+    public void Int64_UpToTwoToTheFiftyThird_IsBoundAsADouble(long value)
+    {
+        var param = CreateDialect().CreateDbParameter("p", DbType.Int64, value);
+        Assert.Equal(DbType.Double, param.DbType);
+        Assert.Equal((double)value, param.Value);
+    }
+
+    [Theory]
+    [InlineData(long.MaxValue)]
+    [InlineData(long.MinValue)]
+    [InlineData(9007199254740993L)]
+    [InlineData(-9007199254740993L)]
+    public void Int64_BeyondTwoToTheFiftyThird_IsBoundAsAnExactDecimal(long value)
+    {
+        var param = CreateDialect().CreateDbParameter("p", DbType.Int64, value);
+        Assert.Equal(DbType.Decimal, param.DbType);
+        Assert.Equal((decimal)value, param.Value);
+    }
+
+    [Fact]
+    public void NullInt64_IsBoundAsANullDouble()
+    {
+        var param = CreateDialect().CreateDbParameter<long?>("p", DbType.Int64, null);
+        Assert.Equal(DbType.Double, param.DbType);
+        Assert.Equal(DBNull.Value, param.Value);
+    }
     // CONFIRMED live: "Mode=Read" is a real, recognized OLE DB/Jet property that genuinely
     // enforces read-only at the driver level.
     [Fact]

@@ -224,7 +224,7 @@ public enum SupportedDatabase
     /// Microsoft Access (Jet/ACE), via <c>System.Data.OleDb</c> and the Microsoft Access Database
     /// Engine Redistributable (<c>Microsoft.ACE.OLEDB.16.0</c>) — there is no native ADO.NET
     /// Jet/ACE client. Positional (<c>?</c>) parameters, no stored procedures, no <c>MERGE</c>.
-    /// Opt-in in the integration test matrix (<c>INCLUDE_ACCESS=true</c>) — Windows-only and
+    /// Runs in the integration test matrix whenever the OS is Windows — Windows-only and
     /// COM-interop-dependent (ADOX), with no Docker image at all.
     /// </summary>
     Access = 1 << 22
