@@ -35,6 +35,7 @@ public class Program
         // merged read for a class in THIS run never picks up stale issues left behind by an
         // earlier run (e.g. a class excluded from this run's --filter).
         BenchmarkCorrectnessArtifacts.ClearFragmentsFromPreviousRun();
+        SqlProofArtifacts.Clear(SqlProofArtifacts.DefaultDirectory);
 
         IConfig config = ShouldUseInProcess()
             ? new InProcessConfig()
@@ -43,6 +44,15 @@ public class Program
         var benchmarkTypes = GetBenchmarkTypes(includeOptInBenchmarks);
         var summaries = BenchmarkSwitcher.FromTypes(benchmarkTypes).Run(switcherArgs, config);
         CrossFrameworkRatioWriter.Write(summaries);
+
+        // PostgreSqlMethodologyBenchmarks records what each case sent to the server.
+        var sqlProof = SqlProofArtifacts.ReadAll(SqlProofArtifacts.DefaultDirectory);
+        if (sqlProof.Count > 0)
+        {
+            var reportPath = Path.Combine(resultsDir, "sqlproof-report.md");
+            File.WriteAllText(reportPath, SqlProof.Report(sqlProof));
+            Console.WriteLine($"SQL proof: {reportPath} ({SqlProof.Analyze(sqlProof).Count} issue(s))");
+        }
     }
 
     private static Type[] GetBenchmarkTypes(bool includeOptInBenchmarks)

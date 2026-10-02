@@ -12,6 +12,24 @@ internal static class PgStats
         await conn.ExecuteAsync("SELECT pg_stat_statements_reset();");
     }
 
+    /// <summary>
+    /// Every statement pg_stat_statements recorded in this database since the last reset, with its
+    /// call count, leaving out the statistics queries themselves.
+    /// </summary>
+    public static async Task<IReadOnlyList<SqlProofStatement>> ReadStatementsAsync(string connStr)
+    {
+        await using var conn = new NpgsqlConnection(connStr);
+        await conn.OpenAsync();
+        var rows = await conn.QueryAsync<(string Query, long Calls)>(
+            @"SELECT s.query, s.calls
+                FROM pg_stat_statements s
+                JOIN pg_database d ON d.oid = s.dbid
+               WHERE d.datname = current_database()
+                 AND s.query NOT ILIKE '%pg_stat_statements%'
+            ORDER BY s.calls DESC, s.query");
+        return rows.Select(r => new SqlProofStatement(r.Query, r.Calls)).ToList();
+    }
+
     public static async Task DumpSummaryAsync(string connStr, string? label = null)
     {
         await using var conn = new NpgsqlConnection(connStr);

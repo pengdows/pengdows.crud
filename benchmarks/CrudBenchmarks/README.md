@@ -79,6 +79,48 @@ You can also enable opt-in classes via environment variable:
 CRUD_BENCH_INCLUDE_OPT_IN=1 dotnet run -c Release -- --filter "*MyExperimentalBenchmarks*"
 ```
 
+### Methodology benchmarks: what each measurement change does (opt-in)
+
+`PostgreSqlMethodologyBenchmarks` runs the PostgreSQL equal-footing workload (ReadSingle, ReadList,
+Create; 20 operations per invocation, reported per operation) under several jobs. Each methodology
+change is the difference between two rows of the same benchmark:
+
+| Job | Settings | Compare with | Shows |
+|---|---|---|---|
+| `Baseline` | 3 warmups, 10 iterations, workstation GC, nothing pinned (today's suite) | — | — |
+| `Pinned` | Postgres container on its own cores (Docker cpuset), benchmark process on the rest (affinity) | `Baseline` | client/server CPU contention |
+| `PinnedServerGc` | `Pinned` + server GC | `Pinned` | GC mode (production ASP.NET Core uses server GC) |
+| `PinnedPrecise` | `Pinned`, iteration count chosen for a 1% relative error (15–100 iterations) | `Pinned` | whether 10 iterations is enough; read the CI columns |
+| `PinnedLatency` | `Pinned` + `tc netem` delay in the container (only when `CRUD_BENCH_NETEM_MS` is set) | `Pinned` | the library's share of a round trip with real latency |
+
+Categories: `ReadSingle`, `ReadList` and `Create` are the equal-footing raw-SQL cells (Dapper is the
+baseline; EF Core appears unpooled, as in the main suite, and pooled). `ReadSingle-Api` and
+`Create-Api` are a different workload, each framework's own API: pengdows `RetrieveOneAsync`/
+`CreateAsync`, EF Core LINQ, `EF.CompileAsyncQuery`, `Add` + `SaveChanges`. Compare them with the
+Dapper row of the matching raw-SQL category. `Error` is the half-width of the 99.9% confidence
+interval, so each cell's interval is Mean ± Error: call two cells equal only where their intervals
+overlap. (BenchmarkDotNet 0.14's `CiLower`/`CiUpper` columns print wrong values, so they aren't used.)
+
+Every case also records what reached the server (`pg_stat_statements`, reset after warm-up). The
+run writes `BenchmarkDotNet.Artifacts/results/sqlproof-report.md`: per case, the statements and their
+call counts, and an Issues list for any case that sent more than one statement per operation or any
+equal-footing cell whose statement differs from the others (identifier quoting, case, whitespace and
+table qualifiers ignored).
+
+```bash
+dotnet run -c Release -f net10.0 -- --include-opt-in --filter "*PostgreSqlMethodology*"
+# one workload only:
+dotnet run -c Release -f net10.0 -- --include-opt-in --filter "*PostgreSqlMethodology*" --anyCategories ReadSingle ReadSingle-Api
+# cores for the database (default 2, the highest-numbered); add the latency job:
+CRUD_BENCH_DB_CORES=2 CRUD_BENCH_NETEM_MS=0.5 dotnet run -c Release -f net10.0 -- --include-opt-in --filter "*PostgreSqlMethodology*"
+```
+
+Without `CRUD_BENCH_NETEM_MS`, every job runs over loopback, which has no network latency, so
+library overhead looks larger relative to the total than it would in production. The latency job
+installs `iproute2-tc` in the container (needs network access for `apk`) and adds `NET_ADMIN`.
+Run out of process (not `CRUD_BENCH_INPROC`): affinity and GC mode apply to BenchmarkDotNet's child
+process.
+
 ### Run with custom iterations
 
 ```bash
