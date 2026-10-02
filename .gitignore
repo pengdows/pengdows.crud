@@ -80,3 +80,6 @@ valuetask-validation/
 # Local MSBuild overrides (never commit)
 Directory.Build.user.props
 ORACLE_TALK.md
+
+# testbed run output (ParallelTestOrchestrator)
+testbed-results.json
