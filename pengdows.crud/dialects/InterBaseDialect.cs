@@ -371,4 +371,27 @@ internal sealed class InterBaseDialect : SqlDialect
 
         return null;
     }
+
+    // ISC codes InterBase shares with Firebird: isc_deadlock and isc_update_conflict.
+    private const int IscDeadlock = 335544336;
+    private const int IscUpdateConflict = 335544451;
+
+    protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
+    {
+        var code = TryGetProviderErrorCode(ex);
+        if (code == IscDeadlock)
+        {
+            category = DbErrorCategory.Deadlock;
+            return true;
+        }
+
+        if (code == IscUpdateConflict)
+        {
+            category = DbErrorCategory.SerializationFailure;
+            return true;
+        }
+
+        category = DbErrorCategory.Unknown;
+        return false;
+    }
 }

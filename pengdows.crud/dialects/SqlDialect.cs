@@ -2378,6 +2378,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return DbErrorCategory.Timeout;
         }
 
+        // The message heuristics below guess from free text, which also holds identifiers and
+        // values ("column serialized_at"). An error the provider identified with its own SQLSTATE
+        // or error number is not re-guessed from its text: it is Unknown unless the checks above
+        // recognized it (REV-045).
+        if (IsProviderIdentified(exception))
+        {
+            return DbErrorCategory.Unknown;
+        }
+
         var message = exception.Message;
 
         if (message.Contains("deadlock", StringComparison.OrdinalIgnoreCase))
@@ -3482,6 +3491,18 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // session: this used to be an independent, weaker duplicate that silently returned
     // null for exactly those shapes — see SqlDialectEdgeCaseTests.cs's
     // TryGetProviderErrorCode/TryGetProviderSqlState "OnlyErrorsCollection" tests.
+    // A SQLSTATE, or an error number other than the exception's default HRESULT.
+    private static bool IsProviderIdentified(Exception exception)
+    {
+        if (!string.IsNullOrEmpty(TryGetProviderSqlState(exception)))
+        {
+            return true;
+        }
+
+        var code = TryGetProviderErrorCode(exception);
+        return code is { } number && number != 0 && number != exception.HResult;
+    }
+
     protected static int? TryGetProviderErrorCode(Exception ex)
     {
         return pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.TryGetErrorCode(ex);

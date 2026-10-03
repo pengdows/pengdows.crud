@@ -67,17 +67,26 @@ public class InterBaseTranslatorTests
         Assert.IsType<CheckConstraintViolationException>(result);
     }
 
-    // InterBaseDialect has no TryClassifyProviderException override (unlike Informix/Hana), so
-    // deadlock/timeout classification for InterBase falls all the way through to
-    // SqlDialect.ClassifyException's generic message-keyword fallback.
+    // InterBase reports its ISC codes (shared with Firebird): isc_deadlock 335544336 and
+    // isc_update_conflict 335544451. Classified by code, not by the message text (REV-045/065).
     [Fact]
-    public void DeadlockLikeMessage_MapsTo_DeadlockException_ViaGenericMessageFallback()
+    public void IscDeadlock_MapsTo_DeadlockException()
     {
-        var raw = new NumberedDbException(1, "deadlock");
+        var raw = new NumberedDbException(335544336, "deadlock");
 
         var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Update);
 
         Assert.IsType<DeadlockException>(result);
+    }
+
+    [Fact]
+    public void IscUpdateConflict_MapsTo_SerializationConflictException()
+    {
+        var raw = new NumberedDbException(335544451, "update conflicts with concurrent update");
+
+        var result = _translator.Translate(TestDialect(), raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
     }
 
     [Fact]

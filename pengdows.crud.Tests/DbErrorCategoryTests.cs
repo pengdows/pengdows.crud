@@ -124,9 +124,18 @@ public class DbErrorCategoryTests
         Assert.Equal(DbErrorCategory.Timeout, category);
     }
 
+    // Only a message: no SQLSTATE and no provider error number (the message fallback applies only
+    // then, REV-045).
     private static DbException CreateDbExceptionWithMessage(string message)
     {
-        return ConnectionFailureHelper.CommonExceptions.CreateDbException(message);
+        return new MessageOnlyDbException(message);
+    }
+
+    private sealed class MessageOnlyDbException : DbException
+    {
+        public MessageOnlyDbException(string message) : base(message)
+        {
+        }
     }
 
     [Fact]
