@@ -2065,6 +2065,11 @@ public partial class DatabaseContext
         return Convert.ToHexString(bytes).ToLowerInvariant();
     }
 
+    // Secrets are hashed under a key generated once per process: the digest appears in exception
+    // text and pool statistics, and an unsalted hash let anyone who knew the rest of the connection
+    // string confirm password guesses offline (REV-065). The digest is stable within a process.
+    private static readonly byte[] PoolKeySecretSalt = RandomNumberGenerator.GetBytes(32);
+
     private static string HashSensitiveConnectionStringValues(string connectionString)
     {
         if (string.IsNullOrWhiteSpace(connectionString))
@@ -2083,7 +2088,7 @@ public partial class DatabaseContext
                     lower.Contains("token") || lower.Contains("secret") || lower.Contains("access"))
                 {
                     var value = builder[key]?.ToString() ?? string.Empty;
-                    var valueBytes = SHA256.HashData(Encoding.UTF8.GetBytes(value));
+                    var valueBytes = HMACSHA256.HashData(PoolKeySecretSalt, Encoding.UTF8.GetBytes(value));
                     builder[key] = Convert.ToHexString(valueBytes)[..16].ToLowerInvariant();
                 }
             }

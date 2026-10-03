@@ -505,4 +505,58 @@ public class EnforceUniqueConnectionStringTests
             }
         }
     }
+
+    // REV-065: the pool-key digest (in PoolSaturatedException/PoolForbiddenException text and the
+    // pool statistics) was an unsalted SHA-256 over the connection string with each secret replaced
+    // by its own unsalted SHA-256, so anyone who saw it and knew the rest of the connection string
+    // could confirm password guesses offline. Secrets are now hashed under a per-process key.
+    [Fact]
+    public void PoolKeyHash_CannotBeRecomputedFromAGuessedPassword()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var connectionString =
+            $"Data Source=digest-db;Password=hunter2;EmulatedProduct={SupportedDatabase.Sqlite}";
+        using var context = new DatabaseContext(BuildConfig(connectionString, enforce: false), factory);
+
+        var published = context.GetPoolStatisticsSnapshot(PoolLabel.Writer).PoolKeyHash;
+
+        Assert.NotEqual(UnsaltedDigest(factory, connectionString), published);
+    }
+
+    [Fact]
+    public void PoolKeyHash_IsStableWithinTheProcess()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var first = $"Data Source=digest-db-a;Password=hunter2;EmulatedProduct={SupportedDatabase.Sqlite}";
+        var second = $"Data Source=digest-db-b;Password=hunter2;EmulatedProduct={SupportedDatabase.Sqlite}";
+        using var a = new DatabaseContext(BuildConfig(first, enforce: false), factory);
+        using var a2 = new DatabaseContext(BuildConfig(first, enforce: false), factory);
+        using var b = new DatabaseContext(BuildConfig(second, enforce: false), factory);
+
+        Assert.Equal(a.GetPoolStatisticsSnapshot(PoolLabel.Writer).PoolKeyHash,
+            a2.GetPoolStatisticsSnapshot(PoolLabel.Writer).PoolKeyHash);
+        Assert.NotEqual(a.GetPoolStatisticsSnapshot(PoolLabel.Writer).PoolKeyHash,
+            b.GetPoolStatisticsSnapshot(PoolLabel.Writer).PoolKeyHash);
+    }
+
+    // The digest as it was computed before: what an attacker could reproduce with a correct guess.
+    private static string UnsaltedDigest(System.Data.Common.DbProviderFactory factory, string connectionString)
+    {
+        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = connectionString };
+        foreach (var key in builder.Keys.Cast<object>().Select(k => k.ToString()!).ToArray())
+        {
+            var lower = key.ToLowerInvariant();
+            if (lower.Contains("password") || lower == "pwd" || lower.Contains("user id") || lower == "uid" ||
+                lower.Contains("token") || lower.Contains("secret") || lower.Contains("access"))
+            {
+                var hashed = System.Security.Cryptography.SHA256.HashData(
+                    System.Text.Encoding.UTF8.GetBytes(builder[key]?.ToString() ?? string.Empty));
+                builder[key] = Convert.ToHexString(hashed)[..16].ToLowerInvariant();
+            }
+        }
+
+        var input = $"{factory.GetType().FullName}|{builder.ConnectionString}";
+        return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes(input))).ToLowerInvariant();
+    }
 }
