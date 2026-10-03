@@ -20,7 +20,8 @@ lock_dir="${install_dir}/lock"
 temp_dir="${install_dir}/tmp"
 
 # The directory intentionally remains available after this script exits so the test
-# process can use it. The workflow cleanup step removes this exact directory afterward.
+# process can use it. Whoever runs this script removes it (FIREBIRD_RUNTIME_DIR) afterward;
+# run-integration-tests.sh does so on exit.
 trap 'find "${install_dir}" -depth -type f -name "*.deb" -delete 2>/dev/null || true' EXIT
 
 curl --fail --location --retry 3 --output "${download}" "${url}"

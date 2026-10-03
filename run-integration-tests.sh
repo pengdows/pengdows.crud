@@ -15,6 +15,18 @@ if [[ -z "${FIREBIRD_EMBEDDED_CLIENT_LIBRARY:-}" ]]; then
   source "${firebird_env}"
   set +a
   rm -f "${firebird_env}"
+  # Provisioned here, so removed here: the runtime directory was left behind in /tmp on every run
+  # (REV-066).
+  # Only the directory install-firebird-embedded.sh created (its mktemp name), and the function
+  # always succeeds so it never changes the script's exit status.
+  firebird_runtime_dir="${FIREBIRD_RUNTIME_DIR:-}"
+  cleanup_firebird_runtime() {
+    if [[ -n "${firebird_runtime_dir}" && -d "${firebird_runtime_dir}" &&
+          "${firebird_runtime_dir}" == */pengdows-firebird.* ]]; then
+      rm -rf -- "${firebird_runtime_dir}"
+    fi
+  }
+  trap cleanup_firebird_runtime EXIT
 fi
 
 # Informix.Net.Core-lnx's native client (libthcli15a.so) resolves its own dependencies through
