@@ -5,8 +5,11 @@
 // AI SUMMARY:
 // - Implements ILockerAsync with real SemaphoreSlim-based locking.
 // - Designed for TransactionContext where the same SemaphoreSlim is locked/unlocked
-//   repeatedly across many operations within a single transaction. Also used by
-//   DatabaseContext for the DuckDB serialized-open gate.
+//   repeatedly across many operations within a single transaction.
+// - ONE instance is shared by every caller and its held state belongs to the instance, not to a
+//   caller: dispose it only after your own Lock/LockAsync succeeded. Disposing it after a failed
+//   or cancelled attempt releases whoever holds it (REV-029 removed the DuckDB open-gate use for
+//   this reason; REV-041 fixed SqlContainer's release after a rejected attempt).
 // - TrackDisposeState = false: Survives await using without being permanently disposed.
 //   DisposeAsync merely releases the held lock, readying the instance for reuse.
 // - Single allocation in TransactionContext constructor; GetLock() returns the same instance.
@@ -17,6 +20,8 @@
 // - MarkHeldByActiveReader(): while set, ANY contended lock attempt fails fast with
 //   InvalidOperationException instead of blocking — a reader still open on the connection means
 //   nothing can safely use it until the reader is disposed. Cleared when the hold is released.
+// - TryDeferUntilActiveReaderReleases(): work (the transaction's rollback after a Dispose) that
+//   runs when the reader's hold is released (REV-027).
 // =============================================================================
 
 using System.Runtime.CompilerServices;

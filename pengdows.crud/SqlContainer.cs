@@ -1188,11 +1188,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         using var activity = StartActivity("ExecuteNonQuery");
         try
         {
-            contextLocker = _context.GetLock();
-            if (contextLocker != NoOpAsyncLocker.Instance)
+            var acquiringContextLocker = _context.GetLock();
+            if (acquiringContextLocker != NoOpAsyncLocker.Instance)
             {
-                await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+                await acquiringContextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             }
+
+            // Assigned only once held: a transaction hands every caller the same locker, so
+            // releasing it after a failed LockAsync released the holder's lock (REV-041).
+            contextLocker = acquiringContextLocker;
 
             if (executionType == ExecutionType.Write && _dialect is SqlDialect ddlDialect &&
                 ddlDialect.RequiresConnectionPoolResetForDdl && IsDdlStatement(Query.ToString()))
@@ -1635,11 +1639,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 await singleConnectionTxGate.LockAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            contextLocker = _context.GetLock();
-            if (contextLocker != NoOpAsyncLocker.Instance)
+            var acquiringContextLocker = _context.GetLock();
+            if (acquiringContextLocker != NoOpAsyncLocker.Instance)
             {
-                await contextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
+                await acquiringContextLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             }
+
+            // Assigned only once held: a transaction hands every caller the same locker, so
+            // releasing it after a failed LockAsync released the holder's lock (REV-041).
+            contextLocker = acquiringContextLocker;
 
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);

@@ -128,6 +128,54 @@ public class TransactionCompletionReaderGuardTests
         await reader.DisposeAsync();
     }
 
+    // REV-041: the transaction's lock is one shared ReusableAsyncLocker. A second command that
+    // fails fast behind the active reader must not release the reader's hold on the way out
+    // (SqlContainer releases the context lock in its finally), or a third command runs on the
+    // reader's connection.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task SecondCommand_RejectedBehindActiveReader_DoesNotReleaseTheReadersLock(bool secondIsReader)
+    {
+        using var tx = CreateContext().BeginTransaction();
+        var reader = await tx.CreateSqlContainer("SELECT 1").ExecuteReaderAsync();
+
+        await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+        {
+            if (secondIsReader)
+            {
+                await using var second = await tx.CreateSqlContainer("SELECT 2").ExecuteReaderAsync();
+                return;
+            }
+
+            await tx.CreateSqlContainer("UPDATE t SET x = 1").ExecuteNonQueryAsync();
+        });
+
+        var third = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await tx.CreateSqlContainer("UPDATE t SET x = 2").ExecuteNonQueryAsync());
+        Assert.Contains("reader", third.Message, StringComparison.OrdinalIgnoreCase);
+
+        await reader.DisposeAsync();
+    }
+
+    // REV-041 with REV-027: the rejected command's exit must not run the rollback deferred by a
+    // Dispose either; it belongs to the reader's release.
+    [Fact]
+    public async Task DisposedTransaction_RejectedCommandBehindReader_DoesNotRollBackUnderTheReader()
+    {
+        var tx = CreateContext().BeginTransaction();
+        var reader = await tx.CreateSqlContainer("SELECT 1").ExecuteReaderAsync();
+        var fakeTx = (fakeDbTransaction)((TransactionContext)tx).Transaction;
+        var container = tx.CreateSqlContainer("UPDATE t SET x = 1");
+        ((IDisposable)tx).Dispose();
+
+        await Assert.ThrowsAnyAsync<Exception>(async () => await container.ExecuteNonQueryAsync());
+
+        Assert.Equal(0, fakeTx.RollbackCallCount);
+        await reader.DisposeAsync();
+        Assert.Equal(1, fakeTx.RollbackCallCount);
+    }
+
     // REV-027: Dispose with a reader still open must not tear the transaction down under the
     // reader (above), but it must not abandon it either: once the reader is disposed the
     // transaction is rolled back and its pinned connection released.
