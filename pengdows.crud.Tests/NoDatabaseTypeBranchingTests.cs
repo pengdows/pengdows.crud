@@ -24,7 +24,6 @@ public sealed class NoDatabaseTypeBranchingTests
     private static readonly Dictionary<string, int> NotYetMoved = new(StringComparer.Ordinal)
     {
         ["types/AdvancedTypeRegistry.cs"] = 78,
-        ["isolation/IsolationResolver.cs"] = 45,
         ["exceptions/translators/DbExceptionTranslatorRegistry.cs"] = 23,
         ["types/converters/SpatialConverter.cs"] = 14,
         ["types/coercion/AdvancedCoercions.cs"] = 8,
@@ -38,7 +37,10 @@ public sealed class NoDatabaseTypeBranchingTests
 
     private static readonly string[] AllowedFiles =
     {
-        "internal/DatabaseDetectionService.cs" // produces the value that picks the dialect
+        "internal/DatabaseDetectionService.cs", // produces the value that picks the dialect
+        // User decision 2026-10-03: the per-database isolation table is a place where keying by
+        // product makes sense, so it stays in one file.
+        "isolation/IsolationResolver.cs"
     };
 
     [Fact]
