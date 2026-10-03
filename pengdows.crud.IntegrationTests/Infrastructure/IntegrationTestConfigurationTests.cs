@@ -118,4 +118,25 @@ public class IntegrationTestConfigurationTests
 
         Assert.Contains("INTEGRATION_ONLY did not match", ex.Message);
     }
+
+    // REV-061: BaseProviders listed FlatFile and Spanner twice. The fixture starts one container per
+    // entry and keys them by database, so the second Spanner container replaced the first, which was
+    // never disposed.
+    [Fact]
+    public void BaseProviders_ListEachDatabaseOnce()
+    {
+        var providers = IntegrationTestConfiguration.BaseProviders;
+
+        Assert.Equal(providers.Count, providers.Distinct().Count());
+    }
+
+    [Fact]
+    public void EnabledProviders_WithEveryOptIn_ListEachDatabaseOnce()
+    {
+        var providers = IntegrationTestConfiguration.GetEnabledProviders(true, true, true, true);
+
+        Assert.Equal(providers.Count, providers.Distinct().Count());
+        Assert.Contains(SupportedDatabase.Spanner, providers);
+        Assert.Contains(SupportedDatabase.FlatFile, providers);
+    }
 }
