@@ -99,6 +99,8 @@ public interface ITenantContextRegistry
     /// <summary>
     /// Raised after a new <see cref="IDatabaseContext"/> is created for a tenant.
     /// Subscribers can use this to register the context with instrumentation or caches.
+    /// If a subscriber throws, the context is disposed and the exception propagates from
+    /// <see cref="GetContext"/>/<c>GetContextAsync</c>; nothing is cached.
     /// </summary>
     event Action<IDatabaseContext>? ContextCreated;
 
@@ -106,6 +108,8 @@ public interface ITenantContextRegistry
     /// Raised after a tenant context has been disposed and removed from the registry
     /// (via <see cref="Invalidate"/> or <see cref="InvalidateAll"/>).
     /// Subscribers must clean up any references they hold to the context.
+    /// Raised even when disposing the context failed. A subscriber that throws is logged, never
+    /// rethrown (the event can run on a thread-pool work item).
     /// </summary>
     event Action<IDatabaseContext>? ContextRemoved;
 }

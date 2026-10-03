@@ -357,7 +357,10 @@ release finding its tenant already invalidated, **and** registry disposal (which
 raises the event for every context the registry has created) — not just the first two. For
 `Invalidate`/`InvalidateAll`/lease-release, the event fires asynchronously relative to the call
 that triggered it (see "Disposal" above) — don't assume it has already fired by the time
-`Invalidate` or a lease's `Dispose`/`DisposeAsync` returns.
+`Invalidate` or a lease's `Dispose`/`DisposeAsync` returns. A `ContextRemoved` subscriber that
+throws is logged at Error and never rethrown (it often runs on a thread-pool work item, where an
+unhandled exception would end the process), and the event is raised even when disposing the
+context itself failed.
 
 ## Application-name composition
 
@@ -409,9 +412,7 @@ immediately, and retrying is the caller's responsibility, exactly like an ordina
 throws after a context was otherwise constructed successfully, the subscriber's exception
 propagates from `GetContext` and the entry is evicted exactly like a construction failure — the
 context never becomes visible to callers or gets cached, so a later `GetContext` call starts over.
-The registry does **not** dispose that just-constructed context, though (the handler runs inside
-the cached construction delegate, and the context reference is discarded with the fault) — keep
-`ContextCreated` subscribers non-throwing.
+The registry disposes that just-constructed context before rethrowing, so nothing leaks.
 
 ## Replacing the context factory
 

@@ -491,7 +491,48 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         }
         finally
         {
+            RaiseContextRemoved(context);
+        }
+    }
+
+    // ContextCreated runs application code. If it throws, the caller gets the exception and the
+    // context nobody will receive is disposed (REV-030).
+    private void RaiseContextCreated(IDatabaseContext context)
+    {
+        try
+        {
+            ContextCreated?.Invoke(context);
+        }
+        catch
+        {
+            DisposeRejectedContext(context);
+            throw;
+        }
+    }
+
+    private void DisposeRejectedContext(IDatabaseContext context)
+    {
+        try
+        {
+            context.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error disposing a tenant context after its ContextCreated handler threw.");
+        }
+    }
+
+    // ContextRemoved runs application code, often on a thread-pool work item where an exception
+    // would end the process (REV-031), so a failing handler is logged, never rethrown.
+    private void RaiseContextRemoved(IDatabaseContext context)
+    {
+        try
+        {
             ContextRemoved?.Invoke(context);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "A ContextRemoved handler threw.");
         }
     }
 
@@ -521,7 +562,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                       ?? throw new InvalidOperationException($"No factory registered for '{config.ProviderName}'.");
 
         var context = _contextFactory.Create(config, factory, _loggerFactory);
-        ContextCreated?.Invoke(context);
+        RaiseContextCreated(context);
         return context;
     }
 
@@ -534,7 +575,7 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
 
         var context = await _contextFactory.CreateAsync(config, factory, _loggerFactory, CancellationToken.None)
             .ConfigureAwait(false);
-        ContextCreated?.Invoke(context);
+        RaiseContextCreated(context);
         return context;
     }
 
@@ -666,12 +707,14 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
         try
         {
             context.Dispose();
-            ContextRemoved?.Invoke(context);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error disposing tenant context during shutdown.");
         }
+
+        // Outside the dispose's try: a failed dispose still removes the context (REV-032).
+        RaiseContextRemoved(context);
     }
 
     private async ValueTask DisposeShutdownContextAsync(IDatabaseContext context)
@@ -686,12 +729,13 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
             {
                 context.Dispose();
             }
-
-            ContextRemoved?.Invoke(context);
         }
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Error asynchronously disposing tenant context during shutdown.");
         }
+
+        // Outside the dispose's try: a failed dispose still removes the context (REV-032).
+        RaiseContextRemoved(context);
     }
 }
