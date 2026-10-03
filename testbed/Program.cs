@@ -117,23 +117,22 @@ if (versions.Count > 0)
 var results = await orchestrator.RunAllTestsAsync(only, exclude, versions);
 
 // Optional: Export results for CI/CD
-var successCount  = results.Count(r => r.Success);
 var timeoutCount  = results.Count(r => r.ContainerStartTimeout);
 var failCount     = results.Count(r => !r.Success && !r.ContainerStartTimeout);
 var totalCount    = results.Count;
 var totalChecks   = results.Sum(r => r.ChecksPassed);
 var totalSkipped  = results.Sum(r => r.ChecksSkipped);
 
-if (failCount == 0)
+var exitCode = ParallelTestOrchestrator.ExitCode(results);
+if (exitCode == 0)
 {
-    var msg = timeoutCount > 0
-        ? $"⚠️ {successCount}/{totalCount} databases passed ({totalChecks} checks, {totalSkipped} skipped); {timeoutCount} unavailable (container startup timed out)"
-        : $"🎉 All {totalCount} databases passed ({totalChecks} checks, {totalSkipped} skipped)!";
-    Console.WriteLine(msg);
-    Environment.Exit(0);
+    Console.WriteLine($"🎉 All {totalCount} databases passed ({totalChecks} checks, {totalSkipped} skipped)!");
 }
 else
 {
-    Console.WriteLine($"❌ {failCount}/{totalCount} databases failed ({totalChecks} checks passed, {totalSkipped} skipped)");
-    Environment.Exit(1);
+    Console.WriteLine(
+        $"❌ {failCount}/{totalCount} databases failed and {timeoutCount} unavailable (container startup timed out) " +
+        $"({totalChecks} checks passed, {totalSkipped} skipped)");
 }
+
+Environment.Exit(exitCode);

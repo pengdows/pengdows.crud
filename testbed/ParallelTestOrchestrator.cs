@@ -130,6 +130,31 @@ public class ParallelTestOrchestrator
         return _results.ToArray();
     }
 
+    /// <summary>
+    /// Records a provider's checks on its result. Any failed check fails the database (REV-048:
+    /// a CheckFail used to leave the run green).
+    /// </summary>
+    public static void ApplyChecks(TestResult result, IReadOnlyList<CheckResult> checks)
+    {
+        result.Checks = checks;
+        result.ChecksPassed = checks.Count(c => c.Outcome == "passed");
+        result.ChecksSkipped = checks.Count(c => c.Outcome == "skipped");
+        result.ChecksFailed = checks.Count(c => c.Outcome == "failed");
+        result.Success = result.ChecksFailed == 0;
+        result.Error = result.Success
+            ? null
+            : $"{result.ChecksFailed} check(s) failed: " +
+              string.Join(", ", checks.Where(c => c.Outcome == "failed").Select(c => c.Name));
+    }
+
+    /// <summary>
+    /// The process exit code: 0 only when every database ran and passed. A database whose container
+    /// did not start is a failure too: always-on databases must run, and an opt-in one is only
+    /// registered when it was asked for (REV-063).
+    /// </summary>
+    public static int ExitCode(IReadOnlyCollection<TestResult> results) =>
+        results.All(r => r.Success) ? 0 : 1;
+
     private async Task RunTestAsync(TestConfiguration config)
     {
         var startTime = DateTime.UtcNow;
@@ -146,7 +171,21 @@ public class ParallelTestOrchestrator
             Console.WriteLine($"[{config.ContainerName}] Starting container...");
 
             var containerSw = System.Diagnostics.Stopwatch.StartNew();
-            await config.Container.StartAsync();
+            try
+            {
+                await config.Container.StartAsync();
+            }
+            catch (TimeoutException tex)
+            {
+                // Only a container-start timeout is "unavailable"; a TimeoutException inside the
+                // tests is an ordinary failure (REV-063).
+                result.ContainerStartTimeout = true;
+                result.Error = tex.Message;
+                result.TotalTime = DateTime.UtcNow - startTime;
+                Console.WriteLine($"[{config.ContainerName}] ⚠️ Unavailable: {tex.Message}");
+                return;
+            }
+
             containerSw.Stop();
             result.ContainerStartTime = containerSw.Elapsed;
 
@@ -160,24 +199,13 @@ public class ParallelTestOrchestrator
             await testProvider.RunTest();
             testSw.Stop();
 
-            result.Success = true;
             result.TestTime = testSw.Elapsed;
             result.TotalTime = DateTime.UtcNow - startTime;
-            result.ChecksPassed = testProvider.ChecksPassed;
-            result.ChecksSkipped = testProvider.ChecksSkipped;
-            result.Checks = testProvider.Checks;
+            ApplyChecks(result, testProvider.Checks);
 
-            Console.WriteLine(
-                $"[{config.ContainerName}] ✅ Tests completed in {result.TestTime.Value.TotalSeconds:F2}s");
-        }
-        catch (TimeoutException tex)
-        {
-            result.Success = false;
-            result.ContainerStartTimeout = true;
-            result.Error = tex.Message;
-            result.TotalTime = DateTime.UtcNow - startTime;
-
-            Console.WriteLine($"[{config.ContainerName}] ⚠️ Unavailable: {tex.Message}");
+            Console.WriteLine(result.Success
+                ? $"[{config.ContainerName}] ✅ Tests completed in {result.TestTime.Value.TotalSeconds:F2}s"
+                : $"[{config.ContainerName}] ❌ {result.Error}");
         }
         catch (Exception ex)
         {
@@ -482,11 +510,11 @@ public class ParallelTestOrchestrator
                 container = r.ContainerName,
                 success = r.Success,
                 outcome = r.Success ? "Passed" : (r.ContainerStartTimeout ? "Unavailable" : "Failed"),
-                checksAttempted = r.ChecksPassed + (r.Success ? 0 : 1),
+                checksAttempted = r.ChecksPassed + r.ChecksFailed,
                 checksPassed = r.ChecksPassed,
-                checksFailed = r.Success ? 0 : 1,
+                checksFailed = r.ChecksFailed,
                 checksSkipped = r.ChecksSkipped,
-                totalChecks = r.ChecksPassed + (r.Success ? 0 : 1) + r.ChecksSkipped,
+                totalChecks = r.ChecksPassed + r.ChecksFailed + r.ChecksSkipped,
                 containerStartTimeSeconds = r.ContainerStartTime.TotalSeconds,
                 configuredStartupWeightSeconds = r.ConfiguredStartupWeightSeconds,
                 testTimeSeconds = r.TestTime?.TotalSeconds,
@@ -584,6 +612,8 @@ public static class TestbedImageMatrix
 
 public class TestResult
 {
+    public int ChecksFailed { get; set; }
+
     public required string ContainerName { get; set; }
     public required string DatabaseProvider { get; set; }
     public required DateTime StartTime { get; set; }
