@@ -267,12 +267,18 @@ public partial class DatabaseContext
                 switch (args.CurrentState)
                 {
                     case ConnectionState.Open:
-                        _logger.LogDebug("Opening connection: " + Name);
+                        if (_logger.IsEnabled(LogLevel.Debug))
+                        {
+                            _logger.LogDebug("Opening connection: {Name}", Name);
+                        }
                         UpdateMaxConnectionCount(Interlocked.Increment(ref _connectionCount));
                         break;
                     case ConnectionState.Closed when args.OriginalState != ConnectionState.Broken:
                     case ConnectionState.Broken:
-                        _logger.LogDebug("Closed or broken connection: " + Name);
+                        if (_logger.IsEnabled(LogLevel.Debug))
+                        {
+                            _logger.LogDebug("Closed or broken connection: {Name}", Name);
+                        }
                         Interlocked.Decrement(ref _connectionCount);
                         break;
                 }
