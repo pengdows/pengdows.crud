@@ -166,6 +166,10 @@ internal sealed class InformixDialect : SqlDialect
         DbType.Single => "SMALLFLOAT",
         DbType.DateTime or DbType.DateTime2 or DbType.DateTimeOffset => "DATETIME YEAR TO FRACTION(5)",
         DbType.Date => "DATE",
+        // WRT-004 (live-verified with the type matrix): a TIME column is declared DATETIME HOUR TO
+        // ..., and MONEY takes a DECIMAL; Informix converts either on assignment.
+        DbType.Time => "DATETIME HOUR TO FRACTION(5)",
+        DbType.Currency => "DECIMAL(32)",
         _ => throw new NotSupportedException(
             $"Informix MERGE upsert does not support a {dbType} column in the source row.")
     };

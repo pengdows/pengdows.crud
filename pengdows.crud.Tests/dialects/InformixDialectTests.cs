@@ -235,6 +235,9 @@ public class InformixDialectTests
     [InlineData(DbType.DateTime, "DATETIME YEAR TO FRACTION(5)")]
     [InlineData(DbType.DateTimeOffset, "DATETIME YEAR TO FRACTION(5)")]
     [InlineData(DbType.Date, "DATE")]
+    // WRT-004: TIME (DATETIME HOUR TO ...) and MONEY columns; Informix converts on assignment.
+    [InlineData(DbType.Time, "DATETIME HOUR TO FRACTION(5)")]
+    [InlineData(DbType.Currency, "DECIMAL(32)")]
     public void GetMergeSourceCastType_MapsVerifiedTypes(DbType dbType, string expected)
     {
         Assert.Equal(expected, InformixDialect.GetMergeSourceCastType(dbType));
