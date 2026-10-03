@@ -5,6 +5,8 @@
 // AI SUMMARY:
 // - Generic bounded cache with configurable max size.
 // - Thread-safe: uses ConcurrentDictionary with per-entry Lazy and LRU timestamps.
+// - Only a miss advances the clock; a hit writes its entry's stamp at most once per miss and
+//   never touches shared state, so concurrent hits don't contend (REV-057).
 // - LRU eviction: least-recently-accessed entries removed when capacity exceeded.
 // - Key methods:
 //   * GetOrAdd(key, factory) - retrieves or creates entry; factory runs at most once per key
@@ -36,6 +38,9 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
 
     public int Count => _map.Count;
 
+    /// <summary>The recency clock; exposed for tests.</summary>
+    internal long Clock => Volatile.Read(ref _clock);
+
     private sealed class CacheEntry
     {
         private readonly Lazy<TValue> _value;
@@ -55,7 +60,7 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
         // Fast path: key already cached — touch and return
         if (_map.TryGetValue(key, out var existing))
         {
-            Volatile.Write(ref existing.LastAccess, Interlocked.Increment(ref _clock));
+            Touch(existing);
             return existing.Value;
         }
 
@@ -68,11 +73,10 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
         // that entry. The poisoned entry stays in the map until it is evicted by LRU.
         // Callers should ensure their factory does not throw for transient errors; use a
         // try/catch inside the factory and return a sentinel value if recovery is needed.
-        var tick = Interlocked.Increment(ref _clock);
+        // A miss advances the clock by 2 and stamps the entry with it: newer than any hit since
+        // the previous miss (those stamp clock + 1), so insertion still counts as a use.
+        var tick = Interlocked.Add(ref _clock, 2);
         var entry = _map.GetOrAdd(key, k => new CacheEntry(() => factory(k), tick));
-
-        // Touch the returned entry (might be one another thread inserted)
-        Volatile.Write(ref entry.LastAccess, Interlocked.Increment(ref _clock));
 
         // Evict LRU entries until we are within capacity
         while (_map.Count > _max)
@@ -90,13 +94,30 @@ internal sealed class BoundedCache<TKey, TValue> where TKey : notnull
     {
         if (_map.TryGetValue(key, out var entry))
         {
-            Volatile.Write(ref entry.LastAccess, Interlocked.Increment(ref _clock));
+            Touch(entry);
             v = entry.Value;
             return true;
         }
 
         v = default!;
         return false;
+    }
+
+    /// <summary>
+    /// Marks <paramref name="entry"/> used since the last miss. Only a miss advances the clock, so
+    /// a hit is two reads and, at most once per miss, one write to the entry — never a write to
+    /// shared state. A per-hit <c>Interlocked.Increment</c> made every thread hitting the cache
+    /// contend on one cache line (REV-057). Recency is therefore tracked per miss: entries hit
+    /// since the last miss tie, and all outrank entries not hit since — eviction only happens on
+    /// a miss, so that is the ordering it needs.
+    /// </summary>
+    private void Touch(CacheEntry entry)
+    {
+        var stamp = Volatile.Read(ref _clock) + 1;
+        if (Volatile.Read(ref entry.LastAccess) < stamp)
+        {
+            Volatile.Write(ref entry.LastAccess, stamp);
+        }
     }
 
     public void Clear()

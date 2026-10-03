@@ -49,6 +49,48 @@ public class BoundedCacheLruTests
         Assert.True(cache.TryGet(4, out _), "Entry 4 was just added");
     }
 
+    // REV-057: every hit used to Interlocked.Increment the shared clock and write the entry's
+    // timestamp, so threads hitting the cache serialized on one cache line (WrapObjectName went
+    // 15 -> 286 ns at 8 threads). Only a miss advances the clock now; a hit stamps its entry at
+    // most once per miss, so repeated hits write nothing.
+    [Fact]
+    public void RepeatedHits_DoNotAdvanceTheSharedClock()
+    {
+        var cache = new BoundedCache<int, string>(4);
+        cache.GetOrAdd(1, _ => "a");
+        cache.GetOrAdd(2, _ => "b");
+        cache.TryGet(1, out _);
+        var clock = cache.Clock;
+
+        for (var i = 0; i < 1000; i++)
+        {
+            cache.GetOrAdd(1, _ => "x");
+            cache.TryGet(2, out _);
+        }
+
+        Assert.Equal(clock, cache.Clock);
+    }
+
+    [Fact]
+    public void HitAfterAMiss_StillOutranksEntriesNotTouchedSince()
+    {
+        // cap=3: 1,2 then hits on both, then 3 (a miss), then a hit on 1 only; adding 4 must
+        // evict 2 — touched before the last miss — not 1.
+        var cache = new BoundedCache<int, string>(3);
+        cache.GetOrAdd(1, _ => "a");
+        cache.GetOrAdd(2, _ => "b");
+        cache.TryGet(1, out _);
+        cache.TryGet(2, out _);
+        cache.GetOrAdd(3, _ => "c");
+        cache.TryGet(1, out _);
+        cache.TryGet(3, out _);
+
+        cache.GetOrAdd(4, _ => "d");
+
+        Assert.True(cache.TryGet(1, out _));
+        Assert.False(cache.TryGet(2, out _));
+    }
+
     [Fact]
     public async Task GetOrAdd_ConcurrentRace_FactoryCalledOnce()
     {
