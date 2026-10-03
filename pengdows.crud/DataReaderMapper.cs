@@ -864,8 +864,15 @@ public sealed class DataReaderMapper : IDataReaderMapper
     {
         var coercer = TypeCoercionHelper.ResolveCoercer(fieldType, prop.PropertyType, enumMode, coercion);
         var read = unresolvedReader ?? UnresolvedColumnReader.Read;
+        // A NULL leaves the property alone, as every other column path does: writing null stored a
+        // struct property's default and overwrote initializers (REV-065).
         return (target, reader) =>
-            prop.SetValue(target, reader.IsDBNull(ordinal) ? null : coercer(read(reader, ordinal, fieldType)));
+        {
+            if (!reader.IsDBNull(ordinal))
+            {
+                prop.SetValue(target, coercer(read(reader, ordinal, fieldType)));
+            }
+        };
     }
 
     private static object? CoerceValue(
