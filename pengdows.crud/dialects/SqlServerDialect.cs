@@ -23,6 +23,7 @@
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
@@ -49,6 +50,23 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class SqlServerDialect : SqlDialect
 {
+    private static readonly Regex BuildToken =
+        new(@"-\s*(\d+\.\d+\.\d+\.\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    // @@VERSION carries the build after " - " ("... 2019 (RTM-CU22) (KB...) - 15.0.4322.2 (X64)") and
+    // ends with the OS version ("Windows Server 2019 Standard 10.0", "Ubuntu 22.04.4"), which the
+    // base parse took (REV-052).
+    public override Version? ParseVersion(string versionString)
+    {
+        var build = string.IsNullOrWhiteSpace(versionString) ? null : BuildToken.Match(versionString);
+        if (build is { Success: true } && Version.TryParse(build.Groups[1].Value, out var version))
+        {
+            return version;
+        }
+
+        return base.ParseVersion(versionString);
+    }
+
     // TYPE-002: uniqueidentifier stores (and CAST to binary(16) yields) .NET's mixed-endian order.
     internal override bool StoresGuidBytesBigEndian => false;
 

@@ -21,6 +21,10 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class TiDbDialect : MySqlDialect
 {
+    // TiDB's banner ("8.0.11-TiDB-v7.5.0") leads with the MySQL version it imitates; its version
+    // gates are keyed to the TiDB release at the end, as before REV-052.
+    public override Version? ParseVersion(string versionString) => ParseLastDottedVersion(versionString);
+
     // TiDB treats READ ONLY as a no-op unless tidb_enable_noop_functions is set (live).
     internal override bool EnforcesReadOnlyTransactions => false;
 

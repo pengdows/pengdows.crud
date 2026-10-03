@@ -21,6 +21,7 @@ using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
+using System.Text.RegularExpressions;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
@@ -50,6 +51,53 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class MySqlDialect : SqlDialect
 {
+    private static readonly Regex AuroraBanner =
+        new(@"^(\d+)\.(\d+)\.mysql_aurora\.(\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    private static readonly Regex LeadingVersion =
+        new(@"^\d+(?:\.\d+){1,3}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// The server's own version is the banner's leading number ("8.0.35-0ubuntu0.22.04.1",
+    /// "10.6.16-MariaDB-0ubuntu0.22.04.1"); the base parse took the last one, the package or OS
+    /// version (REV-052). MariaDB's replication prefix "5.5.5-" is skipped, and Aurora MySQL's
+    /// release ("8.0.mysql_aurora.3.04.0") maps to the MySQL version it is built on.
+    /// </summary>
+    public override Version? ParseVersion(string versionString)
+    {
+        if (string.IsNullOrWhiteSpace(versionString))
+        {
+            return null;
+        }
+
+        var text = versionString.Trim();
+        var aurora = AuroraBanner.Match(text);
+        if (aurora.Success)
+        {
+            return aurora.Groups[3].Value switch
+            {
+                "3" => new Version(8, 0, 23),
+                "2" => new Version(5, 7, 12),
+                "1" => new Version(5, 6, 10),
+                _ => new Version(int.Parse(aurora.Groups[1].Value, CultureInfo.InvariantCulture),
+                    int.Parse(aurora.Groups[2].Value, CultureInfo.InvariantCulture))
+            };
+        }
+
+        if (text.StartsWith("5.5.5-", StringComparison.Ordinal))
+        {
+            text = text[6..];
+        }
+
+        var leading = LeadingVersion.Match(text);
+        if (leading.Success && Version.TryParse(leading.Value, out var version))
+        {
+            return version;
+        }
+
+        return base.ParseVersion(versionString);
+    }
+
     // SingleStore runs on this dialect and accepts a write in a read-only transaction (live).
     internal override bool EnforcesReadOnlyTransactions => DatabaseType != SupportedDatabase.SingleStore;
 

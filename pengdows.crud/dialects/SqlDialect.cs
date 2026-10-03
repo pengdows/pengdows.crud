@@ -2970,7 +2970,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return DatabaseType;
     }
 
-    public virtual Version? ParseVersion(string versionString)
+    public virtual Version? ParseVersion(string versionString) => ParseLastDottedVersion(versionString);
+
+    // The last dotted number in the banner: right for banners that end with the server version,
+    // wrong for packaged builds that append an OS or package version (dialects override).
+    protected Version? ParseLastDottedVersion(string versionString)
     {
         if (string.IsNullOrWhiteSpace(versionString))
         {
