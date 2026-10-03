@@ -399,6 +399,18 @@ public partial class TableGateway<TEntity, TRowID>
 
     private CachedSqlTemplates GetTemplatesForDialect(ISqlDialect dialect)
     {
+        // Fast path first: GetValue allocates its factory delegate (and closure) even on a hit.
+        if (_templatesByDialect.TryGetValue(dialect, out var cached))
+        {
+            return cached.Value;
+        }
+
+        return AddTemplatesForDialect(dialect);
+    }
+
+    // Separate from GetTemplatesForDialect so its closure isn't allocated on a cache hit.
+    private CachedSqlTemplates AddTemplatesForDialect(ISqlDialect dialect)
+    {
         return _templatesByDialect
             .GetValue(dialect, _ => new Lazy<CachedSqlTemplates>(() =>
                 BuildCachedSqlTemplatesForDialect(dialect)))
@@ -442,6 +454,18 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     private CachedContainerTemplates GetContainerTemplatesForDialect(ISqlDialect dialect, IDatabaseContext context)
+    {
+        // Fast path first: GetValue allocates its factory delegate (and closure) even on a hit.
+        if (_containersByDialect.TryGetValue(dialect, out var cached) && cached.IsValueCreated)
+        {
+            return cached.Value;
+        }
+
+        return AddContainerTemplatesForDialect(dialect, context);
+    }
+
+    // Separate from GetContainerTemplatesForDialect so its closure isn't allocated on a cache hit.
+    private CachedContainerTemplates AddContainerTemplatesForDialect(ISqlDialect dialect, IDatabaseContext context)
     {
         try
         {

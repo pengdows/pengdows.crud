@@ -94,7 +94,18 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     // Template infrastructure
     // =========================================================================
 
-    private PkTemplates GetPkTemplatesForDialect(ISqlDialect dialect) =>
+    private PkTemplates GetPkTemplatesForDialect(ISqlDialect dialect)
+    {
+        // Fast path first: GetValue allocates its factory delegate (and closure) even on a hit.
+        if (_pkTemplatesByDialect.TryGetValue(dialect, out var cached))
+        {
+            return cached.Value;
+        }
+
+        return AddPkTemplatesForDialect(dialect);
+    }
+
+    private PkTemplates AddPkTemplatesForDialect(ISqlDialect dialect) =>
         _pkTemplatesByDialect
             .GetValue(dialect, _ => new Lazy<PkTemplates>(() => BuildPkTemplates(dialect)))
             .Value;

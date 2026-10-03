@@ -77,6 +77,10 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private IColumnInfo? _idColumn;
 
+    // Scratch list the insert binder fills before AddParameters copies it; the fill and copy are
+    // synchronous, so one list per thread replaces a list per BuildCreate (PERF-013).
+    [ThreadStatic] private static List<DbParameter>? t_bindScratch;
+
     // Multitenancy background for every cache in this block: TableGateway is a singleton shared
     // across tenant contexts (see CLAUDE.md's multi-tenancy pattern: gateway.Method(entity,
     // tenantCtx)). Two tenants on different versions/capability sets of the same engine (e.g.
@@ -763,17 +767,21 @@ public partial class TableGateway<TEntity, TRowID> :
         if (stripPlaceholders)
         {
             var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
-            var sc = containerTemplates.InsertTemplate.Clone(ctx);
-
-            // Optimized monolithic binding: bypass sc.SetParameterValue dictionary lookups.
-            // We clear the cloned parameters and re-add them using the fast binder.
-            sc.Clear();
-            ((SqlQueryBuilder)sc.Query).CopyFrom((SqlQueryBuilder)containerTemplates.InsertTemplate.Query); // Restore query after Clear()
+            // Copy only the template's text (PERF-013): the binder creates every parameter, so
+            // cloning the template's parameters only to discard them was wasted work.
+            var sc = ((SqlContainer)containerTemplates.InsertTemplate).CloneQueryOnly(ctx);
 
             var binder = GetOrBuildInsertBinder(dialect, sqlTemplate);
-            var parameters = new List<DbParameter>(sqlTemplate.InsertColumns.Count);
-            binder(entity, parameters);
-            sc.AddParameters(parameters);
+            var parameters = t_bindScratch ??= new List<DbParameter>();
+            try
+            {
+                binder(entity, parameters);
+                sc.AddParameters(parameters);
+            }
+            finally
+            {
+                parameters.Clear();
+            }
 
             return (sc, dialect);
         }
@@ -1497,17 +1505,47 @@ public partial class TableGateway<TEntity, TRowID> :
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildInsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
+        if (_insertBinders.TryGetValue(dialect, out var cached))
+        {
+            return cached;
+        }
+
+        return AddInsertBinder(dialect, template);
+    }
+
+    private CompiledBinderFactory<TEntity>.Binder AddInsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
+    {
         return _insertBinders.GetValue(dialect, d =>
             CompiledBinderFactory<TEntity>.CreateInsertBinder(template.InsertColumns, template.InsertParameterNames, d));
     }
 
     private CompiledBinderFactory<TEntity>.Binder GetOrBuildUpsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
+        if (_upsertBinders.TryGetValue(dialect, out var cached))
+        {
+            return cached;
+        }
+
+        return AddUpsertBinder(dialect, template);
+    }
+
+    private CompiledBinderFactory<TEntity>.Binder AddUpsertBinder(ISqlDialect dialect, CachedSqlTemplates template)
+    {
         return _upsertBinders.GetValue(dialect, d =>
             CompiledBinderFactory<TEntity>.CreateInsertBinder(template.UpsertColumns, template.UpsertParameterNames, d));
     }
 
     private CompiledBinderFactory<TEntity>.UpdateBinder GetOrBuildUpdateBinder(ISqlDialect dialect, CachedSqlTemplates template)
+    {
+        if (_updateBinders.TryGetValue(dialect, out var cached))
+        {
+            return cached;
+        }
+
+        return AddUpdateBinder(dialect, template);
+    }
+
+    private CompiledBinderFactory<TEntity>.UpdateBinder AddUpdateBinder(ISqlDialect dialect, CachedSqlTemplates template)
     {
         return _updateBinders.GetValue(dialect, d =>
             CompiledBinderFactory<TEntity>.CreateUpdateBinder(template.UpdateColumns, template.UpdateColumnWrappedNames, d));

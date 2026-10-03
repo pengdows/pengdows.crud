@@ -2465,6 +2465,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return clone;
     }
 
+    /// <summary>
+    /// A copy of this container's query with no parameters, as <see cref="Clone(IDatabaseContext?)"/>
+    /// followed by clearing the parameters would leave it, without building and discarding the
+    /// parameter copies (PERF-013: BuildCreate's template path).
+    /// </summary>
+    internal SqlContainer CloneQueryOnly(IDatabaseContext? context)
+    {
+        var clone = (SqlContainer)(context ?? _context).CreateSqlContainer();
+        clone._query.CopyFrom(_query);
+        clone.HasWhereAppended = HasWhereAppended;
+        clone._nextParameterId = _nextParameterId;
+        return clone;
+    }
+
     private static DbParameter CloneParameter(DbParameter param, ISqlDialect dialect)
     {
         DbParameter cloned;

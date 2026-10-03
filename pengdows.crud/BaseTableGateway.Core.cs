@@ -395,6 +395,12 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     protected string BuildWrappedTableName(ISqlDialect dialect)
     {
+        // Fast path first: GetValue allocates its factory delegate (and closure) even on a hit.
+        if (_wrappedTableNameCache.TryGetValue(dialect, out var cached))
+        {
+            return cached;
+        }
+
         return _wrappedTableNameCache.GetValue(dialect, d =>
         {
             if (string.IsNullOrWhiteSpace(_tableInfo.Schema) || !d.SupportsNamespaces)
