@@ -208,14 +208,17 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
     // properties too. default(JsonElement) and default(JsonValue) hold nothing and are SQL NULL.
     private static string? SerializeJsonValue(object? value, JsonSerializerOptions options)
     {
+        // A null reference is SQL NULL, and a [Json] string is JSON-encoded like any other value:
+        // both as ColumnInfo writes them for batch and primary-key paths, and as the read side
+        // deserializes them (REV-047).
         return value switch
         {
+            null => null,
             JsonElement { ValueKind: JsonValueKind.Undefined } => null,
             types.valueobjects.JsonValue { IsDefault: true } => null,
             JsonDocument document => document.RootElement.GetRawText(),
             JsonElement element => element.GetRawText(),
             types.valueobjects.JsonValue jsonValue => jsonValue.AsString(),
-            string text => text,
             _ => JsonSerializer.Serialize(value, options)
         };
     }
