@@ -542,7 +542,7 @@ internal class DuckDbDialect : SqlDialect
         // read-only mode!"
         // Only DuckDB's read-only refusals: any "read only" text also matched a syntax error that
         // echoes "SET TRANSACTION READ ONLY" (REV-065, live).
-        if (ex.Message.Contains("attached in read-only mode", StringComparison.OrdinalIgnoreCase) ||
+        if (ex.Message.Contains("read-only mode", StringComparison.OrdinalIgnoreCase) ||
             ex.Message.Contains("read-only transaction", StringComparison.OrdinalIgnoreCase) ||
             ex.Message.Contains("read-only database", StringComparison.OrdinalIgnoreCase))
         {
