@@ -110,4 +110,52 @@ public class MetricsCollectorBranchTests
         Assert.Equal(0d, snapshot.P95CommandMs);
         Assert.Equal(0d, snapshot.P99CommandMs);
     }
+    // REV-049: percentiles were memoized by snapshot *call* count and the first (empty) snapshot was
+    // cached, so a consumer polling Metrics reported "unavailable"/0 for up to 31 polls after
+    // commands had run, then stayed frozen for 31 more.
+    private static void RunCommands(MetricsCollector collector, int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var start = collector.CommandStarted(0) - System.Diagnostics.Stopwatch.Frequency / 1000;
+            collector.CommandSucceeded(start, 1);
+        }
+    }
+
+    private static MetricsCollector PercentileCollector() => new(new MetricsOptions
+    {
+        EnableApproxPercentiles = true,
+        PercentileWindowSize = 128
+    });
+
+    [Fact]
+    public void Percentiles_PolledBeforeAnyCommand_AreAvailableOnTheNextPollAfterCommands()
+    {
+        var collector = PercentileCollector();
+        Assert.False(collector.CreateSnapshot().CommandPercentilesAvailable);
+
+        RunCommands(collector, 5);
+
+        var snapshot = collector.CreateSnapshot();
+        Assert.True(snapshot.CommandPercentilesAvailable);
+        Assert.True(snapshot.P95CommandMs > 0d);
+    }
+
+    [Fact]
+    public void Percentiles_RecomputeAfterEnoughNewSamples_HoweverRarelyPolled()
+    {
+        var collector = PercentileCollector();
+        RunCommands(collector, 5);
+        var first = collector.CreateSnapshot();
+
+        for (var i = 0; i < 40; i++)
+        {
+            var start = collector.CommandStarted(0) - System.Diagnostics.Stopwatch.Frequency; // 1 s
+            collector.CommandSucceeded(start, 1);
+        }
+
+        var second = collector.CreateSnapshot();
+        Assert.True(second.P95CommandMs > first.P95CommandMs * 10,
+            $"P95 {first.P95CommandMs} -> {second.P95CommandMs}: the snapshot did not see the new samples");
+    }
 }

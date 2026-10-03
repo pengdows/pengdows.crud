@@ -660,9 +660,11 @@ internal sealed class MetricsCollector
         // therefore this type's CreateSnapshot()) synchronously on every metrics-changing event
         // whenever a MetricsUpdated subscriber is attached (e.g. pengdows.crud.opentelemetry's
         // PengdowsMetricsObserver). Sorting the full window on every one of those calls meant a
-        // sort per database operation for a P95/P99 read far less often. Recomputing only every
-        // RecomputeInterval-th call amortizes the O(n log n) sort; the bounded staleness (at most
-        // RecomputeInterval-1 calls old) is negligible next to the sliding window's own.
+        // sort per database operation. When samples have changed, the snapshot is recomputed if the
+        // cached one is empty, if RecomputeInterval new samples have arrived (a polling consumer),
+        // or after RecomputeInterval calls (a trickle of samples); with no new samples it is never
+        // recomputed. Counting calls alone left a polling consumer "unavailable" or frozen for up
+        // to 31 polls (REV-049).
         private const long RecomputeInterval = 32;
 
         private readonly double[] _buffer;
@@ -670,7 +672,8 @@ internal sealed class MetricsCollector
         private readonly object _snapshotLock = new();
         private long _index;
         private long _count;
-        private long _snapshotCallCount;
+        private long _samplesAtLastCompute = -1;
+        private long _callsSinceCompute;
         private PercentileSnapshot _cachedSnapshot = PercentileSnapshot.Empty;
 
         internal PercentileRing(int size)
@@ -702,22 +705,26 @@ internal sealed class MetricsCollector
 
         internal PercentileSnapshot CreateSnapshot()
         {
-            var call = Interlocked.Increment(ref _snapshotCallCount);
-            if (call % RecomputeInterval != 1)
+            var samples = Volatile.Read(ref _index);
+            lock (_snapshotLock)
             {
-                lock (_snapshotLock)
+                _callsSinceCompute++;
+                var newSamples = samples - _samplesAtLastCompute;
+                var stale = _samplesAtLastCompute < 0 ||
+                            (newSamples > 0 &&
+                             (!_cachedSnapshot.Available ||
+                              newSamples >= RecomputeInterval ||
+                              _callsSinceCompute >= RecomputeInterval));
+                if (!stale)
                 {
                     return _cachedSnapshot;
                 }
-            }
 
-            var computed = ComputeSnapshot();
-            lock (_snapshotLock)
-            {
-                _cachedSnapshot = computed;
+                _cachedSnapshot = ComputeSnapshot();
+                _samplesAtLastCompute = samples;
+                _callsSinceCompute = 0;
+                return _cachedSnapshot;
             }
-
-            return computed;
         }
 
         private PercentileSnapshot ComputeSnapshot()
