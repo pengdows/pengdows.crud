@@ -47,6 +47,12 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class DuckDbDialect : SqlDialect
 {
+    internal override bool RequiresSerializedConnectionOpen => true;
+
+    internal override bool ReadOnlyConnectionsCanBlockConcurrentWriters => true;
+
+    internal override bool RejectsExplicitIsolationLevelOnBeginTransaction => true;
+
     internal DuckDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {

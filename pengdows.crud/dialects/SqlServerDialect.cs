@@ -481,6 +481,42 @@ internal class SqlServerDialect : SqlDialect
         return "ApplicationIntent=ReadOnly";
     }
 
+    internal override async ValueTask<SessionCapabilityPrefetch> DetectSessionCapabilitiesAsync(
+        ITrackedConnection connection, bool useAsync, CancellationToken cancellationToken)
+    {
+        var rcsi = await TryReadIsolationStateAsync(connection, RcsiQuery, useAsync, cancellationToken)
+            .ConfigureAwait(false);
+        var snapshot = await TryReadIsolationStateAsync(connection, SnapshotIsolationQuery, useAsync,
+            cancellationToken).ConfigureAwait(false);
+        return new SessionCapabilityPrefetch(rcsi == 1, snapshot == 1);
+    }
+
+    private static async ValueTask<int> TryReadIsolationStateAsync(ITrackedConnection connection, string sql,
+        bool useAsync, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            var value = useAsync && cmd is DbCommand dbCommand
+                ? await dbCommand.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false)
+                : cmd.ExecuteScalar();
+            return value switch
+            {
+                bool b => b ? 1 : 0,
+                byte by => by,
+                short sh => sh,
+                int i => i,
+                _ => Convert.ToInt32(value ?? 0, CultureInfo.InvariantCulture)
+            };
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Best effort: a failed probe reports "off" (permissions, a proxy, an older server).
+            return 0;
+        }
+    }
+
     public override bool IsReadCommittedSnapshotOn(ITrackedConnection conn)
     {
         using var cmd = conn.CreateCommand();

@@ -353,7 +353,7 @@ public class DatabaseContextTests
         foreach (var connection in factory.Connections)
         {
             connection.ScalarResultsByCommand[
-                "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 1;
+                "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = 1;
             connection.ScalarResultsByCommand[
                 "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 1;
         }
@@ -373,7 +373,7 @@ public class DatabaseContextTests
         foreach (var connection in factory.Connections)
         {
             connection.ScalarResultsByCommand[
-                "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 1;
+                "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = 1;
             connection.ScalarResultsByCommand[
                 "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
         }

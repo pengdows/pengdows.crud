@@ -124,7 +124,7 @@ internal static class fakeDbFactoryTestExtensions
         c.ScalarResultsByCommand["SELECT version()"] = "Test Database 1.0";
         c.ScalarResultsByCommand["PRAGMA version"] = "Test Database 1.0";
         c.ScalarResultsByCommand[
-            "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()"] = 0;
+            "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = 0;
         c.ScalarResultsByCommand[
             "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
 

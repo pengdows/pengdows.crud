@@ -376,7 +376,7 @@ public partial class DatabaseContext
 
             Name = _dataSourceInfo.DatabaseProductName;
             _procWrappingStyle = _dataSourceInfo.ProcWrappingStyle;
-            if (Product == SupportedDatabase.DuckDB)
+            if (_dialect is SqlDialect { RequiresSerializedConnectionOpen: true })
             {
                 RequiresSerializedOpen = true;
                 _connectionOpenGate = new SemaphoreSlim(1, 1);
@@ -809,54 +809,17 @@ public partial class DatabaseContext
                 : DatabaseDetectionService.DetectTopology(product, _connectionString, initConn);
             var isLocalDb = topology.IsLocalDb;
 
-            // Optional: RCSI prefetch (SQL Server only)
-            var rcsi = false;
-            var snapshotIsolation = false;
-            if (initConn != null && product == SupportedDatabase.SqlServer)
+            // Session capabilities the dialect reads before it is initialized (SQL Server's
+            // read-committed snapshot and snapshot isolation); a no-op for other dialects.
+            if (initConn != null)
             {
-                try
-                {
-                    using var cmd = initConn.CreateCommand();
-                    cmd.CommandText =
-                        "SELECT CAST(is_read_committed_snapshot_on AS int) FROM sys.databases WHERE name = DB_NAME()";
-                    var v = await ExecuteInitScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false);
-                    rcsi = v switch
-                    {
-                        bool b => b,
-                        byte by => by != 0,
-                        short s => s != 0,
-                        int i => i != 0,
-                        _ => Convert.ToInt32(v ?? 0) != 0
-                    };
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    /* ignore prefetch failures */
-                }
-
-                try
-                {
-                    using var cmd = initConn.CreateCommand();
-                    cmd.CommandText = "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()";
-                    var value = await ExecuteInitScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false);
-                    var state = value switch
-                    {
-                        bool b => b ? 1 : 0,
-                        byte by => by,
-                        short s => s,
-                        int i => i,
-                        _ => Convert.ToInt32(value ?? 0)
-                    };
-                    snapshotIsolation = state == 1;
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    /* ignore prefetch failures */
-                }
+                var prefetchDialect = (SqlDialect)SqlDialectFactory.CreateDialectForType(product, _factory,
+                    _loggerFactory.CreateLogger<SqlDialect>());
+                var prefetch = await prefetchDialect.DetectSessionCapabilitiesAsync(initConn, useAsync,
+                    cancellationToken).ConfigureAwait(false);
+                _rcsiPrefetch = prefetch.Rcsi;
+                _snapshotIsolationPrefetch = prefetch.SnapshotIsolation;
             }
-
-            _rcsiPrefetch = rcsi;
-            _snapshotIsolationPrefetch = snapshotIsolation;
 
             if (initConn != null && config.DbMode == DbMode.Standard)
             {

@@ -602,6 +602,34 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool ReturnsCollectionsAsLiteralText => false;
 
     /// <summary>
+    /// Opening connections must be serialized: concurrent opens corrupt the provider (DuckDB).
+    /// </summary>
+    internal virtual bool RequiresSerializedConnectionOpen => false;
+
+    /// <summary>
+    /// A read-only connection to the same database can lock out concurrent writers (a DuckDB file),
+    /// so read intent must not route to a read-only connection.
+    /// </summary>
+    internal virtual bool ReadOnlyConnectionsCanBlockConcurrentWriters => false;
+
+    /// <summary>
+    /// The provider rejects an explicit IsolationLevel on BeginTransaction (DuckDB.NET); the
+    /// transaction begins with the provider default and keeps the resolved level for reporting.
+    /// </summary>
+    internal virtual bool RejectsExplicitIsolationLevelOnBeginTransaction => false;
+
+    internal readonly record struct SessionCapabilityPrefetch(bool Rcsi, bool SnapshotIsolation);
+
+    /// <summary>
+    /// Best-effort read of session capabilities from a raw, open connection, before the dialect is
+    /// otherwise initialized (SQL Server: read-committed snapshot and snapshot isolation). Never
+    /// throws except for cancellation; a failed probe reports "off".
+    /// </summary>
+    internal virtual ValueTask<SessionCapabilityPrefetch> DetectSessionCapabilitiesAsync(
+        ITrackedConnection connection, bool useAsync, CancellationToken cancellationToken) =>
+        ValueTask.FromResult(default(SessionCapabilityPrefetch));
+
+    /// <summary>
     /// True when an insert of these columns must take its values from a SELECT
     /// (<see cref="AllowsColumnArgumentsInValues"/>).
     /// </summary>
