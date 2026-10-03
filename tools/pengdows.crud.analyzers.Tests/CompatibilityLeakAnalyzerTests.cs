@@ -142,6 +142,34 @@ public sealed class CompatibilityLeakAnalyzerTests
 
     // A using-alias must not sidestep PGC028: the alias directive itself names the blocked type, and
     // an identifier bound through the alias resolves to the aliased type.
+    // REV-066: only identifiers that can name a blocked symbol are resolved; a global using alias
+    // must still be one of them.
+    [Fact]
+    public async Task GlobalAliasedBlockedType_IsReportedAtEachUse()
+    {
+        var source = """
+            global using Bad = pengdows.crud.TypeCoercionOptions;
+
+            namespace pengdows.crud
+            {
+                public sealed class TypeCoercionOptions { }
+            }
+
+            namespace Consumer
+            {
+                public sealed class ConsumerType
+                {
+                    public Bad Create() => new Bad();
+                }
+            }
+            """;
+
+        await CSharpAnalyzerVerifier<CompatibilityLeakAnalyzer>.VerifyDiagnosticCountAsync(
+            source,
+            CompatibilityLeakAnalyzer.DiagnosticId,
+            expectedCount: 3);
+    }
+
     [Fact]
     public async Task AliasedBlockedType_IsReportedAtTheAliasAndAtEachUse()
     {

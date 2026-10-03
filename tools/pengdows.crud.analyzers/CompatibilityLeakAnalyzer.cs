@@ -78,7 +78,65 @@ public sealed class CompatibilityLeakAnalyzer : DiagnosticAnalyzer
     {
         context.ConfigureGeneratedCodeAnalysis(GeneratedCodeAnalysisFlags.None);
         context.EnableConcurrentExecution();
-        context.RegisterSyntaxNodeAction(AnalyzeIdentifier, SyntaxKind.IdentifierName);
+        context.RegisterCompilationStartAction(start =>
+        {
+            // Only an identifier that can name a blocked symbol is resolved (REV-066): resolving
+            // every identifier in the compilation cost a semantic lookup and display strings each.
+            // That is a blocked simple name, or a using alias, which can name anything.
+            var aliases = CollectAliasNames(start.Compilation);
+            start.RegisterSyntaxNodeAction(nodeContext =>
+            {
+                var text = ((IdentifierNameSyntax)nodeContext.Node).Identifier.ValueText;
+                if (CandidateNames.Contains(text) || aliases.Contains(text))
+                {
+                    AnalyzeIdentifier(nodeContext);
+                }
+            }, SyntaxKind.IdentifierName);
+        });
+    }
+
+    // Simple names that can refer to a blocked symbol: each blocked type (attributes also without the
+    // "Attribute" suffix) and each blocked property.
+    private static readonly ImmutableHashSet<string> CandidateNames = BuildCandidateNames();
+
+    private static ImmutableHashSet<string> BuildCandidateNames()
+    {
+        var names = ImmutableHashSet.CreateBuilder<string>(StringComparer.Ordinal);
+        foreach (var type in BlockedTypes)
+        {
+            var simple = type.Substring(type.LastIndexOf('.') + 1);
+            names.Add(simple);
+            if (simple.EndsWith("Attribute", StringComparison.Ordinal))
+            {
+                names.Add(simple.Substring(0, simple.Length - "Attribute".Length));
+            }
+        }
+
+        foreach (var property in BlockedProperties.Concat(WriteBlockedProperties))
+        {
+            names.Add(property.Substring(property.LastIndexOf('.') + 1));
+        }
+
+        return names.ToImmutable();
+    }
+
+    private static ImmutableHashSet<string> CollectAliasNames(Compilation compilation)
+    {
+        var aliases = ImmutableHashSet.CreateBuilder<string>(StringComparer.Ordinal);
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            foreach (var directive in tree.GetRoot()
+                         .DescendantNodes(node => node is CompilationUnitSyntax or BaseNamespaceDeclarationSyntax)
+                         .OfType<UsingDirectiveSyntax>())
+            {
+                if (directive.Alias != null)
+                {
+                    aliases.Add(directive.Alias.Name.Identifier.ValueText);
+                }
+            }
+        }
+
+        return aliases.ToImmutable();
     }
 
     private static void AnalyzeIdentifier(SyntaxNodeAnalysisContext context)
