@@ -38,4 +38,17 @@ public sealed class PostgreSqlIntervalNegativeClockTests
         Assert.Equal(3, value.Days);
         Assert.Equal(-5_400_000_000L, value.Microseconds);
     }
+
+    // REV-065: the ISO path summed seconds as double, so "PT0.000001S" truncated to 0 µs; and the
+    // pattern accepts fractional hours/minutes that int.Parse then refused.
+    [Theory]
+    [InlineData("PT0.000001S", 1L)]
+    [InlineData("PT1.000003S", 1_000_003L)]
+    [InlineData("PT0.3S", 300_000L)]
+    [InlineData("PT1.5H", 5_400_000_000L)]
+    [InlineData("PT0.5M", 30_000_000L)]
+    public void IsoText_FractionsAreExact(string text, long microseconds)
+    {
+        Assert.Equal(microseconds, Read(text).Microseconds);
+    }
 }

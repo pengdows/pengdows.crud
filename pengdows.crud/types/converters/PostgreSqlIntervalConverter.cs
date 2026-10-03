@@ -392,10 +392,12 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
 
     private static long ParseTimeComponent(string timePart)
     {
+        // decimal throughout: a double sum could truncate a microsecond, and the ISO pattern allows
+        // fractional hours and minutes that int.Parse refused (REV-065).
         var buffer = string.Empty;
-        var hours = 0;
-        var minutes = 0;
-        var seconds = 0.0;
+        var hours = 0m;
+        var minutes = 0m;
+        var seconds = 0m;
 
         foreach (var c in timePart)
         {
@@ -413,20 +415,19 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
             switch (c)
             {
                 case 'H':
-                    hours = int.Parse(buffer, CultureInfo.InvariantCulture);
+                    hours = decimal.Parse(buffer, NumberStyles.Float, CultureInfo.InvariantCulture);
                     break;
                 case 'M':
-                    minutes = int.Parse(buffer, CultureInfo.InvariantCulture);
+                    minutes = decimal.Parse(buffer, NumberStyles.Float, CultureInfo.InvariantCulture);
                     break;
                 case 'S':
-                    seconds = double.Parse(buffer, CultureInfo.InvariantCulture);
+                    seconds = decimal.Parse(buffer, NumberStyles.Float, CultureInfo.InvariantCulture);
                     break;
             }
 
             buffer = string.Empty;
         }
 
-        var totalSeconds = hours * 3600d + minutes * 60d + seconds;
-        return (long)(totalSeconds * 1_000_000d);
+        return checked((long)((hours * 3600m + minutes * 60m + seconds) * 1_000_000m));
     }
 }
