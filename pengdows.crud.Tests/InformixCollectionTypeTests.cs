@@ -164,4 +164,27 @@ public sealed class InformixCollectionTypeTests
 
         return (GC.GetAllocatedBytesForCurrentThread() - before) / count;
     }
+
+    // REV-065: text after a quoted element was skipped, so LIST{'a'x,'b'} parsed as [a, b] with
+    // the 'x' silently dropped. Malformed literals throw (hydration reports DataMappingException).
+    [Theory]
+    [InlineData("LIST{'a'x,'b'}")]
+    [InlineData("SET{'a' 'b'}")]
+    public void ListLiteral_TextAfterAQuotedElement_Throws(string literal)
+    {
+        Assert.Throws<FormatException>(() => pengdows.crud.@internal.CollectionLiteralFormat.Parse<string>(literal));
+    }
+
+    // REV-065: a DateTime element was written with its invariant ToString(), which drops the
+    // fractional seconds. It is written as Informix DATETIME text, to its 5 digits (truncated).
+    [Fact]
+    public void ListLiteral_DateTimeElements_KeepFractionalSeconds()
+    {
+        var value = new DateTime(2026, 10, 3, 12, 34, 56, DateTimeKind.Unspecified).AddTicks(1_234_567);
+
+        var literal = pengdows.crud.@internal.CollectionLiteralFormat.Format(new[] { value });
+
+        Assert.Equal("LIST{'2026-10-03 12:34:56.12345'}", literal);
+        Assert.Equal(value.AddTicks(-67), pengdows.crud.@internal.CollectionLiteralFormat.Parse<DateTime>(literal)[0]);
+    }
 }

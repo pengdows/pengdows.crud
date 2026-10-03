@@ -50,6 +50,12 @@ internal static class CollectionLiteralFormat
             case bool flag:
                 builder.Append(flag ? "'t'" : "'f'");
                 break;
+            // Informix DATETIME text to its 5 fraction digits, truncated: ToString() dropped the
+            // fractional seconds (REV-065).
+            case DateTime dateTime:
+                var truncated = dateTime.AddTicks(-(dateTime.Ticks % 100));
+                builder.Append('\'').Append(truncated.ToString("yyyy-MM-dd HH:mm:ss.fffff", CultureInfo.InvariantCulture)).Append('\'');
+                break;
             case IFormattable formattable when IsNumeric(element):
                 builder.Append(formattable.ToString(null, CultureInfo.InvariantCulture));
                 break;
@@ -128,7 +134,13 @@ internal static class CollectionLiteralFormat
         if (position < body.Length && body[position] == '\'')
         {
             var text = ReadQuoted(body, ref position);
-            SkipSeparator(body, ref position);
+            // Only a separator or the end may follow: text after the closing quote was skipped
+            // ("LIST{'a'x,'b'}" lost the x, REV-065).
+            if (!SkipSeparator(body, ref position) && position < body.Length)
+            {
+                throw new FormatException("Unexpected text after a quoted element in an Informix collection literal.");
+            }
+
             return ConvertElement<T>(text.AsSpan(), text);
         }
 
@@ -169,7 +181,8 @@ internal static class CollectionLiteralFormat
         throw new FormatException("Unterminated string in an Informix collection literal.");
     }
 
-    private static void SkipSeparator(ReadOnlySpan<char> body, ref int position)
+    // True when a separator was consumed.
+    private static bool SkipSeparator(ReadOnlySpan<char> body, ref int position)
     {
         while (position < body.Length && body[position] == ' ')
         {
@@ -179,7 +192,10 @@ internal static class CollectionLiteralFormat
         if (position < body.Length && body[position] == ',')
         {
             position++;
+            return true;
         }
+
+        return false;
     }
 
     private static T ConvertElement<T>(ReadOnlySpan<char> token, string? quoted)
