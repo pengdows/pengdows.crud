@@ -78,7 +78,8 @@ internal class SnowflakeDialect : SqlDialect
 
     public override bool PrepareStatements => true;
 
-    // Snowflake parses constraint DDL but does not enforce any constraints at runtime.
+    // Standard tables parse constraint DDL but don't enforce it; hybrid tables enforce PRIMARY KEY,
+    // UNIQUE and FOREIGN KEY (classified in IsUniqueViolation/IsForeignKeyViolation below).
     public override bool EnforcesConstraints => false;
     public override bool EnforcesForeignKeyConstraints => false;
     public override bool SupportsUniqueConstraints => false;
@@ -451,14 +452,21 @@ internal class SnowflakeDialect : SqlDialect
     // with the provider unless the caller explicitly configures a different limit.
     internal override int DefaultMaxPoolSize => 10;
 
-    // Snowflake parses UNIQUE/PRIMARY KEY constraint DDL but never enforces it at runtime
-    // (SupportsUniqueConstraints = false) — this exception category structurally cannot occur, so
-    // explicit false instead of falling through to the generic message-based default.
-    public override bool IsUniqueViolation(DbException ex) => false;
+    // Standard tables parse UNIQUE/PRIMARY KEY/FOREIGN KEY DDL but never enforce it; hybrid tables
+    // do (REV-065). Shapes from Snowflake's documentation (CREATE HYBRID TABLE, hybrid tables
+    // tutorial), not confirmed live: hybrid tables aren't available to trial accounts.
+    private const int HybridPrimaryKeyExists = 200001;
+    private const int HybridForeignKeyViolated = 200009;
 
-    // Snowflake parses FOREIGN KEY constraint DDL but never enforces it at runtime
-    // (EnforcesForeignKeyConstraints = false) — this exception category structurally cannot occur.
-    public override bool IsForeignKeyViolation(DbException ex) => false;
+    public override bool IsUniqueViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == HybridPrimaryKeyExists ||
+        ex.Message.Contains("Duplicate key value violates unique constraint", StringComparison.OrdinalIgnoreCase);
+
+    public override bool IsForeignKeyViolation(DbException ex) =>
+        TryGetProviderErrorCode(ex) == HybridForeignKeyViolated ||
+        (ex.Message.Contains("Foreign key constraint", StringComparison.OrdinalIgnoreCase) &&
+         ex.Message.Contains("was violated", StringComparison.OrdinalIgnoreCase)) ||
+        ex.Message.Contains("Foreign keys that reference key values still exist", StringComparison.OrdinalIgnoreCase);
 
     // NOT NULL is the one constraint Snowflake actually enforces at runtime (error 100072,
     // SQLSTATE 23502). Message wording is "NULL result in a non-nullable column" — the generic

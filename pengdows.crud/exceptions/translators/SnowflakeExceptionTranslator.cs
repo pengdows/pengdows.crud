@@ -39,18 +39,33 @@ internal sealed class SnowflakeExceptionTranslator : IDbExceptionTranslator
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
-        // NOT NULL is the one constraint Snowflake actually enforces at runtime — delegated to
-        // the dialect (see IDbExceptionTranslator.Translate's doc comment). Unique/FK/Check are
-        // not checked here at all: SnowflakeDialect.IsUniqueViolation/IsForeignKeyViolation/
-        // IsCheckConstraintViolation are hardcoded false (Snowflake parses but never enforces
-        // those constraint types), so there is nothing to delegate for them.
-        if (exception is DbException dbEx && dialect.IsNotNullViolation(dbEx))
+        // Constraint kinds are delegated to the dialect (see IDbExceptionTranslator.Translate's doc
+        // comment): NOT NULL on every table, and PRIMARY KEY/UNIQUE/FOREIGN KEY, which hybrid tables
+        // enforce (REV-065). Snowflake never enforces CHECK.
+        if (exception is DbException dbEx)
         {
             var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
             var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
-            return new NotNullViolationException(
-                $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName);
+            if (dialect.IsUniqueViolation(dbEx))
+            {
+                return new UniqueConstraintViolationException(
+                    $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
+
+            if (dialect.IsForeignKeyViolation(dbEx))
+            {
+                return new ForeignKeyViolationException(
+                    $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
+
+            if (dialect.IsNotNullViolation(dbEx))
+            {
+                return new NotNullViolationException(
+                    $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
+                    database, exception, sqlState, errorCode, constraintName);
+            }
         }
 
         return DbExceptionTranslationSupport.CreateFallback(database, exception, operationKind);
