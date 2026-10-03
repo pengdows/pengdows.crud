@@ -143,7 +143,7 @@ database assigns it; see `docs/advanced-types.md`.
   is the same on both gateways: `UpdateAsync` and `BatchUpdateAsync` throw
   `ConcurrencyConflictException`. After a successful update, both gateways write the new numeric
   version (`current + 1`) back into the entity, so reusing the same instance for another update
-  works; a failed or conflicting update leaves the entity's version untouched. Opaque
+  works; a failed or conflicting update leaves the entity's version untouched. The write-back happens when the UPDATE succeeds, not at commit: if an enclosing transaction then rolls back, the entity keeps the incremented version while the row keeps the old one, so re-read the row (or restore the version) before retrying. Opaque
   `byte[]`/`RowVersion` versions are DB-generated and are not written back — re-read the row to
   get the new token. `UpsertAsync`/`BatchUpsertAsync` don't write back (rows affected can't tell
   an insert from an update). (`UpsertAsync` and `BatchUpsertAsync` on both gateways throw `ConcurrencyConflictException` on a version
