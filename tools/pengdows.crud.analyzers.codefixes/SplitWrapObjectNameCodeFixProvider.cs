@@ -18,7 +18,7 @@ namespace pengdows.crud.analyzers;
 public sealed class SplitWrapObjectNameCodeFixProvider : CodeFixProvider
 {
     public override ImmutableArray<string> FixableDiagnosticIds =>
-        ImmutableArray.Create(SplitWrapObjectNameAnalyzer.DiagnosticId);
+        ImmutableArray.Create(DiagnosticIds.SplitWrapObjectName);
 
     public override FixAllProvider GetFixAllProvider() =>
         WellKnownFixAllProviders.BatchFixer;

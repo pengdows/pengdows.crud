@@ -8,7 +8,7 @@
         <EnforceExtendedAnalyzerRules>true</EnforceExtendedAnalyzerRules>
         <IsPackable>true</IsPackable>
         <IncludeBuildOutput>false</IncludeBuildOutput>
-        <NoWarn>$(NoWarn);RS2008;RS1038;NU5128</NoWarn>
+        <NoWarn>$(NoWarn);NU5128</NoWarn>
         <PackageId>pengdows.crud.analyzers</PackageId>
         <Description>Roslyn analyzers for correct pengdows.crud usage.</Description>
     </PropertyGroup>
@@ -20,8 +20,23 @@
         </PackageReference>
         <!-- Supplied by the compiler at build time; not a dependency of consumers (REV-066). -->
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.12.0" PrivateAssets="all" />
-        <!-- Supplied by the compiler at build time; not a dependency of consumers (REV-066). -->
-        <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.12.0" PrivateAssets="all" />
+    </ItemGroup>
+
+    <!-- Release tracking for the PGC rules (RS2008); add each new rule to Unshipped. -->
+    <ItemGroup>
+        <AdditionalFiles Include="AnalyzerReleases.Shipped.md" />
+        <AdditionalFiles Include="AnalyzerReleases.Unshipped.md" />
+    </ItemGroup>
+
+    <!-- The code fixes live in their own assembly (they need Workspaces, RS1038); built first and
+         packed alongside the analyzers. -->
+    <ItemGroup>
+        <ProjectReference Include="..\pengdows.crud.analyzers.codefixes\pengdows.crud.analyzers.codefixes.csproj"
+                          ReferenceOutputAssembly="false" PrivateAssets="all" />
+        <None Include="..\pengdows.crud.analyzers.codefixes\bin\$(Configuration)\netstandard2.0\pengdows.crud.analyzers.codefixes.dll"
+              Pack="true"
+              PackagePath="analyzers/dotnet/cs"
+              Visible="false" />
     </ItemGroup>
 
     <ItemGroup>

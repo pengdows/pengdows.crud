@@ -9,6 +9,7 @@
 
     <ItemGroup>
         <ProjectReference Include="..\pengdows.crud.analyzers\pengdows.crud.analyzers.csproj" />
+        <ProjectReference Include="..\pengdows.crud.analyzers.codefixes\pengdows.crud.analyzers.codefixes.csproj" />
     </ItemGroup>
 
     <ItemGroup>

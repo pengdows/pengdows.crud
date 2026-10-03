@@ -18,7 +18,7 @@ namespace pengdows.crud.analyzers;
 public sealed class DatabaseContextSingletonCodeFixProvider : CodeFixProvider
 {
     public override ImmutableArray<string> FixableDiagnosticIds =>
-        ImmutableArray.Create(DatabaseContextSingletonAnalyzer.DiagnosticId);
+        ImmutableArray.Create(DiagnosticIds.DatabaseContextSingleton);
 
     public override FixAllProvider GetFixAllProvider() =>
         WellKnownFixAllProviders.BatchFixer;
