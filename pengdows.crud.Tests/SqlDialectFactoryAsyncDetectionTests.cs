@@ -55,7 +55,7 @@ public class SqlDialectFactoryAsyncDetectionTests
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var inner = (fakeDbConnection)factory.CreateConnection();
         inner.ConnectionString = "EmulatedProduct=MySql";
-        inner.SetScalarResultForCommand("SELECT @@aurora_version", "3.04.0.1");
+        inner.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraMySqlProbe, "3.04.0.1");
 
         using var conn = new AsyncAuroraProbeBlockedConnection(inner);
         conn.Open();
@@ -182,7 +182,7 @@ public class SqlDialectFactoryAsyncDetectionTests
 
         public override Task<object?> ExecuteScalarAsync(CancellationToken cancellationToken)
         {
-            if (_inner.CommandText == "SELECT @@aurora_version")
+            if (_inner.CommandText == pengdows.crud.@internal.DatabaseDetectionService.AuroraMySqlProbe)
             {
                 throw new InvalidOperationException(
                     "ExecuteScalarAsync() was called for the identification probe — the synchronous " +

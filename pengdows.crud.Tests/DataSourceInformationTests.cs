@@ -136,15 +136,9 @@ public static class DataSourceTestData
                 "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1";
             scalars[pgSettingsProbe] = DBNull.Value;
 
-            // Same false-positive shape as the YugabyteDB probe above, for
-            // DatabaseDetectionService's Spanner-vs-real-PostgreSQL discriminator: without this
-            // entry the fakeDb fallback scalar answers "SHOW SPANNER.OPTIMIZER_VERSION" with a
-            // non-null string and DetectFlavorWithDetail misreads plain PostgreSQL/Aurora as
-            // Spanner. Verified against a real Spanner Omni + PGAdapter instance that ordinary
-            // PostgreSQL has no such setting (real Spanner returns a string; real PostgreSQL
-            // would error, which the fake models as DBNull rather than a thrown exception).
-            const string spannerOptimizerVersionProbe = "SHOW SPANNER.OPTIMIZER_VERSION";
-            scalars[spannerOptimizerVersionProbe] = DBNull.Value;
+            // DatabaseDetectionService's Spanner-vs-PostgreSQL discriminator counts Spanner's system
+            // schema: 0 on ordinary PostgreSQL (verified live; real Spanner returns 1).
+            scalars[pengdows.crud.@internal.DatabaseDetectionService.SpannerProbe] = 0L;
         }
 
         return (schema, scalars);

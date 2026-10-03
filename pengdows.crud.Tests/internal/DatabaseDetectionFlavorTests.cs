@@ -19,10 +19,10 @@ public class DatabaseDetectionFlavorTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var connection = (fakeDbConnection)factory.CreateConnection();
-        connection.SetScalarResultForCommand("SELECT @@aurora_version", "5.7.12");
+        connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraMySqlProbe, "5.7.12");
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT @@aurora_version";
+        cmd.CommandText = pengdows.crud.@internal.DatabaseDetectionService.AuroraMySqlProbe;
         var res = cmd.ExecuteScalar();
 
         Assert.Equal("5.7.12", res);
@@ -35,7 +35,7 @@ public class DatabaseDetectionFlavorTests
         var connection = (fakeDbConnection)factory.CreateConnection();
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
-        connection.SetScalarResultForCommand("SELECT @@aurora_version", "5.7.12");
+        connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraMySqlProbe, "5.7.12");
 
         var detected = DatabaseDetectionService.DetectProduct(connection, factory);
 
@@ -49,7 +49,7 @@ public class DatabaseDetectionFlavorTests
         var connection = (fakeDbConnection)factory.CreateConnection();
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
-        connection.SetScalarResultForCommand("SELECT aurora_version()", "1.2.3");
+        connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraPostgreSqlProbe, "1.2.3");
 
         var detected = DatabaseDetectionService.DetectProduct(connection, factory);
 
@@ -68,7 +68,7 @@ public class DatabaseDetectionFlavorTests
         var connection = (fakeDbConnection)factory.CreateConnection();
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
-        connection.SetScalarResultForCommand("SELECT @@memsql_version", "9.1.1");
+        connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.SingleStoreProbe, "9.1.1");
 
         var detected = DatabaseDetectionService.DetectProduct(connection, factory);
 
@@ -98,11 +98,10 @@ public class DatabaseDetectionFlavorTests
     [Fact]
     public void DetectProduct_IdentifiesSpanner_ViaOptimizerVersionProbe()
     {
-        // Cloud Spanner's PostgreSQL interface (PGAdapter) exposes a Spanner-only setting,
-        // SPANNER.OPTIMIZER_VERSION, that ordinary PostgreSQL has no concept of. Verified live
-        // against a real Spanner Omni + PGAdapter instance: `SHOW SPANNER.OPTIMIZER_VERSION`
-        // returns one row (an empty string on a fresh instance, not null/an error), which is what
-        // distinguishes it from plain PostgreSQL for this synchronous detection path.
+        // Cloud Spanner's PostgreSQL interface (PGAdapter) has a spanner_sys schema that ordinary
+        // PostgreSQL doesn't. Verified live against a real Spanner Omni + PGAdapter instance: the
+        // count is 1 there and 0 on PostgreSQL, with no error on either (REV-065: the old
+        // SHOW SPANNER.OPTIMIZER_VERSION probe left an error in PostgreSQL's server log).
         //
         // This exercises DatabaseDetectionService.DetectProduct's SYNCHRONOUS path
         // (DetectFlavorWithDetail) specifically — the one DatabaseContext's normal constructor
@@ -114,7 +113,7 @@ public class DatabaseDetectionFlavorTests
         var connection = (fakeDbConnection)factory.CreateConnection();
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
-        connection.SetScalarResultForCommand("SHOW SPANNER.OPTIMIZER_VERSION", string.Empty);
+        connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.SpannerProbe, 1L);
 
         var detected = DatabaseDetectionService.DetectProduct(connection, factory);
 

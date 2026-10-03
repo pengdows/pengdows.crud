@@ -279,6 +279,11 @@ public class fakeDbCommand : DbCommand
             // Handle version queries automatically based on emulated product (do not consume the generic queue)
             if (!string.IsNullOrEmpty(CommandText))
             {
+                if (TryGetDetectionProbeResult(CommandText, conn.EmulatedProduct, out var probeResult))
+                {
+                    return probeResult;
+                }
+
                 var versionResult = GetVersionQueryResult(CommandText, conn.EmulatedProduct);
                 if (versionResult != null)
                 {
@@ -305,6 +310,36 @@ public class fakeDbCommand : DbCommand
         }
 
         return 42;
+    }
+
+    // pengdows.crud's database-detection probes, answered as the real servers do: the matching
+    // product returns a value and every other one returns no row, so an emulation is never detected
+    // as another product by whatever its in-memory engine makes of the probe.
+    private static bool TryGetDetectionProbeResult(string commandText, SupportedDatabase emulatedProduct, out object? result)
+    {
+        var normalized = commandText.Trim().ToUpperInvariant();
+        (bool Matches, object Value)? answer = normalized switch
+        {
+            // Spanner's system schema: 1 on Spanner (confirmed live, Spanner Omni + PGAdapter), 0 elsewhere.
+            "SELECT COUNT(*) FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME = 'SPANNER_SYS'"
+                => (true, emulatedProduct == SupportedDatabase.Spanner ? 1L : 0L),
+            "SHOW VARIABLES LIKE 'MEMSQL_VERSION'"
+                => (emulatedProduct == SupportedDatabase.SingleStore, "memsql_version"),
+            "SHOW VARIABLES LIKE 'AURORA_VERSION'"
+                => (emulatedProduct == SupportedDatabase.AuroraMySql, "aurora_version"),
+            "SELECT PRONAME FROM PG_PROC WHERE PRONAME = 'AURORA_VERSION' LIMIT 1"
+                => (emulatedProduct == SupportedDatabase.AuroraPostgreSql, "aurora_version"),
+            _ => null
+        };
+
+        if (answer is not { } a)
+        {
+            result = null;
+            return false;
+        }
+
+        result = a.Matches ? a.Value : DBNull.Value;
+        return true;
     }
 
     private string? GetVersionQueryResult(string commandText, SupportedDatabase emulatedProduct)
@@ -352,16 +387,6 @@ public class fakeDbCommand : DbCommand
 
             SupportedDatabase.Db2 when normalizedCommand.Contains("SYSPROC.ENV_GET_INST_INFO")
                 => "11.05.0800",
-
-            // Spanner's PostgreSQL interface is detected by this probe (ordinary PostgreSQL rejects
-            // it). Confirmed live against Spanner Omni + PGAdapter: it returns an empty string.
-            SupportedDatabase.Spanner when normalizedCommand == "SHOW SPANNER.OPTIMIZER_VERSION"
-                => string.Empty,
-
-            // SingleStore is detected by this system variable (standard MySQL/MariaDB/TiDB reject it
-            // as unknown); a SingleStore emulation answers it so detection resolves SingleStore.
-            SupportedDatabase.SingleStore when normalizedCommand == "SELECT @@MEMSQL_VERSION"
-                => "8.9.3",
 
             _ => null
         };

@@ -880,7 +880,7 @@ public class PrimaryKeyTableGatewayTests
         // { Length: > 0 }` on both probes and misidentify this as YugabyteDB.
         connection.SetScalarResultForCommand(
             "SELECT name FROM pg_settings WHERE name = 'yb_enable_optimizer_statistics' LIMIT 1", DBNull.Value);
-        connection.SetScalarResultForCommand("SELECT aurora_version()", DBNull.Value);
+        connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraPostgreSqlProbe, DBNull.Value);
         factory.Connections.Add(connection);
 
         return new DatabaseContext(

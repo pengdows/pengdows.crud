@@ -33,6 +33,12 @@ namespace pengdows.crud.@internal;
 /// </summary>
 internal static class DatabaseDetectionService
 {
+    internal const string AuroraMySqlProbe = "SHOW VARIABLES LIKE 'aurora_version'";
+    internal const string SingleStoreProbe = "SHOW VARIABLES LIKE 'memsql_version'";
+    internal const string SpannerProbe =
+        "SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'spanner_sys'";
+    internal const string AuroraPostgreSqlProbe = "SELECT proname FROM pg_proc WHERE proname = 'aurora_version' LIMIT 1";
+
     private static readonly (SupportedDatabase Product, string[] Tokens)[] SchemaProductTokens =
     {
         (SupportedDatabase.SqlServer, new[] { "sql server" }),
@@ -265,14 +271,15 @@ internal static class DatabaseDetectionService
 
             using var cmd = connection.CreateCommand();
 
-            // Aurora MySQL: @@aurora_version returns a version string (e.g. "2.09.1") on Aurora,
-            // throws "Unknown system variable" on standard MySQL. Any non-string result (e.g. the
-            // fakeDb default of int 42) is treated as "not Aurora".
+            // Aurora MySQL: SHOW VARIABLES LIKE 'aurora_version' returns the variable's row on Aurora
+            // and an empty result elsewhere. @@aurora_version raised "Unknown system variable" on every
+            // other server (REV-065: probes must not leave errors in server logs). Any non-string
+            // result (e.g. the fakeDb default of int 42) is treated as "not Aurora".
             if (isMySqlFamily)
             {
                 try
                 {
-                    cmd.CommandText = "SELECT @@aurora_version";
+                    cmd.CommandText = AuroraMySqlProbe;
                     if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("AuroraMySqlVersion", true, null));
@@ -286,15 +293,16 @@ internal static class DatabaseDetectionService
                 }
             }
 
-            // SingleStore (formerly MemSQL): @@memsql_version returns a version string (e.g. "9.1.1")
-            // on SingleStore, throws "Unknown system variable" on standard MySQL/MariaDB/Aurora MySQL/TiDB.
+            // SingleStore (formerly MemSQL): SHOW VARIABLES LIKE 'memsql_version' returns a row on
+            // SingleStore and an empty result on MySQL/MariaDB/Aurora MySQL/TiDB, where
+            // @@memsql_version raised "Unknown system variable" (REV-065).
             // SELECT VERSION()/@@version report a generic MySQL-compatible version with no distinguishing
             // marker on SingleStore, so this dedicated system-variable probe is required.
             if (isMySqlFamily)
             {
                 try
                 {
-                    cmd.CommandText = "SELECT @@memsql_version";
+                    cmd.CommandText = SingleStoreProbe;
                     if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("SingleStoreVersion", true, null));
@@ -357,8 +365,14 @@ internal static class DatabaseDetectionService
             {
                 try
                 {
-                    cmd.CommandText = "SHOW SPANNER.OPTIMIZER_VERSION";
-                    if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string)
+                    // Spanner's own system schema, counted: 1 on Spanner, 0 elsewhere, never an error.
+                    // SHOW SPANNER.OPTIMIZER_VERSION raised "unrecognized configuration parameter"
+                    // on PostgreSQL, which logs every failed statement by default (REV-065); and
+                    // current_setting(..., true) broke PGAdapter's protocol handling (live).
+                    cmd.CommandText = SpannerProbe;
+                    var spannerSchemas = await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false);
+                    if (spannerSchemas is not null and not DBNull &&
+                        Convert.ToInt64(spannerSchemas, System.Globalization.CultureInfo.InvariantCulture) > 0)
                     {
                         attempts.Add(new DetectionProbeAttempt("SpannerOptimizerVersion", true, null));
                         return (SupportedDatabase.Spanner, attempts);
@@ -395,14 +409,14 @@ internal static class DatabaseDetectionService
                 }
             }
 
-            // Aurora PostgreSQL: aurora_version() returns a version string on Aurora,
-            // throws "function does not exist" on standard PostgreSQL. Runs last because it
-            // can leave a YSQL connection in an aborted state (already handled above).
+            // Aurora PostgreSQL: the aurora_version() function exists only on Aurora. Looked up in
+            // pg_proc rather than called: calling it raised "function does not exist" (logged by
+            // PostgreSQL) on every other server and could abort a YSQL connection's state (REV-065).
             if (isPgFamily)
             {
                 try
                 {
-                    cmd.CommandText = "SELECT aurora_version()";
+                    cmd.CommandText = AuroraPostgreSqlProbe;
                     if ((await ExecuteScalarAsync(cmd, useAsync, cancellationToken).ConfigureAwait(false)) is string { Length: > 0 })
                     {
                         attempts.Add(new DetectionProbeAttempt("AuroraPostgreSqlVersion", true, null));

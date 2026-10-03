@@ -470,7 +470,7 @@ public class DatabaseContextAsyncCreationTests
             conn.BlockSynchronousCommandExecution = true;
             if (ScalarResult != null)
             {
-                conn.SetScalarResultForCommand("SELECT @@aurora_version", ScalarResult);
+                conn.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraMySqlProbe, ScalarResult);
             }
             return conn;
         }
