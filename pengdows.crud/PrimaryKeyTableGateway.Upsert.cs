@@ -658,16 +658,17 @@ public partial class PrimaryKeyTableGateway<TEntity>
             wrappedColumnNames[i] = dialect.WrapSimpleName(insertableColumns[i].Name);
         }
 
+        var columnCount = insertableColumns.Count;
+        var cells = ExtractBatchCells(chunk, insertableColumns);
         dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
-            (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]), insertableColumns);
+            (row, col) => cells[row * columnCount + col], insertableColumns);
 
         for (var row = 0; row < chunk.Count; row++)
         {
-            var entity = chunk[row];
-            for (var c = 0; c < insertableColumns.Count; c++)
+            for (var c = 0; c < columnCount; c++)
             {
                 var column = insertableColumns[c];
-                var value = column.MakeParameterValueFromField(entity);
+                var value = cells[row * columnCount + c];
 
                 if (value == null || value == DBNull.Value)
                 {

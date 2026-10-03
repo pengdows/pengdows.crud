@@ -313,48 +313,27 @@ public partial class TableGateway<TEntity, TRowID>
             var wrappedColNames = updateableColumns.Select(c => dialect.WrapSimpleName(c.Name)).ToList();
             var wrappedKeyNames = keyColumns.Select(c => dialect.WrapSimpleName(c.Name)).ToList();
 
+            // Keys first, then updateable columns: the column order the dialect's getValue uses.
+            var allColumns = keyColumns.Concat(updateableColumns).ToList();
+            var columnCount = allColumns.Count;
+            var cells = ExtractBatchCells(chunk, allColumns);
+
             // Delegate structure to dialect
             dialect.BuildBatchUpdateSql(wrappedTableName, wrappedColNames, wrappedKeyNames, chunk.Count, sc.Query,
-                (row, col) =>
-                {
-                    var entity = chunk[row];
-                    IColumnInfo colInfo;
-                    if (col < keyColumns.Count)
-                    {
-                        colInfo = keyColumns[col];
-                    }
-                    else
-                    {
-                        colInfo = updateableColumns[col - keyColumns.Count];
-                    }
-
-                    return colInfo.MakeParameterValueFromField(entity);
-                }, keyColumns.Concat(updateableColumns).ToList());
+                (row, col) => cells[row * columnCount + col], allColumns);
 
             // Value binding
             for (var row = 0; row < chunk.Count; row++)
             {
-                var entity = chunk[row];
-                // Bind Keys first, then Updateable columns (matching the getValue order above)
-                foreach (var col in keyColumns)
+                for (var c = 0; c < columnCount; c++)
                 {
-                    var val = col.MakeParameterValueFromField(entity);
+                    var val = cells[row * columnCount + c];
                     if (val == null || val == DBNull.Value)
                     {
                         continue;
                     }
-                    var batchParam = dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val);
-                    dialect.MarkColumnParameter(batchParam, col);
-                    sc.AddParameter(batchParam);
-                }
 
-                foreach (var col in updateableColumns)
-                {
-                    var val = col.MakeParameterValueFromField(entity);
-                    if (val == null || val == DBNull.Value)
-                    {
-                        continue;
-                    }
+                    var col = allColumns[c];
                     var batchParam = dialect.CreateDbParameter(counters.NextBatch(), col.DbType, val);
                     dialect.MarkColumnParameter(batchParam, col);
                     sc.AddParameter(batchParam);
@@ -585,9 +564,12 @@ public partial class TableGateway<TEntity, TRowID>
             wrappedColumnNames[i] = dialect.WrapSimpleName(insertableColumns[i].Name);
         }
 
+        var columnCount = insertableColumns.Count;
+        var cells = ExtractBatchCells(chunk, insertableColumns);
+
         // Delegate structure to dialect (ANSI VALUES, Oracle INSERT ALL, etc.)
         dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
-            (row, col) => insertableColumns[col].MakeParameterValueFromField(chunk[row]), insertableColumns);
+            (row, col) => cells[row * columnCount + col], insertableColumns);
 
         if (overridesSystemIdentity)
         {
@@ -599,12 +581,10 @@ public partial class TableGateway<TEntity, TRowID>
         // Value binding for each entity
         for (var row = 0; row < chunk.Count; row++)
         {
-            var entity = chunk[row];
-
-            for (var c = 0; c < insertableColumns.Count; c++)
+            for (var c = 0; c < columnCount; c++)
             {
                 var column = insertableColumns[c];
-                var value = column.MakeParameterValueFromField(entity);
+                var value = cells[row * columnCount + c];
 
                 // Skip parameter creation if it was inlined as NULL literal
                 if (value == null || value == DBNull.Value)

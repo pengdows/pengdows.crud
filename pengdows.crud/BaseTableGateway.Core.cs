@@ -393,6 +393,26 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         return DefaultReaderPlanCapacity;
     }
 
+    /// <summary>
+    /// Every cell of a batch chunk, read once, row-major (<c>row * columns.Count + column</c>): the
+    /// dialect's SQL builder and the binding loop both read it. Reading each cell twice serialized
+    /// a [Json] value twice per row (PERF-012).
+    /// </summary>
+    internal static object?[] ExtractBatchCells(IReadOnlyList<TEntity> chunk, IReadOnlyList<IColumnInfo> columns)
+    {
+        var cells = new object?[chunk.Count * columns.Count];
+        for (var row = 0; row < chunk.Count; row++)
+        {
+            var entity = chunk[row];
+            for (var col = 0; col < columns.Count; col++)
+            {
+                cells[row * columns.Count + col] = columns[col].MakeParameterValueFromField(entity);
+            }
+        }
+
+        return cells;
+    }
+
     protected string BuildWrappedTableName(ISqlDialect dialect)
     {
         // Fast path first: GetValue allocates its factory delegate (and closure) even on a hit.

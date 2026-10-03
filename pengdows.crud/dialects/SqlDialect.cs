@@ -831,14 +831,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     private protected void AppendBatchValue(ISqlQueryBuilder query, IReadOnlyList<IColumnInfo>? columns, int column,
         int index)
     {
-        var name = string.Concat(ParameterMarker, "b", index.ToString(CultureInfo.InvariantCulture));
         if (columns != null && RendersColumnArgument(columns[column]))
         {
+            var name = string.Concat(ParameterMarker, "b", index.ToString(CultureInfo.InvariantCulture));
             query.Append(RenderColumnArgument(name, columns[column]));
             return;
         }
 
-        query.Append(name);
+        // Appended in pieces: a marker string per cell was 56 B (PERF-012).
+        query.Append(ParameterMarker).Append('b').Append(index);
     }
 
     public virtual int MaxOutputParameters => 0;
