@@ -23,6 +23,11 @@
           Override locally via Directory.Build.user.props or -p:SkipInterfaceValidation=true.
         -->
         <SkipInterfaceValidation Condition="'$(SkipInterfaceValidation)' == ''">false</SkipInterfaceValidation>
+        <!--
+          NuGet vulnerability-audit warnings (NU1901-NU1904) stay warnings under TreatWarningsAsErrors:
+          an advisory published against a dependency must be visible, not break every build (REV-066).
+        -->
+        <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
         <VersionPrefix>2.0.6</VersionPrefix>
         <Version>$(VersionPrefix)</Version>
         <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
