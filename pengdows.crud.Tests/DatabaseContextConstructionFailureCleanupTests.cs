@@ -213,4 +213,36 @@ public class DatabaseContextConstructionFailureCleanupTests
         Assert.Equal("ReadOnlyValidation", thrown.Phase);
         Assert.Equal("ReadOnly", thrown.Role);
     }
+    // REV-055: in Standard/SingleWriter mode the open detection connection was disposed only on
+    // success. When a later step failed (here: the dedicated ReadOnlyConnectionString can't be
+    // reached), it stayed open and checked out of the provider pool.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async System.Threading.Tasks.Task Construction_FailsAfterDetection_DisposesTheDetectionConnection(bool async)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var detection = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
+        var replica = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
+        replica.SetFailOnOpen();
+        factory.Connections.Add(detection);
+        factory.Connections.Add(replica);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Host=primary;Database=d;EmulatedProduct=PostgreSql",
+            ReadOnlyConnectionString = "Host=replica;Database=d;EmulatedProduct=PostgreSql",
+            DbMode = DbMode.Standard
+        };
+
+        if (async)
+        {
+            await Assert.ThrowsAnyAsync<Exception>(async () => await DatabaseContext.CreateAsync(config, factory));
+        }
+        else
+        {
+            Assert.ThrowsAny<Exception>(() => new DatabaseContext(config, factory));
+        }
+
+        Assert.True(detection.DisposeCount > 0, "The detection connection was left open.");
+    }
 }

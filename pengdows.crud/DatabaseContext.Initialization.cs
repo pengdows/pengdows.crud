@@ -213,6 +213,9 @@ public partial class DatabaseContext
         MarkInitializedOrThrow();
 
         ILockerAsync? initLocker = null;
+        // The open detection connection (Standard/SingleWriter); disposed on success below, and in
+        // the catch when a later construction step fails (REV-055).
+        ITrackedConnection? initialConnection = null;
         try
         {
             initLocker = GetLockInternal();
@@ -343,7 +346,7 @@ public partial class DatabaseContext
                 _metricsCollector.MetricsChanged += OnMetricsCollectorUpdated;
             }
 
-            var initialConnection = await InitializeInternalsAsync(configuration, useAsync, cancellationToken)
+            initialConnection = await InitializeInternalsAsync(configuration, useAsync, cancellationToken)
                 .ConfigureAwait(false);
 
             // Build strategies now that mode is final (moved from InitializeInternals)
@@ -514,6 +517,8 @@ public partial class DatabaseContext
                     initialConnection.Dispose();
                 }
 
+                initialConnection = null;
+
                 // Reset counters to "fresh" state after initialization probe
                 Interlocked.Exchange(ref _connectionCount, 0);
                 Interlocked.Exchange(ref _peakOpenConnections, 0);
@@ -534,6 +539,11 @@ public partial class DatabaseContext
         catch (Exception e)
         {
             _logger?.LogError(e, "DatabaseContext construction failed.");
+            if (initialConnection != null)
+            {
+                DisposeBestEffort(initialConnection, "initialization connection");
+            }
+
             // A failed constructor never returns an object for the caller to Dispose, so release
             // what construction already opened or created: sentinels / the persistent connection
             // (CONFIRMED live on Db2: a failed PreventDatabaseUnload construction left its writer
