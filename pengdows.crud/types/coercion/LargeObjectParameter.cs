@@ -20,14 +20,7 @@ internal static class LargeObjectParameter
     {
         if (value is Stream stream)
         {
-            if (stream.CanSeek)
-            {
-                stream.Seek(0, SeekOrigin.Begin);
-            }
-
-            using var buffer = new MemoryStream();
-            stream.CopyTo(buffer);
-            var bytes = buffer.ToArray();
+            var bytes = ReadAll(stream);
             parameter.DbType = DbType.Binary;
             parameter.Value = bytes;
             parameter.Size = bytes.Length;
@@ -44,5 +37,27 @@ internal static class LargeObjectParameter
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// A stream's bytes from its beginning: a seekable stream is rewound, so a MemoryStream written
+    /// and passed without seeking back still sends its content. A MemoryStream is copied once
+    /// (REV-065: it was first buffered into a second MemoryStream).
+    /// </summary>
+    internal static byte[] ReadAll(Stream stream)
+    {
+        if (stream is MemoryStream memory)
+        {
+            return memory.ToArray();
+        }
+
+        if (stream.CanSeek)
+        {
+            stream.Seek(0, SeekOrigin.Begin);
+        }
+
+        using var buffer = new MemoryStream();
+        stream.CopyTo(buffer);
+        return buffer.ToArray();
     }
 }

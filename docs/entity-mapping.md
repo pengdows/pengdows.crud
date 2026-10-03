@@ -65,6 +65,11 @@ column/parameter ordering — see "Ordinal ordering" below.
 **Duplicate column names** (two properties mapping to the same `[Column("x", ...)]` name) throw
 `SqlGenerationException` at registration.
 
+**`Stream` and `TextReader` properties** are written as their whole content, read when the
+parameter is bound: a seekable stream is rewound first (so a `MemoryStream` you just wrote to needs
+no `Seek(0)`), and a `TextReader` is read to its end. Content before a stream's current position is
+included; pass a stream that starts where the value starts.
+
 ### Ordinal ordering
 
 `ordinal` is opt-in per property. `TypeMapRegistry.AssignOrdinals` validates the *whole set* at

@@ -377,16 +377,7 @@ internal sealed class InformixDialect : SqlDialect
             switch (value)
             {
                 case Stream stream:
-                    if (stream.CanSeek)
-                    {
-                        stream.Seek(0, SeekOrigin.Begin);
-                    }
-
-                    using (var buffer = new MemoryStream())
-                    {
-                        stream.CopyTo(buffer);
-                        return buffer.ToArray();
-                    }
+                    return types.coercion.LargeObjectParameter.ReadAll(stream);
                 case TextReader reader:
                     return reader.ReadToEnd();
             }
