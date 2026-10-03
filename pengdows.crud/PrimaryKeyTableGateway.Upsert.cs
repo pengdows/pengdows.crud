@@ -704,6 +704,14 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return;
         }
 
+        // Each entity's snapshot by reference identity, built once (its first position, as the
+        // linear search found): the search per entity made the restore O(N x chunk) (REV-065).
+        var snapshotIndex = new Dictionary<TEntity, int>(entities.Count, ReferenceEqualityComparer.Instance);
+        for (var entityIndex = 0; entityIndex < entities.Count; entityIndex++)
+        {
+            snapshotIndex.TryAdd(entities[entityIndex], entityIndex);
+        }
+
         for (var containerIndex = firstUnexecutedContainer; containerIndex < containers.Count; containerIndex++)
         {
             if (!_batchContainerEntities.TryGetValue(containers[containerIndex], out var chunk))
@@ -713,13 +721,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
             foreach (var entity in chunk)
             {
-                for (var entityIndex = 0; entityIndex < entities.Count; entityIndex++)
+                if (snapshotIndex.TryGetValue(entity, out var entityIndex))
                 {
-                    if (ReferenceEquals(entities[entityIndex], entity))
-                    {
-                        RestoreAuditFields(entity, snapshots[entityIndex]);
-                        break;
-                    }
+                    RestoreAuditFields(entity, snapshots[entityIndex]);
                 }
             }
         }
