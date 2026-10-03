@@ -700,12 +700,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
             return rawValue;
         }
 
-        // Integral → integral narrowing (e.g. long → int, long → short, int → byte).
-        // Use unchecked conversion — in a DB context the schema is trusted to fit.
-        // Emits conv.i4 / conv.i2 / etc. (1 CPU instruction, no overflow branch).
+        // Integral → integral narrowing (e.g. long → int, long → short, int → byte). Checked: a
+        // value that doesn't fit throws OverflowException instead of wrapping to a different
+        // number (TYPE-008, REV-046); the cost is one overflow branch.
         if (IsIntegralType(sourceType) && IsIntegralType(targetType))
         {
-            return Expression.Convert(rawValue, targetType);
+            return Expression.ConvertChecked(rawValue, targetType);
         }
 
         // float/double/decimal → integral: use Convert.ToXxx for rounding semantics.

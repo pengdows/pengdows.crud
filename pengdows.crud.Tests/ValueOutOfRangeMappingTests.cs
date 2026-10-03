@@ -246,6 +246,51 @@ public sealed class ValueOutOfRangeMappingTests
         [Json] [Column("doc", DbType.String)] public Dictionary<string, int>? Doc { get; set; }
     }
 
+    // REV-046: a value wider than the property was narrowed with an unchecked conversion, so a
+    // BIGINT 5,000,000,000 read into an int property became 705,032,704 with no error.
+    [Theory]
+    [InlineData(5_000_000_000L)]
+    [InlineData(-5_000_000_000L)]
+    [InlineData(3.9e10)]
+    public async Task RetrieveOneAsync_NumberTooWideForTheProperty_ThrowsDataMappingException(object stored)
+    {
+        var (context, exec) = Context(SupportedDatabase.PostgreSql);
+        await using var _ = context;
+        exec.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["id"] = 1, ["count"] = stored } });
+        var gateway = new TableGateway<Counted, int>(context);
+
+        var ex = await Assert.ThrowsAsync<DataMappingException>(async () => await gateway.RetrieveOneAsync(1));
+
+        Assert.Contains("count", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(5_000_000_000L)]
+    [InlineData(3.9e10)]
+    public async Task DataReaderMapper_Strict_NumberTooWideForTheProperty_ThrowsDataMappingException(object stored)
+    {
+        var (context, exec) = Context(SupportedDatabase.PostgreSql);
+        await using var _ = context;
+        exec.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["count"] = stored } });
+        await using var sc = context.CreateSqlContainer("SELECT 1");
+        await using var reader = await sc.ExecuteReaderAsync();
+
+        await Assert.ThrowsAsync<DataMappingException>(async () =>
+            await DataReaderMapper.LoadAsync<CountOnly>(reader, new MapperOptions(Strict: true)));
+    }
+
+    [Table("counted")]
+    private sealed class Counted
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("count", DbType.Int32)] public int Count { get; set; }
+    }
+
+    private sealed class CountOnly
+    {
+        public int Count { get; set; }
+    }
+
     [Table("accounts")]
     private sealed class Account
     {

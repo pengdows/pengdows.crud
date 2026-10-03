@@ -384,10 +384,12 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 : result;
         }
 
-        // Simple numeric/bool conversions
+        // Simple numeric/bool conversions. Checked: a value the property can't hold (a BIGINT above
+        // int.MaxValue into an int) throws OverflowException, reported as DataMappingException,
+        // instead of wrapping to a different number (TYPE-008, REV-046).
         if (IsNumericType(sourceType) && IsNumericType(underlyingTargetType))
         {
-            var converted = Expression.Convert(value, underlyingTargetType);
+            var converted = Expression.ConvertChecked(value, underlyingTargetType);
             return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
         }
 
