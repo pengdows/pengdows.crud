@@ -25,6 +25,9 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
     /// <summary>When set, Rollback() throws this exception.</summary>
     public Exception? RollbackException { get; set; }
 
+    /// <summary>When set, Dispose() throws this exception (after counting the call).</summary>
+    public Exception? DisposeException { get; set; }
+
     /// <summary>Number of times <see cref="Commit"/> was invoked, whether or not it then threw.</summary>
     public int CommitCallCount { get; private set; }
 
@@ -97,6 +100,10 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
         if (disposing)
         {
             DisposeCallCount++;
+            if (DisposeException != null)
+            {
+                throw DisposeException;
+            }
         }
 
         base.Dispose(disposing);

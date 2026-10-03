@@ -58,6 +58,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private bool _shouldFailOnBeginTransaction;
     private Exception? _transactionCommitException;
     private Exception? _transactionRollbackException;
+    private Exception? _transactionDisposeException;
     private Exception? _closeFailureException;
     private Exception? _customFailureException;
     private int _openCallCount;
@@ -464,6 +465,14 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public void SetTransactionCommitException(Exception exception)
     {
         _transactionCommitException = exception;
+    }
+
+    /// <summary>
+    /// Sets an exception to be thrown when the transaction is disposed.
+    /// </summary>
+    public void SetTransactionDisposeException(Exception exception)
+    {
+        _transactionDisposeException = exception;
     }
 
     /// <summary>
@@ -1210,6 +1219,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         if (_transactionRollbackException != null)
         {
             tx.RollbackException = _transactionRollbackException;
+        }
+
+        if (_transactionDisposeException != null)
+        {
+            tx.DisposeException = _transactionDisposeException;
         }
 
         LastTransaction = tx;

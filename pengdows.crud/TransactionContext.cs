@@ -918,13 +918,15 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             }
             finally
             {
-                TryResetReadOnlySession();
+                // Each step runs whatever an earlier one did: a provider whose transaction Dispose
+                // threw used to skip returning the connection, the gate and the metrics (REV-065).
+                RunCleanupStep("reset the read-only session", TryResetReadOnlySession);
                 // Disposing the transaction here, not in DisposeManaged, means it happens exactly
                 // once, on whichever thread completed it, and never under a still-open reader.
-                _transaction.Dispose();
-                _context.CloseAndDisposeConnection(_connection);
-                _singleConnectionTransactionGate.Dispose();
-                CompleteTransactionMetrics();
+                RunCleanupStep("dispose the provider transaction", _transaction.Dispose);
+                RunCleanupStep("release the connection", () => _context.CloseAndDisposeConnection(_connection));
+                RunCleanupStep("release the single-connection gate", _singleConnectionTransactionGate.Dispose);
+                RunCleanupStep("record transaction metrics", CompleteTransactionMetrics);
             }
         }
         finally
@@ -976,26 +978,54 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             }
             finally
             {
-                await TryResetReadOnlySessionAsync().ConfigureAwait(false);
+                // Each step runs whatever an earlier one did (see CompleteTransaction).
+                await RunCleanupStepAsync("reset the read-only session", TryResetReadOnlySessionAsync)
+                    .ConfigureAwait(false);
                 // See CompleteTransaction for why the transaction is disposed here.
-                if (_transaction is IAsyncDisposable asyncTx)
-                {
-                    await asyncTx.DisposeAsync().ConfigureAwait(false);
-                }
-                else
-                {
-                    _transaction.Dispose();
-                }
-
-                await _context.CloseAndDisposeConnectionAsync(_connection).ConfigureAwait(false);
-                await _singleConnectionTransactionGate.DisposeAsync().ConfigureAwait(false);
-                CompleteTransactionMetrics();
+                await RunCleanupStepAsync("dispose the provider transaction", () =>
+                        _transaction is IAsyncDisposable asyncTx ? asyncTx.DisposeAsync() : DisposeSync(_transaction))
+                    .ConfigureAwait(false);
+                await RunCleanupStepAsync("release the connection",
+                    () => _context.CloseAndDisposeConnectionAsync(_connection)).ConfigureAwait(false);
+                await RunCleanupStepAsync("release the single-connection gate",
+                    () => _singleConnectionTransactionGate.DisposeAsync()).ConfigureAwait(false);
+                RunCleanupStep("record transaction metrics", CompleteTransactionMetrics);
             }
         }
         finally
         {
             await _reusableLocker.DisposeAsync().ConfigureAwait(false);
         }
+    }
+
+    private void RunCleanupStep(string step, Action action)
+    {
+        try
+        {
+            action();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Transaction completion could not {Step}; continuing with the remaining clean-up.", step);
+        }
+    }
+
+    private async ValueTask RunCleanupStepAsync(string step, Func<ValueTask> action)
+    {
+        try
+        {
+            await action().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Transaction completion could not {Step}; continuing with the remaining clean-up.", step);
+        }
+    }
+
+    private static ValueTask DisposeSync(IDisposable disposable)
+    {
+        disposable.Dispose();
+        return ValueTask.CompletedTask;
     }
 
     private void CompleteTransactionMetrics()
