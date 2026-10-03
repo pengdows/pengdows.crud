@@ -276,8 +276,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
         if (hasRow)
         {
-            Interlocked.CompareExchange(ref _firstRowTimestamp, Stopwatch.GetTimestamp(), 0);
-            Interlocked.Increment(ref _rowsRead);
+            RecordRow();
             return true;
         }
 
@@ -641,13 +640,25 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
         if (hasRow)
         {
-            Interlocked.CompareExchange(ref _firstRowTimestamp, Stopwatch.GetTimestamp(), 0);
-            Interlocked.Increment(ref _rowsRead);
+            RecordRow();
             return true;
         }
 
         await DisposeAsync().ConfigureAwait(false); // Auto-dispose when done reading
         return false;
+    }
+
+    // A reader has one consumer, so plain fields suffice, and the clock is read only until the
+    // first row is timestamped: a clock read and two interlocked operations per row cost about
+    // 24 ns/row (PERF-009).
+    private void RecordRow()
+    {
+        if (_firstRowTimestamp == 0)
+        {
+            _firstRowTimestamp = Stopwatch.GetTimestamp();
+        }
+
+        _rowsRead++;
     }
 
     private Exception? TranslateReadFailure(Exception exception)
