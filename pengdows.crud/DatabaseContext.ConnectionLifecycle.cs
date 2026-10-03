@@ -313,26 +313,53 @@ public partial class DatabaseContext
         }
     }
 
+    /// <summary>
+    /// Async counterpart of <see cref="CreateSentinelConnection"/>: waits for the pool permit
+    /// without blocking a thread (REV-024).
+    /// </summary>
+    internal async ValueTask<ITrackedConnection> CreateSentinelConnectionAsync(ExecutionType executionType,
+        CancellationToken cancellationToken)
+    {
+        var connectionString = executionType == ExecutionType.Read && !string.IsNullOrWhiteSpace(_readerConnectionString)
+            ? _readerConnectionString
+            : _connectionString;
+        var governor = SentinelGovernor(executionType);
+        var slot = governor == null
+            ? default
+            : await governor.AcquireAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return FactoryCreateConnection(executionType, connectionString, true, slot);
+        }
+        catch
+        {
+            slot.Dispose();
+            throw;
+        }
+    }
+
     private PoolSlot AcquireSentinelSlot(ExecutionType executionType)
+    {
+        var governor = SentinelGovernor(executionType);
+        return governor == null ? default : governor.Acquire();
+    }
+
+    // The governor a sentinel's permit comes from, or null when none is taken.
+    private PoolGovernor? SentinelGovernor(ExecutionType executionType)
     {
         if (!_effectivePoolGovernorEnabled)
         {
-            return default;
+            return null;
         }
 
         var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
         if (governor == null)
         {
             ThrowIfGovernorMissingAfterDisposal();
-            return default;
+            return null;
         }
 
-        if (governor.Forbidden)
-        {
-            return default;
-        }
-
-        return governor.Acquire();
+        return governor.Forbidden ? null : governor;
     }
 
     private ITrackedConnection[] TakePersistentConnections()
@@ -392,7 +419,9 @@ public partial class DatabaseContext
             return NoOpAsyncLocker.Instance;
         }
 
-        return _connectionOpenLocker ?? (ILockerAsync)new RealAsyncLocker(_connectionOpenGate);
+        // One locker per caller: a locker's held state is its own, so a shared one let a caller
+        // whose wait failed release the gate another caller held (REV-029).
+        return new RealAsyncLocker(_connectionOpenGate);
     }
 
     /// <summary>

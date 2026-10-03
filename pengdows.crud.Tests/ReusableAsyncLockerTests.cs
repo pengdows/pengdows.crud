@@ -652,4 +652,40 @@ public class ReusableAsyncLockerTests
         await locker.LockAsync(); // must succeed without throwing
         Assert.Equal(0, sem.CurrentCount);
     }
+    // REV-027: deferred work runs exactly once, on the release that ends the reader's hold.
+    [Fact]
+    public async Task TryDeferUntilActiveReaderReleases_HeldByReader_RunsOnReleaseOnly()
+    {
+        using var sem = new SemaphoreSlim(1, 1);
+        var locker = new ReusableAsyncLocker(sem);
+        locker.Lock();
+        locker.MarkHeldByActiveReader();
+        var sync = 0;
+        var async = 0;
+
+        Assert.True(locker.TryDeferUntilActiveReaderReleases(new ReusableAsyncLocker.DeferredWork(
+            () => sync++, () => { async++; return ValueTask.CompletedTask; })));
+        Assert.Equal(0, sync + async);
+
+        await locker.DisposeAsync();
+        await locker.DisposeAsync();
+
+        Assert.Equal(0, sync);
+        Assert.Equal(1, async);
+    }
+
+    [Fact]
+    public void TryDeferUntilActiveReaderReleases_NoReader_ReturnsFalseAndNeverRuns()
+    {
+        using var sem = new SemaphoreSlim(1, 1);
+        var locker = new ReusableAsyncLocker(sem);
+        locker.Lock();
+        var runs = 0;
+
+        Assert.False(locker.TryDeferUntilActiveReaderReleases(new ReusableAsyncLocker.DeferredWork(
+            () => runs++, () => { runs++; return ValueTask.CompletedTask; })));
+        locker.Dispose();
+
+        Assert.Equal(0, runs);
+    }
 }

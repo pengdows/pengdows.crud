@@ -30,6 +30,10 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
     private readonly SemaphoreSlim _semaphore;
     private int _lockState; // 0 = not held, 1 = held
     private volatile bool _heldByActiveReader;
+    private DeferredWork? _afterActiveReader;
+
+    // Work to run once the active reader releases the lock: Sync from Dispose, Async from DisposeAsync.
+    internal sealed record DeferredWork(Action Sync, Func<ValueTask> Async);
 
     public ReusableAsyncLocker(SemaphoreSlim semaphore)
     {
@@ -50,6 +54,26 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
     internal void MarkHeldByActiveReader()
     {
         _heldByActiveReader = true;
+    }
+
+    internal bool IsHeldByActiveReader => _heldByActiveReader;
+
+    /// <summary>
+    /// Defers <paramref name="work"/> until the active reader releases the lock (REV-027). Returns
+    /// false when no reader holds the lock any more and the work was not taken, in which case the
+    /// caller runs it itself.
+    /// </summary>
+    internal bool TryDeferUntilActiveReaderReleases(DeferredWork work)
+    {
+        // Publish, then re-check; the release clears the flag, then takes the work. Both sides use
+        // a full fence between their store and load, so one of them always sees the other.
+        Interlocked.Exchange(ref _afterActiveReader, work);
+        if (_heldByActiveReader)
+        {
+            return true;
+        }
+
+        return !ReferenceEquals(Interlocked.CompareExchange(ref _afterActiveReader, null, work), work);
     }
 
     /// <inheritdoc />
@@ -141,23 +165,26 @@ internal sealed class ReusableAsyncLocker : SafeAsyncDisposableBase, ILockerAsyn
         }
     }
 
-    private void ReleaseIfHeld()
+    private DeferredWork? ReleaseIfHeld()
     {
-        if (Interlocked.CompareExchange(ref _lockState, 0, 1) == 1)
+        if (Interlocked.CompareExchange(ref _lockState, 0, 1) != 1)
         {
-            _heldByActiveReader = false;
-            _semaphore.Release();
+            return null;
         }
+
+        _heldByActiveReader = false;
+        _semaphore.Release();
+        return Interlocked.Exchange(ref _afterActiveReader, null);
     }
 
     protected override void DisposeManaged()
     {
-        ReleaseIfHeld();
+        ReleaseIfHeld()?.Sync();
     }
 
     protected override ValueTask DisposeManagedAsync()
     {
-        ReleaseIfHeld();
-        return ValueTask.CompletedTask;
+        var deferred = ReleaseIfHeld();
+        return deferred == null ? ValueTask.CompletedTask : deferred.Async();
     }
 }

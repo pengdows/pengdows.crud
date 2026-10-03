@@ -46,6 +46,55 @@ public class EnforceUniqueConnectionStringTests
         Assert.Contains("connection string", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
+    // REV-028: when a governor does not drain before the disposal deadline, the claim on the
+    // connection string is kept while the lease is out (CORE-026) but must not outlive it.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async System.Threading.Tasks.Task Dispose_WithOutstandingLease_ReleasesTheClaimWhenTheLeaseReturns(bool disposeAsync)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var connectionString = $"Host=enforce-test-deferred-{disposeAsync};Database=d;EmulatedProduct={SupportedDatabase.PostgreSql}";
+        var config = BuildConfig(connectionString, enforce: true);
+        config.PoolAcquireTimeout = TimeSpan.FromMilliseconds(200);
+        var first = new DatabaseContext(config, factory);
+        var outstanding = first.GetConnection(ExecutionType.Write);
+
+        if (disposeAsync)
+        {
+            await first.DisposeAsync();
+        }
+        else
+        {
+            first.Dispose();
+        }
+
+        Assert.Throws<InvalidOperationException>(() =>
+            new DatabaseContext(BuildConfig(connectionString, enforce: true), factory));
+
+        outstanding.Dispose();
+
+        using var second = await CreateWhenClaimReleasedAsync(BuildConfig(connectionString, enforce: true), factory);
+    }
+
+    // The release runs as a continuation of the last lease's return, so allow it a moment.
+    private static async System.Threading.Tasks.Task<DatabaseContext> CreateWhenClaimReleasedAsync(
+        DatabaseContextConfiguration config, fakeDbFactory factory)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (true)
+        {
+            try
+            {
+                return new DatabaseContext(config, factory);
+            }
+            catch (InvalidOperationException) when (DateTime.UtcNow < deadline)
+            {
+                await System.Threading.Tasks.Task.Delay(20);
+            }
+        }
+    }
+
     [Fact]
     public void SecondContext_SameConnectionString_NotEnforced_Succeeds()
     {
@@ -65,7 +114,7 @@ public class EnforceUniqueConnectionStringTests
     // EnforceUniqueConnectionString (a second context could now be admitted onto the same
     // physical connection string while the first context's leaked connection is still in use).
     [Fact]
-    public void SecondContext_SameConnectionString_AfterFirstDisposalTimesOutDraining_StillThrows()
+    public void SecondContext_SameConnectionString_WhileFirstDisposalsLeaseIsOutstanding_Throws()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var connectionString = $"Data Source=enforce-test-timeout;EmulatedProduct={SupportedDatabase.Sqlite}";
@@ -79,14 +128,15 @@ public class EnforceUniqueConnectionStringTests
 
         first.Dispose();
 
-        // Release the connection only after disposal has already given up waiting for it.
-        heldConnection.Dispose();
-
-        // The uniqueness claim must NOT have been released by the timed-out disposal — a second
-        // context on the same connection string must still be rejected.
+        // The uniqueness claim must NOT have been released by the timed-out disposal while the
+        // lease is still out — a second context on the same connection string must be rejected.
         var ex = Assert.Throws<InvalidOperationException>(() =>
             new DatabaseContext(BuildConfig(connectionString, enforce: true), factory));
         Assert.Contains("connection string", ex.Message, StringComparison.OrdinalIgnoreCase);
+
+        // Once the lease is back the claim goes (REV-028); that is covered by
+        // Dispose_WithOutstandingLease_ReleasesTheClaimWhenTheLeaseReturns.
+        heldConnection.Dispose();
     }
 
     [Fact]

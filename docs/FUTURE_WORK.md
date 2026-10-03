@@ -545,6 +545,57 @@ contention is larger but was not measured.
   discards idle connections and lets in-use ones finish (not separately verified against
   FirebirdClient's source), so the cost to other Firebird contexts is a reconnect.
 
+## Code review of 2.0.6 vs `main`, second pass (2026-10-03)
+
+Full review of `c8835796..HEAD` (all slices). The user asked for every finding to be fixed
+test-first, recorded here as each lands so the work can resume from this table. Status values:
+**Open** (not started), **Red** (failing test written, verified red), **Fixed** (green, full unit
+suite passed on net10 and net8). 3.0 takes the same fixes after 2.0.6 ships.
+
+| ID | Finding | Status |
+|---|---|---|
+| REV-024 | P0: `PreventDatabaseUnloadConnectionStrategy.RepairSentinelAsync` → `CreateSentinelConnection` → `AcquireSentinelSlot` → blocking `governor.Acquire()` inside an async path | **Fixed**: new `DatabaseContext.CreateSentinelConnectionAsync` takes the permit with `AcquireAsync`; `RepairSentinelAsync` uses it (`KeepAliveSentinelReconnectTests.GetConnectionAsync_SentinelLost_NoFreePermit_WaitsAsynchronously`) |
+| REV-025 | P0: `TransactionContext.CompleteTransactionMetrics` only decrements active transactions on commit/rollback; a transaction ending neither way stays counted forever | **Fixed**: new `MetricsCollector.TransactionAbandoned()` (propagates to the parent) decrements active without counting an outcome (`TransactionContextCommitMetricsBugFixTests.CommitAsync_WhenCommitThrows_NoLongerCountsAsActive`) |
+| REV-026 | P1: `TransactionContext` constructor/`CreateAsync` open the connection and take the gate outside any `try`; a gate failure (timeout/cancel) leaks the open connection and the permit | **Fixed**: open and gate acquisition wrapped; on failure the connection is released through the context (the SingleConnection strategy never disposes its persistent connection) (`TransactionBeginFailureLeakTests`, sync + async) |
+| REV-027 | P1: disposing a transaction while a reader on it is active: `CompleteTransaction`'s `_reusableLocker.Lock()` throws, `DisposeManaged` only logs, so no rollback and the pinned connection is never released | **Fixed**: Dispose/DisposeAsync with an active reader now defer the rollback via `ReusableAsyncLocker.TryDeferUntilActiveReaderReleases` (sync work on the reader's Dispose, async on DisposeAsync); the deferred rollback releases the connection and records the metrics (`TransactionCompletionReaderGuardTests.Dispose_WhileReaderOpen_RollsBackAndReleasesWhenTheReaderIsDisposed` x4, `ReusableAsyncLockerTests.TryDefer*`) |
+| REV-028 | P1: deferred data-source disposal (governor did not drain) skips `ReleaseUniqueConnectionStringRegistrations`, so the connection string can never be registered again in the process | **Fixed**: governors that miss the drain deadline are kept; `DisposeSharedResourcesWhenDrainedAsync` waits (no thread) for the last lease, then disposes them and the data sources and releases the claim. The CORE-026 test now asserts the claim holds only while the lease is out (`EnforceUniqueConnectionStringTests.Dispose_WithOutstandingLease_ReleasesTheClaimWhenTheLeaseReturns` sync+async, `..._WhileFirstDisposalsLeaseIsOutstanding_Throws`) |
+| REV-029 | P1: DuckDB's serialized-open lock is one shared `ReusableAsyncLocker`; its held flag is per instance, so a cancelled/timed-out caller's dispose releases the semaphore held by another caller | **Fixed**: `GetConnectionOpenLock` returns a new `RealAsyncLocker` per caller over the shared gate; the shared `ReusableAsyncLocker` field is gone (`ConnectionOpenLockSharingTests`) |
+| REV-030 | P1: `TenantContextRegistry` create paths: a throwing `ContextCreated` handler leaks the new context | Open |
+| REV-031 | P1: `TenantContextRegistry.DisposeEntry` raises `ContextRemoved` on a thread-pool work item without a catch; a throwing handler crashes the process | Open |
+| REV-032 | P1: `TenantContextRegistry` shutdown paths share one `try` between dispose and `ContextRemoved`, so a throwing handler is reported as a dispose failure (and vice versa) | Open |
+| REV-033 | P1: a gateway reads through a tenant context with its *own* dialect's coercion options (Informix LIST literals, Guid byte order, Snowflake offsets) and caches read plans by recordset shape only | Open |
+| REV-034 | P1: an array/`List<T>` property read from non-array text throws a raw `JsonReaderException`, not `DataMappingException` (TYPE-008) | Open |
+| REV-035 | P2: trailing whitespace: `CoercionBoundaryTests.cs:14`, `InterfaceDefaultMethodBehaviorTests.cs:76`, `TableGateway_RealSqliteTests.cs:247` | Open |
+| REV-036 | P2: "useAsync: false never awaits anything incomplete" is false for `SqlDialectFactory.CreateDialectCoreAsync` (always awaits `DetectDatabaseInfoAsync`) | Open |
+| REV-037 | P2: `CreateMappingException` re-coerces with default options, so it can name the wrong column for dialect-specific reads | Open |
+| REV-038 | P2: dead `BuildUpdateByKey` helpers ("not currently called") | Open |
+| REV-039 | Rule (user, 2026-10-03): no `SupportedDatabase` comparison or switch outside `dialects/` except the dialect-creating switch in `SqlDialectFactory` (and `DatabaseDetectionService`, which produces its input). Guard: a source-scan unit test. Sites: `TransactionContext`, `DatabaseContext`, `DatabaseContext.Initialization`, `AdvancedTypeRegistry`, `ProviderParameterFactory`, `AdvancedCoercions`, `SpatialConverter`, Interval/Inet/Cidr/Range converters, `IsolationResolver`, `DbExceptionTranslatorRegistry`, `CoercionRegistry` provider keys | Open |
+| REV-040 | Flake seen once (2026-10-03, full net10 run under load): `TransactionContextDisposeRaceTests.Rollback_ConcurrentDispose_*` and `RollbackAsync_ConcurrentDisposeAsync_*` failed after 5 s; both passed alone and on the next full run (net10 and net8). Likely thread-pool start latency against the tests' 5 s `Wait`; investigate | Open |
+
+### Write-path type audit (2026-10-03)
+
+`TypeRoundTripMatrixTests` now also checks, per type: null read, update, upsert (existing and new
+row), batch create, batch update and null write (uncommitted expansion; run 2026-10-03, all
+databases incl. Snowflake and InterBase, HANA not run). The matrix reports each type's *first*
+failing step, so rerun after each fix. Per database: CockroachDb 41/43, Db2 31/31, DuckDB 26/27,
+Firebird 1/22, FlatFile 14/16, Informix 17/30, InterBase 0/14, MariaDb 51/51, MySql 49/49, Oracle
+34/35, PostgreSql 57/59, SingleStore 42/42, Snowflake 20/22, Spanner 19/19, Sqlite 21/21, SqlServer
+33/34, SybaseASE 35/35, TiDb 39/40, YugabyteDb 56/58.
+
+| ID | Finding | Status |
+|---|---|---|
+| WRT-001 | Firebird: after the first type's write paths, every later `DROP/CREATE TABLE` fails "lock conflict ... object TABLE type_rt is in use": a write path leaves something (transaction, prepared statement) holding the table | Open |
+| WRT-002 | Harness: SERIAL/BIGSERIAL rows are nulled/updated (PostgreSQL-family NOT NULL; Informix forbids updating a SERIAL). The catalog must mark generated columns and skip those steps | Open |
+| WRT-003 | Harness: InterBase has no upsert (`NotSupportedException`), so upsert steps must be skipped on the dialect capability, not reported as failures | Open |
+| WRT-004 | Informix MERGE upsert throws `NotSupportedException` for Binary, Time, Currency and Object (INTERVAL, LIST/SET/MULTISET) source columns | Open |
+| WRT-005 | Informix BOOLEAN upsert: "Value does not match the type of column" | Open |
+| WRT-006 | Informix BLOB/CLOB UPDATE: "Illegal attempt to use Text/Byte host variable" | Open |
+| WRT-007 | PostgreSQL/CockroachDB/YugabyteDB custom enum (`pengdows_mood`): upsert source row and batch UPDATE send text without a cast to the enum type | Open |
+| WRT-008 | DuckDB INTERVAL upsert: the MERGE source sends a `TimeSpan` as text (`'3.04:05:06.0000070'`), which DuckDB can't cast | Open |
+| WRT-009 | TiDB BIT(64) upsert: wrote 9223372036854775809, read 72057594037928064 | Open |
+| WRT-010 | FlatFile: NULL CHAR/VARCHAR reads back as spaces/empty string | Open |
+| WRT-011 | Null write of provider-typed columns: SQL Server VECTOR (sent as sql_variant), Oracle VECTOR (ORA-50028), Snowflake GEOGRAPHY/GEOMETRY ("No corresponding Snowflake type for type Object") | Open |
+
 ## GEN-001 design: same-connection generated-key retrieval (proposed 2026-09-28, implemented 2026-09-29)
 
 **Problem.** Informix (`DBINFO`), SAP HANA (`CURRENT_IDENTITY_VALUE()`) and Access (`@@IDENTITY`)

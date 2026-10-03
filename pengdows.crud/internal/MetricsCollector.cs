@@ -342,6 +342,15 @@ internal sealed class MetricsCollector
         CompleteTransactionInternal(startTimestamp);
     }
 
+    // A transaction that ended neither committed nor rolled back (a failed commit or rollback) is
+    // no longer active, but is counted in neither outcome bucket (REV-025).
+    internal void TransactionAbandoned()
+    {
+        _parent?.TransactionAbandoned();
+        Decrement(ref _transactionsActive);
+        NotifyUpdated();
+    }
+
     private void CompleteTransactionInternal(long startTimestamp)
     {
         Decrement(ref _transactionsActive);

@@ -227,9 +227,18 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         // on this pinned connection. A second lock on the connection itself would be redundant
         // double-locking that adds measurable overhead (e.g., WriteStorm scenarios).
         var connection = connectionProvider.GetConnection(resolvedExecType, false);
-        OpenConnectionWithOptionalLock(context, connection);
-
-        var gate = AcquireSingleConnectionTransactionGate(context);
+        ILockerAsync gate;
+        try
+        {
+            OpenConnectionWithOptionalLock(context, connection);
+            gate = AcquireSingleConnectionTransactionGate(context);
+        }
+        catch
+        {
+            // The connection holds a pool permit; release it (REV-026).
+            context.CloseAndDisposeConnection(connection);
+            throw;
+        }
 
         // DuckDB's ADO.NET provider rejects explicit IsolationLevel values. Use provider default,
         // but preserve the resolved isolation level for reporting and logic.
@@ -992,7 +1001,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         // commit/rollback attempt that throws (CompleteTransaction's catch block) leaves BOTH
         // _committed and _rolledBack at 0: nothing was actually rolled back, so counting it as a
         // rollback would misreport a faulted, ambiguous outcome as a definite one. Leave it
-        // uncounted in either bucket rather than lie about what happened.
+        // uncounted in either bucket rather than lie about what happened (it still stops being active).
         if (Volatile.Read(ref _committed) == 1)
         {
             _metricsCollector.TransactionCommitted(_transactionMetricsStart);
@@ -1000,6 +1009,10 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         else if (Volatile.Read(ref _rolledBack) == 1)
         {
             _metricsCollector.TransactionRolledBack(_transactionMetricsStart);
+        }
+        else
+        {
+            _metricsCollector.TransactionAbandoned();
         }
     }
 
@@ -1011,6 +1024,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     protected override void DisposeManaged()
     {
+        if (DeferRollbackUntilActiveReaderReleases())
+        {
+            return;
+        }
+
         var shouldDisposeLock = true;
         if (!IsCompleted)
         {
@@ -1060,6 +1078,60 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     }
 
     /// <summary>
+    /// Disposed while a reader opened on this transaction is still active: rolling back now would
+    /// tear the connection down under the reader (CORE-023), and doing nothing abandoned the
+    /// transaction and its pinned connection (REV-027). The rollback, the connection release and
+    /// the metrics run when the reader releases the transaction's lock.
+    /// </summary>
+    private bool DeferRollbackUntilActiveReaderReleases()
+    {
+        return !IsCompleted && _reusableLocker.IsHeldByActiveReader &&
+               _reusableLocker.TryDeferUntilActiveReaderReleases(
+                   new ReusableAsyncLocker.DeferredWork(RollbackAfterActiveReader, RollbackAfterActiveReaderAsync));
+    }
+
+    private void RollbackAfterActiveReader()
+    {
+        try
+        {
+            if (!IsCompleted)
+            {
+                CompleteTransaction(() => _transaction.Rollback(), false);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Rollback deferred until the active reader was disposed failed.");
+        }
+        finally
+        {
+            _completionLock.Dispose();
+            CompleteTransactionMetrics();
+        }
+    }
+
+    private async ValueTask RollbackAfterActiveReaderAsync()
+    {
+        try
+        {
+            if (!IsCompleted)
+            {
+                await CompleteTransactionAsync(() => RollbackTransactionAsync(CancellationToken.None), false)
+                    .ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Rollback deferred until the active reader was disposed failed.");
+        }
+        finally
+        {
+            _completionLock.Dispose();
+            CompleteTransactionMetrics();
+        }
+    }
+
+    /// <summary>
     /// A reader still open on this transaction holds _userLock and releases it (via
     /// _reusableLocker) when it is disposed; disposing the semaphore under it would make that
     /// release throw ObjectDisposedException. Dispose it only when nobody holds it, otherwise
@@ -1075,6 +1147,11 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
     protected override async ValueTask DisposeManagedAsync()
     {
+        if (DeferRollbackUntilActiveReaderReleases())
+        {
+            return;
+        }
+
         var shouldDisposeLock = true;
         if (!IsCompleted)
         {
@@ -1159,9 +1236,18 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         var connection = await connectionProvider.GetConnectionAsync(resolvedExecType, false, cancellationToken)
             .ConfigureAwait(false);
-        await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
-
-        var gate = await AcquireSingleConnectionTransactionGateAsync(context, cancellationToken).ConfigureAwait(false);
+        ILockerAsync gate;
+        try
+        {
+            await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
+            gate = await AcquireSingleConnectionTransactionGateAsync(context, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The connection holds a pool permit; release it (REV-026).
+            await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
+            throw;
+        }
 
         IDbTransaction transaction;
         try

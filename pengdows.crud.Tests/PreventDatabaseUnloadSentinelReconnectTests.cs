@@ -1,5 +1,7 @@
 #region
 
+using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,6 +9,7 @@ using pengdows.crud.@internal;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.infrastructure;
 using pengdows.crud.strategies.connection;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -244,5 +247,45 @@ public class KeepAliveSentinelReconnectTests
         }
 
         Assert.All(factory.CreatedConnections, c => Assert.True(c.DisposeCount > 0, $"Connection (State={c.State}) was never disposed."));
+    }
+    // REV-024: the async repair took the replacement's pool permit with the blocking
+    // PoolGovernor.Acquire(), so an async caller held a thread for up to PoolAcquireTimeout when no
+    // permit was free. With every permit taken, GetConnectionAsync must return a pending task.
+    [Fact]
+    public async Task GetConnectionAsync_SentinelLost_NoFreePermit_WaitsAsynchronously()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        await using var ctx = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=(localdb)\\mssqllocaldb;Database=TestDb;EmulatedProduct=SqlServer",
+            DbMode = DbMode.PreventDatabaseUnload,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            PoolAcquireTimeout = TimeSpan.FromSeconds(3)
+        }, factory);
+
+        ctx.PersistentConnection!.Dispose(); // lost sentinel; its permit is released
+        var held = new List<PoolSlot>();
+        foreach (var name in new[] { "_writerGovernor", "_readerGovernor" })
+        {
+            var governor = (PoolGovernor?)typeof(DatabaseContext)
+                .GetField(name, System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
+                .GetValue(ctx);
+            while (governor != null && governor.AvailablePermits > 0)
+            {
+                held.Add(await governor.AcquireAsync());
+            }
+        }
+
+        var pending = ctx.GetConnectionAsync(ExecutionType.Read).AsTask();
+        var returnedPending = !pending.IsCompleted;
+        foreach (var slot in held)
+        {
+            slot.Dispose();
+        }
+
+        var connection = await pending;
+        await ctx.CloseAndDisposeConnectionAsync(connection);
+        Assert.True(returnedPending, "The repair blocked the async caller waiting for a pool permit.");
+        Assert.Equal(ConnectionState.Open, ctx.PersistentConnection!.State);
     }
 }

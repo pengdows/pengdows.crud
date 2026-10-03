@@ -380,7 +380,6 @@ public partial class DatabaseContext
             {
                 RequiresSerializedOpen = true;
                 _connectionOpenGate = new SemaphoreSlim(1, 1);
-                _connectionOpenLocker = new ReusableAsyncLocker(_connectionOpenGate);
             }
 
             if (ConnectionMode == DbMode.SingleConnection)

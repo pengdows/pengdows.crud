@@ -128,6 +128,55 @@ public class TransactionCompletionReaderGuardTests
         await reader.DisposeAsync();
     }
 
+    // REV-027: Dispose with a reader still open must not tear the transaction down under the
+    // reader (above), but it must not abandon it either: once the reader is disposed the
+    // transaction is rolled back and its pinned connection released.
+    [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task Dispose_WhileReaderOpen_RollsBackAndReleasesWhenTheReaderIsDisposed(bool disposeAsync,
+        bool disposeReaderAsync)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        await using var ctx = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            DbMode = DbMode.SingleWriter,
+            ProviderName = SupportedDatabase.Sqlite.ToString(),
+            ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Sqlite}",
+            EnableMetrics = true
+        }, factory);
+        var tx = ctx.BeginTransaction();
+        var reader = await tx.CreateSqlContainer("SELECT 1").ExecuteReaderAsync();
+        var fakeTx = (fakeDbTransaction)((TransactionContext)tx).Transaction;
+
+        if (disposeAsync)
+        {
+            await ((IAsyncDisposable)tx).DisposeAsync();
+        }
+        else
+        {
+            ((IDisposable)tx).Dispose();
+        }
+
+        Assert.Equal(0, fakeTx.RollbackCallCount + fakeTx.RollbackAsyncCallCount);
+
+        if (disposeReaderAsync)
+        {
+            await reader.DisposeAsync();
+        }
+        else
+        {
+            reader.Dispose();
+        }
+
+        Assert.Equal(1, fakeTx.RollbackCallCount); // fakeDb's RollbackAsync also runs Rollback
+        Assert.True(tx.WasRolledBack);
+        Assert.Equal(0, ctx.Metrics.TransactionsActive);
+        Assert.Equal(1, ctx.Metrics.TransactionsRolledBack);
+    }
+
     [Fact]
     public async Task SavepointAsync_WhileReaderOpen_ThrowsInsteadOfRacingTheConnection()
     {

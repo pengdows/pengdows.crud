@@ -136,7 +136,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         Array.Empty<(ITrackedConnection Connection, ExecutionType ExecutionType)>();
     private readonly object _sentinelLock = new();
     private SemaphoreSlim? _connectionOpenGate;
-    private ReusableAsyncLocker? _connectionOpenLocker;
     // Only allocated for DbMode.SingleConnection. A transaction holds this for its whole
     // lifetime; ordinary non-transactional operations acquire it briefly per-command. See
     // GetSingleConnectionTransactionGate() for details.
@@ -540,7 +539,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         try
         {
-            _connectionOpenLocker?.Dispose();
             _connectionOpenGate?.Dispose();
         }
         catch
@@ -549,7 +547,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         finally
         {
-            _connectionOpenLocker = null;
             _connectionOpenGate = null;
         }
 
@@ -569,10 +566,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         else if (!_sharedResourceDisposalDeferred)
         {
-            _sharedResourceDisposalDeferred = true;
-            _logger.LogWarning(
-                "Deferring data-source disposal: a pool governor did not drain before the " +
-                "disposal timeout, so a lease may still be genuinely outstanding.");
+            DeferSharedResourceDisposal();
         }
 
         base.DisposeManaged();
@@ -589,7 +583,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         try
         {
-            _connectionOpenLocker?.Dispose();
             _connectionOpenGate?.Dispose();
         }
         catch
@@ -598,7 +591,6 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         finally
         {
-            _connectionOpenLocker = null;
             _connectionOpenGate = null;
         }
 
@@ -610,10 +602,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         else if (!_sharedResourceDisposalDeferred)
         {
-            _sharedResourceDisposalDeferred = true;
-            _logger.LogWarning(
-                "Deferring data-source disposal: a pool governor did not drain before the " +
-                "disposal timeout, so a lease may still be genuinely outstanding.");
+            DeferSharedResourceDisposal();
         }
 
         await base.DisposeManagedAsync().ConfigureAwait(false);
@@ -624,6 +613,58 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     /// least one governor timed out — callers must treat that as "do not tear down shared
     /// resources yet."
     /// </returns>
+    // Governors that had not drained by the disposal deadline (BP-110); see DeferSharedResourceDisposal.
+    private readonly List<PoolGovernor> _undrainedGovernors = new();
+
+    private void DeferSharedResourceDisposal()
+    {
+        _sharedResourceDisposalDeferred = true;
+        _logger.LogWarning(
+            "Deferring data-source disposal: a pool governor did not drain before the " +
+            "disposal timeout, so a lease may still be genuinely outstanding.");
+        PoolGovernor[] undrained;
+        lock (_undrainedGovernors)
+        {
+            undrained = _undrainedGovernors.ToArray();
+            _undrainedGovernors.Clear();
+        }
+
+        _ = DisposeSharedResourcesWhenDrainedAsync(undrained);
+    }
+
+    // The data sources and the connection-string claim stay while a lease is outstanding (CORE-026)
+    // and go when it returns (REV-028); before, they were kept for the life of the process. Waits
+    // without a thread: the continuation runs on the release of the last lease.
+    private async Task DisposeSharedResourcesWhenDrainedAsync(PoolGovernor[] undrained)
+    {
+        try
+        {
+            foreach (var governor in undrained)
+            {
+                await governor.WaitForDrainAsync().ConfigureAwait(false);
+                governor.Dispose();
+            }
+
+            await DisposeOwnedDataSourcesAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Deferred data-source disposal failed after the last lease was returned.");
+        }
+        finally
+        {
+            ReleaseUniqueConnectionStringRegistrations();
+        }
+    }
+
+    private void KeepUndrained(PoolGovernor governor)
+    {
+        lock (_undrainedGovernors)
+        {
+            _undrainedGovernors.Add(governor);
+        }
+    }
+
     private bool DisposePoolGovernors()
     {
         var readerGovernor = _readerGovernor;
@@ -664,11 +705,13 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         catch (TimeoutException ex)
         {
             _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
+            KeepUndrained(governor);
             return false;
         }
         catch (OperationCanceledException ex)
         {
             _logger.LogWarning(ex, "Canceled while waiting for {GovernorLabel} governor to drain during disposal.", governor.Label);
+            KeepUndrained(governor);
             return false;
         }
     }
@@ -689,11 +732,13 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         catch (TimeoutException ex)
         {
             _logger.LogWarning(ex, "Timed out waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
+            KeepUndrained(governor);
             return false;
         }
         catch (OperationCanceledException ex)
         {
             _logger.LogWarning(ex, "Canceled while waiting for {GovernorLabel} governor to drain during async disposal.", governor.Label);
+            KeepUndrained(governor);
             return false;
         }
     }

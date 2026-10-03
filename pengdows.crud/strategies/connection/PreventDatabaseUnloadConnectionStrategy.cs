@@ -246,7 +246,8 @@ internal class PreventDatabaseUnloadConnectionStrategy : StandardConnectionStrat
         }
         DisposeQuietly(current);
 
-        var replacement = _context.CreateSentinelConnection(executionType);
+        var replacement = await _context.CreateSentinelConnectionAsync(executionType, cancellationToken)
+            .ConfigureAwait(false);
         try
         {
             await replacement.OpenAsync(cancellationToken).ConfigureAwait(false);

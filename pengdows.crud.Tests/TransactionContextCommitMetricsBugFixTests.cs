@@ -65,4 +65,20 @@ public class TransactionContextCommitMetricsBugFixTests
         Assert.Equal(0, context.Metrics.TransactionsCommitted);
         Assert.Equal(0, context.Metrics.TransactionsRolledBack);
     }
+
+    // REV-025: a transaction that ends neither committed nor rolled back (here, a failed commit)
+    // must still leave the active count; otherwise TransactionsActive only ever grows.
+    [Fact]
+    public async Task CommitAsync_WhenCommitThrows_NoLongerCountsAsActive()
+    {
+        var (context, txn, fakeTransaction) = CreateOpenTransactionWithMetrics();
+        using var _ = context;
+        fakeTransaction.CommitException = new InvalidOperationException("boom");
+        Assert.Equal(1, context.Metrics.TransactionsActive);
+
+        await Assert.ThrowsAsync<pengdows.crud.exceptions.TransactionException>(async () => await txn.CommitAsync());
+        await txn.DisposeAsync();
+
+        Assert.Equal(0, context.Metrics.TransactionsActive);
+    }
 }
