@@ -51,16 +51,7 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
             }
             else if (column.IsEnum)
             {
-                if (column.EnumAsString)
-                {
-                    var toStringMethod = typeof(object).GetMethod(nameof(object.ToString))!;
-                    finalValueExpr = Expression.Call(boxedValue, toStringMethod);
-                }
-                else
-                {
-                    finalValueExpr = Expression.Convert(propertyAccess, column.EnumUnderlyingType!);
-                    finalValueExpr = Expression.Convert(finalValueExpr, typeof(object));
-                }
+                finalValueExpr = EnumValue(propertyAccess, column);
             }
 
             // Create DbParameter: dialect.CreateDbParameter(name, dbType, value)
@@ -124,16 +115,7 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
             }
             else if (column.IsEnum)
             {
-                if (column.EnumAsString)
-                {
-                    var toStringMethod = typeof(object).GetMethod(nameof(object.ToString))!;
-                    finalValueExpr = Expression.Call(boxedUpdated, toStringMethod);
-                }
-                else
-                {
-                    finalValueExpr = Expression.Convert(updatedVal, column.EnumUnderlyingType!);
-                    finalValueExpr = Expression.Convert(finalValueExpr, typeof(object));
-                }
+                finalValueExpr = EnumValue(updatedVal, column);
             }
 
             // Dirty check: if (original == null || !ValuesAreEqual(updatedVal, originalVal, dbType))
@@ -187,6 +169,38 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
         dialect.MarkColumnParameter(parameter, column);
         return parameter;
     }
+
+    // An enum is written as ColumnInfo writes it for batch and primary-key paths (REV-054): its
+    // [EnumLiteral] text for any string column type, otherwise its underlying number; null is SQL
+    // NULL. The literal converter is resolved once, when the binder is compiled.
+    private static Expression EnumValue(Expression property, IColumnInfo column)
+    {
+        if (column.EnumAsString || column.DbType is DbType.String or DbType.AnsiString
+                or DbType.StringFixedLength or DbType.AnsiStringFixedLength)
+        {
+            var converter = (column as ColumnInfo)?.EnumStringConverter ??
+                            ColumnInfo.BuildEnumStringConverter(column.EnumType!);
+            return Expression.Call(
+                typeof(CompiledBinderFactory<TEntity>).GetMethod(nameof(EnumText), BindingFlags.NonPublic | BindingFlags.Static)!,
+                Expression.Convert(property, typeof(object)),
+                Expression.Constant(converter));
+        }
+
+        if (Nullable.GetUnderlyingType(property.Type) != null)
+        {
+            return Expression.Condition(
+                Expression.Property(property, nameof(Nullable<int>.HasValue)),
+                Expression.Convert(
+                    Expression.Convert(Expression.Property(property, nameof(Nullable<int>.Value)), column.EnumUnderlyingType!),
+                    typeof(object)),
+                Expression.Constant(null, typeof(object)));
+        }
+
+        return Expression.Convert(Expression.Convert(property, column.EnumUnderlyingType!), typeof(object));
+    }
+
+    private static object? EnumText(object? value, Func<object, string> converter) =>
+        value is null ? null : converter(value);
 
     private static MethodInfo ResolveGenericCreateDbParameter()
     {
