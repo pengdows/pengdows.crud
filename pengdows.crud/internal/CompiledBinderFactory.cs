@@ -149,10 +149,12 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
     }
 
     // A JSON or enum column's parameter gets the same dialect marking the uncompiled paths apply
-    // (MarkColumnParameter): JSON's text DbType and Npgsql jsonb metadata, an untyped enum on PostgreSQL.
+    // (MarkColumnParameter): JSON's text DbType and Npgsql jsonb metadata, an untyped enum on PostgreSQL,
+    // and the DbType for a NULL in a provider-typed column (WRT-011). Decided once, when compiled.
     private static Expression MarkJson(Expression createParamCall, IColumnInfo column, ISqlDialect dialect)
     {
-        if (!column.IsJsonType && !column.IsEnum)
+        if (!column.IsJsonType && !column.IsEnum &&
+            (dialect as dialects.SqlDialect)?.NullParameterDbType(column) == null)
         {
             return createParamCall;
         }

@@ -572,6 +572,26 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             TryMarkJsonParameter(parameter, column);
         }
+
+        // WRT-011: a NULL bound as DbType.Object carries no type a driver can use (SQL Server sent
+        // sql_variant to a VECTOR column, Oracle refused it with ORA-50028, Snowflake.Data threw), so
+        // it takes the DbType a value of this column binds with.
+        if (parameter.DbType == DbType.Object && Utils.IsNullOrDbNull(parameter.Value) &&
+            NullParameterDbType(column) is { } nullType)
+        {
+            parameter.DbType = nullType;
+        }
+    }
+
+    /// <summary>
+    /// The DbType for a NULL in <paramref name="column"/> when a value of the column's property type
+    /// binds with a DbType other than Object (vectors on databases that bind them as text);
+    /// <c>null</c> keeps DbType.Object.
+    /// </summary>
+    internal virtual DbType? NullParameterDbType(IColumnInfo column)
+    {
+        var type = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        return BindsVectorsAsText && (type == typeof(float[]) || type == typeof(double[])) ? DbType.String : null;
     }
 
     /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>

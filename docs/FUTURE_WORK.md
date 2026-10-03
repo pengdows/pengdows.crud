@@ -660,7 +660,7 @@ update branch writes the SERIAL); upsert steps now skip generated columns too.
 | WRT-008 | DuckDB INTERVAL upsert: the MERGE source sends a `TimeSpan` as text (`'3.04:05:06.0000070'`), which DuckDB can't cast | **Fixed** (2026-10-03): DuckDB binds an INTERVAL `TimeSpan` (DbType.Object) as DuckDB interval text (`3 days 04:05:06.789007`, µs, truncated), which works in INSERT, MERGE and WHERE; DuckDB.NET sent `TimeSpan.ToString()` when the type wasn't inferable and can't bind a negative TimeSpan natively (probed live, DuckDB.NET 1.5.6). `DuckDbIntervalBindingTests`; live DuckDB 27/27 |
 | WRT-009 | TiDB BIT(64) upsert: wrote 9223372036854775809, read 72057594037928064 | Open |
 | WRT-010 | FlatFile: NULL CHAR/VARCHAR reads back as spaces/empty string | Open |
-| WRT-011 | Null write of provider-typed columns: SQL Server VECTOR (sent as sql_variant), Oracle VECTOR (ORA-50028), Snowflake GEOGRAPHY/GEOMETRY ("No corresponding Snowflake type for type Object") | Open |
+| WRT-011 | Null write of provider-typed columns: SQL Server VECTOR (sent as sql_variant), Oracle VECTOR (ORA-50028), Snowflake GEOGRAPHY/GEOMETRY ("No corresponding Snowflake type for type Object") | **Fixed** (2026-10-03): `MarkColumnParameter` gives a NULL bound as DbType.Object the DbType a value of the column binds with (`SqlDialect.NullParameterDbType`: vectors on text-binding dialects, Snowflake spatial); the compiled binders apply it, decided at compile time. `NullProviderTypedColumnBindingTests`; live SQL Server 34/34, Oracle 35/35, Snowflake 22/22 |
 
 ## GEN-001 design: same-connection generated-key retrieval (proposed 2026-09-28, implemented 2026-09-29)
 

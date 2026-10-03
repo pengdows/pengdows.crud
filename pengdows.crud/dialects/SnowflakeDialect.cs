@@ -51,6 +51,16 @@ internal class SnowflakeDialect : SqlDialect
     {
     }
 
+    // Spatial values bind as EWKT text, so a NULL spatial value binds as text too (WRT-011:
+    // Snowflake.Data threw "No corresponding Snowflake type for type Object").
+    internal override DbType? NullParameterDbType(IColumnInfo column)
+    {
+        var type = column.PropertyInfo.PropertyType;
+        return typeof(types.valueobjects.SpatialValue).IsAssignableFrom(type)
+            ? DbType.String
+            : base.NullParameterDbType(column);
+    }
+
     public override SupportedDatabase DatabaseType => SupportedDatabase.Snowflake;
 
     // Snowflake.Data uses colon-prefixed named parameters
