@@ -359,8 +359,30 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     public override DbParameter CreateParameter()
     {
+        if (EmulatesOracleParameterMetadata)
+        {
+            return new fakeDbOracleParameter();
+        }
+
+        if (EmulatesInterBaseParameterMetadata)
+        {
+            return new fakeDbInterBaseParameter();
+        }
+
         return EmulatesNpgsqlParameterMetadata ? new fakeDbNpgsqlParameter() : new fakeDbParameter();
     }
+
+    /// <summary>
+    /// When true, parameters carry ODP.NET's <c>OracleDbType</c> property, so tests can see what a
+    /// dialect stamps on them for ODP.NET.
+    /// </summary>
+    public bool EmulatesOracleParameterMetadata { get; set; }
+
+    /// <summary>
+    /// When true, parameters behave like InterBase's <c>IBParameter</c> for arrays (see
+    /// <see cref="fakeDbInterBaseParameter"/>).
+    /// </summary>
+    public bool EmulatesInterBaseParameterMetadata { get; set; }
 
     /// <summary>
     /// When true, parameters carry Npgsql's provider metadata properties (<c>NpgsqlDbType</c> and

@@ -24,9 +24,9 @@ namespace pengdows.crud;
 /// </summary>
 public abstract partial class BaseTableGateway<TEntity>
 {
-    // Hot path cache: most recently used plan to avoid hash/dictionary overhead
+    // Hot path cache: most recently used plan (which carries its own shape) to avoid hash/dictionary
+    // overhead. One reference, so a racing load can never pair one shape with another's plan.
     private HybridRecordsetPlan? _hotPlan;
-    private RecordsetShape _hotShape;
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public TEntity MapReaderToObject(ITrackedReader reader)
@@ -102,27 +102,24 @@ public abstract partial class BaseTableGateway<TEntity>
             var lookupShape = new RecordsetShape(names, fieldTypes, fieldCount);
 
             var hotPlan = Volatile.Read(ref _hotPlan);
-            if (hotPlan != null && _hotShape.Equals(lookupShape))
+            if (hotPlan != null && hotPlan.Shape.Equals(lookupShape))
             {
                 return hotPlan;
             }
 
             if (_readerPlans.TryGet(lookupShape, out var existingPlan))
             {
-                _hotShape = lookupShape.Persist();
                 Volatile.Write(ref _hotPlan, existingPlan);
                 return existingPlan;
             }
 
-            var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes,
-                coercionOptions: _coercionOptions);
-            var plan = new HybridRecordsetPlan(compiledMapper);
-
             // The key must outlive this call (the rented arrays are returned below), so persist
             // a copy before inserting.
             var persistedShape = lookupShape.Persist();
+            var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes,
+                coercionOptions: _coercionOptions);
+            var plan = new HybridRecordsetPlan(compiledMapper, persistedShape);
             var added = _readerPlans.GetOrAdd(persistedShape, _ => plan);
-            _hotShape = persistedShape;
             Volatile.Write(ref _hotPlan, added);
 
             return added;

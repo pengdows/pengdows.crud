@@ -70,6 +70,27 @@ functionality:
 
 ## Running the Tests
 
+Aurora PostgreSQL and Aurora MySQL are opt-in external targets. The harness connects to existing
+clusters, creates a unique test schema/database, runs the normal provider suite, and drops only
+that generated namespace during teardown. It never creates, stops, or deletes AWS infrastructure.
+
+```bash
+export INCLUDE_AURORA=true
+export AURORA_POSTGRES_HOST=...
+export AURORA_POSTGRES_DATABASE=...
+export AURORA_POSTGRES_USER=...
+export AURORA_POSTGRES_PASSWORD=...
+export AURORA_POSTGRES_SSL_MODE=Require   # optional
+
+export AURORA_MYSQL_HOST=...
+export AURORA_MYSQL_DATABASE=...
+export AURORA_MYSQL_USER=...
+export AURORA_MYSQL_PASSWORD=...
+export AURORA_MYSQL_SSL_MODE=Required     # optional
+```
+
+`AURORA_POSTGRES_PORT` and `AURORA_MYSQL_PORT` are optional and default to 5432 and 3306.
+
 ### Prerequisites
 
 1. **.NET 8 and .NET 10 SDKs** installed (the project targets `net8.0;net10.0`)

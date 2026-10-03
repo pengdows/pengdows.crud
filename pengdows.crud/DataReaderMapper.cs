@@ -528,7 +528,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
-        else if (key.FieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset))
+        else if (key.FieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset) &&
+                 (key.Coercion?.ReadsOffsetTimestampsFromValue ?? false))
         {
             // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact
             // DateTimeOffset (TYPE-002); read the value.
@@ -546,24 +547,29 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
-        else if (ProviderValueFieldReader.IsValueTypeArray(underlyingTarget) &&
-                 (key.FieldType == typeof(Array) || key.FieldType.IsArray))
+        else if (key.FieldType == typeof(string) && ProviderValueFieldReader.IsReadableArray(targetType) &&
+                 (key.Coercion?.ReadsCollectionLiterals ?? false))
         {
-            // Npgsql refuses some arrays as non-nullable elements (Spanner); read them with nullable ones.
-            var readArray = typeof(ProviderValueFieldReader).GetMethod(nameof(ProviderValueFieldReader.ReadArray))!;
-            var rawValue = Expression.Call(readArray, Expression.Convert(readerParam, typeof(IDataRecord)),
-                Expression.Constant(key.Ordinal), Expression.Constant(underlyingTarget.GetElementType()!, typeof(Type)));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            // Informix returns LIST/SET/MULTISET as literal text; parse it, typed.
+            var readLiteral = ProviderValueFieldReader.ReadCollectionLiteralDefinition.MakeGenericMethod(targetType.GetElementType()!);
+            valueExpression = Expression.Call(readLiteral, Expression.Convert(readerParam, typeof(IDataRecord)),
+                Expression.Constant(key.Ordinal));
+        }
+        else if (ProviderValueFieldReader.IsReadableArray(targetType) &&
+                 ProviderValueFieldReader.IsArrayColumn(key.FieldType))
+        {
+            // Typed: Npgsql refuses some arrays as non-nullable elements (Spanner) and InterBase returns
+            // its declared bounds (Int32[*]).
+            var readArray = ProviderValueFieldReader.ReadArrayDefinition.MakeGenericMethod(targetType.GetElementType()!);
+            valueExpression = Expression.Call(readArray, Expression.Convert(readerParam, typeof(IDataRecord)),
+                Expression.Constant(key.Ordinal));
         }
         else if (key.FieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
         {
             // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).
             var readDouble = typeof(NumericFieldReader).GetMethod(nameof(NumericFieldReader.ReadDouble))!;
-            var rawValue = Expression.Convert(Expression.Call(readDouble, Expression.Convert(readerParam, typeof(IDataRecord)),
-                Expression.Constant(key.Ordinal)), typeof(object));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            valueExpression = Expression.Convert(Expression.Call(readDouble, Expression.Convert(readerParam, typeof(IDataRecord)),
+                Expression.Constant(key.Ordinal)), targetType);
         }
         else if (key.FieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
         {

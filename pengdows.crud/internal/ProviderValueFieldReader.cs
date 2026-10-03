@@ -9,6 +9,9 @@
 // - TryReadNullableElementArray(): an array of a value type that Npgsql refuses to read with
 //   non-nullable elements ("returned array contains nulls", Spanner), read as T?[] and returned as
 //   T[] when it holds no nulls (a null element then fails the property's conversion, loudly).
+// - ReadArray<T>(): an array column into a T[] property, typed (bound once per plan): the provider's
+//   T[] as is, a non-zero-based array (InterBase returns INTEGER [1:5] as Int32[*]) copied into a
+//   zero-based one, or the nullable-element fallback above.
 // - Used by CompiledMapperFactory, DataReaderMapper and TrackedReader.GetValue.
 // =============================================================================
 
@@ -45,21 +48,62 @@ internal static class ProviderValueFieldReader
     }
 
     /// <summary>
-    /// An array column read into a <paramref name="elementType"/>[] property: GetValue, or, when
-    /// Npgsql refuses non-nullable elements (Spanner reports the field type only as System.Array), the
-    /// nullable-element array of the property's element type.
+    /// An array column read into a <typeparamref name="T"/>[] property: the provider's T[] as is, a
+    /// non-zero-based array copied into a zero-based one, or, when Npgsql refuses non-nullable elements
+    /// (Spanner reports the field type only as System.Array), the nullable-element array. Anything else
+    /// takes the general conversion, which fails loudly when it can't convert.
     /// </summary>
-    public static object ReadArray(IDataRecord record, int ordinal, Type elementType)
+    public static T[] ReadArray<T>(IDataRecord record, int ordinal)
     {
+        object value;
         try
         {
-            return record.GetValue(ordinal);
+            value = record.GetValue(ordinal);
         }
-        catch (InvalidCastException) when (TryReadNullableElementArray(record, ordinal, elementType, out var array))
+        catch (InvalidCastException) when (TryReadNullableElementArray(record, ordinal, typeof(T), out var array))
         {
-            return array;
+            value = array;
         }
+
+        if (value is T[] typed)
+        {
+            return typed;
+        }
+
+        if (value is Array { Rank: 1 } other && other.GetType().GetElementType() == typeof(T))
+        {
+            var copy = new T[other.Length];
+            Array.Copy(other, other.GetLowerBound(0), copy, 0, other.Length);
+            return copy;
+        }
+
+        return (T[])TypeCoercionHelper.Coerce(value, value.GetType(), typeof(T[]))!;
     }
+
+    /// <summary>
+    /// A one-dimensional array property read through <see cref="ReadArray{T}"/> (not the binary and
+    /// text buffers byte[]/char[]).
+    /// </summary>
+    public static bool IsReadableArray(Type type) =>
+        type.IsArray && type.GetArrayRank() == 1 && type.GetElementType() is { } element &&
+        element != typeof(byte) && element != typeof(char);
+
+    /// <summary>
+    /// A column the provider reports as an array (or as System.Array), not a binary or text buffer: a
+    /// byte[] column (SingleStore's packed VECTOR) keeps its provider-specific conversion.
+    /// </summary>
+    public static bool IsArrayColumn(Type fieldType) =>
+        fieldType == typeof(Array) || (fieldType.IsArray && fieldType != typeof(byte[]) && fieldType != typeof(char[]));
+
+    /// <summary>An array column the driver returns as an Informix collection literal.</summary>
+    public static T[] ReadCollectionLiteral<T>(IDataRecord record, int ordinal) =>
+        CollectionLiteralFormat.Parse<T>(record.GetString(ordinal));
+
+    internal static readonly MethodInfo ReadCollectionLiteralDefinition =
+        typeof(ProviderValueFieldReader).GetMethod(nameof(ReadCollectionLiteral))!;
+
+    internal static readonly MethodInfo ReadArrayDefinition =
+        typeof(ProviderValueFieldReader).GetMethod(nameof(ReadArray))!;
 
     public static bool TryReadNullableElementArray(IDataRecord record, int ordinal, out object array)
     {
@@ -107,12 +151,4 @@ internal static class ProviderValueFieldReader
         array = values;
         return true;
     }
-
-    /// <summary>
-    /// An array whose elements are a non-nullable value type (long[], int[], Guid[], ...), other than
-    /// the binary and text buffers byte[]/char[].
-    /// </summary>
-    public static bool IsValueTypeArray(Type type) =>
-        type.IsArray && type.GetElementType() is { IsValueType: true } element && Nullable.GetUnderlyingType(element) == null &&
-        element != typeof(byte) && element != typeof(char);
 }

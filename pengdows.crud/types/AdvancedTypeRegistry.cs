@@ -996,6 +996,17 @@ internal class AdvancedTypeRegistry
     internal static void SetOracleIntervalDaySecond(DbParameter parameter) =>
         SetEnumProperty(parameter, OracleNames.DbTypeProperty, OracleNames.IntervalDS);
 
+    /// <summary>Sets one enum member: a compiled, cached setter (it runs per parameter).</summary>
+    internal static void SetEnumProperty(DbParameter parameter, string propertyName, string enumName)
+    {
+        if (parameter == null || string.IsNullOrEmpty(propertyName))
+        {
+            return;
+        }
+
+        @internal.ProviderPropertySetter.Set(parameter, propertyName, enumName);
+    }
+
     internal static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)
     {
         if (parameter == null || string.IsNullOrEmpty(propertyName) || enumNames.Length == 0)

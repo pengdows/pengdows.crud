@@ -102,6 +102,9 @@ internal class SnowflakeDialect : SqlDialect
 
     internal override bool AllowsColumnArgumentsInValues => false;
 
+    // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime; GetValue returns the DateTimeOffset.
+    internal override bool ReportsOffsetTimestampsAsDateTime => true;
+
     /// <summary>
     /// "USING (SELECT :p AS col, ...) AS s": the base "USING (VALUES (...))" source can't carry
     /// PARSE_JSON(:p); a SELECT can, for every column.

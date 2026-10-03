@@ -62,7 +62,7 @@ public class ProviderMatrixCompletenessTests
         new HashSet<SupportedDatabase>();
 
     private static readonly IReadOnlySet<SupportedDatabase> KnownExemptTestbedContainers =
-        new HashSet<SupportedDatabase> { SupportedDatabase.AuroraMySql, SupportedDatabase.AuroraPostgreSql };
+        new HashSet<SupportedDatabase>();
 
     [Fact]
     public void ProviderMatrix_TestbedContainerCoverage_MatchesKnownState()
@@ -83,7 +83,7 @@ public class ProviderMatrixCompletenessTests
         new HashSet<SupportedDatabase>();
 
     private static readonly IReadOnlySet<SupportedDatabase> KnownExemptLiveRoundTripConfiguration =
-        new HashSet<SupportedDatabase> { SupportedDatabase.AuroraMySql, SupportedDatabase.AuroraPostgreSql };
+        new HashSet<SupportedDatabase>();
 
     [Fact]
     public void ProviderMatrix_LiveRoundTripConfigurationCoverage_MatchesKnownState()

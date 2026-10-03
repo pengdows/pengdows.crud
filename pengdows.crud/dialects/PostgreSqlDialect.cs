@@ -384,12 +384,7 @@ internal class PostgreSqlDialect : SqlDialect
 
     private protected static void SetNpgsqlDbTypeOnly(DbParameter parameter, string npgsqlDbTypeName)
     {
-        var property = parameter.GetType().GetProperty(NpgsqlDbTypeProperty);
-        if (property != null && property.PropertyType.IsEnum &&
-            Enum.TryParse(property.PropertyType, npgsqlDbTypeName, true, out var value))
-        {
-            property.SetValue(parameter, value);
-        }
+        ProviderPropertySetter.Set(parameter, NpgsqlDbTypeProperty, npgsqlDbTypeName);
     }
 
     public override void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column)
@@ -400,17 +395,8 @@ internal class PostgreSqlDialect : SqlDialect
 
         try
         {
-            var type = parameter.GetType();
-            type.GetProperty(DataTypeNameProperty)?.SetValue(parameter, "jsonb");
-
-            var npgsqlDbTypeProperty = type.GetProperty(NpgsqlDbTypeProperty);
-            if (npgsqlDbTypeProperty != null && npgsqlDbTypeProperty.PropertyType.IsEnum)
-            {
-                if (Enum.TryParse(npgsqlDbTypeProperty.PropertyType, JsonbTypeName, true, out var enumValue))
-                {
-                    npgsqlDbTypeProperty.SetValue(parameter, enumValue);
-                }
-            }
+            ProviderPropertySetter.Set(parameter, DataTypeNameProperty, "jsonb");
+            ProviderPropertySetter.Set(parameter, NpgsqlDbTypeProperty, JsonbTypeName);
         }
         catch (Exception ex)
         {

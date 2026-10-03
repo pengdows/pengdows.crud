@@ -61,6 +61,7 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 
 namespace pengdows.crud.dialects;
 
@@ -275,8 +276,17 @@ internal sealed class InformixDialect : SqlDialect
     // maps to ADO.NET's IsolationLevel — see IsolationResolver.cs's SupportedDatabase.Informix
     // cases (2.0.6 resolves isolation through a central switch, not a dialect-owned override).
 
+    // LIST/SET/MULTISET read back as their literal text, and a LIST literal parameter converts to any
+    // of the three (confirmed live, TYPE-002).
+    internal override bool ReturnsCollectionsAsLiteralText => true;
+
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        if (value is Array array and not byte[] and not char[])
+        {
+            return base.CreateDbParameter<object?>(name, DbType.String, CollectionLiteralFormat.Format(array));
+        }
+
         // CONFIRMED live (testbed): Informix.Net.Core has no DbType.DateTimeOffset mapping
         // ("No mapping exists from DbType DateTimeOffset to a known IfxType", thrown from
         // IfxParameter.set_DbType before any later conversion can run), and Informix has no

@@ -21,9 +21,7 @@
 //   IS the meaningful proxy for "a real ADO.NET provider factory is wired up for this database"
 //   in this codebase's actual architecture — there is no separate registry to check.
 // - Status is one of Pass / Missing / ExemptByDesign. ExemptByDesign covers cases documented
-//   elsewhere as intentional, not oversights (Aurora MySQL/PostgreSQL: managed AWS services with
-//   no Docker image, detected at runtime, covered entirely by the MySQL/PostgreSQL suites — see
-//   CLAUDE.md's "Aurora variants" section). Everything else absent is Missing — a real,
+//   elsewhere as intentional, not oversights. Everything else absent is Missing — a real,
 //   documented-or-not gap, not a design decision.
 // =============================================================================
 
@@ -54,6 +52,7 @@ using testbed.SqlServer;
 using testbed.Sybase;
 using testbed.TiDB;
 using testbed.Yugabyte;
+using testbed.Aurora;
 
 namespace testbed;
 
@@ -86,15 +85,6 @@ public static class ProviderMatrixReport
     // would do; SqliteFactory is already a direct testbed dependency.
     private static readonly DbProviderFactory ProbeFactory = SqliteFactory.Instance;
 
-    // Managed AWS services with no Docker image; detected at runtime (DatabaseDetectionService)
-    // and delegate entirely to the MySQL/PostgreSQL dialect and test suites — see CLAUDE.md's
-    // "Aurora variants" section. Applies to the testbed-container and live-round-trip-
-    // configuration dimensions only (both concern "is there a live container for this
-    // database", not the dialect/translator/catalog dimensions, which are dialect-shape
-    // questions Aurora still legitimately answers via its delegate dialect).
-    private static readonly IReadOnlySet<SupportedDatabase> ExemptFromLiveContainerDimensions =
-        new HashSet<SupportedDatabase> { SupportedDatabase.AuroraMySql, SupportedDatabase.AuroraPostgreSql };
-
     // One dedicated testbed ITestContainer type per database that has one, referenced by
     // typeof() so a rename/removal breaks the BUILD rather than silently going stale here.
     private static readonly IReadOnlyDictionary<SupportedDatabase, Type> TestbedContainers =
@@ -120,7 +110,9 @@ public static class ProviderMatrixReport
             [SupportedDatabase.Snowflake] = typeof(SnowflakeTestContainer),
             [SupportedDatabase.Informix] = typeof(InformixTestContainer),
             [SupportedDatabase.SapHana] = typeof(HanaTestContainer),
-            [SupportedDatabase.InterBase] = typeof(InterBaseTestContainer)
+            [SupportedDatabase.InterBase] = typeof(InterBaseTestContainer),
+            [SupportedDatabase.AuroraPostgreSql] = typeof(AuroraPostgreSqlTestContainer),
+            [SupportedDatabase.AuroraMySql] = typeof(AuroraMySqlTestContainer)
         };
 
     // Mirrors the literal provider-name strings ParallelTestOrchestrator.GetTestConfigurations()
@@ -150,7 +142,9 @@ public static class ProviderMatrixReport
             [SupportedDatabase.Informix] = "Informix",
             [SupportedDatabase.Snowflake] = "Snowflake",
             [SupportedDatabase.SapHana] = "SAP HANA",
-            [SupportedDatabase.InterBase] = "InterBase"
+            [SupportedDatabase.InterBase] = "InterBase",
+            [SupportedDatabase.AuroraPostgreSql] = "Aurora PostgreSQL",
+            [SupportedDatabase.AuroraMySql] = "Aurora MySQL"
         };
 
     // Snowflake, SAP HANA, InterBase, and Access are the four databases CLAUDE.md documents under
@@ -167,7 +161,7 @@ public static class ProviderMatrixReport
         new HashSet<SupportedDatabase>
         {
             SupportedDatabase.Snowflake, SupportedDatabase.SapHana, SupportedDatabase.InterBase,
-            SupportedDatabase.Access
+            SupportedDatabase.Access, SupportedDatabase.AuroraPostgreSql, SupportedDatabase.AuroraMySql
         };
 
     private static readonly Lazy<HashSet<string>> LiveRoundTripConfiguredProviders = new(() =>
@@ -219,12 +213,6 @@ public static class ProviderMatrixReport
             return new MatrixCheckResult(db, "testbed-container", MatrixStatus.Pass);
         }
 
-        if (ExemptFromLiveContainerDimensions.Contains(db))
-        {
-            return new MatrixCheckResult(db, "testbed-container", MatrixStatus.ExemptByDesign,
-                "managed AWS service with no Docker image; covered by the MySQL/PostgreSQL suites (CLAUDE.md 'Aurora variants')");
-        }
-
         return new MatrixCheckResult(db, "testbed-container", MatrixStatus.Missing,
             "no dedicated ITestContainer implementation registered in ProviderMatrixReport.TestbedContainers");
     }
@@ -241,12 +229,6 @@ public static class ProviderMatrixReport
             LiveRoundTripConfiguredProviders.Value.Contains(name))
         {
             return new MatrixCheckResult(db, "live-round-trip-configuration", MatrixStatus.Pass);
-        }
-
-        if (ExemptFromLiveContainerDimensions.Contains(db))
-        {
-            return new MatrixCheckResult(db, "live-round-trip-configuration", MatrixStatus.ExemptByDesign,
-                "managed AWS service with no Docker image; covered by the MySQL/PostgreSQL suites (CLAUDE.md 'Aurora variants')");
         }
 
         return new MatrixCheckResult(db, "live-round-trip-configuration", MatrixStatus.Missing,

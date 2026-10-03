@@ -148,6 +148,10 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   `DateTimeOffset`. `VECTOR` needs the column's type (TYPE-020).
 - SAP HANA: `HanaDecimal` read with `GetDecimal`; decimals sent without trailing zeros (the driver silently cut
   digits otherwise); spatial as WKB; `TIMESTAMP` limited to microseconds by the driver (TYPE-022); `BINTEXT` as text.
+- DuckDB `BIT` ↔ `BitArray` (bit string); SQL Server `sql_variant` ↔ `object`; InterBase `ARRAY` ↔ `T[]` (bound with
+  `IBDbType.Array`, non-zero-based results copied) and its `NONE` charset pinned to UTF-8 (the driver otherwise picks
+  the system code page when code pages are registered, storing `?`); Informix `LIST`/`SET`/`MULTISET` ↔ `T[]` (written as
+  `LIST{...}`, read by parsing the literal). Not yet: HANA `ARRAY`, Informix `ROW` (TYPE-020); ASE has no `XML` type.
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.

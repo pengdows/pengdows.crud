@@ -581,28 +581,14 @@ internal class OracleDialect : SqlDialect
     // which also store into NUMBER/FLOAT columns and compare with them.
     private static void BindAsBinaryFloatingPoint(DbParameter parameter, DbType type)
     {
-        var property = parameter.GetType().GetProperty("OracleDbType");
-        if (property == null || !property.PropertyType.IsEnum)
-        {
-            return;
-        }
-
-        var name = type == DbType.Double ? "BinaryDouble" : "BinaryFloat";
-        if (Enum.TryParse(property.PropertyType, name, false, out var value))
-        {
-            property.SetValue(parameter, value);
-        }
+        ProviderPropertySetter.Set(parameter, "OracleDbType", type == DbType.Double ? "BinaryDouble" : "BinaryFloat");
     }
 
     // ODP.NET reads LONG/LONG RAW as empty unless the select list has the row's key or ROWID, or
     // InitialLONGFetchSize is -1 (fetch it all with the row), confirmed live (TYPE-002).
     internal override void ConfigureCommand(DbCommand command)
     {
-        var property = command.GetType().GetProperty("InitialLONGFetchSize");
-        if (property != null && property.PropertyType == typeof(int) && property.CanWrite)
-        {
-            property.SetValue(command, -1);
-        }
+        ProviderPropertySetter.Set(command, "InitialLONGFetchSize", "-1");
     }
 
     // Oracle has no TIME type; a time of day binds as INTERVAL DAY TO SECOND (TYPE-001). A value is

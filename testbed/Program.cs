@@ -61,7 +61,8 @@ var includeSnowflake = Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE")?.
 var includeSapHana = Environment.GetEnvironmentVariable("INCLUDE_SAPHANA")?.ToLower() == "true";
 var includeInterBase = Environment.GetEnvironmentVariable("INCLUDE_INTERBASE")?.ToLower() == "true";
 var includeAccess = OperatingSystem.IsWindows();
-var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake, includeSapHana, includeInterBase, includeAccess);
+var includeAurora = Environment.GetEnvironmentVariable("INCLUDE_AURORA")?.ToLower() == "true";
+var orchestrator = new ParallelTestOrchestrator(host.Services, includeSnowflake, includeSapHana, includeInterBase, includeAccess, includeAurora);
 
 // Optional filtering: --only A,B or --exclude X,Y or env TESTBED_ONLY/TESTBED_EXCLUDE
 static ISet<string> ParseList(string? csv)

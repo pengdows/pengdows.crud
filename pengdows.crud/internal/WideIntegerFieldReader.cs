@@ -8,6 +8,8 @@
 //   returns the exact digits (confirmed live 2026-10-02 on Snowflake.Data 5.6).
 // - Read(record, ordinal): GetValue, or, when that overflows on a column reported as Int64, the
 //   column's text as a BigInteger. Any other failure is left as the provider threw it.
+// - ReadDecimal/ReadDouble: the same for the common decimal/double properties, typed (GetInt64), so
+//   an ordinary BIGINT neither boxes nor goes through the general coercion.
 // - Keyed on the provider's behavior, not the database: a column reported as Int64 can only
 //   overflow Int64 when the provider understates its type.
 // - Used by entity hydration (CompiledMapperFactory, DataReaderMapper) for properties wider than
@@ -32,6 +34,30 @@ internal static class WideIntegerFieldReader
         catch (OverflowException) when (TryReadText(record, ordinal, out var value))
         {
             return value;
+        }
+    }
+
+    public static decimal ReadDecimal(IDataRecord record, int ordinal)
+    {
+        try
+        {
+            return record.GetInt64(ordinal);
+        }
+        catch (OverflowException) when (TryReadText(record, ordinal, out var value))
+        {
+            return checked((decimal)(BigInteger)value);
+        }
+    }
+
+    public static double ReadDouble(IDataRecord record, int ordinal)
+    {
+        try
+        {
+            return record.GetInt64(ordinal);
+        }
+        catch (OverflowException) when (TryReadText(record, ordinal, out var value))
+        {
+            return (double)(BigInteger)value;
         }
     }
 

@@ -23,6 +23,7 @@ using testbed.TiDB;
 using testbed.Snowflake;
 using testbed.Spanner;
 using testbed.Yugabyte;
+using testbed.Aurora;
 
 namespace testbed;
 
@@ -34,14 +35,16 @@ public class ParallelTestOrchestrator
     private readonly bool _includeSapHana;
     private readonly bool _includeInterBase;
     private readonly bool _includeAccess;
+    private readonly bool _includeAurora;
 
-    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false, bool includeSapHana = false, bool includeInterBase = false, bool includeAccess = false)
+    public ParallelTestOrchestrator(IServiceProvider services, bool includeSnowflake = false, bool includeSapHana = false, bool includeInterBase = false, bool includeAccess = false, bool includeAurora = false)
     {
         _services = services;
         _includeSnowflake = includeSnowflake;
         _includeSapHana = includeSapHana;
         _includeInterBase = includeInterBase;
         _includeAccess = includeAccess;
+        _includeAurora = includeAurora;
     }
 
     /// <summary>
@@ -73,6 +76,8 @@ public class ParallelTestOrchestrator
             SupportedDatabase.SapHana when _includeSapHana => new HanaTestContainer(),
             SupportedDatabase.InterBase when _includeInterBase => new InterBaseTestContainer(),
             SupportedDatabase.Access when _includeAccess => new AccessTestContainer(),
+            SupportedDatabase.AuroraPostgreSql when _includeAurora => new AuroraPostgreSqlTestContainer(),
+            SupportedDatabase.AuroraMySql when _includeAurora => new AuroraMySqlTestContainer(),
             _ => null
         };
 
@@ -362,6 +367,12 @@ public class ParallelTestOrchestrator
         // handful of OLE DB round trips, similar cost shape to InterBase's connection-only case.
         if (_includeAccess)
             AddLocal("Access", new AccessTestContainer(), (db, sp) => new AccessTestProvider(db, sp), 5);
+
+        if (_includeAurora)
+        {
+            AddLocal("Aurora PostgreSQL", new AuroraPostgreSqlTestContainer(), (db, sp) => new PostgreSQLTestProvider(db, sp), 5);
+            AddLocal("Aurora MySQL", new AuroraMySqlTestContainer(), (db, sp) => new TestProvider(db, sp), 5);
+        }
 
         if (only is { Count: > 0 })
             configurations = configurations.Where(c => only.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) || only.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase)).ToList();

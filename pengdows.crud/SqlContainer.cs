@@ -651,7 +651,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (parameter.DbType == DbType.Decimal && parameter.Value is decimal dec)
         {
             var (precision, scale) = DecimalHelpers.Infer(dec);
-            if (((decimal.GetBits(dec)[3] >> 16) & 0x7F) > scale)
+            if (dec.Scale > scale)
             {
                 parameter.Value = decimal.Round(dec, scale);
             }

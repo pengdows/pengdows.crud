@@ -22,10 +22,23 @@ public sealed record TypeCoercionOptions(
     /// </summary>
     internal bool GuidBytesBigEndian { get; init; }
 
+    /// <summary>
+    /// The driver reports offset timestamps as DateTime but returns the DateTimeOffset from GetValue
+    /// (<c>SqlDialect.ReportsOffsetTimestampsAsDateTime</c>).
+    /// </summary>
+    internal bool ReadsOffsetTimestampsFromValue { get; init; }
+
+    /// <summary>
+    /// Collection columns arrive as literal text (<c>SqlDialect.ReturnsCollectionsAsLiteralText</c>).
+    /// </summary>
+    internal bool ReadsCollectionLiterals { get; init; }
+
     /// <summary>The coercion options a dialect's values are read with.</summary>
     internal static TypeCoercionOptions For(dialects.ISqlDialect dialect) => Default with
     {
         Provider = dialect is dialects.SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : dialect.DatabaseType,
-        GuidBytesBigEndian = dialect is not dialects.SqlDialect { StoresGuidBytesBigEndian: false }
+        GuidBytesBigEndian = dialect is not dialects.SqlDialect { StoresGuidBytesBigEndian: false },
+        ReadsOffsetTimestampsFromValue = dialect is dialects.SqlDialect { ReportsOffsetTimestampsAsDateTime: true },
+        ReadsCollectionLiterals = dialect is dialects.SqlDialect { ReturnsCollectionsAsLiteralText: true }
     };
 }

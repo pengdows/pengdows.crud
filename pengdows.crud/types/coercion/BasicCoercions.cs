@@ -49,6 +49,7 @@ internal static class BasicCoercions
 
         // Binary types
         registry.Register(new ByteArrayCoercion());
+        registry.Register(new BitArrayCoercion());
 
         // Array types
         registry.Register(new IntArrayCoercion());
@@ -712,6 +713,11 @@ internal class DecimalCoercion : DbCoercion<decimal>
             case string text when decimal.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed):
                 value = parsed;
                 return true;
+            // BigInteger/Int128/UInt128 aren't IConvertible, so Convert would throw on every value;
+            // decline and let the general path convert them (TypeCoercionHelper.TryCoerceWideInteger).
+            case not IConvertible:
+                value = 0m;
+                return false;
             default:
                 try
                 {
@@ -824,6 +830,35 @@ internal class ByteArrayCoercion : DbCoercion<byte[]>
     {
         parameter.Value = value ?? (object)DBNull.Value;
         parameter.DbType = DbType.Binary;
+        return true;
+    }
+}
+
+/// <summary>
+/// BitArray from a BitArray (Npgsql BIT(n)/VARBIT) or a bit string (DuckDB BIT reads back as "10110").
+/// Text that isn't bits doesn't convert.
+/// </summary>
+internal class BitArrayCoercion : DbCoercion<System.Collections.BitArray>
+{
+    public override bool TryRead(in DbValue src, out System.Collections.BitArray? value)
+    {
+        switch (src.RawValue)
+        {
+            case System.Collections.BitArray bits:
+                value = bits;
+                return true;
+            case string text when @internal.BitStringFormat.TryParse(text, out var parsed):
+                value = parsed;
+                return true;
+            default:
+                value = null;
+                return false;
+        }
+    }
+
+    public override bool TryWrite(System.Collections.BitArray? value, DbParameter parameter)
+    {
+        parameter.Value = value ?? (object)DBNull.Value;
         return true;
     }
 }

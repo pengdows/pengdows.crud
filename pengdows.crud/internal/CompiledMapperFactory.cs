@@ -189,23 +189,26 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     Expression.Constant(coercionOptions?.GuidBytesBigEndian ?? false));
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
-            else if (ProviderValueFieldReader.IsValueTypeArray(Nullable.GetUnderlyingType(targetType) ?? targetType) &&
-                     (fieldType == typeof(Array) || fieldType.IsArray))
+            else if (fieldType == typeof(string) && ProviderValueFieldReader.IsReadableArray(targetType) &&
+                     (coercionOptions?.ReadsCollectionLiterals ?? false))
             {
-                // Npgsql refuses some arrays as non-nullable elements (Spanner reports System.Array); read
-                // them with the property's element type, nullable.
-                var readArray = typeof(ProviderValueFieldReader).GetMethod(nameof(ProviderValueFieldReader.ReadArray))!;
-                var rawValue = Expression.Call(readArray, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr,
-                    Expression.Constant((Nullable.GetUnderlyingType(targetType) ?? targetType).GetElementType()!, typeof(Type)));
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+                // Informix returns LIST/SET/MULTISET as literal text; parse it, typed.
+                var readLiteral = ProviderValueFieldReader.ReadCollectionLiteralDefinition.MakeGenericMethod(targetType.GetElementType()!);
+                valueReadExpr = Expression.Call(readLiteral, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+            }
+            else if (ProviderValueFieldReader.IsReadableArray(targetType) && ProviderValueFieldReader.IsArrayColumn(fieldType))
+            {
+                // Typed: Npgsql refuses some arrays as non-nullable elements (Spanner reports System.Array)
+                // and InterBase returns its declared bounds (Int32[*]).
+                var readArray = ProviderValueFieldReader.ReadArrayDefinition.MakeGenericMethod(targetType.GetElementType()!);
+                valueReadExpr = Expression.Call(readArray, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
             }
             else if (fieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
             {
                 // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).
                 var readDouble = typeof(NumericFieldReader).GetMethod(nameof(NumericFieldReader.ReadDouble))!;
                 var rawValue = Expression.Call(readDouble, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = BuildConversionExpression(Expression.Convert(rawValue, typeof(object)), typeof(object),
-                    targetType, coercionOptions);
+                valueReadExpr = BuildConversionExpression(rawValue, typeof(double), targetType, coercionOptions);
             }
             else if (fieldType == typeof(string) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(byte[]))
             {
@@ -214,6 +217,18 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var getValue = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue))!;
                 var rawValue = Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), getValue, ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+            }
+            else if (fieldType == typeof(long) &&
+                     (Nullable.GetUnderlyingType(targetType) ?? targetType) is var wideTarget &&
+                     (wideTarget == typeof(decimal) || wideTarget == typeof(double)))
+            {
+                // A column reported as Int64 may hold more (Snowflake.Data, see below); typed for the
+                // common decimal/double properties so an ordinary BIGINT doesn't box.
+                var readTyped = typeof(WideIntegerFieldReader).GetMethod(wideTarget == typeof(decimal)
+                    ? nameof(WideIntegerFieldReader.ReadDecimal)
+                    : nameof(WideIntegerFieldReader.ReadDouble))!;
+                var rawValue = Expression.Call(readTyped, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                valueReadExpr = BuildConversionExpression(rawValue, wideTarget, targetType, coercionOptions);
             }
             else if (fieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
             {

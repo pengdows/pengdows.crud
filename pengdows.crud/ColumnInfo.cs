@@ -73,6 +73,19 @@ file static class EnumLiteralCache<TEnum> where TEnum : struct, Enum
     {
         return ValueByLiteral.TryGetValue(literal, out value);
     }
+
+    /// <summary>Non-generic shape of <see cref="TryGetValue"/>, bound once per enum type.</summary>
+    public static bool TryGetBoxed(string literal, out object? value)
+    {
+        if (ValueByLiteral.TryGetValue(literal, out var typed))
+        {
+            value = typed;
+            return true;
+        }
+
+        value = null;
+        return false;
+    }
 }
 
 /// <summary>
@@ -125,14 +138,19 @@ internal class ColumnInfo : IColumnInfo
         return Expression.Lambda<Func<object, string>>(call, param).Compile();
     }
 
+    private delegate bool EnumLiteralParser(string literal, out object? value);
+
+    // One parser per enum type, bound once: DataReaderMapper parses every string-stored enum value
+    // through here, and per-call reflection cost about 280 ns and 120 B per value.
+    private static readonly ConcurrentDictionary<Type, EnumLiteralParser> EnumLiteralParsers = new();
+
     internal static bool TryParseEnumLiteral(Type enumType, string literal, out object? value)
     {
-        var cacheType = typeof(EnumLiteralCache<>).MakeGenericType(enumType);
-        var method = cacheType.GetMethod(nameof(EnumLiteralCache<DayOfWeek>.TryGetValue))!;
-        var args = new object?[] { literal, null };
-        var success = (bool)method.Invoke(null, args)!;
-        value = args[1];
-        return success;
+        var parser = EnumLiteralParsers.GetOrAdd(enumType, static type =>
+            (EnumLiteralParser)Delegate.CreateDelegate(typeof(EnumLiteralParser),
+                typeof(EnumLiteralCache<>).MakeGenericType(type)
+                    .GetMethod(nameof(EnumLiteralCache<DayOfWeek>.TryGetBoxed))!));
+        return parser(literal, out value);
     }
 
     /// <summary>

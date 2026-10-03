@@ -100,6 +100,7 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
+using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
 
 namespace pengdows.crud.dialects;
@@ -123,6 +124,13 @@ internal sealed class InterBaseDialect : SqlDialect
     internal InterBaseDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
+        // The driver's NONE charset turns into the system code page when .NET code pages are
+        // registered first, storing other text as '?'; pin it to UTF-8 (InterBaseCharsetPin).
+        var driver = factory.GetType().Assembly;
+        if (driver.GetName().Name?.StartsWith("InterBaseSql", StringComparison.Ordinal) == true)
+        {
+            InterBaseCharsetPin.PinNoneToUtf8(driver, logger);
+        }
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.InterBase;
@@ -218,6 +226,17 @@ internal sealed class InterBaseDialect : SqlDialect
         {
             return base.CreateDbParameter<object?>(name, DbType.DateTime,
                 DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified));
+        }
+
+        // An ARRAY column binds only when IBDbType is Array before the value is set: IBParameter
+        // infers its type from the value and has no array mapping ("Unknown type: System.Int32[]",
+        // confirmed live, TYPE-002).
+        if (value is Array array and not byte[])
+        {
+            var parameter = base.CreateDbParameter<object?>(name, type, null);
+            ProviderPropertySetter.Set(parameter, "IBDbType", "Array");
+            parameter.Value = array;
+            return parameter;
         }
 
         return base.CreateDbParameter(name, type, value);

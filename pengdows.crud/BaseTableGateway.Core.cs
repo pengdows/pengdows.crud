@@ -137,9 +137,16 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     {
         public Func<ITrackedReader, TEntity> CompiledMapper { get; }
 
-        public HybridRecordsetPlan(Func<ITrackedReader, TEntity> compiledMapper)
+        /// <summary>
+        /// The recordset shape this plan was compiled for. It travels with the plan so the hot slot
+        /// is one reference: a shape and a plan stored separately can be read torn by a racing load.
+        /// </summary>
+        public RecordsetShape Shape { get; }
+
+        public HybridRecordsetPlan(Func<ITrackedReader, TEntity> compiledMapper, RecordsetShape shape)
         {
             CompiledMapper = compiledMapper ?? throw new ArgumentNullException(nameof(compiledMapper));
+            Shape = shape;
         }
     }
 
@@ -172,11 +179,8 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         }
 
         _dialect = databaseContext.GetDialect();
-        _coercionOptions = _coercionOptions with
-        {
-            Provider = _dialect is SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : _dialect.DatabaseType,
-            GuidBytesBigEndian = TypeCoercionOptions.For(_dialect).GuidBytesBigEndian
-        };
+        // All of the dialect's read options (copying fields one by one dropped every flag added later).
+        _coercionOptions = TypeCoercionOptions.For(_dialect);
         _readerPlans = new BoundedCache<RecordsetShape, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
 
         _tableInfo = accessor.TypeMapRegistry.GetTableInfo<TEntity>() ??

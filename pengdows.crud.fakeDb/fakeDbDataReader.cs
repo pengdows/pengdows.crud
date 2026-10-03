@@ -48,9 +48,20 @@ public class fakeDbDataReader : DbDataReader
     /// <summary>Returns the rows in the first result set. Used by RemainingReaderResults.</summary>
     internal List<Dictionary<string, object>> FirstResultSet => _resultSets[0];
 
-    private static string[] GetKeys(Dictionary<string, object> row)
+    // The current row's column names, cached so reading a value doesn't allocate: the library's
+    // allocation tests and benchmarks read through fakeDb. Rows aren't modified while being read.
+    private Dictionary<string, object>? _keysRow;
+    private string[] _keys = Array.Empty<string>();
+
+    private string[] GetKeys(Dictionary<string, object> row)
     {
-        return row.Keys.ToArray();
+        if (!ReferenceEquals(row, _keysRow))
+        {
+            _keys = row.Keys.ToArray();
+            _keysRow = row;
+        }
+
+        return _keys;
     }
 
     public override int FieldCount
@@ -351,6 +362,13 @@ public class fakeDbDataReader : DbDataReader
     public ISet<string>? DateTimeOffsetReportedAsDateTimeColumns { get; set; }
 
     /// <summary>
+    /// Field types reported for columns regardless of the value they hold, as a provider reports its
+    /// declared type (e.g. InterBaseSql reports an ARRAY column as <see cref="Array"/> and returns a
+    /// non-zero-based <c>Int32[*]</c>).
+    /// </summary>
+    public IDictionary<string, Type>? ReportedFieldTypes { get; set; }
+
+    /// <summary>
     /// Columns holding a <see cref="decimal"/> that emulate Sap.Data.Hana.Net on DECIMAL/SMALLDECIMAL
     /// (confirmed live): <see cref="GetFieldType"/> reports <see cref="decimal"/>, <see cref="GetValue"/>
     /// returns a provider-specific <see cref="IConvertible"/> wrapper (<see cref="fakeDbProviderDecimal"/>),
@@ -607,6 +625,11 @@ public class fakeDbDataReader : DbDataReader
         if (IsHandlerlessColumn(ordinal))
         {
             throw HandlerlessRead(ordinal, "System.Object");
+        }
+
+        if (ReportedFieldTypes != null && ReportedFieldTypes.TryGetValue(GetName(ordinal), out var reported))
+        {
+            return reported;
         }
 
         if (IsDoubleBeyondDecimal(ordinal))

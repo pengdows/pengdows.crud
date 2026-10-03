@@ -589,6 +589,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool AllowsColumnArgumentsInValues => true;
 
     /// <summary>
+    /// True when the driver reports an offset timestamp column's field type as DateTime while
+    /// GetValue returns the exact DateTimeOffset (Snowflake.Data, TIMESTAMP_LTZ/TZ), so a
+    /// DateTimeOffset property must read the value rather than the DateTime.
+    /// </summary>
+    internal virtual bool ReportsOffsetTimestampsAsDateTime => false;
+
+    /// <summary>
+    /// True when the driver returns collection columns as their literal text (Informix.Net.Core:
+    /// "LIST{1          ,2          }"), so an array property is read by parsing the literal.
+    /// </summary>
+    internal virtual bool ReturnsCollectionsAsLiteralText => false;
+
+    /// <summary>
     /// True when an insert of these columns must take its values from a SELECT
     /// (<see cref="AllowsColumnArgumentsInValues"/>).
     /// </summary>
@@ -1899,7 +1912,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 parameter.DbType = RemapDbType(type);
             }
 
-            var preparedValue = PrepareParameterValue(value, type);
+            // A decimal is sent without trailing zeros (see the Precision/Scale block below), trimmed
+            // before it is boxed so it is boxed once.
+            var preparedValue = type == DbType.Decimal && value is decimal decimalValue &&
+                                TryTrimTrailingZeros(decimalValue, out var trimmed)
+                ? PrepareParameterValue(trimmed, type)
+                : PrepareParameterValue(value, type);
             parameter.Value = preparedValue ?? DBNull.Value;
         }
 
@@ -1967,19 +1985,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // Using Precision=18 is the industry convention (used by Dapper, EF Core).
         // All supported databases (SQL Server, PostgreSQL, Oracle, MySQL, etc.)
         // accept DECIMAL(18,S) parameters for columns declared with P≤18.
-        if (!valueIsNull && parameter.DbType == DbType.Decimal && value is decimal dec)
+        //
+        // The value is sent without trailing zeros (TryTrimTrailingZeros, above) so its own scale
+        // matches Scale. The SAP HANA driver mis-sends one that doesn't: 12345678901234567.00m at
+        // Precision 18 / Scale 0 was stored as 2345678901234567, silently (confirmed live).
+        if (!valueIsNull && parameter.DbType == DbType.Decimal && parameter.Value is decimal dec)
         {
             var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
             parameter.Precision = (byte)Math.Max(inferredPrecision, 18);
             parameter.Scale = (byte)inferredScale;
-
-            // Send the value without trailing zeros so its own scale matches Scale. The SAP HANA
-            // driver mis-sends one that doesn't: 12345678901234567.00m at Precision 18 / Scale 0
-            // was stored as 2345678901234567, silently (confirmed live). Same number either way.
-            if (((decimal.GetBits(dec)[3] >> 16) & 0x7F) > inferredScale)
-            {
-                parameter.Value = decimal.Round(dec, inferredScale);
-            }
         }
 
         if (traceTimings)
@@ -1994,6 +2008,25 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
 
         return parameter;
+    }
+
+    /// <summary>The same number without trailing fractional zeros, when it has any.</summary>
+    private static bool TryTrimTrailingZeros(decimal value, out decimal trimmed)
+    {
+        trimmed = value;
+        if (value.Scale == 0)
+        {
+            return false;
+        }
+
+        var (_, scale) = DecimalHelpers.Infer(value);
+        if (value.Scale <= scale)
+        {
+            return false;
+        }
+
+        trimmed = decimal.Round(value, scale);
+        return true;
     }
 
     private static bool IsParameterTimingEnabled()

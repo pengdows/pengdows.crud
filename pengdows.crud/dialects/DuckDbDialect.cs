@@ -429,6 +429,16 @@ internal class DuckDbDialect : SqlDialect
     {
         var parameter = base.CreateDbParameter(name, type, value);
 
+        // DuckDB BIT takes its bit string; DuckDB.NET binds a BitArray as its ToString() (TYPE-002).
+        if (value is System.Collections.BitArray bits)
+        {
+            var text = BitStringFormat.Format(bits);
+            parameter.DbType = DbType.String;
+            parameter.Value = text;
+            parameter.Size = Math.Max(text.Length, 1);
+            return parameter;
+        }
+
         // DuckDB specific parameter handling
         if (type == DbType.Boolean && value is bool boolValue)
         {
