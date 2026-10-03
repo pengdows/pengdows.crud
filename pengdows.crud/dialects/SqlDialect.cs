@@ -3082,6 +3082,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return new string(buffer);
     }
 
+    /// <summary>
+    /// The DbType a parameter must take after <see cref="ISqlContainer.SetParameterValue"/> gave it
+    /// <paramref name="newValue"/>, prepared as <paramref name="preparedValue"/>; <c>null</c> keeps
+    /// the parameter's DbType. For a dialect whose prepared value's representation depends on the
+    /// value itself (SQLite's decimal: REAL or exact text).
+    /// </summary>
+    internal virtual DbType? DbTypeForReassignedValue(object? newValue, object? preparedValue) => null;
+
     public virtual object? PrepareParameterValue(object? value, DbType dbType)
     {
         if (value is Guid guid)

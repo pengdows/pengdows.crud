@@ -138,22 +138,25 @@ public class SqlContainerTests : SqlLiteContextTestBase, IDisposable
     }
 
     [Fact]
-    public void SetParameterValue_Decimal_DoesNotChangePrecisionOrScale()
+    public void SetParameterValue_Decimal_BindsAsTheDialectWould()
     {
-        // SQLite binds a decimal as exact text (TYPE-002), so Precision/Scale are 0.
-        // SetParameterValue must not modify those metadata fields, and keeps the value exact text.
+        // SQLite binds a decimal as a REAL when a double holds it exactly, else as exact text
+        // (TYPE-002/REV-058). A reassigned decimal switches representation and DbType with it:
+        // System.Data.SQLite binds by DbType, not by the value's type (confirmed live).
         var container = Context.CreateSqlContainer();
         var param = container.AddParameterWithValue(DbType.Decimal, 0m);
 
-        Assert.Equal(DbType.String, param.DbType);
+        Assert.Equal(DbType.Double, param.DbType);
         Assert.Equal((byte)0, param.Precision);
         Assert.Equal((byte)0, param.Scale);
 
-        container.SetParameterValue(param.ParameterName, 19.99m);
-
-        // Metadata unchanged after value update
-        Assert.Equal("19.99", param.Value);
+        container.SetParameterValue(param.ParameterName, -1234567890123456.0123456789m);
+        Assert.Equal("-1234567890123456.0123456789", param.Value);
         Assert.Equal(DbType.String, param.DbType);
+
+        container.SetParameterValue(param.ParameterName, 19.99m);
+        Assert.Equal(19.99d, param.Value);
+        Assert.Equal(DbType.Double, param.DbType);
         Assert.Equal((byte)0, param.Precision);
         Assert.Equal((byte)0, param.Scale);
     }

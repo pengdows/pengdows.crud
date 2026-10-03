@@ -122,8 +122,8 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
 - A `Guid` declared `DbType.Binary` is stored as 16 bytes in the database's Guid byte order: RFC 4122 big-endian by
   default (MySQL family's `UUID_TO_BIN`, PostgreSQL, SQLite, Firebird, ...), .NET `ToByteArray()` order on SQL Server,
   Oracle and Sybase ASE; 16-byte columns read into a `Guid` decode the same way (changed in 2.0.6, TYPE-002).
-- SQLite: a `decimal` binds as exact invariant text (declare the column `TEXT` to keep every digit; `REAL`/`NUMERIC`
-  convert by affinity); a DuckDB `LIST` maps to `T[]`/`List<T>` through `DataReaderMapper` as through the gateway.
+- SQLite: a `decimal` binds as a `REAL` when a double holds it exactly, else as exact invariant text (declare the
+  column `TEXT` to keep every digit); a DuckDB `LIST` maps to `T[]`/`List<T>` through `DataReaderMapper` as through the gateway.
 - PostgreSQL family: `Geometry`/`Geography` bind EWKB (WKT encoded; GeoJSON-only refused) and PostGIS/`vector` columns
   read without the NetTopologySuite/pgvector plugins (binary value via `GetBytes`); a C# enum into a PG `ENUM` column is
   sent untyped on PostgreSQL/YugabyteDB (CockroachDB accepts text) (string properties, PG 15+ MERGE upserts and custom `WHERE` still need `CAST`); `DateTimeOffset` with

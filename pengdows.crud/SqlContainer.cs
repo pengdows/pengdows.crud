@@ -622,6 +622,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         // Allow dialect to transform value
         var preparedValue = _dialect.PrepareParameterValue(newValue, parameter.DbType);
+        if (_dialect is SqlDialect reassigningDialect &&
+            reassigningDialect.DbTypeForReassignedValue(newValue, preparedValue) is { } reassignedType)
+        {
+            parameter.DbType = reassignedType;
+        }
 
         // If switching to an array value on providers that support set-valued parameters
         // (e.g., PostgreSQL ANY(@p)), coerce DbType to Object so the provider

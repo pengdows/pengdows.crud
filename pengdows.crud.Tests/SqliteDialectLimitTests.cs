@@ -39,22 +39,39 @@ public class SqliteDialectLimitTests
     }
 
     [Theory]
-    [InlineData(9876.54321)]
-    [InlineData(-99999999.99999999)]
-    [InlineData(0.0)]
-    [InlineData(1.0)]
-    public void CreateDbParameter_Decimal_BindsExactText(double rawValue)
+    [InlineData("9876.54321")]
+    [InlineData("0")]
+    [InlineData("1")]
+    public void CreateDbParameter_DecimalADoubleHoldsExactly_BindsAsDouble(string text)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
-        var decimalValue = (decimal)rawValue;
+        var decimalValue = decimal.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
 
         var p = dialect.CreateDbParameter("col_decimal", DbType.Decimal, decimalValue);
 
-        // TYPE-002: exact invariant text, never a double (which lost digits, confirmed live); a
-        // REAL/NUMERIC column still converts it by affinity.
+        // REV-058: a REAL compares numerically with arithmetic/aggregate results; text never does.
+        Assert.Equal(DbType.Double, p.DbType);
+        Assert.Equal((double)decimalValue, p.Value);
+        Assert.Equal((double)decimalValue, dialect.PrepareParameterValue(decimalValue, DbType.Decimal));
+    }
+
+    [Theory]
+    [InlineData("-1234567890123456.0123456789")]
+    [InlineData("-99999999.99999999")]
+    [InlineData("0.12345678901234567")]
+    public void CreateDbParameter_DecimalADoubleCantHold_BindsExactText(string text)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+        var decimalValue = decimal.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+
+        var p = dialect.CreateDbParameter("col_decimal", DbType.Decimal, decimalValue);
+
+        // TYPE-002: a double lost these digits (confirmed live); text keeps them in a TEXT column.
         Assert.Equal(DbType.String, p.DbType);
-        Assert.Equal(decimalValue.ToString(System.Globalization.CultureInfo.InvariantCulture), p.Value);
+        Assert.Equal(text, p.Value);
+        Assert.Equal(text, dialect.PrepareParameterValue(decimalValue, DbType.Decimal));
     }
 
     [Fact]

@@ -393,14 +393,11 @@ internal class SqliteDialect : SqlDialect
                     : Convert.ToUInt64(value, CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture));
         }
 
-        // TYPE-002, confirmed live (Microsoft.Data.Sqlite 9): a decimal bound as a double lost its
-        // digits (-1234567890123456.0123456789 was stored as "-1.23456789012346e+15"). Exact
-        // invariant text keeps every digit in a TEXT column; a REAL/NUMERIC column converts it by
-        // affinity, as it did the double. Only when the caller declared DbType.Decimal; other
-        // mismatches (e.g. DbType.String + decimal) fall through to the base validator and throw.
+        // Only when the caller declared DbType.Decimal; other mismatches (e.g. DbType.String +
+        // decimal) fall through to the base validator and throw.
         if (value is decimal decValue && type == DbType.Decimal)
         {
-            return base.CreateDbParameter(name, DbType.String, decValue.ToString(CultureInfo.InvariantCulture));
+            return BindDecimal(name, decValue);
         }
 
         var p = base.CreateDbParameter(name, type, value);
@@ -413,11 +410,36 @@ internal class SqliteDialect : SqlDialect
         return p;
     }
 
-    // A decimal reassigned through SetParameterValue gets the same exact text CreateDbParameter binds.
+    // A decimal reassigned through SetParameterValue gets the value CreateDbParameter binds, whichever
+    // of the two representations the parameter was created with (DbTypeForReassignedValue re-types it).
     public override object? PrepareParameterValue(object? value, DbType dbType) =>
-        value is decimal d && dbType is DbType.String or DbType.Decimal
-            ? d.ToString(CultureInfo.InvariantCulture)
+        value is decimal d && dbType is DbType.Decimal or DbType.Double or DbType.String
+            ? AsExactDouble(d) is { } dbl ? dbl : d.ToString(CultureInfo.InvariantCulture)
             : base.PrepareParameterValue(value, dbType);
+
+    // System.Data.SQLite binds by DbType, not by the value's type (confirmed live), so the DbType
+    // must follow the representation PrepareParameterValue chose.
+    internal override DbType? DbTypeForReassignedValue(object? newValue, object? preparedValue) =>
+        newValue is decimal
+            ? preparedValue is double ? DbType.Double : DbType.String
+            : null;
+
+    // A decimal binds as a REAL when a double holds it exactly, else as exact invariant text.
+    // TYPE-002, confirmed live (Microsoft.Data.Sqlite 9): a decimal bound as a double lost its digits
+    // (-1234567890123456.0123456789 was stored as "-1.23456789012346e+15"); text keeps every digit
+    // in a TEXT column. But text has no affinity, and SQLite converts neither side of a comparison
+    // when neither has one, so text compared with an arithmetic or aggregate result
+    // (`price * qty > @p`, `SUM(x) > @p`) never matched (REV-058, confirmed live).
+    private DbParameter BindDecimal(string? name, decimal value) =>
+        AsExactDouble(value) is { } dbl
+            ? base.CreateDbParameter(name, DbType.Double, dbl)
+            : base.CreateDbParameter(name, DbType.String, value.ToString(CultureInfo.InvariantCulture));
+
+    private static double? AsExactDouble(decimal value)
+    {
+        var dbl = (double)value;
+        return (decimal)dbl == value ? dbl : null;
+    }
 
     // Connection pooling properties for SQLite (provider-aware)
     public override bool SupportsExternalPooling =>
