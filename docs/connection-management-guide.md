@@ -41,7 +41,7 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 ### PreventDatabaseUnload
 * Keeps a single sentinel connection open (never used for work) to prevent unloads in some embedded/local DBs.
 * Otherwise behaves like `Standard`.
-* `KeepAlive` is the old name for this mode, retained only as an `[Obsolete]` compatibility alias with the identical underlying value (`1`) — use `PreventDatabaseUnload` in new code.
+* `KeepAlive` is the old name for this mode, retained only as an `[Obsolete]` compatibility alias with the identical underlying value (`1`) — use `PreventDatabaseUnload` in new code. Because both names share the value, `ToString()`, logs and serialized configuration may print `PreventDatabaseUnload` for a mode you set as `KeepAlive`; both names parse back to the same value, but compare the enum value, not its text.
 
 ### SingleWriter
 * Identical to Standard (no pinned connections); governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
