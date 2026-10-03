@@ -123,7 +123,8 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
             foreach (var (id, value) in new[] { (10, DateOnly.MinValue), (11, DateOnly.MaxValue) })
             {
                 var row = new CalendarDay { Id = id, Day = value, MaybeDay = value };
-                if (await IsRejectedAsync(provider, $"DateOnly {value:O}", () => gateway.CreateAsync(row, context)))
+                if (await IsRejectedAsync(provider, $"DateOnly {value:O}", () => gateway.CreateAsync(row, context),
+                        async () => await gateway.RetrieveOneAsync(id, context)))
                 {
                     continue;
                 }
@@ -144,7 +145,8 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
             var gateway = new TableGateway<CalendarTime, int>(context);
             var value = new TimeOnly(23, 59, 59).Add(TimeSpan.FromTicks(9_999_999));
             var row = new CalendarTime { Id = 10, At = value, MaybeAt = value };
-            if (await IsRejectedAsync(provider, $"TimeOnly {value:O}", () => gateway.CreateAsync(row, context)))
+            if (await IsRejectedAsync(provider, $"TimeOnly {value:O}", () => gateway.CreateAsync(row, context),
+                    async () => await gateway.RetrieveOneAsync(10, context)))
             {
                 return;
             }
@@ -182,7 +184,8 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
                      })
             {
                 var row = new CalendarDuration { Id = id, Span = value, MaybeSpan = value };
-                if (await IsRejectedAsync(provider, $"TimeSpan {value:c}", () => gateway.CreateAsync(row, context)))
+                if (await IsRejectedAsync(provider, $"TimeSpan {value:c}", () => gateway.CreateAsync(row, context),
+                        async () => await gateway.RetrieveOneAsync(id, context)))
                 {
                     continue;
                 }
@@ -195,9 +198,12 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
         });
     }
 
-    // A rejection is an asserted outcome, not a skip: it must be a clear error (the database's own,
-    // translated, or the library's range check), and it is logged.
-    private async Task<bool> IsRejectedAsync(SupportedDatabase provider, string what, Func<ValueTask<bool>> create)
+    // A rejection is an asserted outcome, not a skip: it must be the database or library refusing the
+    // value (the database's own error, translated, or a range check), nothing may have been written,
+    // and it is logged. REV-062: any DatabaseException used to count, so a dropped connection, a
+    // timeout or a constraint error passed as a "rejection".
+    private async Task<bool> IsRejectedAsync(SupportedDatabase provider, string what, Func<ValueTask<bool>> create,
+        Func<ValueTask<object?>> retrieve)
     {
         try
         {
@@ -206,13 +212,26 @@ public class DateOnlyTimeOnlyRoundTripTests : DatabaseTestBase
         }
         // OverflowException/FormatException: the provider's own range check at bind time (SqlClient,
         // pengdows.flatfile), raised before anything is written; clear, and never a wrong value.
-        catch (Exception ex) when (ex is pengdows.crud.exceptions.DatabaseException or ArgumentOutOfRangeException
-                                       or OverflowException or FormatException)
+        catch (Exception ex) when (IsValueRefusal(ex))
         {
             Output.WriteLine($"[{provider}] {what} rejected: {ex.GetType().Name}: {ex.Message}");
+            Assert.Null(await retrieve());
             return true;
         }
     }
+
+    private static bool IsValueRefusal(Exception ex) => ex switch
+    {
+        ArgumentOutOfRangeException or OverflowException or FormatException => true,
+        pengdows.crud.exceptions.ConnectionException
+            or pengdows.crud.exceptions.CommandTimeoutException
+            or pengdows.crud.exceptions.TransactionException
+            or pengdows.crud.exceptions.ConstraintViolationException
+            or pengdows.crud.exceptions.ReadOnlyViolationException
+            or pengdows.crud.exceptions.TransientWriteConflictException => false,
+        pengdows.crud.exceptions.DatabaseException => true,
+        _ => false
+    };
 
     private static async Task ExecuteAsync(IDatabaseContext context, string sql)
     {

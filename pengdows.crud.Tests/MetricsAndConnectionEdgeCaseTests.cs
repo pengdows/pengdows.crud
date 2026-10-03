@@ -420,17 +420,14 @@ public class MetricsAndConnectionEdgeCaseTests
             DbMode = DbMode.KeepAlive
         };
 
-        // The failure may occur during init or during first operation — either is valid
-        try
+        // REV-062: this caught every exception and asserted nothing. A connection that can't open
+        // fails construction with a connection exception, and the connection is disposed.
+        await Assert.ThrowsAnyAsync<pengdows.crud.exceptions.ConnectionException>(async () =>
         {
             await using var ctx = new DatabaseContext(config, factory);
-            var sc = ctx.CreateSqlContainer("SELECT 1");
-            await sc.ExecuteNonQueryAsync();
-        }
-        catch (Exception)
-        {
-            // Expected: connection open failure surfaces here
-        }
+        });
+
+        Assert.True(failingConn.DisposeCount > 0, "the connection that failed to open was not disposed");
     }
 
     // =========================================================================

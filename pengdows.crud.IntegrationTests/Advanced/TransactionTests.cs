@@ -230,28 +230,48 @@ public class TransactionTests : DatabaseTestBase
                 _ => null
             };
 
-            if (unsupported is null)
+            var supported = context.GetSupportedIsolationLevels();
+            if (unsupported is { } confirmed)
             {
-                Output.WriteLine($"No historically-confirmed unsupported level to check for {provider}; skipping.");
-                return;
+                Assert.DoesNotContain(confirmed, supported);
             }
 
-            // Isolation fails up, never down: an unsupported level runs at the weakest supported
-            // level at least as strong; only when nothing at or above it exists is it rejected.
-            // 2.0.x ranks Serializable above Snapshot, so Db2's Snapshot fails up to Serializable.
-            var nothingAtOrAbove = provider is SupportedDatabase.TiDb or SupportedDatabase.Snowflake;
-            if (nothingAtOrAbove)
+            // REV-062: every other database returned here without checking anything. Now every
+            // standard level is checked on every database: a supported level runs as requested; an
+            // unsupported one fails up to a supported level or, when nothing at or above it exists,
+            // is rejected. Isolation fails up, never down.
+            foreach (var level in new[]
+                     {
+                         IsolationLevel.ReadUncommitted, IsolationLevel.ReadCommitted, IsolationLevel.RepeatableRead,
+                         IsolationLevel.Snapshot, IsolationLevel.Serializable
+                     })
             {
-                var ex = Assert.Throws<InvalidOperationException>(() => context.BeginTransaction(unsupported.Value));
-                Output.WriteLine($"{provider}: {unsupported.Value} correctly rejected — {ex.Message}");
-            }
-            else
-            {
-                await using var tx = context.BeginTransaction(unsupported.Value);
-                Assert.NotEqual(unsupported.Value, tx.IsolationLevel);
-                Assert.Contains(tx.IsolationLevel, context.GetSupportedIsolationLevels());
-                tx.Rollback();
-                Output.WriteLine($"{provider}: {unsupported.Value} failed up to {tx.IsolationLevel}");
+                if (supported.Contains(level))
+                {
+                    await using var tx = context.BeginTransaction(level);
+                    Assert.Equal(level, tx.IsolationLevel);
+                    tx.Rollback();
+                    continue;
+                }
+
+                ITransactionContext? failedUp = null;
+                try
+                {
+                    failedUp = context.BeginTransaction(level);
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Output.WriteLine($"{provider}: {level} rejected (nothing at or above) — {ex.Message}");
+                    continue;
+                }
+
+                await using (failedUp)
+                {
+                    Assert.NotEqual(level, failedUp.IsolationLevel);
+                    Assert.Contains(failedUp.IsolationLevel, supported);
+                    failedUp.Rollback();
+                    Output.WriteLine($"{provider}: {level} failed up to {failedUp.IsolationLevel}");
+                }
             }
         });
     }

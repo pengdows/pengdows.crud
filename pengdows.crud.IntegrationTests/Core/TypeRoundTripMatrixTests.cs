@@ -39,11 +39,8 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
             var entries = DatabaseTypeCatalog.GetColumnTypes(provider)
                 .Where(e => e.ClrType != null && e.DbType != null && e.CanDeclareColumn)
                 .ToList();
-            if (entries.Count == 0)
-            {
-                Output.WriteLine($"{provider}: no catalog entries with a CLR type yet");
-                return;
-            }
+            // REV-062: an empty catalog used to pass silently; every database has one now.
+            Assert.True(entries.Count > 0, $"{provider}: no catalog entries with a CLR type");
 
             var failures = new List<string>();
             foreach (var entry in entries)

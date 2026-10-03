@@ -1,3 +1,6 @@
+using System;
+using Microsoft.Extensions.Logging;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -77,17 +80,35 @@ public class DatabaseContextModeBranchTests
         Assert.Equal(DbMode.Standard, unknownBest);
     }
 
-    [Fact]
-    public void WarnOnModeMismatch_ExecutesBranches()
+    // REV-062: this test only invoked the method; it now asserts which warning each case logs.
+    [Theory]
+    [InlineData(DbMode.SingleConnection, SupportedDatabase.PostgreSql, false, false, "SingleConnection mode used with")]
+    [InlineData(DbMode.SingleWriter, SupportedDatabase.PostgreSql, false, false, "SingleWriter mode used with")]
+    [InlineData(DbMode.SingleConnection, SupportedDatabase.SybaseASE, false, false, "SingleConnection mode used with")]
+    [InlineData(DbMode.Standard, SupportedDatabase.Sqlite, false, false, "Standard mode used with file-based")]
+    [InlineData(DbMode.Standard, SupportedDatabase.SqlServer, false, true, "SQL Server LocalDB")]
+    [InlineData(DbMode.SingleConnection, SupportedDatabase.PostgreSql, true, false, null)]
+    [InlineData(DbMode.Standard, SupportedDatabase.PostgreSql, false, false, null)]
+    [InlineData(DbMode.Standard, SupportedDatabase.SqlServer, false, false, null)]
+    public void WarnOnModeMismatch_LogsTheWarningForTheCase(DbMode mode, SupportedDatabase product, bool wasCoerced,
+        bool isLocalDb, string? expected)
     {
         var context = CreateContext("Data Source=file:test.db");
-        var warn = GetInstanceMethod("WarnOnModeMismatch");
+        var logs = new pengdows.crud.Tests.Logging.ListLoggerProvider();
+        using var loggerFactory = new LoggerFactory(new[] { logs });
+        SetField(context, "_logger", loggerFactory.CreateLogger<IDatabaseContext>());
 
-        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.PostgreSql, false, false });
-        warn.Invoke(context, new object?[] { DbMode.SingleWriter, SupportedDatabase.PostgreSql, false, false });
-        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.Sqlite, false, false });
-        warn.Invoke(context, new object?[] { DbMode.SingleConnection, SupportedDatabase.SybaseASE, false, false });
-        warn.Invoke(context, new object?[] { DbMode.Standard, SupportedDatabase.SqlServer, false, true });
+        GetInstanceMethod("WarnOnModeMismatch").Invoke(context, new object?[] { mode, product, wasCoerced, isLocalDb });
+
+        var warnings = logs.Entries.Where(e => e.Level == LogLevel.Warning).Select(e => e.Message).ToList();
+        if (expected == null)
+        {
+            Assert.Empty(warnings);
+        }
+        else
+        {
+            Assert.Contains(warnings, w => w.Contains(expected, StringComparison.Ordinal));
+        }
     }
 
     [Fact]

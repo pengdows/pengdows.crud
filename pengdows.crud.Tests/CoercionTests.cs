@@ -383,10 +383,11 @@ public class CoercionTests
             typeof(Range<int>?), typeof(TimeSpan?), typeof(DateTimeOffset?)
         };
 
+        // REV-062: this asserted nothing. A read may succeed or decline, but never invents a value.
         foreach (var type in types)
         {
             var success = _registry.TryRead(dbValue, type, out var result);
-            // Some types return true with null, others return false - both are valid
+            Assert.True(result == null, $"{type.Name}: read null as {result} (success={success})");
         }
     }
 

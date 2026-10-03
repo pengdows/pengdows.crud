@@ -113,4 +113,16 @@ public class DatabaseTypeCatalogTests
         Assert.False(entry.CanDeclareColumn);
         Assert.False(entry.CanReturnFromQuery);
     }
+
+    // REV-062: TypeRoundTripMatrixTests passed for a database with no usable catalog entries.
+    [Fact]
+    public void EveryIntegrationDatabase_HasMatrixEntries()
+    {
+        foreach (var provider in IntegrationTestConfiguration.GetEnabledProviders(true, true, true, true))
+        {
+            var usable = DatabaseTypeCatalog.GetColumnTypes(provider)
+                .Count(e => e.ClrType != null && e.DbType != null && e.CanDeclareColumn);
+            Assert.True(usable > 0, $"{provider} has no catalog entries the type matrix can run");
+        }
+    }
 }
