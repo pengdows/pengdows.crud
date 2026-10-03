@@ -641,8 +641,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public void Commit()
     {
         ThrowIfDisposed();
-        // Use async core for consistent semaphore behavior
-        CommitAsync().GetAwaiter().GetResult();
+        // The provider's own sync Commit(), not CommitAsync() blocked on: sync-over-async can
+        // deadlock under a synchronization context and ties up a pool thread for the round trip.
+        CompleteTransactionWithWait(() => _transaction.Commit(), true);
     }
 
     public ValueTask CommitAsync(CancellationToken cancellationToken = default)
@@ -674,7 +675,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
     public void Rollback()
     {
         ThrowIfDisposed();
-        RollbackAsync().GetAwaiter().GetResult();
+        // The provider's sync Rollback() — see Commit().
+        CompleteTransactionWithWait(() => _transaction.Rollback(), false);
     }
 
     public ValueTask RollbackAsync(CancellationToken cancellationToken = default)
