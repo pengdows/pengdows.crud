@@ -579,12 +579,15 @@ suite passed on net10 and net8). 3.0 takes the same fixes after 2.0.6 ships.
 ### Write-path type audit (2026-10-03)
 
 `TypeRoundTripMatrixTests` now also checks, per type: null read, update, upsert (existing and new
-row), batch create, batch update and null write (uncommitted expansion; run 2026-10-03, all
-databases incl. Snowflake and InterBase, HANA not run). The matrix reports each type's *first*
-failing step, so rerun after each fix. Per database: CockroachDb 41/43, Db2 31/31, DuckDB 26/27,
-Firebird 1/22, FlatFile 14/16, Informix 17/30, InterBase 0/14, MariaDb 51/51, MySql 49/49, Oracle
-34/35, PostgreSql 57/59, SingleStore 42/42, Snowflake 20/22, Spanner 19/19, Sqlite 21/21, SqlServer
-33/34, SybaseASE 35/35, TiDb 39/40, YugabyteDb 56/58.
+row), batch create, batch update and null write. Every failing step is reported (not only the
+first); each step sets up its own rows. Steps that don't apply are skipped on a capability:
+generated columns (WRT-002) and databases with no upsert statement (WRT-003). Second run,
+2026-10-03, all databases incl. Snowflake and InterBase (HANA not run): CockroachDb 42/43, Db2
+31/31, DuckDB 26/27, Firebird 1/22 (WRT-001), FlatFile 14/16, Informix 17/30, InterBase 14/14,
+MariaDb 51/51, MySql 49/49, Oracle 34/35, PostgreSql 58/59, SingleStore 42/42, Snowflake 20/22,
+Spanner 19/19, Sqlite 21/21, SqlServer 33/34, SybaseASE 35/35, TiDb 39/40, YugabyteDb 57/58.
+Informix SERIAL/BIGSERIAL "upsert (new row)" failures in that run were the harness (an upsert's
+update branch writes the SERIAL); upsert steps now skip generated columns too.
 
 | ID | Finding | Status |
 |---|---|---|
@@ -593,7 +596,7 @@ Firebird 1/22, FlatFile 14/16, Informix 17/30, InterBase 0/14, MariaDb 51/51, My
 | WRT-003 | Harness: InterBase has no upsert (`NotSupportedException`), so upsert steps must be skipped on the dialect capability, not reported as failures | **Fixed** (harness): upsert steps run only where the dialect supports MERGE, ON CONFLICT or ON DUPLICATE KEY |
 | WRT-004 | Informix MERGE upsert throws `NotSupportedException` for Binary, Time, Currency and Object (INTERVAL, LIST/SET/MULTISET) source columns | Open |
 | WRT-005 | Informix BOOLEAN upsert: "Value does not match the type of column" | Open |
-| WRT-006 | Informix BLOB/CLOB UPDATE: "Illegal attempt to use Text/Byte host variable" | Open |
+| WRT-006 | Informix BLOB/CLOB UPDATE: "Illegal attempt to use Text/Byte host variable"; CLOB upsert also fails "No cast from text to lvarchar" | Open |
 | WRT-007 | PostgreSQL/CockroachDB/YugabyteDB custom enum (`pengdows_mood`): upsert source row and batch UPDATE send text without a cast to the enum type | Open |
 | WRT-008 | DuckDB INTERVAL upsert: the MERGE source sends a `TimeSpan` as text (`'3.04:05:06.0000070'`), which DuckDB can't cast | Open |
 | WRT-009 | TiDB BIT(64) upsert: wrote 9223372036854775809, read 72057594037928064 | Open |
