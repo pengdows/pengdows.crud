@@ -136,11 +136,12 @@ pool-governor drain wait), so it can lag slightly behind the call that triggered
 disposal has already happened by the time `Invalidate`/a lease's `Dispose()` returns; subscribe to
 `ContextRemoved` if you need to observe completion.
 
-**Note:** `AcquireLease` is synchronous only in this version — there is no `AcquireLeaseAsync` or
-`GetContextAsync`, because 2.0's `IDatabaseContextFactory` has no async `CreateAsync` overload
-(that's a separate, later feature). A newer tenant-context API with those async variants exists in
-later versions — see the `pengdows.crud` (current) repo's `docs/connection/multitenancy.md` if
-you're on a newer version.
+`AcquireLeaseAsync` and `GetContextAsync` create a not-yet-cached tenant's context without
+blocking a thread (`await using var lease = await registry.AcquireLeaseAsync(tenantId, ct);`).
+
+The lease guarantee comes from `TenantContextRegistry`: a custom `ITenantContextRegistry` that
+doesn't implement `AcquireLease` itself (e.g. one written against 2.0.5) gets the default
+implementation, which only wraps `GetContext` and protects nothing.
 
 ## 5. Lifecycle management
 
