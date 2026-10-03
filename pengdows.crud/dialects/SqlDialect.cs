@@ -3083,6 +3083,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     /// <summary>
+    /// SQL whose effect is stored in the database itself rather than the session (e.g. SQLite's
+    /// <c>PRAGMA journal_mode = WAL</c>), run once per context on its initialization connection and
+    /// never on a read-only context. <c>null</c> when there is none.
+    /// </summary>
+    internal virtual string? GetDatabaseInitializationSql() => null;
+
+    /// <summary>
     /// The DbType a parameter must take after <see cref="ISqlContainer.SetParameterValue"/> gave it
     /// <paramref name="newValue"/>, prepared as <paramref name="preparedValue"/>; <c>null</c> keeps
     /// the parameter's DbType. For a dialect whose prepared value's representation depends on the

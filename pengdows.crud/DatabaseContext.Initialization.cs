@@ -469,6 +469,14 @@ public partial class DatabaseContext
                 SnapshotIsolationEnabled = false;
             }
 
+            // Settings stored in the database itself run once, on the initialization connection.
+            var databaseInitTarget = initialConnection ?? PersistentConnection;
+            if (databaseInitTarget != null && !IsReadOnlyConnection)
+            {
+                await ExecuteDatabaseInitializationAsync(databaseInitTarget, useAsync, cancellationToken)
+                    .ConfigureAwait(false);
+            }
+
             // Special case: SingleConnection's pinned connection opened before detection.
             // PreventDatabaseUnload sentinel doesn't need settings — it's never used for work.
             if (ConnectionMode == DbMode.SingleConnection)

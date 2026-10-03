@@ -602,6 +602,49 @@ public partial class DatabaseContext
     }
 
     /// <summary>
+    /// Runs the dialect's database-level initialization SQL (see
+    /// <c>SqlDialect.GetDatabaseInitializationSql</c>) once, honoring
+    /// <see cref="SessionInitializationFailureMode"/> as session settings do.
+    /// </summary>
+    private async ValueTask ExecuteDatabaseInitializationAsync(
+        ITrackedConnection connection, bool useAsync, CancellationToken cancellationToken)
+    {
+        var sql = (Dialect as pengdows.crud.dialects.SqlDialect)?.GetDatabaseInitializationSql();
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return;
+        }
+
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            if (useAsync && cmd is DbCommand dbCommand)
+            {
+                await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to apply database initialization settings for {Name}", Name);
+            if (_sessionInitializationFailureMode == SessionInitializationFailureMode.FailClosed)
+            {
+                throw new ConnectionException(
+                    $"Failed to apply database initialization settings for connection '{Name}' and SessionInitializationFailureMode.FailClosed is configured.",
+                    Product, ex);
+            }
+        }
+    }
+
+    /// <summary>
     /// Executes session settings on the given connection as a single command.
     /// Skips execution if session-settings detection has not completed.
     /// </summary>

@@ -196,24 +196,15 @@ internal class SqliteDialect : SqlDialect
         return "SELECT sqlite_version()";
     }
 
+    // foreign_keys is per-connection state, so it is set on every checkout. journal_mode = WAL is
+    // stored in the database file: it runs once per context (GetDatabaseInitializationSql), on a
+    // write-capable connection only (REL-005; it ran on every checkout, read-only ones included).
     public override string GetBaseSessionSettings()
     {
-        return "PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;";
+        return "PRAGMA foreign_keys = ON;";
     }
 
-    public override string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
-    {
-        if (readOnly)
-        {
-            // PRAGMA journal_mode = WAL requires write access to the database file header.
-            // Connections opened with Mode=ReadOnly cannot execute it — WAL was already
-            // established by the first write connection and persists at the file level.
-            // PRAGMA foreign_keys is a session memory flag that works fine on read-only connections.
-            return "PRAGMA foreign_keys = ON;";
-        }
-
-        return base.GetConnectionSessionSettings(context, readOnly);
-    }
+    internal override string? GetDatabaseInitializationSql() => "PRAGMA journal_mode = WAL;";
 
     // Read-only enforcement for SQLite uses Mode=ReadOnly in the connection string (see
     // GetReadOnlyConnectionString and ApplyConnectionSettingsCore), which opens the database

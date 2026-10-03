@@ -122,8 +122,10 @@ public class ReadOnlySessionSettingsTests
         Assert.Contains("foreign_keys", settings, StringComparison.OrdinalIgnoreCase);
     }
 
+    // REL-005: journal_mode = WAL is stored in the database file, so it is not a per-connection
+    // setting; it runs once per context from GetDatabaseInitializationSql (never read-only).
     [Fact]
-    public void SqliteDialect_GetConnectionSessionSettings_ReadWrite_IncludesWalPragma()
+    public void SqliteDialect_GetConnectionSessionSettings_ReadWrite_ExcludesWalPragma()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
@@ -131,8 +133,19 @@ public class ReadOnlySessionSettingsTests
 
         var settings = dialect.GetConnectionSessionSettings(ctx, readOnly: false);
 
-        Assert.Contains("journal_mode", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("WAL", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("journal_mode", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("foreign_keys", settings, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("journal_mode", dialect.GetFinalSessionSettings(false), StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("journal_mode", dialect.GetFinalSessionSettings(true), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SqliteDialect_DatabaseInitializationSql_SetsWal()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var dialect = new SqliteDialect(factory, NullLogger<SqliteDialect>.Instance);
+
+        Assert.Equal("PRAGMA journal_mode = WAL;", dialect.GetDatabaseInitializationSql());
     }
 
     private static SqlDialect CreateDialect(SupportedDatabase database, fakeDbFactory factory)

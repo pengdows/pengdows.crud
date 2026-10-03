@@ -196,7 +196,7 @@ Scope note: Answers are based on this repository (`pengdows.crud`) as of March 6
 - Oracle: base `ALTER SESSION SET NLS_DATE_FORMAT...`; read-only enforced at tx start (`SET TRANSACTION READ ONLY`)
 - CockroachDB: PostgreSQL baseline + `SET client_encoding='UTF8'; SET lock_timeout='30s';`
 - YugabyteDB: PostgreSQL baseline + same encoding/lock timeout overrides
-- SQLite: `PRAGMA foreign_keys=ON; PRAGMA journal_mode=WAL;`
+- SQLite: `PRAGMA foreign_keys = ON;` per checkout; `PRAGMA journal_mode = WAL;` once per context (stored in the database file; never on a read-only context)
 - DuckDB: empty session SQL (read-only via connection string)
 - Firebird: `SET NAMES UTF8; SET SQL DIALECT 3;`
 - Snowflake: single `ALTER SESSION SET ...` batch
