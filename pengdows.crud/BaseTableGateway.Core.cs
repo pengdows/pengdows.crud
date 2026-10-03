@@ -108,9 +108,12 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     private readonly ConditionalWeakTable<ISqlDialect, string> _wrappedTableNameCache = new();
 
     // Thread-safe cache for hybrid reader plans by structural recordset shape (not a bare hash,
-    // so a hash collision between two shapes can never reuse the wrong compiled mapper)
-    private BoundedCache<RecordsetShape, HybridRecordsetPlan> _readerPlans =
+    // so a hash collision between two shapes can never reuse the wrong compiled mapper) and by the
+    // reading context's coercion options: a gateway reads through any tenant's context (REV-033).
+    private BoundedCache<ReaderPlanKey, HybridRecordsetPlan> _readerPlans =
         new(DefaultReaderPlanCapacity);
+
+    private readonly record struct ReaderPlanKey(RecordsetShape Shape, TypeCoercionOptions Options);
 
     // =========================================================================
     // Properties
@@ -143,10 +146,15 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         /// </summary>
         public RecordsetShape Shape { get; }
 
-        public HybridRecordsetPlan(Func<ITrackedReader, TEntity> compiledMapper, RecordsetShape shape)
+        /// <summary>The coercion options the plan was compiled with (the reading context's).</summary>
+        public TypeCoercionOptions Options { get; }
+
+        public HybridRecordsetPlan(Func<ITrackedReader, TEntity> compiledMapper, RecordsetShape shape,
+            TypeCoercionOptions options)
         {
             CompiledMapper = compiledMapper ?? throw new ArgumentNullException(nameof(compiledMapper));
             Shape = shape;
+            Options = options;
         }
     }
 
@@ -181,7 +189,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         _dialect = databaseContext.GetDialect();
         // All of the dialect's read options (copying fields one by one dropped every flag added later).
         _coercionOptions = TypeCoercionOptions.For(_dialect);
-        _readerPlans = new BoundedCache<RecordsetShape, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
+        _readerPlans = new BoundedCache<ReaderPlanKey, HybridRecordsetPlan>(ResolveReaderPlanCacheSize(databaseContext));
 
         _tableInfo = accessor.TypeMapRegistry.GetTableInfo<TEntity>() ??
                      throw new InvalidOperationException($"Type {typeof(TEntity).FullName} is not a table.");

@@ -33,8 +33,17 @@ public sealed record TypeCoercionOptions(
     /// </summary>
     internal bool ReadsCollectionLiterals { get; init; }
 
-    /// <summary>The coercion options a dialect's values are read with.</summary>
-    internal static TypeCoercionOptions For(dialects.ISqlDialect dialect) => Default with
+    private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<dialects.ISqlDialect, TypeCoercionOptions>
+        ByDialect = new();
+
+    /// <summary>
+    /// The coercion options a dialect's values are read with: one instance per dialect, so callers
+    /// that key caches by options compare by reference on the hot path (REV-033).
+    /// </summary>
+    internal static TypeCoercionOptions For(dialects.ISqlDialect dialect) =>
+        ByDialect.GetValue(dialect, static d => Build(d));
+
+    private static TypeCoercionOptions Build(dialects.ISqlDialect dialect) => Default with
     {
         Provider = dialect is dialects.SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : dialect.DatabaseType,
         GuidBytesBigEndian = dialect is not dialects.SqlDialect { StoresGuidBytesBigEndian: false },

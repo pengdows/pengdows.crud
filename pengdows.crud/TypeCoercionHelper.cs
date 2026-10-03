@@ -559,7 +559,18 @@ internal static class TypeCoercionHelper
     // (a float gets the nearest float to the printed value, not a double rounded again).
     private static string[] ParseNumericJsonArray(string text)
     {
-        using var document = JsonDocument.Parse(text);
+        JsonDocument document;
+        try
+        {
+            document = JsonDocument.Parse(text);
+        }
+        catch (JsonException ex)
+        {
+            // A conversion failure like any other, so hydration reports DataMappingException (REV-034).
+            throw new FormatException("Expected a JSON array of numbers.", ex);
+        }
+
+        using var _ = document;
         if (document.RootElement.ValueKind != JsonValueKind.Array)
         {
             throw new FormatException("Expected a JSON array of numbers.");

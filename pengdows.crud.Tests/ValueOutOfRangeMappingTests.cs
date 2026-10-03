@@ -180,6 +180,34 @@ public sealed class ValueOutOfRangeMappingTests
         Assert.IsNotType<DataMappingException>(ex);
     }
 
+    // REV-034: array text that isn't an array surfaced as a raw JsonException. (A [Json] column
+    // holding invalid JSON still reads as null by 2.0 design; REV-042 asks whether to change that.)
+    [Theory]
+    [InlineData("nums", "garbage")]
+    [InlineData("nums", "{\"a\":1}")]
+    public async Task RetrieveOneAsync_TextThatDoesNotParse_ThrowsDataMappingExceptionNamingTheColumn(
+        string column, string stored)
+    {
+        var (context, exec) = Context(SupportedDatabase.Sqlite);
+        await using var _ = context;
+        var row = new Dictionary<string, object?> { ["id"] = 1, ["nums"] = "[1]", ["doc"] = "{}" };
+        row[column] = stored;
+        exec.EnqueueReaderResult(new[] { row });
+        var gateway = new TableGateway<Parsed, int>(context);
+
+        var ex = await Assert.ThrowsAsync<DataMappingException>(async () => await gateway.RetrieveOneAsync(1));
+
+        Assert.Contains(column, ex.Message, StringComparison.Ordinal);
+    }
+
+    [Table("parsed")]
+    private sealed class Parsed
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("nums", DbType.Object)] public int[]? Nums { get; set; }
+        [Json] [Column("doc", DbType.String)] public Dictionary<string, int>? Doc { get; set; }
+    }
+
     [Table("accounts")]
     private sealed class Account
     {

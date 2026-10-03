@@ -101,13 +101,21 @@ public abstract partial class BaseTableGateway<TEntity>
             // Lookup-only: backed by the rented arrays above, never stored as a dictionary key.
             var lookupShape = new RecordsetShape(names, fieldTypes, fieldCount);
 
+            // The reading context's options, not the gateway's own: a singleton gateway reads
+            // through tenant contexts on other databases (REV-033). A reader that wasn't opened by
+            // a context carries Default, and then the gateway's own options apply.
+            var options = reader is IInternalTrackedReader internalReader &&
+                          !ReferenceEquals(internalReader.CoercionOptions, TypeCoercionOptions.Default)
+                ? internalReader.CoercionOptions
+                : _coercionOptions;
+
             var hotPlan = Volatile.Read(ref _hotPlan);
-            if (hotPlan != null && hotPlan.Shape.Equals(lookupShape))
+            if (hotPlan != null && ReferenceEquals(hotPlan.Options, options) && hotPlan.Shape.Equals(lookupShape))
             {
                 return hotPlan;
             }
 
-            if (_readerPlans.TryGet(lookupShape, out var existingPlan))
+            if (_readerPlans.TryGet(new ReaderPlanKey(lookupShape, options), out var existingPlan))
             {
                 Volatile.Write(ref _hotPlan, existingPlan);
                 return existingPlan;
@@ -117,9 +125,9 @@ public abstract partial class BaseTableGateway<TEntity>
             // a copy before inserting.
             var persistedShape = lookupShape.Persist();
             var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes,
-                coercionOptions: _coercionOptions);
-            var plan = new HybridRecordsetPlan(compiledMapper, persistedShape);
-            var added = _readerPlans.GetOrAdd(persistedShape, _ => plan);
+                coercionOptions: options);
+            var plan = new HybridRecordsetPlan(compiledMapper, persistedShape, options);
+            var added = _readerPlans.GetOrAdd(new ReaderPlanKey(persistedShape, options), _ => plan);
             Volatile.Write(ref _hotPlan, added);
 
             return added;
