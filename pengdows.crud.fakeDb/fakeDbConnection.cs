@@ -1135,6 +1135,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private bool _disposedForEvents;
     private StateChangeEventHandler? _stateChange;
 
+    /// <summary>
+    /// The number of handlers currently subscribed to <see cref="DbConnection.StateChange"/>.
+    /// </summary>
+    public int StateChangeSubscriberCount => _stateChange?.GetInvocationList().Length ?? 0;
+
     public override event StateChangeEventHandler? StateChange
     {
         add

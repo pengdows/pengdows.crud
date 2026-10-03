@@ -114,7 +114,8 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
     private int _wasOpened;
     private readonly MetricsCollector? _metricsCollector;
-    private readonly StateChangeEventHandler? _metricsHandler;
+    // The one StateChange handler this wrapper subscribes (see OnConnectionStateChange).
+    private readonly StateChangeEventHandler _stateHandler;
     private long _openTimestamp;
     // TEST-014: a connection that breaks (Open -> Broken) already has its close counted by the
     // Broken case below. DisposeConnectionSync/DisposeConnectionAsyncCore's own "not already
@@ -266,18 +267,10 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             _semaphoreSlim = new SemaphoreSlim(1, 1);
         }
 
-        if (_onStateChange != null)
-        {
-            _connection.StateChange += _onStateChange;
-        }
-
-        if (_metricsCollector != null)
-        {
-            _metricsHandler = HandleMetricsStateChange;
-            _connection.StateChange += _metricsHandler;
-        }
-
-        _connection.StateChange += MarkDriverReportedStateChange;
+        // One subscription instead of three (REL-005): each += / -= of a separate handler built a
+        // new delegate or multicast chain on every checkout.
+        _stateHandler = OnConnectionStateChange;
+        _connection.StateChange += _stateHandler;
 
         if (slot.HasValue)
         {
@@ -291,8 +284,16 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     // own handlers themselves when it didn't; drivers that do report it are not counted twice.
     private int _driverReportedStateChange;
 
-    private void MarkDriverReportedStateChange(object? sender, StateChangeEventArgs args)
+    // Runs the context's handler, then metrics, then notes that the driver reported the transition:
+    // the order the three separate subscriptions ran in.
+    private void OnConnectionStateChange(object? sender, StateChangeEventArgs args)
     {
+        _onStateChange?.Invoke(sender, args);
+        if (_metricsCollector != null)
+        {
+            HandleMetricsStateChange(sender, args);
+        }
+
         Interlocked.Exchange(ref _driverReportedStateChange, 1);
     }
 
@@ -310,7 +311,10 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
         var args = new StateChangeEventArgs(from, to);
         _onStateChange?.Invoke(_connection, args);
-        _metricsHandler?.Invoke(_connection, args);
+        if (_metricsCollector != null)
+        {
+            HandleMetricsStateChange(_connection, args);
+        }
     }
 
     private void HandleMetricsStateChange(object? sender, StateChangeEventArgs args)
@@ -720,12 +724,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
     private void DetachMetricsHandler()
     {
-        if (_metricsHandler != null)
-        {
-            DetachStateChangeHandler(_metricsHandler);
-        }
-
-        DetachStateChangeHandler(MarkDriverReportedStateChange);
+        DetachStateChangeHandler(_stateHandler);
     }
 
     // Runs after the connection is disposed, so a close raised during Dispose is still counted. Some
