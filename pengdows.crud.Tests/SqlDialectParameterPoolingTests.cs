@@ -63,6 +63,49 @@ public class SqlDialectParameterPoolingTests
             "ResetDbType() must clear the explicitly-set flag after reflection-based reset");
     }
 
+    // PERF-015 characterization: a provider-specific property whose setter throws is skipped and
+    // the other provider-specific properties are still reset.
+    [Fact]
+    public void CreateDbParameter_ProviderPropertyThatRefusesReset_IsSkipped_OthersStillReset()
+    {
+        var dialect = new TestDialect(new RefusingProviderFactory());
+
+        var first = (RefusingProviderParameter)dialect.CreateDbParameter("p0", DbType.Int32, 1);
+        first.DataTypeName = "int4";
+        first.SqlDbType = 8;
+        dialect.ReturnParameterToPool(first);
+
+        var second = dialect.CreateDbParameter("p1", DbType.Int32, 2);
+
+        Assert.Same(first, second);
+        Assert.Equal(1, first.ResetAttempts);
+        Assert.Null(first.DataTypeName);
+        Assert.Equal(0, first.SqlDbType);
+    }
+
+    private sealed class RefusingProviderFactory : DbProviderFactory
+    {
+        public override DbParameter CreateParameter() => new RefusingProviderParameter();
+    }
+
+    private sealed class RefusingProviderParameter : fakeDbParameter
+    {
+        public int ResetAttempts { get; private set; }
+
+        public int NpgsqlDbType
+        {
+            get => 0;
+            set
+            {
+                ResetAttempts++;
+                throw new InvalidOperationException("refused");
+            }
+        }
+
+        public string? DataTypeName { get; set; }
+        public int SqlDbType { get; set; }
+    }
+
     private sealed class TestDialect : SqlDialect
     {
         public TestDialect(DbProviderFactory factory)

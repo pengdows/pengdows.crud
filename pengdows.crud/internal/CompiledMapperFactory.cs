@@ -446,23 +446,24 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 /// </summary>
 internal static class EnumMappingCache
 {
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object> _stringMappers = new();
-    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, object> _numericValidators = new();
+    // One static holder per enum type: a single dictionary lookup per value, where a type-keyed
+    // dictionary of dictionaries cost two (PERF-015).
+    private static class Cache<TEnum> where TEnum : struct, Enum
+    {
+        public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, TEnum> FromString =
+            new(StringComparer.OrdinalIgnoreCase);
+
+        public static readonly System.Collections.Concurrent.ConcurrentDictionary<TEnum, bool> Defined = new();
+    }
 
     public static TEnum GetEnumFromString<TEnum>(string value) where TEnum : struct, Enum
     {
-        var mapper = (System.Collections.Concurrent.ConcurrentDictionary<string, TEnum>)_stringMappers.GetOrAdd(
-            typeof(TEnum), _ => new System.Collections.Concurrent.ConcurrentDictionary<string, TEnum>(StringComparer.OrdinalIgnoreCase));
-
-        return mapper.GetOrAdd(value, v => (TEnum)Enum.Parse(typeof(TEnum), v, true));
+        return Cache<TEnum>.FromString.GetOrAdd(value, static v => (TEnum)Enum.Parse(typeof(TEnum), v, true));
     }
 
     public static TEnum ValidateEnumValue<TEnum>(TEnum value) where TEnum : struct, Enum
     {
-        var validator = (System.Collections.Concurrent.ConcurrentDictionary<TEnum, bool>)_numericValidators.GetOrAdd(
-            typeof(TEnum), _ => new System.Collections.Concurrent.ConcurrentDictionary<TEnum, bool>());
-
-        if (validator.GetOrAdd(value, v => Enum.IsDefined(typeof(TEnum), v)))
+        if (Cache<TEnum>.Defined.GetOrAdd(value, static v => Enum.IsDefined(typeof(TEnum), v)))
         {
             return value;
         }
