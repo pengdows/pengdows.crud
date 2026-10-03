@@ -100,7 +100,11 @@ def main():
     if not B or not N:
         print(f"no results: base={len(B)} rounds, new={len(N)} rounds under {out}")
         sys.exit(1)
-    keys = sorted(set().union(*[set(r) for r in B.values()]) & set().union(*[set(r) for r in N.values()]))
+    base_keys = set().union(*[set(r) for r in B.values()])
+    new_keys = set().union(*[set(r) for r in N.values()])
+    keys = sorted(base_keys & new_keys)
+    # Benchmarks measured in only one arm can't be compared, but were dropped without a word (REV-066).
+    only_base, only_new = sorted(base_keys - new_keys), sorted(new_keys - base_keys)
 
     def agg(arm, key, field):
         return med([r[key][field] for r in arm.values() if key in r])
@@ -167,6 +171,14 @@ def main():
               f"| {d_g0:+.2f} | ±{noise_t:.1f}% | {' '.join(flags)} |")
         if any(f in flags for f in ("TIME+", "time-", "TAIL+", "ALLOC+")):
             flagged.append((k, flags))
+
+    print("\n## Missing from one arm (not compared)")
+    for k in only_base:
+        print(f"- {k[0]}.{k[1]} [{k[2]}]: only in {base}")
+    for k in only_new:
+        print(f"- {k[0]}.{k[1]} [{k[2]}]: only in {new}")
+    if not only_base and not only_new:
+        print("- none")
 
     print("\n## Validity")
     print("- Dapper control drift exceeded threshold for: " +
