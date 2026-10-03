@@ -617,6 +617,24 @@ string → `DateTime` column +230 ns (see REV-059); public `MapReaderToObject` r
 (about 275 ns); non-primitive parameters (DateTime/bool/Guid/byte[]) about 15 ns slower than int;
 `WrapObjectName` contention (REV-057).
 
+### 2.0.6 release checklist: items not tracked elsewhere (2026-10-03)
+
+Everything else open for 2.0.6 is a REV, WRT or PERF row above. Items for other repositories live in those
+repositories (pengdows.hangfire `FUTURE_WORK.md`, pengdows.messaging `ROADMAP.md`); 3.0-only items are deferred.
+
+| ID | Item | Status |
+|---|---|---|
+| REL-001 | Decide whether `IsolationResolver`'s per-database mapping moves into the dialects (the one sanctioned exception to REV-039). Proposed: first pin every current output with a characterization test, then move | Open (decision) |
+| REL-002 | Integration-test opacity, proposed (test infrastructure only): (1) an always-on `TestResults/integration/progress.log` with per-database start/finish lines as they happen; (2) a once-a-minute heartbeat naming the running test and database; (3) container start/ready/failed lines; (4) an end-of-run `summary.md` (pass/fail/skip per database, slowest tests, first line of each failure); (5) a preflight in `run-integration-tests.sh` (Docker, Informix/Db2 native libraries, InterBase license, Snowflake credentials, Db2 compatibility library) that prints what will run or be skipped, and takes local library paths from environment variables | Open (decision: all five, or 1, 2 and 4) |
+| REL-003 | `AuroraTestConfigurationTests.MySql_FromEnvironment_BuildsIsolatedDatabaseAndConnections` fails: the built connection string lacks `SslMode=Required`. Fails identically before REV-058 (SQLite integration run, 2026-10-03) | Open |
+| REL-004 | Live verification still owed: MySQL, MariaDB, TiDB and SQL Server after REV-052 (version parsing); the PostgreSQL enum/JSON matrix after REV-047/REV-054; a full testbed run now that REV-048 fails the run on any failed check (watch the SQLite 500 ms fairness check) | Open |
+| REL-005 | Profile one `ReadSingle` and one `Create` call (time and allocations). pengdows spends a fixed 7–13 µs and 4–5 KB per operation beyond Dapper (1.3–1.5x on in-memory SQLite, 4–7% on PostgreSQL), and EF Core with a compiled query / pooled context is about 3% faster than pengdows on PostgreSQL ReadSingle and Create (`PostgreSqlMethodologyBenchmarks`, 2026-10-02). Goal: beat EF Core's best case and close in on Dapper | Open |
+| REL-006 | A SQLite counterpart of `PostgreSqlMethodologyBenchmarks` (pooled and compiled EF Core, `RetrieveOneAsync`/`CreateAsync` cells), so the each-framework's-own-API comparison exists on SQLite | Open |
+| REL-007 | SQL Server hydration trails Dapper by 2–22% and allocates more (`SqlServerHydrationHotPathBenchmarks`, unchanged since 2026-08-13), while SQLite hydration is about 35% faster than Dapper. Not yet investigated | Open |
+| REL-008 | Final gate: unit suite on net8 and net10, API baseline verification, then tag and publish 2.0.6 | Open |
+
+Benchmark record: `benchmarks/CrudBenchmarks/results/sqlite-equal-footing-run-2026-10-03.md`.
+
 ### Write-path type audit (2026-10-03)
 
 `TypeRoundTripMatrixTests` now also checks, per type: null read, update, upsert (existing and new
