@@ -244,7 +244,7 @@ public class TableGateway_RealSqliteTests : RealSqliteContextTestBase, IAsyncLif
         var tmp = new TestEntity { Name = s };
         var create = entityHelper.BuildCreate(tmp);
         await create.ExecuteNonQueryAsync();
-        //var entities = 
+        //var entities =
         var retrieve = entityHelper.BuildBaseRetrieve("a");
         var x = await entityHelper.LoadListAsync(retrieve);
         var foundList = x.FindAll(itm => itm.Name == s);

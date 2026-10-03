@@ -639,13 +639,14 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                 // guarantee. It awaits the entry's completion signal rather than touching
                 // LazyContext.Value, whose getter blocks synchronously while another thread is
                 // mid-construction; no thread (pool or caller) is parked waiting.
+                Task? started = null;
                 if (!entry.ConstructionStarted)
                 {
                     // Nobody has begun evaluating yet (the admitting caller is between
                     // GetOrCreateEntry and ResolveEntry). Start it on the pool so the signal is
                     // guaranteed to complete; if a caller starts it first, this simply observes
                     // that caller's result.
-                    _ = Task.Run(async () =>
+                    started = Task.Run(async () =>
                     {
                         try
                         {
@@ -660,6 +661,13 @@ public class TenantContextRegistry : SafeAsyncDisposableBase, ITenantContextRegi
                 }
 
                 var completedContext = await entry.Constructed.ConfigureAwait(false);
+                if (started != null)
+                {
+                    // The signal completes before that task logs a failed construction; DisposeAsync
+                    // returns only once the failure is logged (REV-043). The task never throws.
+                    await started.ConfigureAwait(false);
+                }
+
                 if (completedContext != null && entry.TryClaimDisposal())
                 {
                     await DisposeShutdownContextAsync(completedContext).ConfigureAwait(false);

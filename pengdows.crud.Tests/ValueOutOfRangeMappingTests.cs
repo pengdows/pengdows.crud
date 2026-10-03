@@ -200,6 +200,44 @@ public sealed class ValueOutOfRangeMappingTests
         Assert.Contains(column, ex.Message, StringComparison.Ordinal);
     }
 
+    // REV-037: the failing column is found by re-reading each column, which used default coercion
+    // options; an Informix LIST literal then "failed" too and was blamed instead of the real column.
+    [Fact]
+    public async Task RetrieveOneAsync_DialectSpecificColumnBeforeTheFailingOne_NamesTheFailingColumn()
+    {
+        var (context, exec) = Context(SupportedDatabase.Informix);
+        await using var _ = context;
+        exec.EnqueueReaderResult(new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["id"] = 1, ["nums"] = "LIST{1}", ["amount"] = 1m }
+        })
+        {
+            ColumnReadExceptions = new Dictionary<string, Exception> { ["amount"] = new OverflowException("too big") }
+        });
+        var gateway = new TableGateway<ListAndAmount, int>(context);
+
+        var ex = await Assert.ThrowsAsync<DataMappingException>(async () => await gateway.RetrieveOneAsync(1));
+
+        Assert.Contains("'amount'", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Coerce_MalformedCollectionLiteral_ThrowsFormatException()
+    {
+        var options = TypeCoercionOptions.Default with { ReadsCollectionLiterals = true };
+
+        Assert.Equal(new[] { 1, 2 }, TypeCoercionHelper.Coerce("LIST{1,2}", typeof(string), typeof(int[]), options));
+        Assert.Throws<FormatException>(() => TypeCoercionHelper.Coerce("LIST{1,2", typeof(string), typeof(int[]), options));
+    }
+
+    [Table("list_amount")]
+    private sealed class ListAndAmount
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("nums", DbType.Object)] public int[]? Nums { get; set; }
+        [Column("amount", DbType.Decimal)] public decimal Amount { get; set; }
+    }
+
     [Table("parsed")]
     private sealed class Parsed
     {

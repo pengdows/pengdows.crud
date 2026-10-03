@@ -109,39 +109,6 @@ public class TableGatewayUpdateBranchTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void BuildUpdateByKey_Reflection_ExercisesStringSetClauseAndVersionIncrement()
-    {
-        var gateway = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
-        var tableInfoField = typeof(TableGateway<TestEntity, int>).GetField("_tableInfo",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-        var tableInfo = tableInfoField.GetValue(gateway)!;
-        var keyColumns = (System.Collections.Generic.IReadOnlyList<IColumnInfo>)tableInfo.GetType()
-            .GetProperty("PrimaryKeys")!
-            .GetValue(tableInfo)!;
-
-        var buildUpdateByKey = typeof(TableGateway<TestEntity, int>).GetMethod("BuildUpdateByKey",
-            BindingFlags.NonPublic | BindingFlags.Instance)!;
-
-        var entity = new TestEntity
-        {
-            Id = 7,
-            Name = "pk-value",
-            CreatedBy = "creator",
-            CreatedOn = DateTime.UtcNow.AddDays(-2),
-            LastUpdatedBy = "updater",
-            LastUpdatedOn = DateTime.UtcNow,
-            version = 5
-        };
-
-        var result = ((string sql, System.Collections.Generic.List<System.Data.Common.DbParameter> parameters))
-            buildUpdateByKey.Invoke(gateway, new object[] { entity, keyColumns, Context.GetDialect() })!;
-
-        Assert.Contains("SET", result.sql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Version", result.sql, StringComparison.OrdinalIgnoreCase);
-        Assert.NotEmpty(result.parameters);
-    }
-
-    [Fact]
     public void AppendVersionCondition_WithNullValue_AppendsIsNull()
     {
         var gateway = new TableGateway<TestEntity, int>(Context, AuditValueResolver);

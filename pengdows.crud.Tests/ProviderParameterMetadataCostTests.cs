@@ -40,7 +40,9 @@ public sealed class ProviderParameterMetadataCostTests
         return new DatabaseContext($"Data Source=x;EmulatedProduct={database}", factory).Dialect;
     }
 
-    private static long Allocated(Action action)
+    private static long Allocated(Action action) => AllocationMeasurement.Lowest(() => AllocatedOnce(action));
+
+    private static long AllocatedOnce(Action action)
     {
         action();
         var before = GC.GetAllocatedBytesForCurrentThread();

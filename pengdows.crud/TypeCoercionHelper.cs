@@ -518,6 +518,23 @@ internal static class TypeCoercionHelper
         // TYPE-015: vector columns. SQL Server's VECTOR reads as "[1.5000000e+000,...]" through
         // SqlClient 6.0 and as SqlVector<T> (Memory) through 6.1+; the Pgvector.Npgsql plugin reads
         // pgvector as Pgvector.Vector (ToArray()). Each becomes an array, coerced element-wise below.
+        if (value is string literal && options.ReadsCollectionLiterals && target.IsArray)
+        {
+            // The dialect returns collections as literal text (Informix LIST/SET/MULTISET).
+            try
+            {
+                result = CollectionLiteralParse.MakeGenericMethod(elementType).Invoke(null, new object[] { literal });
+            }
+            catch (System.Reflection.TargetInvocationException ex) when (ex.InnerException != null)
+            {
+                // Surface the parser's own FormatException, not the reflection wrapper.
+                System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
+                throw;
+            }
+
+            return true;
+        }
+
         if (value is string text)
         {
             if (!IsNumericClrType(Nullable.GetUnderlyingType(elementType) ?? elementType))
@@ -557,6 +574,9 @@ internal static class TypeCoercionHelper
 
     // Numbers kept as their invariant text, so each element parses straight into its target type
     // (a float gets the nearest float to the printed value, not a double rounded again).
+    private static readonly System.Reflection.MethodInfo CollectionLiteralParse =
+        typeof(CollectionLiteralFormat).GetMethod(nameof(CollectionLiteralFormat.Parse))!;
+
     private static string[] ParseNumericJsonArray(string text)
     {
         JsonDocument document;

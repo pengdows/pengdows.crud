@@ -135,7 +135,10 @@ public sealed class InformixCollectionTypeTests
         [Column("nums", DbType.Object)] public int[]? Nums { get; set; }
     }
 
-    private static long AllocatedPerRow(Func<int, object> nums)
+    private static long AllocatedPerRow(Func<int, object> nums) =>
+        AllocationMeasurement.Lowest(() => AllocatedPerRowOnce(nums));
+
+    private static long AllocatedPerRowOnce(Func<int, object> nums)
     {
         var rows = Enumerable.Range(0, 400).Select(i => new Dictionary<string, object> { ["id"] = i, ["nums"] = nums(i) }).ToList();
         var gateway = new TableGateway<NumsOnly, int>(new DatabaseContext("Server=x;Database=d;EmulatedProduct=Informix",

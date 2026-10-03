@@ -53,6 +53,8 @@ internal static class SqlDialectFactory
         DbProviderFactory factory,
         ILoggerFactory loggerFactory)
     {
+        // Synchronous product detection, then the async-only DetectDatabaseInfoAsync: this blocks
+        // on it, as 2.0.5 did (REV-044 tracks a synchronous version-detection path).
         return CreateDialectCoreAsync(connection, factory, loggerFactory, false, CancellationToken.None)
             .GetAwaiter().GetResult();
     }

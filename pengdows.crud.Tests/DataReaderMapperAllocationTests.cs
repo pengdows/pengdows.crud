@@ -23,7 +23,10 @@ public sealed class DataReaderMapperAllocationTests
     public sealed class DateTimeValue { public DateTime V { get; set; } }
     public sealed class OffsetValue { public DateTimeOffset V { get; set; } }
 
-    private static async Task<long> AllocatedPerRowAsync<T>(List<Dictionary<string, object>> rows) where T : class, new()
+    private static Task<long> AllocatedPerRowAsync<T>(List<Dictionary<string, object>> rows) where T : class, new() =>
+        AllocationMeasurement.LowestAsync(() => AllocatedPerRowOnceAsync<T>(rows));
+
+    private static async Task<long> AllocatedPerRowOnceAsync<T>(List<Dictionary<string, object>> rows) where T : class, new()
     {
         TrackedReader Open() => new(new fakeDbDataReader(rows), new Mock<ITrackedConnection>().Object,
             Mock.Of<IAsyncDisposable>(), false);

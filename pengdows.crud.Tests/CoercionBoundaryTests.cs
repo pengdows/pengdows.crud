@@ -11,7 +11,7 @@ namespace pengdows.crud.Tests;
 
 /// <summary>
 /// Tests designed to boost coverage of low-coverage coercion classes.
-/// Targets: DateTimeRangeCoercion (20%), IntRangeCoercion (33.3%), DbCoercion<T> (66.6%), 
+/// Targets: DateTimeRangeCoercion (20%), IntRangeCoercion (33.3%), DbCoercion<T> (66.6%),
 /// HStoreCoercion (53.3%), IntArrayCoercion (57.1%), StringArrayCoercion (53.8%), TimeSpanCoercion (56.2%).
 /// Uses the correct TryRead/TryWrite API.
 /// </summary>

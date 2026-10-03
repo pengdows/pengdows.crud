@@ -111,7 +111,8 @@ internal class StandardConnectionStrategy : SafeAsyncDisposableBase, IConnection
         DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
-        // useAsync: false never awaits anything incomplete, so this completes synchronously.
+        // useAsync: false takes the synchronous product-detection probes, but the dialect's version
+        // detection (DetectDatabaseInfoAsync) is async-only, so this can block on it (REV-036/044).
         return HandleDialectDetectionCoreAsync(initConnection, factory, loggerFactory, false, CancellationToken.None)
             .GetAwaiter().GetResult();
     }

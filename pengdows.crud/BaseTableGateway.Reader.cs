@@ -46,12 +46,13 @@ public abstract partial class BaseTableGateway<TEntity>
             // TYPE-008: a stored value the property can't hold (e.g. a NUMERIC above
             // decimal.MaxValue) surfaced as whatever the provider threw. Report it as a mapping
             // failure naming the column; never a truncated or default value.
-            throw CreateMappingException(reader, ex);
+            throw CreateMappingException(reader, ex, plan.Options);
         }
     }
 
     // Slow path, only after a failure: find the column that can't be read into its property.
-    private DataMappingException CreateMappingException(ITrackedReader reader, Exception failure)
+    private DataMappingException CreateMappingException(ITrackedReader reader, Exception failure,
+        TypeCoercionOptions options)
     {
         IColumnInfo? failing = null;
         for (var i = 0; i < reader.FieldCount && failing == null; i++)
@@ -66,7 +67,9 @@ public abstract partial class BaseTableGateway<TEntity>
                 var value = reader.GetValue(i);
                 if (value is not null && value is not DBNull)
                 {
-                    TypeCoercionHelper.Coerce(value, value.GetType(), column.PropertyInfo.PropertyType);
+                    // The plan's options: dialect-specific reads (e.g. Informix LIST literals) would
+                    // otherwise "fail" here too and be blamed instead of the real column (REV-037).
+                    TypeCoercionHelper.Coerce(value, value.GetType(), column.PropertyInfo.PropertyType, options);
                 }
             }
             catch (Exception)

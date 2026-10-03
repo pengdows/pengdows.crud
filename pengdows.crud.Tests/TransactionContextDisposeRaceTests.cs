@@ -124,10 +124,10 @@ public class TransactionContextDisposeRaceTests
         fakeTx.CommitGate = new ManualResetEventSlim(false);
         fakeTx.CommitStarted = new ManualResetEventSlim(false);
 
-        var commitTask = Task.Run(() => txn.Commit());
+        var commitTask = Dedicated(() => txn.Commit());
         Assert.True(fakeTx.CommitStarted.Wait(TimeSpan.FromSeconds(5)), "Commit did not start in time.");
 
-        var disposeTask = Task.Run(() => ((IDisposable)txn).Dispose());
+        var disposeTask = Dedicated(() => ((IDisposable)txn).Dispose());
         await Task.Delay(50); // give Dispose a chance to (wrongly) run while Commit is blocked
 
         Assert.Equal(0, fakeTx.DisposeCallCount);
@@ -149,10 +149,10 @@ public class TransactionContextDisposeRaceTests
         fakeTx.RollbackGate = new ManualResetEventSlim(false);
         fakeTx.RollbackStarted = new ManualResetEventSlim(false);
 
-        var rollbackTask = Task.Run(() => txn.Rollback());
+        var rollbackTask = Dedicated(() => txn.Rollback());
         Assert.True(fakeTx.RollbackStarted.Wait(TimeSpan.FromSeconds(5)), "Rollback did not start in time.");
 
-        var disposeTask = Task.Run(() => ((IDisposable)txn).Dispose());
+        var disposeTask = Dedicated(() => ((IDisposable)txn).Dispose());
         await Task.Delay(50);
 
         Assert.Equal(0, fakeTx.DisposeCallCount);
@@ -174,10 +174,10 @@ public class TransactionContextDisposeRaceTests
         fakeTx.CommitGate = new ManualResetEventSlim(false);
         fakeTx.CommitStarted = new ManualResetEventSlim(false);
 
-        var commitTask = Task.Run(() => txn.CommitAsync().AsTask());
+        var commitTask = Dedicated(() => txn.CommitAsync().AsTask());
         Assert.True(fakeTx.CommitStarted.Wait(TimeSpan.FromSeconds(5)), "CommitAsync did not start in time.");
 
-        var disposeTask = Task.Run(() => txn.DisposeAsync().AsTask());
+        var disposeTask = Dedicated(() => txn.DisposeAsync().AsTask());
         await Task.Delay(50);
 
         Assert.Equal(0, fakeTx.DisposeCallCount);
@@ -199,10 +199,10 @@ public class TransactionContextDisposeRaceTests
         fakeTx.RollbackGate = new ManualResetEventSlim(false);
         fakeTx.RollbackStarted = new ManualResetEventSlim(false);
 
-        var rollbackTask = Task.Run(() => txn.RollbackAsync().AsTask());
+        var rollbackTask = Dedicated(() => txn.RollbackAsync().AsTask());
         Assert.True(fakeTx.RollbackStarted.Wait(TimeSpan.FromSeconds(5)), "RollbackAsync did not start in time.");
 
-        var disposeTask = Task.Run(() => txn.DisposeAsync().AsTask());
+        var disposeTask = Dedicated(() => txn.DisposeAsync().AsTask());
         await Task.Delay(50);
 
         Assert.Equal(0, fakeTx.DisposeCallCount);
@@ -234,4 +234,12 @@ public class TransactionContextDisposeRaceTests
         ((IDisposable)txn).Dispose();
         Assert.Equal(1, fakeTx.DisposeCallCount);
     }
+    // REV-040: the race steps run on dedicated threads. On the thread pool a loaded full-suite run
+    // could leave them unstarted past the 5 s "did not start in time" waits.
+    private static Task Dedicated(Action action) =>
+        Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
+
+    private static Task Dedicated(Func<Task> action) =>
+        Task.Factory.StartNew(action, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default)
+            .Unwrap();
 }

@@ -73,7 +73,7 @@ public class InterfaceDefaultMethodBehaviorTests
 
         var context = new Mock<IDatabaseContext> { CallBase = true };
         context.SetupGet(c => c.DataSourceInfo).Returns(dataSourceInfo.Object);
-        // DefaultPrepareStatements is no longer exposed on IDatabaseContext, 
+        // DefaultPrepareStatements is no longer exposed on IDatabaseContext,
         // but we can assert on the mock setup if needed, or remove this test.
     }
 

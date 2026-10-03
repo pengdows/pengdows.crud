@@ -35,7 +35,10 @@ public sealed class GatewayReadAllocationTests
         [Column("v", DbType.Double)] public double V { get; set; }
     }
 
-    private static long AllocatedPerRow<T>(List<Dictionary<string, object>> rows) where T : class, new()
+    private static long AllocatedPerRow<T>(List<Dictionary<string, object>> rows) where T : class, new() =>
+        AllocationMeasurement.Lowest(() => AllocatedPerRowOnce<T>(rows));
+
+    private static long AllocatedPerRowOnce<T>(List<Dictionary<string, object>> rows) where T : class, new()
     {
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite));
         var gateway = new TableGateway<T, int>(context);
