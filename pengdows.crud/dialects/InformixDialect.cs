@@ -76,6 +76,8 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal sealed class InformixDialect : SqlDialect
 {
+    internal override bool EnforcesReadOnlyTransactions => true;
+
     internal InformixDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
@@ -433,6 +435,13 @@ internal sealed class InformixDialect : SqlDialect
 
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // -878: "Invalid operation for a READ-ONLY transaction" (live) (REV-050).
+        if (TryGetProviderErrorCode(ex) == -878)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         var code = TryGetProviderErrorCode(ex) is { } raw ? Math.Abs(raw) : (int?)null;
 
         // -143: deadlock (IBM performance-tuning docs).

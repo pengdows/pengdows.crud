@@ -543,7 +543,7 @@ DatabaseException (abstract)                — namespace pengdows.crud.exceptio
 │   │   ├── ConnectionFailedException       — DatabaseContext construction could not connect (Phase/Role)
 │   │   ├── FileLockContentionException     — embedded-file lock contention (IsTransient = false)
 │   │   └── TooManyConnectionsException     — server reached but at its connection limit (IsTransient = true)
-│   ├── ReadOnlyViolationException          — write attempted on read-only connection
+│   ├── ReadOnlyViolationException          — write refused: read-only connection, transaction or database (docs/read-only-enforcement.md)
 │   └── TransactionException               — begin/commit/rollback failure
 ├── SqlGenerationException                  — entity metadata programmer error
 └── DataMappingException                    — strict-mode coercion failure

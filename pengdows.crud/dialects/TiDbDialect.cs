@@ -21,6 +21,9 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class TiDbDialect : MySqlDialect
 {
+    // TiDB treats READ ONLY as a no-op unless tidb_enable_noop_functions is set (live).
+    internal override bool EnforcesReadOnlyTransactions => false;
+
     internal TiDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger, SupportedDatabase.TiDb)
     {

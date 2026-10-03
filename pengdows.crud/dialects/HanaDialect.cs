@@ -95,6 +95,8 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal sealed class HanaDialect : SqlDialect
 {
+    internal override bool EnforcesReadOnlyTransactions => true;
+
     internal HanaDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {

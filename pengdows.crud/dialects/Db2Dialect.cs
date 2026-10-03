@@ -257,6 +257,14 @@ internal sealed class Db2Dialect : SqlDialect
 
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // SQL0817N (-817): the statement would result in a prohibited update, e.g. on a read-only
+        // standby (documented) (REV-050).
+        if (TryGetProviderErrorCode(ex) == -817)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         var sqlState = TryGetProviderSqlState(ex);
         var errorCode = TryGetProviderErrorCode(ex);
         var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;

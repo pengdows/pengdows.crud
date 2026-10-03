@@ -19,7 +19,7 @@ namespace pengdows.crud.Tests.dialects;
 public class DialectLoggingTests
 {
     [Fact]
-    public void MariaDb_TryEnterReadOnly_Failure_IsLoggedDebug()
+    public void MariaDb_TryEnterReadOnly_Failure_IsLoggedAsAWarning()
     {
         var provider = new ListLoggerProvider();
         using var lf = new LoggerFactory(new[] { provider });
@@ -33,7 +33,8 @@ public class DialectLoggingTests
         dialect.TryEnterReadOnlyTransaction(tx);
 
         Assert.Contains(provider.Entries,
-            e => e.Level == LogLevel.Debug && e.Message.Contains("Failed to apply MariaDB read-only session settings"));
+            // A Warning: the transaction is not read-only at the database (REV-051).
+            e => e.Level == LogLevel.Warning && e.Message.Contains("Failed to apply MariaDB read-only session settings"));
     }
 
     private sealed class FakeOracleConnection : IDbConnection

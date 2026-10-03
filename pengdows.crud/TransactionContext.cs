@@ -447,6 +447,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = sql;
+        // Inside the open transaction, the command must carry it: providers reject a command
+        // without it on a connection with a pending local transaction (REV-051).
+        if (!IsCompleted)
+        {
+            cmd.Transaction = _transaction;
+        }
+
         cmd.ExecuteNonQuery();
     }
 
@@ -459,6 +466,13 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = sql;
+        // Inside the open transaction, the command must carry it: providers reject a command
+        // without it on a connection with a pending local transaction (REV-051).
+        if (!IsCompleted)
+        {
+            cmd.Transaction = _transaction;
+        }
+
         if (cmd is DbCommand db)
         {
             await db.ExecuteNonQueryAsync().ConfigureAwait(false);
@@ -482,7 +496,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Failed to reset read-only session settings.");
+                    // The pooled connection may stay read-only for its next user (REV-051).
+                    _logger.LogWarning(ex, "Failed to reset read-only session settings.");
                 }
             }
         }
@@ -501,7 +516,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Failed to reset read-only session settings.");
+                    // The pooled connection may stay read-only for its next user (REV-051).
+                    _logger.LogWarning(ex, "Failed to reset read-only session settings.");
                 }
             }
         }

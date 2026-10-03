@@ -46,6 +46,8 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class PostgreSqlDialect : SqlDialect
 {
+    internal override bool EnforcesReadOnlyTransactions => true;
+
     private const string StandardConformingStringsSetting = "standard_conforming_strings";
     private const string ClientMinMessagesSetting = "client_min_messages";
     private const string ReadOnlyTransactionSetting = "default_transaction_read_only";
@@ -885,6 +887,14 @@ internal class PostgreSqlDialect : SqlDialect
     // codes here, and none override this independently.
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // 25006 read_only_sql_transaction: a write in a read-only transaction or on a read-only
+        // replica (live: PostgreSQL, CockroachDB, YugabyteDB) (REV-050).
+        if (string.Equals(TryGetProviderSqlState(ex), "25006", StringComparison.Ordinal))
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         var sqlState = TryGetProviderSqlState(ex);
 
         if (string.Equals(sqlState, "40P01", StringComparison.OrdinalIgnoreCase))

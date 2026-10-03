@@ -49,9 +49,35 @@ code can catch `IReadOnlyViolation` without inspecting exception messages.
 
 ## `ReadOnlyViolationException`
 
-For SQLite and DuckDB specifically (`SqliteExceptionTranslator`, `DuckDbExceptionTranslator`),
-a raw provider error indicating a write attempted against a read-only database file is translated
-into `ReadOnlyViolationException` (`pengdows.crud.exceptions`, extends `DatabaseOperationException`
-→ `DatabaseException` — a `catch (DatabaseException)` block catches it). Other dialects that reject
-write intent at transaction-creation time do so via a plain `NotSupportedException` instead (see
-`docs/transactions.md`) — the two mechanisms are not unified into one exception type.
+A write the **database** refuses because the transaction, session or database is read-only is
+translated into `ReadOnlyViolationException` (`pengdows.crud.exceptions`, extends
+`DatabaseOperationException` → `DatabaseException`, implements `IReadOnlyViolation`). It is not
+transient. The provider codes, checked live on 2026-10-03 unless marked documented:
+
+| Database | Refusal |
+|---|---|
+| PostgreSQL, CockroachDB, YugabyteDB | SQLSTATE 25006 |
+| MySQL, MariaDB | 1792 (read-only transaction); MySQL 1290 when the message names `--read-only`/`--super-read-only` |
+| TiDB | 1836 (read-only mode) |
+| SQL Server | 3906 (read-only database) |
+| Sybase ASE | 3906 (documented) |
+| Oracle | ORA-01456 (read-only transaction); ORA-16000 (documented, read-only database) |
+| Informix | -878 |
+| Firebird, InterBase | 335544361 (read-only transaction); 335544765 (documented, read-only database) |
+| Db2 | -817 (documented, prohibited update such as a read-only standby) |
+| Spanner | SQLSTATE P0001 with "not allowed for read-only transactions" |
+| SQLite, DuckDB, FlatFile, Access, SAP HANA | their read-only file/connection errors |
+
+### Is a read-intent transaction read-only at the database?
+
+`BeginTransaction(executionType: ExecutionType.Read)` always gets pengdows.crud's own guard (above).
+Whether the **database** also refuses a write through it depends on the database (live, 2026-10-03):
+
+- **Yes**: PostgreSQL, CockroachDB, YugabyteDB, MySQL, MariaDB, Oracle, SQLite, FlatFile, Informix,
+  SAP HANA.
+- **No** (the library's guard is the only protection): SQL Server, Sybase ASE, Db2, Firebird,
+  InterBase, DuckDB, Snowflake, Spanner, TiDB (`READ ONLY` is a no-op unless
+  `tidb_enable_noop_functions` is set), SingleStore.
+
+If the read-only statement a dialect issues fails, the failure is logged as a warning (the
+transaction is then read-write at the database), not swallowed.

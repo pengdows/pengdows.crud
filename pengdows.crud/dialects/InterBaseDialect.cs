@@ -378,6 +378,14 @@ internal sealed class InterBaseDialect : SqlDialect
 
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // isc_read_only_trans / isc_read_only_database, the ISC codes InterBase shares with
+        // Firebird (REV-050).
+        if (TryGetProviderErrorCode(ex) is 335544361 or 335544765)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         var code = TryGetProviderErrorCode(ex);
         if (code == IscDeadlock)
         {

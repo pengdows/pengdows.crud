@@ -42,6 +42,8 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class OracleDialect : SqlDialect
 {
+    internal override bool EnforcesReadOnlyTransactions => true;
+
     // TYPE-002: ODP.NET writes a Guid to RAW(16) in .NET's mixed-endian ToByteArray order.
     internal override bool StoresGuidBytesBigEndian => false;
 
@@ -639,6 +641,14 @@ internal class OracleDialect : SqlDialect
     // a second, independently-maintained copy of the same "is this a constraint violation" signal.
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // ORA-01456 write inside a READ ONLY transaction (live); ORA-16000 database open for
+        // read-only access (documented) (REV-050).
+        if (TryGetProviderErrorCode(ex) is 1456 or 16000)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         var errorCode = TryGetProviderErrorCode(ex);
 
         if (errorCode == 60)

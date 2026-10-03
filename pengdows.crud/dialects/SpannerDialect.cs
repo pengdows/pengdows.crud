@@ -63,6 +63,9 @@ namespace pengdows.crud.dialects;
 /// <remarks>Also covers Spanner Omni PostgreSQL databases reached through PGAdapter.</remarks>
 internal sealed class SpannerDialect : PostgreSqlDialect
 {
+    // The read-intent transaction is not opened read-only on Spanner (a write went through, live).
+    internal override bool EnforcesReadOnlyTransactions => false;
+
     internal SpannerDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger, SupportedDatabase.Spanner) { }
 
@@ -187,6 +190,15 @@ internal sealed class SpannerDialect : PostgreSqlDialect
     // so this category-level classifier can't drift from the constraint-kind classifier.
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // Spanner (through PGAdapter) refuses a write in a read-only transaction with SQLSTATE P0001
+        // and "... not allowed for read-only transactions" (live) (REV-050).
+        if (string.Equals(TryGetProviderSqlState(ex), "P0001", StringComparison.Ordinal) &&
+            ex.Message.Contains("read-only transaction", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         if (IsUniqueViolation(ex) || IsForeignKeyViolation(ex) || IsNotNullViolation(ex) || IsCheckConstraintViolation(ex))
         {
             category = DbErrorCategory.ConstraintViolation;

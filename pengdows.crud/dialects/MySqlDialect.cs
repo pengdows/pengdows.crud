@@ -50,6 +50,9 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class MySqlDialect : SqlDialect
 {
+    // SingleStore runs on this dialect and accepts a write in a read-only transaction (live).
+    internal override bool EnforcesReadOnlyTransactions => DatabaseType != SupportedDatabase.SingleStore;
+
     private const string SqlModeSettingName = "sql_mode";
 
     private const string RequiredSqlModeFlags =
@@ -674,6 +677,17 @@ internal class MySqlDialect : SqlDialect
     // override this independently.
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // REV-050, live: 1792 a write in a READ ONLY transaction (MySQL, MariaDB); 1836 read-only
+        // mode (TiDB tidb_super_read_only); 1290 "--read-only"/"--super-read-only" option (MySQL).
+        // 1290 covers every option that prevents a statement, so it counts only for read-only.
+        var readOnlyCode = TryGetProviderErrorCode(ex);
+        if (readOnlyCode is 1792 or 1836 ||
+            (readOnlyCode == 1290 && ex.Message.Contains("read-only", StringComparison.OrdinalIgnoreCase)))
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         var errorCode = TryGetProviderErrorCode(ex);
         var sqlState = TryGetProviderSqlState(ex);
 

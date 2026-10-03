@@ -668,6 +668,13 @@ internal class SqlServerDialect : SqlDialect
 
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // 3906: "Failed to update database because the database is read-only" (live) (REV-050).
+        if (TryGetProviderErrorCode(ex) == 3906)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         var errorCode = TryGetProviderErrorCode(ex);
 
         if (errorCode == 1205)

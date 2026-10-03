@@ -67,4 +67,30 @@ public sealed class DialectOwnedCapabilityTests
         Assert.True(context.RCSIEnabled);
         Assert.False(context.SnapshotIsolationEnabled);
     }
+    // REV-051: whether a read-intent transaction is read-only at the database (live, 2026-10-03:
+    // a write through one was refused on these, accepted on the others).
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql, true)]
+    [InlineData(SupportedDatabase.CockroachDb, true)]
+    [InlineData(SupportedDatabase.YugabyteDb, true)]
+    [InlineData(SupportedDatabase.MySql, true)]
+    [InlineData(SupportedDatabase.MariaDb, true)]
+    [InlineData(SupportedDatabase.Oracle, true)]
+    [InlineData(SupportedDatabase.Sqlite, true)]
+    [InlineData(SupportedDatabase.FlatFile, true)]
+    [InlineData(SupportedDatabase.Informix, true)]
+    [InlineData(SupportedDatabase.SapHana, true)]
+    [InlineData(SupportedDatabase.TiDb, false)]
+    [InlineData(SupportedDatabase.SingleStore, false)]
+    [InlineData(SupportedDatabase.Spanner, false)]
+    [InlineData(SupportedDatabase.DuckDB, false)]
+    [InlineData(SupportedDatabase.SqlServer, false)]
+    [InlineData(SupportedDatabase.Firebird, false)]
+    [InlineData(SupportedDatabase.Db2, false)]
+    [InlineData(SupportedDatabase.SybaseASE, false)]
+    [InlineData(SupportedDatabase.Snowflake, false)]
+    public void EnforcesReadOnlyTransactions_IsTheDialects(SupportedDatabase database, bool enforced)
+    {
+        Assert.Equal(enforced, Dialect(database).EnforcesReadOnlyTransactions);
+    }
 }

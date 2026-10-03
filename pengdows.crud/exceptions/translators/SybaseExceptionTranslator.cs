@@ -71,6 +71,8 @@ internal sealed class SybaseExceptionTranslator : IDbExceptionTranslator
             546 or 547 => new ForeignKeyViolationException(
                 $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),
+            // 3906: the database is READ ONLY (documented) (REV-050).
+            3906 => DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind),
             1205 => new DeadlockException(
                 $"{operationKind} deadlocked on {database}: {exception.Message}",
                 database, exception, sqlState, errorCode, constraintName),

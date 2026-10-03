@@ -60,7 +60,10 @@ public class fakeDbCommand : DbCommand
     public override UpdateRowSource UpdatedRowSource { get; set; }
 
     protected override DbConnection? DbConnection { get; set; }
-    [AllowNull] public new DbTransaction Transaction { get; set; }
+    // One transaction, whichever way it is set: through this property, DbCommand.Transaction or
+    // IDbCommand.Transaction. It was a separate field, so a transaction set through the interface
+    // (as pengdows.crud does) read back null here.
+    [AllowNull] public new DbTransaction Transaction { get => DbTransaction!; set => DbTransaction = value; }
 
     private readonly FakeParameterCollection _parameterCollection = new();
 

@@ -618,6 +618,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool RejectsExplicitIsolationLevelOnBeginTransaction => false;
 
+    /// <summary>
+    /// A read-intent transaction is read-only at the database, so a write through it is refused by
+    /// the server (ReadOnlyViolationException). Where false, read intent is enforced only by
+    /// pengdows.crud's own guards (REV-051; checked live 2026-10-03).
+    /// </summary>
+    internal virtual bool EnforcesReadOnlyTransactions => false;
+
     internal readonly record struct SessionCapabilityPrefetch(bool Rcsi, bool SnapshotIsolation);
 
     /// <summary>
@@ -2257,7 +2264,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
         catch (Exception ex)
         {
-            Logger.LogDebug(ex, "Failed to apply {DialectName} read-only session settings", dialectName);
+            // The transaction runs read-write: say so (REV-051).
+            Logger.LogWarning(ex, "Failed to apply {DialectName} read-only session settings; the transaction is not read-only at the database", dialectName);
         }
     }
 
@@ -2280,7 +2288,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
         catch (Exception ex)
         {
-            Logger.LogDebug(ex, "Failed to apply {DialectName} read-only session settings", dialectName);
+            // The transaction runs read-write: say so (REV-051).
+            Logger.LogWarning(ex, "Failed to apply {DialectName} read-only session settings; the transaction is not read-only at the database", dialectName);
         }
     }
 

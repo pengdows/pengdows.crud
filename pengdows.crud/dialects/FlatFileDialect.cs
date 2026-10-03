@@ -39,6 +39,8 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class FlatFileDialect : SqlDialect
 {
+    internal override bool EnforcesReadOnlyTransactions => true;
+
     internal FlatFileDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {

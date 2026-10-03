@@ -51,6 +51,8 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class SqliteDialect : SqlDialect
 {
+    internal override bool EnforcesReadOnlyTransactions => true;
+
     private readonly bool _systemDataSqlite;
 
     internal SqliteDialect(DbProviderFactory factory, ILogger logger)

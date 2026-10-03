@@ -657,6 +657,13 @@ internal class FirebirdDialect : SqlDialect
 
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
+        // isc_read_only_trans 335544361 (live); isc_read_only_database 335544765 (documented) (REV-050).
+        if (TryGetProviderErrorCode(ex) is 335544361 or 335544765)
+        {
+            category = DbErrorCategory.ReadOnlyViolation;
+            return true;
+        }
+
         var sqlState = TryGetProviderSqlState(ex);
 
         // Firebird cannot distinguish a true lock-cycle deadlock from an optimistic update
