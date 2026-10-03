@@ -900,14 +900,8 @@ internal static class TypeCoercionHelper
                 return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
                     ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
                     : CreateFlexibleOffset(dt);
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
-                out var parsed):
+            case string s when TryParseTimestampText(s, out var parsed):
                 return parsed;
-            case string s
-                when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
-                return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
-                    ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
-                    : CreateFlexibleOffset(dt);
             default:
                 throw new InvalidCastException("Cannot convert value to DateTimeOffset.");
         }
@@ -928,12 +922,8 @@ internal static class TypeCoercionHelper
                 // Treat empty/whitespace strings as invalid for DateTime
                 // This handles SQLite returning empty strings for TIMESTAMP columns
                 throw new InvalidCastException("Cannot convert value to DateTime.");
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
-                out var dto):
-                return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
-            case string s
-                when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
-                return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
+            case string s when TryParseTimestampText(s, out var dto):
+                return dto.UtcDateTime;
             default:
                 throw new InvalidCastException("Cannot convert value to DateTime.");
         }
@@ -952,14 +942,9 @@ internal static class TypeCoercionHelper
             throw new InvalidCastException("Cannot convert value to DateTime.");
         }
 
-        if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dto))
+        if (TryParseTimestampText(s, out var dto))
         {
-            return DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
-        }
-
-        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
-        {
-            return DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
+            return dto.UtcDateTime;
         }
 
         throw new InvalidCastException("Cannot convert value to DateTime.");
@@ -971,14 +956,9 @@ internal static class TypeCoercionHelper
     /// </summary>
     internal static DateTimeOffset CoerceDateTimeOffsetFromString(string s)
     {
-        if (DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed))
+        if (TryParseTimestampText(s, out var parsed))
         {
             return parsed;
-        }
-
-        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt))
-        {
-            return CreateFlexibleOffset(dt);
         }
 
         throw new InvalidCastException("Cannot convert value to DateTimeOffset.");
@@ -989,6 +969,15 @@ internal static class TypeCoercionHelper
     /// <see cref="DataReaderMapper"/> to avoid boxing the DateTimeOffset return value.
     /// </summary>
     internal static DateTimeOffset CoerceDateTimeOffsetFromDateTime(DateTime dt) => CreateFlexibleOffset(dt);
+
+    /// <summary>
+    /// Timestamp text: a stated offset keeps its instant; text without one is UTC, as an unspecified
+    /// DateTime is everywhere else. DateTimeOffset.TryParse alone assumed the machine's local time,
+    /// so the same text read differently on differently configured hosts (REV-059). One parse,
+    /// where the old path tried DateTimeOffset then DateTime.
+    /// </summary>
+    private static bool TryParseTimestampText(string s, out DateTimeOffset value) =>
+        DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out value);
 
     /// <summary>
     /// Normalizes a DateTime returned by a database driver to DateTimeKind.Utc.
