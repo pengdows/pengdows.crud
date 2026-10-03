@@ -32,8 +32,54 @@ namespace pengdows.crud.@internal;
 
 internal static class UniqueConnectionStringRegistry
 {
-    private static readonly ConcurrentDictionary<string, DatabaseContext> Claims = new();
-    private static readonly ConcurrentDictionary<string, DatabaseContext> Registrations = new();
+    // Weak: a context that is never disposed must still be collectable; holding it here rooted it
+    // and everything it owns for the life of the process (REV-065). A collected owner frees its key.
+    private static readonly ConcurrentDictionary<string, WeakReference<DatabaseContext>> Claims = new();
+    private static readonly ConcurrentDictionary<string, WeakReference<DatabaseContext>> Registrations = new();
+
+    private static bool IsOwnedBy(WeakReference<DatabaseContext> entry, DatabaseContext owner) =>
+        entry.TryGetTarget(out var target) && ReferenceEquals(target, owner);
+
+    private static bool IsLive(WeakReference<DatabaseContext> entry, out DatabaseContext? target) =>
+        entry.TryGetTarget(out target);
+
+    // Removes the key only while it still maps to this exact entry.
+    private static void RemoveIfOwnedBy(ConcurrentDictionary<string, WeakReference<DatabaseContext>> table,
+        string key, DatabaseContext owner)
+    {
+        if (table.TryGetValue(key, out var entry) && IsOwnedBy(entry, owner))
+        {
+            table.TryRemove(new KeyValuePair<string, WeakReference<DatabaseContext>>(key, entry));
+        }
+    }
+
+    // Claims the key for owner; a key held by a collected owner is taken over.
+    private static bool TryClaim(string key, DatabaseContext owner)
+    {
+        var entry = new WeakReference<DatabaseContext>(owner);
+        while (true)
+        {
+            if (Claims.TryAdd(key, entry))
+            {
+                return true;
+            }
+
+            if (!Claims.TryGetValue(key, out var existing))
+            {
+                continue;
+            }
+
+            if (IsLive(existing, out _))
+            {
+                return false;
+            }
+
+            if (Claims.TryUpdate(key, entry, existing))
+            {
+                return true;
+            }
+        }
+    }
 
     /// <summary>
     /// Atomically claims every key in <paramref name="keys"/> for <paramref name="owner"/>.
@@ -45,11 +91,11 @@ internal static class UniqueConnectionStringRegistry
         var claimed = new List<string>(keys.Count);
         foreach (var key in keys)
         {
-            if (!Claims.TryAdd(key, owner))
+            if (!TryClaim(key, owner))
             {
                 foreach (var alreadyClaimed in claimed)
                 {
-                    Claims.TryRemove(new KeyValuePair<string, DatabaseContext>(alreadyClaimed, owner));
+                    RemoveIfOwnedBy(Claims, alreadyClaimed, owner);
                 }
 
                 throw new InvalidOperationException(
@@ -78,7 +124,7 @@ internal static class UniqueConnectionStringRegistry
 
         foreach (var key in keys)
         {
-            Claims.TryRemove(new KeyValuePair<string, DatabaseContext>(key, owner));
+            RemoveIfOwnedBy(Claims, key, owner);
         }
     }
 
@@ -93,7 +139,8 @@ internal static class UniqueConnectionStringRegistry
     {
         foreach (var key in keys)
         {
-            if (Registrations.TryGetValue(key, out var existingOwner) && !ReferenceEquals(existingOwner, owner))
+            if (Registrations.TryGetValue(key, out var existingEntry) && IsLive(existingEntry, out var existingOwner) &&
+                !ReferenceEquals(existingOwner, owner))
             {
                 try
                 {
@@ -114,7 +161,7 @@ internal static class UniqueConnectionStringRegistry
                 }
             }
 
-            Registrations[key] = owner;
+            Registrations[key] = new WeakReference<DatabaseContext>(owner);
         }
 
         return keys;
@@ -135,7 +182,7 @@ internal static class UniqueConnectionStringRegistry
 
         foreach (var key in keys)
         {
-            Registrations.TryRemove(new KeyValuePair<string, DatabaseContext>(key, owner));
+            RemoveIfOwnedBy(Registrations, key, owner);
         }
     }
 }
