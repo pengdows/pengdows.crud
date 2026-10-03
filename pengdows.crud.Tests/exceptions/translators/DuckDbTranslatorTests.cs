@@ -313,4 +313,16 @@ public class DuckDbTranslatorTests
 
         Assert.IsNotType<ReadOnlyViolationException>(_translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert));
     }
+
+    // REV-065: file-open messages were checked before constraints, and a constraint message
+    // carries the row's values, so a key containing "Cannot open file" became a ConnectionException.
+    [Fact]
+    public void UniqueViolation_WhoseKeyMentionsAFile_IsStillAUniqueViolation()
+    {
+        var raw = new SqlStateDbException("23505",
+            "Constraint Error: Duplicate key \"name: Cannot open file report.csv\" violates unique constraint");
+
+        Assert.IsType<UniqueConstraintViolationException>(
+            _translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert));
+    }
 }
