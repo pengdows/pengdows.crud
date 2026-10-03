@@ -175,6 +175,48 @@ public class TableGatewayRetrieveAsyncSetValuedTests
         Assert.Equal("bigint[]", parameter.DataTypeName);
     }
 
+    // REV-065: an element type outside the explicit list was typed integer[] (a decimal[] or
+    // DateTime[] then failed or was converted). Unlisted element types now clear the parameter's
+    // stale scalar type and let Npgsql infer the array type from the value.
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    public void SetParameterValue_ArrayOfAnUnlistedElementType_IsNotTypedIntegerArray(SupportedDatabase db)
+    {
+        var factory = new fakeDbFactory(db);
+        using var ctx = new DatabaseContext($"Data Source=pg;EmulatedProduct={db}", factory);
+        using var sc = ctx.CreateSqlContainer("SELECT 1");
+        var parameter = new FakeNpgsqlArrayParameter
+        {
+            ParameterName = "w0",
+            DbType = DbType.Decimal,
+            NpgsqlDbType = FakeNpgsqlArrayDbType.Bigint,
+            DataTypeName = "numeric",
+            Value = 1m
+        };
+        sc.AddParameter(parameter);
+
+        sc.SetParameterValue("w0", new[] { 1.5m, 2.5m });
+
+        Assert.Equal((FakeNpgsqlArrayDbType)0, parameter.NpgsqlDbType);
+        Assert.True(string.IsNullOrEmpty(parameter.DataTypeName), parameter.DataTypeName);
+    }
+
+    [Fact]
+    public void SetParameterValue_IntArray_IsTypedIntegerArray()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        using var ctx = new DatabaseContext("Data Source=pg;EmulatedProduct=PostgreSql", factory);
+        using var sc = ctx.CreateSqlContainer("SELECT 1");
+        var parameter = new FakeNpgsqlArrayParameter { ParameterName = "w0", DbType = DbType.Int32, Value = 1 };
+        sc.AddParameter(parameter);
+
+        sc.SetParameterValue("w0", new[] { 1, 2 });
+
+        Assert.Equal(FakeNpgsqlArrayDbType.Integer | FakeNpgsqlArrayDbType.Array, parameter.NpgsqlDbType);
+        Assert.Equal("integer[]", parameter.DataTypeName);
+    }
+
     [Flags]
     public enum FakeNpgsqlArrayDbType
     {
@@ -190,7 +232,7 @@ public class TableGatewayRetrieveAsyncSetValuedTests
     private sealed class FakeNpgsqlArrayParameter : DbParameter
     {
         public FakeNpgsqlArrayDbType NpgsqlDbType { get; set; }
-        public string DataTypeName { get; set; } = string.Empty;
+        public string? DataTypeName { get; set; } = string.Empty;
 
         public override DbType DbType { get; set; }
         public override ParameterDirection Direction { get; set; } = ParameterDirection.Input;
@@ -200,7 +242,12 @@ public class TableGatewayRetrieveAsyncSetValuedTests
         public override object? Value { get; set; } = DBNull.Value;
         public override bool SourceColumnNullMapping { get; set; }
         public override int Size { get; set; }
-        public override void ResetDbType() { }
+
+        public override void ResetDbType()
+        {
+            NpgsqlDbType = 0;
+            DataTypeName = string.Empty;
+        }
     }
 
     [Fact]

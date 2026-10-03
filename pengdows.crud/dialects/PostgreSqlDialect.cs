@@ -145,11 +145,21 @@ internal class PostgreSqlDialect : SqlDialect
 
         var elementType = value.GetType().GetElementType();
         var elementName = elementType == typeof(long) ? "Bigint"
+            : elementType == typeof(int) ? "Integer"
             : elementType == typeof(short) ? "Smallint"
             : elementType == typeof(string) ? "Text"
             : elementType == typeof(Guid) ? "Uuid"
             : elementType == typeof(bool) ? "Boolean"
-            : "Integer";
+            : null;
+
+        if (elementName == null)
+        {
+            // Any other element type was typed integer[] (REV-065). Clear the stale scalar type
+            // instead and let Npgsql infer the array type from the value.
+            parameter.ResetDbType();
+            parameter.GetType().GetProperty(DataTypeNameProperty)?.SetValue(parameter, null);
+            return;
+        }
 
         try
         {
