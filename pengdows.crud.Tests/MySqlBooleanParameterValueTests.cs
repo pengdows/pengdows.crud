@@ -8,18 +8,10 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Found while mapping pengdows.crud's layered parameter-type-coercion system (AdvancedTypeRegistry
-/// -> CoercionRegistry -> ParameterBindingRules) during the architecture cleanup that added this
-/// test: <c>ProviderParameterFactory.ApplyMySqlOptimizations</c> sets a bool parameter's
-/// <c>DbType</c> to <c>DbType.Byte</c> (TINYINT(1) compatibility) but never converts
-/// <c>parameter.Value</c> itself away from the raw C# <c>bool</c> — the one live code path that
-/// actually runs for MySql/MariaDb bool parameters through
-/// <see cref="SqlDialect.CreateDbParameter{T}"/>, the real production entry point (not the
-/// coercion classes tested in isolation). <c>ParameterBindingRules.ApplyBooleanNormalization</c>
-/// has the correct <c>(byte)1</c>/<c>(byte)0</c> conversion, but is unreachable dead code here:
-/// <c>CoercionRegistry</c>'s <c>BooleanCoercion</c> always succeeds first, short-circuiting the
-/// `||` chain in <c>AdvancedTypeRegistry.TryConfigureParameterForDialect</c> before
-/// <c>ParameterBindingRules</c> ever runs.
+/// A MySQL/MariaDB bool parameter must carry the byte value (1/0), not only <c>DbType.Byte</c>
+/// with the raw C# <c>bool</c>, through <see cref="SqlDialect.CreateDbParameter{T}"/>, the real
+/// entry point. (The ProviderParameterFactory/ParameterBindingRules layer this was first traced
+/// through was unreachable and has been removed, REV-039.)
 /// </summary>
 public class MySqlBooleanParameterValueTests
 {

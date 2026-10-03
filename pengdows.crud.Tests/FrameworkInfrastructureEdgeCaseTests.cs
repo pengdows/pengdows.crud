@@ -243,32 +243,6 @@ public class FrameworkInfrastructureEdgeCaseTests
         Assert.Equal(6, snapshot.AverageWaitTimeTicks);
     }
 
-    [Fact]
-    public void ParameterBindingRules_BooleanForMySql_UsesByte()
-    {
-        var parameter = new fakeDbParameter();
-
-        var handled = ParameterBindingRules.ApplyBindingRules(
-            parameter, typeof(bool), true, SupportedDatabase.MySql);
-
-        Assert.True(handled);
-        Assert.Equal((byte)1, parameter.Value);
-        Assert.Equal(DbType.Byte, parameter.DbType);
-    }
-
-    [Fact]
-    public void ParameterBindingRules_NullEnum_UsesDbNullAndStringType()
-    {
-        var parameter = new fakeDbParameter();
-
-        var handled = ParameterBindingRules.ApplyBindingRules(
-            parameter, typeof(TestEnum), null, SupportedDatabase.PostgreSql);
-
-        Assert.True(handled);
-        Assert.Equal(DBNull.Value, parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
     private sealed class ThrowOnIndexerSetBuilder : DbConnectionStringBuilder
     {
         [AllowNull]

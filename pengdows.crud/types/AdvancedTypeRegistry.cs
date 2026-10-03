@@ -11,8 +11,6 @@
 // - RegisterMapping<T>(): Associates CLR type with ProviderTypeMapping for a database.
 // - RegisterConverter<T>(): Registers AdvancedTypeConverter for complex transformations.
 // - TryConfigureParameter(): Configures DbParameter with provider-specific type info.
-// - TryConfigureParameterEnhanced(): Tries legacy system, then ProviderParameterFactory (CoercionRegistry),
-//   then ParameterBindingRules. Not currently called anywhere in the library.
 // - Default mappings: JSON (JSONB, JSON), spatial (Geometry, Geography), arrays, ranges,
 //   network types (inet, cidr, macaddr), temporal (interval), LOBs, identity/concurrency.
 // - ProviderTypeMapping: Holds DbType + ConfigureParameter action for provider customization.
@@ -301,29 +299,6 @@ internal class AdvancedTypeRegistry
     {
         clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
         return _mappedTypes.ContainsKey(clrType);
-    }
-
-    /// <summary>
-    /// Enhanced parameter configuration using both legacy converters and new coercion system.
-    /// Provides fallback mechanism and optimal performance.
-    /// </summary>
-    public bool TryConfigureParameterEnhanced(DbParameter parameter, Type clrType, object? value,
-        SupportedDatabase provider)
-    {
-        // First try the legacy advanced type system for backward compatibility
-        if (TryConfigureParameter(parameter, clrType, value, provider))
-        {
-            return true;
-        }
-
-        // Fall back to the new coercion system for "weird" types
-        if (ProviderParameterFactory.TryConfigureParameter(parameter, clrType, value, provider))
-        {
-            return true;
-        }
-
-        // Final fallback: try parameter binding rules
-        return ParameterBindingRules.ApplyBindingRules(parameter, clrType, value, provider);
     }
 
     /// <summary>

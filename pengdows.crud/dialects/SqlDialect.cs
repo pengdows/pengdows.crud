@@ -1930,7 +1930,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
                        // is a concrete subclass (MemoryStream, StringReader, ...) that never matches.
                        // Materialize to byte[]/string rather than handing the provider a raw
                        // instance it cannot bind.
-                       ProviderParameterFactory.TryMaterializeLargeObject(parameter, value));
+                       LargeObjectParameter.TryMaterialize(parameter, value));
         }
 
         if (!handled)

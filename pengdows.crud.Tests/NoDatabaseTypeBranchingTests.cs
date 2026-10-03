@@ -26,7 +26,6 @@ public sealed class NoDatabaseTypeBranchingTests
         ["types/AdvancedTypeRegistry.cs"] = 78,
         ["isolation/IsolationResolver.cs"] = 45,
         ["exceptions/translators/DbExceptionTranslatorRegistry.cs"] = 23,
-        ["types/coercion/ProviderParameterFactory.cs"] = 17,
         ["types/converters/SpatialConverter.cs"] = 14,
         ["types/coercion/AdvancedCoercions.cs"] = 8,
         ["types/converters/InetConverter.cs"] = 3,

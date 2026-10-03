@@ -175,35 +175,6 @@ public class RefactoringDuplicationTests
 
     #endregion
 
-    #region Task 6: ProviderParameterFactory reflection caching
-
-    [Fact]
-    public void ProviderParameterFactory_HandlesNonNpgsqlParameter_Gracefully()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var parameter = factory.CreateParameter()!;
-        var result = ProviderParameterFactory.TryConfigureParameter(
-            parameter, typeof(Guid), Guid.NewGuid(), SupportedDatabase.PostgreSql);
-
-        // Should not throw regardless of result
-        Assert.IsType<bool>(result);
-    }
-
-    [Fact]
-    public void ProviderParameterFactory_HandlesMultipleCallsWithCaching()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-
-        // Call multiple times to exercise cached paths
-        for (int i = 0; i < 5; i++)
-        {
-            var parameter = factory.CreateParameter()!;
-            ProviderParameterFactory.TryConfigureParameter(
-                parameter, typeof(Guid), Guid.NewGuid(), SupportedDatabase.PostgreSql);
-        }
-    }
-
-    #endregion
 
     #region Task 8: AdvancedCoercions null check removal
 

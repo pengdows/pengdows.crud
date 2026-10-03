@@ -114,35 +114,6 @@ public class AdvancedTypeRegistryExtensiveTests
     #region Enhanced Parameter Configuration
 
     [Fact]
-    public void TryConfigureParameterEnhanced_FallsBackToProviderParameterFactory()
-    {
-        var registry = new AdvancedTypeRegistry();
-        var param = new TestDbParameter();
-
-        // Try with a type that isn't registered in AdvancedTypeRegistry
-        // but might be handled by ProviderParameterFactory
-        var result =
-            registry.TryConfigureParameterEnhanced(param, typeof(decimal), 42.5m, SupportedDatabase.PostgreSql);
-
-        // Should fall back to ProviderParameterFactory or ParameterBindingRules
-        // The exact behavior depends on the implementation, but it should not throw
-        Assert.True(result || !result); // Either succeeds or fails gracefully
-    }
-
-    [Fact]
-    public void TryConfigureParameterEnhanced_FallsBackToParameterBindingRules()
-    {
-        var registry = new AdvancedTypeRegistry();
-        var param = new TestDbParameter();
-
-        // Try with a simple type that should be handled by binding rules
-        var result = registry.TryConfigureParameterEnhanced(param, typeof(string), "test", SupportedDatabase.SqlServer);
-
-        // Should either work via advanced types or fall back to binding rules
-        Assert.True(result);
-    }
-
-    [Fact]
     public void CoercionRegistry_Property_ReturnsSharedInstance()
     {
         var registry = new AdvancedTypeRegistry();
