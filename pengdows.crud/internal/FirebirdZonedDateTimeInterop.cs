@@ -54,8 +54,12 @@ internal static class FirebirdZonedDateTimeInterop
             return false;
         }
 
-        time = new DateTimeOffset(DateTime.MinValue.Add(utcTime), TimeSpan.Zero);
-        if (type.GetProperty("Offset")?.GetValue(value) is TimeSpan offset && offset != TimeSpan.Zero)
+        var offset = type.GetProperty("Offset")?.GetValue(value) is TimeSpan stated ? stated : TimeSpan.Zero;
+        // Anchored on 0001-01-01 UTC; one day later only when the offset would otherwise land
+        // before DateTime.MinValue, which threw for a negative offset (REV-065).
+        var anchor = utcTime + offset < TimeSpan.Zero ? DateTime.MinValue.AddDays(1) : DateTime.MinValue;
+        time = new DateTimeOffset(anchor.Add(utcTime), TimeSpan.Zero);
+        if (offset != TimeSpan.Zero)
         {
             time = time.ToOffset(offset);
         }
