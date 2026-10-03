@@ -209,10 +209,14 @@ internal class SqlServerDialect : SqlDialect
     public override bool SupportsLimitOffset => false;
     public override string ParameterMarker => "@";
 
+    private static readonly Regex OrderByPattern =
+        new(@"\bORDER\s+BY\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public override void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
     {
         var sql = query.ToString();
-        if ((sql.Length > 0) && !sql.Contains("ORDER BY", StringComparison.OrdinalIgnoreCase))
+        // Any whitespace between the words: the literal "ORDER BY" refused formatted SQL (REV-065).
+        if ((sql.Length > 0) && !OrderByPattern.IsMatch(sql))
         {
             throw new InvalidOperationException("SQL Server OFFSET/FETCH paging requires ORDER BY.");
         }

@@ -206,6 +206,23 @@ public class PagingDialectTests
         Assert.Equal(" OFFSET 0 ROWS FETCH NEXT 20 ROWS ONLY", sql);
     }
 
+    // REV-065: the check looked for the literal text "ORDER BY", so formatted SQL with the two
+    // words on separate lines or with extra spaces was refused.
+    [Theory]
+    [InlineData("SELECT id FROM orders ORDER\n    BY id")]
+    [InlineData("SELECT id FROM orders ORDER   BY id")]
+    [InlineData("SELECT id FROM orders\r\nORDER\tBY id")]
+    public void SqlServer_AppendPaging_OrderByAcrossWhitespace_IsAccepted(string sql)
+    {
+        using var context = new DatabaseContext("fake", new fakeDbFactory(SupportedDatabase.SqlServer));
+        using var container = context.CreateSqlContainer();
+        container.Query.Append(sql);
+
+        SqlServer().AppendPaging(container.Query, offset: 0, limit: 10);
+
+        Assert.EndsWith(" OFFSET 0 ROWS FETCH NEXT 10 ROWS ONLY", container.Query.ToString());
+    }
+
     [Fact]
     public void SqlServer_AppendPaging_WithoutOrderBy_ThrowsClearException()
     {
