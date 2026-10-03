@@ -540,8 +540,11 @@ internal class DuckDbDialect : SqlDialect
         // execution, with no SqlState populated for this shape — confirmed live: "Binder Error:
         // Cannot execute statement of type "INSERT" on database "..." which is attached in
         // read-only mode!"
-        if (ex.Message.Contains("read-only", StringComparison.OrdinalIgnoreCase) ||
-            ex.Message.Contains("read only", StringComparison.OrdinalIgnoreCase))
+        // Only DuckDB's read-only refusals: any "read only" text also matched a syntax error that
+        // echoes "SET TRANSACTION READ ONLY" (REV-065, live).
+        if (ex.Message.Contains("attached in read-only mode", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("read-only transaction", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("read-only database", StringComparison.OrdinalIgnoreCase))
         {
             category = DbErrorCategory.ReadOnlyViolation;
             return true;

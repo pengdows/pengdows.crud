@@ -207,4 +207,27 @@ public class FirebirdTranslatorTests
 
         Assert.IsType<SerializationConflictException>(result);
     }
+
+    // REV-065 (live): isc_bad_trans_handle (335544332, "invalid transaction handle (expecting
+    // explicit transaction start)") arrives with an 08xxx SQLSTATE but the connection is fine; only
+    // the transaction is gone, so it is not a ConnectionException.
+    [Fact]
+    public void BadTransactionHandle_IsNotAConnectionException()
+    {
+        var raw = new NumberedSqlStateDbException(335544332, "08003",
+            "invalid transaction handle (expecting explicit transaction start)");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Update);
+
+        Assert.IsNotType<ConnectionException>(result);
+        Assert.IsAssignableFrom<DatabaseOperationException>(result);
+    }
+
+    [Fact]
+    public void ConnectionLevelSqlState_IsStillAConnectionException()
+    {
+        var raw = new NumberedSqlStateDbException(335544721, "08006", "Unable to complete network request to host");
+
+        Assert.IsType<ConnectionException>(_translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Query));
+    }
 }

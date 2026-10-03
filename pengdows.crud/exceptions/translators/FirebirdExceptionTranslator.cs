@@ -29,6 +29,8 @@ namespace pengdows.crud.exceptions.translators;
 /// </remarks>
 internal sealed class FirebirdExceptionTranslator : IDbExceptionTranslator
 {
+    private const int BadTransactionHandle = 335544332;
+
     public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
         var database = dialect.DatabaseType;
@@ -39,7 +41,9 @@ internal sealed class FirebirdExceptionTranslator : IDbExceptionTranslator
         // Checked first: a connection-refused/timed-out message could otherwise be swallowed by
         // either the constraint checks below (unlikely) or the LooksLikeTimeout heuristic (a
         // "connection timed out" OS error would literally contain the word "timeout").
-        if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true)
+        // isc_bad_trans_handle (335544332) also carries an 08xxx SQLSTATE, but the connection is
+        // fine; only the transaction is gone (REV-065, live).
+        if (sqlState?.StartsWith("08", StringComparison.Ordinal) == true && errorCode != BadTransactionHandle)
         {
             return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }

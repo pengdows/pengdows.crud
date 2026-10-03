@@ -293,4 +293,24 @@ public class DuckDbTranslatorTests
 
         Assert.IsType<SerializationConflictException>(result);
     }
+
+    // REV-065: any message containing "read only" was a ReadOnlyViolation, so a syntax error that
+    // echoes "SET TRANSACTION READ ONLY" was one too (live). Only DuckDB's read-only refusals count.
+    [Fact]
+    public void ReadOnlyAttachedDatabase_IsReadOnlyViolation()
+    {
+        var raw = new SqliteMessageDbException(
+            "Binder Error: Cannot execute statement of type \"INSERT\" on database \"db\" which is attached in read-only mode!");
+
+        Assert.IsType<ReadOnlyViolationException>(_translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert));
+    }
+
+    [Fact]
+    public void SyntaxErrorEchoingReadOnly_IsNotAReadOnlyViolation()
+    {
+        var raw = new SqliteMessageDbException(
+            "Parser Error: syntax error at or near \"TRANSACTION\" LINE 1: SET TRANSACTION READ ONLY");
+
+        Assert.IsNotType<ReadOnlyViolationException>(_translator.Translate(TestDialect(SupportedDatabase.DuckDB), raw, DbOperationKind.Insert));
+    }
 }

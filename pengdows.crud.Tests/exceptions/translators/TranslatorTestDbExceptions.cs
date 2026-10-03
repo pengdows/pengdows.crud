@@ -31,3 +31,17 @@ internal sealed class SqliteMessageDbException : DbException
     {
     }
 }
+
+internal sealed class NumberedSqlStateDbException : DbException
+{
+    public NumberedSqlStateDbException(int number, string sqlState, string message)
+        : base(message)
+    {
+        Number = number;
+        SqlState = sqlState;
+    }
+
+    public int Number { get; }
+
+    public override string? SqlState { get; }
+}
