@@ -252,7 +252,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         var shape = BuildSchemaShape(recordReader, options, unresolved);
         var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode, coercion);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved, coercion, unresolvedReader));
+        var plan = GetPlan<T>(planKey, recordReader, options, unresolved, coercion, unresolvedReader);
 
         var result = new List<T>();
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -285,7 +285,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         var shape = BuildSchemaShape(rdr, options);
         var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
+        var plan = GetPlan<T>(planKey, rdr, options);
 
         var result = new List<T>();
 
@@ -308,7 +308,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
         var shape = BuildSchemaShape(recordReader, options, unresolved);
         var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode, coercion);
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(recordReader, options, unresolved, coercion, unresolvedReader));
+        var plan = GetPlan<T>(planKey, recordReader, options, unresolved, coercion, unresolvedReader);
 
         while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
@@ -343,12 +343,45 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var shape = BuildSchemaShape(rdr, options);
         var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
 
-        var plan = (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(rdr, options));
+        var plan = GetPlan<T>(planKey, rdr, options);
 
         while (await rdr.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             yield return MapSingleRow(rdr, plan, options);
         }
+    }
+
+    // A cached plan is found without allocating: GetOrAdd's factory closure (over the reader and
+    // options) was allocated on every call, hit or miss (PERF-014). The miss paths are separate
+    // methods so that closure exists only when a plan is built.
+    private static MapperPlan<T> GetPlan<T>(PlanCacheKey planKey, DbDataReader reader, IMapperOptions options,
+        Func<int, Type?>? unresolved, TypeCoercionOptions? coercion,
+        Func<IDataRecord, int, Type, object>? unresolvedReader) where T : class, new() =>
+        _planCache.TryGet(planKey, out var cached)
+            ? (MapperPlan<T>)cached
+            : AddPlan<T>(planKey, reader, options, unresolved, coercion, unresolvedReader);
+
+    private static MapperPlan<T> AddPlan<T>(PlanCacheKey planKey, DbDataReader reader, IMapperOptions options,
+        Func<int, Type?>? unresolved, TypeCoercionOptions? coercion,
+        Func<IDataRecord, int, Type, object>? unresolvedReader) where T : class, new() =>
+        (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(reader, options, unresolved, coercion, unresolvedReader));
+
+    private static MapperPlan<T> GetPlan<T>(PlanCacheKey planKey, DbDataReader reader, IMapperOptions options)
+        where T : class, new() =>
+        _planCache.TryGet(planKey, out var cached)
+            ? (MapperPlan<T>)cached
+            : AddPlan<T>(planKey, reader, options);
+
+    private static MapperPlan<T> AddPlan<T>(PlanCacheKey planKey, DbDataReader reader, IMapperOptions options)
+        where T : class, new() =>
+        (MapperPlan<T>)_planCache.GetOrAdd(planKey, _ => BuildPlan<T>(reader, options));
+
+    // new T() in generic code compiles to Activator.CreateInstance<T>(); a compiled constructor call
+    // per type is cheaper on the per-row path (PERF-014).
+    private static class Factory<T> where T : class, new()
+    {
+        public static readonly Func<T> Create =
+            System.Linq.Expressions.Expression.Lambda<Func<T>>(System.Linq.Expressions.Expression.New(typeof(T))).Compile();
     }
 
     private static DbDataReader GetRecordReader(ITrackedReader reader, out Func<int, Type?>? unresolved,
@@ -387,7 +420,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static T MapSingleRow<T>(DbDataReader rdr, MapperPlan<T> plan, IMapperOptions options)
         where T : class, new()
     {
-        var obj = new T();
+        var obj = Factory<T>.Create();
         for (var i = 0; i < plan.Ordinals.Length; i++)
         {
             var ordinal = plan.Ordinals[i];
