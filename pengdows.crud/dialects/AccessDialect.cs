@@ -350,14 +350,19 @@ internal sealed class AccessDialect : SqlDialect
         if (type == DbType.Int64)
         {
             const long ExactDoubleLimit = 1L << 53;
-            if (value is long l)
+            if (value is null || value is DBNull)
+            {
+                return base.CreateDbParameter<object?>(name, DbType.Double, DBNull.Value);
+            }
+
+            // Any integral value (and a whole decimal) is the Int64 it holds; anything else goes to
+            // the base, which rejects it. It was bound as NULL unless it was a long (REV-053).
+            if (AsInt64(value) is { } l)
             {
                 return l is >= -ExactDoubleLimit and <= ExactDoubleLimit
                     ? base.CreateDbParameter<object?>(name, DbType.Double, (double)l)
                     : base.CreateDbParameter<object?>(name, DbType.Decimal, (decimal)l);
             }
-
-            return base.CreateDbParameter<object?>(name, DbType.Double, DBNull.Value);
         }
 
         var parameter = base.CreateDbParameter(name, type, value);
@@ -499,4 +504,18 @@ internal sealed class AccessDialect : SqlDialect
         category = DbErrorCategory.Unknown;
         return false;
     }
+
+    private static long? AsInt64(object value) => value switch
+    {
+        long l => l,
+        int i => i,
+        short sh => sh,
+        sbyte sb => sb,
+        byte b => b,
+        ushort us => us,
+        uint ui => ui,
+        ulong ul when ul <= long.MaxValue => (long)ul,
+        decimal d when decimal.Truncate(d) == d && d is >= long.MinValue and <= long.MaxValue => (long)d,
+        _ => null
+    };
 }

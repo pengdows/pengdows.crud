@@ -337,6 +337,23 @@ public class AccessDialectTests
         Assert.Equal((decimal)value, param.Value);
     }
 
+    // REV-053: any non-null value that wasn't a long (custom SQL commonly passes an int for an
+    // Int64 parameter) was bound as NULL, so WHERE id = ? matched nothing and INSERTs stored NULL.
+    public static TheoryData<object> OtherIntegralValues() => new()
+    {
+        5, (short)-7, 7u, (byte)9, 42m, (ushort)11
+    };
+
+    [Theory]
+    [MemberData(nameof(OtherIntegralValues))]
+    public void Int64_DeclaredForAnotherIntegralValue_BindsTheValue(object value)
+    {
+        var param = CreateDialect().CreateDbParameter<object>("p", DbType.Int64, value);
+
+        Assert.Equal(DbType.Double, param.DbType);
+        Assert.Equal(Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture), param.Value);
+    }
+
     [Fact]
     public void NullInt64_IsBoundAsANullDouble()
     {
