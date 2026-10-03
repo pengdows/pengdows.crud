@@ -554,22 +554,78 @@ internal static class TypeCoercionHelper
             return false;
         }
 
-        var list = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(elementType))!;
-        foreach (var item in items)
-        {
-            list.Add(item is null || item is DBNull ? null : Coerce(item, item.GetType(), elementType, options));
-        }
-
-        if (!target.IsArray)
-        {
-            result = list;
-            return true;
-        }
-
-        var array = Array.CreateInstance(elementType, list.Count);
-        list.CopyTo(array, 0);
-        result = array;
+        result = SequenceBuilders.GetOrAdd(elementType, CreateSequenceBuilder)(items, options, target.IsArray);
         return true;
+    }
+
+    // PERF-011: one typed builder per element type. The general path built a List through Activator,
+    // added boxed elements through IList, copied the list into an array and coerced elements already
+    // of the target type (a 1536-dimension embedding: about 240 us and 133 KB).
+    private delegate object SequenceBuilder(System.Collections.IEnumerable items, TypeCoercionOptions options, bool asArray);
+
+    private static readonly ConcurrentDictionary<Type, SequenceBuilder> SequenceBuilders = new();
+
+    private static SequenceBuilder CreateSequenceBuilder(Type elementType) =>
+        (SequenceBuilder)typeof(TypeCoercionHelper)
+            .GetMethod(nameof(BuildSequence), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .MakeGenericMethod(elementType)
+            .CreateDelegate(typeof(SequenceBuilder));
+
+    private static object BuildSequence<T>(System.Collections.IEnumerable items, TypeCoercionOptions options, bool asArray)
+    {
+        // Elements already of the target type are what Coerce would return, except DateTime and
+        // DateTimeOffset (normalized) and object (DBNull becomes null).
+        var underlying = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        var copyAsIs = items is IEnumerable<T> && typeof(T) != typeof(object) &&
+                       underlying != typeof(DateTime) && underlying != typeof(DateTimeOffset);
+
+        if (asArray && items is System.Collections.ICollection collection)
+        {
+            var array = new T[collection.Count];
+            var i = 0;
+            if (copyAsIs)
+            {
+                foreach (var item in (IEnumerable<T>)items)
+                {
+                    array[i++] = item;
+                }
+            }
+            else
+            {
+                foreach (var item in items)
+                {
+                    array[i++] = CoerceSequenceElement<T>(item, options);
+                }
+            }
+
+            return array;
+        }
+
+        var list = items is System.Collections.ICollection sized ? new List<T>(sized.Count) : new List<T>();
+        if (copyAsIs)
+        {
+            list.AddRange((IEnumerable<T>)items);
+        }
+        else
+        {
+            foreach (var item in items)
+            {
+                list.Add(CoerceSequenceElement<T>(item, options));
+            }
+        }
+
+        return asArray ? list.ToArray() : list;
+    }
+
+    private static T CoerceSequenceElement<T>(object? item, TypeCoercionOptions options)
+    {
+        if (item is null || item is DBNull)
+        {
+            // As IList.Add(null) on a List of a non-nullable value type did.
+            return default(T) is null ? default! : throw new ArgumentNullException(nameof(item));
+        }
+
+        return (T)Coerce(item, item.GetType(), typeof(T), options)!;
     }
 
     // Numbers kept as their invariant text, so each element parses straight into its target type
