@@ -138,8 +138,13 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     /// <inheritdoc/>
     public bool SessionSettingsApplied { get; set; }
 
+    // A checkout usually prepares one statement, so the first shape lives in a field and the
+    // collections are built only for a second (REL-005: they cost about 1.5 KB per checkout).
+    // Once built they hold every shape, the first included, oldest first.
+    private string? _firstPrepared;
     private ConcurrentDictionary<string, byte>? _prepared;
     private ConcurrentQueue<string>? _order;
+    private readonly object _preparedGate = new();
     private const int _maxPrepared = 32;
 
     /// <inheritdoc/>
@@ -152,19 +157,47 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     public bool IsAlreadyPreparedForShape(string shapeHash)
     {
         var prepared = Volatile.Read(ref _prepared);
-        return prepared != null && prepared.ContainsKey(shapeHash);
+        return prepared != null
+            ? prepared.ContainsKey(shapeHash)
+            : string.Equals(Volatile.Read(ref _firstPrepared), shapeHash, StringComparison.Ordinal);
     }
 
     /// <inheritdoc/>
     public (bool Added, int Evicted) MarkShapePrepared(string shapeHash)
     {
-        var prepared = GetPreparedCache();
-        var order = GetPreparedOrder();
+        if (Volatile.Read(ref _prepared) == null)
+        {
+            var first = Interlocked.CompareExchange(ref _firstPrepared, shapeHash, null);
+            if (first == null)
+            {
+                return (true, 0);
+            }
+
+            if (string.Equals(first, shapeHash, StringComparison.Ordinal))
+            {
+                return (false, 0);
+            }
+
+            lock (_preparedGate)
+            {
+                if (_prepared == null)
+                {
+                    var order = new ConcurrentQueue<string>();
+                    var dictionary = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
+                    dictionary.TryAdd(first, 0);
+                    order.Enqueue(first);
+                    _order = order;
+                    Volatile.Write(ref _prepared, dictionary);
+                }
+            }
+        }
+
+        var prepared = _prepared!;
         if (prepared.TryAdd(shapeHash, 0))
         {
-            order.Enqueue(shapeHash);
+            _order!.Enqueue(shapeHash);
             var evicted = 0;
-            while (prepared.Count > _maxPrepared && order.TryDequeue(out var old))
+            while (prepared.Count > _maxPrepared && _order.TryDequeue(out var old))
             {
                 if (prepared.TryRemove(old, out _))
                 {
@@ -181,39 +214,15 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     /// <inheritdoc/>
     public void Reset()
     {
-        var order = Volatile.Read(ref _order);
-        while (order != null && order.TryDequeue(out _))
+        lock (_preparedGate)
         {
+            Volatile.Write(ref _prepared, null);
+            _order = null;
+            Volatile.Write(ref _firstPrepared, null);
         }
 
-        var prepared = Volatile.Read(ref _prepared);
-        prepared?.Clear();
         // Don't reset PrepareDisabled - that should persist for the physical connection
         SessionSettingsApplied = false;
-    }
-
-    private ConcurrentDictionary<string, byte> GetPreparedCache()
-    {
-        var prepared = Volatile.Read(ref _prepared);
-        if (prepared != null)
-        {
-            return prepared;
-        }
-        prepared = new ConcurrentDictionary<string, byte>();
-        var existing = Interlocked.CompareExchange(ref _prepared, prepared, null);
-        return existing ?? prepared;
-    }
-
-    private ConcurrentQueue<string> GetPreparedOrder()
-    {
-        var order = Volatile.Read(ref _order);
-        if (order != null)
-        {
-            return order;
-        }
-        order = new ConcurrentQueue<string>();
-        var existing = Interlocked.CompareExchange(ref _order, order, null);
-        return existing ?? order;
     }
 
     /// <summary>

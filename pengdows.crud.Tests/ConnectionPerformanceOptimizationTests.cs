@@ -27,7 +27,7 @@ public sealed class ConnectionPerformanceOptimizationTestsCollection
 public sealed class ConnectionPerformanceOptimizationTests
 {
     [Fact]
-    public void TrackedConnection_LocalState_LazyPrepareCache_AllocatesOnMark()
+    public void TrackedConnection_LocalState_LazyPrepareCache_AllocatesOnSecondShape()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var inner = factory.CreateConnection();
@@ -53,6 +53,12 @@ public sealed class ConnectionPerformanceOptimizationTests
         var (added, evicted) = state.MarkShapePrepared("SELECT 1");
         Assert.True(added);
         Assert.Equal(0, evicted);
+
+        // One shape is held in a field (REL-005); the collections exist only from the second.
+        Assert.Null(preparedField.GetValue(state));
+        Assert.Null(orderField.GetValue(state));
+
+        Assert.True(state.MarkShapePrepared("SELECT 2").Added);
 
         Assert.NotNull(preparedField.GetValue(state));
         Assert.NotNull(orderField.GetValue(state));
