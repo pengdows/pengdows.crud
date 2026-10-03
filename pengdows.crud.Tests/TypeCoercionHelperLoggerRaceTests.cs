@@ -29,66 +29,67 @@ namespace pengdows.crud.Tests;
 // logger not in `candidates`, failing Assert.Contains(winner, candidates) — a test-isolation gap,
 // not a defect in the atomic SetLoggerIfUnset implementation itself (which the tests below already
 // correctly prove is atomic in isolation).
+//
+// REV-067: even serialized against the "TypeRegistry" collection, the global field is still written
+// by every DatabaseContext constructed anywhere in the suite (SetLoggerIfUnset), so a test that reset
+// it to NullLogger could lose its contest to an unrelated test's context and fail intermittently.
+// The atomicity tests use a field they own; the global is tested only where no other writer can
+// change the outcome (once set, no SetLoggerIfUnset replaces it).
 [Collection("TypeRegistry")]
 public class TypeCoercionHelperLoggerRaceTests
 {
-    [Fact]
-    public void SetLoggerIfUnset_WhenUnset_AdoptsTheGivenLogger()
+    private sealed class LoggerField
     {
-        var original = TypeCoercionHelper.Logger;
-        try
-        {
-            TypeCoercionHelper.Logger = NullLogger.Instance;
-            var first = new RecordingLogger();
-
-            TypeCoercionHelper.SetLoggerIfUnset(first);
-
-            Assert.Same(first, TypeCoercionHelper.Logger);
-        }
-        finally
-        {
-            TypeCoercionHelper.Logger = original;
-        }
+        public ILogger Value = NullLogger.Instance;
     }
 
     [Fact]
-    public void SetLoggerIfUnset_WhenAlreadySet_DoesNotOverwriteTheWinner()
+    public void SetIfUnset_WhenUnset_AdoptsTheGivenLogger()
     {
-        var original = TypeCoercionHelper.Logger;
-        try
-        {
-            TypeCoercionHelper.Logger = NullLogger.Instance;
-            var first = new RecordingLogger();
-            var second = new RecordingLogger();
+        var field = new LoggerField();
+        var first = new RecordingLogger();
 
-            TypeCoercionHelper.SetLoggerIfUnset(first);
-            TypeCoercionHelper.SetLoggerIfUnset(second);
+        TypeCoercionHelper.SetIfUnset(ref field.Value, first);
 
-            Assert.Same(first, TypeCoercionHelper.Logger);
-        }
-        finally
-        {
-            TypeCoercionHelper.Logger = original;
-        }
+        Assert.Same(first, field.Value);
     }
 
-    // Proves the fix is genuinely atomic, not just correct in the single-threaded case the two
-    // tests above already cover (which the OLD check-then-set code also passed).
     [Fact]
-    public async Task SetLoggerIfUnset_CalledConcurrentlyByManyDistinctLoggers_ExactlyOneWinsAndNoneAreLost()
+    public void SetIfUnset_WhenAlreadySet_DoesNotOverwriteTheWinner()
+    {
+        var field = new LoggerField();
+        var first = new RecordingLogger();
+
+        TypeCoercionHelper.SetIfUnset(ref field.Value, first);
+        TypeCoercionHelper.SetIfUnset(ref field.Value, new RecordingLogger());
+
+        Assert.Same(first, field.Value);
+    }
+
+    // Proves the step is atomic, not just correct single-threaded (which a check-then-set also passed).
+    [Fact]
+    public async Task SetIfUnset_CalledConcurrentlyByManyDistinctLoggers_ExactlyOneWinsAndNoneAreLost()
+    {
+        var field = new LoggerField();
+        var candidates = Enumerable.Range(0, 32).Select(_ => new RecordingLogger()).ToList();
+
+        await Task.WhenAll(candidates.Select(c => Task.Run(() => TypeCoercionHelper.SetIfUnset(ref field.Value, c))));
+
+        Assert.Contains(field.Value, candidates);
+    }
+
+    [Fact]
+    public void SetLoggerIfUnset_WhenTheGlobalLoggerIsSet_DoesNotReplaceIt()
     {
         var original = TypeCoercionHelper.Logger;
         try
         {
-            TypeCoercionHelper.Logger = NullLogger.Instance;
+            var first = new RecordingLogger();
+            TypeCoercionHelper.Logger = first;
 
-            var candidates = Enumerable.Range(0, 32).Select(_ => new RecordingLogger()).ToList();
+            TypeCoercionHelper.SetLoggerIfUnset(new RecordingLogger());
 
-            await Task.WhenAll(candidates.Select(c => Task.Run(() => TypeCoercionHelper.SetLoggerIfUnset(c))));
-
-            var winner = TypeCoercionHelper.Logger;
-            Assert.Contains(winner, candidates);
-            Assert.NotSame(NullLogger.Instance, winner);
+            Assert.Same(first, TypeCoercionHelper.Logger);
         }
         finally
         {

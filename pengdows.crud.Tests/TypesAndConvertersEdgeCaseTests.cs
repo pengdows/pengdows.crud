@@ -1291,7 +1291,7 @@ public class TypesAndConvertersEdgeCaseTests
         var result = coercion.TryRead(src, out var value);
 
         Assert.False(result);
-        Assert.True(value.IsEmpty);
+        Assert.Equal(Range<int>.Empty, value);
     }
 
     [Fact]
@@ -1809,4 +1809,140 @@ public class TypesAndConvertersEdgeCaseTests
     }
 
     #endregion
+
+    // Moved from CoverageGapTests_TypesAndConverters.cs, a near-verbatim copy of this file (REV-067).
+    [Fact]
+    public void PostgreSqlIntervalConverter_ConvertToProvider_PostgreSql_ReturnsIso8601()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        var interval = new PostgreSqlInterval(6, 4, 45_000_000_000); // 12.5 hours in microseconds
+
+        var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
+
+        Assert.IsType<string>(result);
+        var text = (string)result!;
+        Assert.StartsWith("P", text);
+    }
+
+    [Fact]
+    public void PostgreSqlIntervalConverter_ConvertToProvider_CockroachDb_ReturnsIso8601()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        var interval = new PostgreSqlInterval(3, 0, 0);
+
+        var result = converter.ToProviderValue(interval, SupportedDatabase.CockroachDb);
+
+        Assert.IsType<string>(result);
+        Assert.Equal("P3M", (string)result!);
+    }
+
+    [Fact]
+    public void PostgreSqlIntervalConverter_FormatIso8601_OnlyMonths()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        var interval = new PostgreSqlInterval(6, 0, 0);
+
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+
+        Assert.Equal("P6M", result);
+    }
+
+    [Fact]
+    public void PostgreSqlIntervalConverter_FormatIso8601_OnlyDays()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        var interval = new PostgreSqlInterval(0, 15, 0);
+
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+
+        Assert.Equal("P15D", result);
+    }
+
+    [Fact]
+    public void PostgreSqlIntervalConverter_FormatIso8601_HoursAndMinutes()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        // 2 hours 30 minutes = (2*3600 + 30*60) * 1_000_000 microseconds
+        var microseconds = (2L * 3600 + 30 * 60) * 1_000_000;
+        var interval = new PostgreSqlInterval(0, 0, microseconds);
+
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+
+        Assert.Contains("T", result);
+        Assert.Contains("2H", result);
+        Assert.Contains("30M", result);
+    }
+
+    [Fact]
+    public void PostgreSqlIntervalConverter_FormatIso8601_OnlySeconds()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        // 45 seconds = 45 * 1_000_000 microseconds
+        var microseconds = 45L * 1_000_000;
+        var interval = new PostgreSqlInterval(0, 0, microseconds);
+
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+
+        Assert.Contains("T", result);
+        Assert.Contains("45S", result);
+    }
+
+    [Fact]
+    public void PostgreSqlIntervalConverter_FormatIso8601_EmptyInterval()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        var interval = new PostgreSqlInterval(0, 0, 0);
+
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+
+        Assert.Equal("P0D", result);
+    }
+
+    [Fact]
+    public void PostgreSqlIntervalConverter_FormatIso8601_MonthsAndDaysAndTime()
+    {
+        var converter = new PostgreSqlIntervalConverter();
+        // 1 hour = 3600 * 1_000_000 microseconds
+        var interval = new PostgreSqlInterval(2, 3, 3_600_000_000);
+
+        var result = (string)converter.ToProviderValue(interval, SupportedDatabase.PostgreSql)!;
+
+        Assert.StartsWith("P", result);
+        Assert.Contains("2M", result);
+        Assert.Contains("3D", result);
+        Assert.Contains("T", result);
+        Assert.Contains("1H", result);
+    }
+
+    [Fact]
+    public void SpatialConverter_ConvertToProvider_PostgreSql_WKT_PreservesSrid()
+    {
+        var converter = new GeographyConverter();
+        var geog = Geography.FromWellKnownText("POINT(0 0)", 4326);
+
+        var result = converter.ToProviderValue(geog, SupportedDatabase.PostgreSql);
+
+        Assert.Equal(GeometryConverter.AddSridToWkb(WellKnownTextEncoder.Encode("POINT(0 0)"), 4326), result);
+    }
+
+    [Fact]
+    public void SpatialConverter_ConvertToProvider_PostgreSql_Wkb_PreservesSridAsEwkb()
+    {
+        var converter = new GeometryConverter();
+        var wkb = new byte[] { 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
+        var geom = Geometry.FromWellKnownBinary(wkb, 4326);
+
+        var result = Assert.IsType<byte[]>(converter.ToProviderValue(geom, SupportedDatabase.PostgreSql));
+
+        Assert.Equal(25, result.Length);
+        Assert.Equal(0x01, result[0]);
+        Assert.Equal(0x01, result[1]);
+        Assert.Equal(0x00, result[2]);
+        Assert.Equal(0x00, result[3]);
+        Assert.Equal(0x20, result[4]);
+        Assert.Equal(0xE6, result[5]);
+        Assert.Equal(0x10, result[6]);
+        Assert.Equal(0x00, result[7]);
+        Assert.Equal(0x00, result[8]);
+    }
 }

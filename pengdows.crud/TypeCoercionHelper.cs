@@ -98,9 +98,12 @@ internal static class TypeCoercionHelper
     /// A check-then-set here raced when contexts are created concurrently (e.g.
     /// <c>Task.WhenAll</c> over <c>DatabaseContext.CreateAsync</c>, BP-311).
     /// </summary>
-    internal static void SetLoggerIfUnset(ILogger logger)
+    internal static void SetLoggerIfUnset(ILogger logger) => SetIfUnset(ref _logger, logger);
+
+    /// <summary>The atomic adopt-if-unset step, on any field (tests use their own, not the global).</summary>
+    internal static void SetIfUnset(ref ILogger field, ILogger logger)
     {
-        System.Threading.Interlocked.CompareExchange(ref _logger, logger, NullLogger.Instance);
+        System.Threading.Interlocked.CompareExchange(ref field, logger, NullLogger.Instance);
     }
 
     /// <summary>
