@@ -103,7 +103,7 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
         @"(?<value>[+-]?\d+(?:\.\d+)?)\s*(?<unit>years?|mons?|months?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|microseconds?|usecs?|us)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex VerboseClockRegex = new(
-        @"(?<hours>[+-]?\d+):(?<minutes>\d{2}):(?<seconds>\d{2}(?:\.\d+)?)",
+        @"(?<sign>[+-]?)(?<hours>\d+):(?<minutes>\d{2}):(?<seconds>\d{2}(?:\.\d+)?)",
         RegexOptions.CultureInvariant);
     private static readonly Regex IsoDurationRegex = new(
         @"^P(?:[+-]?\d+[YMWD])*(?:T(?:[+-]?\d+(?:\.\d+)?[HMS])+)?$",
@@ -367,7 +367,10 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
             var hours = long.Parse(clock.Groups["hours"].Value, CultureInfo.InvariantCulture);
             var minutes = int.Parse(clock.Groups["minutes"].Value, CultureInfo.InvariantCulture);
             var seconds = decimal.Parse(clock.Groups["seconds"].Value, CultureInfo.InvariantCulture);
-            microseconds += checked((long)((hours * 3600m + minutes * 60m + seconds) * 1_000_000m));
+            // One sign covers the whole clock: "-01:30:00" is minus 90 minutes (REV-060; the sign
+            // was read with the hours alone, and "-00" lost it).
+            var clockMicroseconds = checked((long)((hours * 3600m + minutes * 60m + seconds) * 1_000_000m));
+            microseconds += clock.Groups["sign"].Value == "-" ? -clockMicroseconds : clockMicroseconds;
         }
 
         var unparsed = VerbosePartRegex.Replace(remaining, string.Empty);
