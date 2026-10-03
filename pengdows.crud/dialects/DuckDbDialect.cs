@@ -445,6 +445,16 @@ internal class DuckDbDialect : SqlDialect
             return parameter;
         }
 
+        // WRT-008: an INTERVAL value is sent as DuckDB's own interval text (see IntervalText).
+        if (value is TimeSpan interval && type == DbType.Object)
+        {
+            var text = IntervalText(interval);
+            parameter.DbType = DbType.String;
+            parameter.Value = text;
+            parameter.Size = Math.Max(text.Length, 1);
+            return parameter;
+        }
+
         // DuckDB specific parameter handling
         if (type == DbType.Boolean && value is bool boolValue)
         {
@@ -454,6 +464,33 @@ internal class DuckDbDialect : SqlDialect
         }
 
         return parameter;
+    }
+
+    // A TimeSpan reassigned through SetParameterValue gets the text CreateDbParameter binds.
+    public override object? PrepareParameterValue(object? value, DbType dbType) =>
+        value is TimeSpan interval && dbType is DbType.Object or DbType.String
+            ? IntervalText(interval)
+            : base.PrepareParameterValue(value, dbType);
+
+    internal override DbType? DbTypeForReassignedValue(object? newValue, object? preparedValue) =>
+        newValue is TimeSpan && preparedValue is string ? DbType.String : null;
+
+    /// <summary>
+    /// DuckDB interval text: days, then a signed clock to the microsecond (DuckDB's resolution; the
+    /// last 100 ns digit is truncated). DuckDB.NET binds a TimeSpan natively only when DuckDB infers
+    /// the parameter's type from a target column; in a MERGE source's SELECT it sent
+    /// TimeSpan.ToString() text ("3.04:05:06.7890070"), which DuckDB can't cast, and it can't bind a
+    /// negative TimeSpan at all. This text works in INSERT, MERGE and WHERE (WRT-008, confirmed live
+    /// on DuckDB.NET 1.5.6).
+    /// </summary>
+    internal static string IntervalText(TimeSpan interval)
+    {
+        var clock = interval - TimeSpan.FromDays(interval.Days);
+        var sign = clock < TimeSpan.Zero ? "-" : string.Empty;
+        var abs = clock.Duration();
+        var micros = abs.Ticks % TimeSpan.TicksPerSecond / 10;
+        return string.Create(System.Globalization.CultureInfo.InvariantCulture,
+            $"{interval.Days} days {sign}{abs.Hours:00}:{abs.Minutes:00}:{abs.Seconds:00}.{micros:000000}");
     }
 
     public override bool SupportsRegularExpressions => true;
