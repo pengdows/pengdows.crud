@@ -263,10 +263,10 @@ public class MetricsAndConnectionEdgeCaseTests
         await using var ctx = new DatabaseContext(config, factory);
 
         var sc = ctx.CreateSqlContainer("UPDATE data SET v=1");
-        await sc.ExecuteNonQueryAsync();
+        var affected = await sc.ExecuteNonQueryAsync();
 
         var metrics = ctx.Metrics;
-        Assert.True(metrics.RowsAffectedTotal >= 1);
+        Assert.Equal(affected, metrics.RowsAffectedTotal);
     }
 
     // =========================================================================

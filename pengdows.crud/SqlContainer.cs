@@ -1248,8 +1248,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
                 .ConfigureAwait(false);
             var result = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            // CommandSucceeded records the rows affected; recording them again doubled the total.
             metrics?.CommandSucceeded(startTimestamp, result);
-            metrics?.RecordRowsAffected(result);
 
             if (activity != null)
             {

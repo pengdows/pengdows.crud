@@ -59,7 +59,9 @@ public class DatabaseMetricsTests
         Assert.Equal(1, result);
         var metrics = context.Metrics;
         Assert.Equal(1, metrics.CommandsExecuted);
-        Assert.True(metrics.RowsAffectedTotal >= 1);
+        // Exactly once: ExecuteNonQueryAsync counted the rows in CommandSucceeded and again in
+        // RecordRowsAffected (found 2026-10-04).
+        Assert.Equal(1, metrics.RowsAffectedTotal);
     }
 
     // CORE-022 (tracker false-positive check): a prior review claimed
