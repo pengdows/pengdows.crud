@@ -748,7 +748,7 @@ public partial class TableGateway<TEntity, TRowID> :
     /// BuildCreateWithReturning to replace.
     /// </summary>
     private (ISqlContainer sc, ISqlDialect dialect) PrepareInsertContainer(TEntity entity, IDatabaseContext? context,
-        bool stripPlaceholders)
+        bool stripPlaceholders, bool returningTemplate = false)
     {
         if (entity == null)
         {
@@ -769,7 +769,8 @@ public partial class TableGateway<TEntity, TRowID> :
             var containerTemplates = GetContainerTemplatesForDialect(dialect, ctx);
             // Copy only the template's text (PERF-013): the binder creates every parameter, so
             // cloning the template's parameters only to discard them was wasted work.
-            var sc = ((SqlContainer)containerTemplates.InsertTemplate).CloneQueryOnly(ctx);
+            var template = returningTemplate ? containerTemplates.InsertReturningTemplate! : containerTemplates.InsertTemplate;
+            var sc = ((SqlContainer)template).CloneQueryOnly(ctx);
 
             var binder = GetOrBuildInsertBinder(dialect, sqlTemplate);
             var parameters = t_bindScratch ??= new List<DbParameter>();
@@ -959,8 +960,28 @@ public partial class TableGateway<TEntity, TRowID> :
     /// <returns>SQL container with INSERT statement</returns>
     public ISqlContainer BuildCreateWithReturning(TEntity entity, bool withReturning, IDatabaseContext? context = null)
     {
-        var (sc, dialect) = PrepareInsertContainer(entity, context, stripPlaceholders: false);
+        var ctx = context ?? _context;
+        var dialect = GetDialect(ctx);
+        if (withReturning && UsesReturningTemplate(dialect))
+        {
+            // PERF-016: the cached returning insert, as BuildCreate's fast path does for the plain one.
+            return PrepareInsertContainer(entity, ctx, stripPlaceholders: true, returningTemplate: true).sc;
+        }
 
+        var (sc, preparedDialect) = PrepareInsertContainer(entity, context, stripPlaceholders: false);
+        ApplyReturningClauses(sc, preparedDialect, withReturning);
+        return sc;
+    }
+
+    // A returning insert whose text is the same for every entity: everything except Oracle's OUT
+    // parameter form, which adds a parameter per container.
+    private bool UsesReturningTemplate(ISqlDialect dialect) =>
+        _idColumn != null && !_idColumn.IsIdWritable && dialect.SupportsInsertReturning &&
+        !dialect.RequiresOutputParameterForReturning();
+
+    // Fills the insert's prefix/output/returning placeholders for the dialect's generated-key form.
+    private void ApplyReturningClauses(ISqlContainer sc, ISqlDialect dialect, bool withReturning)
+    {
         var prefixClause = string.Empty;
         var outputClause = string.Empty;
         var returningClause = string.Empty;
@@ -1012,10 +1033,7 @@ public partial class TableGateway<TEntity, TRowID> :
             sc.Query.Clear();
             sc.Query.Append($"SELECT {idWrapped} FROM FINAL TABLE (").Append(insertSql).Append(')');
         }
-
-        return sc;
     }
-
 
     /// <inheritdoc/>
     public ISqlContainer BuildDelete(TRowID id, IDatabaseContext? context = null)

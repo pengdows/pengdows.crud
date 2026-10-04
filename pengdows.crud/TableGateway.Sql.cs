@@ -81,6 +81,8 @@ public partial class TableGateway<TEntity, TRowID>
         public ISqlContainer? GetByIdTemplate;
         public ISqlContainer? GetByIdsTemplate;
         public ISqlContainer InsertTemplate = null!;
+        // The INSERT ... RETURNING (or dialect equivalent) for a database-generated [Id] (PERF-016).
+        public ISqlContainer? InsertReturningTemplate;
         public ISqlContainer? DeleteByIdTemplate;
 
         public ISqlContainer BaseRetrieveTemplate = null!;
@@ -449,6 +451,13 @@ public partial class TableGateway<TEntity, TRowID>
         insertContainer.Query.Replace(OutputClausePlaceholder, string.Empty);
         insertContainer.Query.Replace(ReturningClausePlaceholder, string.Empty);
         templates.InsertTemplate = insertContainer;
+
+        if (UsesReturningTemplate(dialect))
+        {
+            var (returningContainer, _) = BuildInsertContainerDirect(new TEntity(), context, dialect, sqlTemplate);
+            ApplyReturningClauses(returningContainer, dialect, withReturning: true);
+            templates.InsertReturningTemplate = returningContainer;
+        }
 
         return templates;
     }
