@@ -540,7 +540,7 @@ public partial class TableGateway<TEntity, TRowID>
             if (Utils.IsZeroNumeric(TypeCoercionHelper.ConvertWithCache(0, target)))
             {
                 var one = TypeCoercionHelper.ConvertWithCache(1, target);
-                _versionColumn.PropertyInfo.SetValue(entity, one);
+                SetColumnValue(_versionColumn, entity, one);
             }
         }
     }

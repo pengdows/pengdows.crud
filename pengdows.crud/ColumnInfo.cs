@@ -171,6 +171,14 @@ internal class ColumnInfo : IColumnInfo
     public Func<object, object?>? FastGetter { get; set; }
 
     /// <summary>
+    /// Compiled property setter, with <see cref="PropertyInfo"/>.SetValue's semantics (null into a
+    /// non-nullable value type sets its default; a private setter works). Null when the property has
+    /// no setter. Used for id/version/correlation write-backs (PERF-016: reflection allocated ~450 B
+    /// per call).
+    /// </summary>
+    internal Action<object, object?>? FastSetter { get; set; }
+
+    /// <summary>
     /// Gets or sets the enum type if this column represents an enum property.
     /// </summary>
     /// <value>The enum <see cref="Type"/>, or null if this is not an enum column.</value>

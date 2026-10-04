@@ -1226,6 +1226,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var isTransaction = _context is ITransactionContext;
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
+            RetainIfRequested(conn, isTransaction);
 
             await using var singleConnectionTxGate = GetSingleConnectionTransactionGateForOrdinaryOp(isTransaction);
             if (singleConnectionTxGate != NoOpAsyncLocker.Instance)
@@ -1658,6 +1659,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
             var isShared = ShouldUseSharedConnection(_context, executionType, isTransaction);
             conn = await GetConnectionAsync(executionType, isShared, cancellationToken).ConfigureAwait(false);
+            RetainIfRequested(conn, isTransaction);
             connectionLocker = conn.GetLock();
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
@@ -1668,7 +1670,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // are going to set the connection to close and dispose when the reader is
             // closed. This prevents leaking
             var isSingleConnection = _context.ConnectionMode == DbMode.SingleConnection;
-            var closesConnectionAfterRead = !(isTransaction || isSingleConnection || (PinnedConnection != null));
+            var closesConnectionAfterRead = !(isTransaction || isSingleConnection || (PinnedConnection != null) ||
+                                              ReferenceEquals(conn, _connectionHold));
             // A dialect whose provider mishandles CloseConnection (DuckDB) gets a plain reader;
             // TrackedReader still closes the connection, after disposing the reader and command.
             var useCloseConnectionBehavior = closesConnectionAfterRead &&
@@ -2310,7 +2313,57 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// A connection held for a sequence of commands outside a transaction (GEN-001). When set, every
     /// execution on this container uses it and none releases it: the lease owns and releases it.
     /// </summary>
-    internal connection.PinnedConnectionLease? PinnedConnection { get; set; }
+    internal connection.PinnedConnectionLease? PinnedConnection
+    {
+        get => _connectionHold as connection.PinnedConnectionLease;
+        set => _connectionHold = value;
+    }
+
+    // Either the PinnedConnection lease or a connection this container retained (DEC-014); one field,
+    // so a container is no larger for either.
+    private object? _connectionHold;
+
+    /// <summary>
+    /// DEC-014: when set, the first execution outside a transaction keeps the connection it used
+    /// instead of releasing it, so a follow-up command (a generated-id fallback query) can run on it
+    /// without a lease taken up front for the rare case. The caller either adopts it
+    /// (<see cref="AdoptRetainedConnection"/>) or lets disposal release it.
+    /// </summary>
+    internal bool RetainsConnection { get; set; }
+
+    private ITrackedConnection? RetainedConnection => _connectionHold as ITrackedConnection;
+
+    private void RetainIfRequested(ITrackedConnection conn, bool isTransaction)
+    {
+        if (RetainsConnection && !isTransaction && _connectionHold == null)
+        {
+            _connectionHold = conn;
+        }
+    }
+
+    /// <summary>
+    /// Hands the retained connection over as a lease the caller disposes; null when nothing was
+    /// retained (a transaction's connection, or no execution yet).
+    /// </summary>
+    internal connection.PinnedConnectionLease? AdoptRetainedConnection()
+    {
+        if (_connectionHold is not ITrackedConnection conn || _context is not IInternalConnectionProvider provider)
+        {
+            return null; // anything retained stays with the container, which releases it on disposal
+        }
+
+        _connectionHold = null;
+        return connection.PinnedConnectionLease.Adopt(provider, conn);
+    }
+
+    private void ReleaseRetainedConnection()
+    {
+        if (_connectionHold is ITrackedConnection conn)
+        {
+            _connectionHold = null;
+            _context.CloseAndDisposeConnection(conn);
+        }
+    }
 
     private ITrackedConnection GetConnection(ExecutionType executionType, bool isShared)
     {
@@ -2340,6 +2393,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (PinnedConnection != null)
         {
             return ValueTask.FromResult(PinnedConnection.Connection);
+        }
+
+        if (RetainedConnection is { } retained)
+        {
+            return ValueTask.FromResult(retained);
         }
 
         if (_context is not IInternalConnectionProvider provider)
@@ -2410,7 +2468,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // For reads, the TrackedReader owns the connection on success (conn will be null here).
         // For writes, or if a read failed before TrackedReader took ownership (conn is non-null),
         // we must dispose the connection to prevent leaks.
-        if (_context is not TransactionContext && conn is not null && PinnedConnection == null)
+        // A retained connection is released by the container's disposal or adopted (DEC-014).
+        if (_context is not TransactionContext && conn is not null && PinnedConnection == null &&
+            !ReferenceEquals(conn, _connectionHold))
         {
             _context.CloseAndDisposeConnection(conn);
         }
@@ -2603,6 +2663,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     protected override void DisposeManaged()
     {
+        ReleaseRetainedConnection();
         Clear();
         _query.Dispose();
     }

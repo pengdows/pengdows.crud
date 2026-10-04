@@ -208,6 +208,20 @@ public abstract partial class BaseTableGateway<TEntity>
     /// <see cref="SetAuditFields"/>. Returns a no-op snapshot (restoring is a no-op) when the
     /// entity has no audit columns.
     /// </summary>
+    // PERF-016: id/version/correlation write-backs through the column's compiled setter;
+    // PropertyInfo.SetValue allocated ~450 B per call.
+    private protected static void SetColumnValue(IColumnInfo column, object entity, object? value)
+    {
+        if (column is ColumnInfo { FastSetter: { } setter })
+        {
+            setter(entity, value);
+        }
+        else
+        {
+            column.PropertyInfo.SetValue(entity, value);
+        }
+    }
+
     protected AuditFieldSnapshot SnapshotAuditFields(TEntity obj)
     {
         if (obj == null || !_hasAuditColumns)

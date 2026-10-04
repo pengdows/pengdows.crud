@@ -370,7 +370,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
                          _versionColumn.PropertyInfo.PropertyType;
             if (Utils.IsZeroNumeric(TypeCoercionHelper.ConvertWithCache(0, target)))
             {
-                _versionColumn.PropertyInfo.SetValue(entity, TypeCoercionHelper.ConvertWithCache(1, target));
+                SetColumnValue(_versionColumn, entity, TypeCoercionHelper.ConvertWithCache(1, target));
             }
         }
     }

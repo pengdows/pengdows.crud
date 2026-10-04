@@ -134,228 +134,90 @@ public partial class TableGateway<TEntity, TRowID> :
     }
 
     /// <inheritdoc/>
-    public async ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null)
+    public ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null) =>
+        CreateAsync(entity, context, CancellationToken.None);
+
+    /// <inheritdoc/>
+    public ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
+        CancellationToken cancellationToken = default)
     {
+        // Synchronous dispatch, so the common RETURNING/OUTPUT path runs in its own small async method:
+        // one state machine for every plan's branches made each create box ~370 B (PERF-016).
+        // Failures here still surface through the returned task, as from an async method.
         if (entity == null)
         {
-            throw new ArgumentNullException(nameof(entity));
+            return ValueTask.FromException<bool>(new ArgumentNullException(nameof(entity)));
         }
 
-        // BuildCreate (called below via every branch) mutates audit fields as a side effect of
-        // building the INSERT, before anything executes. Restore them if the write never
-        // actually succeeds, so a failed Create doesn't leave the entity claiming one did.
-        // writeSucceeded is set the instant the database has accepted the persisting INSERT
-        // (the write command completed without throwing) — some branches then do a follow-up
-        // step (retrieving a generated ID) that can itself throw. Once the write has succeeded, a
-        // later failure in that follow-up step
-        // must NOT restore audit fields — the row already exists with the new values; restoring
-        // would make the entity falsely claim a rollback that never happened. A plain local bool
-        // can't be observed from the shared catch below across the ExecuteReaderInsertedIdAsync
-        // branch's async call, hence the one-element array as a simple mutable cell.
-        var auditSnapshot = SnapshotAuditFields(entity);
-        var writeSucceeded = new bool[1];
+        var ctx = context ?? _context;
+        GeneratedKeyPlan plan;
+        ISqlDialect dialect;
         try
         {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        var plan = dialect.GetGeneratedKeyPlan();
-
-        // 1. Handle PREFETCH plans (InterBase)
-        //
-        // Only prefetch (and overwrite the entity's Id) when the column is NOT client-writable —
-        // mirrors branch 2's own IsIdWritable check below. CONFIRMED live via InterBase (the first
-        // dialect in this codebase where GetGeneratedKeyPlan actually returns PrefetchSequence in
-        // practice — Oracle's own override resolves to Returning instead, so this branch had never
-        // been exercised with a writable Id column before): without this check, an entity that
-        // explicitly sets its Id (TestTable's [Id] default, Writable=true) had that value silently
-        // discarded and replaced with a freshly generated one, so any caller who inserted with an
-        // explicit id then looked the row up again by that same id got "not found" — the row was
-        // there, just under a different id than the caller was told to expect.
-        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null && !_idColumn.IsIdWritable)
+            dialect = GetDialect(ctx);
+            plan = dialect.GetGeneratedKeyPlan();
+        }
+        catch (Exception ex)
         {
-            var seqQuery = dialect.GetSequenceNextValQuery(GetSequenceName());
-            using var seqSc = ctx.CreateSqlContainer(seqQuery);
-            // Advancing a sequence is a write: a read-only connection rejects it (pengdows.flatfile).
-            var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Write).ConfigureAwait(false);
-            var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
-            _idColumn.PropertyInfo.SetValue(entity, converted);
-
-            await using var sc = BuildCreateWithPrefetchedId(entity, ctx, dialect);
-            var succeeded = await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
-            writeSucceeded[0] = succeeded;
-            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
+            return ValueTask.FromException<bool>(ex);
         }
 
-        if (plan == GeneratedKeyPlan.PrefetchSequence && _idColumn != null && _idColumn.IsIdWritable)
-        {
-            await using var sc = BuildCreate(entity, ctx);
-            var succeeded = await sc.ExecuteNonQueryAsync().ConfigureAwait(false) == 1;
-            writeSucceeded[0] = succeeded;
-            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
-        }
+        return plan is GeneratedKeyPlan.Returning or GeneratedKeyPlan.OutputInserted && _idColumn is { IsIdWritable: false }
+            ? CreateWithReturningAsync(entity, ctx, dialect, cancellationToken)
+            : CreateCoreAsync(entity, ctx, cancellationToken);
+    }
 
-        // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
-        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) &&
-            _idColumn != null && !_idColumn.IsIdWritable)
+    // RETURNING/OUTPUT: the INSERT reports the id itself (Postgres, SQL Server, SQLite, ...).
+    private async ValueTask<bool> CreateWithReturningAsync(TEntity entity, IDatabaseContext ctx, ISqlDialect dialect,
+        CancellationToken cancellationToken)
+    {
+        // Building the INSERT sets audit fields; restore them if the INSERT never succeeds. Once it has,
+        // a failure fetching the id must not restore them: the row exists with those values.
+        var auditSnapshot = SnapshotAuditFields(entity);
+        var writeSucceeded = false;
+        try
         {
-            await using var idLease = await AcquireGeneratedIdLeaseAsync(ctx, CancellationToken.None).ConfigureAwait(false);
+            // The INSERT's connection is kept only in case the id doesn't come back (DEC-014).
             await using var sc = BuildCreateWithReturning(entity, true, ctx);
-            PinTo(sc, idLease);
+            RetainConnection(sc);
 
             object? generatedId;
             if (dialect.RequiresOutputParameterForReturning())
             {
-                await sc.ExecuteNonQueryAsync(ExecutionType.Write).ConfigureAwait(false);
+                await sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.Text, cancellationToken)
+                    .ConfigureAwait(false);
 
                 // The INSERT above executed without throwing — the database accepted the write
                 // regardless of whether reading the OUT parameter below succeeds.
-                writeSucceeded[0] = true;
+                writeSucceeded = true;
                 generatedId = sc.GetParameterValue(OracleReturningParameterName);
             }
             else
             {
-                generatedId = await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write).ConfigureAwait(false);
+                generatedId = await sc
+                    .ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
+                    .ConfigureAwait(false);
 
                 // The statement above executed without throwing — the database accepted the
                 // write regardless of whether a generated ID came back inline.
-                writeSucceeded[0] = true;
+                writeSucceeded = true;
             }
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
-                var targetType = _idColumn.PropertyInfo.PropertyType;
-                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, targetType);
-                _idColumn.PropertyInfo.SetValue(entity, converted);
+                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn!.PropertyInfo.PropertyType);
+                SetColumnValue(_idColumn, entity, converted);
                 return true;
             }
 
             // Fallback on the INSERT's own connection (CORE-016)
-            await PopulateGeneratedIdAsync(entity, ctx, CancellationToken.None, idLease).ConfigureAwait(false);
+            await using var idLease = AdoptRetainedConnection(sc);
+            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken, idLease).ConfigureAwait(false);
             return true;
-        }
-
-        // DEC-007: the correlation token is this dialect's only way to read a generated id back.
-        // Without one the INSERT would succeed and leave the id unset, so refuse before writing.
-        if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn == null &&
-            _idColumn != null && !_idColumn.IsIdWritable &&
-            dialect is SqlDialect { RequiresCorrelationTokenForGeneratedIds: true })
-        {
-            throw MissingCorrelationTokenException(dialect);
-        }
-
-        // 3. Handle CORRELATION TOKEN plan
-        if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn != null && _idColumn != null)
-        {
-            var token = CreateCorrelationToken();
-            _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
-
-            await using var sc = BuildCreate(entity, ctx);
-            if (await sc.ExecuteNonQueryAsync().ConfigureAwait(false) != 1)
-            {
-                RestoreAuditFields(entity, auditSnapshot);
-                return false;
-            }
-
-            writeSucceeded[0] = true;
-
-            var lookupSql = dialect.GetCorrelationTokenLookupQuery(
-                _tableInfo.Name,
-                _idColumn.Name,
-                _tableInfo.CorrelationColumn.Name,
-                dialect.MakeParameterName("p1"));
-
-            using var lookupSc = ctx.CreateSqlContainer(lookupSql);
-            lookupSc.AddParameterWithValue("p1", _tableInfo.CorrelationColumn.DbType, token);
-
-            var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read).ConfigureAwait(false);
-            var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
-            _idColumn.PropertyInfo.SetValue(entity, converted);
-            return true;
-        }
-
-        // 4. Compound statement plan (MySQL Oracle MySql.Data, SQLite pre-3.35).
-        // Appends the dialect's session-scoped ID query (e.g. "; SELECT LAST_INSERT_ID()")
-        // to the INSERT and executes both as a single batch on one connection.
-        // This fixes the two-lease hazard: LAST_INSERT_ID() / last_insert_rowid() are
-        // session-scoped; a separate pool lease could return a stale or zero value.
-        if (plan == GeneratedKeyPlan.CompoundStatement && _idColumn != null && !_idColumn.IsIdWritable)
-        {
-            await using var idLease = await AcquireGeneratedIdLeaseAsync(ctx, CancellationToken.None).ConfigureAwait(false);
-            await using var sc = BuildCreate(entity, ctx);
-            PinTo(sc, idLease);
-            sc.Query.Append(dialect.GetCompoundInsertIdSuffix());
-
-            // Scope the reader so it is closed before the fallback query, which runs on the same
-            // pinned connection (CORE-016).
-            object? generatedId = null;
-            await using (var reader = await sc.ExecuteReaderAsync(ExecutionType.Write).ConfigureAwait(false))
-            {
-                // ExecuteReaderAsync above executed without throwing — the INSERT (the compound
-                // statement's first result set) already ran server-side. The database accepted
-                // the write regardless of whether navigating to/reading the trailing SELECT
-                // result set below succeeds.
-                writeSucceeded[0] = true;
-
-                // First result set = INSERT (rows-affected, no data rows).
-                // Advance to the SELECT result set to read the generated ID.
-                // Use IInternalTrackedReader.InnerReader to bypass TrackedReader.NextResult() policy;
-                // the policy blocks multi-result for general use, but the compound path reads all
-                // result sets before disposing so the connection lifecycle is correctly managed.
-                if (reader is IInternalTrackedReader internalReader)
-                {
-                    var inner = internalReader.InnerReader;
-                    if (await inner.NextResultAsync().ConfigureAwait(false) &&
-                        await inner.ReadAsync().ConfigureAwait(false))
-                    {
-                        generatedId = inner[0];
-                    }
-                }
-            } // reader disposed here; the pinned connection stays open for the fallback query
-
-            if (generatedId != null && generatedId != DBNull.Value)
-            {
-                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
-                _idColumn.PropertyInfo.SetValue(entity, converted);
-                return true;
-            }
-
-            // Fallback for providers/fakeDb that return false from NextResult()
-            // (e.g. fakeDbDataReader.NextResult always returns false).
-            await PopulateGeneratedIdAsync(entity, ctx, CancellationToken.None, idLease).ConfigureAwait(false);
-            return true;
-        }
-
-        // 4b. ReaderInsertedId plan (MySqlConnector): execute INSERT as a reader, read
-        // LastInsertedId from the underlying MySqlCommand (populated from the OK packet).
-        // No multi-statement support required — MySqlConnector deliberately omits it.
-        if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
-            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded).ConfigureAwait(false);
-
-        // 5. Default path, including SessionScopedFunction (Informix, SAP HANA, Access): INSERT, then the
-        // session-scoped id query. A last-id function reports the id only on the connection that ran
-        // the INSERT, so both share one pinned connection (GEN-001, CORE-016).
-        {
-            var needsId = _idColumn != null && !_idColumn.IsIdWritable;
-            await using var idLease = needsId
-                ? await AcquireGeneratedIdLeaseAsync(ctx, CancellationToken.None).ConfigureAwait(false)
-                : null;
-            await using var sc = BuildCreate(entity, ctx);
-            PinTo(sc, idLease);
-            var rowsAffected = await sc.ExecuteNonQueryAsync().ConfigureAwait(false);
-            var succeeded = rowsAffected == 1;
-            writeSucceeded[0] = succeeded;
-
-            if (succeeded && needsId)
-            {
-                await PopulateGeneratedIdAsync(entity, ctx, CancellationToken.None, idLease).ConfigureAwait(false);
-            }
-
-            return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
-        }
         }
         catch
         {
-            if (!writeSucceeded[0])
+            if (!writeSucceeded)
             {
                 RestoreAuditFields(entity, auditSnapshot);
             }
@@ -364,15 +226,10 @@ public partial class TableGateway<TEntity, TRowID> :
         }
     }
 
-    /// <inheritdoc/>
-    public async ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null,
-        CancellationToken cancellationToken = default)
+    // Every generated-key plan but RETURNING/OUTPUT (CreateWithReturningAsync).
+    private async ValueTask<bool> CreateCoreAsync(TEntity entity, IDatabaseContext? context,
+        CancellationToken cancellationToken)
     {
-        if (entity == null)
-        {
-            throw new ArgumentNullException(nameof(entity));
-        }
-
         // See the 2-arg CreateAsync overload above for why this exists (including the
         // writeSucceeded flag and why it's a one-element array).
         var auditSnapshot = SnapshotAuditFields(entity);
@@ -395,7 +252,7 @@ public partial class TableGateway<TEntity, TRowID> :
             // Advancing a sequence is a write: a read-only connection rejects it (pengdows.flatfile).
             var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
-            _idColumn.PropertyInfo.SetValue(entity, converted);
+            SetColumnValue(_idColumn, entity, converted);
 
             await using var sc = BuildCreateWithPrefetchedId(entity, ctx, dialect);
             var succeeded = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1;
@@ -411,48 +268,6 @@ public partial class TableGateway<TEntity, TRowID> :
             return RestoreAuditFieldsIfFailed(succeeded, entity, auditSnapshot);
         }
 
-        // 2. Handle INLINE plans (Postgres, SQL Server, etc.)
-        if ((plan == GeneratedKeyPlan.Returning || plan == GeneratedKeyPlan.OutputInserted) &&
-            _idColumn != null && !_idColumn.IsIdWritable)
-        {
-            await using var idLease = await AcquireGeneratedIdLeaseAsync(ctx, cancellationToken).ConfigureAwait(false);
-            await using var sc = BuildCreateWithReturning(entity, true, ctx);
-            PinTo(sc, idLease);
-
-            object? generatedId;
-            if (dialect.RequiresOutputParameterForReturning())
-            {
-                await sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.Text, cancellationToken)
-                    .ConfigureAwait(false);
-
-                // The INSERT above executed without throwing — the database accepted the write
-                // regardless of whether reading the OUT parameter below succeeds.
-                writeSucceeded[0] = true;
-                generatedId = sc.GetParameterValue(OracleReturningParameterName);
-            }
-            else
-            {
-                generatedId = await sc
-                    .ExecuteScalarOrNullAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken)
-                    .ConfigureAwait(false);
-
-                // The statement above executed without throwing — the database accepted the
-                // write regardless of whether a generated ID came back inline.
-                writeSucceeded[0] = true;
-            }
-
-            if (generatedId != null && generatedId != DBNull.Value)
-            {
-                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
-                _idColumn.PropertyInfo.SetValue(entity, converted);
-                return true;
-            }
-
-            // Fallback on the INSERT's own connection (CORE-016)
-            await PopulateGeneratedIdAsync(entity, ctx, cancellationToken, idLease).ConfigureAwait(false);
-            return true;
-        }
-
         // DEC-007: the correlation token is this dialect's only way to read a generated id back.
         // Without one the INSERT would succeed and leave the id unset, so refuse before writing.
         if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn == null &&
@@ -466,7 +281,7 @@ public partial class TableGateway<TEntity, TRowID> :
         if (plan == GeneratedKeyPlan.CorrelationToken && _tableInfo.CorrelationColumn != null && _idColumn != null)
         {
             var token = CreateCorrelationToken();
-            _tableInfo.CorrelationColumn.PropertyInfo.SetValue(entity, token);
+            SetColumnValue(_tableInfo.CorrelationColumn, entity, token);
 
             await using var sc = BuildCreate(entity, ctx);
             if (await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) != 1)
@@ -488,7 +303,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
             var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
             var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
-            _idColumn.PropertyInfo.SetValue(entity, converted);
+            SetColumnValue(_idColumn, entity, converted);
             return true;
         }
 
@@ -524,7 +339,7 @@ public partial class TableGateway<TEntity, TRowID> :
             if (generatedId != null && generatedId != DBNull.Value)
             {
                 var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
-                _idColumn.PropertyInfo.SetValue(entity, converted);
+                SetColumnValue(_idColumn, entity, converted);
                 return true;
             }
 
@@ -620,8 +435,8 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         if (generatedId is not null && generatedId != DBNull.Value)
-            _idColumn!.PropertyInfo.SetValue(entity,
-                TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType));
+            SetColumnValue(_idColumn!, entity,
+                TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn!.PropertyInfo.PropertyType));
         else
             await PopulateGeneratedIdAsync(entity, ctx, cancellationToken, idLease).ConfigureAwait(false);
         return true;
@@ -646,6 +461,18 @@ public partial class TableGateway<TEntity, TRowID> :
         new($"{typeof(TEntity).Name}: {dialect.DatabaseType} can't return a database-generated [Id(false)] " +
             "value. Add a [CorrelationToken] column (a unique string or Guid the gateway sets and reads " +
             "the new row back by), or make the id client-provided ([Id] with a value you assign).");
+
+    // DEC-014: the INSERT keeps its connection (outside a transaction) for a possible fallback id query.
+    private static void RetainConnection(ISqlContainer container)
+    {
+        if (container is SqlContainer sqlContainer)
+        {
+            sqlContainer.RetainsConnection = true;
+        }
+    }
+
+    private static PinnedConnectionLease? AdoptRetainedConnection(ISqlContainer container) =>
+        (container as SqlContainer)?.AdoptRetainedConnection();
 
     private static void PinTo(ISqlContainer container, PinnedConnectionLease? lease)
     {
@@ -695,11 +522,11 @@ public partial class TableGateway<TEntity, TRowID> :
                 {
                     if (generatedId is Guid g)
                     {
-                        _idColumn.PropertyInfo.SetValue(entity, g);
+                        SetColumnValue(_idColumn, entity, g);
                     }
                     else if (Guid.TryParse(generatedId.ToString(), out var parsed))
                     {
-                        _idColumn.PropertyInfo.SetValue(entity, parsed);
+                        SetColumnValue(_idColumn, entity, parsed);
                     }
                     else
                     {
@@ -710,7 +537,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 {
                     // Convert the ID to the appropriate type and set it on the entity
                     var convertedId = TypeCoercionHelper.ConvertWithCache(generatedId, targetType);
-                    _idColumn.PropertyInfo.SetValue(entity, convertedId);
+                    SetColumnValue(_idColumn, entity, convertedId);
                 }
             }
             catch (Exception ex)
@@ -813,7 +640,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 if (Utils.IsZeroNumeric(TypeCoercionHelper.ConvertWithCache(0, target)))
                 {
                     var one = TypeCoercionHelper.ConvertWithCache(1, target);
-                    _versionColumn.PropertyInfo.SetValue(entity, one);
+                    SetColumnValue(_versionColumn, entity, one);
                 }
             }
         }

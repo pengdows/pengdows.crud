@@ -47,6 +47,13 @@ internal sealed class PinnedConnectionLease : IAsyncDisposable
         return new PinnedConnectionLease(provider, connection);
     }
 
+    /// <summary>
+    /// A connection already acquired (and kept by a <c>SqlContainer</c>, DEC-014), now released by
+    /// this lease instead.
+    /// </summary>
+    internal static PinnedConnectionLease Adopt(IInternalConnectionProvider owner, ITrackedConnection connection) =>
+        new(owner, connection);
+
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _released, 1) == 0)

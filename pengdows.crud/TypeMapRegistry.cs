@@ -258,6 +258,7 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
             var box = Expression.Convert(propAccess, typeof(object));
             var lambda = Expression.Lambda<Func<object, object?>>(box, objParam);
             ci.FastGetter = lambda.Compile();
+            ci.FastSetter = CompileSetter(entityType, prop);
         }
         catch (Exception ex)
         {
@@ -452,6 +453,27 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
     private static bool HasAuditColumns(TableInfo t)
     {
         return t.CreatedBy != null || t.CreatedOn != null || t.LastUpdatedBy != null || t.LastUpdatedOn != null;
+    }
+
+    private static Action<object, object?>? CompileSetter(Type entityType, PropertyInfo prop)
+    {
+        if (prop.GetSetMethod(nonPublic: true) == null)
+        {
+            return null;
+        }
+
+        var target = Expression.Parameter(typeof(object), "o");
+        var value = Expression.Parameter(typeof(object), "v");
+        Expression converted = Expression.Convert(value, prop.PropertyType);
+        if (prop.PropertyType.IsValueType && Nullable.GetUnderlyingType(prop.PropertyType) == null)
+        {
+            // As PropertyInfo.SetValue: null sets the default.
+            converted = Expression.Condition(Expression.Equal(value, Expression.Constant(null)),
+                Expression.Default(prop.PropertyType), converted);
+        }
+
+        var assign = Expression.Assign(Expression.Property(Expression.Convert(target, entityType), prop), converted);
+        return Expression.Lambda<Action<object, object?>>(assign, target, value).Compile();
     }
 
     private static void ValidateVersionColumn(PropertyInfo property)

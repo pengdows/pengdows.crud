@@ -485,8 +485,9 @@ public partial class TableGateway<TEntity, TRowID>
                     BuildCachedContainerTemplatesForDialect(dialect, context)))
                 .Value;
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not ObjectDisposedException)
         {
+            // A disposed context is reported as such, not as a template failure.
             throw new exceptions.TemplateInitializationException(
                 $"Failed to build SQL container templates for {dialect.DatabaseType}.", ex);
         }

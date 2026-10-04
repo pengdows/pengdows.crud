@@ -281,7 +281,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         {
             var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
                     _versionColumn.PropertyInfo.PropertyType;
-            _versionColumn.PropertyInfo.SetValue(entity, TypeCoercionHelper.ConvertWithCache(1, t));
+            SetColumnValue(_versionColumn, entity, TypeCoercionHelper.ConvertWithCache(1, t));
         }
     }
 
@@ -302,7 +302,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         {
             var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
                     _versionColumn.PropertyInfo.PropertyType;
-            _versionColumn.PropertyInfo.SetValue(entity, TypeCoercionHelper.ConvertWithCache(1, t));
+            SetColumnValue(_versionColumn, entity, TypeCoercionHelper.ConvertWithCache(1, t));
         }
     }
 

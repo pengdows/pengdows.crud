@@ -41,6 +41,6 @@ public abstract partial class BaseTableGateway<TEntity>
         var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
                      _versionColumn.PropertyInfo.PropertyType;
         var next = TypeCoercionHelper.ConvertWithCache(currentNumeric + 1, target);
-        _versionColumn.PropertyInfo.SetValue(entity, next);
+        SetColumnValue(_versionColumn, entity, next);
     }
 }

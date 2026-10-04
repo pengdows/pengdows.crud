@@ -76,6 +76,11 @@
 - On SQL Server, gateway hydration (`LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync` and the
   methods built on them) opens its reader with `CommandBehavior.SequentialAccess`, reading each
   column once, in order. A reader you open yourself with `ExecuteReaderAsync` is unchanged (DEC-013).
+- `CreateAsync` with a database-generated id returned by the INSERT (`RETURNING`/`OUTPUT`) no longer
+  pins a connection up front for the rare fallback id query: the INSERT keeps its own connection and
+  hands it to the fallback only when the id doesn't come back, so the fallback still runs on the
+  INSERT's connection. That path now allocates exactly what the INSERT itself does; the id and
+  `[Version]` write-backs use a compiled setter instead of reflection (DEC-014, PERF-016).
 
 ## Every read path converts the same way
 
