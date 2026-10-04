@@ -440,6 +440,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual Type? GetUnresolvedColumnType(string dataTypeName) => null;
 
     /// <summary>
+    /// A transaction for a DDL statement run outside the caller's transaction, when the provider's
+    /// implicit one can't wait for a lock the engine would release; null to use the implicit one.
+    /// Firebird: a WAIT transaction, so DDL after writes doesn't fail on the garbage collector's
+    /// hold on the table (WRT-001).
+    /// </summary>
+    internal virtual System.Data.Common.DbTransaction? BeginDdlTransaction(System.Data.Common.DbConnection connection,
+        TimeSpan? lockWait) => null;
+
+    /// <summary>
     /// True when <see cref="GetUnresolvedColumnType"/> is consulted for every column, not only those
     /// the provider reports no field type for: the provider reports a type but can't convert some of
     /// its values (DuckDB.NET's INTERVAL as TimeSpan, TYPE-022).

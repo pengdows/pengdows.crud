@@ -225,6 +225,47 @@ internal class FirebirdDialect : SqlDialect
     // becomes irrelevant to which pools get cleared, not merely unused. Called via reflection (no
     // hard package reference from pengdows.crud to FirebirdSql.Data.FirebirdClient) — same pattern
     // as OracleDialect's StatementCacheSize hook.
+    // WRT-001, confirmed live (Firebird 5.0.2, FirebirdClient 10.3.3): after writes the engine's
+    // garbage-collector attachment holds the table, and DDL in FirebirdClient's implicit transaction
+    // (NO WAIT, as is every IsolationLevel transaction) failed with "lock conflict on no wait
+    // transaction ... object TABLE is in use" for over 90 s; in a WAIT transaction the engine makes
+    // the collector release it. WAIT is reachable only through FbTransactionOptions, so the
+    // transaction is started through FbConnection.BeginTransaction(FbTransactionOptions) by reflection.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, Func<DbConnection, TimeSpan?, DbTransaction>?> DdlTransactionStarters = new();
+
+    internal override DbTransaction? BeginDdlTransaction(DbConnection connection, TimeSpan? lockWait) =>
+        DdlTransactionStarters.GetOrAdd(connection.GetType(), CreateDdlTransactionStarter) is { } start
+            ? start(connection, lockWait)
+            : null;
+
+    private static Func<DbConnection, TimeSpan?, DbTransaction>? CreateDdlTransactionStarter(Type connectionType)
+    {
+        var begin = connectionType.GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
+            .FirstOrDefault(m => m.Name == "BeginTransaction" && typeof(DbTransaction).IsAssignableFrom(m.ReturnType) &&
+                                 m.GetParameters() is { Length: 1 } p && p[0].ParameterType.Name == "FbTransactionOptions");
+        if (begin == null)
+        {
+            return null;
+        }
+
+        var optionsType = begin.GetParameters()[0].ParameterType;
+        var behaviorProperty = optionsType.GetProperty("TransactionBehavior");
+        var waitTimeoutProperty = optionsType.GetProperty("WaitTimeout");
+        if (behaviorProperty == null || waitTimeoutProperty == null || !behaviorProperty.PropertyType.IsEnum)
+        {
+            return null;
+        }
+
+        var behavior = Enum.Parse(behaviorProperty.PropertyType, "Wait, ReadCommitted, RecVersion");
+        return (connection, lockWait) =>
+        {
+            var options = Activator.CreateInstance(optionsType)!;
+            behaviorProperty.SetValue(options, behavior);
+            waitTimeoutProperty.SetValue(options, lockWait);
+            return (DbTransaction)begin.Invoke(connection, new[] { options })!;
+        };
+    }
+
     internal override void ResetConnectionPoolForDdl(string connectionString)
     {
         try

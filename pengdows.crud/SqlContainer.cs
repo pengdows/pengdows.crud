@@ -1182,6 +1182,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         var startTimestamp = metrics?.CommandStarted(_parameters.Count) ?? 0;
         var commandFailed = false;
         DatabaseContext? suspendedSentinelOwner = null;
+        System.Data.Common.DbTransaction? ddlTransaction = null;
         using var activity = StartActivity("ExecuteNonQuery");
         try
         {
@@ -1195,8 +1196,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // releasing it after a failed LockAsync released the holder's lock (REV-041).
             contextLocker = acquiringContextLocker;
 
-            if (executionType == ExecutionType.Write && _dialect is SqlDialect ddlDialect &&
-                ddlDialect.RequiresConnectionPoolResetForDdl && IsDdlStatement(_query.AsSpan()))
+            var isPoolResetDdl = executionType == ExecutionType.Write && _dialect is SqlDialect
+            {
+                RequiresConnectionPoolResetForDdl: true
+            } && IsDdlStatement(_query.AsSpan());
+            if (isPoolResetDdl && _dialect is SqlDialect ddlDialect)
             {
                 // A stale idle connection in EITHER pool can block a DDL commit. Reader and writer
                 // are, in general, distinct ADO.NET pools (ApplicationName/pool discriminator), so
@@ -1240,7 +1244,26 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             await connectionLocker.LockAsync(cancellationToken).ConfigureAwait(false);
             cmd = await PrepareAndCreateCommandAsync(conn, commandType, executionType, cancellationToken)
                 .ConfigureAwait(false);
+
+            // WRT-001: DDL outside the caller's transaction runs in the dialect's own transaction
+            // when the provider's implicit one can't wait for a lock (Firebird); the command's
+            // timeout bounds the wait.
+            if (isPoolResetDdl && !isTransaction && _dialect is SqlDialect ddlTxDialect &&
+                conn is IInternalConnectionWrapper ddlWrapper)
+            {
+                ddlTransaction = ddlTxDialect.BeginDdlTransaction(ddlWrapper.UnderlyingConnection,
+                    cmd.CommandTimeout > 0 ? TimeSpan.FromSeconds(cmd.CommandTimeout) : null);
+                if (ddlTransaction != null)
+                {
+                    cmd.Transaction = ddlTransaction;
+                }
+            }
+
             var result = await cmd.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            if (ddlTransaction != null)
+            {
+                await ddlTransaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+            }
             // CommandSucceeded records the rows affected; recording them again doubled the total.
             metrics?.CommandSucceeded(startTimestamp, result);
 
@@ -1317,6 +1340,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         finally
         {
+            if (ddlTransaction != null)
+            {
+                await EndDdlTransactionAsync(ddlTransaction, commandFailed).ConfigureAwait(false);
+            }
+
             if (commandFailed && executionType == ExecutionType.Write)
             {
                 // The caller's token may be the reason the write failed; the compensating rollback must
@@ -1366,6 +1394,27 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         catch (Exception ex)
         {
             logger.LogWarning(ex, "Releasing the {Lock} failed; later operations may wait on it.", description);
+        }
+    }
+
+    // A failed DDL's transaction is rolled back (best effort: the original failure is what surfaces);
+    // either way it is disposed before the connection goes back to its pool.
+    private async ValueTask EndDdlTransactionAsync(System.Data.Common.DbTransaction transaction, bool failed)
+    {
+        try
+        {
+            if (failed)
+            {
+                await transaction.RollbackAsync(CancellationToken.None).ConfigureAwait(false);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Rolling back a failed DDL statement's transaction did not complete");
+        }
+        finally
+        {
+            await transaction.DisposeAsync().ConfigureAwait(false);
         }
     }
 

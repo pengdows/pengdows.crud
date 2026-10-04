@@ -76,6 +76,11 @@
 - On SQL Server, gateway hydration (`LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync` and the
   methods built on them) opens its reader with `CommandBehavior.SequentialAccess`, reading each
   column once, in order. A reader you open yourself with `ExecuteReaderAsync` is unchanged (DEC-013).
+- Firebird DDL (`CREATE`/`DROP`/`ALTER`/`TRUNCATE`) outside a transaction now waits for the table's
+  lock, up to the command timeout, in a READ COMMITTED WAIT transaction. After writes to a table,
+  the engine's garbage collector holds it, and 2.0.5 ran the DDL NO WAIT (FirebirdClient's default),
+  so it failed with "lock conflict on no wait transaction ... object TABLE is in use" until the
+  collector let go, which took over 90 s in tests (WRT-001).
 - `CreateAsync` with a database-generated id returned by the INSERT (`RETURNING`/`OUTPUT`) no longer
   pins a connection up front for the rare fallback id query: the INSERT keeps its own connection and
   hands it to the fallback only when the id doesn't come back, so the fallback still runs on the
