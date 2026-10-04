@@ -243,7 +243,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     }
 
     /// <inheritdoc/>
-    public string Name { get; private set; }
+    public string Name { get; private set; } = null!;
 
     /// <inheritdoc/>
     public string ConnectionString => _redactedConnectionString;

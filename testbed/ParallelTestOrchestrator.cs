@@ -5,7 +5,6 @@ using pengdows.crud.infrastructure;
 using testbed.Db2;
 using testbed.Access;
 using testbed.Cockroach;
-using testbed.Db2;
 using testbed.DuckDb;
 using testbed.FlatFile;
 using testbed.Firebird;

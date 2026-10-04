@@ -667,7 +667,8 @@ internal static class TypeCoercionHelper
         return elements;
     }
 
-    private static bool TryUnwrapProviderVector(object value, out object? array)
+    private static bool TryUnwrapProviderVector(object value,
+        [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] out object? array)
     {
         array = null;
         var type = value.GetType();

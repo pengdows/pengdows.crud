@@ -411,8 +411,8 @@ public partial class DatabaseContext
                 _connectionString,
                 Product,
                 ConnectionMode,
-                _dialect?.SupportsExternalPooling ?? false,
-                _dialect?.PoolingSettingName,
+                _dialect.SupportsExternalPooling,
+                _dialect.PoolingSettingName,
                 builder);
 
             var effectiveApplicationName = ResolveApplicationName(configuration.ApplicationName);
@@ -421,14 +421,14 @@ public partial class DatabaseContext
             _connectionString = ConnectionPoolingConfiguration.ApplyApplicationName(
                 _connectionString,
                 effectiveApplicationName,
-                _dialect?.ApplicationNameSettingName,
+                _dialect.ApplicationNameSettingName,
                 builder, logger: _logger);
 
             if (ConnectionMode is DbMode.SingleWriter or DbMode.SingleConnection)
             {
                 _connectionString = ConnectionPoolingConfiguration.StripPoolingSetting(
                     _connectionString,
-                    _dialect?.PoolingSettingName, logger: _logger);
+                    _dialect.PoolingSettingName, logger: _logger);
             }
 
             InitializeReadOnlyConnectionResources(configuration, effectiveApplicationName);

@@ -288,7 +288,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     // the order the three separate subscriptions ran in.
     private void OnConnectionStateChange(object? sender, StateChangeEventArgs args)
     {
-        _onStateChange?.Invoke(sender, args);
+        _onStateChange?.Invoke(sender!, args);
         if (_metricsCollector != null)
         {
             HandleMetricsStateChange(sender, args);
