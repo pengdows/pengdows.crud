@@ -253,6 +253,9 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         return DatabaseSchemaHelper.DropTablesAsync(context);
     }
 
+    // "Class.Method" for the progress log and summary (DEC-011).
+    private string ProgressName(string? testName) => $"{GetType().Name}.{testName ?? "<unknown>"}";
+
     /// <summary>
     /// Run a test against all configured database providers
     /// </summary>
@@ -268,6 +271,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             try
             {
                 var providerStart = DateTime.UtcNow;
+                IntegrationProgress.Shared.TestStarted(ProgressName(testName), provider);
                 IntegrationTraceLog.Write(provider, $"test start name={testName ?? "<unknown>"}", Output);
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] ▶️ {provider} test starting");
                 Output.WriteLine($"[{providerStart:HH:mm:ss.fff}] Running test against {provider}...");
@@ -282,6 +286,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 IntegrationTraceLog.Write(provider,
                     $"test done name={testName ?? "<unknown>"} elapsedMs={(DateTime.UtcNow - providerStart).TotalMilliseconds:F0}",
                     Output);
+                IntegrationProgress.Shared.TestPassed(ProgressName(testName), provider);
             }
             catch (Exception ex)
             {
@@ -291,6 +296,15 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 IntegrationTraceLog.Write(provider,
                     $"test fail name={testName ?? "<unknown>"} error={ex.Message}",
                     Output);
+                if (ex is Xunit.SkipException)
+                {
+                    IntegrationProgress.Shared.TestSkipped(ProgressName(testName), provider, ex.Message);
+                }
+                else
+                {
+                    IntegrationProgress.Shared.TestFailed(ProgressName(testName), provider, ex);
+                }
+
                 failures.Add((provider, ex));
             }
         }

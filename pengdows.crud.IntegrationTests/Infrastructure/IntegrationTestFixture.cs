@@ -160,9 +160,11 @@ public class IntegrationTestFixture : IAsyncLifetime
             {
                 _startupFailures[provider] = environmentError;
                 Console.WriteLine($"Warning: {provider} not started: {environmentError}");
+                IntegrationProgress.Shared.ContainerFailed(provider, environmentError);
                 continue;
             }
 
+            IntegrationProgress.Shared.ContainerStarting(provider);
             try
             {
                 var container = await orchestrator.CreateContainerAsync(provider);
@@ -171,11 +173,14 @@ public class IntegrationTestFixture : IAsyncLifetime
                 {
                     _containers[provider] = container;
                 }
+
+                IntegrationProgress.Shared.ContainerReady(provider);
             }
             catch (Exception ex)
             {
                 _startupFailures[provider] = ex.ToString();
                 Console.WriteLine($"Warning: Failed to initialize {provider} container: {ex.Message}");
+                IntegrationProgress.Shared.ContainerFailed(provider, ex.Message);
             }
         }
 
@@ -188,6 +193,8 @@ public class IntegrationTestFixture : IAsyncLifetime
 
     public async Task DisposeAsync()
     {
+        IntegrationProgress.Shared.TryWriteSummary();
+
         foreach (var context in _contexts.Values)
         {
             context.Dispose();

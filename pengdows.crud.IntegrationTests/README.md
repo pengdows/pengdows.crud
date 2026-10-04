@@ -128,6 +128,19 @@ dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj
 ./run-integration-tests.sh
 ```
 
+Before anything starts, the script prints a preflight: whether Docker is reachable, whether the
+Db2 and Informix native clients will load, and for each opt-in database (InterBase, Snowflake,
+SAP HANA) whether it will run and what is missing. It stops only when Docker is unreachable.
+`PREFLIGHT_ONLY=1 ./run-integration-tests.sh` prints the report and exits. Native-library
+directories this host needs (a `libxml2.so.2` compatibility copy for Db2, InterBase's `libgds.so`)
+go in `PENGDOWS_EXTRA_LIB_DIRS` (colon-separated).
+
+While it runs, `TestResults/integration/progress.log` gets a line as each container starts and as
+each test starts and finishes on each database, plus a heartbeat once a minute naming whatever is
+still running; `TestResults/integration/summary-<tfm>.md` lists pass/fail/skip per database, the
+slowest tests and the first line of each failure. Both are written on every run, with or without
+`INTEGRATION_TRACE`; `INTEGRATION_RESULTS_DIR` moves them.
+
 `IntegrationMatrixTests` excludes Informix: its native driver needs `LD_LIBRARY_PATH` set before the
 process starts, which is impossible inside vstest's testhost. Informix is covered by
 `dotnet run --project testbed -f net8.0` (or `-f net10.0`) instead.
