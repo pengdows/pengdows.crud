@@ -2384,6 +2384,19 @@ public partial class DatabaseContext
     /// <see cref="DbProviderFactory"/> (e.g. the base <c>NotSupportedException</c> stub) are
     /// excluded so we never invoke a no-op and mistake it for provider capability.
     /// </summary>
+    // .NET's DbProviderFactory.CreateDataSource default (System.Data.Common.DefaultDataSource) is not
+    // a provider-native data source, even when an override only forwards to it (DEC-009).
+    private static bool IsBaseDefaultDataSource(DbDataSource dataSource)
+    {
+        if (!ReferenceEquals(dataSource.GetType().Assembly, typeof(DbProviderFactory).Assembly))
+        {
+            return false;
+        }
+
+        dataSource.Dispose();
+        return true;
+    }
+
     private static MethodInfo? FindProviderCreateDataSourceMethod(Type factoryType, Type parameterType)
     {
         var method = factoryType.GetMethod("CreateDataSource", new[] { parameterType });
@@ -2414,7 +2427,7 @@ public partial class DatabaseContext
             {
                 if (stringMethod.Invoke(factory, new object?[] { connectionString }) is DbDataSource ds)
                 {
-                    return ds;
+                    return IsBaseDefaultDataSource(ds) ? null : ds;
                 }
             }
 
@@ -2426,7 +2439,7 @@ public partial class DatabaseContext
                 builder.ConnectionString = connectionString;
                 if (builderMethod.Invoke(factory, new object?[] { builder }) is DbDataSource ds)
                 {
-                    return ds;
+                    return IsBaseDefaultDataSource(ds) ? null : ds;
                 }
             }
 

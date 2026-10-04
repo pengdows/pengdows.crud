@@ -37,10 +37,10 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     /// <summary>
     /// When true, <see cref="CreateDataSource"/> returns a <see cref="FakeDbDataSource"/> wrapping
-    /// this factory instead of throwing <see cref="NotSupportedException"/> — opt-in so tests that
-    /// specifically need to exercise DatabaseContext's provider-native-DataSource path don't have
-    /// to hand-roll their own DbProviderFactory/DbDataSource pair. Defaults to false so every
-    /// existing caller keeps falling back to GenericDbDataSource, unchanged.
+    /// this factory (a provider-native data source), so tests can exercise DatabaseContext's
+    /// provider-native-DataSource path without hand-rolling a DbProviderFactory/DbDataSource pair.
+    /// When false (the default), it returns .NET's default data source, as a provider without its
+    /// own does and as 2.0.5 did; DatabaseContext then uses its GenericDbDataSource.
     /// </summary>
     public bool SupportsNativeDataSource { get; set; } = false;
 
@@ -394,14 +394,10 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     {
         if (!SupportsNativeDataSource)
         {
-            // DbProviderFactory's own base implementation does NOT throw (it returns a
-            // DefaultDataSource) — but DatabaseContext's reflection-based provider-native probe
-            // (TryCreateProviderDataSource) treats a caught NotSupportedException as "provider
-            // explicitly opts out" and falls back to GenericDbDataSource. Throwing here, rather
-            // than delegating to base, is what actually preserves the pre-existing fallback
-            // behavior for every caller that hasn't opted into SupportsNativeDataSource.
-            throw new NotSupportedException(
-                $"{nameof(fakeDbFactory)} does not support {nameof(CreateDataSource)} unless {nameof(SupportsNativeDataSource)} is set to true.");
+            // DEC-009: what 2.0.5 (no override) and a real provider without its own data source
+            // return. DatabaseContext recognizes .NET's default data source as non-native and uses
+            // its generic wrapper, exactly as for such a provider.
+            return base.CreateDataSource(connectionString);
         }
 
         var dataSource = new FakeDbDataSource(connectionString, this);

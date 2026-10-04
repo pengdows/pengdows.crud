@@ -802,8 +802,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
     }
 
-    public override string Database =>
-        GetConnectionStringValue(new[] { "Database", "Initial Catalog" }, string.Empty)!;
+    // What the emulated provider reports (confirmed against the real drivers, DEC-009):
+    // Microsoft.Data.Sqlite always "main", DuckDB.NET its data source, the rest the named database
+    // or "".
+    public override string Database => EmulatedProduct switch
+    {
+        SupportedDatabase.Sqlite => "main",
+        SupportedDatabase.DuckDB => GetConnectionStringValue(new[] { "Data Source", "DataSource" }, string.Empty)!,
+        _ => GetConnectionStringValue(new[] { "Database", "Initial Catalog" }, string.Empty)!
+    };
 
     private string? GetConnectionStringValue(string[] keys, string? defaultValue)
     {
@@ -859,11 +866,16 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     {
         if (_state == ConnectionState.Open)
         {
-            // Matches real ADO.NET providers (SqlConnection, NpgsqlConnection, SqliteConnection):
-            // calling Open() while already Open throws InvalidOperationException, it does not
-            // silently no-op. A fakeDb that silently allowed this let a real double-open bug in
-            // application code pass every fakeDb-based unit test and only surface against a real
-            // provider in production.
+            // Matches the emulated provider (confirmed against the real drivers, DEC-009):
+            // SqlConnection, NpgsqlConnection and DuckDBConnection throw InvalidOperationException
+            // on Open() while already Open; SqliteConnection returns without doing anything. A fake
+            // that always allowed it let a double-open bug pass every fakeDb test on a provider that
+            // throws.
+            if (EmulatedProduct == SupportedDatabase.Sqlite)
+            {
+                return;
+            }
+
             throw new InvalidOperationException(
                 "Connection is already open. The connection's current state is open.");
         }

@@ -232,8 +232,9 @@ On `fakeDbFactory`:
   this specific follow-up command" when `DbMode` might route different calls to different pooled
   instances (see the `SetCommandFailure` example above).
 - `CreatedDataSources` (`IReadOnlyList<FakeDbDataSource>`) — every `FakeDbDataSource` created via
-  `CreateDataSource` (reachable only when the factory advertises `SupportsNativeDataSource = true`),
-  for verifying disposal of a data source your test never held a direct reference to.
+  `CreateDataSource` when the factory advertises `SupportsNativeDataSource = true` (otherwise
+  `CreateDataSource` returns .NET's default data source, as a provider without its own does), for
+  verifying disposal of a data source your test never held a direct reference to.
 
 `fakeDbTransaction` exposes `CommitCallCount`/`RollbackCallCount`/`DisposeCallCount`, plus
 `CommitGate`/`RollbackGate`/`CommitStarted`/`RollbackStarted` (`ManualResetEventSlim`s) for pausing
