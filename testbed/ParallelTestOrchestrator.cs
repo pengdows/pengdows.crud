@@ -402,10 +402,17 @@ public class ParallelTestOrchestrator
             AddLocal("Aurora MySQL", new AuroraMySqlTestContainer(), (db, sp) => new TestProvider(db, sp), 5);
         }
 
+        // Names match ignoring case and spaces, so a SupportedDatabase-style "SapHana"/"SqlServer"
+        // selects the display-named "SAP HANA"/"SQL Server" (HARN-011).
+        static string Key(string name) => name.Replace(" ", string.Empty);
+        static bool Named(ISet<string> names, TestConfiguration c) =>
+            names.Any(n => string.Equals(Key(n), Key(c.ContainerName), StringComparison.OrdinalIgnoreCase) ||
+                           string.Equals(Key(n), Key(c.DatabaseProvider), StringComparison.OrdinalIgnoreCase));
+
         if (only is { Count: > 0 })
-            configurations = configurations.Where(c => only.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) || only.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase)).ToList();
+            configurations = configurations.Where(c => Named(only, c)).ToList();
         if (exclude is { Count: > 0 })
-            configurations = configurations.Where(c => !exclude.Contains(c.ContainerName, StringComparer.OrdinalIgnoreCase) && !exclude.Contains(c.DatabaseProvider, StringComparer.OrdinalIgnoreCase)).ToList();
+            configurations = configurations.Where(c => !Named(exclude, c)).ToList();
 
         return configurations;
     }

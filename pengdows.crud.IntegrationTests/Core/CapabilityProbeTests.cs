@@ -148,6 +148,8 @@ public class CapabilityProbeTests : DatabaseTestBase
         SupportedDatabase.Db2 => " FROM SYSIBM.SYSDUMMY1",
         SupportedDatabase.Firebird => " FROM RDB$DATABASE",
         SupportedDatabase.InterBase => " FROM RDB$DATABASE",
+        // SAP HANA rejects a table-less SELECT; DUMMY is its one-row table (HARN-011).
+        SupportedDatabase.SapHana => " FROM DUMMY",
         _ => string.Empty
     };
 

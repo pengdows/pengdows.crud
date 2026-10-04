@@ -124,6 +124,11 @@ public class TransientErrorTests : DatabaseTestBase
 
             SupportedDatabase.Db2 => BuildUnreachableDb2Context(rawCs),
 
+            // Sap.Data.Hana's Server is "host:port".
+            SupportedDatabase.SapHana =>
+                new DatabaseContext(WithBuilderKey(rawCs, "Server", "localhost:1"),
+                    Sap.Data.Hana.HanaFactory.Instance),
+
             SupportedDatabase.InterBase =>
                 new DatabaseContext(
                     new InterBaseSql.Data.InterBaseClient.IBConnectionStringBuilder(rawCs) { Port = 1 }.ConnectionString,

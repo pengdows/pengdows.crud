@@ -55,6 +55,7 @@ public class TestTableCreator
             SupportedDatabase.Snowflake => CreateSnowflakeTableSql(),
             SupportedDatabase.Oracle => CreateOracleTableSql(),
             SupportedDatabase.Db2 => CreateDb2TableSql(),
+            SupportedDatabase.SapHana => CreateHanaTableSql(),
             SupportedDatabase.Informix => CreateInformixTableSql(),
             SupportedDatabase.SybaseASE => CreateSybaseTableSql(),
             SupportedDatabase.Access => CreateAccessTableSql(),
@@ -260,6 +261,22 @@ public class TestTableCreator
                 ) WITH (NULLTOKEN = '<<NULL>>')",
             // No CREATE TABLE IF NOT EXISTS (the shared reset drops the table first) and no time
             // zone type: the UTC instant is stored. Db2Dialect stores Guid as a string.
+            // SAP HANA (HARN-011): column store, NVARCHAR for Unicode, native BOOLEAN, no time-zone
+            // TIMESTAMP (UTC stored), Guid as text (HanaDialect GuidStorageFormat.String).
+            SupportedDatabase.SapHana => $@"
+                CREATE COLUMN TABLE {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {textCol} NVARCHAR(255) NOT NULL,
+                    {unicodeCol} NVARCHAR(255) NOT NULL,
+                    {nullCol} NVARCHAR(255),
+                    {intCol} INTEGER NOT NULL,
+                    {longCol} BIGINT NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} BOOLEAN NOT NULL,
+                    {dtoCol} TIMESTAMP NOT NULL,
+                    {guidCol} NVARCHAR(36) NOT NULL,
+                    {binCol} VARBINARY(256) NOT NULL
+                )",
             SupportedDatabase.Db2 => $@"
                 CREATE TABLE {table} (
                     {idCol} BIGINT NOT NULL PRIMARY KEY,
@@ -398,6 +415,13 @@ public class TestTableCreator
                     {fromCol} VARCHAR,
                     {userCol} VARCHAR
                 )",
+            SupportedDatabase.SapHana => $@"
+                CREATE COLUMN TABLE {table} (
+                    {idCol} BIGINT NOT NULL PRIMARY KEY,
+                    {selectCol} NVARCHAR(255),
+                    {fromCol} NVARCHAR(255),
+                    {userCol} NVARCHAR(255)
+                )",
             SupportedDatabase.Db2 => $@"
                 CREATE TABLE {table} (
                     {idCol} BIGINT NOT NULL PRIMARY KEY,
@@ -510,6 +534,12 @@ public class TestTableCreator
                     {0}id{1} BIGINT NOT NULL PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
+                )", qp, qs, table),
+            SupportedDatabase.SapHana => string.Format(@"
+                CREATE COLUMN TABLE {2} (
+                    {0}id{1} BIGINT NOT NULL PRIMARY KEY,
+                    {0}name{1} NVARCHAR(255) NOT NULL,
+                    {0}balance{1} DECIMAL(18,2) DEFAULT 0.00 NOT NULL
                 )", qp, qs, table),
             SupportedDatabase.InterBase => string.Format(@"
                 CREATE TABLE {2} (
@@ -731,6 +761,27 @@ public class TestTableCreator
             {0}created_by{1} VARCHAR(100),
             {0}updated_at{1} TIMESTAMP,
             {0}updated_by{1} VARCHAR(100)
+        )", qp, qs, table);
+    }
+
+    private string CreateHanaTableSql()
+    {
+        // No CREATE TABLE IF NOT EXISTS: the shared reset drops test_table first. Quoted columns, as
+        // HANA folds unquoted identifiers to upper case (HARN-011).
+        var table = IntegrationObjectNameHelper.Table(_context, "test_table");
+        var qp = _context.QuotePrefix;
+        var qs = _context.QuoteSuffix;
+        return string.Format(@"
+        CREATE COLUMN TABLE {2} (
+            {0}id{1} BIGINT NOT NULL PRIMARY KEY,
+            {0}name{1} NVARCHAR(255) NOT NULL,
+            {0}value{1} INTEGER NOT NULL,
+            {0}description{1} NVARCHAR(1024),
+            {0}is_active{1} BOOLEAN DEFAULT TRUE NOT NULL,
+            {0}created_at{1} TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
+            {0}created_by{1} NVARCHAR(100),
+            {0}updated_at{1} TIMESTAMP,
+            {0}updated_by{1} NVARCHAR(100)
         )", qp, qs, table);
     }
 
