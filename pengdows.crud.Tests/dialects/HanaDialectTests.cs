@@ -115,6 +115,54 @@ public class HanaDialectTests
     // RenderMergeSource's exact SQL shape ("USING (SELECT ? AS ..., ? AS ... FROM DUMMY) s") is
     // covered by SqlDialectBranchTests.RenderMergeSource_UsesProviderSyntax's SapHana case.
 
+    // HANA-001, confirmed live 2026-10-04: an untyped "? AS col" in the MERGE source is typed as
+    // text, so a byte[] fails into VARBINARY/BINARY ("invalid character encoding"). CAST(? AS BLOB)
+    // round-trips into VARBINARY, BINARY and BLOB alike, with no 5000-byte VARBINARY cap.
+    [Fact]
+    public void RenderMergeSource_BinaryColumn_CastsThePlaceholderToBlob()
+    {
+        var columns = new TypeMapRegistry().GetTableInfo<BinaryMergeEntity>().OrderedColumns;
+
+        var source = CreateDialect().RenderMergeSource(new[] { columns[0], columns[1] }, new[] { "i0", "i1" });
+
+        Assert.Equal("USING (SELECT ? AS \"id\", CAST(? AS BLOB) AS \"payload\" FROM DUMMY) s", source);
+    }
+
+    // HANA-001, confirmed live 2026-10-04: the spatial converter binds WKB bytes, which an
+    // ST_GEOMETRY/ST_POINT column takes from a plain INSERT but not from the MERGE source ("The
+    // geometry data is corrupt", even for a new row); ST_GeomFromWKB(?) works for insert and update.
+    [Fact]
+    public void RenderMergeSource_SpatialColumn_ReadsTheWkbThroughStGeomFromWkb()
+    {
+        var columns = new TypeMapRegistry().GetTableInfo<SpatialMergeEntity>().OrderedColumns;
+
+        var source = CreateDialect().RenderMergeSource(new[] { columns[0], columns[1] }, new[] { "i0", "i1" });
+
+        Assert.Equal("USING (SELECT ? AS \"id\", ST_GeomFromWKB(?) AS \"shape\" FROM DUMMY) s", source);
+    }
+
+    [pengdows.crud.attributes.Table("spatial_merge")]
+    private sealed class SpatialMergeEntity
+    {
+        [pengdows.crud.attributes.Id]
+        [pengdows.crud.attributes.Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [pengdows.crud.attributes.Column("shape", DbType.Object)]
+        public pengdows.crud.types.valueobjects.Geometry? Shape { get; set; }
+    }
+
+    [pengdows.crud.attributes.Table("binary_merge")]
+    private sealed class BinaryMergeEntity
+    {
+        [pengdows.crud.attributes.Id]
+        [pengdows.crud.attributes.Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [pengdows.crud.attributes.Column("payload", DbType.Binary)]
+        public byte[] Payload { get; set; } = Array.Empty<byte>();
+    }
+
     // Verified live: an ANSI multi-row VALUES clause ("INSERT INTO t VALUES (1,'a'), (2,'b')") is
     // rejected ("257: sql syntax error ... incorrect syntax near \",\""). Falls back to one
     // BuildCreate per entity, the same safe path SQLite/MySQL/MariaDB/Firebird/Informix use.
@@ -311,6 +359,20 @@ public class HanaDialectTests
             "access mode from read-only to update directly: please use \"SET TRANSACTION READ WRITE\" statement first");
         var info = ctx.GetDialect().AnalyzeException(ex);
         Assert.Equal(DbErrorCategory.ReadOnlyViolation, info.Category);
+    }
+
+    [Fact]
+    public void TryClassifyProviderException_129ForAnotherInternalError_IsNotReadOnlyViolation()
+    {
+        // HANA-001, CONFIRMED LIVE 2026-10-04: 129 is HANA's generic "transaction rolled back by an
+        // internal error"; a MERGE updating an ST_GEOMETRY column fails with it for corrupt geometry
+        // data, which was reported as a read-only connection. Only the access-mode message is one.
+        using var ctx = CreateContext();
+        var ex = new NativeErrorDbException(129,
+            "transaction rolled back by an internal error: TrexColumnUpdate failed on table 'SYSTEM:type_rt' " +
+            "with error: The geometry data is corrupt; $table$=SYSTEM:type_rt");
+        var info = ctx.GetDialect().AnalyzeException(ex);
+        Assert.NotEqual(DbErrorCategory.ReadOnlyViolation, info.Category);
     }
 
     [Fact]

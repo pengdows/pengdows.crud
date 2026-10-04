@@ -200,6 +200,22 @@ internal sealed class HanaDialect : SqlDialect
             {
                 placeholder = RenderColumnArgument(placeholder, columns[i]);
             }
+            else if (columns[i].DbType == DbType.Binary)
+            {
+                // CONFIRMED live (HANA-001): an untyped "? AS col" here is typed as text, so a byte[]
+                // fails into VARBINARY/BINARY; CAST(? AS BLOB) round-trips into VARBINARY, BINARY and
+                // BLOB, with no VARBINARY length cap.
+                placeholder = string.Concat("CAST(", placeholder, " AS BLOB)");
+            }
+            else if (typeof(types.valueobjects.SpatialValue).IsAssignableFrom(
+                         Nullable.GetUnderlyingType(columns[i].PropertyInfo.PropertyType) ??
+                         columns[i].PropertyInfo.PropertyType))
+            {
+                // CONFIRMED live (HANA-001): the spatial converter's WKB bytes go into ST_GEOMETRY/
+                // ST_POINT from a plain INSERT but not from this source ("The geometry data is
+                // corrupt"); ST_GeomFromWKB(?) works for MERGE insert and update.
+                placeholder = string.Concat("ST_GeomFromWKB(", placeholder, ")");
+            }
 
             select.Append(placeholder);
             select.Append(" AS ");
@@ -342,7 +358,9 @@ internal sealed class HanaDialect : SqlDialect
         // GetBaseSessionSettings' remarks) is marked SET TRANSACTION READ ONLY. Feeds
         // HanaExceptionTranslator's shared TryCreateFromCategory path into a real
         // ReadOnlyViolationException, mirroring Access/Sqlite/DuckDb's identical classification.
-        if (code == 129)
+        // 129 itself is HANA's generic "transaction rolled back by an internal error" (a corrupt
+        // ST_GEOMETRY update gets it too, confirmed live, HANA-001), so the read-only text decides.
+        if (code == 129 && ex.Message.Contains("read-only", StringComparison.OrdinalIgnoreCase))
         {
             category = DbErrorCategory.ReadOnlyViolation;
             return true;
