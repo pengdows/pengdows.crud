@@ -1204,7 +1204,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             contextLocker = acquiringContextLocker;
 
             if (executionType == ExecutionType.Write && _dialect is SqlDialect ddlDialect &&
-                ddlDialect.RequiresConnectionPoolResetForDdl && IsDdlStatement(Query.ToString()))
+                ddlDialect.RequiresConnectionPoolResetForDdl && IsDdlStatement(_query.AsSpan()))
             {
                 // A stale idle connection in EITHER pool can block a DDL commit. Reader and writer
                 // are, in general, distinct ADO.NET pools (ApplicationName/pool discriminator), so
@@ -1262,7 +1262,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // reload now; inside one it only becomes visible at commit.
             if (executionType == ExecutionType.Write && _context is not ITransactionContext &&
                 _context is DatabaseContext typeOwner && _dialect is SqlDialect typeDialect &&
-                typeDialect.InvalidatesProviderTypeCache(Query.ToString()))
+                typeDialect.InvalidatesProviderTypeCache(RenderedOrQueryText()))
             {
                 await typeOwner.ReloadProviderTypesAsync(cancellationToken).ConfigureAwait(false);
             }
@@ -2172,6 +2172,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         };
     }
 
+    // The statement text without copying it again: the rendered command text when current, which
+    // has the same leading keywords (PERF-018).
+    private string RenderedOrQueryText() =>
+        _cachedCommandText != null && _cachedCommandTextVersion == _query.Version ? _cachedCommandText : _query.ToString();
+
     private DbOperationKind DetermineOperationKind(CommandType commandType, ExecutionType executionType)
     {
         if (commandType == CommandType.StoredProcedure)
@@ -2179,7 +2184,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return executionType == ExecutionType.Write ? DbOperationKind.Unknown : DbOperationKind.Query;
         }
 
-        var sql = Query.ToString().TrimStart();
+        // The leading keyword, read in place: copying the statement for this cost a full copy of
+        // every write's text (PERF-018).
+        var sql = _query.AsSpan().TrimStart();
         if (sql.StartsWith("INSERT", StringComparison.OrdinalIgnoreCase) ||
             sql.StartsWith("MERGE", StringComparison.OrdinalIgnoreCase) ||
             sql.StartsWith("UPSERT", StringComparison.OrdinalIgnoreCase))
@@ -2206,8 +2213,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// meaningful for that hook — not used for exception-message operation-kind labeling
     /// (<see cref="DetermineOperationKind"/> is separate and unaffected).
     /// </summary>
-    private static bool IsDdlStatement(string sql)
+    private static bool IsDdlStatement(ReadOnlySpan<char> sql)
     {
+        // Read in place: this runs before the command text is rendered, so a string here copied
+        // every Firebird write (PERF-018).
         var trimmed = sql.TrimStart();
         return trimmed.StartsWith("CREATE", StringComparison.OrdinalIgnoreCase) ||
                trimmed.StartsWith("DROP", StringComparison.OrdinalIgnoreCase) ||
@@ -2273,7 +2282,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             activity.SetTag("db.system", _context.Product.ToString().ToLowerInvariant());
             activity.SetTag("db.name", _context.Name);
-            activity.SetTag("db.statement", Truncate(Query.ToString(), MaxTelemetryStatementLength));
+            // Only the kept prefix is copied: a large statement was copied whole first (PERF-018).
+            var statement = _query.AsSpan();
+            activity.SetTag("db.statement", statement.Length <= MaxTelemetryStatementLength
+                ? _query.ToString()
+                : string.Concat(statement[..MaxTelemetryStatementLength], "...(truncated)"));
             activity.SetTag("db.operation", operationName);
             activity.SetTag("pengdows.context_id", _context.RootId.ToString());
         }

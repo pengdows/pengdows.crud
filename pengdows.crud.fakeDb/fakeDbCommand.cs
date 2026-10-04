@@ -136,9 +136,12 @@ public class fakeDbCommand : DbCommand
         // so tests that seed rows-affected for subsequent DML remain stable.
         if (!string.IsNullOrWhiteSpace(CommandText))
         {
-            var trimmed = CommandText.TrimStart();
-            var upper = trimmed.ToUpperInvariant();
-            if (upper.StartsWith("SET ") || upper.StartsWith("PRAGMA ") || upper.Contains("ALTER SESSION SET") || upper.StartsWith("SELECT SET_CONFIG("))
+            // Compared in place: upper-casing copied every command's whole text.
+            var trimmed = CommandText.AsSpan().TrimStart();
+            if (trimmed.StartsWith("SET ", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("PRAGMA ", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.Contains("ALTER SESSION SET", StringComparison.OrdinalIgnoreCase) ||
+                trimmed.StartsWith("SELECT SET_CONFIG(", StringComparison.OrdinalIgnoreCase))
             {
                 if (conn != null && !string.IsNullOrWhiteSpace(CommandText))
                 {
