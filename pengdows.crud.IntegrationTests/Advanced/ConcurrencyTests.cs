@@ -417,6 +417,16 @@ public class ConcurrencyTests : DatabaseTestBase
 
                         return entity.Id;
                     }
+                    catch (AmbiguousResultException) when (attempt < maxAttempts)
+                    {
+                        // CockroachDB reports a commit it can't confirm under contention as ambiguous
+                        // (40003, by design; seen once with 7 databases running at once, HARN-010).
+                        // The row decides: present means the commit landed, absent means retry.
+                        if (await CreateTableGateway(context).RetrieveOneAsync(entity.Id, context) != null)
+                        {
+                            return entity.Id;
+                        }
+                    }
                     catch (DatabaseException ex) when (ex.IsTransient == true && attempt < maxAttempts)
                     {
                         await Task.Delay(TimeSpan.FromMilliseconds(200 * attempt));
