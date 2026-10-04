@@ -256,6 +256,7 @@ var clone = template.Clone(transactionContext);  // Different context (e.g., tra
 | `DatabaseContext` | **Singleton** | Manages connection pool, metrics, DbMode state |
 | `TableGateway<T,TId>` | **Singleton** | Stateless, caches compiled accessors |
 | `IAuditValueResolver` | **Singleton** | Must be thread-safe/AsyncLocal-based (e.g. `IHttpContextAccessor` inside); cannot be Scoped because gateways are Singletons |
+| `ITenantContextRegistry` | **Singleton** | Manages per-tenant DatabaseContext instances |
 
 ```csharp
 // Correct DI registration
@@ -268,6 +269,9 @@ services.AddSingleton<IOrderGateway>(sp =>
 
 // AuditResolver is SINGLETON - must be thread-safe (use IHttpContextAccessor/AsyncLocal internally)
 services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
+
+// TenantContextRegistry is SINGLETON
+services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
 ```
 
 ## Extending TableGateway - THE CORRECT PATTERN
@@ -482,6 +486,7 @@ public class OrderItem
 ### Custom SQL with SqlContainer
 
 **IMPORTANT:** Always use `WrapObjectName()` for column names and aliases to ensure proper quoting per database dialect.
+**IMPORTANT:** Always parameterize predicate and join values. `pengdows.crud.analyzers` flags raw predicate/join value injection as `PGC008`; `IS NULL` and `IS NOT NULL` are the normal exceptions.
 
 ```csharp
 // Inside your extended gateway class
@@ -776,7 +781,7 @@ Tests are required. Coverage minimums are enforced in CI.
 1. **DatabaseContext is SINGLETON** - one per connection string
 2. **TableGateway is SINGLETON** - stateless, caches compiled accessors
 3. **Extend TableGateway** - put custom query methods in inherited class, not wrapper service
-4. **IAuditValueResolver is SINGLETON** - must be thread-safe/AsyncLocal-based; use IHttpContextAccessor or AsyncLocal internally to access per-request state
+4. **IAuditValueResolver is SINGLETON** - must be thread-safe/AsyncLocal-based to avoid captive dependencies in singleton gateways; use IHttpContextAccessor or AsyncLocal internally to access per-request state
 5. **TenantContextRegistry is SINGLETON** - manages per-tenant contexts
 6. **Transactions are operation-scoped** - create inside methods, never store as fields
 7. **ITrackedReader is a lease** - pins connection until disposed, dispose promptly

@@ -76,11 +76,11 @@ All execution methods return `ValueTask` (not `Task`) for reduced allocations. A
 
 | Method | Returns | Purpose |
 |--------|---------|---------|
-| `ExecuteNonQueryAsync(CommandType?, ExecutionType?, ct?)` | `ValueTask<int>` | Returns affected row count |
-| `ExecuteScalarRequiredAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<T>` | Returns value — throws if no rows or null |
-| `ExecuteScalarOrNullAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<T?>` | Returns value or null if no rows / DBNull |
-| `TryExecuteScalarAsync<T>(CommandType?, ExecutionType?, ct?)` | `ValueTask<ScalarResult<T>>` | Unambiguous: distinguishes None / Null / Value |
-| `ExecuteReaderAsync(CommandType?, ExecutionType?, ct?)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
+| `ExecuteNonQueryAsync(ExecutionType?, CommandType?, ct?)` | `ValueTask<int>` | Returns affected row count |
+| `ExecuteScalarRequiredAsync<T>(ExecutionType?, CommandType?, ct?)` | `ValueTask<T>` | Returns value — throws if no rows or null |
+| `ExecuteScalarOrNullAsync<T>(ExecutionType?, CommandType?, ct?)` | `ValueTask<T?>` | Returns value or null if no rows / DBNull |
+| `TryExecuteScalarAsync<T>(ExecutionType?, CommandType?, ct?)` | `ValueTask<ScalarResult<T>>` | Unambiguous: distinguishes None / Null / Value |
+| `ExecuteReaderAsync(ExecutionType?, CommandType?, ct?)` | `ValueTask<ITrackedReader>` | Runs query, returns reader (extends IDataReader) |
 
 ## ScalarResult\<T\>
 

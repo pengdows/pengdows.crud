@@ -24,7 +24,13 @@ The core coercion logic provides:
 
 ## Enum Parsing
 
-pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`:
+pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`. Set it once through the gateway constructor's `enumParseBehavior` parameter (the gateway's `EnumParseBehavior` property is init-only):
+
+```csharp
+var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
+```
+
+`EnumParseFailureMode` has three values:
 
 ### EnumParseFailureMode.Throw (Default)
 
@@ -32,27 +38,26 @@ pengdows.crud supports flexible enum parsing through `EnumParseFailureMode`:
 - Recommended for strict validation scenarios
 - Ensures data integrity by failing fast on invalid values
 
-```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.Throw);
-```
-
 ### EnumParseFailureMode.SetNullAndLog
 
-- Sets the property to null (for nullable types) and logs a warning on parse failure
-- Useful when you want to tolerate stale/unknown enum values without crashing
-
-```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetNullAndLog);
-```
+- Sets the property to `null` on parse failure (a non-nullable enum gets its default value instead)
+- Logs a warning so the failure is visible without crashing
+- Useful when bad data is expected and the application can tolerate a null
 
 ### EnumParseFailureMode.SetDefaultValue
 
-- Returns the enum's default value (typically 0) on parse failure
-- Useful for data migration scenarios
+- Sets the property to the enum's default value (value `0`) on parse failure, without logging (a nullable enum gets `null`)
+- Useful for data migration or legacy-data scenarios where the default is a safe sentinel
 
-```csharp
-var gateway = new TableGateway<User, int>(context, enumParseBehavior: EnumParseFailureMode.SetDefaultValue);
-```
+## Enum Column Attributes
+
+Three attributes control how enum columns are mapped:
+
+| Attribute | Purpose |
+|-----------|---------|
+| `[EnumColumn(Type enumType)]` | Explicitly declares the enum type for a column |
+| `[EnumLiteral(string literal)]` | Overrides the database string for a specific enum member |
+| `[Json]` | Serializes the value as JSON (works for complex types and enums stored as JSON objects) |
 
 ## Cross-Database Type Mapping
 
@@ -154,6 +159,14 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   Windows-only native code): written as a big-endian SRID + WKB that the gateway SQL turns into the instance with
   `STGeomFromWKB`, so the server validates it and keeps the SRID; read by decoding the stored encoding. Curves and
   `FULLGLOBE` have no WKB form and throw `DataMappingException` (TYPE-002).
+- Oracle `SDO_GEOMETRY` → `Geometry`/`Geography` with no ODP.NET UDT class: written as EWKT (`SRID=n;WKT`) bound as a
+  CLOB and built server-side with `SDO_GEOMETRY(wkt, srid)` (SRID 0 stored as NULL); gateway SELECT lists read it as EWKT
+  via `SDO_UTIL.TO_WKTGEOMETRY`, and custom SQL must select that same expression (`DataReaderMapper` then maps the EWKT
+  text). Oracle keeps 15 significant digits per ordinate. Needs Oracle Spatial/Locator (the `gvenzl` slim images lack it:
+  `ORA-00902`); GeoJSON-only values throw `NotSupportedException` (TYPE-021).
+- DuckDB `INTERVAL` → `TimeSpan` (`DbType.Object`): written as DuckDB interval text; read from the stored
+  months/days/microseconds because DuckDB.NET 1.5.6 throws for every negative interval and silently drops negative
+  months. An interval with months fails with `DataMappingException` (a month has no fixed length) (TYPE-022).
 - A stored value with no .NET representation throws `DataMappingException` naming the column, never a raw provider
   exception or a default: MySQL/MariaDB zero dates, PostgreSQL `numeric` NaN into `decimal`, SQL Server
   curves/`FULLGLOBE`, user CLR types without their assembly (select `col.ToString()` instead).
@@ -170,8 +183,41 @@ public UserSettings Settings { get; set; }
 
 - Automatically serializes/deserializes complex types
 - Uses `System.Text.Json` by default
+- The `[Json]` attribute exposes a `SerializerOptions` property for supplying a custom `JsonSerializerOptions` instance
+- Text that isn't valid JSON fails the read with `DataMappingException` naming the column (DEC-008). Blank text reads as the JSON literal `null`: null for a reference/nullable property, a JSON-null `JsonDocument`/`JsonValue`, and a failure for a non-nullable value type (COR-007)
 - Supports nullable reference types
 - Works across all supported databases
+
+## Special-Purpose Coercion Attributes
+
+### [CorrelationToken]
+
+The `[CorrelationToken]` attribute marks a property used as a unique correlation token for generated-ID retrieval fallback. Needed only where the dialect's plan is `CorrelationToken` (Snowflake): no `RETURNING`/`OUTPUT`, sequence prefetch or session last-id function. Without it `CreateAsync` throws `NotSupportedException` there before writing (DEC-007). See `docs/generated-keys.md`.
+
+```csharp
+[CorrelationToken]
+[Column("correlation_id", DbType.Guid)]
+public Guid CorrelationId { get; set; }
+```
+
+TableGateway generates a unique value, inserts it alongside the row, then immediately queries back using this token to retrieve the database-generated identity. The `CorrelationId` property is separate from the `[Id]` column.
+
+### [Version]
+
+Enables optimistic concurrency control:
+
+```csharp
+[Version]
+[Column("version")]
+public int Version { get; set; }
+```
+
+| Operation | Behavior |
+|-----------|----------|
+| **Create** | Version is automatically set to `1` if null or `0` |
+| **Update** | Version is incremented by 1 in the `SET` clause; `WHERE version = @currentVersion` is appended |
+
+`UpdateAsync` automatically throws `ConcurrencyConflictException` when a `[Version]` column is present and the UPDATE affects 0 rows (version mismatch — optimistic concurrency conflict).
 
 ## Null Handling
 
@@ -197,6 +243,8 @@ registry.RegisterMapping<CustomType>(
 ## Best Practices
 
 - Use `EnumParseFailureMode.Throw` in production for data integrity
+- Use `EnumParseFailureMode.SetNullAndLog` for nullable enum properties where missing values are tolerated
+- Use `EnumParseFailureMode.SetDefaultValue` for non-nullable enum properties in data migration scenarios
 - Store complex types as JSON for cross-database portability
 - Always use UTC for timestamp fields
 - Leverage nullable reference types for proper null handling

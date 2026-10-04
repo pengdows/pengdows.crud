@@ -14,7 +14,7 @@ ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null);
 
 // SELECT with no WHERE (starting point for custom queries)
 ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
-ISqlContainer BuildBaseRetrieve(string alias, string[]? extraSelectExpressions, IDatabaseContext? context = null);
+ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions, IDatabaseContext? context = null);
 
 // SELECT with WHERE clause by IDs
 ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? ids, string alias, IDatabaseContext? context = null);
@@ -101,31 +101,33 @@ ValueTask<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? conte
 ValueTask<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
 
 // Count
-ValueTask<long> CountAllAsync(IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<long> CountWhereAsync(ISqlContainer sc, CancellationToken ct = default);
-ValueTask<long> CountWhereNullAsync(string columnName, IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<long> CountWhereEqualsAsync<T>(string columnName, T value, DbType dbType, IDatabaseContext? context = null, CancellationToken ct = default);
+ValueTask<long> CountAllAsync(IDatabaseContext? context = null);
+ValueTask<long> CountWhereAsync(string column, string value, bool isLike = false, IDatabaseContext? context = null);
+ValueTask<long> CountWhereNullAsync(string column, IDatabaseContext? context = null);
+ValueTask<long> CountWhereEqualsAsync(string column, string value, string? andWhereNull = null, string? andWhereNotNull = null, IDatabaseContext? context = null); // at most one of andWhereNull/andWhereNotNull
 ```
 
 ### Other Members
 
 ```csharp
 string WrappedTableName { get; }                    // Fully qualified, quoted table name
-EnumParseFailureMode EnumParseBehavior { get; set; } // Enum parse failure handling
+EnumParseFailureMode EnumParseBehavior { get; }      // Enum parse failure handling (init-only; set via constructor)
 Action<object, object?> GetOrCreateSetter(PropertyInfo prop); // Compiled setter
 TEntity MapReaderToObject(ITrackedReader reader);    // Row-to-entity mapping
 ```
 
 ## IPrimaryKeyTableGateway<TEntity>
 
-For entities with **no surrogate `[Id]` column** — all operations use `[PrimaryKey]` columns. Throws `SqlGenerationException` at construction if no `[PrimaryKey]` defined.
+For entities with **no surrogate `[Id]` column** — all operations use `[PrimaryKey]` columns. Throws `InvalidOperationException` at construction if no `[PrimaryKey]` defined.
 
 ### Tier 1: Build Methods
 
 ```csharp
 ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null);
-ISqlContainer BuildBaseRetrieve(string alias, string[]? extraSelectExpressions = null);
-ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? objects, string alias = "");
+ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
+ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions, IDatabaseContext? context = null);
+ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? objects, string alias, IDatabaseContext? context = null);
+ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? objects, IDatabaseContext? context = null);
 ValueTask<ISqlContainer> BuildUpdateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
 ValueTask<ISqlContainer> BuildUpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null, CancellationToken ct = default);
 ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null);
@@ -185,7 +187,7 @@ void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? entities, ISqlContaine
 
 ```csharp
 string WrappedTableName { get; }
-EnumParseFailureMode EnumParseBehavior { get; set; }
+EnumParseFailureMode EnumParseBehavior { get; }
 Action<object, object?> GetOrCreateSetter(PropertyInfo prop);
 TEntity MapReaderToObject(ITrackedReader reader);
 ```
@@ -284,11 +286,11 @@ string WrapForStoredProc(ExecutionType type, bool includeParameters = true, bool
 ### Transaction Management
 
 ```csharp
-ITransactionContext BeginTransaction(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write, bool? readOnly = null);
-ITransactionContext BeginTransaction(IsolationProfile profile, ExecutionType type = ExecutionType.Write, bool? readOnly = null);
+ITransactionContext BeginTransaction(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write);
+ITransactionContext BeginTransaction(IsolationProfile profile, ExecutionType type = ExecutionType.Write);
 
-ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write, bool? readOnly = null, CancellationToken ct = default);
-ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile profile, ExecutionType type = ExecutionType.Write, bool? readOnly = null, CancellationToken ct = default);
+ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write, CancellationToken ct = default);
+ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile profile, ExecutionType type = ExecutionType.Write, CancellationToken ct = default);
 ```
 
 ### SQL Container Creation
@@ -337,11 +339,11 @@ Extends `IDatabaseContext`:
 
 ```csharp
 void Commit();
-Task CommitAsync(CancellationToken ct = default);
+ValueTask CommitAsync(CancellationToken ct = default);
 void Rollback();
-Task RollbackAsync(CancellationToken ct = default);
-Task SavepointAsync(string name);
-Task RollbackToSavepointAsync(string name);
+ValueTask RollbackAsync(CancellationToken ct = default);
+ValueTask SavepointAsync(string name, CancellationToken ct = default);
+ValueTask RollbackToSavepointAsync(string name, CancellationToken ct = default);
 ```
 
 ### Transaction State
@@ -440,10 +442,10 @@ Returned by `TryExecuteScalarAsync<T>` to unambiguously distinguish between thre
 ```csharp
 public enum ScalarStatus { None, Null, Value }
 
-public struct ScalarResult<T>
+public readonly record struct ScalarResult<T>(ScalarStatus Status, T? Value)
 {
-    public ScalarStatus Status { get; }   // None = no rows, Null = row returned DBNull, Value = has value
-    public T? Value { get; }              // The value; meaningful only when Status == Value
+    // Status: None = no rows, Null = row returned DBNull, Value = has value
+    // Value: meaningful only when Status == Value
     public bool HasValue { get; }         // True only when Status == Value
     public T Required { get; }            // Returns Value or throws InvalidOperationException if not Value
 }
@@ -464,7 +466,7 @@ switch (result.Status)
 
 ## EnumParseFailureMode
 
-Controls how `TableGateway` handles enum values that cannot be parsed when reading from the database. Configured via the `EnumParseBehavior` property on the gateway.
+Controls how `TableGateway` handles enum values that cannot be parsed when reading from the database. Set once via the gateway constructor's `enumParseBehavior` parameter (default `Throw`); the gateway's `EnumParseBehavior` property is init-only.
 
 ```csharp
 public enum EnumParseFailureMode

@@ -10,8 +10,6 @@
 
 ## Basic Setup
 
-When creating a `DatabaseContext` for unit tests with `fakeDb`, always use `DbMode.SingleConnection`. This prevents the fake provider from being called with multi-connection patterns it does not support.
-
 ```csharp
 using System.Data;
 using pengdows.crud;
@@ -25,9 +23,7 @@ public class BasicFakeDbTests
     public async Task BuildAndExecute_WorksWithFakeProvider()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var context = new DatabaseContext(
-            new DatabaseContextConfiguration { ConnectionString = "Data Source=test;", DbMode = DbMode.SingleConnection },
-            factory);
+        var context = new DatabaseContext("Data Source=test;", factory);
 
         using var sc = context.CreateSqlContainer("SELECT 1");
         var value = await sc.ExecuteScalarRequiredAsync<int>();
@@ -102,11 +98,11 @@ The five supported failure modes on `ConnectionFailureMode` are:
 
 Additional failure controls are available on `fakeDbConnection`, including:
 
-- `SetFailOnOpen(...)`
-- `SetFailOnCommand(...)`
-- `SetFailOnTransaction(...)`
-- `SetFailAfterOpenCount(...)`
-- `SetCustomFailureException(...)`
+- `SetFailOnOpen(...)` — corresponds to `ConnectionFailureMode.FailOnOpen`
+- `SetFailOnCommand(...)` — corresponds to `ConnectionFailureMode.FailOnCommand`
+- `SetFailOnBeginTransaction(...)` — corresponds to `ConnectionFailureMode.FailOnTransaction`
+- `SetFailAfterOpenCount(...)` — corresponds to `ConnectionFailureMode.FailAfterCount`
+- `SetCustomFailureException(...)` — override the exception thrown on failure
 
 Custom exception injection is supported — pass a specific exception instance to `SetCustomFailureException` to control exactly what is thrown. Connection tracking and disposal verification are also available for asserting correct resource cleanup.
 

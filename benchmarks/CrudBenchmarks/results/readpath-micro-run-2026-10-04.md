@@ -28,3 +28,17 @@ Findings:
   saving shows up as less GC work at volume (the SQL Server hydration run of the same day measured
   pengdows ahead of Dapper's async path), but the per-row CPU figure is not a win and is reported as
   measured.
+
+### Re-run at `46d240e0` plus the TrackedReader flag (2026-10-04, PERF-030)
+
+Same machine, file and command, after the TYPE-022 DuckDB change added a column check to typed reads
+(gated on a constructor-time flag, so only DuckDB pays for it):
+
+| Method | HEAD |
+|---|---:|
+| GovernorAcquireRelease | 84.5 ns ± 0.3, 48 B |
+| MapRow | 165.0 ns ± 0.7, 80 B |
+
+`MapRow` is back at the "before" figure (165.9 ns) with half its allocation; the +3.5 ns of the first
+run doesn't reproduce, so PERF-030 is closed as not reproduced.
+

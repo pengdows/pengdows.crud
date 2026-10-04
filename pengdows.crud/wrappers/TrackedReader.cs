@@ -77,6 +77,10 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     // once, since a tracked reader never moves to another result set.
     private readonly SqlDialect? _unresolvedColumnDialect;
 
+    // SqlDialect.ReadsResolvedColumnsByDataTypeName, read once: only then can a column the provider
+    // reports a type for be one the dialect reads itself, so typed reads test this flag alone.
+    private readonly bool _readsResolvedColumnsByDataTypeName;
+
     // The dialect's coercion options: DataReaderMapper resolves provider-specific coercions with them.
     private readonly TypeCoercionOptions _coercionOptions;
     private object?[]? _unresolvedColumnTypes;
@@ -145,6 +149,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     {
         _coercionOptions = coercionOptions ?? TypeCoercionOptions.Default;
         _unresolvedColumnDialect = unresolvedColumnDialect;
+        _readsResolvedColumnsByDataTypeName = unresolvedColumnDialect is { ReadsResolvedColumnsByDataTypeName: true };
         _isUnreadableStoredValue = isUnreadableStoredValue;
         _reportsOutOfRangeDecimalAsNull = reportsOutOfRangeDecimalAsNull;
         _readFailureTranslator = readFailureTranslator;
@@ -400,7 +405,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     {
         // A column the dialect reads itself (DuckDB's INTERVAL, TYPE-022) bypasses the provider's
         // conversion.
-        if (_unresolvedColumnDialect is not null && UnresolvedColumnType(i) is not null)
+        if (_readsResolvedColumnsByDataTypeName && UnresolvedColumnType(i) is not null)
         {
             return (T)GetValue(i);
         }

@@ -140,7 +140,10 @@ try
 }
 catch
 {
-    await txn.RollbackAsync(ct);
+    if (!txn.IsCompleted) // a failed CommitAsync has already completed the transaction
+    {
+        await txn.RollbackAsync(ct);
+    }
     throw;
 }
 ```

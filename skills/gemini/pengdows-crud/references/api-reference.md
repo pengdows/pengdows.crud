@@ -14,6 +14,7 @@ ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null);
 
 // SELECT with no WHERE (starting point for custom queries)
 ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
+ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions, IDatabaseContext? context = null);
 
 // SELECT with WHERE clause by IDs
 ISqlContainer BuildRetrieve(IReadOnlyCollection<TRowID>? ids, string alias, IDatabaseContext? context = null);
@@ -99,32 +100,34 @@ ValueTask<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContex
 ValueTask<int> BatchDeleteAsync(IEnumerable<TRowID> ids, IDatabaseContext? context = null, CancellationToken ct = default);
 ValueTask<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
 
-// Count Operations
-ValueTask<long> CountAllAsync(IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<long> CountWhereAsync(ISqlContainer sc, CancellationToken ct = default);
-ValueTask<long> CountWhereNullAsync(string columnName, IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<long> CountWhereEqualsAsync<TValue>(string columnName, TValue value, IDatabaseContext? context = null, CancellationToken ct = default);
+// Count
+ValueTask<long> CountAllAsync(IDatabaseContext? context = null);
+ValueTask<long> CountWhereAsync(string column, string value, bool isLike = false, IDatabaseContext? context = null);
+ValueTask<long> CountWhereNullAsync(string column, IDatabaseContext? context = null);
+ValueTask<long> CountWhereEqualsAsync(string column, string value, string? andWhereNull = null, string? andWhereNotNull = null, IDatabaseContext? context = null); // at most one of andWhereNull/andWhereNotNull
 ```
 
 ### Other Members
 
 ```csharp
 string WrappedTableName { get; }                    // Fully qualified, quoted table name
-EnumParseFailureMode EnumParseBehavior { get; set; } // Enum parse failure handling
+EnumParseFailureMode EnumParseBehavior { get; }      // Enum parse failure handling (init-only; set via constructor)
 Action<object, object?> GetOrCreateSetter(PropertyInfo prop); // Compiled setter
 TEntity MapReaderToObject(ITrackedReader reader);    // Row-to-entity mapping
 ```
 
 ## IPrimaryKeyTableGateway<TEntity>
 
-For entities with **no surrogate `[Id]` column** — all operations use `[PrimaryKey]` columns. Throws `SqlGenerationException` at construction if no `[PrimaryKey]` defined.
+For entities with **no surrogate `[Id]` column** — all operations use `[PrimaryKey]` columns. Throws `InvalidOperationException` at construction if no `[PrimaryKey]` defined.
 
 ### Tier 1: Build Methods
 
 ```csharp
 ISqlContainer BuildCreate(TEntity entity, IDatabaseContext? context = null);
-ISqlContainer BuildBaseRetrieve(string alias, string[]? extraSelectExpressions = null);
-ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? objects, string alias = "");
+ISqlContainer BuildBaseRetrieve(string alias, IDatabaseContext? context = null);
+ISqlContainer BuildBaseRetrieve(string alias, IReadOnlyCollection<string> extraSelectExpressions, IDatabaseContext? context = null);
+ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? objects, string alias, IDatabaseContext? context = null);
+ISqlContainer BuildRetrieve(IReadOnlyCollection<TEntity>? objects, IDatabaseContext? context = null);
 ValueTask<ISqlContainer> BuildUpdateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
 ValueTask<ISqlContainer> BuildUpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null, CancellationToken ct = default);
 ISqlContainer BuildUpsert(TEntity entity, IDatabaseContext? context = null);
@@ -148,19 +151,45 @@ IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc, CancellationToken ct
 ### Tier 3: Convenience Methods
 
 ```csharp
+// Create
 ValueTask<bool> CreateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+ValueTask<int> CreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // → BatchCreateAsync
+
+// Retrieve (by [PrimaryKey] only — no TRowID overload)
 ValueTask<TEntity?> RetrieveOneAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
+
+// Update
 ValueTask<int> UpdateAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+ValueTask<int> UpdateAsync(TEntity entity, bool loadOriginal, IDatabaseContext? context = null, CancellationToken ct = default); // loadOriginal ignored
+ValueTask<int> UpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // → BatchUpdateAsync
+
+// Delete (entity collection only — no DeleteAsync(id) overload)
+ValueTask<int> DeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // → BatchDeleteAsync
+
+// Upsert
 ValueTask<int> UpsertAsync(TEntity entity, IDatabaseContext? context = null, CancellationToken ct = default);
-ValueTask<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+ValueTask<int> UpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default); // → BatchUpsertAsync
+
+// Explicit Batch Operations
 ValueTask<int> BatchCreateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
 ValueTask<int> BatchUpdateAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
 ValueTask<int> BatchUpsertAsync(IReadOnlyList<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
 ValueTask<int> BatchDeleteAsync(IReadOnlyCollection<TEntity> entities, IDatabaseContext? context = null, CancellationToken ct = default);
+```
+
+### WHERE Clause Helpers
+
+```csharp
+void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? entities, ISqlContainer sc, string alias = "");
+```
+
+### Other Members
+
+```csharp
+string WrappedTableName { get; }
+EnumParseFailureMode EnumParseBehavior { get; }
+Action<object, object?> GetOrCreateSetter(PropertyInfo prop);
+TEntity MapReaderToObject(ITrackedReader reader);
 ```
 
 ### Key Differences from `ITableGateway<TEntity, TRowID>`
@@ -257,11 +286,11 @@ string WrapForStoredProc(ExecutionType type, bool includeParameters = true, bool
 ### Transaction Management
 
 ```csharp
-ITransactionContext BeginTransaction(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write, bool? readOnly = null);
-ITransactionContext BeginTransaction(IsolationProfile profile, ExecutionType type = ExecutionType.Write, bool? readOnly = null);
+ITransactionContext BeginTransaction(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write);
+ITransactionContext BeginTransaction(IsolationProfile profile, ExecutionType type = ExecutionType.Write);
 
-ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write, bool? readOnly = null, CancellationToken ct = default);
-ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile profile, ExecutionType type = ExecutionType.Write, bool? readOnly = null, CancellationToken ct = default);
+ValueTask<ITransactionContext> BeginTransactionAsync(IsolationLevel? level = null, ExecutionType type = ExecutionType.Write, CancellationToken ct = default);
+ValueTask<ITransactionContext> BeginTransactionAsync(IsolationProfile profile, ExecutionType type = ExecutionType.Write, CancellationToken ct = default);
 ```
 
 ### SQL Container Creation
@@ -283,13 +312,14 @@ long PeakOpenConnections { get; }
 int? ReaderPlanCacheSize { get; }              // Plan cache size for reader connections
 int MaxParameterLimit { get; }                 // Provider-specific parameter limit
 DatabaseMetrics Metrics { get; }               // Real-time metrics snapshot
+EventHandler<DatabaseMetrics> MetricsUpdated;  // Raised when metrics change
+CommandPrepareMode PrepareMode { get; }        // Auto/Always/Never statement preparation
+bool SupportsInsertReturning { get; }          // True if INSERT ... RETURNING is supported
+bool SupportsNamedParameters { get; }          // False for providers that use positional ? markers
 string Name { get; set; }                      // Logical name for this context (for logging/multi-tenancy)
 Guid RootId { get; }                           // Unique identity of this context instance
 ReadWriteMode ReadWriteMode { get; }           // Read-only or read-write
 bool IsReadOnlyConnection { get; }             // True if context was opened read-only
-CommandPrepareMode PrepareMode { get; }        // Statement preparation mode (Auto/Always/Never)
-bool SupportsInsertReturning { get; }          // Whether INSERT ... RETURNING is supported
-bool SupportsNamedParameters { get; }          // Whether named parameters are supported
 string DatabaseProductName { get; }            // Database product name string
 ```
 
@@ -402,6 +432,48 @@ public interface IAuditValues
     DateTime UtcNow { get; }                 // Always UTC
     DateTimeOffset? TimestampOffset { get; } // Optional UTC offset
     T As<T>();                               // Cast UserId
+}
+```
+
+## ScalarResult\<T\>
+
+Returned by `TryExecuteScalarAsync<T>` to unambiguously distinguish between three outcomes:
+
+```csharp
+public enum ScalarStatus { None, Null, Value }
+
+public readonly record struct ScalarResult<T>(ScalarStatus Status, T? Value)
+{
+    // Status: None = no rows, Null = row returned DBNull, Value = has value
+    // Value: meaningful only when Status == Value
+    public bool HasValue { get; }         // True only when Status == Value
+    public T Required { get; }            // Returns Value or throws InvalidOperationException if not Value
+}
+```
+
+**Usage:**
+
+```csharp
+var result = await sc.TryExecuteScalarAsync<int>();
+switch (result.Status)
+{
+    case ScalarStatus.None:  // query returned no rows
+    case ScalarStatus.Null:  // row returned but value was DBNull
+    case ScalarStatus.Value: // result.Value is valid
+        Console.WriteLine(result.Required); // throws if not Value
+}
+```
+
+## EnumParseFailureMode
+
+Controls how `TableGateway` handles enum values that cannot be parsed when reading from the database. Set once via the gateway constructor's `enumParseBehavior` parameter (default `Throw`); the gateway's `EnumParseBehavior` property is init-only.
+
+```csharp
+public enum EnumParseFailureMode
+{
+    Throw,           // Throw an exception (default)
+    SetNullAndLog,   // Set property to null and log a warning
+    SetDefaultValue  // Set property to default(TEnum) silently
 }
 ```
 

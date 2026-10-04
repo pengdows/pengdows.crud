@@ -16,7 +16,7 @@ public class MyEntity { }
 
 **Parameters:**
 - `name` (string) — Table name (no dot-notation; do not embed schema in name)
-- `schema` (string, optional) — Schema name as a separate parameter
+- `schema` (string, optional) — Schema name as a separate parameter (e.g., "dbo", "public", "wiki")
 
 **Notes:**
 - Required on all entities used with TableGateway
@@ -29,14 +29,14 @@ Maps a property to a database column with type information.
 
 ```csharp
 [Column("column_name", DbType.String)]
-[Column("column_name", DbType.Int32, 2)]  // With explicit ordinal (read order)
+[Column("column_name", DbType.Int32, 2)]  // With explicit ordinal
 public string Name { get; set; }
 ```
 
 **Parameters:**
 - `name` (string) — Database column name
 - `type` (DbType) — ADO.NET database type
-- `ordinal` (int, default: 0) — Column read order; controls reader column index during mapping
+- `ordinal` (int, optional, default: 0) — Column order in generated SQL column lists; 0 = assigned automatically (reader mapping is by column name, not ordinal)
 
 **Supported DbTypes:**
 - `DbType.String` — Text/varchar columns

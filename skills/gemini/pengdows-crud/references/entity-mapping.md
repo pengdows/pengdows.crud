@@ -10,18 +10,18 @@ Specifies the database table name for an entity.
 
 ```csharp
 [Table("table_name")]
-[Table("table_name", "schema_name")]  // With schema as second argument
+[Table("table_name", "schema_name")]  // With explicit schema parameter
 public class MyEntity { }
 ```
 
 **Parameters:**
-- `name` (string) — Table name
-- `schema` (string, optional) — Schema name (e.g., "dbo", "public", "wiki")
+- `name` (string) — Table name (no dot-notation; do not embed schema in name)
+- `schema` (string, optional) — Schema name as a separate parameter (e.g., "dbo", "public", "wiki")
 
 **Notes:**
 - Required on all entities used with TableGateway
-- Schema is passed as a separate second argument, not dot-prefixed in the name
-- Schema and table name are automatically quoted per database requirements
+- Schema must be passed as the second constructor parameter, not embedded in `name` with dot-notation
+- Both name and schema are automatically quoted per database requirements
 
 ### ColumnAttribute
 
@@ -36,7 +36,7 @@ public string Name { get; set; }
 **Parameters:**
 - `name` (string) — Database column name
 - `type` (DbType) — ADO.NET database type
-- `ordinal` (int, optional, default: 0) — Column ordinal position in SELECT results
+- `ordinal` (int, optional, default: 0) — Column order in generated SQL column lists; 0 = assigned automatically (reader mapping is by column name, not ordinal)
 
 **Supported DbTypes:**
 - `DbType.String` — Text/varchar columns
@@ -78,17 +78,21 @@ public int Id { get; set; }
 Defines business/natural primary key columns (separate from pseudokey).
 
 ```csharp
-[PrimaryKey(1)]
+[PrimaryKey]        // Single-column primary key (no order needed)
+[Column("email", DbType.String)]
+public string Email { get; set; }
+
+[PrimaryKey(1)]     // Composite key — part 1
 [Column("tenant_id", DbType.String)]
 public string TenantId { get; set; }
 
-[PrimaryKey(2)]
+[PrimaryKey(2)]     // Composite key — part 2
 [Column("email", DbType.String)]
 public string Email { get; set; }
 ```
 
 **Parameters:**
-- `order` (int) — Order of this column in composite key (1-based)
+- `order` (int, optional) — Order of this column in composite key (1-based); omit for single-column keys
 
 **Rules:**
 - Can have multiple PrimaryKey columns with different orders

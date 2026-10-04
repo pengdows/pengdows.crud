@@ -255,7 +255,8 @@ var clone = template.Clone(transactionContext);  // Different context (e.g., tra
 |-----------|----------|-----|
 | `DatabaseContext` | **Singleton** | Manages connection pool, metrics, DbMode state |
 | `TableGateway<T,TId>` | **Singleton** | Stateless, caches compiled accessors |
-| `IAuditValueResolver` | **Singleton** | Must be thread-safe/AsyncLocal-based (e.g. `IHttpContextAccessor`) |
+| `IAuditValueResolver` | **Singleton** | Must be thread-safe/AsyncLocal-based (e.g. `IHttpContextAccessor` inside); cannot be Scoped because gateways are Singletons |
+| `ITenantContextRegistry` | **Singleton** | Manages per-tenant DatabaseContext instances |
 
 ```csharp
 // Correct DI registration
@@ -266,8 +267,11 @@ services.AddSingleton<IDatabaseContext>(sp =>
 services.AddSingleton<IOrderGateway>(sp =>
     new OrderGateway(sp.GetRequiredService<IDatabaseContext>(), sp.GetRequiredService<IAuditValueResolver>()));
 
-// AuditResolver is SINGLETON - must be thread-safe (e.g. uses IHttpContextAccessor)
+// AuditResolver is SINGLETON - must be thread-safe (use IHttpContextAccessor/AsyncLocal internally)
 services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
+
+// TenantContextRegistry is SINGLETON
+services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
 ```
 
 ## Extending TableGateway - THE CORRECT PATTERN
@@ -346,10 +350,10 @@ You cannot accidentally skip setting audit fields.
 
 ### IAuditValueResolver
 
-Register as **singleton** and pass to TableGateway for entities with audit fields:
+Register as **singleton** and pass to TableGateway for entities with audit fields. Because gateways are singletons, the resolver must also be a singleton — use `IHttpContextAccessor` or `AsyncLocal<T>` internally to access per-request state safely:
 
 ```csharp
-// Register singleton resolver
+// Register singleton resolver (thread-safe via IHttpContextAccessor internally)
 services.AddHttpContextAccessor();
 services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
 
@@ -482,6 +486,7 @@ public class OrderItem
 ### Custom SQL with SqlContainer
 
 **IMPORTANT:** Always use `WrapObjectName()` for column names and aliases to ensure proper quoting per database dialect.
+**IMPORTANT:** Always parameterize predicate and join values. `pengdows.crud.analyzers` flags raw predicate/join value injection as `PGC008`; `IS NULL` and `IS NOT NULL` are the normal exceptions.
 
 ```csharp
 // Inside your extended gateway class
@@ -699,10 +704,13 @@ public int Version { get; set; }
 
 | Operation | Pattern | Example |
 |-----------|---------|---------|
-| INSERT | `i{n}` | `i0`, `i1`, `i2` |
-| UPDATE SET | `s{n}` | `s0`, `s1`, `s2` |
-| WHERE | `w{n}` | `w0`, `w1`, `w2` |
-| VERSION | `v{n}` | `v0`, `v1` |
+| INSERT values | `i{n}` | `i0`, `i1`, `i2` |
+| UPDATE SET clause | `s{n}` | `s0`, `s1`, `s2` |
+| WHERE (IN/ANY retrieve) | `w{n}` | `w0`, `w1`, `w2` |
+| WHERE key/id lookup | `k{n}` | `k0`, `k1` |
+| Optimistic lock version | `v{n}` | `v0`, `v1` |
+| JOIN conditions | `j{n}` | `j0`, `j1` |
+| Batch row values | `b{n}` | `b0`, `b1`, `b2` |
 
 ```csharp
 // Reuse container with updated parameters
@@ -773,7 +781,7 @@ Tests are required. Coverage minimums are enforced in CI.
 1. **DatabaseContext is SINGLETON** - one per connection string
 2. **TableGateway is SINGLETON** - stateless, caches compiled accessors
 3. **Extend TableGateway** - put custom query methods in inherited class, not wrapper service
-4. **IAuditValueResolver is SINGLETON** - must be thread-safe/AsyncLocal-based to avoid captive dependencies in singleton gateways
+4. **IAuditValueResolver is SINGLETON** - must be thread-safe/AsyncLocal-based to avoid captive dependencies in singleton gateways; use IHttpContextAccessor or AsyncLocal internally to access per-request state
 5. **TenantContextRegistry is SINGLETON** - manages per-tenant contexts
 6. **Transactions are operation-scoped** - create inside methods, never store as fields
 7. **ITrackedReader is a lease** - pins connection until disposed, dispose promptly

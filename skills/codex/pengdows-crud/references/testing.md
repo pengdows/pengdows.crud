@@ -33,6 +33,8 @@ public class BasicFakeDbTests
 }
 ```
 
+Tests should target `TableGateway<TEntity, TRowID>` (not `EntityHelper`, which was the 1.0 name).
+
 ## Queueing Fake Results
 
 Use `fakeDbConnection` queue APIs for deterministic command results:
@@ -84,6 +86,16 @@ public void OpenFailure_IsConfigurable()
 }
 ```
 
+The five supported failure modes on `ConnectionFailureMode` are:
+
+| Mode | Behavior |
+|------|----------|
+| `FailOnOpen` | Throws when the connection is opened |
+| `FailOnCommand` | Throws when any command is executed |
+| `FailOnTransaction` | Throws when a transaction is begun |
+| `FailAfterCount` | Succeeds for N opens, then throws |
+| `Broken` | Simulates a fully broken/unusable connection |
+
 Additional failure controls are available on `fakeDbConnection`, including:
 
 - `SetFailOnOpen(...)` — corresponds to `ConnectionFailureMode.FailOnOpen`
@@ -92,7 +104,7 @@ Additional failure controls are available on `fakeDbConnection`, including:
 - `SetFailAfterOpenCount(...)` — corresponds to `ConnectionFailureMode.FailAfterCount`
 - `SetCustomFailureException(...)` — override the exception thrown on failure
 
-The `ConnectionFailureMode` enum values are: `FailOnOpen`, `FailOnCommand`, `FailOnTransaction`, `FailAfterCount`, `Broken`.
+Custom exception injection is supported — pass a specific exception instance to `SetCustomFailureException` to control exactly what is thrown. Connection tracking and disposal verification are also available for asserting correct resource cleanup.
 
 ## Recommended Coverage Pattern
 

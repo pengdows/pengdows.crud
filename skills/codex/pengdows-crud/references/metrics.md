@@ -1,6 +1,6 @@
 # Metrics & Observability
 
-`pengdows.crud` provides 36 real-time metrics for deep operational visibility via the `DatabaseMetrics` sealed record.
+`pengdows.crud` provides 36+ real-time metrics for deep operational visibility via the `DatabaseMetrics` sealed record.
 
 ## Categories & Key Metrics
 
