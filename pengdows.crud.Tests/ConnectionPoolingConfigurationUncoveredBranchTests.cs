@@ -84,7 +84,7 @@ public sealed class ConnectionPoolingConfigurationUncoveredBranchTests
     public void ApplyPoolDiscriminator_StrippingBuilder_PreservesCredentials()
     {
         var cs = "Data Source=x;Password=secret";
-        var builder = new PasswordStrippingBuilder(cs);
+        var builder = new EdgeCasePasswordStrippingBuilder(cs);
         var result = ConnectionPoolingConfiguration.ApplyPoolDiscriminator(cs, "Application Name", "reader", builder);
         var resultBuilder = new DbConnectionStringBuilder { ConnectionString = result };
         Assert.Equal("secret", resultBuilder["Password"]);
