@@ -3,9 +3,11 @@
 // PURPOSE: Reads values a provider reports but can't return through GetValue.
 //
 // AI SUMMARY:
-// - ReadGuid(): a Guid property's column through GetValue, or, when the provider can't return the
-//   value (Npgsql on Spanner's uuid: no type name, GetValue throws), its 16 binary bytes in the
-//   dialect's Guid byte order (confirmed live on the Spanner emulator, TYPE-002).
+// - GuidColumnReader: a Guid property's column through GetValue, or, once the provider refuses it
+//   (Npgsql on Spanner's uuid: no type name, GetValue throws), its 16 binary bytes in the dialect's
+//   Guid byte order (confirmed live on the Spanner emulator, TYPE-002). One per plan column, so the
+//   refusal is learned once rather than thrown on every row (PERF-010).
+// - ValueArrayColumnReader<T>: the same learning for value-type arrays Npgsql on Spanner refuses.
 // - TryReadNullableElementArray(): an array of a value type that Npgsql refuses to read with
 //   non-nullable elements ("returned array contains nulls", Spanner), read as T?[] and returned as
 //   T[] when it holds no nulls (a null element then fails the property's conversion, loudly).
@@ -18,6 +20,7 @@
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace pengdows.crud.@internal;
@@ -29,22 +32,49 @@ internal static class ProviderValueFieldReader
 
     private static readonly ConcurrentDictionary<Type, MethodInfo> NullableArrayReaders = new();
 
-    public static object ReadGuid(IDataRecord record, int ordinal, bool bigEndian)
+    /// <summary>
+    /// A Guid column of one read plan (PERF-010): reads through GetValue until the provider refuses it
+    /// once, then reads the bytes directly, instead of throwing and catching on every row.
+    /// </summary>
+    internal sealed class GuidColumnReader
     {
-        try
+        private readonly bool _bigEndian;
+        private volatile bool _readBytes;
+
+        public GuidColumnReader(bool bigEndian) => _bigEndian = bigEndian;
+
+        internal static readonly MethodInfo ReadMethod = typeof(GuidColumnReader).GetMethod(nameof(Read))!;
+
+        public object Read(IDataRecord record, int ordinal)
         {
-            return record.GetValue(ordinal);
-        }
-        catch (InvalidCastException)
-        {
-            var bytes = UnresolvedColumnReader.ReadBytes(record, ordinal);
-            if (bytes.Length != 16)
+            if (_readBytes)
             {
-                throw;
+                return record.IsDBNull(ordinal) ? DBNull.Value : ReadGuidBytes(record, ordinal, _bigEndian);
             }
 
-            return new Guid(bytes, bigEndian);
+            try
+            {
+                return record.GetValue(ordinal);
+            }
+            catch (InvalidCastException)
+            {
+                var guid = ReadGuidBytes(record, ordinal, _bigEndian);
+                _readBytes = true;
+                return guid;
+            }
         }
+    }
+
+    private static Guid ReadGuidBytes(IDataRecord record, int ordinal, bool bigEndian)
+    {
+        var bytes = UnresolvedColumnReader.ReadBytes(record, ordinal);
+        if (bytes.Length != 16)
+        {
+            throw new InvalidCastException(
+                $"Column {ordinal} can't be read as a Guid: the provider refused its value and its bytes are {bytes.Length} long, not 16.");
+        }
+
+        return new Guid(bytes, bigEndian);
     }
 
     /// <summary>
@@ -65,6 +95,11 @@ internal static class ProviderValueFieldReader
             value = array;
         }
 
+        return ToArray<T>(value);
+    }
+
+    private static T[] ToArray<T>(object value)
+    {
         if (value is T[] typed)
         {
             return typed;
@@ -98,6 +133,73 @@ internal static class ProviderValueFieldReader
     /// <summary>An array column the driver returns as an Informix collection literal.</summary>
     public static T[] ReadCollectionLiteral<T>(IDataRecord record, int ordinal) =>
         CollectionLiteralFormat.Parse<T>(record.GetString(ordinal));
+
+    /// <summary>
+    /// A value-type array column of one read plan (PERF-010). Npgsql on Spanner refuses GetValue for
+    /// these even with no null elements (confirmed live), so after the first refusal the plan reads
+    /// nullable elements directly instead of throwing and catching on every row.
+    /// </summary>
+    internal sealed class ValueArrayColumnReader<T> where T : struct
+    {
+        private volatile bool _readNullable;
+
+        public T[] Read(IDataRecord record, int ordinal)
+        {
+            var reader = record as DbDataReader ?? (record as IInternalTrackedReader)?.InnerReader;
+            if (_readNullable && reader != null)
+            {
+                return ReadNullableElements(reader, ordinal);
+            }
+
+            object value;
+            try
+            {
+                value = record.GetValue(ordinal);
+            }
+            catch (InvalidCastException) when (reader != null)
+            {
+                var array = ReadNullableElements(reader, ordinal);
+                _readNullable = true;
+                return array;
+            }
+
+            return ToArray<T>(value);
+        }
+
+        private static T[] ReadNullableElements(DbDataReader reader, int ordinal)
+        {
+            var nullable = reader.GetFieldValue<T?[]>(ordinal);
+            var values = new T[nullable.Length];
+            for (var i = 0; i < nullable.Length; i++)
+            {
+                if (nullable[i] is not { } item)
+                {
+                    // A null element fails the property's conversion, loudly.
+                    return (T[])TypeCoercionHelper.Coerce(nullable, nullable.GetType(), typeof(T[]))!;
+                }
+
+                values[i] = item;
+            }
+
+            return values;
+        }
+    }
+
+    /// <summary>
+    /// The array reader one plan column binds: a learning <see cref="ValueArrayColumnReader{T}"/> for a
+    /// non-nullable value-type element, otherwise <see cref="ReadArray{T}"/>.
+    /// </summary>
+    internal static Expression BindArrayRead(Type elementType, Expression record, Expression ordinal)
+    {
+        if (elementType.IsValueType && Nullable.GetUnderlyingType(elementType) == null)
+        {
+            var readerType = typeof(ValueArrayColumnReader<>).MakeGenericType(elementType);
+            var instance = Activator.CreateInstance(readerType)!;
+            return Expression.Call(Expression.Constant(instance), readerType.GetMethod("Read")!, record, ordinal);
+        }
+
+        return Expression.Call(ReadArrayDefinition.MakeGenericMethod(elementType), record, ordinal);
+    }
 
     internal static readonly MethodInfo ReadCollectionLiteralDefinition =
         typeof(ProviderValueFieldReader).GetMethod(nameof(ReadCollectionLiteral))!;

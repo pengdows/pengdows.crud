@@ -204,7 +204,26 @@ public class fakeDbDataReader : DbDataReader
         }
     }
 
+    /// <summary>
+    /// How many <see cref="GetValue"/> calls threw, so a test can show a provider refusal is learned
+    /// once per column instead of thrown and caught on every row.
+    /// </summary>
+    public int GetValueExceptionCount { get; private set; }
+
     public override object GetValue(int i)
+    {
+        try
+        {
+            return GetValueCore(i);
+        }
+        catch
+        {
+            GetValueExceptionCount++;
+            throw;
+        }
+    }
+
+    private object GetValueCore(int i)
     {
         var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
             ?? throw new IndexOutOfRangeException("No data rows.");

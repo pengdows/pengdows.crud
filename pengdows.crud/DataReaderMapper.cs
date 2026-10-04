@@ -574,9 +574,10 @@ public sealed class DataReaderMapper : IDataReaderMapper
         else if (key.FieldType == typeof(object) && underlyingTarget == typeof(Guid))
         {
             // A column the provider can't return (Npgsql on Spanner's uuid) is read from its bytes.
-            var readGuid = typeof(ProviderValueFieldReader).GetMethod(nameof(ProviderValueFieldReader.ReadGuid))!;
-            var rawValue = Expression.Call(readGuid, Expression.Convert(readerParam, typeof(IDataRecord)),
-                Expression.Constant(key.Ordinal), Expression.Constant(key.Coercion?.GuidBytesBigEndian ?? false));
+            // One reader per plan column learns the refusal once (PERF-010).
+            var guidReader = new ProviderValueFieldReader.GuidColumnReader(key.Coercion?.GuidBytesBigEndian ?? false);
+            var rawValue = Expression.Call(Expression.Constant(guidReader), ProviderValueFieldReader.GuidColumnReader.ReadMethod,
+                Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
@@ -593,9 +594,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
         {
             // Typed: Npgsql refuses some arrays as non-nullable elements (Spanner) and InterBase returns
             // its declared bounds (Int32[*]).
-            var readArray = ProviderValueFieldReader.ReadArrayDefinition.MakeGenericMethod(targetType.GetElementType()!);
-            valueExpression = Expression.Call(readArray, Expression.Convert(readerParam, typeof(IDataRecord)),
-                Expression.Constant(key.Ordinal));
+            valueExpression = ProviderValueFieldReader.BindArrayRead(targetType.GetElementType()!,
+                Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
         }
         else if (key.FieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
         {

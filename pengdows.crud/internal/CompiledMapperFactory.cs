@@ -184,9 +184,10 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             else if (fieldType == typeof(object) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(Guid))
             {
                 // A column the provider can't return (Npgsql on Spanner's uuid) is read from its bytes.
-                var readGuid = typeof(ProviderValueFieldReader).GetMethod(nameof(ProviderValueFieldReader.ReadGuid))!;
-                var rawValue = Expression.Call(readGuid, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr,
-                    Expression.Constant(coercionOptions?.GuidBytesBigEndian ?? false));
+                // One reader per plan column learns the refusal once (PERF-010).
+                var guidReader = new ProviderValueFieldReader.GuidColumnReader(coercionOptions?.GuidBytesBigEndian ?? false);
+                var rawValue = Expression.Call(Expression.Constant(guidReader), ProviderValueFieldReader.GuidColumnReader.ReadMethod,
+                    Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(string) && ProviderValueFieldReader.IsReadableArray(targetType) &&
@@ -200,8 +201,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 // Typed: Npgsql refuses some arrays as non-nullable elements (Spanner reports System.Array)
                 // and InterBase returns its declared bounds (Int32[*]).
-                var readArray = ProviderValueFieldReader.ReadArrayDefinition.MakeGenericMethod(targetType.GetElementType()!);
-                valueReadExpr = Expression.Call(readArray, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                valueReadExpr = ProviderValueFieldReader.BindArrayRead(targetType.GetElementType()!,
+                    Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
             }
             else if (fieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
             {
