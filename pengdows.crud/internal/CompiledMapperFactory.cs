@@ -439,7 +439,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         // Simple numeric/bool conversions. Checked: a value the property can't hold (a BIGINT above
         // int.MaxValue into an int) throws OverflowException, reported as DataMappingException,
         // instead of wrapping to a different number (TYPE-008, REV-046).
-        if (IsNumericType(sourceType) && IsNumericType(underlyingTargetType))
+        if (NumericTypes.IsNumeric(sourceType) && NumericTypes.IsNumeric(underlyingTargetType))
         {
             // An enum converts through its underlying integer: there is no decimal-to-enum conversion,
             // so a decimal column (Oracle NUMBER) into an enum failed to compile (COR-013).
@@ -495,25 +495,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         return Expression.Convert(coerceCall, targetType);
     }
 
-    private static bool IsNumericType(Type type)
-    {
-        var typeCode = Type.GetTypeCode(type);
-        return typeCode switch
-        {
-            TypeCode.Byte => true,
-            TypeCode.SByte => true,
-            TypeCode.Int16 => true,
-            TypeCode.UInt16 => true,
-            TypeCode.Int32 => true,
-            TypeCode.UInt32 => true,
-            TypeCode.Int64 => true,
-            TypeCode.UInt64 => true,
-            TypeCode.Single => true,
-            TypeCode.Double => true,
-            TypeCode.Decimal => true,
-            _ => false
-        };
-    }
 }
 
 /// <summary>

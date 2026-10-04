@@ -27,10 +27,6 @@ public sealed class CoveragePush_TypeCoercionAndCompiledMapperTests
         typeof(CompiledMapperFactory<MapperEntity>).GetMethod("GetReaderMethod",
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
-    private static readonly MethodInfo IsNumericTypeMethod =
-        typeof(CompiledMapperFactory<MapperEntity>).GetMethod("IsNumericType",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
-
     private static readonly MethodInfo ResolveCoercerTypePairMethod =
         typeof(TypeCoercionHelper).GetMethod("ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
@@ -52,23 +48,6 @@ public sealed class CoveragePush_TypeCoercionAndCompiledMapperTests
         var resolvedMethod = (MethodInfo)GetReaderMethodMethod.Invoke(null, new object[] { fieldType })!;
 
         Assert.Equal(expectedMethod, resolvedMethod.Name);
-    }
-
-    [Fact]
-    public void CompiledMapperFactory_IsNumericType_CoversNumericCases()
-    {
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(byte) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(sbyte) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(ushort) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(uint) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(ulong) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(short) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(int) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(long) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(float) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(double) })!);
-        Assert.True((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(decimal) })!);
-        Assert.False((bool)IsNumericTypeMethod.Invoke(null, new object[] { typeof(string) })!);
     }
 
     [Fact]

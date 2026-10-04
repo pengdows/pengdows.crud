@@ -500,7 +500,7 @@ internal static class TypeCoercionHelper
 
         if (value is string text)
         {
-            if (!IsNumericClrType(Nullable.GetUnderlyingType(elementType) ?? elementType))
+            if (!NumericTypes.IsNumeric(Nullable.GetUnderlyingType(elementType) ?? elementType))
             {
                 return false;
             }
@@ -650,27 +650,6 @@ internal static class TypeCoercionHelper
 
         array = memory?.GetType().GetMethod("ToArray", Type.EmptyTypes)?.Invoke(memory, null);
         return array != null;
-    }
-
-    private static bool IsNumericClrType(Type type)
-    {
-        switch (Type.GetTypeCode(type))
-        {
-            case TypeCode.Byte:
-            case TypeCode.SByte:
-            case TypeCode.UInt16:
-            case TypeCode.UInt32:
-            case TypeCode.UInt64:
-            case TypeCode.Int16:
-            case TypeCode.Int32:
-            case TypeCode.Int64:
-            case TypeCode.Decimal:
-            case TypeCode.Double:
-            case TypeCode.Single:
-                return true;
-            default:
-                return false;
-        }
     }
 
     private static object? CoerceEnum(object value, Type enumType, EnumParseFailureMode parseMode, Type targetType)

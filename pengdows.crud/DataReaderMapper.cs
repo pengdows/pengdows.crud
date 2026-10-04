@@ -656,7 +656,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             {
                 valueExpression = rawValue;
             }
-            else if (underlyingTarget == typeof(bool) && IsNumericType(key.FieldType))
+            else if (underlyingTarget == typeof(bool) && NumericTypes.IsNumeric(key.FieldType))
             {
                 // Non-zero is true; NaN fails (NumericTruth, DRY-003).
                 var nonZero = key.FieldType == typeof(double)
@@ -668,7 +668,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
                     ? Expression.Convert(nonZero, targetType)
                     : nonZero;
             }
-            else if (IsNumericType(key.FieldType) && IsNumericType(underlyingTarget))
+            else if (NumericTypes.IsNumeric(key.FieldType) && NumericTypes.IsNumeric(underlyingTarget))
             {
                 var converted = BuildNumericConversion(rawValue, key.FieldType, underlyingTarget);
                 valueExpression = targetType != underlyingTarget
@@ -721,12 +721,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
             return false;
         }
 
-        if (IsNumericType(fieldType) && IsNumericType(targetType))
+        if (NumericTypes.IsNumeric(fieldType) && NumericTypes.IsNumeric(targetType))
         {
             return false;
         }
 
-        if (targetType == typeof(bool) && IsNumericType(fieldType))
+        if (targetType == typeof(bool) && NumericTypes.IsNumeric(fieldType))
         {
             return false;
         }
@@ -744,7 +744,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         // Integral → integral narrowing (e.g. long → int, long → short, int → byte). Checked: a
         // value that doesn't fit throws OverflowException instead of wrapping to a different
         // number (TYPE-008, REV-046); the cost is one overflow branch.
-        if (IsIntegralType(sourceType) && IsIntegralType(targetType))
+        if (NumericTypes.IsIntegral(sourceType) && NumericTypes.IsIntegral(targetType))
         {
             return Expression.ConvertChecked(rawValue, targetType);
         }
@@ -801,41 +801,6 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
 
         return typeof(Convert).GetMethod(methodName, new[] { sourceType });
-    }
-
-    private static bool IsNumericType(Type type)
-    {
-        return Type.GetTypeCode(type) switch
-        {
-            TypeCode.Byte => true,
-            TypeCode.SByte => true,
-            TypeCode.Int16 => true,
-            TypeCode.UInt16 => true,
-            TypeCode.Int32 => true,
-            TypeCode.UInt32 => true,
-            TypeCode.Int64 => true,
-            TypeCode.UInt64 => true,
-            TypeCode.Single => true,
-            TypeCode.Double => true,
-            TypeCode.Decimal => true,
-            _ => false
-        };
-    }
-
-    private static bool IsIntegralType(Type type)
-    {
-        return Type.GetTypeCode(type) switch
-        {
-            TypeCode.Byte => true,
-            TypeCode.SByte => true,
-            TypeCode.Int16 => true,
-            TypeCode.UInt16 => true,
-            TypeCode.Int32 => true,
-            TypeCode.UInt32 => true,
-            TypeCode.Int64 => true,
-            TypeCode.UInt64 => true,
-            _ => false
-        };
     }
 
     private static Type ResolveFieldType(DbDataReader reader, int ordinal, Func<int, Type?>? unresolved = null)

@@ -44,9 +44,8 @@ internal static class WholeNumber
         }
     }
 
-    private static bool IsIntegral(Type type) => Type.GetTypeCode(type) is TypeCode.Byte or TypeCode.SByte
-        or TypeCode.Int16 or TypeCode.UInt16 or TypeCode.Int32 or TypeCode.UInt32 or TypeCode.Int64
-        or TypeCode.UInt64 && !type.IsEnum;
+    // An enum converts through its underlying type before it gets here.
+    private static bool IsIntegral(Type type) => NumericTypes.IsIntegral(type) && !type.IsEnum;
 
     private static InvalidCastException Fraction(IFormattable value) =>
         new($"{value.ToString(null, CultureInfo.InvariantCulture)} has a fractional part; an integer can't hold it exactly.");

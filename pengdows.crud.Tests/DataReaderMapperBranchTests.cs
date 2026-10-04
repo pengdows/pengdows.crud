@@ -121,39 +121,6 @@ public class DataReaderMapperBranchTests
         Assert.Null(unsupported);
     }
 
-    [Fact]
-    public void PrivateTypeChecks_ExerciseNumericAndIntegralSwitches()
-    {
-        var isNumericType = typeof(DataReaderMapper)
-            .GetMethod("IsNumericType", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("IsNumericType not found.");
-        var isIntegralType = typeof(DataReaderMapper)
-            .GetMethod("IsIntegralType", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("IsIntegralType not found.");
-
-        var numericTypes = new[]
-        {
-            typeof(byte), typeof(sbyte), typeof(short), typeof(ushort), typeof(int), typeof(uint), typeof(long),
-            typeof(ulong), typeof(float), typeof(double), typeof(decimal), typeof(string)
-        };
-
-        foreach (var type in numericTypes)
-        {
-            _ = isNumericType.Invoke(null, new object[] { type });
-        }
-
-        var integralTypes = new[]
-        {
-            typeof(byte), typeof(sbyte), typeof(short), typeof(ushort), typeof(int), typeof(uint), typeof(long),
-            typeof(ulong), typeof(decimal)
-        };
-
-        foreach (var type in integralTypes)
-        {
-            _ = isIntegralType.Invoke(null, new object[] { type });
-        }
-    }
-
     private sealed class DateTimeEntity
     {
         public DateTime Timestamp { get; set; }
