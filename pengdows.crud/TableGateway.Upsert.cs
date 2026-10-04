@@ -335,7 +335,8 @@ public partial class TableGateway<TEntity, TRowID>
             }
 
             sc.Query.Append(" ON DUPLICATE KEY UPDATE ")
-                .Append(template.UpsertUpdateFragmentOnConflict);
+                .Append(ReuseParametersForUnreliableIncoming(dialect, template.UpsertUpdateFragmentOnConflict!,
+                    template.UpsertColumns, template.UpsertParameterNames));
 
             sc.AddParameters(parameters);
             return sc;

@@ -458,6 +458,60 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     /// affected reveals a skipped row; not Firebird's unguarded UPDATE OR INSERT or Sybase ASE, see
     /// <see cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>).
     /// </summary>
+    /// <summary>
+    /// DEC-012: the ON DUPLICATE KEY UPDATE fragment with each column whose incoming-row reference
+    /// the dialect can't trust set from that column's own parameter instead. Returns the fragment
+    /// unchanged when no column is affected.
+    /// </summary>
+    private protected static string ReuseParametersForUnreliableIncoming(ISqlDialect dialect, string fragment,
+        IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
+    {
+        if (dialect is not SqlDialect sqlDialect)
+        {
+            return fragment;
+        }
+
+        for (var i = 0; i < columns.Count && i < parameterNames.Count; i++)
+        {
+            if (!sqlDialect.UpsertIncomingValueUnreliable(columns[i]))
+            {
+                continue;
+            }
+
+            var wrapped = dialect.WrapSimpleName(columns[i].Name);
+            fragment = fragment.Replace(
+                string.Concat(wrapped, " = ", dialect.UpsertIncomingColumn(columns[i].Name)),
+                string.Concat(wrapped, " = ", dialect.MakeParameterName(parameterNames[i])),
+                StringComparison.Ordinal);
+        }
+
+        return fragment;
+    }
+
+    /// <summary>
+    /// DEC-012: true when the update fragment reads a column whose incoming-row reference the dialect
+    /// can't trust; a batch upsert then runs one statement per row (a batch can only use that reference).
+    /// </summary>
+    private protected static bool UpsertFragmentHasUnreliableIncoming(ISqlDialect dialect, string? fragment,
+        IEnumerable<IColumnInfo> columns)
+    {
+        if (fragment == null || dialect is not SqlDialect sqlDialect)
+        {
+            return false;
+        }
+
+        foreach (var column in columns)
+        {
+            if (sqlDialect.UpsertIncomingValueUnreliable(column) &&
+                fragment.Contains(dialect.UpsertIncomingColumn(column.Name), StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private protected bool BatchUpsertCanDetectVersionConflict(IDatabaseContext ctx)
     {
         if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())

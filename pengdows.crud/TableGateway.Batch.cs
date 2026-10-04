@@ -395,12 +395,15 @@ public partial class TableGateway<TEntity, TRowID>
             return BuildBatchUpsertOnConflict(entities, ctx);
         }
 
-        if (ctx.DataSourceInfo.SupportsOnDuplicateKey)
+        if (ctx.DataSourceInfo.SupportsOnDuplicateKey &&
+            !UpsertFragmentHasUnreliableIncoming(GetDialect(ctx),
+                GetTemplatesForDialect(GetDialect(ctx)).UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values))
         {
             return BuildBatchUpsertOnDuplicate(entities, ctx);
         }
 
-        // Fallback: databases with MERGE (SQL Server, Oracle, Firebird) or unknown
+        // Fallback: databases with MERGE (SQL Server, Oracle, Firebird), unknown, or a batch whose
+        // ON DUPLICATE KEY form would read an untrustworthy incoming value (DEC-012)
         // Use individual BuildUpsert per entity
         var result = new List<ISqlContainer>(entities.Count);
         foreach (var entity in entities)

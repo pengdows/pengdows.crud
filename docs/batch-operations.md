@@ -118,6 +118,15 @@ is stale, the same as single-entity `UpdateAsync`:
   the same instances can go through another `BatchUpdateAsync`. When a conflict throws, entities
   updated before it carry their new version and the conflicting entity keeps the one it had.
 
+### TiDB: `UInt64` columns
+
+TiDB's `VALUES(col)` in `ON DUPLICATE KEY UPDATE` returns a `BIT(64)` value byte-reversed (a TiDB
+defect, confirmed on v8.5.7). `BIT(64)` maps to `ulong` (`DbType.UInt64`), as `BIGINT UNSIGNED`
+does, so on TiDB every `UInt64` column is upserted safely: a single-row upsert sets it from its own
+bound parameter, and a batch upsert of an entity with such a column runs one statement per row
+(TiDB has no row alias, so a multi-row statement can only use `VALUES()`). Other entities keep the
+multi-row statement.
+
 ### Batch upsert and `[Version]` conflicts
 
 `BatchUpsertAsync` on both gateways throws `ConcurrencyConflictException` when a

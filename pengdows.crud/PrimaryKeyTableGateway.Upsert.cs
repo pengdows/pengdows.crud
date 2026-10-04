@@ -182,7 +182,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return BuildPkBatchUpsertOnConflict(entities, ctx);
         }
 
-        if (ctx.DataSourceInfo.SupportsOnDuplicateKey)
+        if (ctx.DataSourceInfo.SupportsOnDuplicateKey &&
+            !UpsertFragmentHasUnreliableIncoming(GetDialect(ctx),
+                GetPkTemplatesForDialect(GetDialect(ctx)).UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values))
         {
             return BuildPkBatchUpsertOnDuplicate(entities, ctx);
         }
@@ -356,7 +358,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
             sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
         }
 
-        sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
+        sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(ReuseParametersForUnreliableIncoming(dialect,
+            template.UpsertUpdateFragmentOnConflict!, insertableColumns,
+            parameters.ConvertAll(static p => p.ParameterName)));
 
         sc.AddParameters(parameters);
         return sc;

@@ -594,6 +594,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return BindsVectorsAsText && (type == typeof(float[]) || type == typeof(double[])) ? DbType.String : null;
     }
 
+    /// <summary>
+    /// True when the dialect's upsert incoming-row reference (<see cref="UpsertIncomingColumn"/>)
+    /// can't be trusted for this column, so a single-row upsert sets it from its own bound parameter
+    /// and a batch upsert runs one statement per row (DEC-012: TiDB's VALUES() byte-reverses BIT(64)).
+    /// </summary>
+    internal virtual bool UpsertIncomingValueUnreliable(IColumnInfo column) => false;
+
     /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>
     public virtual bool RendersColumnArgument(IColumnInfo column) => column.IsJsonType;
 
