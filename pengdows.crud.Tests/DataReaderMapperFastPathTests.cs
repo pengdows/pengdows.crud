@@ -104,6 +104,11 @@ public class DataReaderMapperFastPathTests
             return typeof(TField);
         }
 
+        // The typed getters a real provider has (PERF-026: the mapper uses them), with the same checks.
+        public override int GetInt32(int ordinal) => GetFieldValue<int>(ordinal);
+        public override double GetDouble(int ordinal) => GetFieldValue<double>(ordinal);
+        public override bool GetBoolean(int ordinal) => GetFieldValue<bool>(ordinal);
+
         public override bool IsDBNull(int ordinal) => false;
     }
 }

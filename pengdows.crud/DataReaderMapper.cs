@@ -660,6 +660,13 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var getDecimalMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetDecimal))!;
                 rawValue = Expression.Call(readerParam, getDecimalMethod, Expression.Constant(key.Ordinal));
             }
+            else if (TypedGetter(key.FieldType) is { } typedGetter)
+            {
+                // The provider's own getter for the column's type, as the gateway reads it: several
+                // providers dispatch GetFieldValue<T> through a type switch, slow for a reference type
+                // such as string (PERF-026).
+                rawValue = Expression.Call(readerParam, typedGetter, Expression.Constant(key.Ordinal));
+            }
             else
             {
                 var getFieldValueMethod = _getFieldValueGenericMethod.MakeGenericMethod(key.FieldType);
@@ -693,6 +700,23 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var assignment = Expression.Assign(propertyAccess, valueExpression);
         var lambda = Expression.Lambda<Action<T, DbDataReader>>(assignment, objParam, readerParam);
         return lambda.Compile();
+    }
+
+    // Typed DbDataReader getters by column type. Int64 isn't here: Informix.Net.Core's GetInt64 rejects
+    // BIGSERIAL, which GetFieldValue<long> reads.
+    private static MethodInfo? TypedGetter(Type fieldType)
+    {
+        var name = fieldType == typeof(int) ? nameof(DbDataReader.GetInt32)
+            : fieldType == typeof(string) ? nameof(DbDataReader.GetString)
+            : fieldType == typeof(double) ? nameof(DbDataReader.GetDouble)
+            : fieldType == typeof(bool) ? nameof(DbDataReader.GetBoolean)
+            : fieldType == typeof(DateTime) ? nameof(DbDataReader.GetDateTime)
+            : fieldType == typeof(Guid) ? nameof(DbDataReader.GetGuid)
+            : fieldType == typeof(short) ? nameof(DbDataReader.GetInt16)
+            : fieldType == typeof(byte) ? nameof(DbDataReader.GetByte)
+            : fieldType == typeof(float) ? nameof(DbDataReader.GetFloat)
+            : null;
+        return name == null ? null : typeof(DbDataReader).GetMethod(name, new[] { typeof(int) });
     }
 
     private static bool RequiresCoercion(Type fieldType, Type propertyType)

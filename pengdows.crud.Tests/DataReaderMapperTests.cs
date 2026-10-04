@@ -319,7 +319,7 @@ public class DataReaderMapperTests
     }
 
     [Fact]
-    public async Task LoadObjectsFromDataReaderAsync_DirectAssignment_UsesGetFieldValue()
+    public async Task LoadObjectsFromDataReaderAsync_DirectAssignment_UsesATypedRead()
     {
         var reader = new TrackingFieldAccessReader(new[]
         {
@@ -337,7 +337,7 @@ public class DataReaderMapperTests
         // metadata (fakeDb no longer reads it through GetValue, like a real provider), so the typed
         // path never calls GetValue.
         Assert.Equal(0, reader.GetValueCallCount);
-        Assert.Equal(1, reader.GetFieldValueCallCount);
+        Assert.Equal(1, reader.TypedReadCount);
     }
 
     [Fact]
@@ -358,7 +358,7 @@ public class DataReaderMapperTests
         // IsDBNull is not called for non-nullable value types (int); the coercion setter reads
         // through GetValue (GetFieldType is metadata and no longer counted).
         Assert.True(reader.GetValueCallCount >= 1);
-        Assert.Equal(0, reader.GetFieldValueCallCount);
+        Assert.Equal(0, reader.TypedReadCount);
     }
 
     [Fact]
@@ -388,9 +388,9 @@ public class DataReaderMapperTests
         Assert.Single(secondResult);
         Assert.Equal(65, secondResult[0].Age);
         Assert.Equal(0, firstReader.GetFieldValueFailures);
-        Assert.True(firstReader.GetFieldValueCallCount >= 1);
+        Assert.True(firstReader.TypedReadCount >= 1);
         Assert.Equal(0, secondReader.GetFieldValueFailures);
-        Assert.True(secondReader.GetFieldValueCallCount >= 1);
+        Assert.True(secondReader.TypedReadCount >= 1);
     }
 
     [Fact]
@@ -416,13 +416,13 @@ public class DataReaderMapperTests
         Assert.Single(firstResult);
         Assert.Equal(70, firstResult[0].Age);
         Assert.Equal(0, firstReader.GetFieldValueFailures);
-        Assert.True(firstReader.GetFieldValueCallCount >= 1);
+        Assert.True(firstReader.TypedReadCount >= 1);
 
         var secondResult = await DataReaderMapper.LoadObjectsFromDataReaderAsync<DirectEntity>(secondReader);
 
         Assert.Single(secondResult);
         Assert.Equal(71, secondResult[0].Age);
-        Assert.Equal(0, secondReader.GetFieldValueCallCount);
+        Assert.Equal(0, secondReader.TypedReadCount);
         // GetFieldType is suppressed in StrictTrackingFieldAccessReader, and IsDBNull is
         // no longer called for non-nullable int. Only the coercion setter calls GetValue.
         Assert.True(secondReader.GetValueCallCount >= 1);
@@ -733,6 +733,11 @@ public class DataReaderMapperTests
 
     private sealed class TrackingFieldAccessReader : fakeDbDataReader
     {
+        // A typed getter is a typed read, as on a real provider (PERF-026: the mapper uses them).
+        public override int GetInt32(int ordinal) => GetFieldValue<int>(ordinal);
+        public override string GetString(int ordinal) => GetFieldValue<string>(ordinal);
+        public override double GetDouble(int ordinal) => GetFieldValue<double>(ordinal);
+
         public TrackingFieldAccessReader(IEnumerable<Dictionary<string, object>> rows)
             : base(rows)
         {
@@ -740,7 +745,7 @@ public class DataReaderMapperTests
 
         public int GetValueCallCount { get; private set; }
 
-        public int GetFieldValueCallCount { get; private set; }
+        public int TypedReadCount { get; private set; }
 
         public override object GetValue(int i)
         {
@@ -750,7 +755,7 @@ public class DataReaderMapperTests
 
         public override T GetFieldValue<T>(int ordinal)
         {
-            GetFieldValueCallCount++;
+            TypedReadCount++;
             var value = base.GetValue(ordinal);
             if (value is T typed)
             {
@@ -763,6 +768,11 @@ public class DataReaderMapperTests
 
     private sealed class StrictTrackingFieldAccessReader : fakeDbDataReader
     {
+        // A typed getter is a typed read, as on a real provider (PERF-026: the mapper uses them).
+        public override int GetInt32(int ordinal) => GetFieldValue<int>(ordinal);
+        public override string GetString(int ordinal) => GetFieldValue<string>(ordinal);
+        public override double GetDouble(int ordinal) => GetFieldValue<double>(ordinal);
+
         private bool _suppressValueCount;
 
         public StrictTrackingFieldAccessReader(IEnumerable<Dictionary<string, object>> rows)
@@ -772,7 +782,7 @@ public class DataReaderMapperTests
 
         public int GetValueCallCount { get; private set; }
 
-        public int GetFieldValueCallCount { get; private set; }
+        public int TypedReadCount { get; private set; }
 
         public int GetFieldValueFailures { get; private set; }
 
@@ -801,7 +811,7 @@ public class DataReaderMapperTests
 
         public override T GetFieldValue<T>(int ordinal)
         {
-            GetFieldValueCallCount++;
+            TypedReadCount++;
             var value = base.GetValue(ordinal);
             if (value is T typed)
             {
