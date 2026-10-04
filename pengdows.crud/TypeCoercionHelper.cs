@@ -364,6 +364,7 @@ internal static class TypeCoercionHelper
         // A fractional value into an integer must be whole (COR-009): Convert.ChangeType rounded it to
         // even (2.7 → 3) where the gateway truncated.
         WholeNumber.Check(value, underlyingTarget);
+        NumericTruth.Check(value, underlyingTarget);
 
         // Final fallback: Use cached compiled converter for better performance
         try

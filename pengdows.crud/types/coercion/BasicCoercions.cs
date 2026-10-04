@@ -585,9 +585,11 @@ internal class BooleanCoercion : DbCoercion<bool>
                     return true;
                 }
 
-                if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var dbl))
+                // NaN is neither true nor false: declined here (a Try method doesn't throw, REV-079);
+                // Coerce fails it (NumericTruth.Check).
+                if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var dbl) && !double.IsNaN(dbl))
                 {
-                    value = @internal.NumericTruth.FromDouble(dbl);
+                    value = dbl != 0;
                     return true;
                 }
 
@@ -603,11 +605,11 @@ internal class BooleanCoercion : DbCoercion<bool>
             case sbyte or byte or short or ushort or int or uint or long:
                 value = Convert.ToInt64(src.RawValue, CultureInfo.InvariantCulture) != 0;
                 return true;
-            case float f:
-                value = @internal.NumericTruth.FromFloat(f);
+            case float f when !float.IsNaN(f):
+                value = f != 0;
                 return true;
-            case double d:
-                value = @internal.NumericTruth.FromDouble(d);
+            case double d when !double.IsNaN(d):
+                value = d != 0;
                 return true;
             case decimal m:
                 value = m != decimal.Zero;

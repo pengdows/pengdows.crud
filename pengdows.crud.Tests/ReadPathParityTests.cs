@@ -244,7 +244,10 @@ public class ReadPathParityTests
         public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
             TState state, Exception? exception, Func<TState, Exception?, string> formatter)
         {
-            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning)
+            // Only this test's enum: other test classes log the same warning through the process-global
+            // logger, possibly concurrently (REV-073).
+            if ((logLevel == Microsoft.Extensions.Logging.LogLevel.Warning)
+                && formatter(state, exception).Contains(typeof(Mood).FullName!, StringComparison.Ordinal))
             {
                 System.Threading.Interlocked.Increment(ref Warnings);
             }
@@ -300,5 +303,19 @@ public class ReadPathParityTests
         var error = await Assert.ThrowsAsync<pengdows.crud.exceptions.DataMappingException>(() => gateway.LoadSingleAsync(sc).AsTask());
 
         Assert.Contains("'v'", error.Message);
+    }
+
+    // REV-079: a Try method reports failure by returning false. Text "NaN" made BooleanCoercion.TryRead
+    // throw (NumericTruth); Coerce still fails the value, through its fallback.
+    [Theory]
+    [InlineData("NaN")]
+    [InlineData("-NaN")]
+    public void BooleanCoercion_NaNText_TryReadReturnsFalse(string text)
+    {
+        var read = pengdows.crud.types.coercion.CoercionRegistry.Shared.TryRead(
+            new pengdows.crud.types.coercion.DbValue(text, typeof(string)), typeof(bool), out _);
+
+        Assert.False(read);
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce(text, typeof(string), typeof(bool)));
     }
 }
