@@ -402,8 +402,8 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         {
             return _reader.GetFieldValue<T>(i);
         }
-        catch (Exception ex) when (ex is InvalidCastException or NotSupportedException
-                                   && UnreadableValue(i, ex) is null)
+        catch (Exception ex) when ((ex is InvalidCastException or NotSupportedException)
+                                   && (UnreadableValue(i, ex) is null))
         {
             return (T)GetValue(i);
         }

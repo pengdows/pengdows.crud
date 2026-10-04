@@ -71,7 +71,10 @@ public class ReaderDelegateAllocationTests
         for (var pass = 0; pass < 3; pass++)
         {
             var containers = new SqlContainer[200];
-            for (var i = 0; i < containers.Length; i++) containers[i] = Container();
+            for (var i = 0; i < containers.Length; i++)
+            {
+                containers[i] = Container();
+            }
 
             var before = GC.GetAllocatedBytesForCurrentThread();
             foreach (var sc in containers)

@@ -92,8 +92,18 @@ public class TypedValueReadAllocationTests
         public override bool IsDBNull(int ordinal) => false;
         public override T GetFieldValue<T>(int ordinal)
         {
-            if (typeof(T) == typeof(TimeSpan)) { var v = _time; return Unsafe.As<TimeSpan, T>(ref v); }
-            if (typeof(T) == typeof(uint)) { var v = (uint)_row; return Unsafe.As<uint, T>(ref v); }
+            if (typeof(T) == typeof(TimeSpan))
+            {
+                var v = _time;
+                return Unsafe.As<TimeSpan, T>(ref v);
+            }
+
+            if (typeof(T) == typeof(uint))
+            {
+                var v = (uint)_row;
+                return Unsafe.As<uint, T>(ref v);
+            }
+
             return (T)Value(ordinal);
         }
 
@@ -247,10 +257,25 @@ public class TypedValueReadAllocationTests
         public override bool IsDBNull(int ordinal) => false;
         public override T GetFieldValue<T>(int ordinal)
         {
-            if (_refusesTypedReads) throw new InvalidCastException("typed reads not supported");
-            if (ordinal == 1) { var v = When; return Unsafe.As<DateTimeOffset, T>(ref v); }
-            if (ordinal == 2) { var v = Span; return Unsafe.As<TimeSpan, T>(ref v); }
-            var i = _row; return Unsafe.As<int, T>(ref i);
+            if (_refusesTypedReads)
+            {
+                throw new InvalidCastException("typed reads not supported");
+            }
+
+            if (ordinal == 1)
+            {
+                var v = When;
+                return Unsafe.As<DateTimeOffset, T>(ref v);
+            }
+
+            if (ordinal == 2)
+            {
+                var v = Span;
+                return Unsafe.As<TimeSpan, T>(ref v);
+            }
+
+            var i = _row;
+            return Unsafe.As<int, T>(ref i);
         }
 
         public override int GetOrdinal(string name) => name switch { "id" => 0, "when" => 1, _ => 2 };

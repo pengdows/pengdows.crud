@@ -412,10 +412,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     /// <summary>The read-failure translator for <paramref name="kind"/>, made by <paramref name="create"/> once.</summary>
     internal Func<Exception, Exception?> GetReadFailureTranslator(DbOperationKind kind,
-        Func<SqlDialect, DbOperationKind, Func<Exception, Exception?>> create) =>
-        kind == DbOperationKind.Query
-            ? _queryReadFailureTranslator ??= create(this, kind)
-            : _otherReadFailureTranslator ??= create(this, DbOperationKind.Unknown);
+        Func<SqlDialect, DbOperationKind, Func<Exception, Exception?>> create)
+    {
+        // Readers run queries or stored procedures (Unknown); any other kind would be classified as
+        // Unknown here, so it must not reach this cache (REV-084).
+        System.Diagnostics.Debug.Assert(kind is DbOperationKind.Query or DbOperationKind.Unknown,
+            $"A reader's operation kind is Query or Unknown, not {kind}.");
+        if (kind == DbOperationKind.Query)
+        {
+            return _queryReadFailureTranslator ??= create(this, kind);
+        }
+
+        return _otherReadFailureTranslator ??= create(this, DbOperationKind.Unknown);
+    }
 
     /// <summary>
     /// True when the dialect can read some columns its provider reports no field type for

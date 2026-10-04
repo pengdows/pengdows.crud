@@ -2159,7 +2159,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     // The statement text without copying it again: the rendered command text when current, which
     // has the same leading keywords (PERF-018).
     private string RenderedOrQueryText() =>
-        _cachedCommandText != null && _cachedCommandTextVersion == _query.Version ? _cachedCommandText : _query.ToString();
+        (_cachedCommandText != null && _cachedCommandTextVersion == _query.Version) ? _cachedCommandText : _query.ToString();
 
     private DbOperationKind DetermineOperationKind(CommandType commandType, ExecutionType executionType)
     {
