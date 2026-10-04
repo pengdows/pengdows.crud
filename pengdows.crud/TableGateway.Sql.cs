@@ -51,6 +51,9 @@ public partial class TableGateway<TEntity, TRowID>
         // Null for dialects that don't support upsert or where it could not be pre-built.
         public string? UpsertUpdateFragment;
 
+        // The columns UpsertUpdateFragment's MERGE form sets, for MergeBindsValuesDirectly (WRT-004).
+        public List<IColumnInfo>? UpsertMergeUpdateColumns;
+
         // Pre-built SET fragment for ON CONFLICT / ON DUPLICATE KEY statements (single-row and
         // batch), e.g. "col = EXCLUDED.col". Null when the dialect supports neither.
         public string? UpsertUpdateFragmentOnConflict;
@@ -245,6 +248,7 @@ public partial class TableGateway<TEntity, TRowID>
         // row (source alias "s", target alias "t") and ON CONFLICT for batches (EXCLUDED, no alias).
         string? upsertUpdateFragment = null;
         string? upsertUpdateFragmentOnConflict = null;
+        List<IColumnInfo>? upsertMergeUpdateColumns = null;
         if (updateColumns != null)
         {
             if (dialect.SupportsMerge)
@@ -271,6 +275,7 @@ public partial class TableGateway<TEntity, TRowID>
                         frag.Append(dialect.WrapSimpleName(col.Name));
                         frag.Append(" = s.");
                         frag.Append(dialect.WrapSimpleName(col.Name));
+                        (upsertMergeUpdateColumns ??= new List<IColumnInfo>()).Add(col);
                     }
 
                     if (_versionColumn != null && !_versionColumn.IsOpaqueVersionColumn())
@@ -390,6 +395,7 @@ public partial class TableGateway<TEntity, TRowID>
             UpdateSqlSuffix = updateSqlSuffix!,
             VersionIncrementClause = versionIncrementClause,
             UpsertUpdateFragment = upsertUpdateFragment,
+            UpsertMergeUpdateColumns = upsertMergeUpdateColumns,
             UpsertUpdateFragmentOnConflict = upsertUpdateFragmentOnConflict,
             UpdateColumns = updateColumns!,
             UpdateColumnWrappedNames = updateColumnWrappedNames,

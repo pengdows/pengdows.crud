@@ -853,7 +853,16 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         // AdvancedTypeRegistry / _commonConversions path as the original, so
         // provider-specific configuration (OracleDbType, NpgsqlDbType, etc.) is
         // applied by the dialect — no ICloneable dependency needed.
-        var clone = _dialect.CreateDbParameter<object?>(nameOverride, source.DbType, source.Value);
+        // A dialect that leaves an Object parameter's DbType unset (SqlDialect.AssignsObjectDbType,
+        // Informix) leaves the provider's default on it, which may not hold the value (AnsiString for a
+        // TimeSpan): such a parameter is re-created as the original was, as DbType.Object (WRT-004).
+        var dbType = source.DbType;
+        if (_dialect is SqlDialect { AssignsObjectDbType: false } && !DbTypeValidator.IsCompatible(dbType, source.Value))
+        {
+            dbType = DbType.Object;
+        }
+
+        var clone = _dialect.CreateDbParameter<object?>(nameOverride, dbType, source.Value);
         clone.Direction = source.Direction;
         clone.Size = source.Size;
         clone.Precision = source.Precision;

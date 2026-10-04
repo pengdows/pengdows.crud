@@ -151,6 +151,9 @@ internal static class InternalSqlDialectExtensions
         return GetInternal(dialect).RenderMergeSource(columns, parameterNames);
     }
 
+    internal static bool MergeBindsValuesDirectly(this ISqlDialect dialect) =>
+        dialect is SqlDialect { MergeBindsValuesDirectly: true };
+
     /// <summary>The MERGE source for an upsert into <paramref name="tableName"/> (wrapped).</summary>
     internal static string RenderMergeSource(this ISqlDialect dialect, IReadOnlyList<IColumnInfo> columns,
         IReadOnlyList<string> parameterNames, string tableName)

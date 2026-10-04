@@ -397,7 +397,13 @@ public partial class PrimaryKeyTableGateway<TEntity>
             parameters.Add(param);
         }
 
-        var mergeSource = dialect.RenderMergeSource(insertableColumns.ToList(), paramNames, BuildWrappedTableName(dialect));
+        // WRT-004: keys through the source, every other value bound directly where the dialect needs it.
+        var direct = dialect.MergeBindsValuesDirectly()
+            ? RenderDirectBoundMerge(dialect, insertableColumns, paramNames, _tableInfo.PrimaryKeys,
+                template.UpsertMergeUpdateColumns ?? new List<IColumnInfo>())
+            : default((string Source, string UpdateSet, string InsertValues)?);
+        var mergeSource = direct?.Source
+                          ?? dialect.RenderMergeSource(insertableColumns.ToList(), paramNames, BuildWrappedTableName(dialect));
 
         var insertColSb = SbLite.Create(stackalloc char[512]);
         var insertValSb = SbLite.Create(stackalloc char[512]);
@@ -450,7 +456,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                     ? $" WHEN MATCHED {template.UpsertMergeVersionCondition} THEN UPDATE SET "
                     : " WHEN MATCHED THEN UPDATE SET ");
 
-            sc.Query.Append(template.UpsertUpdateFragment);
+            sc.Query.Append(direct?.UpdateSet ?? template.UpsertUpdateFragment);
             if (template.UpsertMergeUpdateWhere != null)
             {
                 sc.Query.Append(" ").Append(template.UpsertMergeUpdateWhere);
@@ -458,9 +464,17 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
             sc.Query.Append(" WHEN NOT MATCHED THEN INSERT (")
                 .Append(insertColSb.AsSpan())
-                .Append(") VALUES (")
-                .Append(insertValSb.AsSpan())
-                .Append(")");
+                .Append(") VALUES (");
+            if (direct is { } bound)
+            {
+                sc.Query.Append(bound.InsertValues);
+            }
+            else
+            {
+                sc.Query.Append(insertValSb.AsSpan());
+            }
+
+            sc.Query.Append(")");
 
             if (dialect.RequiresMergeStatementTerminator)
             {

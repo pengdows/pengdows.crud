@@ -468,6 +468,62 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     /// the dialect can't trust set from that column's own parameter instead. Returns the fragment
     /// unchanged when no column is affected.
     /// </summary>
+    /// <summary>
+    /// The MERGE pieces for a dialect that binds values directly (<c>SqlDialect.MergeBindsValuesDirectly</c>,
+    /// WRT-004): the source holds only <paramref name="keyColumns"/>; UPDATE SET and INSERT VALUES use
+    /// each other column's parameter as a <c>{P}name</c> token, so a value used in both is bound at
+    /// each use, in order, on a positional provider.
+    /// </summary>
+    private protected static (string Source, string UpdateSet, string InsertValues) RenderDirectBoundMerge(
+        ISqlDialect dialect, IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames,
+        IReadOnlyList<IColumnInfo> keyColumns, IReadOnlyList<IColumnInfo> updateColumns)
+    {
+        var sqlDialect = (SqlDialect)dialect;
+        string Token(int i)
+        {
+            var token = "{P}" + parameterNames[i];
+            return sqlDialect.RendersColumnArgument(columns[i]) ? sqlDialect.RenderColumnArgument(token, columns[i]) : token;
+        }
+
+        var index = new Dictionary<IColumnInfo, int>(columns.Count);
+        for (var i = 0; i < columns.Count; i++)
+        {
+            index[columns[i]] = i;
+        }
+
+        var keyPlaceholders = new string[keyColumns.Count];
+        for (var i = 0; i < keyColumns.Count; i++)
+        {
+            keyPlaceholders[i] = Token(index[keyColumns[i]]);
+        }
+
+        var targetAlias = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
+        var update = new System.Text.StringBuilder();
+        foreach (var column in updateColumns)
+        {
+            if (update.Length > 0)
+            {
+                update.Append(", ");
+            }
+
+            update.Append(targetAlias).Append(dialect.WrapSimpleName(column.Name)).Append(" = ").Append(Token(index[column]));
+        }
+
+        var keys = new HashSet<IColumnInfo>(keyColumns);
+        var values = new System.Text.StringBuilder();
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                values.Append(", ");
+            }
+
+            values.Append(keys.Contains(columns[i]) ? "s." + dialect.WrapSimpleName(columns[i].Name) : Token(i));
+        }
+
+        return (sqlDialect.RenderMergeSourceFromPlaceholders(keyColumns, keyPlaceholders), update.ToString(), values.ToString());
+    }
+
     private protected static string ReuseParametersForUnreliableIncoming(ISqlDialect dialect, string fragment,
         IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames) =>
         ReuseParametersForUnreliableIncoming(dialect, fragment, columns, parameterNames, static name => name);

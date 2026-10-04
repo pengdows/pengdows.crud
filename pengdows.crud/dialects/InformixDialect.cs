@@ -125,6 +125,25 @@ internal sealed class InformixDialect : SqlDialect
             throw new ArgumentException("Column and parameter counts must match.");
         }
 
+        var placeholders = new string[columns.Count];
+        for (var i = 0; i < columns.Count; i++)
+        {
+            var placeholder = MakeParameterName(parameterNames[i]);
+            placeholders[i] = RendersColumnArgument(columns[i]) ? RenderColumnArgument(placeholder, columns[i]) : placeholder;
+        }
+
+        return RenderMergeSourceFromPlaceholders(columns, placeholders);
+    }
+
+    // WRT-004/WRT-005, confirmed live (Informix 15, Informix.Net.Core): INTERVAL, LIST/SET/MULTISET and
+    // BOOLEAN values can't go through the source (each needs a CAST to its declared type; a bool
+    // binds as SMALLINT, which a BOOLEAN column refuses from the source) but bind directly in UPDATE
+    // SET and INSERT VALUES, inserting and updating. BYTE can't be a MERGE host variable at all.
+    internal override bool MergeBindsValuesDirectly => true;
+
+    internal override string RenderMergeSourceFromPlaceholders(IReadOnlyList<IColumnInfo> columns,
+        IReadOnlyList<string> placeholders)
+    {
         var select = new System.Text.StringBuilder("USING (SELECT ");
         for (var i = 0; i < columns.Count; i++)
         {
@@ -133,13 +152,7 @@ internal sealed class InformixDialect : SqlDialect
                 select.Append(", ");
             }
 
-            var placeholder = MakeParameterName(parameterNames[i]);
-            if (RendersColumnArgument(columns[i]))
-            {
-                placeholder = RenderColumnArgument(placeholder, columns[i]);
-            }
-
-            select.Append("CAST(").Append(placeholder).Append(" AS ")
+            select.Append("CAST(").Append(placeholders[i]).Append(" AS ")
                 .Append(GetMergeSourceCastType(columns[i].IsJsonType ? DbType.String : columns[i].DbType))
                 .Append(") AS ").Append(WrapObjectName(columns[i].Name));
         }

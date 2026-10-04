@@ -40,6 +40,11 @@
   upsert (PostgreSQL 15+) and a batch update on PostgreSQL, CockroachDB and YugabyteDB. 2.0.5 failed
   with "column is of type ... but expression is of type text". Those statements now take their rows
   from a source typed by the table itself, only when a row holds such an enum (TYPE-020, WRT-007).
+- Informix upserts of `INTERVAL`, `LIST`/`SET`/`MULTISET` and `BOOLEAN` columns work. 2.0.5 threw
+  `NotSupportedException` ("does not support a Object column in the source row") or failed with
+  "Value does not match the type of column". The MERGE now carries only the key columns in its
+  source and binds every other value directly in `UPDATE SET` and `INSERT VALUES`, where the column
+  types it (WRT-004, WRT-005). `BYTE`, `BLOB` and `CLOB` upserts still fail (WRT-006).
 
 ## Reads that now work
 

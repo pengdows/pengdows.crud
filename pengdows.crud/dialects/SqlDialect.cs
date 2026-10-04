@@ -1779,6 +1779,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
         RenderMergeSource(columns, parameterNames);
 
     /// <summary>
+    /// True when a MERGE upsert carries only its key columns in the source and binds every other
+    /// value directly in UPDATE SET and INSERT VALUES, where the target column types it (Informix:
+    /// a source value needs a CAST to its declared type, WRT-004/WRT-005).
+    /// </summary>
+    internal virtual bool MergeBindsValuesDirectly => false;
+
+    /// <summary>
+    /// The MERGE source for <paramref name="columns"/> with the given placeholders (already rendered
+    /// through <see cref="RenderColumnArgument"/>); used with <see cref="MergeBindsValuesDirectly"/>.
+    /// </summary>
+    internal virtual string RenderMergeSourceFromPlaceholders(IReadOnlyList<IColumnInfo> columns,
+        IReadOnlyList<string> placeholders) =>
+        throw new NotSupportedException($"{DatabaseType} does not bind MERGE values directly.");
+
+    /// <summary>
     /// Formats the MERGE ON clause predicate for the dialect.
     /// </summary>
     public virtual string RenderMergeOnClause(string predicate)

@@ -87,9 +87,25 @@ internal static class DbTypeValidator
     /// </remarks>
     internal static void Validate(DbType dbType, Type? clrType)
     {
+        if (Mismatch(dbType, clrType) is { } message)
+        {
+            throw new ArgumentException(message);
+        }
+    }
+
+    /// <summary>
+    /// True when a value of <paramref name="value"/>'s type can be bound as <paramref name="dbType"/>
+    /// (null always can); the non-throwing form of <see cref="Validate(DbType, object?)"/>.
+    /// </summary>
+    internal static bool IsCompatible(DbType dbType, object? value) =>
+        value is null or DBNull || Mismatch(dbType, Nullable.GetUnderlyingType(value.GetType()) ?? value.GetType()) == null;
+
+    // The mismatch message for Validate, or null when the CLR type fits the DbType.
+    private static string? Mismatch(DbType dbType, Type? clrType)
+    {
         if (clrType == null)
         {
-            return; // value was null — always valid
+            return null; // value was null — always valid
         }
 
         // clrType is already nullable-unwrapped by ResolveClrType.
@@ -98,51 +114,48 @@ internal static class DbTypeValidator
         {
             if (NumericDbTypes.Contains(dbType) || StringDbTypes.Contains(dbType) || dbType == DbType.Object)
             {
-                return;
+                return null;
             }
 
-            throw new ArgumentException(
-                $"CLR type '{clrType.Name}' (enum) is not compatible with DbType.{dbType}. " +
-                $"Use an integer or string DbType for enum values.");
+            return $"CLR type '{clrType.Name}' (enum) is not compatible with DbType.{dbType}. " +
+                $"Use an integer or string DbType for enum values.";
         }
 
         if (dbType == DbType.Object)
         {
-            return;
+            return null;
         }
 
         if (NumericDbTypes.Contains(dbType))
         {
             if (NumericTypes.Contains(clrType))
             {
-                return;
+                return null;
             }
 
-            throw new ArgumentException(
-                $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
-                $"Ensure the value type matches the declared parameter type.");
+            return $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
+                $"Ensure the value type matches the declared parameter type.";
         }
 
         if (AcceptableTypes.TryGetValue(dbType, out var acceptable))
         {
             if (acceptable.Count == 0 || acceptable.Contains(clrType))
             {
-                return;
+                return null;
             }
 
-            throw new ArgumentException(
-                $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
-                $"Ensure the value type matches the declared parameter type.");
+            return $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
+                $"Ensure the value type matches the declared parameter type.";
         }
 
         if (NumericTypes.Contains(clrType))
         {
-            throw new ArgumentException(
-                $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
-                $"Ensure the value type matches the declared parameter type.");
+            return $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
+                $"Ensure the value type matches the declared parameter type.";
         }
 
         // Unknown DbType with non-numeric CLR type — pass through without blocking
+        return null;
     }
 
     /// <summary>

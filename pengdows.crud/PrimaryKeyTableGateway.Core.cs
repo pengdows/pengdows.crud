@@ -55,6 +55,9 @@ public partial class PrimaryKeyTableGateway<TEntity> :
 
         /// <summary>ON CONFLICT / MERGE / ON DUPLICATE KEY UPDATE fragment, or null when upsert not applicable.</summary>
         public string? UpsertUpdateFragment;
+
+        /// <summary>The columns the MERGE update fragment sets, for MergeBindsValuesDirectly (WRT-004).</summary>
+        public List<IColumnInfo>? UpsertMergeUpdateColumns;
         // SET fragment for ON CONFLICT / ON DUPLICATE KEY (single-row and batch).
         public string? UpsertUpdateFragmentOnConflict;
         // Oracle: the MERGE version check as a WHERE on the UPDATE branch.
@@ -171,6 +174,9 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             UpdateSqlPrefix = updateSqlPrefix,
             VersionIncrementClause = versionIncrementClause,
             UpsertUpdateFragment = upsertUpdateFragment,
+            UpsertMergeUpdateColumns = dialect.SupportsMerge
+                ? updateColumns.Where(c => _auditValueResolver != null || !c.IsLastUpdatedBy).ToList()
+                : null,
             UpsertUpdateFragmentOnConflict = upsertUpdateFragmentOnConflict,
             UpsertMergeUpdateWhere = upsertMergeUpdateWhere,
             UpsertMergeVersionCondition = upsertMergeVersionCondition,
