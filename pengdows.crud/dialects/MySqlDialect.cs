@@ -777,10 +777,12 @@ internal class MySqlDialect : SqlDialect
     }
 
     // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
-    // SingleStore shares this dialect but has always used the generic mapping (base).
+    // SingleStore (probed live on 9.1.1, REV-087) accepts and reports every level but runs every
+    // transaction as READ COMMITTED, so it supports only that: a stronger request fails instead of
+    // running weaker than asked.
     internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
         DatabaseType == SupportedDatabase.SingleStore
-        ? base.GetSupportedIsolationLevels(allowSnapshotIsolation)
+        ? new HashSet<IsolationLevel> { IsolationLevel.ReadCommitted }
         : new HashSet<IsolationLevel>
         {
             IsolationLevel.ReadUncommitted,
@@ -791,7 +793,12 @@ internal class MySqlDialect : SqlDialect
 
     internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
         DatabaseType == SupportedDatabase.SingleStore
-        ? base.GetIsolationProfileMapping(allowSnapshotIsolation)
+        ? new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // short of Serializable: throws
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+        }
         : new Dictionary<IsolationProfile, IsolationLevel>
         {
             [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,

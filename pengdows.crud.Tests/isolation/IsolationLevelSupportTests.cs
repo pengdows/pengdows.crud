@@ -122,6 +122,19 @@ public class IsolationLevelSupportTests
                 IsolationLevel.ReadCommitted
             }
         };
+
+        // REV-087 (probed live, SingleStore 9.1.1): every level is accepted and reported back, but every
+        // transaction runs as READ COMMITTED (a non-repeatable read at REPEATABLE READ and SERIALIZABLE).
+        yield return new object[]
+        {
+            SupportedDatabase.SingleStore,
+            false,
+            false,
+            new[]
+            {
+                IsolationLevel.ReadCommitted
+            }
+        };
     }
 
     [Theory]
@@ -146,6 +159,11 @@ public class IsolationLevelSupportTests
         yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.SafeNonBlockingReads, IsolationLevel.ReadCommitted };
         yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.StrictConsistency, IsolationLevel.ReadCommitted };
         yield return new object[] { SupportedDatabase.Snowflake, IsolationProfile.FastWithRisks, IsolationLevel.ReadCommitted };
+
+        // SingleStore: only ReadCommitted is enforced (REV-087)
+        yield return new object[] { SupportedDatabase.SingleStore, IsolationProfile.SafeNonBlockingReads, IsolationLevel.ReadCommitted };
+        yield return new object[] { SupportedDatabase.SingleStore, IsolationProfile.StrictConsistency, IsolationLevel.ReadCommitted };
+        yield return new object[] { SupportedDatabase.SingleStore, IsolationProfile.FastWithRisks, IsolationLevel.ReadCommitted };
     }
 
     [Fact]
@@ -160,5 +178,14 @@ public class IsolationLevelSupportTests
     {
         var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.TiDb), false, false);
         Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.Serializable));
+    }
+
+    [Theory]
+    [InlineData(IsolationLevel.Serializable)]
+    [InlineData(IsolationLevel.RepeatableRead)]
+    public void Validate_SingleStore_RejectsLevelsItDoesNotEnforce(IsolationLevel level)
+    {
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.SingleStore), false, false);
+        Assert.Throws<InvalidOperationException>(() => resolver.Validate(level));
     }
 }

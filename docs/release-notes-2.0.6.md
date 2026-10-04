@@ -75,6 +75,14 @@ same stored value, checked by one table-driven test (DRY-003). Where 2.0.5 diffe
   `DataMappingException` under `Strict`), and now logs on the gateway, which gave the default
   without logging (DRY-007).
 
+## SingleStore
+
+- SingleStore runs every transaction as READ COMMITTED whatever level is requested (it accepts and
+  reports the others; confirmed live on 9.1.1). pengdows now reports `ReadCommitted` as its only
+  supported level: `RepeatableRead`, `Snapshot` or `Serializable` throws `InvalidOperationException`
+  and `IsolationProfile.StrictConsistency` throws `TransactionModeNotSupportedException`, where 2.0.5
+  began the transaction and silently ran it at READ COMMITTED (REV-087).
+
 ## TiDB
 
 - Upserts of `UInt64`, `Int64` and `Binary` columns no longer go through `VALUES(col)`, which TiDB

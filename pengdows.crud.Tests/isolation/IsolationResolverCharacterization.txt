@@ -679,45 +679,45 @@ FlatFile snapshot=True rcsi=True
   atLeast Snapshot: throws InvalidOperationException
   atLeast Serializable: throws InvalidOperationException
 SingleStore snapshot=False rcsi=False
-  levels: ReadCommitted,RepeatableRead,Serializable
+  levels: ReadCommitted
   SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
-  StrictConsistency: Serializable degraded=False | tx Serializable
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
   FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
   atLeast ReadUncommitted: ReadCommitted
   atLeast ReadCommitted: ReadCommitted
-  atLeast RepeatableRead: RepeatableRead
-  atLeast Snapshot: Serializable
-  atLeast Serializable: Serializable
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
 SingleStore snapshot=False rcsi=True
-  levels: ReadCommitted,RepeatableRead,Serializable
+  levels: ReadCommitted
   SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
-  StrictConsistency: Serializable degraded=False | tx Serializable
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
   FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
   atLeast ReadUncommitted: ReadCommitted
   atLeast ReadCommitted: ReadCommitted
-  atLeast RepeatableRead: RepeatableRead
-  atLeast Snapshot: Serializable
-  atLeast Serializable: Serializable
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
 SingleStore snapshot=True rcsi=False
-  levels: ReadCommitted,RepeatableRead,Serializable
+  levels: ReadCommitted
   SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
-  StrictConsistency: Serializable degraded=False | tx Serializable
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
   FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
   atLeast ReadUncommitted: ReadCommitted
   atLeast ReadCommitted: ReadCommitted
-  atLeast RepeatableRead: RepeatableRead
-  atLeast Snapshot: Serializable
-  atLeast Serializable: Serializable
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
 SingleStore snapshot=True rcsi=True
-  levels: ReadCommitted,RepeatableRead,Serializable
+  levels: ReadCommitted
   SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
-  StrictConsistency: Serializable degraded=False | tx Serializable
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
   FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
   atLeast ReadUncommitted: ReadCommitted
   atLeast ReadCommitted: ReadCommitted
-  atLeast RepeatableRead: RepeatableRead
-  atLeast Snapshot: Serializable
-  atLeast Serializable: Serializable
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
 SybaseASE snapshot=False rcsi=False
   levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
   SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
