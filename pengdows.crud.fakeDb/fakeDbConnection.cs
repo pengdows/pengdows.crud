@@ -1062,11 +1062,22 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public TaskCompletionSource<bool> SetExecuteGate()
     {
         var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _executeGateEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         _executeGate = tcs;
         return tcs;
     }
 
+    private TaskCompletionSource<bool> _executeGateEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    /// <summary>
+    /// Completes when the first command reaches the gate set by <see cref="SetExecuteGate"/>, so a
+    /// test can act while it is in flight without guessing with a delay.
+    /// </summary>
+    public Task ExecuteGateEntered => _executeGateEntered.Task;
+
     internal TaskCompletionSource<bool>? ExecuteGate => _executeGate;
+
+    internal void SignalExecuteGateEntered() => _executeGateEntered.TrySetResult(true);
 
     public override Task OpenAsync(CancellationToken cancellationToken)
     {

@@ -101,7 +101,9 @@ public sealed class PoolGovernorMetricsTests
         // Act
         await using var first = await governor.AcquireAsync();
         var waiter = Task.Run(async () => await governor.AcquireAsync());
-        await Task.Delay(50);
+        // Wait until the second caller is really queued: a fixed delay let the assertion pass
+        // before anything had queued (REV-067).
+        Assert.True(SpinWait.SpinUntil(() => governor.QueueDepth == 1, TimeSpan.FromSeconds(10)));
 
         var snapshot = governor.GetSnapshot();
 

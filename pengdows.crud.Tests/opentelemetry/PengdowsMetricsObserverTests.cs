@@ -487,7 +487,6 @@ public class PengdowsMetricsObserverTests
         await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
 
         await anySeen.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await Task.Delay(50);
 
         Assert.Equal(1L, Interlocked.Read(ref totalDelta));
     }
@@ -868,7 +867,6 @@ public class PengdowsMetricsObserverTests
         await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
 
         await commandSeen.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await Task.Delay(50);
 
         Assert.True(Interlocked.Read(ref totalCommitted) >= 1,
             "Expected transactions.committed delta >= 1 after commit");
@@ -919,7 +917,6 @@ public class PengdowsMetricsObserverTests
         await ctx.CreateSqlContainer("SELECT 1").ExecuteScalarOrNullAsync<int>();
 
         await commandSeen.Task.WaitAsync(TimeSpan.FromSeconds(5));
-        await Task.Delay(50);
 
         Assert.True(Interlocked.Read(ref totalRolledBack) >= 1,
             "Expected transactions.rolled_back delta >= 1 after rollback");

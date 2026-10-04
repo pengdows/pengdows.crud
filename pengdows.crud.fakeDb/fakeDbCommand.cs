@@ -469,6 +469,7 @@ public class fakeDbCommand : DbCommand
         var gate = FakeConnection?.ExecuteGate;
         if (gate != null)
         {
+            FakeConnection!.SignalExecuteGateEntered();
             return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
         }
 
@@ -497,6 +498,7 @@ public class fakeDbCommand : DbCommand
         var gate = FakeConnection?.ExecuteGate;
         if (gate != null)
         {
+            FakeConnection!.SignalExecuteGateEntered();
             return ExecuteWithGateAsync(gate, ct, RunScalar);
         }
 
@@ -519,6 +521,7 @@ public class fakeDbCommand : DbCommand
         var gate = FakeConnection?.ExecuteGate;
         if (gate != null)
         {
+            FakeConnection!.SignalExecuteGateEntered();
             return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
         }
 

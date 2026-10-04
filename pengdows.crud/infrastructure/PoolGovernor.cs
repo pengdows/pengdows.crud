@@ -179,6 +179,9 @@ internal sealed class PoolGovernor : IDisposable
     internal bool Forbidden => _forbidden;
 
     public PoolLabel Label => _label;
+
+    /// <summary>Callers currently waiting for a slot (tracked whether or not metrics are on).</summary>
+    internal long QueueDepth => Interlocked.Read(ref _queueDepth);
     public string PoolKeyHash => _poolKeyHash;
 
     /// <summary>

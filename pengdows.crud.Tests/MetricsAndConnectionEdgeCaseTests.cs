@@ -295,7 +295,7 @@ public class MetricsAndConnectionEdgeCaseTests
         var sc = ctx.CreateSqlContainer("SELECT 1");
         await sc.ExecuteNonQueryAsync();
 
-        await Task.Delay(50); // allow async notification
+        // MetricsUpdated is raised synchronously as the command completes (REV-067: no delay needed).
 
         ctx.MetricsUpdated -= h1;
         ctx.MetricsUpdated -= h2;

@@ -37,15 +37,11 @@ public sealed class FailedWriteRollbackCancellationTests
     private static async Task CancelWhileExecutingAsync(fakeDbConnection exec, CancellationTokenSource cts,
         TaskCompletionSource<bool> gate)
     {
-        var deadline = DateTime.UtcNow.AddSeconds(5);
-        while (exec.State != ConnectionState.Open && DateTime.UtcNow < deadline)
-        {
-            await Task.Delay(5);
-        }
-
-        await Task.Delay(50);
+        // Cancel once the write is in flight at the gate, then release the gate for the rollback
+        // (REV-067: fixed 50 ms delays guessed at both). Cancel() completes the gated wait
+        // synchronously, so the release can follow at once.
+        await exec.ExecuteGateEntered.WaitAsync(TimeSpan.FromSeconds(10));
         cts.Cancel();
-        await Task.Delay(50);
         gate.TrySetResult(true);
     }
 
