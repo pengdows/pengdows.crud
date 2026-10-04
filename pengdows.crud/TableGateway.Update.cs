@@ -50,7 +50,16 @@ public partial class TableGateway<TEntity, TRowID>
 
     /// <inheritdoc/>
     public async ValueTask<ISqlContainer> BuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
-        IDatabaseContext? context = null, CancellationToken cancellationToken = default)
+        IDatabaseContext? context = null, CancellationToken cancellationToken = default) =>
+        await TryBuildUpdateAsync(objectToUpdate, loadOriginal, context, cancellationToken).ConfigureAwait(false)
+        ?? throw NoChanges();
+
+    private static InvalidOperationException NoChanges() => new("No changes detected for update.");
+
+    // The UPDATE, or null when no column changed: UpdateAsync returns 0 for that without an
+    // exception (COR-012); BuildUpdateAsync throws, as documented.
+    private async ValueTask<ISqlContainer?> TryBuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
+        IDatabaseContext? context, CancellationToken cancellationToken)
     {
         if (objectToUpdate == null)
         {
@@ -76,7 +85,7 @@ public partial class TableGateway<TEntity, TRowID>
             }
         }
 
-        return BuildUpdateInternal(objectToUpdate, original, ctx);
+        return TryBuildUpdateInternal(objectToUpdate, original, ctx);
     }
 
     /// <summary>
@@ -88,7 +97,10 @@ public partial class TableGateway<TEntity, TRowID>
         return BuildUpdateInternal(entity, null, context ?? _context);
     }
 
-    private ISqlContainer BuildUpdateInternal(TEntity objectToUpdate, TEntity? original, IDatabaseContext ctx)
+    private ISqlContainer BuildUpdateInternal(TEntity objectToUpdate, TEntity? original, IDatabaseContext ctx) =>
+        TryBuildUpdateInternal(objectToUpdate, original, ctx) ?? throw NoChanges();
+
+    private ISqlContainer? TryBuildUpdateInternal(TEntity objectToUpdate, TEntity? original, IDatabaseContext ctx)
     {
         var sc = ctx.CreateSqlContainer();
         var dialect = GetDialect(ctx);
@@ -104,7 +116,8 @@ public partial class TableGateway<TEntity, TRowID>
         var (columnsAdded, parameters) = BuildSetClause(objectToUpdate, original, dialect, ref counters, sc.Query);
         if (columnsAdded == 0)
         {
-            throw new InvalidOperationException("No changes detected for update.");
+            sc.Dispose();
+            return null;
         }
 
         // Append version increment directly from cached clause (no string alloc)

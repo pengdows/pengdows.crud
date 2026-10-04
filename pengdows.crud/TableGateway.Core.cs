@@ -1598,7 +1598,15 @@ public partial class TableGateway<TEntity, TRowID> :
         var auditSnapshot = SnapshotAuditFields(objectToUpdate);
         try
         {
-            await using var sc = await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
+            await using var sc = await TryBuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken)
+                .ConfigureAwait(false);
+            if (sc == null)
+            {
+                // Nothing changed: no statement to run.
+                RestoreAuditFields(objectToUpdate, auditSnapshot);
+                return 0;
+            }
+
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             if (rowsAffected == 0)
             {
@@ -1622,11 +1630,6 @@ public partial class TableGateway<TEntity, TRowID> :
             }
 
             return rowsAffected;
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("No changes detected for update."))
-        {
-            RestoreAuditFields(objectToUpdate, auditSnapshot);
-            return 0;
         }
         catch
         {

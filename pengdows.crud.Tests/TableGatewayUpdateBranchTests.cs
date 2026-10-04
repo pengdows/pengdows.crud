@@ -186,6 +186,45 @@ public class TableGatewayUpdateBranchTests : SqlLiteContextTestBase
         Assert.Equal(0, result);
     }
 
+    // COR-012: "no changes" was an InvalidOperationException UpdateAsync threw and caught by matching
+    // its message: an exception per no-op update, and fragile. UpdateAsync now returns 0 without one;
+    // BuildUpdateAsync still throws, as documented.
+    private static readonly System.Threading.AsyncLocal<bool> CountingExceptions = new();
+
+    [Fact]
+    public async Task UpdateAsync_NoChanges_ReturnsZeroWithoutThrowingInternally()
+    {
+        var gateway = new TableGateway<OnlyIdEntity, int>(Context);
+        var entity = new OnlyIdEntity { Id = 1 };
+        var thrown = 0;
+        void Count(object? sender, System.Runtime.ExceptionServices.FirstChanceExceptionEventArgs e)
+        {
+            if (CountingExceptions.Value)
+            {
+                System.Threading.Interlocked.Increment(ref thrown);
+            }
+        }
+
+        AppDomain.CurrentDomain.FirstChanceException += Count;
+        try
+        {
+            CountingExceptions.Value = true;
+            var result = await gateway.UpdateAsync(entity, false, null, System.Threading.CancellationToken.None);
+            CountingExceptions.Value = false;
+
+            Assert.Equal(0, result);
+            Assert.Equal(0, thrown);
+        }
+        finally
+        {
+            CountingExceptions.Value = false;
+            AppDomain.CurrentDomain.FirstChanceException -= Count;
+        }
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() => gateway.BuildUpdateAsync(entity, false, Context).AsTask());
+        Assert.Equal("No changes detected for update.", ex.Message);
+    }
+
     [Table("OnlyIdEntities")]
     private sealed class OnlyIdEntity
     {
