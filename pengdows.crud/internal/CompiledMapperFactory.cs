@@ -79,7 +79,11 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             if (column.IsJsonType)
             {
                 var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
-                var jsonStr = Expression.Call(readerParam, getString, ordinalExpr);
+                // Blank text is the JSON literal null (COR-007).
+                var jsonStr = Expression.Call(
+                    typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.JsonTextOrNullLiteral),
+                        BindingFlags.NonPublic | BindingFlags.Static)!,
+                    Expression.Call(readerParam, getString, ordinalExpr));
 
                 var underlying = Nullable.GetUnderlyingType(targetType) ?? targetType;
                 if (underlying == typeof(types.valueobjects.JsonValue))

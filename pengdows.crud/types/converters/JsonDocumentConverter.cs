@@ -40,7 +40,7 @@ internal sealed class JsonDocumentConverter : AdvancedTypeConverter<JsonDocument
         {
             try
             {
-                result = JsonDocument.Parse(json);
+                result = JsonDocument.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(json));
                 return true;
             }
             catch (JsonException)

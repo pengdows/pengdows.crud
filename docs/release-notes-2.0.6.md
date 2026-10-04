@@ -8,6 +8,10 @@
 
 - A `[Json]` column holding text that isn't valid JSON for the property type fails the read with
   `DataMappingException` naming the column. 2.0.5 returned `null`/default silently (DEC-008).
+  Blank text reads as the JSON literal `null` on every path (gateway, `DataReaderMapper`,
+  `TypeCoercionHelper`, the `JsonDocument` converter): null for a reference or nullable type, as in
+  2.0.5, but a non-nullable value type such as `int` now fails instead of reading `default`, and a
+  `JsonValue` reads as `null` JSON rather than as C# `null` or empty text (COR-007).
 
 - Blank or whitespace text read into a number, Guid, date or bool (nullable or not) fails with
   `DataMappingException` naming the column (scalar reads: `FormatException`). 2.0.5 returned

@@ -290,6 +290,12 @@ internal static class TypeCoercionHelper
         if (value is string s && string.IsNullOrWhiteSpace(s) && underlyingTarget != typeof(string) &&
             underlyingTarget != typeof(object))
         {
+            // COR-007: a JSON type reads blank text as the JSON literal null, as a [Json] column does.
+            if (IsJsonValueType(underlyingTarget))
+            {
+                return CoerceJsonValue(s, targetType, null, options);
+            }
+
             throw BlankText(underlyingTarget);
         }
 
@@ -924,7 +930,7 @@ internal static class TypeCoercionHelper
     private static object? CoerceJsonValue(
         object value,
         Type targetType,
-        IColumnInfo columnInfo,
+        IColumnInfo? columnInfo,
         TypeCoercionOptions options)
     {
         var actualTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
@@ -933,7 +939,7 @@ internal static class TypeCoercionHelper
             return value;
         }
 
-        var serializerOptions = columnInfo.JsonSerializerOptions ?? JsonSerializerOptions.Default;
+        var serializerOptions = columnInfo?.JsonSerializerOptions ?? JsonSerializerOptions.Default;
 
         if (actualTarget == typeof(string) || actualTarget == typeof(ReadOnlyMemory<char>))
         {
@@ -955,14 +961,12 @@ internal static class TypeCoercionHelper
         if (actualTarget == typeof(types.valueobjects.JsonValue))
         {
             // The JSON text itself, never JsonSerializer.Deserialize into the struct (TYPE-019).
-            var text = ExtractJsonString(value, serializerOptions);
-            return string.IsNullOrWhiteSpace(text) ? null : (object)new types.valueobjects.JsonValue(text);
+            return new types.valueobjects.JsonValue(JsonTextOrNullLiteral(ExtractJsonString(value, serializerOptions)));
         }
 
         if (actualTarget == typeof(JsonNode))
         {
-            var text = ExtractJsonString(value, serializerOptions);
-            return string.IsNullOrWhiteSpace(text) ? null : JsonNode.Parse(text, new JsonNodeOptions());
+            return JsonNode.Parse(JsonTextOrNullLiteral(ExtractJsonString(value, serializerOptions)), new JsonNodeOptions());
         }
 
         var jsonText = ExtractJsonString(value, serializerOptions);
@@ -973,12 +977,13 @@ internal static class TypeCoercionHelper
                 throw new JsonException("JSON payload cannot be empty.");
             }
 
-            return null;
+            jsonText = JsonTextOrNullLiteral(jsonText);
         }
 
         try
         {
-            return JsonSerializer.Deserialize(jsonText, actualTarget, serializerOptions);
+            // Into the declared type, so JSON null reads as null for a Nullable<T> (COR-007).
+            return JsonSerializer.Deserialize(jsonText, targetType, serializerOptions);
         }
         catch (JsonException ex) when (value is not Stream)
         {
@@ -986,6 +991,17 @@ internal static class TypeCoercionHelper
             throw new JsonException($"Failed to deserialize JSON payload into {actualTarget}.", ex);
         }
     }
+
+    /// <summary>
+    /// COR-007: blank text (empty or whitespace) in a JSON column is the JSON literal <c>null</c> on
+    /// every read path, so each target reads it as it reads <c>null</c>: null for a reference or
+    /// nullable type, a JSON-null document or value, and a failure for a non-nullable value type.
+    /// </summary>
+    private static bool IsJsonValueType(Type type) =>
+        type == typeof(JsonDocument) || type == typeof(JsonElement) || typeof(JsonNode).IsAssignableFrom(type) ||
+        type == typeof(types.valueobjects.JsonValue);
+
+    internal static string JsonTextOrNullLiteral(string? text) => string.IsNullOrWhiteSpace(text) ? "null" : text;
 
     private static JsonDocument ToJsonDocument(object value, JsonSerializerOptions options)
     {
@@ -1000,7 +1016,7 @@ internal static class TypeCoercionHelper
                 case JsonNode node:
                     return JsonDocument.Parse(node.ToJsonString(options));
                 case string s:
-                    return JsonDocument.Parse(string.IsNullOrWhiteSpace(s) ? "null" : s);
+                    return JsonDocument.Parse(JsonTextOrNullLiteral(s));
                 case byte[] bytes when bytes.Length == 0:
                     return JsonDocument.Parse("null");
                 case byte[] bytes:
@@ -1034,7 +1050,7 @@ internal static class TypeCoercionHelper
 
         using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
         var text = reader.ReadToEnd();
-        return JsonDocument.Parse(string.IsNullOrWhiteSpace(text) ? "null" : text);
+        return JsonDocument.Parse(JsonTextOrNullLiteral(text));
     }
 
     private static string ExtractJsonString(object value, JsonSerializerOptions options)
