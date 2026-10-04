@@ -439,10 +439,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual Type? GetUnresolvedColumnType(string dataTypeName) => null;
 
-    /// <summary>
-    /// Reads a column <see cref="GetUnresolvedColumnType"/> named, as that type; the dialect knows
-    /// its database's encoding (SQL Server's stored spatial format, PostgreSQL's EWKB).
-    /// </summary>
     private Func<IDataRecord, int, Type, object>? _unresolvedColumnReader;
 
     /// <summary>
@@ -457,6 +453,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
         static (record, ordinal, type) =>
             record.IsDBNull(ordinal) ? DBNull.Value : @internal.UnresolvedColumnReader.Read(record, ordinal, type);
 
+    /// <summary>
+    /// Reads a column <see cref="GetUnresolvedColumnType"/> named, as that type; the dialect knows
+    /// its database's encoding (SQL Server's stored spatial format, PostgreSQL's EWKB).
+    /// </summary>
     internal virtual object ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type) =>
         UnresolvedColumnReader.Read(record, ordinal, type);
 

@@ -244,17 +244,22 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     // Load methods
     // =========================================================================
 
-    /// <inheritdoc/>
     // Gateway hydration's reader (DEC-013): a SqlContainer opens it with SequentialAccess where the
     // dialect asks; any other ISqlContainer implementation keeps its own behavior.
     private static ValueTask<ITrackedReader> OpenHydrationReaderAsync(ISqlContainer sc, bool singleRow,
-        CancellationToken cancellationToken) =>
-        sc is SqlContainer container
-            ? container.ExecuteReaderForHydrationAsync(singleRow, cancellationToken)
-            : singleRow
-                ? sc.ExecuteReaderSingleRowAsync(cancellationToken)
-                : sc.ExecuteReaderAsync(CommandType.Text, cancellationToken);
+        CancellationToken cancellationToken)
+    {
+        if (sc is SqlContainer container)
+        {
+            return container.ExecuteReaderForHydrationAsync(singleRow, cancellationToken);
+        }
 
+        return singleRow
+            ? sc.ExecuteReaderSingleRowAsync(cancellationToken)
+            : sc.ExecuteReaderAsync(CommandType.Text, cancellationToken);
+    }
+
+    /// <inheritdoc/>
     public ValueTask<TEntity?> LoadSingleAsync(ISqlContainer sc)
     {
         return LoadSingleAsync(sc, CancellationToken.None);
@@ -459,29 +464,29 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     }
 
     /// <summary>
-    /// Whether a rows-affected shortfall from a batch-upsert container reliably means a
-    /// <c>[Version]</c> conflict. Mirrors the SQL shape <c>BuildBatchUpsert</c> picks:
-    /// chunked ON CONFLICT carries a version guard only when the dialect supports
-    /// <c>DO UPDATE ... WHERE</c>; chunked ON DUPLICATE KEY (MySQL family) has no guard and
-    /// reports 0 affected for an unchanged row, so it can't detect a conflict; the per-entity
-    /// fallback uses the same rule as single-entity <c>UpsertAsync</c> (a guarded MERGE whose rows
-    /// affected reveals a skipped row; not Firebird's unguarded UPDATE OR INSERT or Sybase ASE, see
-    /// <see cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>).
-    /// </summary>
-    /// <summary>
     /// DEC-012: the ON DUPLICATE KEY UPDATE fragment with each column whose incoming-row reference
     /// the dialect can't trust set from that column's own parameter instead. Returns the fragment
     /// unchanged when no column is affected.
     /// </summary>
     private protected static string ReuseParametersForUnreliableIncoming(ISqlDialect dialect, string fragment,
-        IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
+        IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames) =>
+        ReuseParametersForUnreliableIncoming(dialect, fragment, columns, parameterNames, static name => name);
+
+    // The parameters themselves: a name is read only for an unreliable column, so no list of names is built
+    // for every upsert on every MySQL-family dialect (REV-082).
+    private protected static string ReuseParametersForUnreliableIncoming(ISqlDialect dialect, string fragment,
+        IReadOnlyList<IColumnInfo> columns, IReadOnlyList<System.Data.Common.DbParameter> parameters) =>
+        ReuseParametersForUnreliableIncoming(dialect, fragment, columns, parameters, static p => p.ParameterName);
+
+    private static string ReuseParametersForUnreliableIncoming<T>(ISqlDialect dialect, string fragment,
+        IReadOnlyList<IColumnInfo> columns, IReadOnlyList<T> parameters, Func<T, string> nameOf)
     {
         if (dialect is not SqlDialect sqlDialect)
         {
             return fragment;
         }
 
-        for (var i = 0; i < columns.Count && i < parameterNames.Count; i++)
+        for (var i = 0; i < columns.Count && i < parameters.Count; i++)
         {
             if (!sqlDialect.UpsertIncomingValueUnreliable(columns[i]))
             {
@@ -491,7 +496,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             var wrapped = dialect.WrapSimpleName(columns[i].Name);
             fragment = fragment.Replace(
                 string.Concat(wrapped, " = ", dialect.UpsertIncomingColumn(columns[i].Name)),
-                string.Concat(wrapped, " = ", dialect.MakeParameterName(parameterNames[i])),
+                string.Concat(wrapped, " = ", dialect.MakeParameterName(nameOf(parameters[i]))),
                 StringComparison.Ordinal);
         }
 
@@ -522,6 +527,16 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         return false;
     }
 
+    /// <summary>
+    /// Whether a rows-affected shortfall from a batch-upsert container reliably means a
+    /// <c>[Version]</c> conflict. Mirrors the SQL shape <c>BuildBatchUpsert</c> picks:
+    /// chunked ON CONFLICT carries a version guard only when the dialect supports
+    /// <c>DO UPDATE ... WHERE</c>; chunked ON DUPLICATE KEY (MySQL family) has no guard and
+    /// reports 0 affected for an unchanged row, so it can't detect a conflict; the per-entity
+    /// fallback uses the same rule as single-entity <c>UpsertAsync</c> (a guarded MERGE whose rows
+    /// affected reveals a skipped row; not Firebird's unguarded UPDATE OR INSERT or Sybase ASE, see
+    /// <see cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>).
+    /// </summary>
     private protected bool BatchUpsertCanDetectVersionConflict(IDatabaseContext ctx)
     {
         if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())

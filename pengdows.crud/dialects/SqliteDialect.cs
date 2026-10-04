@@ -9,7 +9,7 @@
 //   * Parameter marker: @ (at sign)
 //   * Identifier quoting: "name" (double quotes)
 //   * Max parameters: 999, or 32766 on 3.32+ (SQLITE_MAX_VARIABLE_NUMBER defaults)
-//   * Prepared statements enabled
+//   * Commands not prepared by default (the driver keeps a prepared statement per command; PERF-027)
 // - Connection mode detection:
 //   * Isolated :memory: -> SingleConnection mode
 //   * File mode -> SingleWriter mode

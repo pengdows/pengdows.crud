@@ -69,8 +69,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             var ordinalExpr = Expression.Constant(i);
             var notDbNull = Expression.Not(Expression.Call(readerParam, IsDbNullMethod, ordinalExpr));
 
-            // Build the value-read expression; the JSON, byte[] and lenient-enum branches wrap it in
-            // their own try-catch.
+            // Build the value-read expression; only the lenient-enum branch wraps it in its own try-catch
+            // (conversion failures are caught once, below, and tagged with the column).
             Expression valueReadExpr;
             // Set to true in the else branch for non-nullable value types to skip the
             // IsDBNull guard — see comment near the end of the else block below.
@@ -325,8 +325,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 skipNullGuard = targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null;
             }
 
-            // Directly assign without per-column try-catch for maximum performance.
-            // Exceptions will bubble up naturally.
+            // No per-column try-catch: the whole body's catch tags a conversion failure with this column's
+            // ordinal (ColumnReadException); any other exception passes through unchanged.
             var propertyAccess = Expression.Property(entityVar, property);
             var assignment = Expression.Assign(propertyAccess, valueReadExpr);
 
@@ -450,7 +450,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         }
 
         // Integer and decimal columns into bool (Oracle reports NUMBER(1) as decimal): non-zero is true,
-        // as TypeCoercionHelper's CoerceBoolean decides, without boxing the value through it.
+        // as BooleanCoercion decides, without boxing the value through it.
         if (underlyingTargetType == typeof(bool) &&
             (sourceType == typeof(decimal) || sourceType == typeof(long) || sourceType == typeof(int) ||
              sourceType == typeof(short) || sourceType == typeof(byte) || sourceType == typeof(sbyte) ||

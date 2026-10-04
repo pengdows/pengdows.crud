@@ -1028,7 +1028,6 @@ internal sealed class PoolGovernor : IDisposable
         return tcs;
     }
 
-
     private sealed class TurnstileState
     {
         internal long WritersActiveOrWaiting;

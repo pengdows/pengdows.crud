@@ -359,8 +359,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(ReuseParametersForUnreliableIncoming(dialect,
-            template.UpsertUpdateFragmentOnConflict!, insertableColumns,
-            parameters.ConvertAll(static p => p.ParameterName)));
+            template.UpsertUpdateFragmentOnConflict!, insertableColumns, parameters));
 
         sc.AddParameters(parameters);
         return sc;

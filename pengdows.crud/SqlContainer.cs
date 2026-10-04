@@ -2479,11 +2479,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return clone;
     }
 
-    /// <summary>
-    /// A copy of this container's query with no parameters, as <see cref="Clone(IDatabaseContext?)"/>
-    /// followed by clearing the parameters would leave it, without building and discarding the
-    /// parameter copies (PERF-013: BuildCreate's template path).
-    /// </summary>
     // Renders and caches the command text. RenderParams populates ParamSequence and replaces
     // {P}name with the dialect marker (? for positional providers such as ODBC/Access and Informix,
     // @name/:name for named ones).
@@ -2516,6 +2511,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// <summary>True when the command text for the current query is rendered and cached (tests).</summary>
     internal bool IsCommandTextRendered => _cachedCommandText != null && _cachedCommandTextVersion == _query.Version;
 
+    /// <summary>
+    /// A copy of this container's query with no parameters, as <see cref="Clone(IDatabaseContext?)"/>
+    /// followed by clearing the parameters would leave it, without building and discarding the
+    /// parameter copies (PERF-013: BuildCreate's template path).
+    /// </summary>
     internal SqlContainer CloneQueryOnly(IDatabaseContext? context)
     {
         var clone = (SqlContainer)(context ?? _context).CreateSqlContainer();
