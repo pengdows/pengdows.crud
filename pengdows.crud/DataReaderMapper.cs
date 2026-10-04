@@ -741,14 +741,11 @@ public sealed class DataReaderMapper : IDataReaderMapper
             return Expression.ConvertChecked(rawValue, targetType);
         }
 
-        // float/double/decimal → integral: use Convert.ToXxx for rounding semantics.
-        if (IsIntegralType(targetType) && !IsIntegralType(sourceType))
+        // float/double/decimal → integral: the value must be whole (COR-009), then converts checked.
+        // Convert.ToXxx rounded to even (2.7 → 3, 2.5 → 2) where the gateway truncated.
+        if (WholeNumber.RequireFor(sourceType, targetType) is { } requireWhole)
         {
-            var method = ResolveConvertMethod(targetType, sourceType);
-            if (method != null)
-            {
-                return Expression.Call(method, rawValue);
-            }
+            return Expression.ConvertChecked(Expression.Call(requireWhole, rawValue), targetType);
         }
 
         if (targetType == typeof(decimal) && (sourceType == typeof(double) || sourceType == typeof(float)))

@@ -440,7 +440,22 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         // instead of wrapping to a different number (TYPE-008, REV-046).
         if (IsNumericType(sourceType) && IsNumericType(underlyingTargetType))
         {
-            var converted = Expression.ConvertChecked(value, underlyingTargetType);
+            // An enum converts through its underlying integer: there is no decimal-to-enum conversion,
+            // so a decimal column (Oracle NUMBER) into an enum failed to compile (COR-013).
+            var numericTarget = underlyingTargetType.IsEnum ? Enum.GetUnderlyingType(underlyingTargetType) : underlyingTargetType;
+
+            // A fractional value into an integer must be whole (COR-009); truncating lost the fraction.
+            if (value.Type == sourceType && WholeNumber.RequireFor(sourceType, numericTarget) is { } requireWhole)
+            {
+                value = Expression.Call(requireWhole, value);
+            }
+
+            Expression converted = Expression.ConvertChecked(value, numericTarget);
+            if (numericTarget != underlyingTargetType)
+            {
+                converted = Expression.Convert(converted, underlyingTargetType);
+            }
+
             return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
         }
 

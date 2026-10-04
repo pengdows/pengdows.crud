@@ -8409,6 +8409,13 @@ PostgreSQL `numeric` `NaN` read into `decimal`, a SQL Server curve or `FULLGLOBE
 user CLR type when its assembly isn't loaded (select `col.ToString()` instead). `hierarchyid`,
 `geometry` and `geography` are read without `Microsoft.SqlServer.Types` (above).
 
+A fractional number read into an integer property, or into an enum stored as a number, must be
+whole: `2.0` reads as `2`, `2.7` fails (gateway: `DataMappingException` naming the column;
+`DataReaderMapper`: the same when `Strict`, otherwise logged with the property left at its default;
+scalar reads: `InvalidCastException`), as a value beyond the property's range does. 2.0.5 truncated
+it on the gateway and rounded it to even elsewhere (COR-009). A `decimal` column (Oracle `NUMBER`)
+reads into an enum property; 2.0.5 failed to build the mapper (COR-013).
+
 ## Not a public extension point
 
 `AdvancedTypeRegistry`, `CoercionRegistry`, and `ProviderTypeMapping` are all `internal`. The

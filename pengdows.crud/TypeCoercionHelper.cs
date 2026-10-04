@@ -365,6 +365,10 @@ internal static class TypeCoercionHelper
             return sequence;
         }
 
+        // A fractional value into an integer must be whole (COR-009): Convert.ChangeType rounded it to
+        // even (2.7 → 3) where the gateway truncated.
+        WholeNumber.Check(value, underlyingTarget);
+
         // Final fallback: Use cached compiled converter for better performance
         try
         {
@@ -700,6 +704,8 @@ internal static class TypeCoercionHelper
 
         try
         {
+            // A fractional number is no member: Convert.ToInt64 rounded 2.7 to 3 (COR-009).
+            WholeNumber.Check(value, typeof(long));
             var numeric = Convert.ToInt64(value, CultureInfo.InvariantCulture);
             var result = Enum.ToObject(enumType, numeric);
             if (Enum.IsDefined(enumType, result))

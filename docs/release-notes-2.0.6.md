@@ -18,12 +18,19 @@
   undefined value (`ArgumentException`, as before for unknown names). `[Flags]` enums accept any
   combination of defined flags on both string and numeric columns; 2.0.5 rejected numeric
   combinations (COR-005).
+- A fractional number read into an integer property (or an enum stored as a number) must be whole:
+  `2.7` fails with `DataMappingException` naming the column (`DataReaderMapper`: when `Strict`,
+  otherwise logged and left at the default; scalar reads: `InvalidCastException`). 2.0.5 truncated
+  it on the gateway (`2`) and rounded it to even in `DataReaderMapper` and scalar reads (`3`)
+  (COR-009).
 
 ## Reads that now work
 
 - An unsigned column read into a wider signed property (MySQL `INT UNSIGNED` into a `long`) is
   converted; 2.0.5 failed the read with `DataMappingException` (an `InvalidCastException` inside)
   (COR-008).
+- A `decimal` column (Oracle `NUMBER`) read into an enum property works; 2.0.5 failed building the
+  mapper with `InvalidOperationException` (COR-013).
 
 ## Metrics
 
