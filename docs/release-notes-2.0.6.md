@@ -31,8 +31,8 @@
 ## Reads that now work
 
 - An unsigned column read into a wider signed property (MySQL `INT UNSIGNED` into a `long`) is
-  converted; 2.0.5 failed the read with `DataMappingException` (an `InvalidCastException` inside)
-  (COR-008).
+  converted, and so is an unsigned or `sbyte` column into an enum property stored as a number; 2.0.5
+  failed the read with `DataMappingException` (an `InvalidCastException` inside) (COR-008, REV-072).
 - A `decimal` column (Oracle `NUMBER`) read into an enum property works; 2.0.5 failed building the
   mapper with `InvalidOperationException` (COR-013).
 

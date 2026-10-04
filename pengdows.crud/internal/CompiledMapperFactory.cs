@@ -137,8 +137,9 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 }
                 else
                 {
-                    var getMethod = GetReaderMethod(fieldType);
-                    var rawValue = Expression.Call(readerParam, getMethod, ordinalExpr);
+                    // Typed like any other column: an unsigned column read through GetValue was unboxed as the
+                    // enum's underlying type and failed (REV-072, as COR-008 for other properties).
+                    var rawValue = ReadColumn(readerParam, fieldType, ordinalExpr);
                     var convertedValue = BuildConversionExpression(rawValue, fieldType, underlyingTarget, coercionOptions);
 
                     var mapperMethod = typeof(EnumMappingCache).GetMethod(nameof(EnumMappingCache.ValidateEnumValue))!.MakeGenericMethod(underlyingTarget);
@@ -278,11 +279,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
                 // Typed for any target: a uint column into a long property converts the uint; the boxed
                 // GetValue result was unboxed as long and threw (COR-008).
-                var rawValue = TypedFieldReader.Handles(fieldType)
-                    ? Expression.Call(
-                        typeof(TypedFieldReader).GetMethod(nameof(TypedFieldReader.Read))!.MakeGenericMethod(fieldType),
-                        Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)
-                    : Expression.Call(readerParam, GetReaderMethod(fieldType), ordinalExpr);
+                var rawValue = ReadColumn(readerParam, fieldType, ordinalExpr);
                 if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(fieldType))
                 {
                     // DuckDB returns BLOBs as UnmanagedMemoryStream instances backed by the
@@ -391,6 +388,15 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         }
         throw new InvalidOperationException("Could not find JsonSerializer.Deserialize<T>(string, options) overload.");
     }
+
+    // The column read as its own type: a typed getter, GetFieldValue<T> for the value types IDataRecord has
+    // no getter for (TypedFieldReader, COR-008), otherwise GetValue.
+    private static Expression ReadColumn(Expression readerParam, Type fieldType, Expression ordinalExpr) =>
+        TypedFieldReader.Handles(fieldType)
+            ? Expression.Call(
+                typeof(TypedFieldReader).GetMethod(nameof(TypedFieldReader.Read))!.MakeGenericMethod(fieldType),
+                Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)
+            : Expression.Call(readerParam, GetReaderMethod(fieldType), ordinalExpr);
 
     private static MethodInfo GetReaderMethod(Type fieldType) =>
         ReaderGetters.TypedGetter(typeof(IDataRecord), fieldType) ?? ReaderGetters.GetValue;

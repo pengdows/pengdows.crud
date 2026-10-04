@@ -96,6 +96,9 @@ public class ReadPathParityTests
         // enums stored as numbers
         NumericEnumCase<Mood>(2), NumericEnumCase<Mood>(99), NumericEnumCase<Mood>(2L), NumericEnumCase<Mood>(2.0m),
         NumericEnumCase<Perm>(3), NumericEnumCase<Perm>(8), NumericEnumCase<Mood?>(1),
+        // unsigned and sbyte columns into an int-backed enum (REV-072: the gateway unboxed GetValue's object)
+        NumericEnumCase<Mood>(2u), NumericEnumCase<Mood>(2UL), NumericEnumCase<Mood>((ushort)2), NumericEnumCase<Mood>((sbyte)2),
+        NumericEnumCase<Mood?>(1u), NumericEnumCase<Mood>(99u),
         // enums stored as names
         StringEnumCase<Mood>("Ok"), StringEnumCase<Mood>("ok"), StringEnumCase<Mood>("Nope"), StringEnumCase<Mood>("99"),
         StringEnumCase<Mood>("2"), StringEnumCase<Perm>("Read, Write"),
