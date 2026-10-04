@@ -1323,24 +1323,8 @@ internal static class TypeCoercionHelper
             return Array.Empty<byte>();
         }
 
-        // For small binary data (like small hashes), use a rented buffer to read,
-        // then copy to a new array of the exact size.
-        if (length <= 256)
-        {
-            var temp = System.Buffers.ArrayPool<byte>.Shared.Rent((int)length);
-            try
-            {
-                var read = ReadAllBytes(reader, ordinal, temp, (int)length);
-                var result = new byte[read];
-                Buffer.BlockCopy(temp, 0, result, 0, read);
-                return result;
-            }
-            finally
-            {
-                System.Buffers.ArrayPool<byte>.Shared.Return(temp);
-            }
-        }
-
+        // The reported length sizes the result: read straight into it (a rented buffer for small
+        // values cost a second copy and allocated the same array).
         var heapBuffer = new byte[length];
         var total = ReadAllBytes(reader, ordinal, heapBuffer, (int)length);
         if (total < heapBuffer.Length)

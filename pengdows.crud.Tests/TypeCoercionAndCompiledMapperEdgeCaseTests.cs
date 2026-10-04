@@ -126,8 +126,8 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
     // ADO.NET lets GetBytes return fewer bytes than requested (streaming providers do), so
     // ReadBytes must keep reading until it has the whole value, not trust one call.
     [Theory]
-    [InlineData(100)]  // pooled small-buffer path
-    [InlineData(1000)] // heap path
+    [InlineData(100)]  // a small value (once read through a pooled buffer)
+    [InlineData(1000)]
     public void ReadBytes_ProviderReturnsPartialChunks_ReadsWholeValue(int size)
     {
         var data = new byte[size];
