@@ -168,7 +168,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var rawValue = Expression.Call(readInet, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
-            else if (fieldType == typeof(DateTime) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(DateTimeOffset))
+            else if (fieldType == typeof(DateTime) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(DateTimeOffset)
+                     && coercionOptions?.ReadsOffsetTimestampsFromValue == true)
             {
                 // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact
                 // DateTimeOffset, while GetDateTime gives local wall time or throws (TYPE-002): read the
@@ -469,15 +470,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             var typed = value.Type != sourceType ? Expression.Convert(value, sourceType) : value;
             var notEqualZero = Expression.NotEqual(typed, Expression.Constant(Convert.ChangeType(0, sourceType), sourceType));
             return targetType != underlyingTargetType ? Expression.Convert(notEqualZero, targetType) : notEqualZero;
-        }
-
-        // Fast path: string column → Guid property (common for SQLite, Oracle, DuckDB, Snowflake).
-        // Avoids boxing the string to object and the TypeCoercionHelper.Coerce dispatch.
-        if (sourceType == typeof(string) && underlyingTargetType == typeof(Guid))
-        {
-            var parseMethod = typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
-            var parsed = Expression.Call(parseMethod, value);
-            return targetType != underlyingTargetType ? Expression.Convert(parsed, targetType) : parsed;
         }
 
         // Date and time conversions TypeCoercionHelper.Coerce would make, without boxing the value or

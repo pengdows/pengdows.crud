@@ -22,6 +22,10 @@ public sealed class DataReaderMapperAllocationTests
     public sealed class DoubleValue { public double V { get; set; } }
     public sealed class DateTimeValue { public DateTime V { get; set; } }
     public sealed class OffsetValue { public DateTimeOffset V { get; set; } }
+    public sealed class DateOnlyValue { public DateOnly V { get; set; } }
+    public sealed class TimeSpanValue { public TimeSpan V { get; set; } }
+    public sealed class TimeOnlyValue { public TimeOnly V { get; set; } }
+    public sealed class GuidValue { public Guid V { get; set; } }
 
     private static Task<long> AllocatedPerRowAsync<T>(List<Dictionary<string, object>> rows) where T : class, new() =>
         AllocationMeasurement.LowestAsync(() => AllocatedPerRowOnceAsync<T>(rows));
@@ -61,5 +65,43 @@ public sealed class DataReaderMapperAllocationTests
 
         // A DateTimeOffset property makes the entity 8 bytes larger; nothing else should differ.
         Assert.True(asOffset <= asDateTime + 8, $"offset {asOffset} B/row, DateTime {asDateTime} B/row");
+    }
+
+    // DRY-003: DataReaderMapper converted these through the boxed coercer; it uses the gateway's
+    // TypedCoercions.
+    [Fact]
+    public async Task DateTimeColumnIntoDateOnlyProperty_AllocatesNoMoreThanIntoDateTimeProperty()
+    {
+        var rows = Rows(i => new DateTime(2026, 10, 1).AddDays(i));
+
+        var asDateOnly = await AllocatedPerRowAsync<DateOnlyValue>(rows);
+        var asDateTime = await AllocatedPerRowAsync<DateTimeValue>(rows);
+
+        Assert.True(asDateOnly <= asDateTime, $"DateOnly {asDateOnly} B/row, DateTime {asDateTime} B/row");
+    }
+
+    [Fact]
+    public async Task TimeSpanColumnIntoTimeOnlyProperty_AllocatesNoMoreThanIntoTimeSpanProperty()
+    {
+        var rows = Rows(i => TimeSpan.FromSeconds(i));
+
+        var asTimeOnly = await AllocatedPerRowAsync<TimeOnlyValue>(rows);
+        var asTimeSpan = await AllocatedPerRowAsync<TimeSpanValue>(rows);
+
+        Assert.True(asTimeOnly <= asTimeSpan, $"TimeOnly {asTimeOnly} B/row, TimeSpan {asTimeSpan} B/row");
+    }
+
+    // The gateway's Guid reader: a value that isn't 16 bytes fails as InvalidValueException on both.
+    [Fact]
+    public async Task BinaryColumnOfTheWrongLengthIntoGuid_FailsAsOnTheGateway()
+    {
+        var rows = new List<Dictionary<string, object>> { new() { ["V"] = new byte[15] } };
+        await using var reader = new TrackedReader(new fakeDbDataReader(rows), new Mock<ITrackedConnection>().Object,
+            Mock.Of<IAsyncDisposable>(), false);
+
+        var error = await Assert.ThrowsAsync<pengdows.crud.exceptions.DataMappingException>(
+            () => DataReaderMapper.LoadAsync<GuidValue>(reader, new MapperOptions(Strict: true)).AsTask());
+
+        Assert.IsType<pengdows.crud.exceptions.InvalidValueException>(error.InnerException);
     }
 }

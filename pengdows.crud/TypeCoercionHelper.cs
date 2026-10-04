@@ -792,9 +792,7 @@ internal static class TypeCoercionHelper
                 // Firebird TIME WITH TIME ZONE columns are returned as FbZonedTime (TYPE-002).
                 return zonedTime;
             case DateTime dt:
-                return options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
-                    ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
-                    : CreateFlexibleOffset(dt);
+                return DateTimeOffsetFromDateTime(dt, options);
             case string s when TryParseTimestampText(s, out var parsed):
                 return parsed;
             default:
@@ -860,10 +858,13 @@ internal static class TypeCoercionHelper
     }
 
     /// <summary>
-    /// Typed DateTimeOffset converter for DateTime source — used by compiled expression trees in
-    /// <see cref="DataReaderMapper"/> to avoid boxing the DateTimeOffset return value.
+    /// A DateTime as a DateTimeOffset under <paramref name="options"/>' time policy, as
+    /// <see cref="CoerceDateTimeOffset"/> converts it, without boxing (DRY-003).
     /// </summary>
-    internal static DateTimeOffset CoerceDateTimeOffsetFromDateTime(DateTime dt) => CreateFlexibleOffset(dt);
+    internal static DateTimeOffset DateTimeOffsetFromDateTime(DateTime dt, TypeCoercionOptions options) =>
+        options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
+            ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
+            : CreateFlexibleOffset(dt);
 
     /// <summary>
     /// Timestamp text: a stated offset keeps its instant; text without one is UTC, as an unspecified

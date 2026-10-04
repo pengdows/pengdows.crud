@@ -97,10 +97,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
 
-    // Cached MethodInfo/ConstructorInfo for typed direct-read expression trees.
-    // Resolved once at class load to avoid per-plan reflection overhead.
-    // NormalizeDateTime: treats Unspecified as UTC, converts Local to UTC.
-    // Used after GetDateTime() to apply the same UTC policy that other paths use.
+    // NormalizeDateTime: treats Unspecified as UTC, converts Local to UTC, as every read path does.
     private static readonly MethodInfo _normalizeDateTimeMethod =
         typeof(TypeCoercionHelper).GetMethod(
             nameof(TypeCoercionHelper.NormalizeDateTime),
@@ -108,30 +105,6 @@ public sealed class DataReaderMapper : IDataReaderMapper
             null,
             new[] { typeof(DateTime) },
             null)!;
-
-    // IDataRecord.GetDateTime(int) — called directly for string→DateTime coercion to
-    // delegate parsing to the DB driver (single parse, no intermediate string allocation).
-    private static readonly MethodInfo _getDateTimeMethod =
-        typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetDateTime), new[] { typeof(int) })!;
-
-    private static readonly MethodInfo _coerceDateTimeOffsetFromStringMethod =
-        typeof(TypeCoercionHelper).GetMethod(
-            nameof(TypeCoercionHelper.CoerceDateTimeOffsetFromString),
-            BindingFlags.NonPublic | BindingFlags.Static,
-            null,
-            new[] { typeof(string) },
-            null)!;
-
-    private static readonly MethodInfo _coerceDateTimeOffsetFromDateTimeMethod =
-        typeof(TypeCoercionHelper).GetMethod(
-            nameof(TypeCoercionHelper.CoerceDateTimeOffsetFromDateTime),
-            BindingFlags.NonPublic | BindingFlags.Static,
-            null,
-            new[] { typeof(DateTime) },
-            null)!;
-
-    private static readonly MethodInfo _guidParseMethod =
-        typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
 
     internal DataReaderMapper()
     {
@@ -676,9 +649,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             if (underlyingTarget == typeof(DateTime) && key.FieldType == typeof(DateTime))
             {
                 // Unspecified reads as UTC, as on the gateway (DRY-003).
-                Expression normalized = Expression.Call(
-                    typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.NormalizeDateTime),
-                        BindingFlags.NonPublic | BindingFlags.Static)!, rawValue);
+                Expression normalized = Expression.Call(_normalizeDateTimeMethod, rawValue);
                 valueExpression = targetType != underlyingTarget ? Expression.Convert(normalized, targetType) : normalized;
             }
             else if (targetType == key.FieldType)
@@ -984,6 +955,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
     /// <c>false</c> when the pair is not handled here and the caller should fall back to the
     /// generic coercer path.
     /// </returns>
+    // The conversions both mappers share (DRY-003): Guid bytes through the gateway's reader, and the
+    // typed date, time and Guid coercions of TypedCoercions, read from the column's typed getter.
     private static bool TryBuildDirectReadExpression(
         SetterCacheKey key,
         ParameterExpression readerParam,
@@ -991,72 +964,34 @@ public sealed class DataReaderMapper : IDataReaderMapper
         Type underlyingTarget,
         out Expression valueExpression)
     {
-        var fieldType = key.FieldType;
         var ordinalConst = Expression.Constant(key.Ordinal);
-        var isNullable = targetType != underlyingTarget; // targetType is Nullable<underlyingTarget>
-
-        // string → DateTime / DateTime?
-        // Use reader.GetDateTime(ordinal) directly rather than GetFieldValue<string>() +
-        // CoerceDateTimeFromString(). Delegating to the DB driver:
-        //   • avoids allocating an intermediate C# string
-        //   • uses a single DateTime.Parse call (no DateTimeOffset.TryParse first attempt)
-        //   • matches what Dapper emits and what CompiledMapperFactory does for drivers
-        //     that natively return typeof(DateTime) from GetFieldType()
-        // NormalizeDateTime then applies the same UTC policy as every other path.
-        if (fieldType == typeof(string) && underlyingTarget == typeof(DateTime))
+        Expression? converted = null;
+        if (key.FieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
         {
-            var rawDt = Expression.Call(readerParam, _getDateTimeMethod, ordinalConst);
-            var normalized = Expression.Call(_normalizeDateTimeMethod, rawDt);
-            valueExpression = isNullable ? Expression.Convert(normalized, targetType) : normalized;
-            return true;
+            // In the dialect's Guid byte order (SqlDialect.StoresGuidBytesBigEndian, TYPE-002); a reader
+            // with no dialect uses .NET's mixed-endian order. Exactly 16 bytes (COR-003/COR-014).
+            converted = Expression.Call(_readGuidFromBytesMethod, Expression.Convert(readerParam, typeof(IDataRecord)),
+                ordinalConst, Expression.Constant(key.Coercion?.GuidBytesBigEndian ?? false));
+        }
+        else if (TypedCoercions.Find(key.FieldType, underlyingTarget) is { } typedCoercion)
+        {
+            var getter = TypedGetter(key.FieldType) ?? _getFieldValueGenericMethod.MakeGenericMethod(key.FieldType);
+            converted = Expression.Call(typedCoercion, Expression.Call(readerParam, getter, ordinalConst),
+                Expression.Constant(key.Coercion ?? TypeCoercionOptions.Default, typeof(TypeCoercionOptions)));
         }
 
-        // string → DateTimeOffset / DateTimeOffset?
-        if (fieldType == typeof(string) && underlyingTarget == typeof(DateTimeOffset))
+        if (converted == null)
         {
-            var getStr = _getFieldValueGenericMethod.MakeGenericMethod(typeof(string));
-            var rawStr = Expression.Call(readerParam, getStr, ordinalConst);
-            var parsed = Expression.Call(_coerceDateTimeOffsetFromStringMethod, rawStr);
-            valueExpression = isNullable ? Expression.Convert(parsed, targetType) : parsed;
-            return true;
+            valueExpression = null!;
+            return false;
         }
 
-        // DateTime → DateTimeOffset / DateTimeOffset?
-        if (fieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset))
-        {
-            var getDateTime = _getFieldValueGenericMethod.MakeGenericMethod(typeof(DateTime));
-            var rawDt = Expression.Call(readerParam, getDateTime, ordinalConst);
-            var converted = Expression.Call(_coerceDateTimeOffsetFromDateTimeMethod, rawDt);
-            valueExpression = isNullable ? Expression.Convert(converted, targetType) : converted;
-            return true;
-        }
-
-        // string → Guid / Guid?
-        if (fieldType == typeof(string) && underlyingTarget == typeof(Guid))
-        {
-            var getStr = _getFieldValueGenericMethod.MakeGenericMethod(typeof(string));
-            var rawStr = Expression.Call(readerParam, getStr, ordinalConst);
-            var parsed = Expression.Call(_guidParseMethod, rawStr);
-            valueExpression = isNullable ? Expression.Convert(parsed, targetType) : parsed;
-            return true;
-        }
-
-        // byte[] → Guid / Guid?, in the dialect's Guid byte order (SqlDialect.StoresGuidBytesBigEndian,
-        // TYPE-002); a reader with no dialect uses .NET's mixed-endian order.
-        if (fieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
-        {
-            var getBytes = _getFieldValueGenericMethod.MakeGenericMethod(typeof(byte[]));
-            var rawBytes = Expression.Call(readerParam, getBytes, ordinalConst);
-            var newGuid = Expression.Call(
-                typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.GuidFromBytes))!,
-                rawBytes, Expression.Constant(key.Coercion?.GuidBytesBigEndian ?? false));
-            valueExpression = isNullable ? Expression.Convert(newGuid, targetType) : newGuid;
-            return true;
-        }
-
-        valueExpression = null!;
-        return false;
+        valueExpression = targetType != underlyingTarget ? Expression.Convert(converted, targetType) : converted;
+        return true;
     }
+
+    private static readonly MethodInfo _readGuidFromBytesMethod = typeof(TypeCoercionHelper).GetMethod(
+        nameof(TypeCoercionHelper.ReadGuidFromBytes), new[] { typeof(IDataRecord), typeof(int), typeof(bool) })!;
 
     private static MethodInfo ResolveGetFieldValueMethod()
     {
