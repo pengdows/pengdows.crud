@@ -497,10 +497,11 @@ internal static class EnumMappingCache
 
         public static readonly bool IsFlags = typeof(TEnum).IsDefined(typeof(FlagsAttribute), false);
 
-        // Every bit some defined member uses, for [Flags] combinations.
-        public static readonly ulong AllFlags = Enum.GetValues<TEnum>().Aggregate(0UL, (bits, v) => bits | ToBits(v));
+        // Every bit some defined member uses, for [Flags] combinations; computed only for [Flags] enums.
+        public static readonly ulong AllFlags =
+            IsFlags ? Enum.GetValues<TEnum>().Aggregate(0UL, (bits, v) => bits | ToBits(v)) : 0UL;
 
-        public static ulong ToBits(TEnum value) => unchecked((ulong)Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture));
+        public static ulong ToBits(TEnum value) => Bits(value);
     }
 
     // A defined value, or for a [Flags] enum any combination of defined flags (COR-005).
@@ -520,11 +521,23 @@ internal static class EnumMappingCache
             return true;
         }
 
-        var (isFlags, allFlags) = FlagsByType.GetOrAdd(enumType, static t => (t.IsDefined(typeof(FlagsAttribute), false),
-            Enum.GetValues(t).Cast<object>().Aggregate(0UL, (bits, v) => bits | Bits(v))));
-        return isFlags && (Bits(value) & ~allFlags) == 0;
+        var (isFlags, allFlags) = FlagsByType.GetOrAdd(enumType, static t => t.IsDefined(typeof(FlagsAttribute), false)
+            ? (true, Enum.GetValues(t).Cast<object>().Aggregate(0UL, (bits, v) => bits | Bits(v)))
+            : (false, 0UL));
+        return isFlags && ((Bits(value) & ~allFlags) == 0);
+    }
 
-        static ulong Bits(object v) => unchecked((ulong)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture));
+    // An enum value's bits whatever its underlying type: Convert.ToInt64 overflowed for a ulong member
+    // above long.MaxValue, which failed the whole enum (REV-070).
+    private static ulong Bits(object value)
+    {
+        var underlying = Type.GetTypeCode(value.GetType().IsEnum ? Enum.GetUnderlyingType(value.GetType()) : value.GetType());
+        if (underlying is TypeCode.Byte or TypeCode.UInt16 or TypeCode.UInt32 or TypeCode.UInt64)
+        {
+            return Convert.ToUInt64(value, System.Globalization.CultureInfo.InvariantCulture);
+        }
+
+        return unchecked((ulong)Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture));
     }
 
     public static TEnum GetEnumFromString<TEnum>(string value) where TEnum : struct, Enum

@@ -682,8 +682,11 @@ internal static class TypeCoercionHelper
         {
             // A fractional number is no member: Convert.ToInt64 rounded 2.7 to 3 (COR-009).
             WholeNumber.Check(value, typeof(long));
-            var numeric = Convert.ToInt64(value, CultureInfo.InvariantCulture);
-            var result = Enum.ToObject(enumType, numeric);
+            // An integer goes in as itself (Convert.ToInt64 overflowed a ulong above long.MaxValue,
+            // REV-070); a whole decimal or floating value by its sign.
+            var result = value is decimal or double or float
+                ? NumericEnumValue(enumType, value)
+                : Enum.ToObject(enumType, value);
             // Defined, or a combination of [Flags] members, as on the gateway (DRY-003).
             if (EnumMappingCache.IsValid(enumType, result))
             {
@@ -696,6 +699,16 @@ internal static class TypeCoercionHelper
         {
             return HandleEnumFailure(value, enumType, parseMode, isNullable);
         }
+    }
+
+    private static object NumericEnumValue(Type enumType, object wholeValue)
+    {
+        if (Convert.ToDecimal(wholeValue, CultureInfo.InvariantCulture) >= 0)
+        {
+            return Enum.ToObject(enumType, Convert.ToUInt64(wholeValue, CultureInfo.InvariantCulture));
+        }
+
+        return Enum.ToObject(enumType, Convert.ToInt64(wholeValue, CultureInfo.InvariantCulture));
     }
 
     private static object DefaultOf(Type enumType) =>

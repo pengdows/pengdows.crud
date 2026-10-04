@@ -26,6 +26,16 @@ public class ReadPathParityTests
         Admin = 4
     }
 
+    // REV-070: a ulong-backed [Flags] enum with a member above long.MaxValue overflowed the flags
+    // computation (Convert.ToInt64), which failed the whole enum on every path.
+    [Flags]
+    public enum Wide : ulong
+    {
+        None = 0,
+        Low = 1,
+        Top = 1UL << 63
+    }
+
     public enum Mood
     {
         Sad = 1,
@@ -88,7 +98,11 @@ public class ReadPathParityTests
         NumericEnumCase<Perm>(3), NumericEnumCase<Perm>(8), NumericEnumCase<Mood?>(1),
         // enums stored as names
         StringEnumCase<Mood>("Ok"), StringEnumCase<Mood>("ok"), StringEnumCase<Mood>("Nope"), StringEnumCase<Mood>("99"),
-        StringEnumCase<Mood>("2"), StringEnumCase<Perm>("Read, Write")
+        StringEnumCase<Mood>("2"), StringEnumCase<Perm>("Read, Write"),
+        // ulong-backed [Flags] enum, a member above long.MaxValue (REV-070)
+        NumericEnumCase<Wide>(1UL), NumericEnumCase<Wide>(1UL << 63), NumericEnumCase<Wide>((1UL << 63) | 1UL),
+        NumericEnumCase<Wide>(2UL), StringEnumCase<Wide>("Top"), StringEnumCase<Wide>("Low, Top"),
+        StringEnumCase<Wide>("2")
     };
 
     private static object[] Case<T>(object stored) => new object[] { typeof(G<T>), typeof(T), stored };
