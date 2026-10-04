@@ -225,7 +225,9 @@ public MyConfig? Config { get; set; }
 ```
 
 Serializes the property to a JSON string on write, deserializes on read. `SerializerOptions`
-defaults to `JsonSerializerOptions.Default`. **`[Json]` is not required for every JSON-shaped
+defaults to `JsonSerializerOptions.Default`. A stored value that isn't valid JSON for the property
+type fails the read with `DataMappingException` naming the column; it never reads as `null` (2.0.5
+and earlier returned `null`/default silently). **`[Json]` is not required for every JSON-shaped
 type** — `TypeMapRegistry` auto-infers JSON handling for `System.Text.Json.JsonDocument`,
 `JsonElement`, any `JsonNode`-derived type, and the library's own `JsonValue` value object, without
 the attribute. Everything else (POCOs, `Dictionary<,>`, `List<>`, etc. — including the

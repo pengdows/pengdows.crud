@@ -93,9 +93,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     valueReadExpr = Expression.Call(deserializeMethod, jsonStr, Expression.Constant(column.JsonSerializerOptions));
                 }
 
-                // For JSON, we return default (null for objects) on error to match old behavior
-                var catchBlock = Expression.Catch(typeof(JsonException), Expression.Default(targetType));
-                valueReadExpr = Expression.TryCatch(valueReadExpr, catchBlock);
+                // Invalid JSON is not swallowed (DEC-008): the JsonException reaches the gateway,
+                // which reports a DataMappingException naming the column (TYPE-008).
             }
             else if (fieldType == typeof(byte[]))
             {

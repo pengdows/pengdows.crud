@@ -76,7 +76,7 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void MapReaderToObject_InvalidJson_ReturnsNull()
+    public void MapReaderToObject_InvalidJson_ThrowsDataMappingExceptionNamingTheColumn()
     {
         var helper = new TableGateway<JsonEntity, int>(Context);
         var rows = new[]
@@ -89,8 +89,10 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
         };
         using var reader = new FakeTrackedReader(rows);
         reader.Read();
-        var entity = helper.MapReaderToObject(reader);
-        Assert.Null(entity.Data);
+        // DEC-008: invalid JSON is a stored value the property can't hold, so it fails loudly
+        // (TYPE-008) instead of reading as null.
+        var ex = Assert.Throws<pengdows.crud.exceptions.DataMappingException>(() => helper.MapReaderToObject(reader));
+        Assert.Contains("Data", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]

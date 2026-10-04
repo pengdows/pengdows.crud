@@ -180,11 +180,13 @@ public sealed class ValueOutOfRangeMappingTests
         Assert.IsNotType<DataMappingException>(ex);
     }
 
-    // REV-034: array text that isn't an array surfaced as a raw JsonException. (A [Json] column
-    // holding invalid JSON still reads as null by 2.0 design; REV-042 asks whether to change that.)
+    // REV-034: array text that isn't an array surfaced as a raw JsonException. DEC-008: a [Json]
+    // column holding invalid JSON read as null with no error; it fails naming the column too.
     [Theory]
     [InlineData("nums", "garbage")]
     [InlineData("nums", "{\"a\":1}")]
+    [InlineData("doc", "{bad")]
+    [InlineData("doc", "[1,2]")]
     public async Task RetrieveOneAsync_TextThatDoesNotParse_ThrowsDataMappingExceptionNamingTheColumn(
         string column, string stored)
     {
