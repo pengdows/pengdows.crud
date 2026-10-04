@@ -391,6 +391,28 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         }
     }
 
+    /// <summary>
+    /// A value type with no IDataRecord getter read without boxing (PERF-020), for a column whose
+    /// field type is <typeparamref name="T"/>. A provider that refuses the typed read is read
+    /// through <see cref="GetValue"/>; an unreadable stored value fails as it does there.
+    /// </summary>
+    internal T ReadFieldValue<T>(int i)
+    {
+        try
+        {
+            return _reader.GetFieldValue<T>(i);
+        }
+        catch (Exception ex) when (ex is InvalidCastException or NotSupportedException
+                                   && UnreadableValue(i, ex) is null)
+        {
+            return (T)GetValue(i);
+        }
+        catch (Exception ex) when (UnreadableValue(i, ex) is { } unreadable)
+        {
+            throw unreadable;
+        }
+    }
+
     public object GetValue(int i)
     {
         if (UnresolvedColumnType(i) is { } unresolvedType)

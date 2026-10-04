@@ -139,22 +139,30 @@ public abstract partial class BaseTableGateway<TEntity>
                 return existingPlan;
             }
 
-            // The key must outlive this call (the rented arrays are returned below), so persist
-            // a copy before inserting.
-            var persistedShape = lookupShape.Persist();
-            var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes,
-                coercionOptions: options);
-            var plan = new HybridRecordsetPlan(compiledMapper, persistedShape, options);
-            var added = _readerPlans.GetOrAdd(new ReaderPlanKey(persistedShape, options), _ => plan);
-            Volatile.Write(ref _hotPlan, added);
-
-            return added;
+            return BuildRecordsetPlan(reader, lookupShape, names, fieldTypes, options);
         }
         finally
         {
             RecordsetFieldArrayPool.ReturnStringArray(names, fieldCount);
             RecordsetFieldArrayPool.ReturnTypeArray(fieldTypes, fieldCount);
         }
+    }
+
+    // Its own method: the GetOrAdd lambda's closure would otherwise be allocated on every call of
+    // the caller, hot-plan hits included (once per row through MapReaderToObject, PERF-020).
+    private HybridRecordsetPlan BuildRecordsetPlan(ITrackedReader reader, RecordsetShape lookupShape, string[] names,
+        Type[] fieldTypes, TypeCoercionOptions options)
+    {
+        // The key must outlive this call (the rented arrays are returned by the caller), so persist
+        // a copy before inserting.
+        var persistedShape = lookupShape.Persist();
+        var compiledMapper = CompiledMapperFactory<TEntity>.Create(reader, _columnsByNameCI, EnumParseBehavior, names, fieldTypes,
+            coercionOptions: options);
+        var plan = new HybridRecordsetPlan(compiledMapper, persistedShape, options);
+        var added = _readerPlans.GetOrAdd(new ReaderPlanKey(persistedShape, options), _ => plan);
+        Volatile.Write(ref _hotPlan, added);
+
+        return added;
     }
 
     public Action<object, object?> GetOrCreateSetter(PropertyInfo prop)

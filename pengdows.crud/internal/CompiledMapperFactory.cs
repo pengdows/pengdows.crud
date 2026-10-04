@@ -263,12 +263,14 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             }
             else
             {
-                var getMethod = GetReaderMethod(fieldType);
-                var rawValue = Expression.Call(readerParam, getMethod, ordinalExpr);
-
                 // OPTIMIZATION: For most common primitive types where source and target match,
                 // bypass BuildConversionExpression's potential boxing/Coerce paths.
                 var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+                var rawValue = fieldType == underlyingTarget && TypedFieldReader.Handles(fieldType)
+                    ? Expression.Call(
+                        typeof(TypedFieldReader).GetMethod(nameof(TypedFieldReader.Read))!.MakeGenericMethod(fieldType),
+                        Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)
+                    : Expression.Call(readerParam, GetReaderMethod(fieldType), ordinalExpr);
                 if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(fieldType))
                 {
                     // DuckDB returns BLOBs as UnmanagedMemoryStream instances backed by the
