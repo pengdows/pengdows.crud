@@ -439,6 +439,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual Type? GetUnresolvedColumnType(string dataTypeName) => null;
 
+    /// <summary>
+    /// True when <see cref="GetUnresolvedColumnType"/> is consulted for every column, not only those
+    /// the provider reports no field type for: the provider reports a type but can't convert some of
+    /// its values (DuckDB.NET's INTERVAL as TimeSpan, TYPE-022).
+    /// </summary>
+    internal virtual bool ReadsResolvedColumnsByDataTypeName => false;
+
     private Func<IDataRecord, int, Type, object>? _unresolvedColumnReader;
 
     /// <summary>

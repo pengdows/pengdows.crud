@@ -476,6 +476,27 @@ internal class DuckDbDialect : SqlDialect
     internal override DbType? DbTypeForReassignedValue(object? newValue, object? preparedValue) =>
         newValue is TimeSpan && preparedValue is string ? DbType.String : null;
 
+    // TYPE-022, confirmed live (DuckDB.NET 1.5.6): an INTERVAL reports TimeSpan, but the driver's
+    // conversion throws for every negative value (its microseconds are signed, exposed as ulong) and
+    // for months >= 1, and drops negative months. GetProviderSpecificValue returns the stored
+    // DuckDBInterval (Months, Days, Micros), which is converted here exactly.
+    internal override bool ReadsUnresolvedColumns => true;
+
+    internal override bool ReadsResolvedColumnsByDataTypeName => true;
+
+    internal override Type? GetUnresolvedColumnType(string dataTypeName) =>
+        dataTypeName.Equals("Interval", StringComparison.OrdinalIgnoreCase) ? typeof(TimeSpan) : null;
+
+    internal override object ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type)
+    {
+        if (type != typeof(TimeSpan) || record is not DbDataReader reader)
+        {
+            return base.ReadUnresolvedColumn(record, ordinal, type);
+        }
+
+        return IntervalParts.ToTimeSpan(reader.GetProviderSpecificValue(ordinal));
+    }
+
     /// <summary>
     /// DuckDB interval text: days, then a signed clock to the microsecond (DuckDB's resolution; the
     /// last 100 ns digit is truncated). DuckDB.NET binds a TimeSpan natively only when DuckDB infers

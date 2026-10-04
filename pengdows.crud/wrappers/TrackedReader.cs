@@ -93,7 +93,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         var entry = cache[i];
         if (entry is null)
         {
-            entry = (ProviderFieldTypeIsUnknown(i)
+            entry = (_unresolvedColumnDialect.ReadsResolvedColumnsByDataTypeName || ProviderFieldTypeIsUnknown(i)
                 ? _unresolvedColumnDialect.GetUnresolvedColumnType(_reader.GetDataTypeName(i))
                 : null) ?? NotUnresolved;
             cache[i] = entry;
@@ -398,6 +398,13 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     /// </summary>
     internal T ReadFieldValue<T>(int i)
     {
+        // A column the dialect reads itself (DuckDB's INTERVAL, TYPE-022) bypasses the provider's
+        // conversion.
+        if (_unresolvedColumnDialect is not null && UnresolvedColumnType(i) is not null)
+        {
+            return (T)GetValue(i);
+        }
+
         try
         {
             return _reader.GetFieldValue<T>(i);

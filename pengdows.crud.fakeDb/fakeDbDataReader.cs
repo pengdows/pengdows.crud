@@ -297,6 +297,11 @@ public class fakeDbDataReader : DbDataReader
                 "Microsoft.SqlServer.Types, Version=16.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91");
         }
 
+        if (row[keys[i]] is fakeDbInterval interval)
+        {
+            return interval.ToDriverTimeSpan();
+        }
+
         if (OutOfRangeReturnsNullColumns != null && OutOfRangeReturnsNullColumns.Contains(keys[i]))
         {
             return null!; // deliberately violates the contract, as the emulated driver does
@@ -442,6 +447,24 @@ public class fakeDbDataReader : DbDataReader
     private bool IsNullableElementArray(int i) =>
         NullableElementArrayColumns != null && NullableElementArrayColumns.Contains(GetName(i));
 
+    /// <summary>
+    /// The stored value itself for a provider-specific type (<see cref="fakeDbInterval"/>); otherwise
+    /// <see cref="GetValue"/>, as <see cref="System.Data.Common.DbDataReader"/> does.
+    /// </summary>
+    public override object GetProviderSpecificValue(int ordinal)
+    {
+        if (RawValue(ordinal) is not fakeDbInterval interval)
+        {
+            return GetValue(ordinal);
+        }
+
+        CheckSequentialAccess(ordinal);
+        return interval;
+    }
+
+    public override Type GetProviderSpecificFieldType(int ordinal) =>
+        RawValue(ordinal) is fakeDbInterval ? typeof(fakeDbInterval) : GetFieldType(ordinal);
+
     public override T GetFieldValue<T>(int ordinal)
     {
         CheckSequentialAccess(ordinal);
@@ -522,7 +545,7 @@ public class fakeDbDataReader : DbDataReader
         }
 
         var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsHandlerlessColumn(i) || IsDoubleBeyondDecimal(i) ||
-                    IsUnknownTypeColumn(i) || IsNullableElementArray(i)
+                    IsUnknownTypeColumn(i) || IsNullableElementArray(i) || RawValue(i) is fakeDbInterval
             ? RawValue(i)
             : GetValue(i);
         return value is null || value == DBNull.Value;
@@ -634,6 +657,11 @@ public class fakeDbDataReader : DbDataReader
             return ".<unknown>";
         }
 
+        if (RawValue(i) is fakeDbInterval)
+        {
+            return "Interval";
+        }
+
         return RawValue(i)?.GetType().Name ?? nameof(DBNull);
     }
 
@@ -722,6 +750,11 @@ public class fakeDbDataReader : DbDataReader
         if (IsDateTimeOffsetReportedAsDateTime(ordinal))
         {
             return typeof(DateTime);
+        }
+
+        if (RawValue(ordinal) is fakeDbInterval)
+        {
+            return typeof(TimeSpan);
         }
 
         if (IsNullableElementArray(ordinal))

@@ -32,6 +32,10 @@
 
 ## Reads that now work
 
+- A negative DuckDB `INTERVAL` read into a `TimeSpan` works. DuckDB.NET 1.5.6 throws for every
+  negative interval; the value is now read from its stored parts. An interval with months fails with
+  `DataMappingException` instead of reading as zero months (TYPE-022).
+
 - An unsigned column read into a wider signed property (MySQL `INT UNSIGNED` into a `long`) is
   converted, and so is an unsigned or `sbyte` column into an enum property stored as a number; 2.0.5
   failed the read with `DataMappingException` (an `InvalidCastException` inside) (COR-008, REV-072).
@@ -116,3 +120,5 @@ passed on 2.0.5 and fails now was relying on behavior no real provider has.
 | `Database` | the emulated product's name (e.g. `"Sqlite"`) | the connection string's `Database`/`Initial Catalog`, else `""`; `"main"` when emulating SQLite, the data source when emulating DuckDB | what each provider reports |
 | Minimum pool size above maximum | accepted | rejected with `ArgumentException` | Npgsql and SqlClient reject |
 | `fakeDbFactory.CreateDataSource` | .NET's default data source | .NET's default data source; `SupportsNativeDataSource = true` returns a `FakeDbDataSource` | providers without their own data source return .NET's default |
+| A column holding a `fakeDbInterval` (new) | — | reports `TimeSpan` and data type `Interval`; `GetValue` converts as DuckDB.NET 1.5.6 does (throws for negatives and months ≥ 1, drops negative months); `GetProviderSpecificValue` returns the stored parts | DuckDB.NET 1.5.6 on `INTERVAL` |
+| `GetProviderSpecificValue` / `GetProviderSpecificFieldType` | .NET's default (`GetValue`) | the stored value for a provider-specific type (`fakeDbInterval`), otherwise unchanged | each provider's own value type |

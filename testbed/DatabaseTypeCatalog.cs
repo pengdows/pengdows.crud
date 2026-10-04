@@ -715,6 +715,10 @@ public static class DatabaseTypeCatalog
         new("INTERVAL", ColumnTypeCategory.Temporal, IsTemporal: true,
             Declaration: "INTERVAL", ClrType: typeof(TimeSpan), DbType: System.Data.DbType.Object,
             Sample: new TimeSpan(3, 4, 5, 6).Add(TimeSpan.FromMicroseconds(7))),
+        // TYPE-022: DuckDB.NET can't convert a negative INTERVAL; the dialect reads its stored parts.
+        new("INTERVAL (negative)", ColumnTypeCategory.Temporal, IsTemporal: true,
+            Declaration: "INTERVAL", ClrType: typeof(TimeSpan), DbType: System.Data.DbType.Object,
+            Sample: -new TimeSpan(1, 2, 3, 4).Add(TimeSpan.FromMicroseconds(567891))),
         new("UUID", ColumnTypeCategory.Other,
             Declaration: "UUID", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
         new("JSON", ColumnTypeCategory.Json,
