@@ -183,7 +183,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact
                 // DateTimeOffset, while GetDateTime gives local wall time or throws (TYPE-002): read the
                 // value, which converts as before when it is a DateTime.
-                var getValue = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue))!;
+                var getValue = GetValueMethod;
                 var rawValue = Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), getValue, ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
@@ -221,7 +221,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 // FirebirdClient reports BINARY/VARBINARY as string but returns byte[] (TYPE-002): read
                 // the value, which converts as before when it really is text.
-                var getValue = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue))!;
+                var getValue = GetValueMethod;
                 var rawValue = Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), getValue, ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
@@ -353,8 +353,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         return Expression.Lambda<Func<TReader, TEntity>>(block, readerParam).Compile();
     }
 
-    private static readonly MethodInfo GetValueMethod =
-        typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue), new[] { typeof(int) })!;
+    private static readonly MethodInfo GetValueMethod = ReaderGetters.GetValue;
 
     private static readonly MethodInfo StringFromValueMethod =
         typeof(CompiledMapperFactory<TEntity>).GetMethod(nameof(StringFromValue), BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -393,33 +392,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         throw new InvalidOperationException("Could not find JsonSerializer.Deserialize<T>(string, options) overload.");
     }
 
-    private static MethodInfo GetReaderMethod(Type fieldType)
-    {
-        var typeCode = Type.GetTypeCode(fieldType);
-        var methodName = typeCode switch
-        {
-            TypeCode.Int32 => nameof(IDataRecord.GetInt32),
-            TypeCode.Int64 => nameof(IDataRecord.GetInt64),
-            TypeCode.String => nameof(IDataRecord.GetString),
-            TypeCode.DateTime => nameof(IDataRecord.GetDateTime),
-            TypeCode.Decimal => nameof(IDataRecord.GetDecimal),
-            TypeCode.Boolean => nameof(IDataRecord.GetBoolean),
-            TypeCode.Int16 => nameof(IDataRecord.GetInt16),
-            TypeCode.Byte => nameof(IDataRecord.GetByte),
-            TypeCode.Double => nameof(IDataRecord.GetDouble),
-            TypeCode.Single => nameof(IDataRecord.GetFloat),
-            _ when fieldType == typeof(Guid) => nameof(IDataRecord.GetGuid),
-            _ => nameof(IDataRecord.GetValue)
-        };
-
-        var method = typeof(IDataRecord).GetMethod(methodName, new[] { typeof(int) });
-        if (method == null)
-        {
-            // Fallback to GetValue
-            return typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue), new[] { typeof(int) })!;
-        }
-        return method;
-    }
+    private static MethodInfo GetReaderMethod(Type fieldType) =>
+        ReaderGetters.TypedGetter(typeof(IDataRecord), fieldType) ?? ReaderGetters.GetValue;
 
     private static Expression BuildConversionExpression(Expression value, Type sourceType, Type targetType,
         TypeCoercionOptions? coercionOptions)

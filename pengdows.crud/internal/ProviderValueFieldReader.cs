@@ -27,8 +27,7 @@ namespace pengdows.crud.@internal;
 
 internal static class ProviderValueFieldReader
 {
-    private static readonly MethodInfo GetFieldValueDefinition = typeof(DbDataReader).GetMethods()
-        .First(m => m.Name == nameof(DbDataReader.GetFieldValue) && m.IsGenericMethodDefinition);
+    private static readonly MethodInfo GetFieldValueDefinition = ReaderGetters.GetFieldValueDefinition;
 
     private static readonly ConcurrentDictionary<Type, MethodInfo> NullableArrayReaders = new();
 

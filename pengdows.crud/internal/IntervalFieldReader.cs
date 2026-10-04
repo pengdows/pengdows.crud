@@ -44,9 +44,7 @@ internal static class IntervalFieldReader
             return null;
         }
 
-        var getFieldValue = typeof(DbDataReader).GetMethods()
-            .First(m => m.Name == nameof(DbDataReader.GetFieldValue) && m.IsGenericMethodDefinition)
-            .MakeGenericMethod(intervalType);
+        var getFieldValue = ReaderGetters.GetFieldValueOf(intervalType);
         var reader = Expression.Parameter(typeof(DbDataReader), "reader");
         var ordinal = Expression.Parameter(typeof(int), "ordinal");
         var body = Expression.Convert(Expression.Call(reader, getFieldValue, ordinal), typeof(object));

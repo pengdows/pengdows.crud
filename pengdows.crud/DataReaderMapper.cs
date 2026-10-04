@@ -95,7 +95,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static readonly BoundedCache<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>>
         _propertyLookupCache = new(MaxPropertyLookupCacheSize);
 
-    private static readonly MethodInfo _getFieldValueGenericMethod = ResolveGetFieldValueMethod();
+    private static readonly MethodInfo _getFieldValueGenericMethod = ReaderGetters.GetFieldValueDefinition;
 
     // NormalizeDateTime: treats Unspecified as UTC, converts Local to UTC, as every read path does.
     private static readonly MethodInfo _normalizeDateTimeMethod =
@@ -686,22 +686,13 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return lambda.Compile();
     }
 
-    // Typed DbDataReader getters by column type. Int64 isn't here: Informix.Net.Core's GetInt64 rejects
-    // BIGSERIAL, which GetFieldValue<long> reads.
-    private static MethodInfo? TypedGetter(Type fieldType)
-    {
-        var name = fieldType == typeof(int) ? nameof(DbDataReader.GetInt32)
-            : fieldType == typeof(string) ? nameof(DbDataReader.GetString)
-            : fieldType == typeof(double) ? nameof(DbDataReader.GetDouble)
-            : fieldType == typeof(bool) ? nameof(DbDataReader.GetBoolean)
-            : fieldType == typeof(DateTime) ? nameof(DbDataReader.GetDateTime)
-            : fieldType == typeof(Guid) ? nameof(DbDataReader.GetGuid)
-            : fieldType == typeof(short) ? nameof(DbDataReader.GetInt16)
-            : fieldType == typeof(byte) ? nameof(DbDataReader.GetByte)
-            : fieldType == typeof(float) ? nameof(DbDataReader.GetFloat)
-            : null;
-        return name == null ? null : typeof(DbDataReader).GetMethod(name, new[] { typeof(int) });
-    }
+    // The typed getter for the column's type, as the gateway reads it. Not Int64 (Informix.Net.Core's
+    // GetInt64 rejects BIGSERIAL, which GetFieldValue<long> reads) nor decimal (read with GetDecimal
+    // above for Sap.Data.Hana).
+    private static MethodInfo? TypedGetter(Type fieldType) =>
+        fieldType == typeof(long) || fieldType == typeof(decimal)
+            ? null
+            : ReaderGetters.TypedGetter(typeof(DbDataReader), fieldType);
 
     private static bool RequiresCoercion(Type fieldType, Type propertyType)
     {
@@ -958,18 +949,4 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static readonly MethodInfo _readGuidFromBytesMethod = typeof(TypeCoercionHelper).GetMethod(
         nameof(TypeCoercionHelper.ReadGuidFromBytes), new[] { typeof(IDataRecord), typeof(int), typeof(bool) })!;
 
-    private static MethodInfo ResolveGetFieldValueMethod()
-    {
-        var methods = typeof(DbDataReader).GetMethods(BindingFlags.Instance | BindingFlags.Public);
-        for (var i = 0; i < methods.Length; i++)
-        {
-            var method = methods[i];
-            if (method.IsGenericMethodDefinition && method.Name == nameof(DbDataReader.GetFieldValue))
-            {
-                return method;
-            }
-        }
-
-        throw new InvalidOperationException("DbDataReader.GetFieldValue<T> method not found.");
-    }
 }
