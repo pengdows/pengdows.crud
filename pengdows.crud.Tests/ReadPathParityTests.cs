@@ -36,6 +36,12 @@ public class ReadPathParityTests
         Top = 1UL << 63
     }
 
+    public enum Small : byte
+    {
+        One = 1,
+        Two = 2
+    }
+
     public enum Mood
     {
         Sad = 1,
@@ -77,6 +83,11 @@ public class ReadPathParityTests
         Case<long>(5), Case<int>(5L), Case<int>(long.MaxValue), Case<int>(2.0m), Case<int>(2.7m), Case<int>(double.NaN),
         Case<long>(7u), Case<double>(3L), Case<double>(new System.Numerics.BigInteger(ulong.MaxValue) * 3 + 1),
         Case<long>(new System.Numerics.BigInteger(42)), Case<double>(1.25m), Case<decimal>(1.5d), Case<short>(70000),
+        // boundary values (REV-078)
+        Case<int>(double.PositiveInfinity), Case<int>(double.NegativeInfinity), Case<long>(decimal.MaxValue),
+        Case<int>(2.0000000000000000000000000001m), Case<int>(-0.0), Case<int>(double.Epsilon), Case<long>(1e19),
+        Case<int?>(2.5m), Case<int?>(3.0m), Case<ulong>(-1L), Case<byte>(256), Case<decimal>(double.NaN),
+        Case<bool>(-0.0), Case<bool>(double.Epsilon), Case<bool>(float.NaN), Case<bool?>(0L),
         // into bool
         Case<bool>(1), Case<bool>(0L), Case<bool>(1m), Case<bool>(0.5d), Case<bool>(double.NaN), Case<bool>(ulong.MaxValue),
         Case<bool>("true"), Case<bool>("0"),
@@ -99,6 +110,9 @@ public class ReadPathParityTests
         // unsigned and sbyte columns into an int-backed enum (REV-072: the gateway unboxed GetValue's object)
         NumericEnumCase<Mood>(2u), NumericEnumCase<Mood>(2UL), NumericEnumCase<Mood>((ushort)2), NumericEnumCase<Mood>((sbyte)2),
         NumericEnumCase<Mood?>(1u), NumericEnumCase<Mood>(99u),
+        // enum boundaries (REV-078)
+        NumericEnumCase<Small>((byte)2), NumericEnumCase<Small>(2), NumericEnumCase<Small>(300), NumericEnumCase<Small>(2.0m),
+        NumericEnumCase<Mood>(2.5m), NumericEnumCase<Mood>(99m), NumericEnumCase<Mood?>(2.0m), NumericEnumCase<Mood>(-1),
         // enums stored as names
         StringEnumCase<Mood>("Ok"), StringEnumCase<Mood>("ok"), StringEnumCase<Mood>("Nope"), StringEnumCase<Mood>("99"),
         StringEnumCase<Mood>("2"), StringEnumCase<Perm>("Read, Write"),
@@ -317,5 +331,48 @@ public class ReadPathParityTests
 
         Assert.False(read);
         Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce(text, typeof(string), typeof(bool)));
+    }
+
+    // REV-078: parity says the paths agree; these say what they agree on. null = the read fails.
+    public static IEnumerable<object?[]> BoundaryExpectations() => new[]
+    {
+        new object?[] { typeof(G<int>), double.PositiveInfinity, null },
+        new object?[] { typeof(G<int>), double.NegativeInfinity, null },
+        new object?[] { typeof(G<long>), decimal.MaxValue, null },
+        new object?[] { typeof(G<int>), 2.0000000000000000000000000001m, null },
+        new object?[] { typeof(G<int>), -0.0, 0 },
+        new object?[] { typeof(G<int>), double.Epsilon, null },
+        new object?[] { typeof(G<long>), 1e19, null },
+        new object?[] { typeof(G<ulong>), -1L, null },
+        new object?[] { typeof(G<byte>), 256, null },
+        new object?[] { typeof(G<decimal>), double.NaN, null },
+        new object?[] { typeof(G<bool>), -0.0, false },
+        new object?[] { typeof(G<bool>), double.Epsilon, true },
+        new object?[] { typeof(G<bool>), float.NaN, null },
+        new object?[] { typeof(NumericEnum<Small>), 2, Small.Two },
+        new object?[] { typeof(NumericEnum<Small>), 2.0m, Small.Two },
+        new object?[] { typeof(NumericEnum<Small>), 300, null },
+        new object?[] { typeof(NumericEnum<Mood>), 2.5m, null },
+        new object?[] { typeof(NumericEnum<Mood>), 99m, null },
+        new object?[] { typeof(NumericEnum<Mood>), -1, null },
+        new object?[] { typeof(NumericEnum<Wide>), (1UL << 63) | 1UL, Wide.Low | Wide.Top }
+    };
+
+    [Theory]
+    [MemberData(nameof(BoundaryExpectations))]
+    public async Task BoundaryValue_ReadsAsExpected(Type entityType, object stored, object? expected)
+    {
+        var outcome = await (Task<Outcome>)typeof(ReadPathParityTests).GetMethod(nameof(ViaGateway),
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .MakeGenericMethod(entityType).Invoke(null, new object[] { stored, EnumParseFailureMode.Throw })!;
+
+        if (expected == null)
+        {
+            Assert.True(outcome.Failed, $"{stored} read as {outcome}");
+            return;
+        }
+
+        Assert.False(outcome.Failed, $"{stored} failed ({outcome.Detail})");
+        Assert.Equal(expected, outcome.Value);
     }
 }
