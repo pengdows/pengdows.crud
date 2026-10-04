@@ -402,6 +402,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool IsUnreadableStoredValue(Exception exception) => false;
 
+    // The delegates each tracked reader takes, made once per dialect rather than per reader (PERF-022).
+    private Func<Exception, bool>? _unreadableStoredValuePredicate;
+    private Func<Exception, Exception?>? _queryReadFailureTranslator;
+    private Func<Exception, Exception?>? _otherReadFailureTranslator;
+
+    internal Func<Exception, bool> UnreadableStoredValuePredicate =>
+        _unreadableStoredValuePredicate ??= IsUnreadableStoredValue;
+
+    /// <summary>The read-failure translator for <paramref name="kind"/>, made by <paramref name="create"/> once.</summary>
+    internal Func<Exception, Exception?> GetReadFailureTranslator(DbOperationKind kind,
+        Func<SqlDialect, DbOperationKind, Func<Exception, Exception?>> create) =>
+        kind == DbOperationKind.Query
+            ? _queryReadFailureTranslator ??= create(this, kind)
+            : _otherReadFailureTranslator ??= create(this, DbOperationKind.Unknown);
+
     /// <summary>
     /// True when the dialect can read some columns its provider reports no field type for
     /// (<see cref="GetUnresolvedColumnType"/>), so tracked readers consult it (TYPE-016).

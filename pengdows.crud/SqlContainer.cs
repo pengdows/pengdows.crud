@@ -128,11 +128,15 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private readonly ILogger<ISqlContainer> _logger;
 
-    private readonly IDictionary<string, DbParameter> _parameters =
-        new pengdows.crud.collections.OrderedDictionary<string, DbParameter>(ParameterNameComparer.Instance);
+    // The concrete type: enumerating it uses its struct enumerator, where IDictionary.Values boxed one
+    // per execution (PERF-022).
+    private readonly pengdows.crud.collections.OrderedDictionary<string, DbParameter> _parameters =
+        new(ParameterNameComparer.Instance);
 
-    private readonly Dictionary<DbParameter, DbParameterCollection?> _parameterOwners =
-        new(ParameterReferenceComparer.Instance);
+    // The command collection the parameters were last bound into, to detach them before pooling. One
+    // execution binds every parameter into one collection, and a command clears its collection on
+    // cleanup; a per-parameter map cost a dictionary per container (PERF-022).
+    private DbParameterCollection? _parameterOwner;
 
     private sealed class ParameterNameComparer : IEqualityComparer<string>
     {
@@ -763,7 +767,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             // Named provider that supports repeated placeholders — each parameter
             // appears once and the provider resolves duplicate references in SQL.
-            foreach (var param in _parameters.Values)
+            foreach (var (_, param) in _parameters)
             {
                 dbCommand.Parameters.Add(param);
                 RegisterParameterOwner(param, dbCommand.Parameters);
@@ -776,7 +780,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             // Named provider but no ParamSequence recorded (e.g., manual SQL).
             // Fall back to adding all parameters once.
-            foreach (var param in _parameters.Values)
+            foreach (var (_, param) in _parameters)
             {
                 dbCommand.Parameters.Add(param);
                 RegisterParameterOwner(param, dbCommand.Parameters);
@@ -795,7 +799,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // Since each "?" in the rendered text corresponds 1:1, in order, with one
             // AddParameterWithValue call, binding _parameters in insertion order is correct —
             // mirrors the named-provider fallback immediately above for the same reason.
-            foreach (var param in _parameters.Values)
+            foreach (var (_, param) in _parameters)
             {
                 dbCommand.Parameters.Add(param);
                 RegisterParameterOwner(param, dbCommand.Parameters);
@@ -932,19 +936,20 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private void RegisterParameterOwner(DbParameter parameter, DbParameterCollection owner)
     {
-        _parameterOwners[parameter] = owner;
+        _parameterOwner = owner;
     }
 
     private void RemoveParameterFromOwner(DbParameter parameter)
     {
-        if (!_parameterOwners.TryGetValue(parameter, out var owner))
+        var owner = _parameterOwner;
+        if (owner == null)
         {
             return;
         }
 
         try
         {
-            if (owner?.Contains(parameter) == true)
+            if (owner.Contains(parameter))
             {
                 owner.Remove(parameter);
             }
@@ -953,19 +958,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         {
             // Already removed or not owned, ignore.
         }
-        finally
-        {
-            _parameterOwners.Remove(parameter);
-        }
-    }
-
-    private sealed class ParameterReferenceComparer : IEqualityComparer<DbParameter>
-    {
-        public static ParameterReferenceComparer Instance { get; } = new();
-
-        public bool Equals(DbParameter? x, DbParameter? y) => ReferenceEquals(x, y);
-
-        public int GetHashCode(DbParameter obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
     public void Clear()
@@ -1038,7 +1030,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 // Trust that dev has set correct names
                 var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
                 var index = 0;
-                foreach (var param in _parameters.Values)
+                foreach (var (_, param) in _parameters)
                 {
                     if (index++ > 0)
                     {
@@ -1703,12 +1695,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 this,
                 contextLocker,
                 singleConnectionTxGate == NoOpAsyncLocker.Instance ? null : singleConnectionTxGate,
-                readFailure => readFailure is not DatabaseException && LooksLikeProviderException(readFailure)
-                    ? TranslateDatabaseException(readFailure, operationKind)
-                    : null,
+                _dialect is SqlDialect translatingDialect
+                    ? translatingDialect.GetReadFailureTranslator(operationKind, CreateReadFailureTranslatorFor)
+                    : CreateReadFailureTranslator(_dialect, operationKind),
                 _dialect is SqlDialect { ReadsInt64ThroughGetValue: true },
                 _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true },
-                _dialect is SqlDialect unreadableDialect ? unreadableDialect.IsUnreadableStoredValue : null,
+                _dialect is SqlDialect unreadableDialect ? unreadableDialect.UnreadableStoredValuePredicate : null,
                 _dialect is SqlDialect { ReadsUnresolvedColumns: true } unresolvedDialect ? unresolvedDialect : null,
                 DefaultCoercionOptions)
             {
@@ -1930,7 +1922,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             // Log only metadata: name, type, direction
             using var paramDump = new SqlQueryBuilder();
             var index = 0;
-            foreach (var param in _parameters.Values)
+            foreach (var (_, param) in _parameters)
             {
                 if (index++ > 0)
                 {
@@ -2134,9 +2126,22 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
     private DatabaseException TranslateDatabaseException(Exception exception, DbOperationKind operationKind)
     {
-        return ExceptionTranslatorRegistry.Get(_dialect.DatabaseType)
-            .Translate(_dialect, exception, operationKind);
+        return TranslateDatabaseException(_dialect, exception, operationKind);
     }
+
+    private static DatabaseException TranslateDatabaseException(ISqlDialect dialect, Exception exception,
+        DbOperationKind operationKind) =>
+        ExceptionTranslatorRegistry.Get(dialect.DatabaseType).Translate(dialect, exception, operationKind);
+
+    private static readonly Func<SqlDialect, DbOperationKind, Func<Exception, Exception?>> CreateReadFailureTranslatorFor =
+        static (dialect, kind) => CreateReadFailureTranslator(dialect, kind);
+
+    // A provider failure while a reader reads becomes the database exception it means; anything else
+    // passes through. Depends only on the dialect and kind, so SqlDialect keeps one (PERF-022).
+    private static Func<Exception, Exception?> CreateReadFailureTranslator(ISqlDialect dialect, DbOperationKind kind) =>
+        readFailure => readFailure is not DatabaseException && LooksLikeProviderException(readFailure)
+            ? TranslateDatabaseException(dialect, readFailure, kind)
+            : null;
 
     private static DbErrorCategory ClassifyTranslatedException(DatabaseException exception)
     {
@@ -2607,7 +2612,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         if (_parameters.Count == 0)
         {
             _parameters.Clear();
-            _parameterOwners.Clear();
+            _parameterOwner = null;
             return;
         }
 
@@ -2620,7 +2625,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return;
         }
 
-        foreach (var parameter in _parameters.Values)
+        foreach (var (_, parameter) in _parameters)
         {
             RemoveParameterFromOwner(parameter);
             if (_dialect is SqlDialect sqlDialect)
@@ -2630,7 +2635,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         _parameters.Clear();
-        _parameterOwners.Clear();
+        _parameterOwner = null;
         Volatile.Write(ref _deferParameterPooling, 0);
     }
 
