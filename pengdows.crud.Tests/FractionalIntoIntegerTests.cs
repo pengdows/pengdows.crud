@@ -213,7 +213,7 @@ public class FractionalIntoIntegerTests
         factory.EnqueueReaderResult(new[] { new Dictionary<string, object> { ["v"] = (decimal)stored } });
         await using var sc = context.CreateSqlContainer("SELECT v");
 
-        await Assert.ThrowsAsync<ArgumentException>(() => sc.ExecuteScalarRequiredAsync<Mood>().AsTask());
+        await Assert.ThrowsAnyAsync<ArgumentException>(() => sc.ExecuteScalarRequiredAsync<Mood>().AsTask());
     }
 
     [Fact]

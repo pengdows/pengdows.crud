@@ -724,7 +724,7 @@ internal static class TypeCoercionHelper
         switch (parseMode)
         {
             case EnumParseFailureMode.Throw:
-                throw new ArgumentException($"Cannot convert value to enum {enumType}");
+                throw new EnumValueException($"Cannot convert value to enum {enumType}");
             case EnumParseFailureMode.SetDefaultValue:
                 return targetNullable ? null : DefaultOf(enumType);
             case EnumParseFailureMode.SetNullAndLog:

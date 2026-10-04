@@ -76,7 +76,7 @@ public class TypeCoercionHelperAdvancedTests
     public void CoerceEnum_StrictModeThrowsOnInvalid()
     {
         var column = CreateEnumColumn();
-        Assert.Throws<ArgumentException>(() => TypeCoercionHelper.Coerce("unknown", typeof(string), column));
+        Assert.ThrowsAny<ArgumentException>(() => TypeCoercionHelper.Coerce("unknown", typeof(string), column));
     }
 
     [Fact]

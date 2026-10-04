@@ -15,9 +15,13 @@
 - A binary column read as a `Guid` must hold exactly 16 bytes; a longer value was silently cut to
   its first 16 (COR-003).
 - A string enum column holding a number that isn't a defined member ("999") fails like any other
-  undefined value (`ArgumentException`, as before for unknown names). `[Flags]` enums accept any
+  undefined value. `[Flags]` enums accept any
   combination of defined flags on both string and numeric columns; 2.0.5 rejected numeric
   combinations (COR-005).
+- A gateway read of an enum value that is no member (an unknown name, `"999"`, an undefined number)
+  under `EnumParseFailureMode.Throw` fails with `DataMappingException` naming the column, its inner
+  exception an `ArgumentException`; 2.0.5 let a bare `ArgumentException` escape. Scalar reads still
+  throw an `ArgumentException` (REV-071).
 - A fractional number read into an integer property (or an enum stored as a number) must be whole:
   `2.7` fails with `DataMappingException` naming the column (`DataReaderMapper`: when `Strict`,
   otherwise logged and left at the default; scalar reads: `InvalidCastException`). 2.0.5 truncated

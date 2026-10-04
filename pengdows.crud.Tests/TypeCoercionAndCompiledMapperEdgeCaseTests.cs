@@ -56,7 +56,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         var valid = EnumMappingCache.ValidateEnumValue(MapperEnum.One);
         Assert.Equal(MapperEnum.One, valid);
 
-        Assert.Throws<ArgumentException>(() => EnumMappingCache.ValidateEnumValue((MapperEnum)77));
+        Assert.ThrowsAny<ArgumentException>(() => EnumMappingCache.ValidateEnumValue((MapperEnum)77));
     }
 
     [Fact]

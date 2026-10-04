@@ -46,7 +46,8 @@ public class EnumValidationTests : SqlLiteContextTestBase
     [Fact]
     public void StringEnum_UndefinedNumber_Throws()
     {
-        Assert.Throws<ArgumentException>(() => Map("999", "Read", 1));
+        // A gateway read reports it as DataMappingException naming the column (REV-071).
+        Assert.IsAssignableFrom<ArgumentException>(Assert.Throws<pengdows.crud.exceptions.DataMappingException>(() => Map("999", "Read", 1)).InnerException);
     }
 
     [Fact]
@@ -67,7 +68,7 @@ public class EnumValidationTests : SqlLiteContextTestBase
     [Fact]
     public void FlagsEnum_UndefinedBit_Throws()
     {
-        Assert.Throws<ArgumentException>(() => Map("Red", "Read", 8));
-        Assert.Throws<ArgumentException>(() => Map("Red", "9", 1));
+        Assert.IsAssignableFrom<ArgumentException>(Assert.Throws<pengdows.crud.exceptions.DataMappingException>(() => Map("Red", "Read", 8)).InnerException);
+        Assert.IsAssignableFrom<ArgumentException>(Assert.Throws<pengdows.crud.exceptions.DataMappingException>(() => Map("Red", "9", 1)).InnerException);
     }
 }

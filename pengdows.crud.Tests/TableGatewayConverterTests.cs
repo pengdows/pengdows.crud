@@ -52,7 +52,8 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
         };
         using var reader = new FakeTrackedReader(rows);
         reader.Read();
-        Assert.Throws<ArgumentException>(() => helper.MapReaderToObject(reader));
+        // Reported as DataMappingException naming the column (REV-071).
+        Assert.IsAssignableFrom<ArgumentException>(Assert.Throws<pengdows.crud.exceptions.DataMappingException>(() => helper.MapReaderToObject(reader)).InnerException);
     }
 
     [Fact]

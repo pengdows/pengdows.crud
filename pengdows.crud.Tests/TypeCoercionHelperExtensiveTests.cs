@@ -475,14 +475,14 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     [Fact]
     public void CoerceEnum_FromInvalidString_ThrowsByDefault()
     {
-        Assert.Throws<ArgumentException>(() =>
+        Assert.ThrowsAny<ArgumentException>(() =>
             TypeCoercionHelper.Coerce("Invalid", typeof(string), typeof(TestEnum)));
     }
 
     [Fact]
     public void CoerceEnum_FromInvalidNumeric_ThrowsByDefault()
     {
-        Assert.Throws<ArgumentException>(() =>
+        Assert.ThrowsAny<ArgumentException>(() =>
             TypeCoercionHelper.Coerce(999, typeof(int), typeof(TestEnum)));
     }
 

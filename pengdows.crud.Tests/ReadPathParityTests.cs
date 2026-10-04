@@ -267,4 +267,35 @@ public class ReadPathParityTests
             TypeCoercionHelper.Logger = original;
         }
     }
+
+    // REV-071: in Throw mode the gateway let enum failures escape as a bare ArgumentException, with no
+    // DataMappingException and no column name; DataReaderMapper wrapped the same failure.
+    [Theory]
+    [InlineData("Nope")]
+    [InlineData("99")]
+    public async Task Gateway_UnreadableStringEnum_FailsAsDataMappingExceptionNamingTheColumn(string stored)
+    {
+        Factory(stored, out var context);
+        await using var _ = context;
+        var gateway = new TableGateway<StringEnum<Mood>, int>(context);
+        await using var sc = context.CreateSqlContainer("SELECT id, v FROM t");
+
+        var error = await Assert.ThrowsAsync<pengdows.crud.exceptions.DataMappingException>(() => gateway.LoadSingleAsync(sc).AsTask());
+
+        Assert.Contains("'v'", error.Message);
+        Assert.IsAssignableFrom<ArgumentException>(error.InnerException);
+    }
+
+    [Fact]
+    public async Task Gateway_UndefinedNumericEnum_FailsAsDataMappingExceptionNamingTheColumn()
+    {
+        Factory(99, out var context);
+        await using var _ = context;
+        var gateway = new TableGateway<NumericEnum<Mood>, int>(context);
+        await using var sc = context.CreateSqlContainer("SELECT id, v FROM t");
+
+        var error = await Assert.ThrowsAsync<pengdows.crud.exceptions.DataMappingException>(() => gateway.LoadSingleAsync(sc).AsTask());
+
+        Assert.Contains("'v'", error.Message);
+    }
 }

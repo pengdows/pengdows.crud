@@ -373,7 +373,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
     // The failures a stored value that doesn't fit its property produces (TYPE-008).
     private static bool IsConversionFailure(Exception failure) =>
         failure is OverflowException or InvalidCastException or FormatException or JsonException
-            or exceptions.InvalidValueException;
+            or exceptions.InvalidValueException or EnumValueException;
 
     private static MethodInfo ResolveJsonDeserializeMethod(Type targetType)
     {
@@ -547,12 +547,11 @@ internal static class EnumMappingCache
             return cached;
         }
 
-        // Enum.Parse accepts a number ("999") and returns it as an undefined value; the numeric path
-        // validated, this one didn't (COR-005).
-        var parsed = (TEnum)Enum.Parse(typeof(TEnum), value, true);
-        if (!IsValid(parsed))
+        // Parsing accepts a number ("999") as an undefined value, so it is validated like the numeric path
+        // (COR-005); TryParse, so an unknown name fails as EnumValueException, reported naming the column (REV-071).
+        if (!Enum.TryParse<TEnum>(value, true, out var parsed) || !IsValid(parsed))
         {
-            throw new ArgumentException($"Invalid enum value '{value}' for type {typeof(TEnum).Name}");
+            throw new EnumValueException($"Invalid enum value '{value}' for type {typeof(TEnum).Name}");
         }
 
         Cache<TEnum>.FromString.TryAdd(value, parsed);
@@ -572,6 +571,6 @@ internal static class EnumMappingCache
             return value;
         }
 
-        throw new ArgumentException($"Invalid enum value '{value}' for type {typeof(TEnum).Name}");
+        throw new EnumValueException($"Invalid enum value '{value}' for type {typeof(TEnum).Name}");
     }
 }
