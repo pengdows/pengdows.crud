@@ -65,17 +65,24 @@ public class ReaderDelegateAllocationTests
         var warm = Container();
         bind(warm, command);
         command.Parameters.Clear();
-        var containers = new SqlContainer[50];
-        for (var i = 0; i < containers.Length; i++) containers[i] = Container();
-
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        foreach (var sc in containers)
+        // The least of three passes: a one-off allocation on this thread while the full suite runs
+        // inflates one pass, not three.
+        var least = long.MaxValue;
+        for (var pass = 0; pass < 3; pass++)
         {
-            bind(sc, command);
-            command.Parameters.Clear();
+            var containers = new SqlContainer[200];
+            for (var i = 0; i < containers.Length; i++) containers[i] = Container();
+
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            foreach (var sc in containers)
+            {
+                bind(sc, command);
+                command.Parameters.Clear();
+            }
+
+            least = Math.Min(least, (GC.GetAllocatedBytesForCurrentThread() - before) / containers.Length);
         }
 
-        var perBind = (GC.GetAllocatedBytesForCurrentThread() - before) / containers.Length;
-        Assert.Equal(0, perBind);
+        Assert.Equal(0, least);
     }
 }

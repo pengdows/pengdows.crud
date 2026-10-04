@@ -124,24 +124,42 @@ public class TypedValueReadAllocationTests
     private static TrackedReader OpenConverting(ConvertingReader reader) =>
         new(reader, new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
 
+    // Bytes per mapped row, the least of three passes of 2000 rows: a one-off allocation on this
+    // thread while the full suite runs (a tier-up, another test's static init) inflates one pass,
+    // not three; a per-row allocation shows in every pass.
+    private static long LeastAllocatedPerRow<T>(TableGateway<T, int> gateway, Func<TrackedReader> open,
+        Func<T, long> use, long expectedSum) where T : class, new()
+    {
+        var least = long.MaxValue;
+        for (var pass = 0; pass < 3; pass++)
+        {
+            var reader = open();
+            reader.Read();
+            gateway.MapReaderToObject(reader);
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            long sum = 0;
+            while (reader.Read())
+            {
+                sum += use(gateway.MapReaderToObject(reader));
+            }
+
+            least = Math.Min(least, (GC.GetAllocatedBytesForCurrentThread() - before) / (MeasuredRows - 1));
+            Assert.Equal(expectedSum, sum);
+        }
+
+        return least;
+    }
+
+    private const int MeasuredRows = 2001;
+    private const long RowNumberSum = (long)MeasuredRows * (MeasuredRows - 1) / 2;
+
     // PERF-021: these conversions went through TypeCoercionHelper.Coerce, which boxes its result
     // (and a value-type input).
     [Fact]
     public void DateTimeAndTextConversions_AllocateOnlyTheEntityPerRow()
     {
-        var gateway = Gateway<Converted>();
-        var reader = OpenConverting(new ConvertingReader(501));
-        reader.Read();
-        gateway.MapReaderToObject(reader);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        long sum = 0;
-        while (reader.Read())
-        {
-            sum += gateway.MapReaderToObject(reader).Unsigned;
-        }
-
-        var perRow = (GC.GetAllocatedBytesForCurrentThread() - before) / 500;
-        Assert.Equal(500L * 501 / 2, sum);
+        var perRow = LeastAllocatedPerRow(Gateway<Converted>(),
+            () => OpenConverting(new ConvertingReader(MeasuredRows)), row => row.Unsigned, RowNumberSum);
         Assert.True(perRow <= EntitySize<Converted>(), $"{perRow} B/row; the entity alone is {EntitySize<Converted>()} B");
     }
 
@@ -292,44 +310,16 @@ public class TypedValueReadAllocationTests
     [Fact]
     public void MapReaderToObject_AllocatesOnlyTheEntityPerRow()
     {
-        var gateway = Gateway<OnlyId>();
-        var reader = Open(501);
-        reader.Read();
-        gateway.MapReaderToObject(reader);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        long ids = 0;
-        while (reader.Read())
-        {
-            ids += gateway.MapReaderToObject(reader).Id;
-        }
-
-        var perRow = (GC.GetAllocatedBytesForCurrentThread() - before) / 500;
-        Assert.Equal(500L * 501 / 2, ids);
+        var perRow = LeastAllocatedPerRow(Gateway<OnlyId>(), () => Open(MeasuredRows), row => row.Id, RowNumberSum);
         Assert.True(perRow <= EntitySize<OnlyId>(), $"{perRow} B/row; the entity alone is {EntitySize<OnlyId>()} B");
     }
 
     [Fact]
     public void DateTimeOffsetAndTimeSpanColumns_AreNotBoxedPerRow()
     {
-        var gateway = Gateway<Row>();
-
-        var warm = Open(10);
-        while (warm.Read()) gateway.MapReaderToObject(warm);
-
-        var reader = Open(501);
-        reader.Read();
-        gateway.MapReaderToObject(reader);
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        var count = 0;
-        var spans = TimeSpan.Zero;
-        while (reader.Read())
-        {
-            spans += gateway.MapReaderToObject(reader).Span;
-            count++;
-        }
-
-        var perRow = (GC.GetAllocatedBytesForCurrentThread() - before) / count;
-        Assert.Equal(TimeSpan.FromMinutes(500 * 501 / 2), spans);
+        // Span is the row number in minutes.
+        var perRow = LeastAllocatedPerRow(Gateway<Row>(), () => Open(MeasuredRows), row => (long)row.Span.TotalMinutes,
+            RowNumberSum);
         var entityBytes = EntitySize<Row>();
         Assert.True(perRow <= entityBytes, $"{perRow} B/row; the entity alone is {entityBytes} B");
     }

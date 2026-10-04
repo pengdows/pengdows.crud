@@ -41,6 +41,32 @@ public class DatabaseMetricsTests
         Assert.Equal(closedBeforeBreak + 1, context.Metrics.ConnectionsClosed);
     }
 
+    // COR-010: open and close durations were whole milliseconds (Stopwatch.ElapsedMilliseconds), so
+    // a pooled open or close, which takes microseconds, recorded 0 and was dropped: the averages only
+    // ever saw slow opens.
+    [Fact]
+    public async Task Metrics_SubMillisecondOpenAndClose_AreRecorded()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            EnableMetrics = true
+        };
+        await using var context = new DatabaseContext(config, factory);
+
+        for (var i = 0; i < 5; i++)
+        {
+            await using var sc = context.CreateSqlContainer("UPDATE t SET a = 1");
+            await sc.ExecuteNonQueryAsync();
+        }
+
+        Assert.True(context.Metrics.AvgConnectionOpenMs > 0, $"open {context.Metrics.AvgConnectionOpenMs}");
+        Assert.True(context.Metrics.AvgConnectionOpenMs < 1, $"open {context.Metrics.AvgConnectionOpenMs}");
+        Assert.True(context.Metrics.AvgConnectionCloseMs > 0, $"close {context.Metrics.AvgConnectionCloseMs}");
+    }
+
     [Fact]
     public async Task ExecuteNonQueryAsync_UpdatesMetricsOnSuccess()
     {

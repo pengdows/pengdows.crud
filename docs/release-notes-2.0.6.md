@@ -19,6 +19,18 @@
   combination of defined flags on both string and numeric columns; 2.0.5 rejected numeric
   combinations (COR-005).
 
+## Reads that now work
+
+- An unsigned column read into a wider signed property (MySQL `INT UNSIGNED` into a `long`) is
+  converted; 2.0.5 failed the read with `DataMappingException` (an `InvalidCastException` inside)
+  (COR-008).
+
+## Metrics
+
+- `AvgConnectionOpenMs` and `AvgConnectionCloseMs` include sub-millisecond opens and closes (a
+  pooled open). 2.0.5 rounded them down to 0 ms and left them out, so the averages counted only
+  slow opens (COR-010).
+
 ## TiDB
 
 - Upserts of `UInt64` columns (`BIT(64)`, `BIGINT UNSIGNED`) no longer go through `VALUES(col)`,

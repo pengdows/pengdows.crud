@@ -395,11 +395,13 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
         var debugEnabled = _logger.IsEnabled(LogLevel.Debug);
         var shouldTime = debugEnabled || _metricsCollector != null;
-        Stopwatch? stopwatch = null;
+        // A timestamp, not a Stopwatch per open, and fractional milliseconds: a pooled open takes
+        // microseconds, which ElapsedMilliseconds recorded as 0 and the metric dropped (COR-010).
+        var startedAt = 0L;
         if (shouldTime)
         {
             OpenTimingHook?.Invoke();
-            stopwatch = Stopwatch.StartNew();
+            startedAt = Stopwatch.GetTimestamp();
         }
 
         ResetDriverReportedStateChange();
@@ -409,15 +411,15 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
         finally
         {
-            if (stopwatch != null)
+            if (shouldTime)
             {
-                stopwatch.Stop();
+                var elapsedMs = MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - startedAt);
                 if (debugEnabled)
                 {
-                    _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
+                    _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", elapsedMs);
                 }
 
-                _metricsCollector?.RecordConnectionOpenDuration(stopwatch.ElapsedMilliseconds);
+                _metricsCollector?.RecordConnectionOpenDuration(elapsedMs);
             }
         }
 
@@ -519,11 +521,13 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
         var debugEnabled = _logger.IsEnabled(LogLevel.Debug);
         var shouldTime = debugEnabled || _metricsCollector != null;
-        Stopwatch? stopwatch = null;
+        // A timestamp, not a Stopwatch per open, and fractional milliseconds: a pooled open takes
+        // microseconds, which ElapsedMilliseconds recorded as 0 and the metric dropped (COR-010).
+        var startedAt = 0L;
         if (shouldTime)
         {
             OpenTimingHook?.Invoke();
-            stopwatch = Stopwatch.StartNew();
+            startedAt = Stopwatch.GetTimestamp();
         }
 
         ResetDriverReportedStateChange();
@@ -533,15 +537,15 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
         finally
         {
-            if (stopwatch != null)
+            if (shouldTime)
             {
-                stopwatch.Stop();
+                var elapsedMs = MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - startedAt);
                 if (debugEnabled)
                 {
-                    _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", stopwatch.ElapsedMilliseconds);
+                    _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", elapsedMs);
                 }
 
-                _metricsCollector?.RecordConnectionOpenDuration(stopwatch.ElapsedMilliseconds);
+                _metricsCollector?.RecordConnectionOpenDuration(elapsedMs);
             }
         }
 
@@ -822,7 +826,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             return;
         }
 
-        var stopwatch = Stopwatch.StartNew();
+        var startedAt = Stopwatch.GetTimestamp();
         ResetDriverReportedStateChange();
         try
         {
@@ -830,8 +834,8 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
         finally
         {
-            stopwatch.Stop();
-            _metricsCollector?.RecordConnectionCloseDuration(stopwatch.ElapsedMilliseconds);
+            _metricsCollector?.RecordConnectionCloseDuration(
+                MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - startedAt));
         }
 
         ReportTransitionIfDriverDidNot(ConnectionState.Open, ConnectionState.Closed);
