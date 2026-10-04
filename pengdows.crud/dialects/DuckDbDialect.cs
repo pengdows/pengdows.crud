@@ -122,8 +122,9 @@ internal class DuckDbDialect : SqlDialect
     // IMMUTABLE: DuckDB identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
 
-    // DuckDB supports prepare for modest performance gains
-    public override bool PrepareStatements => true;
+    // DuckDB.NET keeps a prepared statement only on its command, as Microsoft.Data.Sqlite does: an
+    // explicit Prepare bought nothing (measured equal, 2026-10-04, PERF-027).
+    public override bool PrepareStatements => false;
 
     // DuckDB only supports SERIALIZABLE isolation.
     public override IsolationLevel ReadCommittedCompatibleIsolationLevel => IsolationLevel.Serializable;

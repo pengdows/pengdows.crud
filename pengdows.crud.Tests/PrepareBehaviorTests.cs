@@ -417,4 +417,32 @@ public class PrepareBehaviorTests
 
         public int Number { get; }
     }
+
+    // PERF-027: Microsoft.Data.Sqlite and DuckDB.NET keep a prepared statement only on its command, and
+    // every execution makes a new command, so an explicit Prepare bought nothing (driver-level: equal
+    // within noise) and cost about 1 µs of pengdows bookkeeping per operation. Both default to not
+    // preparing; PrepareMode.Always still prepares.
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite, CommandPrepareMode.Auto, 0)]
+    [InlineData(SupportedDatabase.DuckDB, CommandPrepareMode.Auto, 0)]
+    [InlineData(SupportedDatabase.Sqlite, CommandPrepareMode.Always, 1)]
+    public async Task EmbeddedEngines_DoNotPrepareByDefault(SupportedDatabase database, CommandPrepareMode mode, int expected)
+    {
+        var factory = new fakeDbFactory(database);
+        await using var context = new DatabaseContext(new pengdows.crud.configuration.DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=prep-{database}.db;EmulatedProduct={database}",
+            DbMode = DbMode.Standard,
+            PrepareMode = mode
+        }, factory);
+
+        await using (var sc = context.CreateSqlContainer("UPDATE t SET a = 1"))
+        {
+            await sc.ExecuteNonQueryAsync();
+        }
+
+        var prepares = factory.CreatedConnections.SelectMany(c => c.CreatedCommands)
+            .Where(c => c.CommandText == "UPDATE t SET a = 1").Sum(c => c.PrepareCount);
+        Assert.Equal(expected, prepares);
+    }
 }

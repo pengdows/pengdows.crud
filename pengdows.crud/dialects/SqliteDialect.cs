@@ -139,8 +139,10 @@ internal class SqliteDialect : SqlDialect
     // IMMUTABLE: SQLite identifier length limit - do not change without extensive testing
     public override int ParameterNameMaxLength => 255;
 
-    // SQLite benefits from prepared statements with inherent prepare support
-    public override bool PrepareStatements => true;
+    // Microsoft.Data.Sqlite keeps a prepared statement only on its command, and every execution makes a
+    // new command, so an explicit Prepare bought nothing and cost pengdows' prepare bookkeeping (about
+    // 1 µs per operation, measured 2026-10-04, PERF-027). PrepareMode.Always still prepares.
+    public override bool PrepareStatements => false;
 
     // SQLite supports LIMIT/OFFSET only — no OFFSET/FETCH NEXT syntax.
     public override bool SupportsOffsetFetch => false;

@@ -364,7 +364,7 @@ public class DuckDbDialectAdvancedTests
         Assert.True(_dialect.SupportsSubqueries);
         Assert.True(_dialect.SupportsOuterJoins);
         Assert.True(_dialect.SupportsUnion);
-        Assert.True(_dialect.PrepareStatements);
+        Assert.False(_dialect.PrepareStatements); // PERF-027
         Assert.Equal(65535, _dialect.MaxParameterLimit);
         Assert.Equal(255, _dialect.ParameterNameMaxLength);
     }
