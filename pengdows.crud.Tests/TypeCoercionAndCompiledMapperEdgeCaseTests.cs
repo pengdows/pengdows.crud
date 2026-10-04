@@ -148,6 +148,60 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         Assert.Equal(data, TypeCoercionHelper.ReadBytes(reader, 0));
     }
 
+    // COR-014: COR-003 asked for a 17th byte to prove a value held exactly 16; MySql.Data throws
+    // IndexOutOfRangeException for a read at the end of a value (MySqlConnector, Npgsql, SqlClient and
+    // Microsoft.Data.Sqlite return 0, probed live 2026-10-04), so every BINARY(16) Guid on it failed.
+    [Fact]
+    public void ReadGuidFromBytes_ProviderThrowsReadingPastTheEnd_ReadsTheGuid()
+    {
+        var guid = Guid.NewGuid();
+        using var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["gid"] = guid.ToByteArray() }
+        })
+        {
+            ThrowsReadingPastEnd = true
+        };
+        Assert.True(reader.Read());
+
+        Assert.Equal(guid, TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
+    }
+
+    [Theory]
+    [InlineData(15)]
+    [InlineData(17)]
+    public void ReadGuidFromBytes_ProviderThrowsReadingPastTheEnd_WrongLengthStillFails(int size)
+    {
+        using var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["gid"] = new byte[size] }
+        })
+        {
+            ThrowsReadingPastEnd = true
+        };
+        Assert.True(reader.Read());
+
+        Assert.Throws<InvalidValueException>(() => TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
+    }
+
+    [Fact]
+    public void FakeReader_ThrowsReadingPastEnd_ThrowsOnlyForAReadAtTheEnd()
+    {
+        using var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["payload"] = new byte[4] }
+        })
+        {
+            ThrowsReadingPastEnd = true
+        };
+        Assert.True(reader.Read());
+        var buffer = new byte[8];
+
+        Assert.Equal(4, reader.GetBytes(0, 0, null, 0, 0));
+        Assert.Equal(4, reader.GetBytes(0, 0, buffer, 0, 8));
+        Assert.Throws<IndexOutOfRangeException>(() => reader.GetBytes(0, 4, buffer, 4, 1));
+    }
+
     [Fact]
     public void ReadGuidFromBytes_ProviderReturnsPartialChunks_ReadsWholeGuid()
     {

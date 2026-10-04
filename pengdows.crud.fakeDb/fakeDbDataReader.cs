@@ -94,6 +94,14 @@ public class fakeDbDataReader : DbDataReader
     public int MaxBytesPerGetBytesCall { get; set; }
 
     /// <summary>
+    /// When true, a <see cref="GetBytes"/> call that copies into a buffer from an offset at or past the
+    /// end of the value throws <see cref="IndexOutOfRangeException"/>, as MySql.Data does; MySqlConnector,
+    /// Npgsql, SqlClient and Microsoft.Data.Sqlite return 0 (the default here). A length query (null
+    /// buffer) never throws.
+    /// </summary>
+    public bool ThrowsReadingPastEnd { get; set; }
+
+    /// <summary>
     /// When set, accessing <see cref="RecordsAffected"/> throws this exception instead of
     /// returning <see cref="RecordsAffectedOverride"/> — cleared after throwing once. Needed to
     /// simulate a raw provider failure for a provider whose rows-affected check reads
@@ -562,6 +570,11 @@ public class fakeDbDataReader : DbDataReader
         var available = bytes.LongLength - dataOffset;
         if (available <= 0)
         {
+            if (ThrowsReadingPastEnd && buffer != null)
+            {
+                throw new IndexOutOfRangeException("Data index must be a valid index in the field");
+            }
+
             return 0;
         }
 

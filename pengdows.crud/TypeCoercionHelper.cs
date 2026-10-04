@@ -1371,18 +1371,29 @@ internal static class TypeCoercionHelper
     /// Reads a GUID from a binary column in the given byte order (RFC 4122 big-endian or .NET's
     /// mixed-endian order; <c>SqlDialect.StoresGuidBytesBigEndian</c>).
     /// </summary>
+    private static exceptions.InvalidValueException NotAGuid(long length) =>
+        new($"Binary column holds {length.ToString(CultureInfo.InvariantCulture)} bytes; a GUID needs exactly 16.");
+
     public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal, bool bigEndian)
     {
-        var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(17);
+        // Exactly 16 bytes: a longer value was read as its first 16, a silently wrong Guid (COR-003).
+        // The length comes from the provider; asking for a 17th byte to prove there is none threw on
+        // MySql.Data, which refuses a read at the end of a value (COR-014).
+        var length = reader.GetBytes(ordinal, 0, null, 0, 0);
+        if (length != 16)
+        {
+            throw NotAGuid(length);
+        }
+
+        var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(16);
         try
         {
-            // Up to 17 bytes: a longer value was read as its first 16, a silently wrong Guid (COR-003).
-            var read = ReadAllBytes(reader, ordinal, temp, 17);
+            var read = ReadAllBytes(reader, ordinal, temp, 16);
             if (read != 16)
             {
-                throw new exceptions.InvalidValueException(
-                    $"Binary column holds {(read > 16 ? "more than 16" : read.ToString(CultureInfo.InvariantCulture))} bytes; a GUID needs exactly 16.");
+                throw NotAGuid(read);
             }
+
             return new Guid(temp.AsSpan(0, 16), bigEndian);
         }
         finally
