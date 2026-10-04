@@ -587,7 +587,7 @@ internal class BooleanCoercion : DbCoercion<bool>
 
                 if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var dbl))
                 {
-                    value = Math.Abs(dbl) > double.Epsilon;
+                    value = @internal.NumericTruth.FromDouble(dbl);
                     return true;
                 }
 
@@ -596,14 +596,18 @@ internal class BooleanCoercion : DbCoercion<bool>
             case char c:
                 value = EvaluateCharBoolean(char.ToLowerInvariant(c));
                 return true;
-            case sbyte or byte or short or ushort or int or uint or long or ulong:
+            case ulong u:
+                // Before the Int64 case: Convert.ToInt64 overflows above long.MaxValue.
+                value = u != 0;
+                return true;
+            case sbyte or byte or short or ushort or int or uint or long:
                 value = Convert.ToInt64(src.RawValue, CultureInfo.InvariantCulture) != 0;
                 return true;
             case float f:
-                value = Math.Abs(f) > float.Epsilon;
+                value = @internal.NumericTruth.FromFloat(f);
                 return true;
             case double d:
-                value = Math.Abs(d) > double.Epsilon;
+                value = @internal.NumericTruth.FromDouble(d);
                 return true;
             case decimal m:
                 value = m != decimal.Zero;

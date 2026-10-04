@@ -38,6 +38,20 @@
   pooled open). 2.0.5 rounded them down to 0 ms and left them out, so the averages counted only
   slow opens (COR-010).
 
+## Every read path converts the same way
+
+The gateway, `DataReaderMapper` and scalar reads (`ExecuteScalar*`) now give the same result for the
+same stored value, checked by one table-driven test (DRY-003). Where 2.0.5 differed:
+
+- `DataReaderMapper` returns a `DateTime` column as UTC (`DateTimeKind.Utc`), as the gateway does;
+  2.0.5 left it `Unspecified`.
+- A number read into a `bool` is true when non-zero and fails when NaN. 2.0.5 read NaN as `true` in
+  `DataReaderMapper` and `false` elsewhere, read the smallest non-zero `double` as `false`, and failed
+  a `ulong` above `long.MaxValue` in scalar reads.
+- An enum read from a number accepts any combination of `[Flags]` members in `DataReaderMapper` and
+  scalar reads (2.0.5: only on the gateway). Text holding a number that is no member (`"99"`) fails
+  there too, as it does on the gateway.
+
 ## TiDB
 
 - Upserts of `UInt64` columns (`BIT(64)`, `BIGINT UNSIGNED`) no longer go through `VALUES(col)`,

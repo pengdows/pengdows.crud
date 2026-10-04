@@ -673,13 +673,26 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 rawValue = Expression.Call(readerParam, getFieldValueMethod, Expression.Constant(key.Ordinal));
             }
 
-            if (targetType == key.FieldType)
+            if (underlyingTarget == typeof(DateTime) && key.FieldType == typeof(DateTime))
+            {
+                // Unspecified reads as UTC, as on the gateway (DRY-003).
+                Expression normalized = Expression.Call(
+                    typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.NormalizeDateTime),
+                        BindingFlags.NonPublic | BindingFlags.Static)!, rawValue);
+                valueExpression = targetType != underlyingTarget ? Expression.Convert(normalized, targetType) : normalized;
+            }
+            else if (targetType == key.FieldType)
             {
                 valueExpression = rawValue;
             }
             else if (underlyingTarget == typeof(bool) && IsNumericType(key.FieldType))
             {
-                var nonZero = Expression.NotEqual(rawValue, Expression.Default(key.FieldType));
+                // Non-zero is true; NaN fails (NumericTruth, DRY-003).
+                var nonZero = key.FieldType == typeof(double)
+                    ? Expression.Call(typeof(NumericTruth).GetMethod(nameof(NumericTruth.FromDouble))!, rawValue)
+                    : key.FieldType == typeof(float)
+                        ? Expression.Call(typeof(NumericTruth).GetMethod(nameof(NumericTruth.FromFloat))!, rawValue)
+                        : (Expression)Expression.NotEqual(rawValue, Expression.Default(key.FieldType));
                 valueExpression = targetType != underlyingTarget
                     ? Expression.Convert(nonZero, targetType)
                     : nonZero;

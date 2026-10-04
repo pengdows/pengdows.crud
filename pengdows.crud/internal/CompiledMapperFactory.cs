@@ -551,6 +551,26 @@ internal static class EnumMappingCache
     private static bool IsValid<TEnum>(TEnum value) where TEnum : struct, Enum =>
         Enum.IsDefined(value) || (Cache<TEnum>.IsFlags && (Cache<TEnum>.ToBits(value) & ~Cache<TEnum>.AllFlags) == 0);
 
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (bool IsFlags, ulong AllFlags)> FlagsByType = new();
+
+    /// <summary>
+    /// The same rule for an enum known only at run time (<c>TypeCoercionHelper.CoerceEnum</c>), so every read
+    /// path accepts the same values (DRY-003).
+    /// </summary>
+    internal static bool IsValid(Type enumType, object value)
+    {
+        if (Enum.IsDefined(enumType, value))
+        {
+            return true;
+        }
+
+        var (isFlags, allFlags) = FlagsByType.GetOrAdd(enumType, static t => (t.IsDefined(typeof(FlagsAttribute), false),
+            Enum.GetValues(t).Cast<object>().Aggregate(0UL, (bits, v) => bits | Bits(v))));
+        return isFlags && (Bits(value) & ~allFlags) == 0;
+
+        static ulong Bits(object v) => unchecked((ulong)Convert.ToInt64(v, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     public static TEnum GetEnumFromString<TEnum>(string value) where TEnum : struct, Enum
     {
         if (Cache<TEnum>.FromString.TryGetValue(value, out var cached))

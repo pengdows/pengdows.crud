@@ -690,7 +690,8 @@ internal static class TypeCoercionHelper
                 return literalResult!;
             }
 
-            if (Enum.TryParse(enumType, stringValue, true, out var parsed))
+            // Validated like a number: Enum.TryParse accepts "99" as an undefined value (DRY-003).
+            if (Enum.TryParse(enumType, stringValue, true, out var parsed) && EnumMappingCache.IsValid(enumType, parsed!))
             {
                 return parsed!;
             }
@@ -704,7 +705,8 @@ internal static class TypeCoercionHelper
             WholeNumber.Check(value, typeof(long));
             var numeric = Convert.ToInt64(value, CultureInfo.InvariantCulture);
             var result = Enum.ToObject(enumType, numeric);
-            if (Enum.IsDefined(enumType, result))
+            // Defined, or a combination of [Flags] members, as on the gateway (DRY-003).
+            if (EnumMappingCache.IsValid(enumType, result))
             {
                 return result;
             }
