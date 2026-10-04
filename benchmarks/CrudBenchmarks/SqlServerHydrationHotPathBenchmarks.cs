@@ -167,6 +167,15 @@ public class SqlServerHydrationHotPathBenchmarks : IDisposable
         return _dapperConnection.Query<HydrationBenchEntity>(_dapperSql).AsList();
     }
 
+    // REL-007: the pengdows cell reads asynchronously (LoadListAsync), the Dapper cell above
+    // synchronously, and SqlClient's async read path costs more per row; this is the like-for-like
+    // async comparison.
+    [Benchmark]
+    public async Task<List<HydrationBenchEntity>> HydrationOnly_DapperAsync()
+    {
+        return (await _dapperConnection.QueryAsync<HydrationBenchEntity>(_dapperSql)).AsList();
+    }
+
     private async Task PreWarmAsync()
     {
         for (var i = 0; i < 5; i++)
