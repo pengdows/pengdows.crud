@@ -50,7 +50,9 @@ public sealed class AuroraTestConfigurationTests
         Assert.Equal("aurora_mysql_test_123456", configuration.TestNamespace);
         Assert.Contains("Database=app", configuration.AdminConnectionString);
         Assert.Contains("Database=aurora_mysql_test_123456", configuration.TestConnectionString);
-        Assert.Contains("SslMode=Required", configuration.TestConnectionString);
+        // Parsed rather than matched as text: MySqlConnector spells the key "SSL Mode" (REL-003).
+        Assert.Equal(MySqlConnector.MySqlSslMode.Required,
+            new MySqlConnector.MySqlConnectionStringBuilder(configuration.TestConnectionString).SslMode);
     }
 
     [Fact]
