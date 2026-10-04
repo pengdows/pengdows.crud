@@ -72,10 +72,6 @@ namespace pengdows.crud;
 /// <seealso cref="EnumParseFailureMode"/>
 internal static class TypeCoercionHelper
 {
-    private static readonly Type GuidType = typeof(Guid);
-    private static readonly Type GuidArrayType = typeof(byte[]);
-    private static readonly Type ReadOnlyMemoryOfByteType = typeof(ReadOnlyMemory<byte>);
-    private static readonly Type ArraySegmentOfByteType = typeof(ArraySegment<byte>);
 
     /// <summary>
     /// Cache of compiled type conversion delegates for faster Convert.ChangeType operations.
@@ -762,79 +758,6 @@ internal static class TypeCoercionHelper
         {
             // Ignore logging failures in debug-only fallbacks.
         }
-    }
-
-    private static object CoerceGuid(object value)
-    {
-        if (value is Guid g)
-        {
-            return g;
-        }
-
-        if (value is string s && Guid.TryParse(s, out var parsed))
-        {
-            return parsed;
-        }
-
-        if (value is byte[] bytes && bytes.Length == 16)
-        {
-            return new Guid(bytes);
-        }
-
-        if (value is ReadOnlyMemory<byte> memory && memory.Length == 16)
-        {
-            return new Guid(memory.Span);
-        }
-
-        if (value is ArraySegment<byte> segment && segment.Count == 16)
-        {
-            return new Guid(segment.AsSpan());
-        }
-
-        if (value is char[] chars && chars.Length == 36 && Guid.TryParse(new string(chars), out var charGuid))
-        {
-            return charGuid;
-        }
-
-        throw new InvalidCastException("Cannot convert value to Guid.");
-    }
-
-    private static object CoerceBoolean(object value)
-    {
-        switch (value)
-        {
-            case bool b:
-                return b;
-            case string s:
-                if (bool.TryParse(s, out var boolResult))
-                {
-                    return boolResult;
-                }
-
-                if (s.Length == 1)
-                {
-                    return EvaluateCharBoolean(char.ToLowerInvariant(s[0]));
-                }
-
-                if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var dbl))
-                {
-                    return Math.Abs(dbl) > double.Epsilon;
-                }
-
-                break;
-            case char c:
-                return EvaluateCharBoolean(char.ToLowerInvariant(c));
-            case sbyte or byte or short or ushort or int or uint or long or ulong:
-                return Convert.ToInt64(value, CultureInfo.InvariantCulture) != 0;
-            case float f:
-                return Math.Abs(f) > float.Epsilon;
-            case double d:
-                return Math.Abs(d) > double.Epsilon;
-            case decimal m:
-                return m != decimal.Zero;
-        }
-
-        throw new InvalidCastException("Cannot convert value to Boolean.");
     }
 
     private static bool EvaluateCharBoolean(char lower)

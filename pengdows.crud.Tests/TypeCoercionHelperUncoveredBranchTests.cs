@@ -81,7 +81,7 @@ public class TypeCoercionHelperUncoveredBranchTests
         Assert.Throws<FormatException>(() => TypeCoercionHelper.Coerce("   ", typeof(string), typeof(uint)));
     }
 
-    // TypeCoercionHelper.CoerceBoolean: char and double switch cases (lines ~575-582).
+    // BooleanCoercion: char and double cases.
     [Theory]
     [InlineData('t', true)]
     [InlineData('n', false)]

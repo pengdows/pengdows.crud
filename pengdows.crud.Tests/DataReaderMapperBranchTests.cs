@@ -154,64 +154,6 @@ public class DataReaderMapperBranchTests
         }
     }
 
-    [Fact]
-    public void PrivateEnumFailureHandling_ExercisesAllModes()
-    {
-        var tryHandleEnumFailure = typeof(DataReaderMapper)
-            .GetMethod("TryHandleEnumFailure", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("TryHandleEnumFailure not found.");
-
-        var nonEnumProperty = typeof(NonEnumEntity).GetProperty(nameof(NonEnumEntity.Name))!;
-        var nonEnumArgs = new object?[] { "x", nonEnumProperty, EnumParseFailureMode.SetDefaultValue, new Exception(), null };
-        var nonEnumHandled = (bool)tryHandleEnumFailure.Invoke(null, nonEnumArgs)!;
-        Assert.False(nonEnumHandled);
-
-        var enumProperty = typeof(EnumEntity).GetProperty(nameof(EnumEntity.Color))!;
-        var throwArgs = new object?[] { "x", enumProperty, EnumParseFailureMode.Throw, new Exception(), null };
-        var throwHandled = (bool)tryHandleEnumFailure.Invoke(null, throwArgs)!;
-        Assert.False(throwHandled);
-
-        var originalLogger = TypeCoercionHelper.Logger;
-        try
-        {
-            TypeCoercionHelper.Logger = NullLogger.Instance;
-
-            var setNullAndLogArgs = new object?[]
-                { "x", enumProperty, EnumParseFailureMode.SetNullAndLog, new Exception(), null };
-            var setNullAndLogHandled = (bool)tryHandleEnumFailure.Invoke(null, setNullAndLogArgs)!;
-            Assert.True(setNullAndLogHandled);
-            Assert.Equal(Enum.ToObject(typeof(SampleColor), 0), setNullAndLogArgs[4]);
-        }
-        finally
-        {
-            TypeCoercionHelper.Logger = originalLogger;
-        }
-
-        var nullableEnumProperty = typeof(EnumEntity).GetProperty(nameof(EnumEntity.NullableColor))!;
-        var setDefaultArgs = new object?[]
-            { "x", nullableEnumProperty, EnumParseFailureMode.SetDefaultValue, new Exception(), null };
-        var setDefaultHandled = (bool)tryHandleEnumFailure.Invoke(null, setDefaultArgs)!;
-        Assert.True(setDefaultHandled);
-        Assert.Null(setDefaultArgs[4]);
-
-        var invalidModeArgs = new object?[] { "x", enumProperty, (EnumParseFailureMode)999, new Exception(), null };
-        var invalidModeHandled = (bool)tryHandleEnumFailure.Invoke(null, invalidModeArgs)!;
-        Assert.False(invalidModeHandled);
-    }
-
-    [Fact]
-    public void CoerceValue_WhenInputIsNull_ReturnsNull()
-    {
-        var coerceValue = typeof(DataReaderMapper)
-            .GetMethod("CoerceValue", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("CoerceValue not found.");
-        var property = typeof(NonEnumEntity).GetProperty(nameof(NonEnumEntity.Name))!;
-
-        var result = coerceValue.Invoke(null, new object?[] { null, property, typeof(string), EnumParseFailureMode.Throw });
-
-        Assert.Null(result);
-    }
-
     private sealed class DateTimeEntity
     {
         public DateTime Timestamp { get; set; }

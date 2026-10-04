@@ -245,41 +245,6 @@ public class TypeCoercionHelperBranchTests
     }
 
     [Fact]
-    public void CoerceGuid_PrivateHandlesSupportedShapes()
-    {
-        var guid = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
-
-        Assert.Equal(guid, InvokePrivate<Guid>("CoerceGuid", guid));
-        Assert.Equal(guid, InvokePrivate<Guid>("CoerceGuid", guid.ToString()));
-        Assert.Equal(guid, InvokePrivate<Guid>("CoerceGuid", guid.ToByteArray()));
-        Assert.Equal(guid, InvokePrivate<Guid>("CoerceGuid", new ReadOnlyMemory<byte>(guid.ToByteArray())));
-        Assert.Equal(guid, InvokePrivate<Guid>("CoerceGuid", new ArraySegment<byte>(guid.ToByteArray())));
-        Assert.Equal(guid, InvokePrivate<Guid>("CoerceGuid", guid.ToString().ToCharArray()));
-
-        var ex = InvokePrivateThrows("CoerceGuid", "not-a-guid");
-        Assert.IsType<InvalidCastException>(ex);
-    }
-
-    [Fact]
-    public void CoerceBoolean_PrivateHandlesMultiplePaths()
-    {
-        Assert.True(InvokePrivate<bool>("CoerceBoolean", true));
-        Assert.True(InvokePrivate<bool>("CoerceBoolean", "true"));
-        Assert.True(InvokePrivate<bool>("CoerceBoolean", "y"));
-        Assert.True(InvokePrivate<bool>("CoerceBoolean", "1.5"));
-        Assert.True(InvokePrivate<bool>("CoerceBoolean", (byte)1));
-        Assert.False(InvokePrivate<bool>("CoerceBoolean", (ushort)0));
-        Assert.True(InvokePrivate<bool>("CoerceBoolean", (uint)1));
-        Assert.False(InvokePrivate<bool>("CoerceBoolean", (ulong)0));
-        Assert.True(InvokePrivate<bool>("CoerceBoolean", 1.0m));
-        Assert.False(InvokePrivate<bool>("CoerceBoolean", 0.0f));
-        Assert.False(InvokePrivate<bool>("CoerceBoolean", 0));
-
-        var ex = InvokePrivateThrows("CoerceBoolean", "not-a-bool");
-        Assert.IsType<InvalidCastException>(ex);
-    }
-
-    [Fact]
     public void EvaluateCharBoolean_PrivateThrowsOnUnknown()
     {
         Assert.True(InvokePrivate<bool>("EvaluateCharBoolean", 't'));
