@@ -51,6 +51,10 @@ same stored value, checked by one table-driven test (DRY-003). Where 2.0.5 diffe
 - An enum read from a number accepts any combination of `[Flags]` members in `DataReaderMapper` and
   scalar reads (2.0.5: only on the gateway). Text holding a number that is no member (`"99"`) fails
   there too, as it does on the gateway.
+- `EnumParseFailureMode.SetNullAndLog` gives a non-nullable enum property its default in
+  `DataReaderMapper` and `Coerce` (2.0.5 returned null, which failed to unbox: a
+  `DataMappingException` under `Strict`), and now logs on the gateway, which gave the default
+  without logging (DRY-007).
 
 ## TiDB
 

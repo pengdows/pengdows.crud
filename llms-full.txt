@@ -6672,7 +6672,7 @@ public sealed record MapperOptions(
 | `Strict` | Throws `DataMappingException` when a matched column's value can't be converted/assigned to its property. Default `false`: the failure is logged as a warning via `TypeCoercionHelper.Logger` and the property keeps its default. Reader columns with no matching property are ignored either way. |
 | `ColumnsOnly` | When `true`, only properties carrying a `[Column]` attribute are mapped, matched (case-insensitively) against the `[Column]` name rather than the property name, and `NamePolicy` is not applied. |
 | `NamePolicy` | A `string -> string` transform applied to each reader column name before matching. The most common use: bridging a stored procedure's naming convention to C# property names — e.g. stripping underscores so `order_id` matches `OrderId` (`OrdinalIgnoreCase` means casing doesn't need to match, only the transformed string shape does). |
-| `EnumMode` | `EnumParseFailureMode` — `Throw` (default), `SetDefaultValue`, or `SetNullAndLog` when a column value can't parse into a target enum property. `SetNullAndLog` logs via `TypeCoercionHelper.Logger` — see that type's XML doc for the process-wide (not per-tenant) scope of that logger. |
+| `EnumMode` | `EnumParseFailureMode` — `Throw` (default), `SetDefaultValue`, or `SetNullAndLog` when a column value can't parse into a target enum property. `SetNullAndLog` logs via `TypeCoercionHelper.Logger` — see that type's XML doc for the process-wide (not per-tenant) scope of that logger. Both non-`Throw` modes leave a nullable enum property `null` and a non-nullable one at the enum's default, here and in gateway hydration alike. |
 
 ```csharp
 // Stored proc returns snake_case columns; POCO uses PascalCase properties.

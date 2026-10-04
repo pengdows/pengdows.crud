@@ -155,9 +155,18 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 }
                 else
                 {
-                    var defaultValue = Expression.Default(targetType);
-                    var catchBlock = Expression.Catch(typeof(Exception), defaultValue);
-                    valueReadExpr = Expression.TryCatch(finalEnumExpr, catchBlock);
+                    // The property's default (null for a nullable enum); SetNullAndLog also logs, as
+                    // TypeCoercionHelper does on the other read paths (DRY-007).
+                    Expression fallback = Expression.Default(targetType);
+                    if (enumMode == EnumParseFailureMode.SetNullAndLog)
+                    {
+                        fallback = Expression.Block(
+                            Expression.Call(typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.LogEnumFailure),
+                                BindingFlags.NonPublic | BindingFlags.Static)!, Expression.Constant(underlyingTarget)),
+                            fallback);
+                    }
+
+                    valueReadExpr = Expression.TryCatch(finalEnumExpr, Expression.Catch(typeof(Exception), fallback));
                 }
             }
             else if ((Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.Inet))

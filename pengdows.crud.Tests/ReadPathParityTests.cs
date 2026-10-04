@@ -114,10 +114,10 @@ public class ReadPathParityTests
     {
         var gateway = await (Task<Outcome>)typeof(ReadPathParityTests).GetMethod(nameof(ViaGateway),
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
-            .MakeGenericMethod(entityType).Invoke(null, new[] { stored })!;
+            .MakeGenericMethod(entityType).Invoke(null, new object[] { stored, EnumParseFailureMode.Throw })!;
         var mapper = await (Task<Outcome>)typeof(ReadPathParityTests).GetMethod(nameof(ViaDataReaderMapper),
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
-            .MakeGenericMethod(propertyType).Invoke(null, new[] { stored })!;
+            .MakeGenericMethod(propertyType).Invoke(null, new object[] { stored, EnumParseFailureMode.Throw })!;
         var coerce = ViaCoerce(stored, propertyType);
 
         Assert.True(Same(gateway, mapper) && Same(gateway, coerce),
@@ -137,13 +137,14 @@ public class ReadPathParityTests
         return factory;
     }
 
-    private static async Task<Outcome> ViaGateway<TEntity>(object stored) where TEntity : class, new()
+    private static async Task<Outcome> ViaGateway<TEntity>(object stored, EnumParseFailureMode mode = EnumParseFailureMode.Throw)
+        where TEntity : class, new()
     {
         Factory(stored, out var context);
         await using var _ = context;
         try
         {
-            var gateway = new TableGateway<TEntity, int>(context);
+            var gateway = new TableGateway<TEntity, int>(context) { EnumParseBehavior = mode };
             await using var sc = context.CreateSqlContainer("SELECT id, v FROM t");
             var row = await gateway.LoadSingleAsync(sc);
             return new Outcome(false, typeof(TEntity).GetProperty("V")!.GetValue(row), "");
@@ -154,7 +155,7 @@ public class ReadPathParityTests
         }
     }
 
-    private static async Task<Outcome> ViaDataReaderMapper<T>(object stored)
+    private static async Task<Outcome> ViaDataReaderMapper<T>(object stored, EnumParseFailureMode mode = EnumParseFailureMode.Throw)
     {
         Factory(stored, out var context);
         await using var _ = context;
@@ -162,7 +163,7 @@ public class ReadPathParityTests
         {
             await using var sc = context.CreateSqlContainer("SELECT id, v FROM t");
             await using var reader = await sc.ExecuteReaderAsync();
-            var rows = await DataReaderMapper.LoadAsync<Plain<T>>(reader, new MapperOptions(Strict: true));
+            var rows = await DataReaderMapper.LoadAsync<Plain<T>>(reader, new MapperOptions(Strict: true, EnumMode: mode));
             return new Outcome(false, rows[0].V, "");
         }
         catch (Exception ex)
@@ -184,6 +185,72 @@ public class ReadPathParityTests
         catch (Exception ex)
         {
             return new Outcome(true, null, ex.GetType().Name);
+        }
+    }
+
+    // An enum value that can't be read, under each EnumParseFailureMode: the gateway (EnumParseBehavior)
+    // and DataReaderMapper (MapperOptions.EnumMode, Strict) must agree. SetNullAndLog gave null for a
+    // non-nullable property in DataReaderMapper, which then failed to unbox.
+    public static IEnumerable<object[]> EnumFailureCases()
+    {
+        foreach (var mode in new[] { EnumParseFailureMode.Throw, EnumParseFailureMode.SetDefaultValue, EnumParseFailureMode.SetNullAndLog })
+        {
+            yield return new object[] { mode, typeof(StringEnum<Mood>), typeof(Mood), "Nope" };
+            yield return new object[] { mode, typeof(StringEnum<Mood?>), typeof(Mood?), "Nope" };
+            yield return new object[] { mode, typeof(NumericEnum<Mood>), typeof(Mood), 99 };
+            yield return new object[] { mode, typeof(NumericEnum<Mood?>), typeof(Mood?), 99 };
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(EnumFailureCases))]
+    public async Task UnreadableEnum_EachFailureMode_GivesTheSameResultOnBothMappers(EnumParseFailureMode mode,
+        Type entityType, Type propertyType, object stored)
+    {
+        var gateway = await (Task<Outcome>)typeof(ReadPathParityTests).GetMethod(nameof(ViaGateway),
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .MakeGenericMethod(entityType).Invoke(null, new object[] { stored, mode })!;
+        var mapper = await (Task<Outcome>)typeof(ReadPathParityTests).GetMethod(nameof(ViaDataReaderMapper),
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static)!
+            .MakeGenericMethod(propertyType).Invoke(null, new object[] { stored, mode })!;
+
+        Assert.True(Same(gateway, mapper), $"{mode}: {stored} into {propertyType.Name}: gateway {gateway}, DataReaderMapper {mapper}");
+        Assert.Equal(mode == EnumParseFailureMode.Throw, gateway.Failed);
+    }
+
+    private sealed class CountingLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public int Warnings;
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        {
+            if (logLevel == Microsoft.Extensions.Logging.LogLevel.Warning)
+            {
+                System.Threading.Interlocked.Increment(ref Warnings);
+            }
+        }
+    }
+
+    // SetNullAndLog on the gateway gave the default without logging.
+    [Fact]
+    public async Task Gateway_SetNullAndLog_LogsTheUnreadableEnum()
+    {
+        var logger = new CountingLogger();
+        var original = TypeCoercionHelper.Logger;
+        TypeCoercionHelper.Logger = logger;
+        try
+        {
+            var outcome = await ViaGateway<StringEnum<Mood>>("Nope", EnumParseFailureMode.SetNullAndLog);
+
+            Assert.False(outcome.Failed);
+            Assert.Equal(1, logger.Warnings);
+        }
+        finally
+        {
+            TypeCoercionHelper.Logger = original;
         }
     }
 }

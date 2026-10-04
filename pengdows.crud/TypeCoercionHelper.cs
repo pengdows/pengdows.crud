@@ -698,6 +698,13 @@ internal static class TypeCoercionHelper
         }
     }
 
+    private static object DefaultOf(Type enumType) =>
+        Enum.ToObject(enumType, Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!);
+
+    /// <summary>The warning <see cref="EnumParseFailureMode.SetNullAndLog"/> logs on every read path.</summary>
+    internal static void LogEnumFailure(Type enumType) =>
+        TryLogWarning("Cannot convert value to enum {EnumType}.", enumType);
+
     private static object? HandleEnumFailure(object _, Type enumType, EnumParseFailureMode parseMode,
         bool targetNullable)
     {
@@ -706,12 +713,12 @@ internal static class TypeCoercionHelper
             case EnumParseFailureMode.Throw:
                 throw new ArgumentException($"Cannot convert value to enum {enumType}");
             case EnumParseFailureMode.SetDefaultValue:
-                return targetNullable
-                    ? null
-                    : Enum.ToObject(enumType, Activator.CreateInstance(Enum.GetUnderlyingType(enumType))!);
+                return targetNullable ? null : DefaultOf(enumType);
             case EnumParseFailureMode.SetNullAndLog:
-                TryLogWarning("Cannot convert value to enum {EnumType}.", enumType);
-                return null;
+                // Null where the property can hold it; a non-nullable enum gets its default, as on the
+                // gateway (null failed to unbox, DRY-007).
+                LogEnumFailure(enumType);
+                return targetNullable ? null : DefaultOf(enumType);
             default:
                 return null;
         }

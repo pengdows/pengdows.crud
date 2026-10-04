@@ -70,7 +70,8 @@ public class TypeCoercionHelperBehaviorTests
             TypeCoercionHelper.Logger = new ThrowingLogger();
             var result =
                 TypeCoercionHelper.Coerce("invalid", typeof(string), column, EnumParseFailureMode.SetNullAndLog);
-            Assert.Null(result);
+            // A non-nullable enum property gets its default; null failed to unbox (DRY-007).
+            Assert.Equal(default(TestState), result);
         }
         finally
         {
