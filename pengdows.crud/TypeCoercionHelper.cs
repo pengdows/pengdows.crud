@@ -294,7 +294,7 @@ internal static class TypeCoercionHelper
         if (value is string s && string.IsNullOrWhiteSpace(s) && underlyingTarget != typeof(string) &&
             underlyingTarget != typeof(object))
         {
-            throw new FormatException($"Blank text can't be read as {underlyingTarget.Name}.");
+            throw BlankText(underlyingTarget);
         }
 
         // Don't take fast path for DateTime types as they may need UTC conversion
@@ -375,6 +375,8 @@ internal static class TypeCoercionHelper
             throw new InvalidCastException($"Cannot convert value of type {sourceType} to {targetType}.", ex);
         }
     }
+
+    internal static FormatException BlankText(Type target) => new($"Blank text can't be read as {target.Name}.");
 
     /// <summary>A Guid from its 16 stored bytes in the given byte order.</summary>
     public static Guid GuidFromBytes(byte[] bytes, bool bigEndian) => new(bytes, bigEndian);

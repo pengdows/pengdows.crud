@@ -266,7 +266,9 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // OPTIMIZATION: For most common primitive types where source and target match,
                 // bypass BuildConversionExpression's potential boxing/Coerce paths.
                 var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
-                var rawValue = fieldType == underlyingTarget && TypedFieldReader.Handles(fieldType)
+                // Typed for any target: a uint column into a long property converts the uint; the boxed
+                // GetValue result was unboxed as long and threw (COR-008).
+                var rawValue = TypedFieldReader.Handles(fieldType)
                     ? Expression.Call(
                         typeof(TypedFieldReader).GetMethod(nameof(TypedFieldReader.Read))!.MakeGenericMethod(fieldType),
                         Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)
@@ -461,6 +463,17 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             var parseMethod = typeof(Guid).GetMethod(nameof(Guid.Parse), new[] { typeof(string) })!;
             var parsed = Expression.Call(parseMethod, value);
             return targetType != underlyingTargetType ? Expression.Convert(parsed, targetType) : parsed;
+        }
+
+        // Date and time conversions TypeCoercionHelper.Coerce would make, without boxing the value or
+        // its result (PERF-021): DateTime into DateOnly, TimeSpan into TimeOnly, timestamp text (SQLite)
+        // into DateTime/DateTimeOffset/DateOnly.
+        if (TypedCoercions.Find(sourceType, underlyingTargetType) is { } typedCoercion)
+        {
+            var typedSource = value.Type != sourceType ? Expression.Convert(value, sourceType) : value;
+            var converted = Expression.Call(typedCoercion, typedSource,
+                Expression.Constant(coercionOptions ?? TypeCoercionOptions.Default, typeof(TypeCoercionOptions)));
+            return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
         }
 
         // Fallback: TypeCoercionHelper.Coerce(object, fieldType, targetType)
