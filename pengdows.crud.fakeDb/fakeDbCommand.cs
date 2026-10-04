@@ -399,7 +399,19 @@ public class fakeDbCommand : DbCommand
         return ExecuteDbDataReaderCore(behavior);
     }
 
+    // A reader executed with SequentialAccess enforces it (fakeDbDataReader.EnforceSequentialAccess).
     private DbDataReader ExecuteDbDataReaderCore(CommandBehavior behavior)
+    {
+        var reader = CreateReader(behavior);
+        if (reader is fakeDbDataReader fake && behavior.HasFlag(CommandBehavior.SequentialAccess))
+        {
+            fake.EnforceSequentialAccess = true;
+        }
+
+        return reader;
+    }
+
+    private DbDataReader CreateReader(CommandBehavior behavior)
     {
         ThrowIfShouldFail(nameof(ExecuteDbDataReader));
         var conn = FakeConnection;

@@ -602,6 +602,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool UpsertIncomingValueUnreliable(IColumnInfo column) => false;
 
     /// <summary>
+    /// True when gateway hydration (which reads each column once, in ordinal order) should open its
+    /// reader with <see cref="CommandBehavior.SequentialAccess"/> because the provider buffers every
+    /// row without it (DEC-013). Readers handed to callers always keep the default behavior.
+    /// </summary>
+    internal virtual bool HydratesWithSequentialAccess => false;
+
+    /// <summary>
     /// The isolation levels this database's provider accepts (DEC-010: dialect-owned, as on 3.0).
     /// The base is the generic fallback for a database without its own mapping.
     /// </summary>

@@ -32,3 +32,15 @@ columns instead). pengdows executes with `CommandBehavior.Default`.
 Using `SequentialAccess` for gateway hydration is a design change (each column must be read once,
 in ordinal order; the mapping-failure diagnostics and some provider fallbacks re-read a column), so
 it is recorded as a decision (REL-007), not made here.
+
+### After DEC-013 (gateway hydration opens its reader with `SequentialAccess` on SQL Server)
+
+| Rows | pengdows `LoadListAsync` | Dapper `QueryAsync` | Dapper `Query` (sync) | pengdows ÷ Dapper async | Allocated (p / Dapper async) |
+|---:|---:|---:|---:|---:|---:|
+| 100 | 281.1 µs | 292.0 µs | 252.0 µs | 0.96 | 25.7 / 42.8 KB |
+| 1,000 | 779.8 µs | 852.3 µs | 748.9 µs | 0.91 | 202 / 374 KB |
+| 5,000 | 2,964.3 µs | 3,054.6 µs | 3,143.2 µs | 0.97 | 1,068 / 1,924 KB |
+
+pengdows went from +4%/+14%/+11% over Dapper's async read to 4-9% under it, and allocates about
+half: the per-row `byte[]` is gone, and pengdows reads value columns through typed getters where
+Dapper boxes them.

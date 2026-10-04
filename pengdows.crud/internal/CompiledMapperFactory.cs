@@ -42,6 +42,9 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
     {
         var readerParam = Expression.Parameter(typeof(TReader), "reader");
         var entityVar = Expression.Variable(typeof(TEntity), "entity");
+        // The ordinal being read, so a conversion failure names its column without re-reading the
+        // row (DEC-013: a sequential-access reader can't go back). A local store per column.
+        var ordinalVar = Expression.Variable(typeof(int), "ordinal");
 
         var expressions = new List<Expression>
         {
@@ -304,16 +307,36 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             var propertyAccess = Expression.Property(entityVar, property);
             var assignment = Expression.Assign(propertyAccess, valueReadExpr);
 
+            expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
             expressions.Add(skipNullGuard
                 ? assignment
                 : Expression.IfThen(notDbNull, assignment));
         }
 
-        expressions.Add(entityVar);
+        // Conversion failures leave tagged with the ordinal; anything else (cancellation, provider
+        // errors) passes through unchanged.
+        var failure = Expression.Parameter(typeof(Exception), "failure");
+        var body = Expression.TryCatch(
+            Expression.Block(typeof(void), expressions),
+            Expression.Catch(
+                failure,
+                Expression.Throw(Expression.New(ColumnReadExceptionCtor, ordinalVar, failure)),
+                Expression.Call(IsConversionFailureMethod, failure)));
 
-        var block = Expression.Block(new[] { entityVar }, expressions);
+        var block = Expression.Block(new[] { entityVar, ordinalVar }, body, entityVar);
         return Expression.Lambda<Func<TReader, TEntity>>(block, readerParam).Compile();
     }
+
+    private static readonly ConstructorInfo ColumnReadExceptionCtor =
+        typeof(ColumnReadException).GetConstructor(new[] { typeof(int), typeof(Exception) })!;
+
+    private static readonly MethodInfo IsConversionFailureMethod =
+        typeof(CompiledMapperFactory<TEntity>).GetMethod(nameof(IsConversionFailure),
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    // The failures a stored value that doesn't fit its property produces (TYPE-008).
+    private static bool IsConversionFailure(Exception failure) =>
+        failure is OverflowException or InvalidCastException or FormatException or JsonException;
 
     private static MethodInfo ResolveJsonDeserializeMethod(Type targetType)
     {

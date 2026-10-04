@@ -181,6 +181,10 @@ internal class SqlServerDialect : SqlDialect
 
     internal override bool ReadsUnresolvedColumns => true;
 
+    // DEC-013, measured live (SQL Server 2025, SqlClient 5.2.2): ReadAsync without SequentialAccess
+    // allocates ~100 B of byte[] per row (row buffering for async reads); with it, none.
+    internal override bool HydratesWithSequentialAccess => true;
+
     internal override Type? GetUnresolvedColumnType(string dataTypeName) =>
         IsUdt(dataTypeName, "hierarchyid") ? typeof(HierarchyId)
         : IsUdt(dataTypeName, "geometry") ? typeof(Geometry)

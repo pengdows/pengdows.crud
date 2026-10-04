@@ -41,6 +41,10 @@ public abstract partial class BaseTableGateway<TEntity>
         {
             return plan.CompiledMapper(reader);
         }
+        catch (ColumnReadException ex)
+        {
+            throw CreateMappingException(reader, ex.InnerException!, plan.Options, ex.Ordinal);
+        }
         catch (Exception ex) when (ex is OverflowException or InvalidCastException or FormatException
                                        or System.Text.Json.JsonException)
         {
@@ -53,10 +57,20 @@ public abstract partial class BaseTableGateway<TEntity>
 
     // Slow path, only after a failure: find the column that can't be read into its property.
     private DataMappingException CreateMappingException(ITrackedReader reader, Exception failure,
-        TypeCoercionOptions options)
+        TypeCoercionOptions options, int? failedOrdinal = null)
     {
         IColumnInfo? failing = null;
-        for (var i = 0; i < reader.FieldCount && failing == null; i++)
+        // The mapper knows which column it was reading; metadata (GetName) is readable under
+        // SequentialAccess, values aren't (DEC-013).
+        if (failedOrdinal is { } ordinal && _columnsByNameCI.TryGetValue(reader.GetName(ordinal), out var known))
+        {
+            failing = known;
+        }
+
+        // A sequential-access reader can't go back to earlier columns (DEC-013): re-reading would
+        // throw and blame the wrong column, so report without naming one.
+        var canReread = reader is not wrappers.TrackedReader { IsSequentialAccess: true };
+        for (var i = 0; canReread && i < reader.FieldCount && failing == null; i++)
         {
             if (!_columnsByNameCI.TryGetValue(reader.GetName(i), out var column))
             {

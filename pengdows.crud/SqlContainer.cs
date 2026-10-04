@@ -1591,11 +1591,21 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             .ConfigureAwait(false);
     }
 
+    /// <summary>
+    /// The reader gateway hydration uses (DEC-013): <see cref="CommandBehavior.SequentialAccess"/>
+    /// where the dialect asks for it, since the compiled mapper reads each column once, in order.
+    /// </summary>
+    internal ValueTask<ITrackedReader> ExecuteReaderForHydrationAsync(bool singleRow,
+        CancellationToken cancellationToken) =>
+        ExecuteReaderAsyncInternal(ExecutionType.Read, CommandType.Text, cancellationToken, singleRow,
+            sequentialAccess: _dialect is SqlDialect { HydratesWithSequentialAccess: true });
+
     private async ValueTask<ITrackedReader> ExecuteReaderAsyncInternal(
         ExecutionType executionType,
         CommandType commandType,
         CancellationToken cancellationToken,
-        bool singleRow)
+        bool singleRow,
+        bool sequentialAccess = false)
     {
         var operationKind = commandType == CommandType.StoredProcedure ? DbOperationKind.Unknown : DbOperationKind.Query;
         if (executionType == ExecutionType.Write)
@@ -1675,6 +1685,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var behavior = useCloseConnectionBehavior
                 ? (singleRow ? CommandBehavior.CloseConnection | CommandBehavior.SingleRow : CommandBehavior.CloseConnection)
                 : (singleRow ? CommandBehavior.SingleRow : CommandBehavior.Default);
+            if (sequentialAccess)
+            {
+                behavior |= CommandBehavior.SequentialAccess;
+            }
 
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, 0);
@@ -1696,7 +1710,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true },
                 _dialect is SqlDialect unreadableDialect ? unreadableDialect.IsUnreadableStoredValue : null,
                 _dialect is SqlDialect { ReadsUnresolvedColumns: true } unresolvedDialect ? unresolvedDialect : null,
-                DefaultCoercionOptions);
+                DefaultCoercionOptions)
+            {
+                IsSequentialAccess = sequentialAccess
+            };
             cmd = null;
             singleConnectionTxGate = null; // TrackedReader owns it until the reader is disposed
             lockTransferred = true; // TrackedReader now owns both the connection and context locks

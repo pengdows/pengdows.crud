@@ -62,6 +62,12 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     // SqlDialect.ReportsOutOfRangeDecimalAsNull: Informix.Net.Core returns null for an out-of-range DECIMAL.
     private readonly bool _reportsOutOfRangeDecimalAsNull;
 
+    /// <summary>
+    /// True when this reader was opened with <see cref="CommandBehavior.SequentialAccess"/> (gateway
+    /// hydration, DEC-013): a column before the last one read can't be read again in the same row.
+    /// </summary>
+    internal bool IsSequentialAccess { get; init; }
+
     // SqlDialect.IsUnreadableStoredValue: a provider exception meaning the stored value has no .NET
     // representation (TYPE-005).
     private readonly Func<Exception, bool>? _isUnreadableStoredValue;

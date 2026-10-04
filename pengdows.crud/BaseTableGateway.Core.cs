@@ -245,6 +245,16 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     // =========================================================================
 
     /// <inheritdoc/>
+    // Gateway hydration's reader (DEC-013): a SqlContainer opens it with SequentialAccess where the
+    // dialect asks; any other ISqlContainer implementation keeps its own behavior.
+    private static ValueTask<ITrackedReader> OpenHydrationReaderAsync(ISqlContainer sc, bool singleRow,
+        CancellationToken cancellationToken) =>
+        sc is SqlContainer container
+            ? container.ExecuteReaderForHydrationAsync(singleRow, cancellationToken)
+            : singleRow
+                ? sc.ExecuteReaderSingleRowAsync(cancellationToken)
+                : sc.ExecuteReaderAsync(CommandType.Text, cancellationToken);
+
     public ValueTask<TEntity?> LoadSingleAsync(ISqlContainer sc)
     {
         return LoadSingleAsync(sc, CancellationToken.None);
@@ -258,7 +268,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             throw new ArgumentNullException(nameof(sc));
         }
 
-        await using var reader = await sc.ExecuteReaderSingleRowAsync(cancellationToken).ConfigureAwait(false);
+        await using var reader = await OpenHydrationReaderAsync(sc, singleRow: true, cancellationToken).ConfigureAwait(false);
         if (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
         {
             var plan = GetOrBuildRecordsetPlan(reader);
@@ -284,7 +294,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
         var list = new List<TEntity>();
 
-        await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        await using var reader = await OpenHydrationReaderAsync(sc, singleRow: false, cancellationToken).ConfigureAwait(false);
 
         HybridRecordsetPlan? plan = null;
 
@@ -314,7 +324,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         }
 
         await using var reader =
-            await sc.ExecuteReaderAsync(CommandType.Text, CancellationToken.None).ConfigureAwait(false);
+            await OpenHydrationReaderAsync(sc, singleRow: false, CancellationToken.None).ConfigureAwait(false);
 
         HybridRecordsetPlan? plan = null;
 
@@ -343,7 +353,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         }
 
         await using var reader =
-            await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            await OpenHydrationReaderAsync(sc, singleRow: false, cancellationToken).ConfigureAwait(false);
 
         HybridRecordsetPlan? plan = null;
 

@@ -167,8 +167,35 @@ public class fakeDbDataReader : DbDataReader
     /// <summary>See <see cref="CancelAfterReadCount"/>.</summary>
     public CancellationTokenSource? CancelSource { get; set; }
 
+    /// <summary>
+    /// Emulates <see cref="CommandBehavior.SequentialAccess"/> as SqlClient enforces it: within a row,
+    /// reading a column before the last one read throws <see cref="InvalidOperationException"/>;
+    /// re-reading the current column (e.g. IsDBNull, then GetString) is allowed. fakeDbCommand sets it
+    /// when a reader is executed with SequentialAccess.
+    /// </summary>
+    public bool EnforceSequentialAccess { get; set; }
+
+    private int _sequentialLastOrdinal = -1;
+
+    private void CheckSequentialAccess(int ordinal)
+    {
+        if (!EnforceSequentialAccess)
+        {
+            return;
+        }
+
+        if (ordinal < _sequentialLastOrdinal)
+        {
+            throw new InvalidOperationException(
+                $"Invalid attempt to read from column ordinal '{ordinal}'. With CommandBehavior.SequentialAccess, you may only read from column ordinal '{_sequentialLastOrdinal}' or greater.");
+        }
+
+        _sequentialLastOrdinal = ordinal;
+    }
+
     public override bool Read()
     {
+        _sequentialLastOrdinal = -1;
         if (FailException != null && FailAfterReadCount.HasValue && _index + 1 >= FailAfterReadCount.Value)
         {
             var ex = FailException;
@@ -212,6 +239,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override object GetValue(int i)
     {
+        CheckSequentialAccess(i);
         try
         {
             return GetValueCore(i);
@@ -408,6 +436,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override T GetFieldValue<T>(int ordinal)
     {
+        CheckSequentialAccess(ordinal);
         if (IsNullableElementArray(ordinal) && RawValue(ordinal) is Array stored && stored.GetType() == typeof(T))
         {
             return (T)(object)stored;
@@ -471,6 +500,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override bool IsDBNull(int i)
     {
+        CheckSequentialAccess(i);
         if (OutOfRangeReturnsNullColumns != null && OutOfRangeReturnsNullColumns.Contains(GetName(i)))
         {
             throw new OverflowException("Value was either too large or too small for a Decimal.");
@@ -500,16 +530,19 @@ public class fakeDbDataReader : DbDataReader
 
     public override bool GetBoolean(int i)
     {
+        CheckSequentialAccess(i);
         return (bool)GetValue(i);
     }
 
     public override byte GetByte(int i)
     {
+        CheckSequentialAccess(i);
         return (byte)GetValue(i);
     }
 
     public override long GetBytes(int ordinal, long dataOffset, byte[]? buffer, int bufferOffset, int length)
     {
+        CheckSequentialAccess(ordinal);
         var data = IsUnloadableUdt(ordinal) || IsHandlerlessColumn(ordinal) || IsUnknownTypeColumn(ordinal)
             ? RawValue(ordinal)
             : GetValue(ordinal);
@@ -547,11 +580,13 @@ public class fakeDbDataReader : DbDataReader
 
     public override char GetChar(int i)
     {
+        CheckSequentialAccess(i);
         return (char)GetValue(i);
     }
 
     public override long GetChars(int ordinal, long dataOffset, char[]? buffer, int bufferOffset, int length)
     {
+        CheckSequentialAccess(ordinal);
         var data = (string)GetValue(ordinal);
         var copyLength = Math.Min(length, data.Length - dataOffset);
         if (buffer != null && copyLength > 0)
@@ -584,6 +619,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override DateTime GetDateTime(int i)
     {
+        CheckSequentialAccess(i);
         if (IsDateTimeOffsetReportedAsDateTime(i) && RawValue(i) is DateTimeOffset offsetValue)
         {
             return DateTime.SpecifyKind(offsetValue.DateTime, DateTimeKind.Unspecified);
@@ -602,6 +638,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override decimal GetDecimal(int i)
     {
+        CheckSequentialAccess(i);
         if (IsProviderDecimal(i) && RawValue(i) is decimal providerDecimal)
         {
             return providerDecimal;
@@ -619,6 +656,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override double GetDouble(int i)
     {
+        CheckSequentialAccess(i);
         if (IsDoubleBeyondDecimal(i) && RawValue(i) is double value)
         {
             return value;
@@ -707,26 +745,31 @@ public class fakeDbDataReader : DbDataReader
 
     public override float GetFloat(int i)
     {
+        CheckSequentialAccess(i);
         return (float)GetValue(i);
     }
 
     public override Guid GetGuid(int i)
     {
+        CheckSequentialAccess(i);
         return (Guid)GetValue(i);
     }
 
     public override short GetInt16(int i)
     {
+        CheckSequentialAccess(i);
         return (short)GetValue(i);
     }
 
     public override int GetInt32(int i)
     {
+        CheckSequentialAccess(i);
         return (int)GetValue(i);
     }
 
     public override long GetInt64(int i)
     {
+        CheckSequentialAccess(i);
         if (GetInt64RejectedColumns != null && GetInt64RejectedColumns.Contains(GetName(i)))
         {
             throw new InvalidCastException("Specified cast is not valid.");
@@ -745,6 +788,7 @@ public class fakeDbDataReader : DbDataReader
 
     public override string GetString(int i)
     {
+        CheckSequentialAccess(i);
         if (IsInt64TextColumn(i) && RawValue(i) is string text)
         {
             return text;
