@@ -164,7 +164,7 @@ internal sealed class GeometryConverter : SpatialConverter<Geometry>
         source[9..].CopyTo(normalized.AsSpan(5));
     }
 
-    private static (int srid, string text) ExtractSridFromText(string text)
+    internal static (int srid, string text) ExtractSridFromText(string text)
     {
         if (string.IsNullOrEmpty(text))
         {

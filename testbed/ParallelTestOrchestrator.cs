@@ -598,7 +598,9 @@ public static class TestbedImageMatrix
         ["Firebird"] = [new("5.0.2", "firebirdsql/firebird:5.0.2"), new("4.0.5", "firebirdsql/firebird:4.0.5"), new("3.0.9", "firebirdsql/firebird:3.0.9")],
         ["TiDB"] = [new("v8.5.7", "pingcap/tidb:v8.5.7"), new("v7.5.7", "pingcap/tidb:v7.5.7")],
         ["YugabyteDB"] = [new("2025.2.5.2-b5", "yugabytedb/yugabyte:2025.2.5.2-b5"), new("2.25.2.0-b359", "yugabytedb/yugabyte:2.25.2.0-b359")],
-        ["Oracle"] = [new("23.26.2", "gvenzl/oracle-free:23.26.2-slim-faststart"), new("21c", "gvenzl/oracle-xe:21-slim-faststart"), new("18c", "gvenzl/oracle-xe:18.4.0-slim-faststart")],
+        // 23.26.2 is the full image the integration fixture uses (the slim ones leave out Spatial, so no
+        // SDO_GEOMETRY for the type matrix, TYPE-021); the older versions don't run the type matrix.
+        ["Oracle"] = [new("23.26.2", "gvenzl/oracle-free:23.26.2-full-faststart"), new("21c", "gvenzl/oracle-xe:21-slim-faststart"), new("18c", "gvenzl/oracle-xe:18.4.0-slim-faststart")],
         ["Db2"] = [new("11.5.8.0", "ibmcom/db2:11.5.8.0"), new("11.5.0.0a", "ibmcom/db2:11.5.0.0a")]
     };
 

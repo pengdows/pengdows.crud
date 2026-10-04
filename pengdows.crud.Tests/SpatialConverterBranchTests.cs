@@ -101,7 +101,8 @@ public class SpatialConverterBranchTests
         var geo = Geometry.FromGeoJson("{\"type\":\"Point\"}", 4326);
 
         Assert.Equal("{\"type\":\"Point\"}", converter.ToProviderValue(geo, SupportedDatabase.Unknown));
-        Assert.Throws<InvalidOperationException>(() => converter.ToProviderValue(geo, SupportedDatabase.Oracle));
+        // TYPE-021: Oracle is written as EWKT, which GeoJSON alone can't supply.
+        Assert.Throws<NotSupportedException>(() => converter.ToProviderValue(geo, SupportedDatabase.Oracle));
     }
 
     [Fact]

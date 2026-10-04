@@ -936,13 +936,13 @@ public class TypesAndConvertersEdgeCaseTests
     }
 
     [Fact]
-    public void SpatialConverter_ConvertToProvider_Oracle_NoProviderValue_Throws()
+    public void SpatialConverter_ConvertToProvider_Oracle_IsEwkt()
     {
+        // TYPE-021: OracleDialect builds SDO_GEOMETRY from this text.
         var converter = new GeographyConverter();
         var geog = Geography.FromWellKnownText("POINT(0 0)", 4326);
 
-        Assert.Throws<InvalidOperationException>(() =>
-            converter.ToProviderValue(geog, SupportedDatabase.Oracle));
+        Assert.Equal("SRID=4326;POINT(0 0)", converter.ToProviderValue(geog, SupportedDatabase.Oracle));
     }
 
     [Fact]

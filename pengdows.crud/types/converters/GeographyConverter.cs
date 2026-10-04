@@ -171,7 +171,7 @@ internal sealed class GeographyConverter : SpatialConverter<Geography>
         normalized = source.ToArray();
     }
 
-    private static (int srid, string text) ExtractSridFromText(string text)
+    internal static (int srid, string text) ExtractSridFromText(string text)
     {
         if (string.IsNullOrEmpty(text))
         {

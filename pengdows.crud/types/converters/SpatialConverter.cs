@@ -84,8 +84,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
                     "SingleStore spatial values are written as WKT; create the value with FromWellKnownText."),
             SupportedDatabase.Snowflake => CreateSnowflakeSpatial(value),
             SupportedDatabase.SapHana => CreateWkb(value, "SAP HANA"),
-            SupportedDatabase.Oracle => value.ProviderValue ?? throw new InvalidOperationException(
-                "Oracle spatial parameters require provider-specific objects. Use WithProviderValue to supply SDO_GEOMETRY."),
+            // EWKT text, always with its SRID: OracleDialect builds SDO_GEOMETRY from it (TYPE-021).
+            SupportedDatabase.Oracle => ExtendedWellKnownText.From(value),
             _ => ExtractDefaultSpatial(value)
         };
     }

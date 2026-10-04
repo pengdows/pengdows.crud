@@ -854,7 +854,14 @@ public static class DatabaseTypeCatalog
         new("VECTOR(n)", ColumnTypeCategory.Vector, MinVersion: "23",
             Declaration: "VECTOR(3, FLOAT32)", ClrType: typeof(float[]), DbType: System.Data.DbType.Object,
             Sample: new[] { 1.5f, 2f, -3f }, Comparable: false),
-        new("SDO_GEOMETRY", ColumnTypeCategory.Spatial, Notes: "Oracle object type; see TYPE-021."),
+        // TYPE-021: written as EWKT through SDO_GEOMETRY(wkt, srid), read as EWKT; needs Spatial/Locator,
+        // which the slim images leave out (ORA-00902), hence OracleTestContainer's full image.
+        new("SDO_GEOMETRY", ColumnTypeCategory.Spatial,
+            Declaration: "SDO_GEOMETRY", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POLYGON ((0 0, 10 0, 10 10, 0 10, 0 0))", 3857), Comparable: false),
+        new("SDO_GEOMETRY (geography)", ColumnTypeCategory.Spatial,
+            Declaration: "SDO_GEOMETRY", ClrType: typeof(pengdows.crud.types.valueobjects.Geography), DbType: System.Data.DbType.Object,
+            Sample: pengdows.crud.types.valueobjects.Geography.FromWellKnownText("POINT (-87.6298 41.8781)", 4326), Comparable: false),
         new("ROWID", ColumnTypeCategory.Other, Aliases: new[] { "UROWID" }, Notes: "Server-assigned row address."),
     };
 

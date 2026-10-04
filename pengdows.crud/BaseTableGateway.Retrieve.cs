@@ -86,8 +86,10 @@ public abstract partial class BaseTableGateway<TEntity>
                 sb.Append(", ");
             }
 
-            sb.Append(wrappedAliasPrefix);
-            sb.Append(dialect.WrapSimpleName(_tableInfo.OrderedColumns[i].Name));
+            var column = _tableInfo.OrderedColumns[i];
+            var wrappedName = dialect.WrapSimpleName(column.Name);
+            var reference = string.Concat(wrappedAliasPrefix, wrappedName);
+            sb.Append(dialect is SqlDialect sqlDialect ? sqlDialect.RenderColumnSelect(reference, wrappedName, column) : reference);
         }
 
         if (extraSelectExpressions != null)

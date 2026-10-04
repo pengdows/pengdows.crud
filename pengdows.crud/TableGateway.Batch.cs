@@ -674,7 +674,8 @@ public partial class TableGateway<TEntity, TRowID>
                 sc.Query.Append(", ");
             }
 
-            sc.Query.Append(sc.MakeParameterName(p));
+            var marker = sc.MakeParameterName(p);
+            sc.Query.Append(dialect.RendersColumnArgument(column) ? dialect.RenderColumnArgument(marker, column) : marker);
         }
 
         sc.Query.Append(')');

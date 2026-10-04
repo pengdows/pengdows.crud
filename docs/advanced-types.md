@@ -84,7 +84,7 @@ public RowVersion Rv { get; set; }
 | `IntervalDaySecond` (`IntervalDaySecond.cs`) | Oracle `INTERVAL DAY TO SECOND` | Oracle only |
 | `HStore` (`HStore.cs`) | PostgreSQL key/value column | Built-in `coercion/` pipeline (`ProviderParameterFactory`/`BasicCoercions`), provider-agnostic at the CLR boundary |
 | `JsonValue` (`JsonValue.cs`) | Lazy string/`JsonDocument`/`JsonElement` JSON wrapper | Same built-in `coercion/` pipeline as `HStore`, provider-agnostic at the CLR boundary |
-| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server `geometry`/`geography` without `Microsoft.SqlServer.Types` (below); PostgreSQL/CockroachDB/YugabyteDB for both as EWKB (WKT encoded to WKB, read without NetTopologySuite; a GeoJSON-only value can't be written); MySQL/MariaDB `GEOMETRY` in the server's internal format (4-byte SRID + WKB, WKT encoded to WKB; a GeoJSON-only value can't be written there) |
+| `Geometry` / `Geography` (`Geometry.cs`, `Geography.cs`, both extend `SpatialValue`) | Planar vs. geodetic spatial data; WKB/WKT/GeoJSON-backed | SQL Server `geometry`/`geography` without `Microsoft.SqlServer.Types` (below); PostgreSQL/CockroachDB/YugabyteDB for both as EWKB (WKT encoded to WKB, read without NetTopologySuite; a GeoJSON-only value can't be written); MySQL/MariaDB `GEOMETRY` in the server's internal format (4-byte SRID + WKB, WKT encoded to WKB; a GeoJSON-only value can't be written there); Oracle `SDO_GEOMETRY` as EWKT (below) |
 | `RowVersion` (`RowVersion.cs`) | 8-byte optimistic-concurrency token | SQL Server → `rowversion`/`timestamp` |
 | `HierarchyId` (`HierarchyId.cs`) | Node path such as `/1/2.5/` with SQL Server `hierarchyid` semantics (`Level`, `GetAncestor`, `IsDescendantOf`, SQL Server's depth-first ordering) | SQL Server `hierarchyid` without `Microsoft.SqlServer.Types`; text on any other database (TYPE-016, below) |
 
@@ -168,6 +168,38 @@ code that only ships for Windows (`PlatformNotSupportedException` elsewhere).
   `SqlGeometry`/`SqlGeography` is converted. Both the gateway and `DataReaderMapper` read it.
 - Verified live on SQL Server 2025: every gateway write path, SRIDs other than 0/4326, an invalid
   polygon, NULLs, and reads (TYPE-002).
+
+### Oracle `SDO_GEOMETRY`
+
+`Geometry` and `Geography` properties map to `SDO_GEOMETRY` columns with no ODP.NET UDT class.
+`SDO_GEOMETRY` is an object type, which ODP.NET reads only through a custom type mapping, so
+the server converts it both ways.
+
+```csharp
+[Column("shape", DbType.Object)] public Geometry? Shape { get; set; }
+[Column("location", DbType.Object)] public Geography? Location { get; set; }
+```
+
+- **Write:** the parameter is EWKT text (`SRID=4326;POINT (1 2)`), bound as a CLOB so a long
+  geometry fits. WKB is decoded to WKT exactly. A GeoJSON-only value throws `NotSupportedException`.
+  The gateways write the column's value as
+  `(SELECT CASE WHEN x IS NULL THEN NULL ELSE SDO_GEOMETRY(SUBSTR(x, INSTR(x, ';') + 1), NULLIF(TO_NUMBER(SUBSTR(x, 6, INSTR(x, ';') - 6)), 0)) END FROM (SELECT TO_CLOB(:p) x FROM DUAL))`.
+  This applies to single-row and batch INSERT, UPDATE and MERGE alike, including the array-bound
+  batch insert. ODP.NET binds by position, so the marker appears only once. SRID 0 is stored as a
+  NULL `SDO_SRID`.
+- **Read:** gateway SELECT lists read the column as
+  `CASE WHEN col IS NULL THEN NULL ELSE 'SRID=' || NVL(JSON_VALUE(SDO_UTIL.TO_JSON(col), '$.srid'), '0') || ';' || SDO_UTIL.TO_WKTGEOMETRY(col) END AS col`,
+  and that EWKT is parsed back into the value with its SRID. In your own SQL, select that
+  expression too. ODP.NET can't read a bare `SDO_GEOMETRY` column, and `DataReaderMapper` maps the
+  EWKT like the gateway does.
+- **Precision:** Oracle stores ordinates to 15 significant digits whether they arrive as WKT or WKB,
+  so a double that needs 16 or 17 digits reads back rounded.
+- **Requirements:** Oracle Spatial/Locator must be installed. The `gvenzl` *slim* images leave it
+  out (`ORA-00902: invalid datatype`); the full images and every standard install include it.
+- 2D only, as elsewhere: Z/M values throw `NotSupportedException`. `WithProviderValue` is not used
+  for Oracle; the value's WKT or WKB is written.
+- Verified live on Oracle Free 23ai (TYPE-021): every gateway write path, NULLs, SRID 0, a
+  41,000-character line string, and reads through the gateway and `DataReaderMapper`.
 
 ## Provider-specific column types mapped to .NET types
 

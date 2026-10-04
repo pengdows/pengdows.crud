@@ -17,14 +17,13 @@ public class SpatialConverterEdgeCaseTests
     // ===== ConvertToProvider edge cases =====
 
     [Fact]
-    public void ConvertToProvider_OracleNoProviderValue_Throws()
+    public void ConvertToProvider_Oracle_IsEwktEvenForSridZero()
     {
+        // TYPE-021: the SRID is always present so the server-side SUBSTR parse has one shape.
         var converter = new GeometryConverter();
         var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
-            converter.ToProviderValue(geometry, SupportedDatabase.Oracle));
-        Assert.Contains("Oracle", ex.Message);
+        Assert.Equal("SRID=0;POINT(1 2)", converter.ToProviderValue(geometry, SupportedDatabase.Oracle));
     }
 
     [Fact]
@@ -376,13 +375,14 @@ public class SpatialConverterEdgeCaseTests
     }
 
     [Fact]
-    public void GeographyConverter_ConvertToProvider_OracleThrows()
+    public void GeographyConverter_ConvertToProvider_Oracle_EwktFromWkbOrEwkt()
     {
         var converter = new GeographyConverter();
-        var geography = Geography.FromWellKnownText("POINT(1 2)", 4326);
+        var fromText = Geography.FromWellKnownText("SRID=4326;POINT(1 2)", 4326);
+        var fromBinary = Geography.FromWellKnownBinary(WellKnownTextEncoder.Encode("POINT(1 2)"), 4326);
 
-        Assert.Throws<InvalidOperationException>(() =>
-            converter.ToProviderValue(geography, SupportedDatabase.Oracle));
+        Assert.Equal("SRID=4326;POINT(1 2)", converter.ToProviderValue(fromText, SupportedDatabase.Oracle));
+        Assert.Equal("SRID=4326;POINT (1 2)", converter.ToProviderValue(fromBinary, SupportedDatabase.Oracle));
     }
 
     [Fact]

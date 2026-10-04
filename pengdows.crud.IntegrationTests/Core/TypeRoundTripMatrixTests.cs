@@ -150,14 +150,26 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         try
         {
             await using var select = context.CreateSqlContainer();
-            select.Query.Append("SELECT ").Append(context.WrapObjectName("v")).Append(" AS ")
-                .Append(context.WrapObjectName("V")).Append(" FROM ")
+            // Custom SQL selects what the gateway selects: some columns are read through a conversion
+            // (Oracle SDO_GEOMETRY as EWKT, TYPE-021), the column itself everywhere else.
+            var column = ((pengdows.crud.@internal.ITypeMapAccessor)context).TypeMapRegistry.GetTableInfo<TRow>().Columns["v"];
+            var reference = context.WrapObjectName("v");
+            var selected = ((pengdows.crud.dialects.SqlDialect)context.Dialect)
+                .RenderColumnSelect(reference, context.WrapObjectName("V"), column);
+            if (selected == reference)
+            {
+                selected = string.Concat(reference, " AS ", context.WrapObjectName("V"));
+            }
+
+            select.Query.Append("SELECT ").Append(selected).Append(" FROM ")
                 .Append(IntegrationObjectNameHelper.Table(context, TableName));
             await using var reader = await select.ExecuteReaderAsync();
             var mapped = await DataReaderMapper.LoadObjectsFromDataReaderAsync<MappedValue<T>>(reader);
             if (mapped.Count != 1 || !SameValue(entry.Sample, mapped[0].V, Provider(context)))
             {
-                return $"DataReaderMapper: wrote {Show(entry.Sample)}, read {Show(mapped.Count == 1 ? mapped[0].V : null)}";
+                return mapped.Count == 1
+                    ? $"DataReaderMapper: wrote {Show(entry.Sample)}, read {Show(mapped[0].V)} ({select.Query})"
+                    : $"DataReaderMapper: {mapped.Count} rows ({select.Query})";
             }
         }
         catch (Exception ex)

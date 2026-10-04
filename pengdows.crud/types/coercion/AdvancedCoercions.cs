@@ -522,7 +522,9 @@ internal class GeometryCoercion : DbCoercion<Geometry>
                     value = Geometry.FromGeoJson(text, 0);
                     return true;
                 case string text:
-                    value = Geometry.FromWellKnownText(text, 0);
+                    // EWKT keeps its SRID (Oracle SDO_GEOMETRY is read this way, TYPE-021).
+                    var (textSrid, wkt) = GeometryConverter.ExtractSridFromText(text);
+                    value = Geometry.FromWellKnownText(wkt, textSrid);
                     return true;
                 default:
                     value = default!;
@@ -588,7 +590,8 @@ internal class GeographyCoercion : DbCoercion<Geography>
                     value = Geography.FromGeoJson(text, 4326);
                     return true;
                 case string text:
-                    value = Geography.FromWellKnownText(text, 4326);
+                    var (textSrid, wkt) = GeographyConverter.ExtractSridFromText(text);
+                    value = Geography.FromWellKnownText(wkt, textSrid == 0 ? 4326 : textSrid);
                     return true;
                 default:
                     value = default!;

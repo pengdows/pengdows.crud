@@ -20,7 +20,7 @@ public class OracleTestContainer : TestContainer
 
     public OracleTestContainer(string? requestedImage = null)
     {
-        var image = requestedImage ?? Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? "gvenzl/oracle-free:23.26.2-slim-faststart";
+        var image = requestedImage ?? Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? "gvenzl/oracle-free:23.26.2-full-faststart";
         var isXe = image.Contains("xe", StringComparison.OrdinalIgnoreCase);
         _sid = isXe ? "XEPDB1" : "FREEPDB1";
         var passwordEnvVar = image.StartsWith("oracle/database:", StringComparison.OrdinalIgnoreCase) ? "ORACLE_PWD" : "ORACLE_PASSWORD";
@@ -49,7 +49,7 @@ public class OracleTestContainer : TestContainer
 
         // Wait for Oracle to be truly ready for connections
         await WaitForDbToStart(OracleClientFactory.Instance, _connectionString, _container,
-            300); // 300s safety margin; gvenzl/oracle-free:23.26.2-slim-faststart typically starts in ~30s
+            300); // 300s safety margin; the full-faststart image typically starts in about a minute
     }
 
     public override Task<IDatabaseContext> GetDatabaseContextAsync(IServiceProvider services)

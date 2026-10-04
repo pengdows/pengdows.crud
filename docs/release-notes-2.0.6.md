@@ -38,6 +38,18 @@
 - A `decimal` column (Oracle `NUMBER`) read into an enum property works; 2.0.5 failed building the
   mapper with `InvalidOperationException` (COR-013).
 
+## Oracle spatial
+
+- `Geometry` and `Geography` properties now work with Oracle `SDO_GEOMETRY` columns through every
+  gateway path, with no ODP.NET UDT class (TYPE-021). In 2.0.5, writing one threw
+  `InvalidOperationException` ("use WithProviderValue") and reading one failed. Values are written as
+  EWKT, which the server converts with `SDO_GEOMETRY(...)`, and read through
+  `SDO_UTIL.TO_WKTGEOMETRY`; see [advanced-types.md](advanced-types.md#oracle-sdo_geometry). Custom
+  SQL must select that same expression. Oracle keeps 15 significant digits per ordinate, and the
+  database needs Spatial/Locator installed.
+- Oracle's array-bound batch insert and batch update now apply a column's conversion as a single-row
+  write does; spatial is the first Oracle column type that needs one.
+
 ## Metrics
 
 - `RowsAffectedTotal` counts each write's rows once; 2.0.5 counted them twice, so the total halves

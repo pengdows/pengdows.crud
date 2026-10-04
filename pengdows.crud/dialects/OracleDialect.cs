@@ -201,6 +201,23 @@ internal class OracleDialect : SqlDialect
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)
     {
+        AppendBatchMerge(tableName, columnNames, keyColumns, rowCount, query, getValue, null);
+    }
+
+    internal override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo> columns)
+    {
+        AppendBatchMerge(tableName, columnNames, keyColumns, rowCount, query, getValue, columns);
+    }
+
+    // With columns, a value is written through RenderColumnArgument where the column asks for it,
+    // a NULL too: a bare NULL in the UNION ALL source is typed as text, which an SDO_GEOMETRY target
+    // refuses (ORA-00932, TYPE-021, confirmed live).
+    private void AppendBatchMerge(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo>? columns)
+    {
         if (rowCount <= 0)
         {
             return;
@@ -239,16 +256,12 @@ internal class OracleDialect : SqlDialect
                 }
 
                 var val = getValue?.Invoke(row, col);
-                if (val == null || val == DBNull.Value)
-                {
-                    query.Append("NULL");
-                }
-                else
-                {
-                    query.Append(ParameterMarker);
-                    query.Append('b');
-                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                }
+                var cell = val == null || val == DBNull.Value
+                    ? "NULL"
+                    : string.Concat(ParameterMarker, "b", paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                query.Append(columns != null && RendersColumnArgument(columns[col])
+                    ? RenderColumnArgument(cell, columns[col])
+                    : cell);
 
                 if (row == 0)
                 {
@@ -564,6 +577,39 @@ internal class OracleDialect : SqlDialect
     internal override string? ReadOnlyPoolDiscriminatorSettingName => "Metadata Pooling";
     internal override string? ReadOnlyPoolDiscriminatorSettingValue => "false";
 
+    // TYPE-021 (confirmed live, Oracle Free 23ai full image): SDO_GEOMETRY is an object type ODP.NET reads
+    // only through a custom UDT class, so the server converts. A Geometry/Geography is written as EWKT
+    // text bound as a CLOB and built by SDO_GEOMETRY(wkt, srid) in a scalar subquery (ODP.NET binds by
+    // position, so the marker appears once; SRID 0, pengdows' "unknown", is stored as NULL) and read
+    // as EWKT: SDO_UTIL.TO_WKTGEOMETRY plus the SRID from SDO_UTIL.TO_JSON, which needs no table alias.
+    // Oracle stores ordinates to 15 significant digits on every path (WKT and WKB alike).
+    private static bool IsSpatial(IColumnInfo column)
+    {
+        var type = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        return typeof(types.valueobjects.SpatialValue).IsAssignableFrom(type);
+    }
+
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        IsSpatial(column) || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        IsSpatial(column)
+            ? "(SELECT CASE WHEN x IS NULL THEN NULL ELSE SDO_GEOMETRY(SUBSTR(x, INSTR(x, ';') + 1), " +
+              "NULLIF(TO_NUMBER(SUBSTR(x, 6, INSTR(x, ';') - 6)), 0)) END " +
+              $"FROM (SELECT TO_CLOB({parameterMarker}) x FROM DUAL))"
+            : base.RenderColumnArgument(parameterMarker, column);
+
+    // A NULL geometry binds as text like a value does; ODP.NET refuses an untyped NULL (ORA-50028).
+    internal override DbType? NullParameterDbType(IColumnInfo column) =>
+        IsSpatial(column) ? DbType.String : base.NullParameterDbType(column);
+
+    internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        IsSpatial(column)
+            ? $"CASE WHEN {columnReference} IS NULL THEN NULL ELSE 'SRID=' || " +
+              $"NVL(JSON_VALUE(SDO_UTIL.TO_JSON({columnReference}), '$.srid'), '0') || ';' || " +
+              $"SDO_UTIL.TO_WKTGEOMETRY({columnReference}) END AS {wrappedName}"
+            : columnReference;
+
     // Oracle ODP.NET 23.x throws ArgumentException for DbType.Boolean and DbType.Guid.
     // Remap to safe native types; ApplyGuidFormat then serializes the Guid to VARCHAR2(36).
     // TYPE-002, confirmed live (ODP.NET 23.8): DbType.DateTime2 and DbType.Xml are rejected too ("Value
@@ -599,6 +645,15 @@ internal class OracleDialect : SqlDialect
     // ("ORA-00932: expression is of data type TIMESTAMP", confirmed live).
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        // TYPE-021: a spatial value is EWKT for RenderColumnArgument's SDO_GEOMETRY(...), bound as a
+        // CLOB: as VARCHAR2 a long geometry fails with ORA-01461 (confirmed live).
+        if (value is types.valueobjects.SpatialValue spatial)
+        {
+            var text = base.CreateDbParameter(name, DbType.String, types.converters.ExtendedWellKnownText.From(spatial));
+            ProviderPropertySetter.Set(text, "OracleDbType", "Clob");
+            return text;
+        }
+
         var parameter = base.CreateDbParameter(name, type, value);
         if (type is DbType.Double or DbType.Single)
         {

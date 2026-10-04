@@ -676,6 +676,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>
     public virtual bool RendersColumnArgument(IColumnInfo column) => column.IsJsonType;
 
+    /// <summary>
+    /// The expression a gateway SELECT list reads <paramref name="column"/> with: the column reference
+    /// itself, or a conversion the provider needs (Oracle SDO_GEOMETRY as EWKT text, TYPE-021), named
+    /// <paramref name="wrappedName"/> so the row maps by name as before.
+    /// </summary>
+    internal virtual string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        columnReference;
+
     /// <inheritdoc cref="IInternalSqlDialect.RenderColumnArgument"/>
     public virtual string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
         column.IsJsonType ? RenderJsonArgument(parameterMarker, column) : parameterMarker;

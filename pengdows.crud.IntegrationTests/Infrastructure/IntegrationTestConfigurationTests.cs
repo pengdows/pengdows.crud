@@ -72,7 +72,7 @@ public class IntegrationTestConfigurationTests
     [Fact]
     public void GetEnabledProviders_AlwaysIncludesOracle()
     {
-        // Oracle is always-on (gvenzl/oracle-free:slim starts reliably in Docker)
+        // Oracle is always-on (gvenzl/oracle-free full-faststart starts reliably in Docker)
         var providers = IntegrationTestConfiguration.GetEnabledProviders(includeSnowflake: false);
 
         Assert.Contains(SupportedDatabase.Oracle, providers);

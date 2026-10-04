@@ -47,7 +47,7 @@ public class BuildPackagesScriptTests
             ["testbed/Yugabyte/YugabyteTestContainer.cs"] = "yugabytedb/yugabyte:2025.2.5.2-b5",
             ["testbed/Firebird/FirebirdSqlTestContainer.cs"] = "firebirdsql/firebird:5.0.2",
             ["testbed/SqlServer/SqlServerTestContainer.cs"] = "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04",
-            ["testbed/Oracle/OracleTestContainer.cs"] = "gvenzl/oracle-free:23.26.2-slim-faststart"
+            ["testbed/Oracle/OracleTestContainer.cs"] = "gvenzl/oracle-free:23.26.2-full-faststart"
         };
 
         foreach (var (relativePath, image) in expected)
