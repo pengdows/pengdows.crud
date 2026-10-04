@@ -15,9 +15,18 @@ public class TestTableCreator
         _context = context;
     }
 
+    // InterBase shares Firebird's DDL except: no BIGINT keyword (NUMERIC(18,0) is its 64-bit
+    // integer), and text columns take the database's NONE charset, which InterBaseDialect pins to
+    // UTF-8 (its driver's Charset=UTF8 is broken, TYPE-022) (HARN-011).
+    private bool IsFirebirdFamily => _context.Product is SupportedDatabase.Firebird or SupportedDatabase.InterBase;
+
+    private string BigIntType => _context.Product == SupportedDatabase.InterBase ? "NUMERIC(18,0)" : "BIGINT";
+
+    private string Utf8 => _context.Product == SupportedDatabase.InterBase ? "" : " CHARACTER SET UTF8";
+
     public async Task CreateTestTableAsync()
     {
-        if (_context.Product == SupportedDatabase.Firebird)
+        if (IsFirebirdFamily)
         {
             await CreateFirebirdTestTableAsync();
             return;
@@ -73,19 +82,19 @@ public class TestTableCreator
         var guidCol = _context.WrapObjectName("guid_value");
         var binCol = _context.WrapObjectName("binary_value");
 
-        if (_context.Product == SupportedDatabase.Firebird)
+        if (IsFirebirdFamily)
         {
             await using var tx = _context.BeginTransaction();
             try
             {
                 var sqlFb = $@"
                     CREATE TABLE {table} (
-                        {idCol} BIGINT NOT NULL PRIMARY KEY,
-                        {textCol} VARCHAR(255) CHARACTER SET UTF8 NOT NULL,
-                        {unicodeCol} VARCHAR(255) CHARACTER SET UTF8 NOT NULL,
-                        {nullCol} VARCHAR(255) CHARACTER SET UTF8,
+                        {idCol} {BigIntType} NOT NULL PRIMARY KEY,
+                        {textCol} VARCHAR(255){Utf8} NOT NULL,
+                        {unicodeCol} VARCHAR(255){Utf8} NOT NULL,
+                        {nullCol} VARCHAR(255){Utf8},
                         {intCol} INTEGER NOT NULL,
-                        {longCol} BIGINT NOT NULL,
+                        {longCol} {BigIntType} NOT NULL,
                         {decimalCol} DECIMAL(18,8) NOT NULL,
                         {boolCol} SMALLINT NOT NULL,
                         {dtoCol} TIMESTAMP NOT NULL,
@@ -374,6 +383,14 @@ public class TestTableCreator
                             ""User Name"" VARCHAR(255)
                         )';
                 END",
+            // No EXECUTE BLOCK on InterBase; an existing table is ignored below.
+            SupportedDatabase.InterBase => $@"
+                CREATE TABLE {table} (
+                    {idCol} NUMERIC(18,0) NOT NULL PRIMARY KEY,
+                    {selectCol} VARCHAR(255),
+                    {fromCol} VARCHAR(255),
+                    {userCol} VARCHAR(255)
+                )",
             SupportedDatabase.DuckDB => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
@@ -399,7 +416,7 @@ public class TestTableCreator
         };
 
         // For Firebird DDL visibility
-        if (_context.Product == SupportedDatabase.Firebird)
+        if (IsFirebirdFamily)
         {
             await using var tx = _context.BeginTransaction();
             try
@@ -493,6 +510,12 @@ public class TestTableCreator
                     {0}id{1} BIGINT NOT NULL PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
+                )", qp, qs, table),
+            SupportedDatabase.InterBase => string.Format(@"
+                CREATE TABLE {2} (
+                    {0}id{1} NUMERIC(18,0) NOT NULL PRIMARY KEY,
+                    {0}name{1} VARCHAR(255) NOT NULL,
+                    {0}balance{1} DECIMAL(18,2) DEFAULT 0.00 NOT NULL
                 )", qp, qs, table),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
@@ -639,7 +662,7 @@ public class TestTableCreator
 
         return $@"
         CREATE TABLE {table} (
-            {idColumn} BIGINT NOT NULL PRIMARY KEY,
+            {idColumn} {BigIntType} NOT NULL PRIMARY KEY,
             {nameColumn} VARCHAR(255) NOT NULL,
             {valueColumn} INTEGER NOT NULL,
             {descriptionColumn} VARCHAR(1024),

@@ -33,6 +33,9 @@ public class ValueOutOfRangeTests : DatabaseTestBase
         // Db2's maximum DECIMAL precision is 31 (SQL0604N on 38); 31 digits still exceed decimal.
         SupportedDatabase.Db2 => "DECIMAL(31,0)",
         SupportedDatabase.Sqlite or SupportedDatabase.Spanner => "NUMERIC",
+        // InterBase's exact numerics stop at 18 digits, below decimal's range; a double holds 9e28
+        // and the read must still overflow loudly (HARN-011).
+        SupportedDatabase.InterBase => "DOUBLE PRECISION",
         _ => "DECIMAL(38,0)"
     };
 
@@ -40,6 +43,9 @@ public class ValueOutOfRangeTests : DatabaseTestBase
     {
         var w = (string name) => context.WrapObjectName(name);
         var idType = provider == SupportedDatabase.Spanner ? "BIGINT" : "INTEGER";
+        // A database kept between runs (InterBase's externally managed container) still has the
+        // table from the last run (HARN-011).
+        await DropTableIfExistsAsync(context, TableName);
         await using var sc = context.CreateSqlContainer(
             $"CREATE TABLE {IntegrationObjectNameHelper.Table(context, TableName)} (" +
             $"{w("id")} {idType} NOT NULL PRIMARY KEY, {w("amount")} {WideNumeric(provider)})");

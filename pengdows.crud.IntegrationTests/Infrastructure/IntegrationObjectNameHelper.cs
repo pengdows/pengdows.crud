@@ -60,13 +60,15 @@ internal static class IntegrationObjectNameHelper
     {
         SupportedDatabase.Sqlite => "INTEGER",
         SupportedDatabase.Oracle => "NUMBER(19)",
+        // InterBase has no BIGINT keyword; NUMERIC(18,0) is its 64-bit integer (HARN-011).
+        SupportedDatabase.InterBase => "NUMERIC(18,0)",
         _ => "BIGINT"
     };
 
     public static string IntType(SupportedDatabase provider) => provider switch
     {
         SupportedDatabase.Sqlite => "INTEGER",
-        SupportedDatabase.Firebird => "INTEGER",
+        SupportedDatabase.Firebird or SupportedDatabase.InterBase => "INTEGER",
         // Access DDL: LONG is the 32-bit integer (INT is a 16-bit SHORT).
         SupportedDatabase.Access => "LONG",
         _ => "INT"

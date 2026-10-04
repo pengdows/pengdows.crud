@@ -24,12 +24,14 @@ public class SmallAndUnsignedTypeRoundTripTests : DatabaseTestBase
 
     private static string Small(SupportedDatabase p) => p == SupportedDatabase.Oracle ? "NUMBER(5)" : p == SupportedDatabase.Spanner ? "BIGINT" : "SMALLINT";   // byte, sbyte
     private static string Int(SupportedDatabase p) => p == SupportedDatabase.Oracle ? "NUMBER(10)" : p == SupportedDatabase.Spanner ? "BIGINT" : "INTEGER";    // ushort
-    private static string Big(SupportedDatabase p) => p == SupportedDatabase.Oracle ? "NUMBER(19)" : "BIGINT";     // uint
+    private static string Big(SupportedDatabase p) => IntegrationObjectNameHelper.BigIntType(p);     // uint
     private static string Unsigned64(SupportedDatabase p) => p switch              // ulong
     {
         SupportedDatabase.Sqlite => "TEXT",
         SupportedDatabase.Oracle => "NUMBER(20)",
         SupportedDatabase.Spanner => "NUMERIC",
+        // InterBase's exact numerics stop at 18 digits; ulong.MaxValue has 20 (HARN-011).
+        SupportedDatabase.InterBase => "VARCHAR(20)",
         _ => "DECIMAL(20,0)"
     };
     private static string Char1(SupportedDatabase p) => p == SupportedDatabase.Spanner ? "VARCHAR(1)" : "CHAR(1)";                // char
@@ -46,6 +48,9 @@ public class SmallAndUnsignedTypeRoundTripTests : DatabaseTestBase
     {
         var w = (string name) => context.WrapObjectName(name);
         var idType = provider == SupportedDatabase.Spanner ? "BIGINT" : "INTEGER";
+        // A database kept between runs (InterBase's externally managed container) still has the
+        // table from the last run (HARN-011).
+        await DropTableIfExistsAsync(context, TableName);
         var suffix = provider == SupportedDatabase.FlatFile ? " WITH (NULLTOKEN = '<<NULL>>')" : string.Empty;
         await using var sc = context.CreateSqlContainer(
             $"CREATE TABLE {IntegrationObjectNameHelper.Table(context, TableName)} (" +

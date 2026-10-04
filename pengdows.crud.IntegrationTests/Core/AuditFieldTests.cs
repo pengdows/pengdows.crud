@@ -235,6 +235,12 @@ public class AuditFieldTests : DatabaseTestBase
                 Name = "Upserted New"
             };
 
+            if (!SupportsUpsert(context))
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.UpsertAsync(entity, context));
+                return;
+            }
+
             var beforeUpsert = DateTime.UtcNow.AddSeconds(-1);
             var count = await helper.UpsertAsync(entity, context);
 

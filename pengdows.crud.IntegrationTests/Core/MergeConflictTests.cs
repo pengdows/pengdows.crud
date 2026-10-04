@@ -209,6 +209,12 @@ public class MergeConflictTests : DatabaseTestBase
                 LastUpdated = DateTime.UtcNow
             };
 
+            if (!SupportsUpsert(context))
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.UpsertAsync(mergeCandidate, context));
+                return;
+            }
+
             var merged = await helper.UpsertAsync(mergeCandidate, context);
             Assert.True(merged is 1 or 2, $"Expected 1 or 2 affected rows, got {merged}");
 
@@ -249,6 +255,7 @@ public class MergeConflictTests : DatabaseTestBase
         {
             SupportedDatabase.Firebird => $"{versionColumn} {versionType} NOT NULL",
             SupportedDatabase.Oracle or SupportedDatabase.Informix or SupportedDatabase.SybaseASE
+                or SupportedDatabase.InterBase
                 => $"{versionColumn} {versionType} DEFAULT 1 NOT NULL",
             _ => $"{versionColumn} {versionType} NOT NULL DEFAULT 1"
         };

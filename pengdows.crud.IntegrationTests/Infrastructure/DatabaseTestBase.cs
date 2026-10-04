@@ -485,6 +485,14 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     /// Note: Oracle is excluded at the dialect level because its read-only transactions pin a
     /// consistent snapshot, which is incompatible with the per-test DDL reset path (ORA-01466).
     /// </summary>
+    /// <summary>
+    /// False for a database with no upsert statement (InterBase, WRT-003), where the gateway refuses
+    /// UpsertAsync with NotSupportedException; tests assert that refusal there (HARN-011).
+    /// </summary>
+    protected static bool SupportsUpsert(IDatabaseContext context) =>
+        context.DataSourceInfo.SupportsMerge || context.DataSourceInfo.SupportsInsertOnConflict ||
+        context.DataSourceInfo.SupportsOnDuplicateKey;
+
     protected static bool SupportsReadOnlyTransactions(IDatabaseContext context) =>
         context.Dialect.SupportsReadOnlyTransactions;
 
@@ -499,7 +507,13 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     {
         // Capability: a MERGE with no conditional matched clause in any form (Informix) cannot carry
         // the [Version] check, so the gateways refuse a versioned upsert with NotSupportedException
-        // (SupportsMergeMatchedCondition = false) instead of silently overwriting.
+        // (SupportsMergeMatchedCondition = false) instead of silently overwriting. A database with no
+        // upsert statement at all (InterBase) refuses every upsert the same way (HARN-011).
+        if (!SupportsUpsert(context))
+        {
+            return true;
+        }
+
         var dialect = context.GetDialect();
         return !dialect.SupportsOnConflictWhere && !dialect.SupportsOnDuplicateKey && dialect.SupportsMerge
                && !pengdows.crud.dialects.InternalSqlDialectExtensions.SupportsMergeMatchedCondition(dialect);

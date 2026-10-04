@@ -46,6 +46,12 @@ public class InterBaseTestContainer : TestContainer
     private const string _containerName = "interbase-interbase-1";
     private string? _connectionString;
 
+    // CONFIRMED live (2026-10-03): this Developer Edition license allows 16 connections; the 17th
+    // gets "Maximum user count exceeded". Size each pool (reader and writer) so a context, plus a
+    // second one some tests open, stays below that; the governor queues the rest (HARN-011, as
+    // SybaseTestContainer does for ASE's 25).
+    private const int DeveloperEditionPoolSize = 3;
+
     public override async Task StartAsync()
     {
         // Best-effort convenience for the common case (container exists, stopped) — mirrors what
@@ -133,7 +139,15 @@ public class InterBaseTestContainer : TestContainer
             throw new InvalidOperationException("Container not started yet.");
         }
 
-        return Task.FromResult<IDatabaseContext>(new DatabaseContext(_connectionString, InterBaseClientFactory.Instance));
+        return Task.FromResult<IDatabaseContext>(
+            new DatabaseContext(
+                new pengdows.crud.configuration.DatabaseContextConfiguration
+                {
+                    ConnectionString = _connectionString,
+                    MaxConcurrentReads = DeveloperEditionPoolSize,
+                    MaxConcurrentWrites = DeveloperEditionPoolSize
+                },
+                InterBaseClientFactory.Instance));
     }
 
     /// <summary>

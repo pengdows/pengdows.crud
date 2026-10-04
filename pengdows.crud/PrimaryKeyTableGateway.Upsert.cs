@@ -56,7 +56,11 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
         var ctx = context ?? _context;
 
-        if (ctx.DataSourceInfo.IsUsingFallbackDialect)
+        // A database with no upsert statement (InterBase) is refused before the pure-key check below,
+        // which would otherwise blame the entity's columns (HARN-011).
+        if (ctx.DataSourceInfo.IsUsingFallbackDialect ||
+            !(ctx.DataSourceInfo.SupportsMerge || ctx.DataSourceInfo.SupportsInsertOnConflict ||
+              ctx.DataSourceInfo.SupportsOnDuplicateKey))
         {
             throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
         }

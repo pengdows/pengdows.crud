@@ -58,9 +58,13 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
     public async Task InitializeAsync()
     {
         await _host.StartAsync();
+        // The opt-in databases follow the same switches as the rest of the suite: without them,
+        // INTEGRATION_ONLY=InterBase (or SapHana) ran nothing and failed on an empty result (HARN-011).
         _orchestrator = new ParallelTestOrchestrator(
             _host.Services,
-            ShouldIncludeSnowflake());
+            ShouldIncludeSnowflake(),
+            includeSapHana: Infrastructure.IntegrationTestConfiguration.ShouldIncludeSapHana,
+            includeInterBase: Infrastructure.IntegrationTestConfiguration.ShouldIncludeInterBase);
     }
 
     public async Task DisposeAsync()

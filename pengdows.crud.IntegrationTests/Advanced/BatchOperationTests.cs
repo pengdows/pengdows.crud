@@ -331,6 +331,12 @@ public class BatchOperationTests : DatabaseTestBase
             var allEntities = existingEntities.Concat(newEntities).ToList();
             var sw = Stopwatch.StartNew();
 
+            if (!SupportsUpsert(context))
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.UpsertAsync(allEntities, context));
+                return;
+            }
+
             // Act - Upsert all (mix of updates and inserts)
             await using var transaction = context.BeginTransaction(context.Dialect.ReadCommittedCompatibleIsolationLevel);
 

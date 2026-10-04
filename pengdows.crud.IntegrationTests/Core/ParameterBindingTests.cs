@@ -124,6 +124,9 @@ public class ParameterBindingTests : DatabaseTestBase
             {
                 SupportedDatabase.Firebird =>
                     $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM RDB$DATABASE",
+                // InterBase: same as Firebird, but NUMERIC(18,0) is its 64-bit integer (no BIGINT) (HARN-011).
+                SupportedDatabase.InterBase =>
+                    $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS NUMERIC(18,0)), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM RDB$DATABASE",
                 // Db2 needs a FROM clause and rejects an untyped "?" in a SELECT list (SQL0418N).
                 SupportedDatabase.Db2 =>
                     $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS DECIMAL(18,4)), CAST({pBool} AS SMALLINT), CAST({pString} AS VARCHAR(100)) FROM SYSIBM.SYSDUMMY1",

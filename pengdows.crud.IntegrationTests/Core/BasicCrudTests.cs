@@ -222,6 +222,11 @@ public class BasicCrudTests : DatabaseTestBase
             // Arrange
             var helper = CreateTableGateway(context);
             var entity = CreateTestEntity(NameEnum.Test, 400);
+            if (!SupportsUpsert(context))
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.UpsertAsync(entity, context));
+                return;
+            }
 
             // Act
             var upsertCount = await helper.UpsertAsync(entity, context);
@@ -250,6 +255,12 @@ public class BasicCrudTests : DatabaseTestBase
             // Act - Upsert with changes
             entity.Name = NameEnum.Test2;
             entity.Value = 999;
+            if (!SupportsUpsert(context))
+            {
+                await Assert.ThrowsAsync<NotSupportedException>(async () => await helper.UpsertAsync(entity, context));
+                return;
+            }
+
             var upsertCount = await helper.UpsertAsync(entity, context);
 
             // Assert - every upsert form reports the one updated row, except MySQL-family

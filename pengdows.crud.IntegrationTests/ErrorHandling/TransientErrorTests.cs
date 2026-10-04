@@ -124,6 +124,11 @@ public class TransientErrorTests : DatabaseTestBase
 
             SupportedDatabase.Db2 => BuildUnreachableDb2Context(rawCs),
 
+            SupportedDatabase.InterBase =>
+                new DatabaseContext(
+                    new InterBaseSql.Data.InterBaseClient.IBConnectionStringBuilder(rawCs) { Port = 1 }.ConnectionString,
+                    InterBaseSql.Data.InterBaseClient.InterBaseClientFactory.Instance),
+
             SupportedDatabase.SybaseASE =>
                 new DatabaseContext(WithBuilderKey(rawCs, "Port", "1"),
                     AdoNetCore.AseClient.AseClientFactory.Instance),

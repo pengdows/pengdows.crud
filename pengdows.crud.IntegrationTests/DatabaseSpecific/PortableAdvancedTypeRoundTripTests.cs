@@ -28,6 +28,10 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
+        // A database kept between runs (InterBase's externally managed container) still has the
+        // table from the last run (HARN-011).
+        await DropTableIfExistsAsync(context, "portable_advanced_types");
+
         var sql = provider switch
         {
             SupportedDatabase.SqlServer => "CREATE TABLE [dbo].[portable_advanced_types] ([id] INT NOT NULL PRIMARY KEY, [payload] NVARCHAR(MAX) NOT NULL, [bytes] VARBINARY(MAX) NOT NULL, [content] VARBINARY(MAX) NOT NULL, [notes] NVARCHAR(MAX) NOT NULL)",
@@ -45,7 +49,8 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
             SupportedDatabase.Informix => "CREATE TABLE portable_advanced_types (id INTEGER NOT NULL PRIMARY KEY, payload LVARCHAR(4000) NOT NULL, bytes BYTE NOT NULL, content BYTE NOT NULL, notes LVARCHAR(4000) NOT NULL)",
             SupportedDatabase.FlatFile => "CREATE TABLE portable_advanced_types (id INTEGER NOT NULL PRIMARY KEY, payload VARCHAR(4000) NOT NULL, bytes BLOB NOT NULL, content BLOB NOT NULL, notes VARCHAR(4000) NOT NULL)",
             SupportedDatabase.SapHana => "CREATE COLUMN TABLE \"portable_advanced_types\" (\"id\" INTEGER PRIMARY KEY, \"payload\" NCLOB NOT NULL, \"bytes\" BLOB NOT NULL, \"content\" BLOB NOT NULL, \"notes\" NCLOB NOT NULL)",
-            SupportedDatabase.InterBase => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER NOT NULL PRIMARY KEY, \"payload\" BLOB SUB_TYPE TEXT NOT NULL, \"bytes\" BLOB SUB_TYPE BINARY NOT NULL, \"content\" BLOB SUB_TYPE BINARY NOT NULL, \"notes\" BLOB SUB_TYPE TEXT NOT NULL)",
+            // InterBase names BLOB subtypes by number only (0 binary, 1 text) (HARN-011).
+            SupportedDatabase.InterBase => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER NOT NULL PRIMARY KEY, \"payload\" BLOB SUB_TYPE 1 NOT NULL, \"bytes\" BLOB SUB_TYPE 0 NOT NULL, \"content\" BLOB SUB_TYPE 0 NOT NULL, \"notes\" BLOB SUB_TYPE 1 NOT NULL)",
             SupportedDatabase.Snowflake => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER PRIMARY KEY, \"payload\" VARCHAR NOT NULL, \"bytes\" BINARY NOT NULL, \"content\" BINARY NOT NULL, \"notes\" VARCHAR NOT NULL)",
             _ => "CREATE TABLE portable_advanced_types (id INTEGER PRIMARY KEY, payload TEXT NOT NULL, bytes BLOB NOT NULL, content BLOB NOT NULL, notes TEXT NOT NULL)"
         };

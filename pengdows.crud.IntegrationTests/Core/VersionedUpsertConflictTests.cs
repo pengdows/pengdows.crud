@@ -331,12 +331,15 @@ public class VersionedUpsertConflictTests : DatabaseTestBase
         var keyColumn = context.WrapObjectName(keyName);
         var nameColumn = context.WrapObjectName("name");
         var versionColumn = context.WrapObjectName("version");
-        var versionType = provider is SupportedDatabase.Sqlite or SupportedDatabase.Firebird ? "INTEGER" : "INT";
+        var versionType = provider is SupportedDatabase.Sqlite or SupportedDatabase.Firebird or SupportedDatabase.InterBase
+            ? "INTEGER"
+            : "INT";
 
         var versionDefinition = provider switch
         {
             SupportedDatabase.Firebird => $"{versionColumn} {versionType} NOT NULL",
             SupportedDatabase.Oracle or SupportedDatabase.Informix or SupportedDatabase.SybaseASE
+                or SupportedDatabase.InterBase
                 => $"{versionColumn} {versionType} DEFAULT 1 NOT NULL",
             _ => $"{versionColumn} {versionType} NOT NULL DEFAULT 1"
         };
@@ -353,6 +356,7 @@ CREATE TABLE {table} (
     {
         SupportedDatabase.Sqlite => "INTEGER",
         SupportedDatabase.Oracle => "NUMBER(19)",
+        SupportedDatabase.InterBase => "NUMERIC(18,0)",
         _ => "BIGINT"
     };
 
