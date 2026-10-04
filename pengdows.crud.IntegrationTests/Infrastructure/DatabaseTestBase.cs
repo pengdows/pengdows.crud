@@ -446,7 +446,10 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             // means "the exact index we wanted already exists" — a no-op, not a failure. Treated
             // as success unconditionally rather than retried, which also sidesteps the timing
             // question entirely instead of trying to out-wait a variable-length propagation lag.
+            // Only for CREATE INDEX: a duplicate TABLE name means the DROP didn't take, and
+            // accepting it would run the test against a stale table of unknown shape (REV-067).
             catch (DatabaseException ex) when (context.Product == SupportedDatabase.Spanner &&
+                IsCreateIndex(sql) &&
                 ex.Message.Contains("Duplicate name in schema", StringComparison.OrdinalIgnoreCase))
             {
                 return;
@@ -456,6 +459,18 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 await Task.Delay(TimeSpan.FromSeconds(5 * attempt)).ConfigureAwait(false);
             }
         }
+    }
+
+    private static bool IsCreateIndex(string sql)
+    {
+        var words = sql.TrimStart().Split((char[]?)null, 4, StringSplitOptions.RemoveEmptyEntries);
+        return words.Length >= 2 &&
+               words[0].Equals("CREATE", StringComparison.OrdinalIgnoreCase) &&
+               (words[1].Equals("INDEX", StringComparison.OrdinalIgnoreCase) ||
+                (words.Length >= 3 &&
+                 (words[1].Equals("UNIQUE", StringComparison.OrdinalIgnoreCase) ||
+                  words[1].Equals("NULL_FILTERED", StringComparison.OrdinalIgnoreCase)) &&
+                 words[2].Equals("INDEX", StringComparison.OrdinalIgnoreCase)));
     }
 
     protected Task<IDatabaseContext> CreateAdditionalContextAsync(SupportedDatabase provider)

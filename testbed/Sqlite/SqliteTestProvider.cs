@@ -54,6 +54,30 @@ public class SqliteTestProvider : TestProvider
         await RunReadDuringOpenWriteTransactionProbe(enableFairness: false);
     }
 
+    // True when the read finished on its own; false when it was seen waiting in the reader pool
+    // (turnstile or slot queue), or hadn't finished after 30 s.
+    private static async Task<bool> WaitForReadOutcomeAsync(DatabaseContext ctx, Task<long> readTask)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(30);
+        while (DateTime.UtcNow < deadline)
+        {
+            if (readTask.IsCompleted)
+            {
+                return true;
+            }
+
+            var reader = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
+            if (reader.TurnstileQueued > 0 || reader.Queued > 0)
+            {
+                return false;
+            }
+
+            await Task.Delay(10);
+        }
+
+        return readTask.IsCompleted;
+    }
+
     private async Task RunReadDuringOpenWriteTransactionProbe(bool enableFairness)
     {
         var checkName = enableFairness
@@ -67,7 +91,9 @@ public class SqliteTestProvider : TestProvider
                 ConnectionString = $"Data Source={dbFilePath}",
                 DbMode = DbMode.SingleWriter,
                 ReadWriteMode = ReadWriteMode.ReadWrite,
-                EnableSingleWriterFairness = enableFairness
+                EnableSingleWriterFairness = enableFairness,
+                // The probe reads the reader pool's queue gauges to see whether the read is gated.
+                EnableMetrics = true
             };
 
             await using var ctx = new DatabaseContext(cfg, SqliteFactory.Instance);
@@ -106,13 +132,14 @@ public class SqliteTestProvider : TestProvider
                 }
             });
 
-            var completedQuickly = await Task.WhenAny(readTask, Task.Delay(TimeSpan.FromMilliseconds(500)))
-                == readTask;
+            // Wait until the read either finishes or is seen queued in the reader pool. A fixed 500 ms
+            // window misreported a slow but concurrent read as blocked on a loaded machine (REV-067).
+            var completedConcurrently = await WaitForReadOutcomeAsync(ctx, readTask);
             readSw.Stop();
 
-            if (!completedQuickly)
+            if (!completedConcurrently)
             {
-                // The read didn't finish within 500ms while the write transaction was still open —
+                // The read queued (or never finished) while the write transaction was still open —
                 // it's serialized/blocked, not concurrent. Wait for it to actually resolve so the
                 // read side of the test doesn't leak, then report the finding either way.
                 txn.Commit();
