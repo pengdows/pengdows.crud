@@ -733,7 +733,7 @@ var results = await helper.LoadListAsync(sc);
 
 These are places outside the dialect file itself that switch or pattern-match on `SupportedDatabase` explicitly. A new database silently falls through to a `default`/catch-all branch here instead of erroring, so nothing fails loudly — only manual review catches it.
 
-7. **`pengdows.crud/isolation/IsolationResolver.cs`** — add the new database's native isolation-level mapping in both `BuildSupportedIsolationLevels` and `BuildProfileMapping`. Missing this silently gives the database whatever `IsolationLevel` the `default` case falls back to, which is wrong for any database with non-standard isolation semantics.
+7. **Isolation mapping lives on the dialect** — override `GetSupportedIsolationLevels` and `GetIsolationProfileMapping` (and `IsDegradedForProfile` if a mapped level falls short of a profile, as SQL Server's ReadCommitted does for SafeNonBlockingReads) in the new dialect. Without them the database silently gets `SqlDialect`'s generic fallback, which is wrong for any database with non-standard isolation semantics. `IsolationResolverCharacterizationTests` pins every database's mapping; extend its pinned file (`PIN_ISOLATION=1`) when adding one.
 8. **`ISqlDialect.IsClientServerDatabase`** (`SqlDialect` default `true`) — override to `false` in the new dialect if it's embedded/in-process (as SQLite, DuckDB, Access, FlatFile do). `DatabaseContext.Initialization.cs` reads it to decide whether to warn about `SingleConnection`/`SingleWriter` misconfiguration.
 9. **`ISqlDialect.CoerceConnectionMode(...)`** — `DatabaseContext.Initialization.cs`'s `CoerceMode()` delegates all mode policy to the dialect. A client/server database needs nothing (the base implementation is correct); an embedded engine or one with real mode restrictions must override it (see `SqliteDialect`/`DuckDbDialect` via `CoerceEmbeddedSingleWriterMode`, and `SqlServerDialect` for LocalDB).
 10. **`pengdows.crud/dialects/SqlDialect.cs` → `GetNaturalKeyLookupQuery()` and any other pagination/"first row only" fallback** — check whether the new database's syntax actually matches the generic `LIMIT 1` fallback. It doesn't for Oracle (`ROWNUM = 1`), and it doesn't for Db2 (`FETCH FIRST 1 ROWS ONLY`). Grep `SqlDialect.cs` for `DatabaseType ==`/`DatabaseType !=` checks and verify each one explicitly for the new database rather than assuming the catch-all branch is correct.
@@ -747,7 +747,7 @@ Only databases that **cannot run in a standard Docker container / CI runner** ma
 - `INCLUDE_SNOWFLAKE=true` — cloud-only, requires credentials
 - `INCLUDE_SAPHANA=true` — Docker image needs 16-32GB RAM
 - `INCLUDE_INTERBASE=true` — personal, node-locked Developer Edition license
-- `INCLUDE_ACCESS=true` — Windows-only, no Docker image
+- Access — no Docker image; runs automatically whenever the OS is Windows (no env var)
 
 All other databases must run automatically with no env var gating.
 
@@ -1042,8 +1042,8 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `ModeContentionException : TimeoutException` — shared-connection mode lock (e.g. SingleConnection) or transaction-completion lock exceeded `ModeLockTimeout`
 - `PoolSaturatedException : TimeoutException` — no governor slot became available within `PoolAcquireTimeout` (includes SingleWriter write-slot waits)
 - `PoolForbiddenException : InvalidOperationException` — connection requested from a pool configured to reject all requests (e.g. the write pool of a `ReadOnly` context)
-- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/Access/FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
-- `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
+- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
+- `ConnectionFailedException : ConnectionException` — startup connection failure (carries `Phase` and `Role`, plus the underlying SQLSTATE/error code/`IsTransient`); since 2.0.6 `catch (ConnectionException)` and `catch (DatabaseException)` see it too
 
 ```csharp
 using pengdows.crud.exceptions;
@@ -4817,7 +4817,7 @@ await tx.ReleaseSavepointAsync("checkpoint1", ct);
 
 ## Isolation profiles (portable)
 
-`IsolationProfile` maps to a per-database `IsolationLevel` (see `pengdows.crud/isolation/IsolationResolver.cs`):
+`IsolationProfile` maps to a per-database `IsolationLevel` (each dialect's `GetIsolationProfileMapping`, applied by `IsolationResolver`):
 
 | Profile | Intent |
 |---------|--------|
@@ -4962,6 +4962,15 @@ is stale, the same as single-entity `UpdateAsync`:
 - Each successfully updated entity gets its new numeric version written back (`current + 1`), so
   the same instances can go through another `BatchUpdateAsync`. When a conflict throws, entities
   updated before it carry their new version and the conflicting entity keeps the one it had.
+
+### TiDB: `UInt64` columns
+
+TiDB's `VALUES(col)` in `ON DUPLICATE KEY UPDATE` returns a `BIT(64)` value byte-reversed (a TiDB
+defect, confirmed on v8.5.7). `BIT(64)` maps to `ulong` (`DbType.UInt64`), as `BIGINT UNSIGNED`
+does, so on TiDB every `UInt64` column is upserted safely: a single-row upsert sets it from its own
+bound parameter, and a batch upsert of an entity with such a column runs one statement per row
+(TiDB has no row alias, so a multi-row statement can only use `VALUES()`). Other entities keep the
+multi-row statement.
 
 ### Batch upsert and `[Version]` conflicts
 
@@ -5155,10 +5164,46 @@ functionality:
 
 ## Running the Tests
 
+Aurora PostgreSQL and Aurora MySQL are opt-in external targets. The harness connects to existing
+clusters, creates a unique test schema/database, runs the normal provider suite, and drops only
+that generated namespace during teardown. It never creates, stops, or deletes AWS infrastructure.
+
+```bash
+export INCLUDE_AURORA=true
+export AURORA_POSTGRES_HOST=...
+export AURORA_POSTGRES_DATABASE=...
+export AURORA_POSTGRES_USER=...
+export AURORA_POSTGRES_PASSWORD=...
+export AURORA_POSTGRES_SSL_MODE=Require   # optional
+
+export AURORA_MYSQL_HOST=...
+export AURORA_MYSQL_DATABASE=...
+export AURORA_MYSQL_USER=...
+export AURORA_MYSQL_PASSWORD=...
+export AURORA_MYSQL_SSL_MODE=Required     # optional
+```
+
+`AURORA_POSTGRES_PORT` and `AURORA_MYSQL_PORT` are optional and default to 5432 and 3306.
+
 ### Prerequisites
 
 1. **.NET 8 and .NET 10 SDKs** installed (the project targets `net8.0;net10.0`)
 2. **Docker** for database containers (PostgreSQL, SQL Server, MySQL, etc.)
+
+Firebird Embedded tests require the complete pinned Firebird 5 Linux distribution,
+not the obsolete `libfbembed.so` deployment. CI extracts it into a user-owned
+`$RUNNER_TEMP` directory with `scripts/install-firebird-embedded.sh`; it does not invoke
+the root-oriented installer or modify `/opt`, `/etc`, system libraries, or services. It
+sets `Providers = Engine13` and the Firebird runtime/lock/temp paths before running the
+tests. The tests explicitly use the extracted `libfbclient.so` and temporary writable
+`.fdb` files, so a successful connection proves the in-process Engine13 path is working
+without a TCP listener. The workflow removes the exact temporary runtime in an always-run
+cleanup step.
+
+The direct provider bootstrap uses `Pooling=false` while creating the database. The
+`DatabaseContext` tests intentionally use its required provider-managed pooling path;
+the `PreventDatabaseUnload` test additionally asserts the passive sentinel. Teardown
+disposes the context and clears provider pools before deleting the temporary database.
 
 ### Run All Integration Tests
 
@@ -5176,6 +5221,19 @@ dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj
 # (default "net8.0 net10.0")
 ./run-integration-tests.sh
 ```
+
+Before anything starts, the script prints a preflight: whether Docker is reachable, whether the
+Db2 and Informix native clients will load, and for each opt-in database (InterBase, Snowflake,
+SAP HANA) whether it will run and what is missing. It stops only when Docker is unreachable.
+`PREFLIGHT_ONLY=1 ./run-integration-tests.sh` prints the report and exits. Native-library
+directories this host needs (a `libxml2.so.2` compatibility copy for Db2, InterBase's `libgds.so`)
+go in `PENGDOWS_EXTRA_LIB_DIRS` (colon-separated).
+
+While it runs, `TestResults/integration/progress.log` gets a line as each container starts and as
+each test starts and finishes on each database, plus a heartbeat once a minute naming whatever is
+still running; `TestResults/integration/summary-<tfm>.md` lists pass/fail/skip per database, the
+slowest tests and the first line of each failure. Both are written on every run, with or without
+`INTEGRATION_TRACE`; `INTEGRATION_RESULTS_DIR` moves them.
 
 `IntegrationMatrixTests` excludes Informix: its native driver needs `LD_LIBRARY_PATH` set before the
 process starts, which is impossible inside vstest's testhost. Informix is covered by
@@ -5233,7 +5291,7 @@ opt-in databases, which `IntegrationMatrixTests` does not enable:
 - `INCLUDE_SAPHANA=true` — SAP HANA (Docker image, needs 16-32GB RAM)
 - `INCLUDE_INTERBASE=true` — InterBase (a pre-registered, licensed, already-running container; also needs
   `LD_LIBRARY_PATH` pointing to a directory containing `libgds.so`)
-- `INCLUDE_ACCESS=true` — Microsoft Access (Windows only; requires the Access Database Engine Redistributable)
+- Microsoft Access runs automatically on Windows (requires the Access Database Engine Redistributable); no env var
 
 #### Snowflake Configuration
 
@@ -5896,6 +5954,11 @@ column/parameter ordering — see "Ordinal ordering" below.
 **Duplicate column names** (two properties mapping to the same `[Column("x", ...)]` name) throw
 `SqlGenerationException` at registration.
 
+**`Stream` and `TextReader` properties** are written as their whole content, read when the
+parameter is bound: a seekable stream is rewound first (so a `MemoryStream` you just wrote to needs
+no `Seek(0)`), and a `TextReader` is read to its end. Content before a stream's current position is
+included; pass a stream that starts where the value starts.
+
 ### Ordinal ordering
 
 `ordinal` is opt-in per property. `TypeMapRegistry.AssignOrdinals` validates the *whole set* at
@@ -6051,7 +6114,9 @@ public MyConfig? Config { get; set; }
 ```
 
 Serializes the property to a JSON string on write, deserializes on read. `SerializerOptions`
-defaults to `JsonSerializerOptions.Default`. **`[Json]` is not required for every JSON-shaped
+defaults to `JsonSerializerOptions.Default`. A stored value that isn't valid JSON for the property
+type fails the read with `DataMappingException` naming the column; it never reads as `null` (2.0.5
+and earlier returned `null`/default silently). **`[Json]` is not required for every JSON-shaped
 type** — `TypeMapRegistry` auto-infers JSON handling for `System.Text.Json.JsonDocument`,
 `JsonElement`, any `JsonNode`-derived type, and the library's own `JsonValue` value object, without
 the attribute. Everything else (POCOs, `Dictionary<,>`, `List<>`, etc. — including the
@@ -6541,8 +6606,9 @@ On `fakeDbFactory`:
   this specific follow-up command" when `DbMode` might route different calls to different pooled
   instances (see the `SetCommandFailure` example above).
 - `CreatedDataSources` (`IReadOnlyList<FakeDbDataSource>`) — every `FakeDbDataSource` created via
-  `CreateDataSource` (reachable only when the factory advertises `SupportsNativeDataSource = true`),
-  for verifying disposal of a data source your test never held a direct reference to.
+  `CreateDataSource` when the factory advertises `SupportsNativeDataSource = true` (otherwise
+  `CreateDataSource` returns .NET's default data source, as a provider without its own does), for
+  verifying disposal of a data source your test never held a direct reference to.
 
 `fakeDbTransaction` exposes `CommitCallCount`/`RollbackCallCount`/`DisposeCallCount`, plus
 `CommitGate`/`RollbackGate`/`CommitStarted`/`RollbackStarted` (`ManualResetEventSlim`s) for pausing

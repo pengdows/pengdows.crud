@@ -14,6 +14,8 @@
   0/`Guid.Empty`/default/false (COR-002).
 - A binary column read as a `Guid` must hold exactly 16 bytes; a longer value was silently cut to
   its first 16 (COR-003).
+- A provider failure while reading a binary column into a `Guid` surfaces as the provider's own
+  exception; 2.0.5 replaced it with an `InvalidValueException` that kept no inner exception (COR-004).
 - A string enum column holding a number that isn't a defined member ("999") fails like any other
   undefined value. `[Flags]` enums accept any
   combination of defined flags on both string and numeric columns; 2.0.5 rejected numeric
@@ -38,9 +40,22 @@
 
 ## Metrics
 
+- `RowsAffectedTotal` counts each write's rows once; 2.0.5 counted them twice, so the total halves
+  for the same workload (COR-001).
+
 - `AvgConnectionOpenMs` and `AvgConnectionCloseMs` include sub-millisecond opens and closes (a
   pooled open). 2.0.5 rounded them down to 0 ms and left them out, so the averages counted only
   slow opens (COR-010).
+
+## How commands run
+
+- SQLite and DuckDB commands are no longer prepared by default (`CommandPrepareMode.Auto`): both
+  drivers keep a prepared statement only on its command, and every execution makes a new command, so
+  preparing bought nothing and cost about 1 µs per operation. Prepare metrics read 0 for these
+  databases; `CommandPrepareMode.Always` still prepares (PERF-027).
+- On SQL Server, gateway hydration (`LoadSingleAsync`, `LoadListAsync`, `LoadStreamAsync` and the
+  methods built on them) opens its reader with `CommandBehavior.SequentialAccess`, reading each
+  column once, in order. A reader you open yourself with `ExecuteReaderAsync` is unchanged (DEC-013).
 
 ## Every read path converts the same way
 

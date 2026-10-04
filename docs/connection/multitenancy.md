@@ -180,7 +180,7 @@ still removes it from the registry's lookup immediately (so the *next* `GetConte
 call gets a fresh context right away), but defers actually disposing the superseded context until
 every outstanding lease on it has been released. Multiple concurrent leases on the same tenant are
 independent — the context is only disposed once the *last* one releases. Dispose the lease as soon
-as you're done; holding it longer than necessary delays a concurrent rotation's actual cleanup.
+as you're done; holding it longer than necessary delays a concurrent rotation's actual cleanup. The guarantee comes from `TenantContextRegistry`: a custom `ITenantContextRegistry` that doesn't implement `AcquireLease` itself (e.g. one written against 2.0.5) gets the default implementation, which only wraps `GetContext` and protects nothing.
 
 This is what makes live tenant ejection/rotation a genuinely supported pattern rather than an
 accepted-risk primitive: any code path that holds a tenant context across an await (a long-running

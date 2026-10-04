@@ -102,7 +102,7 @@ await tx.ReleaseSavepointAsync("checkpoint1", ct);
 
 ## Isolation profiles (portable)
 
-`IsolationProfile` maps to a per-database `IsolationLevel` (see `pengdows.crud/isolation/IsolationResolver.cs`):
+`IsolationProfile` maps to a per-database `IsolationLevel` (each dialect's `GetIsolationProfileMapping`, applied by `IsolationResolver`):
 
 | Profile | Intent |
 |---------|--------|
