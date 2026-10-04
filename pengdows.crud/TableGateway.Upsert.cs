@@ -364,7 +364,7 @@ public partial class TableGateway<TEntity, TRowID>
         var template = GetTemplatesForDialect(dialect);
         var binder = GetOrBuildUpsertBinder(dialect, template);
 
-        var mergeSource = dialect.RenderMergeSource(template.UpsertColumns, template.UpsertParameterNames);
+        var mergeSource = dialect.RenderMergeSource(template.UpsertColumns, template.UpsertParameterNames, BuildWrappedTableName(dialect));
 
         var parameters = new List<DbParameter>(template.UpsertColumns.Count);
         binder(entity, parameters);

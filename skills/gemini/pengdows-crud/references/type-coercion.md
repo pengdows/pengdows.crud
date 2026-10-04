@@ -126,7 +126,7 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   column `TEXT` to keep every digit); a DuckDB `LIST` maps to `T[]`/`List<T>` through `DataReaderMapper` as through the gateway.
 - PostgreSQL family: `Geometry`/`Geography` bind EWKB (WKT encoded; GeoJSON-only refused) and PostGIS/`vector` columns
   read without the NetTopologySuite/pgvector plugins (binary value via `GetBytes`); a C# enum into a PG `ENUM` column is
-  sent untyped on PostgreSQL/YugabyteDB (CockroachDB accepts text) (string properties, PG 15+ MERGE upserts and custom `WHERE` still need `CAST`); `DateTimeOffset` with
+  sent untyped on PostgreSQL/YugabyteDB (CockroachDB accepts text) (MERGE upserts and batch updates of such rows use a table-typed `SELECT ... UNION ALL` source; string properties and custom `WHERE` still need `CAST`); `DateTimeOffset` with
   `DbType.Time` is `timetz`; CockroachDB runs multi-statement commands unprepared (TYPE-002).
 - Oracle: `double`/`float` bind as `BINARY_DOUBLE`/`BINARY_FLOAT`; NUMBER beyond `decimal` reads into `double`; LONG data
   is fetched with the row; `DbType.DateTime2`/`DbType.Xml` are remapped. Firebird: `TIME WITH TIME ZONE` from a

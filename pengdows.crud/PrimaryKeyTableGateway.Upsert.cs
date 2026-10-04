@@ -397,7 +397,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             parameters.Add(param);
         }
 
-        var mergeSource = dialect.RenderMergeSource(insertableColumns.ToList(), paramNames);
+        var mergeSource = dialect.RenderMergeSource(insertableColumns.ToList(), paramNames, BuildWrappedTableName(dialect));
 
         var insertColSb = SbLite.Create(stackalloc char[512]);
         var insertValSb = SbLite.Create(stackalloc char[512]);

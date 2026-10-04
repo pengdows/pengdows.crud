@@ -182,6 +182,129 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override bool SupportsBatchUpdate => true;
 
+    // TYPE-020 / WRT-007, confirmed live (PostgreSQL 16.4, CockroachDB 25.1, YugabyteDB 2025.2): a VALUES
+    // source types a C# enum's name as text (untyped, or text on CockroachDB), which a user-defined
+    // ENUM column refuses. An empty SELECT of the target's own columns followed by one SELECT per row,
+    // UNION ALL, gives each value its column's type instead, with no type name needed. Only for rows
+    // holding such an enum: a long UNION ALL plans more slowly than one VALUES list.
+    private static bool HasEnumStoredByName(IReadOnlyList<IColumnInfo> columns)
+    {
+        foreach (var column in columns)
+        {
+            if (column.IsEnum && column.EnumAsString)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void AppendTypedSourceTemplate(ISqlQueryBuilder query, string tableName, IReadOnlyList<string> columns)
+    {
+        query.Append("SELECT ");
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append(columns[i]);
+        }
+
+        query.Append(" FROM ").Append(tableName).Append(" WHERE FALSE");
+    }
+
+    internal override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames,
+        string tableName)
+    {
+        if (!HasEnumStoredByName(columns))
+        {
+            return RenderMergeSource(columns, parameterNames);
+        }
+
+        var names = new List<string>(columns.Count);
+        var values = new System.Text.StringBuilder();
+        for (var i = 0; i < columns.Count; i++)
+        {
+            names.Add(WrapObjectName(columns[i].Name));
+            if (i > 0)
+            {
+                values.Append(", ");
+            }
+
+            var placeholder = MakeParameterName(parameterNames[i]);
+            values.Append(RendersColumnArgument(columns[i]) ? RenderColumnArgument(placeholder, columns[i]) : placeholder);
+        }
+
+        var source = new SqlQueryBuilder();
+        AppendTypedSourceTemplate(source, tableName, names);
+        return string.Concat("USING (", source.ToString(), " UNION ALL SELECT ", values.ToString(), ") AS s (",
+            string.Join(", ", names), ")");
+    }
+
+    internal override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
+        IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue,
+        IReadOnlyList<IColumnInfo> columns)
+    {
+        if (rowCount <= 0 || !HasEnumStoredByName(columns))
+        {
+            BuildBatchUpdateSql(tableName, columnNames, keyColumns, rowCount, query, getValue);
+            return;
+        }
+
+        query.Append("UPDATE ").Append(tableName).Append(" AS t SET ");
+        for (var i = 0; i < columnNames.Count; i++)
+        {
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append(columnNames[i]).Append(" = s.").Append(columnNames[i]);
+        }
+
+        var allCols = new List<string>(keyColumns);
+        allCols.AddRange(columnNames);
+        query.Append(" FROM (");
+        AppendTypedSourceTemplate(query, tableName, allCols);
+        var paramIdx = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            query.Append(" UNION ALL SELECT ");
+            for (var col = 0; col < allCols.Count; col++)
+            {
+                if (col > 0)
+                {
+                    query.Append(", ");
+                }
+
+                var val = getValue?.Invoke(row, col);
+                if (val == null || val == DBNull.Value)
+                {
+                    query.Append("NULL");
+                }
+                else
+                {
+                    query.Append(ParameterMarker).Append('b')
+                        .Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                }
+            }
+        }
+
+        query.Append(") AS s(").Append(string.Join(", ", allCols)).Append(") WHERE ");
+        for (var i = 0; i < keyColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                query.Append(" AND ");
+            }
+
+            query.Append("t.").Append(keyColumns[i]).Append(" = s.").Append(keyColumns[i]);
+        }
+    }
+
     /// <inheritdoc />
     public override void BuildBatchUpdateSql(string tableName, IReadOnlyList<string> columnNames,
         IReadOnlyList<string> keyColumns, int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue)

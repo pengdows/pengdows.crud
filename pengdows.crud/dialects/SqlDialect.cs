@@ -1771,6 +1771,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     /// <summary>
+    /// The MERGE source for an upsert into <paramref name="tableName"/> (wrapped); a dialect that
+    /// types the source from the target table overrides this. Default: <see cref="RenderMergeSource(IReadOnlyList{IColumnInfo}, IReadOnlyList{string})"/>.
+    /// </summary>
+    internal virtual string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames,
+        string tableName) =>
+        RenderMergeSource(columns, parameterNames);
+
+    /// <summary>
     /// Formats the MERGE ON clause predicate for the dialect.
     /// </summary>
     public virtual string RenderMergeOnClause(string predicate)

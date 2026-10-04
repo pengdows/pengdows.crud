@@ -34,6 +34,13 @@
   it on the gateway (`2`) and rounded it to even in `DataReaderMapper` and scalar reads (`3`)
   (COR-009).
 
+## Writes that now work
+
+- A C# enum stored by name in a PostgreSQL-family user-defined `ENUM` column now works in a MERGE
+  upsert (PostgreSQL 15+) and a batch update on PostgreSQL, CockroachDB and YugabyteDB. 2.0.5 failed
+  with "column is of type ... but expression is of type text". Those statements now take their rows
+  from a source typed by the table itself, only when a row holds such an enum (TYPE-020, WRT-007).
+
 ## Reads that now work
 
 - A negative DuckDB `INTERVAL` read into a `TimeSpan` works. DuckDB.NET 1.5.6 throws for every

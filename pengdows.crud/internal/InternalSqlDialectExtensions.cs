@@ -151,6 +151,15 @@ internal static class InternalSqlDialectExtensions
         return GetInternal(dialect).RenderMergeSource(columns, parameterNames);
     }
 
+    /// <summary>The MERGE source for an upsert into <paramref name="tableName"/> (wrapped).</summary>
+    internal static string RenderMergeSource(this ISqlDialect dialect, IReadOnlyList<IColumnInfo> columns,
+        IReadOnlyList<string> parameterNames, string tableName)
+    {
+        return dialect is SqlDialect sqlDialect
+            ? sqlDialect.RenderMergeSource(columns, parameterNames, tableName)
+            : GetInternal(dialect).RenderMergeSource(columns, parameterNames);
+    }
+
     /// <summary>
     /// See <see cref="IInternalSqlDialect.MergeMatchedConditionAsUpdateWhere"/>; false for a
     /// dialect that isn't an internal one (e.g. a test double).
