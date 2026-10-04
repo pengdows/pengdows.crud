@@ -370,9 +370,9 @@ internal class MySqlDialect : SqlDialect
         return true;
     }
 
-    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    internal override async Task<IDatabaseProductInfo> DetectDatabaseInfoCoreAsync(ITrackedConnection connection, bool useAsync)
     {
-        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+        var productInfo = await base.DetectDatabaseInfoCoreAsync(connection, useAsync);
 
         // Check and cache MySQL session settings during initialization
         if (_sessionSettings == null)

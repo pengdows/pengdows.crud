@@ -314,7 +314,7 @@ public class SqlDialectAdditionalCoverageTests
         {
         }
 
-        public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+        internal override Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
         {
             throw new InvalidOperationException("boom");
         }

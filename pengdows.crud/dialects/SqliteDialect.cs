@@ -267,15 +267,17 @@ internal class SqliteDialect : SqlDialect
         return table;
     }
 
-    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    internal override async Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT sqlite_version()";
-            await using var reader = await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow);
+            await using var reader = useAsync
+                ? await cmd.ExecuteReaderAsync(CommandBehavior.SingleRow).ConfigureAwait(false)
+                : cmd.ExecuteReader(CommandBehavior.SingleRow);
 
-            if (await reader.ReadAsync())
+            if (useAsync ? await reader.ReadAsync().ConfigureAwait(false) : reader.Read())
             {
                 return "SQLite";
             }

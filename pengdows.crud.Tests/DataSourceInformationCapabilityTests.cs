@@ -88,12 +88,12 @@ public class DataSourceInformationCapabilityTests
         public override int ParameterNameMaxLength => 1;
         public override ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.None;
 
-        public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+        internal override Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
         {
             return Task.FromResult("1.0");
         }
 
-        public override Task<string?> GetProductNameAsync(ITrackedConnection connection)
+        internal override Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)
         {
             return Task.FromResult<string?>("OldDB");
         }

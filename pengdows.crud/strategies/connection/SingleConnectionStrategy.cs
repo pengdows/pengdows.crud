@@ -110,8 +110,8 @@ internal class SingleConnectionStrategy : SafeAsyncDisposableBase, IConnectionSt
         DbProviderFactory? factory,
         ILoggerFactory loggerFactory)
     {
-        // useAsync: false takes the synchronous product-detection probes, but the dialect's version
-        // detection (DetectDatabaseInfoAsync) is async-only, so this can block on it (REV-036/044).
+        // useAsync: false takes the synchronous product- and version-detection paths, so this
+        // completes without blocking on async I/O (REV-036/044).
         return HandleDialectDetectionCoreAsync(initConnection, factory, loggerFactory, false, CancellationToken.None)
             .GetAwaiter().GetResult();
     }

@@ -387,9 +387,9 @@ internal class FirebirdDialect : SqlDialect
 
     private string? _sessionSettings;
 
-    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    internal override async Task<IDatabaseProductInfo> DetectDatabaseInfoCoreAsync(ITrackedConnection connection, bool useAsync)
     {
-        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+        var productInfo = await base.DetectDatabaseInfoCoreAsync(connection, useAsync);
 
         if (_sessionSettings == null)
         {
@@ -437,14 +437,14 @@ internal class FirebirdDialect : SqlDialect
         return "SET TRANSACTION READ WRITE;";
     }
 
-    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    internal override async Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         // Prefer scalar results to match fakeDb test helpers
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = EngineVersionQuery;
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             if (result != null)
             {
                 return "Firebird";
@@ -456,7 +456,7 @@ internal class FirebirdDialect : SqlDialect
             {
                 await using var cmd = (DbCommand)connection.CreateCommand();
                 cmd.CommandText = DatabaseInfoQuery;
-                var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+                var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
                 if (result != null)
                 {
                     return "Firebird";
@@ -530,14 +530,14 @@ internal class FirebirdDialect : SqlDialect
         return null;
     }
 
-    public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    internal override async Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         // Try engine context first; if returns null or empty, surface empty (do not attempt monitor)
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = EngineVersionQuery;
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             var s = result?.ToString() ?? string.Empty;
             if (!string.IsNullOrEmpty(s))
             {
@@ -557,7 +557,7 @@ internal class FirebirdDialect : SqlDialect
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = MonitorVersionQuery;
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             var s = result?.ToString() ?? string.Empty;
             if (!string.IsNullOrEmpty(s))
             {

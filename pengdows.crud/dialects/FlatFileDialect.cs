@@ -277,7 +277,7 @@ internal class FlatFileDialect : SqlDialect
     /// provider instead exposes version the idiomatic ADO.NET way — <c>FlatFileConnection.ServerVersion</c>
     /// (currently hardcoded to <c>"1.0"</c>) — so read that directly instead of executing SQL.
     /// </summary>
-    public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    internal override Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         return Task.FromResult(connection.ServerVersion);
     }

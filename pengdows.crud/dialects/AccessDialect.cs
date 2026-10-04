@@ -422,7 +422,7 @@ internal sealed class AccessDialect : SqlDialect
     /// directly by the driver — same idiom as FlatFileDialect/InterBaseDialect's own
     /// ServerVersion-based override, for the identical reason (no version()-style SQL function).
     /// </summary>
-    public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    internal override Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         return Task.FromResult(connection.ServerVersion);
     }

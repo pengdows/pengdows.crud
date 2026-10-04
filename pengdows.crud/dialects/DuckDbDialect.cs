@@ -283,14 +283,14 @@ internal class DuckDbDialect : SqlDialect
         return string.Empty;
     }
 
-    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    internal override async Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         // Try SELECT version() first
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT version()";
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             if (result is string s && !string.IsNullOrEmpty(s))
             {
                 if (s.ToLowerInvariant().Contains("duckdb"))
@@ -310,7 +310,7 @@ internal class DuckDbDialect : SqlDialect
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "PRAGMA version";
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             if (result is string s && !string.IsNullOrEmpty(s))
             {
                 return "DuckDB";
@@ -381,7 +381,7 @@ internal class DuckDbDialect : SqlDialect
         return null;
     }
 
-    public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    internal override async Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         var selectFailed = false;
         var pragmaFailed = false;
@@ -390,7 +390,7 @@ internal class DuckDbDialect : SqlDialect
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "SELECT version()";
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             if (result is string s && !string.IsNullOrEmpty(s))
             {
                 return s;
@@ -410,7 +410,7 @@ internal class DuckDbDialect : SqlDialect
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = "PRAGMA version";
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             if (result is string s && !string.IsNullOrEmpty(s))
             {
                 return s;

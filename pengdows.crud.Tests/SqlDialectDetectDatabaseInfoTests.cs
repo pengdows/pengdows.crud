@@ -216,7 +216,7 @@ public class SqlDialectDetectDatabaseInfoTests
             _productNameResult = result;
         }
 
-        public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+        internal override async Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)
         {
             return await Task.FromResult(_productNameResult);
         }

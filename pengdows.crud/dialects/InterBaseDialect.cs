@@ -329,7 +329,7 @@ internal sealed class InterBaseDialect : SqlDialect
     /// mon$-table equivalent exists in InterBase 15 (both fail with "Function unknown"/table not
     /// found).
     /// </summary>
-    public override Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    internal override Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         return Task.FromResult(connection.ServerVersion);
     }

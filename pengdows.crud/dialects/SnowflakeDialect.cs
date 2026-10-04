@@ -375,9 +375,9 @@ internal class SnowflakeDialect : SqlDialect
 
     private string? _sessionSettings;
 
-    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    internal override async Task<IDatabaseProductInfo> DetectDatabaseInfoCoreAsync(ITrackedConnection connection, bool useAsync)
     {
-        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+        var productInfo = await base.DetectDatabaseInfoCoreAsync(connection, useAsync);
 
         if (_sessionSettings == null)
         {

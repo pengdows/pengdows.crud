@@ -53,8 +53,7 @@ internal static class SqlDialectFactory
         DbProviderFactory factory,
         ILoggerFactory loggerFactory)
     {
-        // Synchronous product detection, then the async-only DetectDatabaseInfoAsync: this blocks
-        // on it, as 2.0.5 did (REV-044 tracks a synchronous version-detection path).
+        // Synchronous product and version detection throughout (REV-044).
         return CreateDialectCoreAsync(connection, factory, loggerFactory, false, CancellationToken.None)
             .GetAwaiter().GetResult();
     }
@@ -93,7 +92,16 @@ internal static class SqlDialectFactory
             concreteDialect.PreDeterminedDatabaseType = inferredType;
         }
 
-        await internalDialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
+        if (dialect is SqlDialect detecting)
+        {
+            // useAsync false issues only synchronous commands, so the constructor path no longer
+            // blocks on async version detection (REV-044).
+            await detecting.DetectDatabaseInfoCoreAsync(connection, useAsync).ConfigureAwait(false);
+        }
+        else
+        {
+            await internalDialect.DetectDatabaseInfoAsync(connection).ConfigureAwait(false);
+        }
         return dialect;
     }
 

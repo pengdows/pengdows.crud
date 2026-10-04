@@ -1410,13 +1410,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
         ITrackedConnection connection,
         string query,
         Func<object?, T?> converter,
+        bool useAsync,
         Func<Exception, T?>? onError = null)
     {
         try
         {
             await using var cmd = (DbCommand)connection.CreateCommand();
             cmd.CommandText = query;
-            var result = await cmd.ExecuteScalarAsync().ConfigureAwait(false);
+            var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             return converter(result);
         }
         catch (Exception ex) when (onError != null)
@@ -1424,6 +1425,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return onError(ex);
         }
     }
+
+    /// <summary>
+    /// Version-detection scalar (REV-044): <paramref name="useAsync"/> false runs the command
+    /// synchronously, so the synchronous detection path never blocks on async ADO.NET I/O.
+    /// </summary>
+    protected static async Task<object?> ScalarAsync(DbCommand command, bool useAsync)
+        => useAsync ? await command.ExecuteScalarAsync().ConfigureAwait(false) : command.ExecuteScalar();
 
     protected readonly record struct SessionSettingsResult(
         string Settings,
@@ -2152,7 +2160,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
     {
         try
         {
-            return GetDatabaseVersionAsync(connection).GetAwaiter().GetResult();
+            // Completes synchronously: useAsync false issues only synchronous commands (REV-044).
+            return GetDatabaseVersionCoreAsync(connection, false).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
@@ -2508,7 +2517,16 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>
     /// Detects database product information from the connection
     /// </summary>
-    public virtual async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    public Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+        => DetectDatabaseInfoCoreAsync(connection, true);
+
+    /// <summary>
+    /// The one detection path (REV-044): <paramref name="useAsync"/> false issues only synchronous
+    /// commands, so <see cref="DetectDatabaseInfo"/> gets an already-completed task instead of
+    /// blocking on async I/O.
+    /// </summary>
+    internal virtual async Task<IDatabaseProductInfo> DetectDatabaseInfoCoreAsync(ITrackedConnection connection,
+        bool useAsync)
     {
         if (_productInfo != null)
         {
@@ -2517,8 +2535,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         try
         {
-            var versionString = await GetDatabaseVersionAsync(connection);
-            var productName = await GetProductNameAsync(connection) ?? ExtractProductNameFromVersion(versionString);
+            var versionString = await GetDatabaseVersionCoreAsync(connection, useAsync).ConfigureAwait(false);
+            var productName = await GetProductNameCoreAsync(connection, useAsync).ConfigureAwait(false)
+                              ?? ExtractProductNameFromVersion(versionString);
             var parsedVersion = ParseVersion(versionString);
 
             // Enrich version string with schema DataSourceProductVersion for more accurate inference.
@@ -2576,7 +2595,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 databaseType = InferDatabaseTypeFromInfo(productName, versionForInference);
                 if (databaseType == DatabaseType)
                 {
-                    databaseType = DatabaseDetectionService.DetectProduct(connection, Factory);
+                    databaseType = useAsync
+                        ? await DatabaseDetectionService.DetectProductAsync(connection, Factory, CancellationToken.None)
+                            .ConfigureAwait(false)
+                        : DatabaseDetectionService.DetectProduct(connection, Factory);
                 }
             }
 
@@ -2825,10 +2847,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     public virtual IDatabaseProductInfo DetectDatabaseInfo(ITrackedConnection connection)
     {
-        return DetectDatabaseInfoAsync(connection).GetAwaiter().GetResult();
+        // Completes synchronously: useAsync false issues only synchronous commands (REV-044).
+        return DetectDatabaseInfoCoreAsync(connection, false).GetAwaiter().GetResult();
     }
 
-    public virtual async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    public Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+        => GetDatabaseVersionCoreAsync(connection, true);
+
+    internal virtual async Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         // Minimal, test-friendly behavior:
         // - Try dialect-provided query if any; otherwise, try SELECT version()
@@ -2837,13 +2863,17 @@ internal abstract class SqlDialect : IInternalSqlDialect
         var preferred = GetVersionQuery();
         var query = !string.IsNullOrWhiteSpace(preferred) ? preferred : "SELECT version()";
 
-        var result = await ExecuteScalarQueryAsync(connection, query, static value => value?.ToString() ?? string.Empty)
+        var result = await ExecuteScalarQueryAsync(connection, query, static value => value?.ToString() ?? string.Empty,
+                useAsync)
             .ConfigureAwait(false);
 
         return result ?? string.Empty;
     }
 
-    public virtual Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    public Task<string?> GetProductNameAsync(ITrackedConnection connection)
+        => GetProductNameCoreAsync(connection, true);
+
+    internal virtual Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         try
         {

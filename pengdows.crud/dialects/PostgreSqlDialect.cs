@@ -444,9 +444,9 @@ internal class PostgreSqlDialect : SqlDialect
         return base.ParseVersion(versionString);
     }
 
-    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    internal override async Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)
     {
-        var name = await base.GetProductNameAsync(connection).ConfigureAwait(false);
+        var name = await base.GetProductNameCoreAsync(connection, useAsync).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(name) && name!.IndexOf("npgsql", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             return "PostgreSQL";
@@ -455,9 +455,9 @@ internal class PostgreSqlDialect : SqlDialect
         return name;
     }
 
-    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    internal override async Task<IDatabaseProductInfo> DetectDatabaseInfoCoreAsync(ITrackedConnection connection, bool useAsync)
     {
-        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+        var productInfo = await base.DetectDatabaseInfoCoreAsync(connection, useAsync);
 
         // Check and cache PostgreSQL session settings during initialization
         if (_sessionSettings == null)

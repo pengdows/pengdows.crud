@@ -472,12 +472,13 @@ internal class SqlServerDialect : SqlDialect
         return "SELECT @@VERSION";
     }
 
-    public override async Task<string> GetDatabaseVersionAsync(ITrackedConnection connection)
+    internal override async Task<string> GetDatabaseVersionCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         var result = await ExecuteScalarQueryAsync(
                 connection,
                 GetVersionQuery(),
                 static value => value?.ToString() ?? string.Empty,
+                useAsync,
                 ex => $"Error retrieving version: {ex.Message}")
             .ConfigureAwait(false);
 
@@ -561,9 +562,9 @@ internal class SqlServerDialect : SqlDialect
 
     // SQL Server uses base class ApplyConnectionSettings implementation
 
-    public override async Task<IDatabaseProductInfo> DetectDatabaseInfoAsync(ITrackedConnection connection)
+    internal override async Task<IDatabaseProductInfo> DetectDatabaseInfoCoreAsync(ITrackedConnection connection, bool useAsync)
     {
-        var productInfo = await base.DetectDatabaseInfoAsync(connection);
+        var productInfo = await base.DetectDatabaseInfoCoreAsync(connection, useAsync);
 
         // Check and cache SQL Server session settings during initialization
         if (_sessionSettings == null)

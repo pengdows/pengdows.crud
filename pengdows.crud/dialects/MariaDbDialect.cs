@@ -116,9 +116,9 @@ internal class MariaDbDialect : MySqlDialect
     // MariaDB does not support INSERT ... AS alias for ON DUPLICATE KEY UPDATE.
     public override string? UpsertIncomingAlias => null;
 
-    public override async Task<string?> GetProductNameAsync(ITrackedConnection connection)
+    internal override async Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)
     {
-        var name = await base.GetProductNameAsync(connection).ConfigureAwait(false);
+        var name = await base.GetProductNameCoreAsync(connection, useAsync).ConfigureAwait(false);
         if (!string.IsNullOrEmpty(name) && name!.IndexOf("mysql", StringComparison.OrdinalIgnoreCase) >= 0)
         {
             return "MariaDB";
