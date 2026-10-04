@@ -50,6 +50,52 @@ pengdows.crud supports 23 directly supported database products via the `Supporte
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
+## Adding a New Database: Type Contract
+
+Adding a database is not complete when basic CRUD SQL executes. The dialect must also describe
+how the provider represents its values and make those representations work through the central
+coercion system. Application code should not need provider-specific converters for a type the
+database support claims to cover.
+
+The responsibility is divided deliberately:
+
+| Layer | Responsibility |
+|---|---|
+| `SqlDialect` | Vendor SQL, capabilities, parameter binding, provider-specific command/connection configuration, and database type facts |
+| `TypeCoercionHelper` / `CoercionRegistry` | Shared conversion rules, provider-specific coercion dispatch, null handling, precision/range checks, JSON, sequences, and CLR target conversion |
+| `TableGateway` / `DataReaderMapper` | Apply the resolved coercion plan when hydrating objects and bind converted values when writing |
+| Database documentation and test matrix | State the supported database/CLR mappings, limitations, version gates, and real-provider evidence |
+
+For every supported database, verify at minimum:
+
+- Primitive numerics, including signed/unsigned and wide integer values.
+- Decimal precision, scale, rounding, overflow, `NaN`, and infinity behavior where applicable.
+- `DateOnly`, `TimeOnly`, `DateTime`, `DateTimeOffset`, timezone, precision, and UTC semantics.
+- `Guid` text and binary representations, including byte order.
+- Boolean, character, string, binary, stream, and large-object values.
+- Null and `DBNull` behavior for reads, writes, nullable properties, and non-nullable properties.
+- Enums, including numeric values, string literals, `[Flags]`, nullable enums, and invalid values.
+- JSON strings, native JSON/provider JSON values, `JsonDocument`, `JsonElement`, `JsonNode`, `JsonValue`, and arbitrary complex CLR types marked `[Json]`.
+- Arrays, lists, vectors, ranges, intervals, spatial values, network values, and other provider-specific types exposed by the provider.
+- Generated keys and any provider-specific value returned by `RETURNING`, `OUTPUT`, identity functions, or compound statements.
+- Unsupported or lossy conversions: these must fail as `DataMappingException` or another documented mapping error, never silently become a default value.
+
+The dialect must provide any required provider hooks for parameter type configuration or value
+normalization. The central coercion layer owns the conversion machinery; the dialect owns the
+provider truth. A new dialect must not duplicate general conversion logic or require application
+code to branch on the database product.
+
+Each supported type needs both directions tested where meaningful:
+
+```text
+provider value -> CLR value -> provider parameter
+```
+
+The evidence should include fakeDb tests for generated SQL, parameter shape, and failure paths,
+plus real-provider integration tests for round trips, precision, nulls, provider-native value
+shapes, and transaction behavior. A dialect that passes basic CRUD but has not completed this
+type contract is partially supported, not fully supported.
+
 ## Minimum Server Versions
 
 Two thresholds matter for each database:
