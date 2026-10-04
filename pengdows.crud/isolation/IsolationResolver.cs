@@ -26,10 +26,12 @@
 //   on SQL Server without snapshot). PostgreSQL/YugabyteDB map SafeNonBlockingReads to
 //   RepeatableRead (MVCC snapshot).
 // - GetSupportedLevels(): Returns set of supported levels for current database.
-// - Constructor params: product, readCommittedSnapshotEnabled, allowSnapshotIsolation.
+// - Constructor params: dialect (owns the per-database mapping, DEC-010), readCommittedSnapshotEnabled,
+//   allowSnapshotIsolation.
 // =============================================================================
 
 using System.Data;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
@@ -38,25 +40,30 @@ namespace pengdows.crud.isolation;
 
 internal sealed class IsolationResolver : IIsolationResolver
 {
+    private readonly SqlDialect _dialect;
     private readonly SupportedDatabase _product;
     private readonly Dictionary<IsolationProfile, IsolationLevel> _profileMap;
     private readonly bool _rcsi;
     private readonly HashSet<IsolationLevel> _supportedLevels;
 
+    /// <summary>
+    /// Which levels a database supports and what each <see cref="IsolationProfile"/> maps to is the
+    /// dialect's data (<see cref="SqlDialect.GetSupportedIsolationLevels"/>,
+    /// <see cref="SqlDialect.GetIsolationProfileMapping"/>, <see cref="SqlDialect.IsDegradedForProfile"/>);
+    /// this resolver applies the product-agnostic resolution rules to it (DEC-010, as on 3.0).
+    /// </summary>
     internal IsolationResolver(
-        SupportedDatabase product,
+        SqlDialect dialect,
         bool readCommittedSnapshotEnabled,
         bool allowSnapshotIsolation)
     {
-        if (!Enum.IsDefined(typeof(SupportedDatabase), product))
-        {
-            throw new NotSupportedException($"Database {product} is not supported by the isolation resolver.");
-        }
+        ArgumentNullException.ThrowIfNull(dialect);
 
-        _product = product;
+        _dialect = dialect;
+        _product = dialect.DatabaseType;
         _rcsi = readCommittedSnapshotEnabled;
-        _supportedLevels = BuildSupportedIsolationLevels(product, allowSnapshotIsolation);
-        _profileMap = BuildProfileMapping(product, allowSnapshotIsolation);
+        _supportedLevels = dialect.GetSupportedIsolationLevels(allowSnapshotIsolation);
+        _profileMap = dialect.GetIsolationProfileMapping(allowSnapshotIsolation);
     }
 
     public IsolationLevel Resolve(IsolationProfile profile)
@@ -135,19 +142,11 @@ internal sealed class IsolationResolver : IIsolationResolver
         var originalLevel = level;
         var degraded = false;
 
-        if (_product == SupportedDatabase.SqlServer && profile == IsolationProfile.SafeNonBlockingReads)
+        // A mapped level the dialect says falls short of the profile (SQL Server's ReadCommitted for
+        // SafeNonBlockingReads when snapshot isolation is off).
+        if (_dialect.IsDegradedForProfile(profile, level))
         {
-            // Ideal is Snapshot; if we have to use ReadCommitted, it's degraded
-            if (level == IsolationLevel.Snapshot && !_supportedLevels.Contains(IsolationLevel.Snapshot))
-            {
-                level = IsolationLevel.ReadCommitted;
-                degraded = true;
-            }
-            else if (level == IsolationLevel.ReadCommitted)
-            {
-                // Using ReadCommitted instead of Snapshot is always degraded for SafeNonBlockingReads
-                degraded = true;
-            }
+            degraded = true;
         }
 
         if (level != originalLevel)
@@ -178,329 +177,5 @@ internal sealed class IsolationResolver : IIsolationResolver
     public IReadOnlySet<IsolationLevel> GetSupportedLevels()
     {
         return _supportedLevels;
-    }
-
-    private static HashSet<IsolationLevel> BuildSupportedIsolationLevels(
-        SupportedDatabase db,
-        bool allowSnapshotIsolation)
-    {
-        return db switch
-        {
-            SupportedDatabase.SqlServer => allowSnapshotIsolation
-                ? new HashSet<IsolationLevel>
-                {
-                    IsolationLevel.ReadUncommitted,
-                    IsolationLevel.ReadCommitted,
-                    IsolationLevel.RepeatableRead,
-                    IsolationLevel.Serializable,
-                    IsolationLevel.Snapshot
-                }
-                : new HashSet<IsolationLevel>
-                {
-                    IsolationLevel.ReadUncommitted,
-                    IsolationLevel.ReadCommitted,
-                    IsolationLevel.RepeatableRead,
-                    IsolationLevel.Serializable
-                },
-            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.CockroachDb => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.YugabyteDb => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.Sqlite => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.Firebird => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.Snapshot,
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.MariaDb => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.TiDb => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead
-                // Note: TiDB accepts SERIALIZABLE syntax but silently treats it as REPEATABLE READ.
-                // Omitting it prevents callers from relying on semantics that are never enforced.
-            },
-            SupportedDatabase.Oracle => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.DuckDB => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.Serializable
-            },
-            SupportedDatabase.Snowflake => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadCommitted
-                // Note: Snowflake only supports READ COMMITTED. Other levels are not available.
-            },
-            SupportedDatabase.Db2 => new HashSet<IsolationLevel>
-            {
-                // Db2's four isolation levels map directly to ADO.NET's IsolationLevel: UR
-                // (Uncommitted Read) -> ReadUncommitted, CS (Cursor Stability, the default) ->
-                // ReadCommitted, RS (Read Stability) -> RepeatableRead, RR (Repeatable Read) ->
-                // Serializable.
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            // Verified live against ASE 16.0 SP02: AseConnection.BeginTransaction accepts all
-            // four standard IsolationLevel values, and a subsequent "SELECT @@isolation" inside
-            // each transaction confirms the server genuinely applied it — 0/1/2/3 map exactly to
-            // ReadUncommitted/ReadCommitted/RepeatableRead/Serializable, not just a client-side
-            // no-op.
-            SupportedDatabase.SybaseASE => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            // Informix's own terminology (Dirty Read/Committed Read/Cursor Stability/
-            // Repeatable Read) maps to ADO.NET's IsolationLevel as: Dirty Read =
-            // ReadUncommitted, Committed Read (the default) = ReadCommitted, Repeatable Read =
-            // BOTH RepeatableRead and Serializable (a single, stricter underlying lock mode
-            // satisfies both requests). Source: IBM "Informix Isolation Levels", 14.10.
-            // UNVERIFIED: whether the driver's BeginTransaction(IsolationLevel) actually issues
-            // the correct native SET ISOLATION text for each of these has not been confirmed
-            // live.
-            SupportedDatabase.Informix => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            // CONFIRMED live via HanaConnection.BeginTransaction(IsolationLevel): all four
-            // accepted without error (Snapshot correctly rejected by the driver itself).
-            SupportedDatabase.SapHana => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            // CONFIRMED live via IBTransaction.BeginTransaction(IsolationLevel): all five
-            // accepted, including Snapshot (broader than HANA, which rejects it).
-            SupportedDatabase.InterBase => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable,
-                IsolationLevel.Snapshot
-            },
-            // Verified live against a real Spanner Omni + PGAdapter instance.
-            SupportedDatabase.Spanner => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            },
-            // CONFIRMED live against a real .accdb (see AccessDialect.cs's file-level AI
-            // SUMMARY): only ReadUncommitted/ReadCommitted are accepted by
-            // OleDbConnection.BeginTransaction — RepeatableRead/Serializable/Snapshot all throw
-            // "Neither the isolation level nor a strengthening of it is supported."
-            SupportedDatabase.Access => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted
-            },
-            // pengdows.flatfile's FlatFileTransaction.ValidateIsolationLevel accepts exactly
-            // Unspecified/ReadUncommitted/ReadCommitted/RepeatableRead and throws
-            // NotSupportedException for Serializable and Snapshot. DML is always staged
-            // (write-aside), so no level ever sees dirty reads; RepeatableRead freezes a per-table
-            // copy on the transaction's first read of each table (ResolveForRead).
-            SupportedDatabase.FlatFile => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadUncommitted,
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead
-            },
-            _ => new HashSet<IsolationLevel>
-            {
-                IsolationLevel.ReadCommitted,
-                IsolationLevel.RepeatableRead,
-                IsolationLevel.Serializable
-            }
-        };
-    }
-
-    private static Dictionary<IsolationProfile, IsolationLevel> BuildProfileMapping(
-        SupportedDatabase db,
-        bool allowSnapshotIsolation)
-    {
-        return db switch
-        {
-            SupportedDatabase.SqlServer => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = allowSnapshotIsolation
-                    ? IsolationLevel.Snapshot
-                    : IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
-            },
-            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                // MVCC RepeatableRead is a transaction-wide snapshot: reads never block on writers
-                // and never see non-repeatable reads, which is what the profile promises.
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            },
-            SupportedDatabase.CockroachDb => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
-            },
-            SupportedDatabase.YugabyteDb => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                // MVCC RepeatableRead is a transaction-wide snapshot: reads never block on writers
-                // and never see non-repeatable reads, which is what the profile promises.
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            },
-            SupportedDatabase.Sqlite => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            },
-            SupportedDatabase.Firebird => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Snapshot,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            },
-            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
-            },
-            SupportedDatabase.MariaDb => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
-            },
-            SupportedDatabase.TiDb => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable (Degraded)
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            },
-            SupportedDatabase.Oracle => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            },
-            SupportedDatabase.DuckDB => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
-            },
-            SupportedDatabase.Snowflake => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // Only level Snowflake supports (Degraded)
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            },
-            SupportedDatabase.Db2 => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // CS, Db2's default
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // RR
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // UR
-            },
-            SupportedDatabase.SybaseASE => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
-            },
-            SupportedDatabase.Informix => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // Committed Read, Informix's default
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // Repeatable Read
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // Dirty Read
-            },
-            SupportedDatabase.SapHana => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
-            },
-            SupportedDatabase.InterBase => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Snapshot,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            },
-            SupportedDatabase.Spanner => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.RepeatableRead
-            },
-            // Serializable is unavailable for Access — ReadCommitted is the strictest level
-            // genuinely accepted (see BuildSupportedIsolationLevels' Access case above), so
-            // StrictConsistency resolves as Degraded and ResolveForTransaction rejects it.
-            SupportedDatabase.Access => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
-            },
-            // RepeatableRead's per-table snapshot never blocks on the (single) writer and gives
-            // repeatable reads, so it is the SafeNonBlockingReads level. Nothing reaches
-            // Serializable: StrictConsistency maps to the strongest level, RepeatableRead, which
-            // ResolveWithDetail reports as Degraded, so ResolveForTransaction throws.
-            SupportedDatabase.FlatFile => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
-            },
-            _ => new Dictionary<IsolationProfile, IsolationLevel>
-            {
-                [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
-                [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
-                [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
-            }
-        };
     }
 }

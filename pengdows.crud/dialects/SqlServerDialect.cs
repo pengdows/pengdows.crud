@@ -735,4 +735,37 @@ internal class SqlServerDialect : SqlDialect
         category = DbErrorCategory.Unknown;
         return false;
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        allowSnapshotIsolation
+            ? new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable,
+                IsolationLevel.Snapshot
+            }
+            : new HashSet<IsolationLevel>
+            {
+                IsolationLevel.ReadUncommitted,
+                IsolationLevel.ReadCommitted,
+                IsolationLevel.RepeatableRead,
+                IsolationLevel.Serializable
+            };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = allowSnapshotIsolation
+                ? IsolationLevel.Snapshot
+                : IsolationLevel.ReadCommitted,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+        };
+
+    // SafeNonBlockingReads' guarantee needs Snapshot; ReadCommitted (snapshot isolation off) falls short.
+    internal override bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level) =>
+        profile == IsolationProfile.SafeNonBlockingReads && level == IsolationLevel.ReadCommitted;
 }

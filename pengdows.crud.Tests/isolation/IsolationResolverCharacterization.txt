@@ -1,0 +1,960 @@
+Unknown snapshot=False rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Unknown snapshot=False rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Unknown snapshot=True rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Unknown snapshot=True rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+PostgreSql snapshot=False rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+PostgreSql snapshot=False rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+PostgreSql snapshot=True rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+PostgreSql snapshot=True rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SqlServer snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SqlServer snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SqlServer snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+SqlServer snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+Oracle snapshot=False rcsi=False
+  levels: ReadCommitted,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Oracle snapshot=False rcsi=True
+  levels: ReadCommitted,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Oracle snapshot=True rcsi=False
+  levels: ReadCommitted,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Oracle snapshot=True rcsi=True
+  levels: ReadCommitted,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Firebird snapshot=False rcsi=False
+  levels: ReadCommitted,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+Firebird snapshot=False rcsi=True
+  levels: ReadCommitted,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+Firebird snapshot=True rcsi=False
+  levels: ReadCommitted,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+Firebird snapshot=True rcsi=True
+  levels: ReadCommitted,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+CockroachDb snapshot=False rcsi=False
+  levels: Serializable
+  SafeNonBlockingReads: Serializable degraded=False | tx Serializable
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: Serializable degraded=False | tx Serializable
+  atLeast ReadUncommitted: Serializable
+  atLeast ReadCommitted: Serializable
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+CockroachDb snapshot=False rcsi=True
+  levels: Serializable
+  SafeNonBlockingReads: Serializable degraded=False | tx Serializable
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: Serializable degraded=False | tx Serializable
+  atLeast ReadUncommitted: Serializable
+  atLeast ReadCommitted: Serializable
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+CockroachDb snapshot=True rcsi=False
+  levels: Serializable
+  SafeNonBlockingReads: Serializable degraded=False | tx Serializable
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: Serializable degraded=False | tx Serializable
+  atLeast ReadUncommitted: Serializable
+  atLeast ReadCommitted: Serializable
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+CockroachDb snapshot=True rcsi=True
+  levels: Serializable
+  SafeNonBlockingReads: Serializable degraded=False | tx Serializable
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: Serializable degraded=False | tx Serializable
+  atLeast ReadUncommitted: Serializable
+  atLeast ReadCommitted: Serializable
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+MariaDb snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+MariaDb snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+MariaDb snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+MariaDb snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+MySql snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+MySql snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+MySql snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+MySql snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Sqlite snapshot=False rcsi=False
+  levels: ReadCommitted,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Sqlite snapshot=False rcsi=True
+  levels: ReadCommitted,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Sqlite snapshot=True rcsi=False
+  levels: ReadCommitted,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Sqlite snapshot=True rcsi=True
+  levels: ReadCommitted,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+DuckDB snapshot=False rcsi=False
+  levels: Serializable
+  SafeNonBlockingReads: Serializable degraded=False | tx Serializable
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: Serializable degraded=False | tx Serializable
+  atLeast ReadUncommitted: Serializable
+  atLeast ReadCommitted: Serializable
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+DuckDB snapshot=False rcsi=True
+  levels: Serializable
+  SafeNonBlockingReads: Serializable degraded=False | tx Serializable
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: Serializable degraded=False | tx Serializable
+  atLeast ReadUncommitted: Serializable
+  atLeast ReadCommitted: Serializable
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+DuckDB snapshot=True rcsi=False
+  levels: Serializable
+  SafeNonBlockingReads: Serializable degraded=False | tx Serializable
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: Serializable degraded=False | tx Serializable
+  atLeast ReadUncommitted: Serializable
+  atLeast ReadCommitted: Serializable
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+DuckDB snapshot=True rcsi=True
+  levels: Serializable
+  SafeNonBlockingReads: Serializable degraded=False | tx Serializable
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: Serializable degraded=False | tx Serializable
+  atLeast ReadUncommitted: Serializable
+  atLeast ReadCommitted: Serializable
+  atLeast RepeatableRead: Serializable
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+YugabyteDb snapshot=False rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+YugabyteDb snapshot=False rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+YugabyteDb snapshot=True rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+YugabyteDb snapshot=True rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+TiDb snapshot=False rcsi=False
+  levels: ReadCommitted,RepeatableRead
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: RepeatableRead degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+TiDb snapshot=False rcsi=True
+  levels: ReadCommitted,RepeatableRead
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: RepeatableRead degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+TiDb snapshot=True rcsi=False
+  levels: ReadCommitted,RepeatableRead
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: RepeatableRead degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+TiDb snapshot=True rcsi=True
+  levels: ReadCommitted,RepeatableRead
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: RepeatableRead degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+Snowflake snapshot=False rcsi=False
+  levels: ReadCommitted
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+Snowflake snapshot=False rcsi=True
+  levels: ReadCommitted
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+Snowflake snapshot=True rcsi=False
+  levels: ReadCommitted
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+Snowflake snapshot=True rcsi=True
+  levels: ReadCommitted
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+AuroraMySql snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+AuroraMySql snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+AuroraMySql snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+AuroraMySql snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+AuroraPostgreSql snapshot=False rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+AuroraPostgreSql snapshot=False rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+AuroraPostgreSql snapshot=True rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+AuroraPostgreSql snapshot=True rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Db2 snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Db2 snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Db2 snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Db2 snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+FlatFile snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: RepeatableRead degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+FlatFile snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: RepeatableRead degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+FlatFile snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: RepeatableRead degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+FlatFile snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: RepeatableRead degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+SingleStore snapshot=False rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SingleStore snapshot=False rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SingleStore snapshot=True rcsi=False
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SingleStore snapshot=True rcsi=True
+  levels: ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadCommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SybaseASE snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SybaseASE snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SybaseASE snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SybaseASE snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Spanner snapshot=False rcsi=False
+  levels: RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: RepeatableRead degraded=False | tx RepeatableRead
+  atLeast ReadUncommitted: RepeatableRead
+  atLeast ReadCommitted: RepeatableRead
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Spanner snapshot=False rcsi=True
+  levels: RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: RepeatableRead degraded=False | tx RepeatableRead
+  atLeast ReadUncommitted: RepeatableRead
+  atLeast ReadCommitted: RepeatableRead
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Spanner snapshot=True rcsi=False
+  levels: RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: RepeatableRead degraded=False | tx RepeatableRead
+  atLeast ReadUncommitted: RepeatableRead
+  atLeast ReadCommitted: RepeatableRead
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Spanner snapshot=True rcsi=True
+  levels: RepeatableRead,Serializable
+  SafeNonBlockingReads: RepeatableRead degraded=False | tx RepeatableRead
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: RepeatableRead degraded=False | tx RepeatableRead
+  atLeast ReadUncommitted: RepeatableRead
+  atLeast ReadCommitted: RepeatableRead
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Informix snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Informix snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Informix snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+Informix snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SapHana snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SapHana snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SapHana snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+SapHana snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Serializable
+  atLeast Serializable: Serializable
+InterBase snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+InterBase snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+InterBase snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+InterBase snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable,Snapshot
+  SafeNonBlockingReads: Snapshot degraded=False | tx Snapshot
+  StrictConsistency: Serializable degraded=False | tx Serializable
+  FastWithRisks: ReadCommitted degraded=False | tx ReadCommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: RepeatableRead
+  atLeast Snapshot: Snapshot
+  atLeast Serializable: Serializable
+Access snapshot=False rcsi=False
+  levels: ReadUncommitted,ReadCommitted
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+Access snapshot=False rcsi=True
+  levels: ReadUncommitted,ReadCommitted
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+Access snapshot=True rcsi=False
+  levels: ReadUncommitted,ReadCommitted
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException
+Access snapshot=True rcsi=True
+  levels: ReadUncommitted,ReadCommitted
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
+  StrictConsistency: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
+  atLeast ReadUncommitted: ReadUncommitted
+  atLeast ReadCommitted: ReadCommitted
+  atLeast RepeatableRead: throws InvalidOperationException
+  atLeast Snapshot: throws InvalidOperationException
+  atLeast Serializable: throws InvalidOperationException

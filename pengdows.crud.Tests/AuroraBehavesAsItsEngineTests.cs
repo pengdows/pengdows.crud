@@ -91,8 +91,8 @@ public sealed class AuroraBehavesAsItsEngineTests
     [MemberData(nameof(Pairs))]
     public void IsolationLevels_AreTheEngines(SupportedDatabase aurora, SupportedDatabase engine)
     {
-        var auroraResolver = new IsolationResolver(aurora, false, false);
-        var engineResolver = new IsolationResolver(engine, false, false);
+        var auroraResolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(aurora), false, false);
+        var engineResolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(engine), false, false);
 
         Assert.Equal(engineResolver.GetSupportedLevels().OrderBy(l => l), auroraResolver.GetSupportedLevels().OrderBy(l => l));
         foreach (var profile in Enum.GetValues<IsolationProfile>())

@@ -79,4 +79,19 @@ internal class CockroachDbDialect : PostgreSqlDialect
         yield return ("client_encoding", "UTF8");
         yield return ("lock_timeout", "30s");
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.Serializable
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+            [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
+        };
 }

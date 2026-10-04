@@ -82,4 +82,22 @@ internal class TiDbDialect : MySqlDialect
     {
         return string.Concat(base.GetBaseSessionSettings(), "\nSET tidb_pessimistic_txn_default = ON;");
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead
+            // Note: TiDB accepts SERIALIZABLE syntax but silently treats it as REPEATABLE READ.
+            // Omitting it prevents callers from relying on semantics that are never enforced.
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable (Degraded)
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+        };
 }

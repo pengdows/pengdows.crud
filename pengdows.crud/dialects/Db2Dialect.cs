@@ -89,10 +89,9 @@ internal sealed class Db2Dialect : SqlDialect
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
     public override string? MinPoolSizeSettingName => "Min Pool Size";
 
-    // Db2's four isolation levels (UR/CS/RS/RR) are mapped to ADO.NET's IsolationLevel in
-    // IsolationResolver.BuildSupportedIsolationLevels/BuildProfileMapping — this dialect layer
-    // has no per-database isolation customization hook (unlike the 3.0 branch this was ported
-    // from, which owns isolation mapping on the dialect itself).
+    // Db2's four isolation levels (UR/CS/RS/RR) are mapped to ADO.NET's IsolationLevel in this
+    // dialect's GetSupportedIsolationLevels/GetIsolationProfileMapping, at the end of this file
+    // (DEC-010, as on 3.0).
 
     // Db2 stores GUIDs as CHAR(36) strings — IDs are generated client-side, so there's
     // no need for Db2's GENERATE_UUID()/GENERATE_UUID_BINARY() server-side functions.
@@ -299,4 +298,26 @@ internal sealed class Db2Dialect : SqlDialect
         category = DbErrorCategory.Unknown;
         return false;
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            // Db2's four isolation levels map directly to ADO.NET's IsolationLevel: UR
+            // (Uncommitted Read) -> ReadUncommitted, CS (Cursor Stability, the default) ->
+            // ReadCommitted, RS (Read Stability) -> RepeatableRead, RR (Repeatable Read) ->
+            // Serializable.
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // CS, Db2's default
+            [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // RR
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // UR
+        };
 }

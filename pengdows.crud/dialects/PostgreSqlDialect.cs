@@ -956,4 +956,23 @@ internal class PostgreSqlDialect : SqlDialect
         category = DbErrorCategory.Unknown;
         return false;
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            // MVCC RepeatableRead is a transaction-wide snapshot: reads never block on writers
+            // and never see non-repeatable reads, which is what the profile promises.
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+        };
 }

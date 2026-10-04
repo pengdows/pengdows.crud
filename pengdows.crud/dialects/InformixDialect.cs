@@ -4,9 +4,8 @@
 //
 // AI SUMMARY:
 // - Backported from pengdows.crud 3.0 (same live-verification trail applies) to this
-//   non-breaking 2.0.6 patch line. Isolation-level data (GetSupportedIsolationLevels/
-//   GetIsolationProfileMapping on 3.0) lives in IsolationResolver.cs's central switch instead,
-//   since 2.0.6 predates 3.0's dialect-owned isolation refactor.
+//   non-breaking 2.0.6 patch line. Isolation-level data is dialect-owned as on 3.0
+//   (GetSupportedIsolationLevels/GetIsolationProfileMapping, at the end of this file; DEC-010).
 // - LIVE-VERIFIED end-to-end against a real icr.io/informix/informix-developer-database
 //   container (15.0.1.0.3DE) via Testcontainers: full CRUD, transactions, concurrency, error
 //   mapping, and capability probes all pass.
@@ -279,8 +278,8 @@ internal sealed class InformixDialect : SqlDialect
     // TYPE thrown - that switch only affects the separate advisory-diagnostics path.
 
     // Informix's own terminology (Dirty Read/Committed Read/Cursor Stability/Repeatable Read)
-    // maps to ADO.NET's IsolationLevel — see IsolationResolver.cs's SupportedDatabase.Informix
-    // cases (2.0.6 resolves isolation through a central switch, not a dialect-owned override).
+    // maps to ADO.NET's IsolationLevel — see GetSupportedIsolationLevels/GetIsolationProfileMapping
+    // at the end of this file.
 
     // LIST/SET/MULTISET read back as their literal text, and a LIST literal parameter converts to any
     // of the three (confirmed live, TYPE-002).
@@ -474,4 +473,22 @@ internal sealed class InformixDialect : SqlDialect
         category = DbErrorCategory.Unknown;
         return false;
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted, // Committed Read, Informix's default
+            [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // Repeatable Read
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // Dirty Read
+        };
 }

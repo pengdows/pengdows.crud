@@ -132,7 +132,7 @@ public class SpannerDialectTests
     {
         // Spanner has no distinct READ COMMITTED level — its PostgreSQL interface only exposes
         // RepeatableRead and Serializable, unlike plain PostgreSqlDialect's three-level set.
-        var resolver = new IsolationResolver(SupportedDatabase.Spanner, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.Spanner), false, false);
         var levels = resolver.GetSupportedLevels();
         Assert.Equal(new HashSet<IsolationLevel> { IsolationLevel.RepeatableRead, IsolationLevel.Serializable },
             levels);
@@ -141,7 +141,7 @@ public class SpannerDialectTests
     [Fact]
     public void IsolationResolver_MapsAllThreeProfiles()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Spanner, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.Spanner), false, false);
         Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.FastWithRisks));

@@ -601,6 +601,33 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool UpsertIncomingValueUnreliable(IColumnInfo column) => false;
 
+    /// <summary>
+    /// The isolation levels this database's provider accepts (DEC-010: dialect-owned, as on 3.0).
+    /// The base is the generic fallback for a database without its own mapping.
+    /// </summary>
+    internal virtual HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        };
+
+    /// <summary>The level each portable <see cref="IsolationProfile"/> maps to on this database.</summary>
+    internal virtual Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+        };
+
+    /// <summary>
+    /// True when <paramref name="level"/> falls short of <paramref name="profile"/>'s guarantee on this
+    /// database even though it is the mapped level (SQL Server: ReadCommitted for SafeNonBlockingReads).
+    /// </summary>
+    internal virtual bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level) => false;
+
     /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>
     public virtual bool RendersColumnArgument(IColumnInfo column) => column.IsJsonType;
 

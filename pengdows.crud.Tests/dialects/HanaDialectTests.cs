@@ -228,7 +228,7 @@ public class HanaDialectTests
     [Fact]
     public void IsolationResolver_SupportsAllFourAnsiLevels()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.SapHana, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.SapHana), false, false);
         var levels = resolver.GetSupportedLevels();
         Assert.Contains(IsolationLevel.ReadUncommitted, levels);
         Assert.Contains(IsolationLevel.ReadCommitted, levels);
@@ -239,7 +239,7 @@ public class HanaDialectTests
     [Fact]
     public void IsolationResolver_MapsSafeAndStrictAndFast()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.SapHana, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.SapHana), false, false);
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadUncommitted, resolver.Resolve(IsolationProfile.FastWithRisks));

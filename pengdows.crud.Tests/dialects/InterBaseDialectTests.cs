@@ -212,7 +212,7 @@ public class InterBaseDialectTests
     [Fact]
     public void IsolationResolver_SupportsAllFiveLevels()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.InterBase, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.InterBase), false, false);
         var levels = resolver.GetSupportedLevels();
         Assert.Contains(IsolationLevel.ReadUncommitted, levels);
         Assert.Contains(IsolationLevel.ReadCommitted, levels);
@@ -224,7 +224,7 @@ public class InterBaseDialectTests
     [Fact]
     public void IsolationResolver_MapsSafeAndStrictAndFast()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.InterBase, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.InterBase), false, false);
         Assert.Equal(IsolationLevel.Snapshot, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));

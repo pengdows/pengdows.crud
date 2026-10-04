@@ -4,9 +4,9 @@
 //
 // AI SUMMARY:
 // - Backported from pengdows.crud 3.0 (same live-verification trail applies) to this
-//   non-breaking 2.0.6 patch line. Isolation-level data (GetSupportedIsolationLevels/
-//   GetIsolationProfileMapping on 3.0) lives in IsolationResolver.cs's central switch instead,
-//   and advisory exception-category classification lives in SqlDialect.cs's own private
+//   non-breaking 2.0.6 patch line. Isolation-level data is dialect-owned as on 3.0
+//   (GetSupportedIsolationLevels/GetIsolationProfileMapping, below; DEC-010), and advisory
+//   exception-category classification lives in SqlDialect.cs's own private
 //   TryClassifyProviderException switch, since 2.0.6 predates 3.0's dialect-owned refactors for
 //   both.
 // - LIVE-VERIFIED end-to-end against a real saplabs/hanaexpress 2.00.088.00.1760424921
@@ -301,8 +301,7 @@ internal sealed class HanaDialect : SqlDialect
         return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "SAP HANA", cancellationToken);
     }
 
-    // Isolation-level data (GetSupportedIsolationLevels/GetIsolationProfileMapping on 3.0) lives
-    // in IsolationResolver.cs's SupportedDatabase.SapHana cases on this branch instead.
+    // Isolation-level data: GetSupportedIsolationLevels/GetIsolationProfileMapping at the end of this file.
 
     // All four codes below were captured live from a real Sap.Data.Hana.HanaException thrown
     // against a real saplabs/hanaexpress container (see file-level AI SUMMARY). TryGetProviderErrorCode
@@ -369,4 +368,22 @@ internal sealed class HanaDialect : SqlDialect
         category = DbErrorCategory.Unknown;
         return false;
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+        };
 }

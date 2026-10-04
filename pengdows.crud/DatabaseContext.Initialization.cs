@@ -538,7 +538,7 @@ public partial class DatabaseContext
                 Interlocked.Exchange(ref _peakOpenConnections, 0);
             }
 
-            _isolationResolver = new IsolationResolver(Product, RCSIEnabled, SnapshotIsolationEnabled);
+            _isolationResolver = new IsolationResolver(_dialect, RCSIEnabled, SnapshotIsolationEnabled);
 
             // BP-301: always-on duplicate warning, and the opt-in hard check. A failed claim
             // rolls back its own keys and throws; the catch below releases everything else.

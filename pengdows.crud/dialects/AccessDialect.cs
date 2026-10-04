@@ -9,8 +9,7 @@
 // refactor — see CLAUDE.md's "Adding a New Database" checklist items 7/10):
 //   - GetSupportedIsolationLevels/GetIsolationProfileMapping: the same data (ReadUncommitted +
 //     ReadCommitted only; SafeNonBlockingReads/StrictConsistency -> ReadCommitted, FastWithRisks
-//     -> ReadUncommitted) lives in IsolationResolver.cs's BuildSupportedIsolationLevels/
-//     BuildProfileMapping instead.
+//     -> ReadUncommitted) is in this dialect's overrides, as on 3.0 (DEC-010).
 //   - GetNaturalKeySelectClause/GetNaturalKeyFirstRowOnlyClause: the same "SELECT TOP 1, no
 //     suffix" behavior is an inline SupportedDatabase.Access case in
 //     SqlDialect.GetNaturalKeyLookupQuery instead (alongside the existing SqlServer/Sybase/
@@ -380,10 +379,8 @@ internal sealed class AccessDialect : SqlDialect
     }
 
     // Isolation-level data (CONFIRMED live: RepeatableRead/Serializable/Snapshot all throw
-    // "Neither the isolation level nor a strengthening of it is supported.") lives in
-    // IsolationResolver.cs's BuildSupportedIsolationLevels/BuildProfileMapping on this branch —
-    // 2.0.6 predates 3.0's dialect-owned GetSupportedIsolationLevels/GetIsolationProfileMapping
-    // hooks. See the SupportedDatabase.Access case added there.
+    // "Neither the isolation level nor a strengthening of it is supported."): this dialect's
+    // GetSupportedIsolationLevels/GetIsolationProfileMapping, at the end of this file (DEC-010).
 
     // CONFIRMED live: "Mode=Read" is a real, recognized OLE DB/Jet connection-string property
     // (distinct from ADO.NET's own "Pooling"/"Application Name" keywords, both confirmed
@@ -518,4 +515,20 @@ internal sealed class AccessDialect : SqlDialect
         decimal d when decimal.Truncate(d) == d && d is >= long.MinValue and <= long.MaxValue => (long)d,
         _ => null
     };
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted,
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+        };
 }

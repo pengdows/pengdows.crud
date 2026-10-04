@@ -12,7 +12,7 @@ public class NewIsolationResolverTests
     [Fact]
     public void Resolve_YugabyteDb_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.YugabyteDb, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.YugabyteDb), false, false);
 
         // BP-209: MVCC RepeatableRead is a non-blocking snapshot (inherits PostgreSQL semantics).
         Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
@@ -28,7 +28,7 @@ public class NewIsolationResolverTests
     [Fact]
     public void Resolve_TiDb_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.TiDb, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.TiDb), false, false);
 
         // TiDB accepts SERIALIZABLE syntax but silently maps it to REPEATABLE READ.
         // StrictConsistency uses RepeatableRead (best available) rather than advertising a level that isn't enforced.
@@ -45,7 +45,7 @@ public class NewIsolationResolverTests
     [Fact]
     public void Resolve_Snowflake_Mappings()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Snowflake, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.Snowflake), false, false);
 
         // Snowflake only supports READ COMMITTED; all profiles map to it.
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
@@ -69,7 +69,7 @@ public class NewIsolationResolverTests
         // just a client-side no-op. Without an explicit entry here, this fell back to the generic
         // default ({ReadCommitted, RepeatableRead, Serializable}), which wrongly omitted
         // ReadUncommitted — a real, supported level on this engine.
-        var resolver = new IsolationResolver(SupportedDatabase.SybaseASE, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.SybaseASE), false, false);
 
         Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.Serializable, resolver.Resolve(IsolationProfile.StrictConsistency));

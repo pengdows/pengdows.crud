@@ -327,4 +327,21 @@ internal class FlatFileDialect : SqlDialect
                 return base.TryClassifyProviderException(ex, out category);
         }
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead,
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+        };
 }

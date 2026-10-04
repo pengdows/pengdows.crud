@@ -775,4 +775,27 @@ internal class MySqlDialect : SqlDialect
         category = DbErrorCategory.Unknown;
         return false;
     }
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    // SingleStore shares this dialect but has always used the generic mapping (base).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        DatabaseType == SupportedDatabase.SingleStore
+        ? base.GetSupportedIsolationLevels(allowSnapshotIsolation)
+        : new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadUncommitted,
+            IsolationLevel.ReadCommitted,
+            IsolationLevel.RepeatableRead,
+            IsolationLevel.Serializable
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        DatabaseType == SupportedDatabase.SingleStore
+        ? base.GetIsolationProfileMapping(allowSnapshotIsolation)
+        : new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+        };
 }

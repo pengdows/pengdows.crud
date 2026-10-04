@@ -479,4 +479,20 @@ internal class SnowflakeDialect : SqlDialect
     // Snowflake parses CHECK constraint DDL but never enforces it at runtime
     // (SupportsCheckConstraints = false) — this exception category structurally cannot occur.
     public override bool IsCheckConstraintViolation(DbException ex) => false;
+
+    // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
+    internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>
+        new HashSet<IsolationLevel>
+        {
+            IsolationLevel.ReadCommitted
+            // Note: Snowflake only supports READ COMMITTED. Other levels are not available.
+        };
+
+    internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) =>
+        new Dictionary<IsolationProfile, IsolationLevel>
+        {
+            [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
+            [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // Only level Snowflake supports (Degraded)
+            [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+        };
 }

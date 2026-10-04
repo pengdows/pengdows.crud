@@ -141,7 +141,7 @@ public class CodeReviewFixTests
     [Fact]
     public void IsolationResolver_CockroachDb_FastWithRisks_Should_Not_Throw()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.CockroachDb, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.CockroachDb), false, false);
 
         // Should resolve without throwing NotSupportedException
         var result = resolver.ResolveWithDetail(IsolationProfile.FastWithRisks);
@@ -157,7 +157,7 @@ public class CodeReviewFixTests
     [InlineData(SupportedDatabase.DuckDB)]
     public void IsolationResolver_AllDatabases_Should_Map_FastWithRisks(SupportedDatabase product)
     {
-        var resolver = new IsolationResolver(product, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(product), false, false);
 
         // All databases should handle FastWithRisks without throwing
         var result = resolver.ResolveWithDetail(IsolationProfile.FastWithRisks);

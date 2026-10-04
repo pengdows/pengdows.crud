@@ -409,7 +409,7 @@ public class AccessDialectTests
     [Fact]
     public void IsolationResolver_SupportsOnlyReadUncommittedAndReadCommitted()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Access, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.Access), false, false);
         var levels = resolver.GetSupportedLevels();
         Assert.Contains(IsolationLevel.ReadUncommitted, levels);
         Assert.Contains(IsolationLevel.ReadCommitted, levels);
@@ -421,7 +421,7 @@ public class AccessDialectTests
     [Fact]
     public void IsolationResolver_MapsSafeAndStrictToReadCommitted_FastToReadUncommitted()
     {
-        var resolver = new IsolationResolver(SupportedDatabase.Access, false, false);
+        var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.Access), false, false);
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.StrictConsistency));
         Assert.Equal(IsolationLevel.ReadUncommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
