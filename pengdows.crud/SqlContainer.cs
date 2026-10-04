@@ -1901,28 +1901,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
         else
         {
-            // Render and cache the command text
-            cmdText = _query.ToString();
-
-            // For non-stored-proc queries, render parameter placeholders
-            // This is CRITICAL for positional-parameter providers (e.g. ODBC/Access, Informix)
-            // RenderParams() populates ParamSequence and replaces {P}name with the dialect marker
-            // (? for positional providers, @name/:name for named ones)
-            if (cmdText.Contains("{P}"))
-            {
-                cmdText = RenderParams(cmdText);
-            }
-            else if (ParamSequence.Count > 0)
-            {
-                // No {P} placeholders — clear any stale sequence from a previous render
-                // so AddParametersToCommand doesn't bind using an outdated mapping.
-                ParamSequence.Clear();
-                _renderedParameterMap?.Clear();
-            }
-
-            // Cache the rendered command text for reuse
-            _cachedCommandText = cmdText;
-            _cachedCommandTextVersion = _query.Version;
+            cmdText = RenderCommandText();
         }
 
         if (traceTimings)
@@ -2500,12 +2479,62 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     /// followed by clearing the parameters would leave it, without building and discarding the
     /// parameter copies (PERF-013: BuildCreate's template path).
     /// </summary>
+    // Renders and caches the command text. RenderParams populates ParamSequence and replaces
+    // {P}name with the dialect marker (? for positional providers such as ODBC/Access and Informix,
+    // @name/:name for named ones).
+    private string RenderCommandText()
+    {
+        var cmdText = _query.ToString();
+        if (cmdText.Contains("{P}"))
+        {
+            cmdText = RenderParams(cmdText);
+        }
+        else if (ParamSequence.Count > 0)
+        {
+            // No {P} placeholders — clear any stale sequence from a previous render
+            // so AddParametersToCommand doesn't bind using an outdated mapping.
+            ParamSequence.Clear();
+            _renderedParameterMap?.Clear();
+        }
+
+        _cachedCommandText = cmdText;
+        _cachedCommandTextVersion = _query.Version;
+        return cmdText;
+    }
+
+    /// <summary>
+    /// Renders a cached template's command text once, while it is built (single-threaded), so the
+    /// clones made from it share the text instead of rendering it again per call (PERF-019).
+    /// </summary>
+    internal void RenderTemplateText() => RenderCommandText();
+
+    /// <summary>True when the command text for the current query is rendered and cached (tests).</summary>
+    internal bool IsCommandTextRendered => _cachedCommandText != null && _cachedCommandTextVersion == _query.Version;
+
     internal SqlContainer CloneQueryOnly(IDatabaseContext? context)
     {
         var clone = (SqlContainer)(context ?? _context).CreateSqlContainer();
         clone._query.CopyFrom(_query);
         clone.HasWhereAppended = HasWhereAppended;
         clone._nextParameterId = _nextParameterId;
+
+        // Share the template's rendered text and its parameter order, as Clone does (PERF-019).
+        if (_cachedCommandText != null && _cachedCommandTextVersion == _query.Version)
+        {
+            clone._cachedCommandText = _cachedCommandText;
+            clone._cachedCommandTextVersion = _cachedCommandTextVersion;
+            if (ParamSequence.Count > 0)
+            {
+                clone.ParamSequence.AddRange(ParamSequence);
+            }
+
+            if (_renderedParameterMap is { Count: > 0 })
+            {
+                clone._renderedParameterMap = new Dictionary<string, string>(_renderedParameterMap,
+                    ParameterNameComparer.Instance);
+            }
+        }
+
         return clone;
     }
 

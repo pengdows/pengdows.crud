@@ -450,12 +450,14 @@ public partial class TableGateway<TEntity, TRowID>
         insertContainer.Query.Replace(PrefixClausePlaceholder, string.Empty);
         insertContainer.Query.Replace(OutputClausePlaceholder, string.Empty);
         insertContainer.Query.Replace(ReturningClausePlaceholder, string.Empty);
+        ((SqlContainer)insertContainer).RenderTemplateText();
         templates.InsertTemplate = insertContainer;
 
         if (UsesReturningTemplate(dialect))
         {
             var (returningContainer, _) = BuildInsertContainerDirect(new TEntity(), context, dialect, sqlTemplate);
             ApplyReturningClauses(returningContainer, dialect, withReturning: true);
+            ((SqlContainer)returningContainer).RenderTemplateText();
             templates.InsertReturningTemplate = returningContainer;
         }
 

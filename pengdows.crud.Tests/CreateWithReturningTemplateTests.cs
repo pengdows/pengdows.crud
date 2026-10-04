@@ -76,4 +76,31 @@ public class CreateWithReturningTemplateTests
 
         Assert.True(returning <= plain + 64, $"BuildCreateWithReturning {returning} B vs BuildCreate {plain} B");
     }
+
+    // PERF-019: the insert templates were never rendered (only executed clones are), so every
+    // BuildCreate clone copied and rendered the SQL text again. The template is rendered once when
+    // built and clones share the result.
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    public void BuildCreate_And_BuildCreateWithReturning_ShareTheRenderedTemplateText(SupportedDatabase db)
+    {
+        var gateway = Gateway(db);
+
+        using var create = (SqlContainer)gateway.BuildCreate(NewRow());
+        using var returning = (SqlContainer)gateway.BuildCreateWithReturning(NewRow(), true);
+
+        Assert.True(create.IsCommandTextRendered);
+        Assert.True(returning.IsCommandTextRendered);
+    }
+
+    // A positional-parameter provider: the clone gets the template's parameter order with its text.
+    [Fact]
+    public void BuildCreate_Informix_SharesTheRenderedTemplateText()
+    {
+        using var create = (SqlContainer)Gateway(SupportedDatabase.Informix).BuildCreate(NewRow());
+
+        Assert.True(create.IsCommandTextRendered);
+    }
 }
