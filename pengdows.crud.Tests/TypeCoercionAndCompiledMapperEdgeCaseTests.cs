@@ -205,4 +205,21 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
 
         Assert.Throws<InvalidValueException>(() => TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
     }
+
+    // COR-011: the coercer DataReaderMapper resolves per column converted DateTime/DateTimeOffset
+    // with the default options, ignoring the TimePolicy Coerce honors for the same options.
+    [Fact]
+    public void ResolveCoercer_DateTimeIntoDateTimeOffset_HonorsTheTimePolicy()
+    {
+        var forceUtc = TypeCoercionOptions.Default with { TimePolicy = TimeMappingPolicy.ForceUtcDateTime };
+        var local = new DateTime(2026, 10, 4, 7, 30, 0, DateTimeKind.Local);
+
+        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(DateTime), typeof(DateTimeOffset),
+            EnumParseFailureMode.Throw, forceUtc);
+
+        var expected = TypeCoercionHelper.Coerce(local, typeof(DateTime), typeof(DateTimeOffset), forceUtc);
+        Assert.Equal(TimeSpan.Zero, ((DateTimeOffset)expected!).Offset);
+        Assert.Equal(expected, coercer(local));
+        Assert.Equal(TimeSpan.Zero, ((DateTimeOffset)coercer(local)!).Offset);
+    }
 }

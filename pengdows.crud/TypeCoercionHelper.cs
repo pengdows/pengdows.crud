@@ -1261,15 +1261,18 @@ internal static class TypeCoercionHelper
             return value => Utils.IsNullOrDbNull(value) ? null : CoerceEnum(value!, enumType, parseMode, targetType);
         }
 
+        // The caller's options, as Coerce uses them: the TimePolicy decides how a DateTime becomes a
+        // DateTimeOffset (COR-011).
+        var timeOptions = options ?? TypeCoercionOptions.Default;
         if (runtimeTarget == typeof(DateTimeOffset))
         {
             return value =>
-                Utils.IsNullOrDbNull(value) ? null : CoerceDateTimeOffset(value!, TypeCoercionOptions.Default);
+                Utils.IsNullOrDbNull(value) ? null : CoerceDateTimeOffset(value!, timeOptions);
         }
 
         if (runtimeTarget == typeof(DateTime))
         {
-            return value => Utils.IsNullOrDbNull(value) ? null : CoerceDateTime(value!, TypeCoercionOptions.Default);
+            return value => Utils.IsNullOrDbNull(value) ? null : CoerceDateTime(value!, timeOptions);
         }
 
         if (runtimeTarget.IsAssignableFrom(sourceType) &&
@@ -1311,9 +1314,9 @@ internal static class TypeCoercionHelper
     }
 
     /// <summary>
-    /// Byte reader for compiled mappers. Values of 256 bytes or less are read into a pooled
-    /// buffer and copied to an exact-size array; larger values are read directly into a new array.
-    /// GetBytes may return fewer bytes than requested, so both paths read until the value is complete.
+    /// Byte reader for compiled mappers: the value is read straight into an array of the length the
+    /// provider reports. GetBytes may return fewer bytes than requested, so it reads until the value
+    /// is complete.
     /// </summary>
     public static byte[] ReadBytes(IDataRecord reader, int ordinal)
     {
