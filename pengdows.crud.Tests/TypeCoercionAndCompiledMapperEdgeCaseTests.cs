@@ -241,6 +241,9 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
 
     // COR-011: the coercer DataReaderMapper resolves per column converted DateTime/DateTimeOffset
     // with the default options, ignoring the TimePolicy Coerce honors for the same options.
+    // Verification gap (REV-076): the policy changes the result only for a DateTimeKind.Local value, and on
+    // a UTC host (CI) local and UTC offsets coincide, so this can only fail on a non-UTC host. Changing the
+    // process time zone mid-run would affect every test running in parallel.
     [Fact]
     public void ResolveCoercer_DateTimeIntoDateTimeOffset_HonorsTheTimePolicy()
     {

@@ -56,7 +56,9 @@ public class DatabaseMetricsTests
         };
         await using var context = new DatabaseContext(config, factory);
 
-        for (var i = 0; i < 5; i++)
+        // 200 operations: the average is exponentially weighted, so a slow first open (JIT, a loaded host)
+        // fades. Whole milliseconds kept only opens of 1 ms or more, so the old average was never below 1.
+        for (var i = 0; i < 200; i++)
         {
             await using var sc = context.CreateSqlContainer("UPDATE t SET a = 1");
             await sc.ExecuteNonQueryAsync();
