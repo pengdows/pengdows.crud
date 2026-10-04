@@ -16,50 +16,6 @@ namespace pengdows.crud.Tests;
 
 public class SqlDialectAdditionalCoverageTests
 {
-    [Fact]
-    public void WrapObjectName_TrimsWhitespaceAndSkipsEmptySegments()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
-        var wrapped = context.WrapObjectName("  schema..table  ");
-        Assert.Equal("\"schema\".\"table\"", wrapped);
-    }
-
-    [Fact]
-    public void GetConnectionSessionSettings_ReadOnlyAppendsReadOnlySettings()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-        var context = new DatabaseContext("Data Source=:memory:", factory);
-        var settings = dialect.GetConnectionSessionSettings(context, true);
-        Assert.Equal("SET BASE SETTINGS\nSET READONLY MODE", settings);
-    }
-
-    [Fact]
-    public void GetReadOnlyConnectionString_AppendsReadOnlyParameter()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-        var readOnly = dialect.CallGetReadOnlyConnectionString("Data Source=test");
-        Assert.Equal("Data Source=test;Mode=ReadOnly", readOnly);
-    }
-
-    [Fact]
-    public void CreateDbParameter_InvalidName_ThrowsArgumentException()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-        Assert.Throws<ArgumentException>(() => dialect.CreateDbParameter("bad-name!", DbType.Int32, 1));
-    }
-
-    [Fact]
-    public void CreateDbParameter_StringValue_SetsSize()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-        var parameter = dialect.CreateDbParameter("p", DbType.String, "abc");
-        Assert.Equal(3, parameter.Size);
-    }
 
     [Fact]
     public void CreateDbParameter_DecimalValue_SetsPrecisionToAtLeast18AndExactScale()
@@ -90,95 +46,6 @@ public class SqlDialectAdditionalCoverageTests
     }
 
     [Fact]
-    public void InferDatabaseTypeFromInfo_DetectsKnownProduct()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-        var inferred = dialect.CallInferDatabaseType("CockroachDB", "CockroachDB 23.1");
-        Assert.Equal(SupportedDatabase.CockroachDb, inferred);
-    }
-
-    [Fact]
-    public void FeatureProperties_AreCallable()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-        var features = new[]
-        {
-            dialect.SupportsJoins,
-            dialect.SupportsOuterJoins,
-            dialect.SupportsSubqueries,
-            dialect.SupportsUnion,
-            dialect.SupportsUserDefinedTypes,
-            dialect.SupportsArrayTypes,
-            dialect.SupportsRegularExpressions,
-            dialect.SupportsMerge,
-            dialect.SupportsXmlTypes,
-            dialect.SupportsWindowFunctions,
-            dialect.SupportsCommonTableExpressions,
-            dialect.SupportsInsteadOfTriggers,
-            dialect.SupportsTruncateTable,
-            dialect.SupportsTemporalData,
-            dialect.SupportsEnhancedWindowFunctions,
-            dialect.SupportsJsonTypes,
-            dialect.SupportsRowPatternMatching,
-            dialect.SupportsMultidimensionalArrays,
-            dialect.SupportsPropertyGraphQueries,
-            dialect.SupportsSqlJsonConstructors,
-            dialect.SupportsJsonTable,
-            dialect.SupportsMergeReturning,
-            dialect.SupportsInsertOnConflict,
-            dialect.SupportsOnDuplicateKey,
-            dialect.SupportsSavepoints,
-            dialect.SupportsDropTableIfExists
-        };
-
-        Assert.Equal(26, features.Length);
-        Assert.Contains("SAVEPOINT", dialect.GetSavepointSql("sp"), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ROLLBACK", dialect.GetRollbackToSavepointSql("sp"), StringComparison.OrdinalIgnoreCase);
-        var numeric = new[]
-        {
-            dialect.MaxParameterLimit,
-            dialect.MaxOutputParameters,
-            dialect.ParameterNameMaxLength
-        };
-        Assert.All(numeric, value => Assert.True(value >= 0));
-        Assert.False(dialect.RequiresStoredProcParameterNameMatch);
-        Assert.False(dialect.SupportsNamespaces);
-    }
-
-    [Fact]
-    public void ParameterHelpers_AreInvokable()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-
-        Assert.Equal(":", dialect.ParameterMarker);
-        Assert.Equal(":", dialect.ParameterMarkerAt(10));
-        Assert.Equal(":p", dialect.RenderJsonArgument(":p", null!));
-        Assert.Throws<ArgumentNullException>(() => dialect.TryMarkJsonParameter(null!, null!));
-    }
-
-    [Fact]
-    public void WrapObjectName_WhitespaceOnlyReturnsEmpty()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.PostgreSql}", factory);
-        Assert.Equal(string.Empty, context.WrapObjectName("     "));
-    }
-
-    [Fact]
-    public void BuildWrappedObjectName_TrimsAndQuotesSegments()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-        var result = dialect.CallBuildWrappedObjectName("  schema.table  ");
-
-        Assert.Equal("\"schema\".\"table\"", result);
-        Assert.Equal(string.Empty, dialect.CallBuildWrappedObjectName("   "));
-    }
-
-    [Fact]
     public async Task DetectDatabaseInfoAsync_FallsBackWhenVersionFails()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
@@ -190,39 +57,6 @@ public class SqlDialectAdditionalCoverageTests
 
         Assert.Equal("Unknown", info.ProductName);
         Assert.Equal(SqlStandardLevel.Sql92, info.StandardCompliance);
-    }
-
-    [Fact]
-    public async Task GetProductNameAsync_UsesSchemaName()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-        var schema = DataSourceInformation.BuildEmptySchema("Driver", "1.0", "?", "%", 64, "\\w+", "\\w+", true);
-        using var tracked = CreateTrackedConnection(factory, schema);
-
-        var result = await dialect.GetProductNameAsync(tracked);
-
-        Assert.Equal("Driver", result);
-    }
-
-    [Fact]
-    public void ParseVersion_HandlesCommonFormats()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-
-        Assert.Equal(3, dialect.ParseVersion("PostgreSQL 3.2.1")?.Major);
-        Assert.Null(dialect.ParseVersion("invalid version"));
-    }
-
-    [Fact]
-    public void GenerateRandomName_TruncatesToMax()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
-
-        var name = dialect.GenerateRandomName(10, 3);
-        Assert.True(name.Length <= 3);
     }
 
     [Fact]

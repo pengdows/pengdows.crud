@@ -288,3 +288,22 @@ namespace pengdows.crud.Tests
     }
 
 }
+
+
+namespace Npgsql
+{
+    internal sealed class FakeConnection : IDbConnection
+    {
+        public string ConnectionString { get; set; } = string.Empty;
+        public int ConnectionTimeout => 0;
+        public string Database => "npgsql";
+        public ConnectionState State => ConnectionState.Closed;
+        public IDbTransaction BeginTransaction() => throw new NotSupportedException();
+        public IDbTransaction BeginTransaction(IsolationLevel il) => throw new NotSupportedException();
+        public void ChangeDatabase(string databaseName) => throw new NotSupportedException();
+        public void Close() { }
+        public IDbCommand CreateCommand() => throw new NotSupportedException();
+        public void Open() { }
+        public void Dispose() { }
+    }
+}

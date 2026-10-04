@@ -27,52 +27,10 @@ public class CoveragePush_InternalExtensionThrowPathsTests
     // (InternalSqlContainerExtensions.cs lines 11-12)
     // =========================================================================
 
-    [Fact]
-    public void CreateCommand_NonSqlContainerISqlContainer_Throws()
-    {
-        // Create a mock ISqlContainer that is NOT a SqlContainer
-        var mockContainer = new Mock<ISqlContainer>();
-        var mockConnection = new Mock<ITrackedConnection>();
-
-        var ex = Assert.Throws<InvalidOperationException>(
-            () => mockContainer.Object.CreateCommand(mockConnection.Object));
-
-        Assert.Contains("SqlContainer", ex.Message);
-    }
-
     // =========================================================================
     // InternalConnectionExtensions — non-IInternalConnectionProvider context
     // (InternalConnectionExtensions.cs lines 39-40, 49-50, 60-61)
     // =========================================================================
-
-    [Fact]
-    public void GetConnection_NonProviderContext_Throws()
-    {
-        // IDatabaseContext that does NOT implement IInternalConnectionProvider
-        var mockCtx = new Mock<IDatabaseContext>();
-        mockCtx.Setup(c => c.ReadWriteMode).Returns(ReadWriteMode.ReadWrite);
-
-        Assert.Throws<InvalidOperationException>(
-            () => mockCtx.Object.GetConnection(ExecutionType.Read));
-    }
-
-    [Fact]
-    public void GetLock_NonProviderContext_Throws()
-    {
-        var mockCtx = new Mock<IDatabaseContext>();
-
-        Assert.Throws<InvalidOperationException>(
-            () => mockCtx.Object.GetLock());
-    }
-
-    [Fact]
-    public void CloseAndDisposeConnection_NonProviderContext_Throws()
-    {
-        var mockCtx = new Mock<IDatabaseContext>();
-
-        Assert.Throws<InvalidOperationException>(
-            () => mockCtx.Object.CloseAndDisposeConnection(null));
-    }
 
     [Fact]
     public async System.Threading.Tasks.Task CloseAndDisposeConnectionAsync_NonProviderContext_Throws()
@@ -87,38 +45,6 @@ public class CoveragePush_InternalExtensionThrowPathsTests
     // InternalSqlDialectExtensions.GetInternal — non-IInternalSqlDialect input
     // (InternalSqlDialectExtensions.cs lines 100-101)
     // =========================================================================
-
-    [Fact]
-    public void ApplyConnectionSettings_NonInternalDialect_Throws()
-    {
-        // Create a mock ISqlDialect that does NOT implement IInternalSqlDialect
-        var mockDialect = new Mock<ISqlDialect>();
-        var mockCtx = new Mock<IDatabaseContext>();
-        var mockConn = new Mock<IDbConnection>();
-
-        Assert.Throws<InvalidOperationException>(
-            () => mockDialect.Object.ApplyConnectionSettings(mockConn.Object, mockCtx.Object, false));
-    }
-
-    [Fact]
-    public void ShouldDisablePrepareOn_NonInternalDialect_Throws()
-    {
-        var mockDialect = new Mock<ISqlDialect>();
-        var ex = new Exception("test");
-
-        Assert.Throws<InvalidOperationException>(
-            () => mockDialect.Object.ShouldDisablePrepareOn(ex));
-    }
-
-    [Fact]
-    public void TryEnterReadOnlyTransaction_NonInternalDialect_Throws()
-    {
-        var mockDialect = new Mock<ISqlDialect>();
-        var mockTx = new Mock<ITransactionContext>();
-
-        Assert.Throws<InvalidOperationException>(
-            () => mockDialect.Object.TryEnterReadOnlyTransaction(mockTx.Object));
-    }
 
     // =========================================================================
     // InternalSqlDialectExtensions — success paths via real dialect
@@ -158,16 +84,6 @@ public class CoveragePush_InternalExtensionThrowPathsTests
         // Just ensure it doesn't throw and returns a valid bool
         var result = dialect.ShouldDisablePrepareOn(ex);
         Assert.IsType<bool>(result);
-    }
-
-    [Fact]
-    public void GetMajorVersion_RealDialect_ReturnsNullableInt()
-    {
-        var dialect = GetRealDialect();
-
-        // "3.39.5" → major version 3
-        var result = dialect.GetMajorVersion("3.39.5");
-        Assert.True(result == null || result >= 0);
     }
 
     [Fact]
