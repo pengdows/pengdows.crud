@@ -28,6 +28,12 @@ internal interface IInternalTrackedReader
     object ReadUnresolvedColumn(System.Data.IDataRecord record, int ordinal, Type type);
 
     /// <summary>
+    /// <see cref="ReadUnresolvedColumn"/> as a delegate bound to the dialect (or a static reader),
+    /// never to this reader, so a cached plan can hold it without keeping the reader alive (COR-006).
+    /// </summary>
+    Func<System.Data.IDataRecord, int, Type, object> UnresolvedColumnReadDelegate { get; }
+
+    /// <summary>
     /// The coercion options of the dialect that produced this reader (its type-mapping provider and
     /// Guid byte order), so callers that read <see cref="InnerReader"/> directly convert values as
     /// the gateway does (TYPE-002).

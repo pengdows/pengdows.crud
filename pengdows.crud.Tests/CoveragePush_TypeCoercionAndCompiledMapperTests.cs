@@ -80,21 +80,28 @@ public sealed class CoveragePush_TypeCoercionAndCompiledMapperTests
         Assert.Throws<ArgumentException>(() => EnumMappingCache.ValidateEnumValue((MapperEnum)77));
     }
 
-    [Fact]
-    public void Coerce_EmptyString_CoversDefaultValueBranches()
+    // COR-002: blank text is not a number, Guid, date or flag. It read as 0/Guid.Empty/default/false
+    // with no error (the silent wrong value TYPE-008 forbids); it fails instead, nullable targets too
+    // (an empty string is not NULL).
+    [Theory]
+    [InlineData(typeof(decimal))]
+    [InlineData(typeof(Guid))]
+    [InlineData(typeof(DateTime))]
+    [InlineData(typeof(DateTimeOffset))]
+    [InlineData(typeof(int))]
+    [InlineData(typeof(long))]
+    [InlineData(typeof(double))]
+    [InlineData(typeof(float))]
+    [InlineData(typeof(bool))]
+    [InlineData(typeof(short))]
+    [InlineData(typeof(byte))]
+    [InlineData(typeof(uint))]
+    [InlineData(typeof(int?))]
+    [InlineData(typeof(Guid?))]
+    public void Coerce_BlankString_IntoANonStringType_Throws(Type target)
     {
-        Assert.Equal(0m, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(decimal)));
-        Assert.Equal(Guid.Empty, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(Guid)));
-        Assert.Equal(default(DateTime), TypeCoercionHelper.Coerce(" ", typeof(string), typeof(DateTime)));
-        Assert.Equal(default(DateTimeOffset), TypeCoercionHelper.Coerce(" ", typeof(string), typeof(DateTimeOffset)));
-        Assert.Equal(0, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(int)));
-        Assert.Equal(0L, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(long)));
-        Assert.Equal(0d, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(double)));
-        Assert.Equal(0f, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(float)));
-        Assert.Equal(false, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(bool)));
-        Assert.Equal((short)0, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(short)));
-        Assert.Equal((byte)0, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(byte)));
-        Assert.Equal((uint)0, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(uint)));
+        Assert.Throws<FormatException>(() => TypeCoercionHelper.Coerce(" ", typeof(string), target));
+        Assert.Throws<FormatException>(() => TypeCoercionHelper.Coerce("", typeof(string), target));
     }
 
     [Fact]

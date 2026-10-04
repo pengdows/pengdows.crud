@@ -288,55 +288,13 @@ internal static class TypeCoercionHelper
                     $"A char needs exactly one character; the stored text has {charText.Length}.");
         }
 
-        // Handle empty strings for non-string types
-        if (value is string s && string.IsNullOrWhiteSpace(s) && underlyingTarget != typeof(string))
+        // COR-002: blank text is not a number, Guid, date or flag. It used to read as
+        // 0/Guid.Empty/default/false with no error (the silent wrong value TYPE-008 forbids), for
+        // nullable targets too; an empty string is not NULL.
+        if (value is string s && string.IsNullOrWhiteSpace(s) && underlyingTarget != typeof(string) &&
+            underlyingTarget != typeof(object))
         {
-            if (underlyingTarget == typeof(decimal))
-            {
-                return 0m;
-            }
-            if (underlyingTarget == typeof(Guid))
-            {
-                return Guid.Empty;
-            }
-            if (underlyingTarget == typeof(DateTime))
-            {
-                return default(DateTime);
-            }
-            if (underlyingTarget == typeof(DateTimeOffset))
-            {
-                return default(DateTimeOffset);
-            }
-            if (underlyingTarget == typeof(int))
-            {
-                return 0;
-            }
-            if (underlyingTarget == typeof(long))
-            {
-                return 0L;
-            }
-            if (underlyingTarget == typeof(double))
-            {
-                return 0d;
-            }
-            if (underlyingTarget == typeof(float))
-            {
-                return 0f;
-            }
-            if (underlyingTarget == typeof(bool))
-            {
-                return false;
-            }
-            if (underlyingTarget == typeof(short))
-            {
-                return (short)0;
-            }
-            if (underlyingTarget == typeof(byte))
-            {
-                return (byte)0;
-            }
-
-            return IsNumericClrType(underlyingTarget) ? Activator.CreateInstance(underlyingTarget) : null;
+            throw new FormatException($"Blank text can't be read as {underlyingTarget.Name}.");
         }
 
         // Don't take fast path for DateTime types as they may need UTC conversion
@@ -1420,13 +1378,15 @@ internal static class TypeCoercionHelper
     /// </summary>
     public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal, bool bigEndian)
     {
-        var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(16);
+        var temp = System.Buffers.ArrayPool<byte>.Shared.Rent(17);
         try
         {
-            var read = ReadAllBytes(reader, ordinal, temp, 16);
-            if (read < 16)
+            // Up to 17 bytes: a longer value was read as its first 16, a silently wrong Guid (COR-003).
+            var read = ReadAllBytes(reader, ordinal, temp, 17);
+            if (read != 16)
             {
-                throw new exceptions.InvalidValueException("Binary column does not contain 16 bytes for a GUID.");
+                throw new exceptions.InvalidValueException(
+                    $"Binary column holds {(read > 16 ? "more than 16" : read.ToString(CultureInfo.InvariantCulture))} bytes; a GUID needs exactly 16.");
             }
             return new Guid(temp.AsSpan(0, 16), bigEndian);
         }

@@ -120,14 +120,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     valueReadExpr = BuildConversionExpression(call, fieldType, targetType, coercionOptions);
                 }
 
-                var exParam = Expression.Parameter(typeof(Exception), "ex");
-                var catchBlock = Expression.Catch(exParam,
-                    Expression.Throw(
-                        Expression.New(typeof(exceptions.InvalidValueException).GetConstructor(new[] { typeof(string) })!,
-                        Expression.Constant($"Unable to set property from value that was stored in the database: {rawName}")),
-                        targetType));
-
-                valueReadExpr = Expression.TryCatch(valueReadExpr, catchBlock);
+                // No catch-all here (COR-004): a value that isn't a Guid (InvalidValueException) is a
+                // conversion failure the gateway reports naming the column; anything else surfaces as itself.
             }
             else if (column.IsEnum)
             {
@@ -365,7 +359,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 
     // The failures a stored value that doesn't fit its property produces (TYPE-008).
     private static bool IsConversionFailure(Exception failure) =>
-        failure is OverflowException or InvalidCastException or FormatException or JsonException;
+        failure is OverflowException or InvalidCastException or FormatException or JsonException
+            or exceptions.InvalidValueException;
 
     private static MethodInfo ResolveJsonDeserializeMethod(Type targetType)
     {
@@ -511,18 +506,50 @@ internal static class EnumMappingCache
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<string, TEnum> FromString =
             new(StringComparer.OrdinalIgnoreCase);
 
+        // Only valid values are cached, so bad stored data can't grow these without bound (COR-005).
         public static readonly System.Collections.Concurrent.ConcurrentDictionary<TEnum, bool> Defined = new();
+
+        public static readonly bool IsFlags = typeof(TEnum).IsDefined(typeof(FlagsAttribute), false);
+
+        // Every bit some defined member uses, for [Flags] combinations.
+        public static readonly ulong AllFlags = Enum.GetValues<TEnum>().Aggregate(0UL, (bits, v) => bits | ToBits(v));
+
+        public static ulong ToBits(TEnum value) => unchecked((ulong)Convert.ToInt64(value, System.Globalization.CultureInfo.InvariantCulture));
     }
+
+    // A defined value, or for a [Flags] enum any combination of defined flags (COR-005).
+    private static bool IsValid<TEnum>(TEnum value) where TEnum : struct, Enum =>
+        Enum.IsDefined(value) || (Cache<TEnum>.IsFlags && (Cache<TEnum>.ToBits(value) & ~Cache<TEnum>.AllFlags) == 0);
 
     public static TEnum GetEnumFromString<TEnum>(string value) where TEnum : struct, Enum
     {
-        return Cache<TEnum>.FromString.GetOrAdd(value, static v => (TEnum)Enum.Parse(typeof(TEnum), v, true));
+        if (Cache<TEnum>.FromString.TryGetValue(value, out var cached))
+        {
+            return cached;
+        }
+
+        // Enum.Parse accepts a number ("999") and returns it as an undefined value; the numeric path
+        // validated, this one didn't (COR-005).
+        var parsed = (TEnum)Enum.Parse(typeof(TEnum), value, true);
+        if (!IsValid(parsed))
+        {
+            throw new ArgumentException($"Invalid enum value '{value}' for type {typeof(TEnum).Name}");
+        }
+
+        Cache<TEnum>.FromString.TryAdd(value, parsed);
+        return parsed;
     }
 
     public static TEnum ValidateEnumValue<TEnum>(TEnum value) where TEnum : struct, Enum
     {
-        if (Cache<TEnum>.Defined.GetOrAdd(value, static v => Enum.IsDefined(typeof(TEnum), v)))
+        if (Cache<TEnum>.Defined.ContainsKey(value))
         {
+            return value;
+        }
+
+        if (IsValid(value))
+        {
+            Cache<TEnum>.Defined.TryAdd(value, true);
             return value;
         }
 

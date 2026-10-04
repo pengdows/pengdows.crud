@@ -109,14 +109,45 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
         Assert.True(reader.BytesReadCount > 0);
     }
 
+    // COR-004: the byte[] branch caught every exception and replaced it with an InvalidValueException
+    // carrying no inner exception; a provider failure now surfaces as itself, as for every other column.
     [Fact]
-    public void MapReaderToObject_ByteArray_GetBytesFailure_Throws()
+    public void MapReaderToObject_ByteArray_GetBytesFailure_SurfacesTheProviderError()
     {
         var helper = new TableGateway<ByteArrayEntity, int>(Context);
         using var reader = CreateThrowingReader(new byte[] { 1, 2, 3 });
         reader.Read();
 
-        Assert.Throws<InvalidValueException>(() => helper.MapReaderToObject(reader));
+        var ex = Assert.Throws<InvalidOperationException>(() => helper.MapReaderToObject(reader));
+        Assert.Equal("GetBytes failed.", ex.Message);
+    }
+
+    // ...and a binary value that isn't a Guid is a mapping failure naming the column, with the cause kept.
+    [Fact]
+    public void MapReaderToObject_BinaryGuidOfWrongLength_ThrowsDataMappingExceptionNamingTheColumn()
+    {
+        var helper = new TableGateway<GuidBytesEntity, int>(Context);
+        var table = new DataTable();
+        table.Columns.Add("Id", typeof(int));
+        table.Columns.Add("Key", typeof(byte[]));
+        table.Rows.Add(1, new byte[20]);
+        using var reader = new NonDbTrackedReader(new DataTableReader(table));
+        reader.Read();
+
+        var ex = Assert.Throws<pengdows.crud.exceptions.DataMappingException>(() => helper.MapReaderToObject(reader));
+        Assert.Contains("'Key'", ex.Message, StringComparison.Ordinal);
+        Assert.IsType<InvalidValueException>(ex.InnerException);
+    }
+
+    [Table("GuidBytes")]
+    private class GuidBytesEntity
+    {
+        [Id(false)]
+        [Column("Id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("Key", DbType.Binary)]
+        public Guid Key { get; set; }
     }
 
     [Table("EnumEntity")]

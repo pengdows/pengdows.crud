@@ -75,11 +75,10 @@ public class TypeCoercionHelperUncoveredBranchTests
     // Same ternary, true side: an unsigned integer type is numeric per IsNumericClrType but has no
     // earlier explicit special case, so it reaches the Activator.CreateInstance branch.
     [Fact]
-    public void Coerce_WhitespaceStringToUInt32_ReturnsDefaultInstance()
+    public void Coerce_WhitespaceStringToUInt32_Throws()
     {
-        var result = TypeCoercionHelper.Coerce("   ", typeof(string), typeof(uint));
-
-        Assert.Equal(0u, result);
+        // COR-002: blank text is not a number.
+        Assert.Throws<FormatException>(() => TypeCoercionHelper.Coerce("   ", typeof(string), typeof(uint)));
     }
 
     // TypeCoercionHelper.CoerceBoolean: char and double switch cases (lines ~575-582).

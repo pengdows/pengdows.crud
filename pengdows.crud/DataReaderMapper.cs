@@ -400,7 +400,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             // TYPE-002: provider-specific coercions (e.g. MySQL's SRID-prefixed spatial format)
             // apply here as they do through the gateway.
             coercion = internalReader.CoercionOptions;
-            unresolvedReader = internalReader.ReadUnresolvedColumn;
+            unresolvedReader = internalReader.UnresolvedColumnReadDelegate;
             return internalReader.InnerReader;
         }
 

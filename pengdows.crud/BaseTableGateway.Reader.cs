@@ -46,7 +46,7 @@ public abstract partial class BaseTableGateway<TEntity>
             throw CreateMappingException(reader, ex.InnerException!, plan.Options, ex.Ordinal);
         }
         catch (Exception ex) when (ex is OverflowException or InvalidCastException or FormatException
-                                       or System.Text.Json.JsonException)
+                                       or System.Text.Json.JsonException or exceptions.InvalidValueException)
         {
             // TYPE-008: a stored value the property can't hold (e.g. a NUMERIC above
             // decimal.MaxValue) surfaced as whatever the provider threw. Report it as a mapping

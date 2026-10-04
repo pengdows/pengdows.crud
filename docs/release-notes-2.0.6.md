@@ -9,6 +9,16 @@
 - A `[Json]` column holding text that isn't valid JSON for the property type fails the read with
   `DataMappingException` naming the column. 2.0.5 returned `null`/default silently (DEC-008).
 
+- Blank or whitespace text read into a number, Guid, date or bool (nullable or not) fails with
+  `DataMappingException` naming the column (scalar reads: `FormatException`). 2.0.5 returned
+  0/`Guid.Empty`/default/false (COR-002).
+- A binary column read as a `Guid` must hold exactly 16 bytes; a longer value was silently cut to
+  its first 16 (COR-003).
+- A string enum column holding a number that isn't a defined member ("999") fails like any other
+  undefined value (`ArgumentException`, as before for unknown names). `[Flags]` enums accept any
+  combination of defined flags on both string and numeric columns; 2.0.5 rejected numeric
+  combinations (COR-005).
+
 ## TiDB
 
 - Upserts of `UInt64` columns (`BIT(64)`, `BIGINT UNSIGNED`) no longer go through `VALUES(col)`,

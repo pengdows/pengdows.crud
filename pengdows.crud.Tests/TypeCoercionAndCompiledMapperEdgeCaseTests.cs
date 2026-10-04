@@ -81,23 +81,6 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
     }
 
     [Fact]
-    public void Coerce_EmptyString_CoversDefaultValueBranches()
-    {
-        Assert.Equal(0m, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(decimal)));
-        Assert.Equal(Guid.Empty, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(Guid)));
-        Assert.Equal(default(DateTime), TypeCoercionHelper.Coerce(" ", typeof(string), typeof(DateTime)));
-        Assert.Equal(default(DateTimeOffset), TypeCoercionHelper.Coerce(" ", typeof(string), typeof(DateTimeOffset)));
-        Assert.Equal(0, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(int)));
-        Assert.Equal(0L, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(long)));
-        Assert.Equal(0d, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(double)));
-        Assert.Equal(0f, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(float)));
-        Assert.Equal(false, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(bool)));
-        Assert.Equal((short)0, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(short)));
-        Assert.Equal((byte)0, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(byte)));
-        Assert.Equal((uint)0, TypeCoercionHelper.Coerce(" ", typeof(string), typeof(uint)));
-    }
-
-    [Fact]
     public void CoerceDateTimeFromString_CoversWhitespaceParseAndFailureBranches()
     {
         Assert.Throws<InvalidCastException>(() => TypeCoercionHelper.CoerceDateTimeFromString("   "));
@@ -196,6 +179,19 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         Assert.Equal(20, reader.GetBytes(0, 0, null, 0, 0));
         Assert.Equal(7, reader.GetBytes(0, 0, new byte[20], 0, 20));
         Assert.Equal(6, reader.GetBytes(0, 14, new byte[20], 0, 20));
+    }
+
+    // COR-003: a value longer than 16 bytes was read as its first 16 bytes, a silently wrong Guid.
+    [Fact]
+    public void ReadGuidFromBytes_LongerThan16Bytes_ThrowsInvalidValueException()
+    {
+        using var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["gid"] = new byte[20] }
+        });
+        Assert.True(reader.Read());
+
+        Assert.Throws<InvalidValueException>(() => TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
     }
 
     [Fact]

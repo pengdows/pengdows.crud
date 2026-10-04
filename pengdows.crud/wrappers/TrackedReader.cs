@@ -170,6 +170,9 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         : UnresolvedColumnReader.Read(record, ordinal, type);
     TypeCoercionOptions IInternalTrackedReader.CoercionOptions => _coercionOptions;
 
+    Func<IDataRecord, int, Type, object> IInternalTrackedReader.UnresolvedColumnReadDelegate =>
+        _unresolvedColumnDialect?.UnresolvedColumnReadDelegate ?? SqlDialect.DefaultUnresolvedColumnReader;
+
     protected override void DisposeManaged()
     {
         // BP-110 (3.0 CORE-021): every phase below owns a distinct resource (reader, command,
