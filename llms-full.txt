@@ -4963,14 +4963,15 @@ is stale, the same as single-entity `UpdateAsync`:
   the same instances can go through another `BatchUpdateAsync`. When a conflict throws, entities
   updated before it carry their new version and the conflicting entity keeps the one it had.
 
-### TiDB: `UInt64` columns
+### TiDB: `UInt64`, `Int64` and `Binary` columns
 
 TiDB's `VALUES(col)` in `ON DUPLICATE KEY UPDATE` returns a `BIT(64)` value byte-reversed (a TiDB
-defect, confirmed on v8.5.7). `BIT(64)` maps to `ulong` (`DbType.UInt64`), as `BIGINT UNSIGNED`
-does, so on TiDB every `UInt64` column is upserted safely: a single-row upsert sets it from its own
-bound parameter, and a batch upsert of an entity with such a column runs one statement per row
-(TiDB has no row alias, so a multi-row statement can only use `VALUES()`). Other entities keep the
-multi-row statement.
+defect, confirmed on v8.5.7), whether the value is bound as `ulong`, `long` or `byte[]`. pengdows sees
+a column's `DbType`, not its declared type, so on TiDB every `UInt64`, `Int64` and `Binary` column in
+the update list is upserted safely: a single-row upsert sets it from its own bound parameter (no extra
+cost), and a batch upsert of an entity with such a column runs one statement per row (TiDB has no row
+alias, so a multi-row statement can only use `VALUES()`). Key columns aren't in the update list, so a
+`long` `[Id]` or `[PrimaryKey]` alone doesn't trigger it. Other entities keep the multi-row statement.
 
 ### Batch upsert and `[Version]` conflicts
 

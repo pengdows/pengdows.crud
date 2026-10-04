@@ -36,7 +36,20 @@ public class TiDbBit64UpsertTests
     public class PlainRow
     {
         [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("n", DbType.Int32)] public int N { get; set; }
+        [Column("s", DbType.String)] public string S { get; set; } = "";
+    }
+
+    // REV-083 (probed live, TiDB v8.5.7, MySqlConnector 2.6.2 and MySql.Data 9.4.0): VALUES(col) reverses
+    // a BIT(64) value whether it is bound as ulong, long or byte[]; pengdows sees only the DbType, so a
+    // long or byte[] column could be BIT(64) too.
+    [Table("bits_wide")]
+    public class WideRow
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
         [Column("n", DbType.Int64)] public long N { get; set; }
+        [Column("raw", DbType.Binary)] public byte[] Raw { get; set; } = System.Array.Empty<byte>();
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
     }
 
     private static DatabaseContext Context(SupportedDatabase db) =>
@@ -101,10 +114,10 @@ public class TiDbBit64UpsertTests
     }
 
     [Fact]
-    public void TiDb_BatchUpsert_WithoutAUInt64Column_StaysOneStatement()
+    public void TiDb_BatchUpsert_WithNoColumnThatCouldBeBit64_StaysOneStatement()
     {
         using var ctx = Context(SupportedDatabase.TiDb);
-        var batch = new TableGateway<PlainRow, int>(ctx).BuildBatchUpsert(new[] { new PlainRow { Id = 1, N = 1 }, new PlainRow { Id = 2, N = 2 } });
+        var batch = new TableGateway<PlainRow, int>(ctx).BuildBatchUpsert(new[] { new PlainRow { Id = 1, N = 1, S = "a" }, new PlainRow { Id = 2, N = 2, S = "b" } });
 
         Assert.Single(batch);
     }
@@ -117,5 +130,31 @@ public class TiDbBit64UpsertTests
         var batch = gateway.BuildBatchUpsert(new[] { new Row { Id = 1, Flags = 1UL }, new Row { Id = 2, Flags = 2UL } });
 
         Assert.Single(batch);
+    }
+
+    [Fact]
+    public void TableGateway_SingleRowUpsert_SetsLongAndBinaryColumnsFromTheirParameters()
+    {
+        using var ctx = Context(SupportedDatabase.TiDb);
+        using var sc = new TableGateway<WideRow, int>(ctx).BuildUpsert(
+            new WideRow { Id = 1, N = 5, Raw = new byte[] { 1, 2 }, Name = "a" });
+        var sql = sc.Query.ToString();
+
+        Assert.DoesNotContain("VALUES(\"n\")", sql);
+        Assert.DoesNotContain("VALUES(\"raw\")", sql);
+        Assert.Contains("\"name\" = VALUES(\"name\")", sql);
+    }
+
+    [Fact]
+    public void TableGateway_BatchUpsert_WithALongColumn_RunsOneStatementPerRow()
+    {
+        using var ctx = Context(SupportedDatabase.TiDb);
+        var batch = new TableGateway<WideRow, int>(ctx).BuildBatchUpsert(new[]
+        {
+            new WideRow { Id = 1, N = 1, Name = "a" }, new WideRow { Id = 2, N = 2, Name = "b" }
+        });
+
+        Assert.Equal(2, batch.Count);
+        Assert.All(batch, sc => Assert.DoesNotContain("VALUES(\"n\")", sc.Query.ToString()));
     }
 }

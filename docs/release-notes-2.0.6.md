@@ -77,9 +77,10 @@ same stored value, checked by one table-driven test (DRY-003). Where 2.0.5 diffe
 
 ## TiDB
 
-- Upserts of `UInt64` columns (`BIT(64)`, `BIGINT UNSIGNED`) no longer go through `VALUES(col)`,
-  which TiDB returns byte-reversed for `BIT(64)`: a single-row upsert sets the column from its own
-  parameter, and a batch upsert of such an entity runs one statement per row (DEC-012).
+- Upserts of `UInt64`, `Int64` and `Binary` columns no longer go through `VALUES(col)`, which TiDB
+  returns byte-reversed for a `BIT(64)` column however it is bound: a single-row upsert sets the
+  column from its own parameter, and a batch upsert of an entity with such a non-key column runs one
+  statement per row (DEC-012, REV-083).
 
 ## pengdows.crud.fakeDb
 

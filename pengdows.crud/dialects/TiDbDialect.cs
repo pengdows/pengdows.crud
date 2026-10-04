@@ -55,11 +55,14 @@ internal class TiDbDialect : MySqlDialect
     public override string? UpsertIncomingAlias => null;
     public override string UpsertIncomingColumn(string columnName) => $"VALUES({WrapObjectName(columnName)})";
 
-    // CONFIRMED live (v8.5.7, MySqlConnector 2.4.0; WRT-009): VALUES(col) returns a BIT(64) value
-    // byte-reversed, for every binding; BIT(8/16/32), a plain INSERT and "col = @param" are correct.
-    // BIT(64) maps to ulong (DbType.UInt64), as BIGINT UNSIGNED does, so every UInt64 column takes the
-    // safe path (DEC-012). Never undo the reversal: that would corrupt data once TiDB fixes it.
-    internal override bool UpsertIncomingValueUnreliable(IColumnInfo column) => column.DbType == DbType.UInt64;
+    // CONFIRMED live (v8.5.7, MySqlConnector 2.4.0/2.6.2, MySql.Data 9.4.0; WRT-009, REV-083): VALUES(col)
+    // returns a BIT(64) value byte-reversed whether it is bound as ulong, long or byte[], in single- and
+    // multi-row upserts; BIGINT, BIGINT UNSIGNED, BIT(8/16/32), a plain INSERT and "col = @param" are
+    // correct, and TiDB has no row alias. Only the DbType is known here, so every column that could be
+    // BIT(64) takes the safe path (DEC-012). Never undo the reversal: that would corrupt data once TiDB
+    // fixes it.
+    internal override bool UpsertIncomingValueUnreliable(IColumnInfo column) =>
+        column.DbType is DbType.UInt64 or DbType.Int64 or DbType.Binary;
 
     // TiDB does not enforce FK constraints by default (compatibility mode).
     // TiDB parses CHECK constraint DDL but does not enforce it at runtime.
