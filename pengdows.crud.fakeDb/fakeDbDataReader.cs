@@ -498,8 +498,15 @@ public class fakeDbDataReader : DbDataReader
         return ordinal;
     }
 
+    /// <summary>
+    /// How many times <see cref="IsDBNull"/> was called, so a test can show a read path avoids it
+    /// (it costs a round of driver work per call on some providers, e.g. Npgsql).
+    /// </summary>
+    public int IsDBNullCallCount { get; private set; }
+
     public override bool IsDBNull(int i)
     {
+        IsDBNullCallCount++;
         CheckSequentialAccess(i);
         if (OutOfRangeReturnsNullColumns != null && OutOfRangeReturnsNullColumns.Contains(GetName(i)))
         {

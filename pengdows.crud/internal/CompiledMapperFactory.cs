@@ -241,6 +241,24 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var rawValue = Expression.Call(readWide, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
+            else if (fieldType == typeof(string) && targetType == typeof(string))
+            {
+                // One GetValue per string column; its DBNull result is the null check. IsDBNull and
+                // then GetString cost a second round of driver work per column on some providers
+                // (Npgsql: ~0.12 µs each, measured 2026-10-04); never slower on any provider measured.
+                var valueObj = Expression.Variable(typeof(object), "value");
+                var stringAssignment = Expression.Block(
+                    new[] { valueObj },
+                    Expression.Assign(valueObj, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
+                    Expression.IfThen(
+                        Expression.Not(Expression.TypeIs(valueObj, typeof(DBNull))),
+                        Expression.Assign(Expression.Property(entityVar, property),
+                            Expression.Call(StringFromValueMethod, valueObj,
+                                Expression.Constant(coercionOptions, typeof(TypeCoercionOptions))))));
+                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                expressions.Add(stringAssignment);
+                continue;
+            }
             else if ((Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.PostgreSqlInterval))
             {
                 // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
@@ -326,6 +344,17 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         var block = Expression.Block(new[] { entityVar, ordinalVar }, body, entityVar);
         return Expression.Lambda<Func<TReader, TEntity>>(block, readerParam).Compile();
     }
+
+    private static readonly MethodInfo GetValueMethod =
+        typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue), new[] { typeof(int) })!;
+
+    private static readonly MethodInfo StringFromValueMethod =
+        typeof(CompiledMapperFactory<TEntity>).GetMethod(nameof(StringFromValue), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    // A string column's value: the string itself, or anything else a provider returns converted the
+    // usual way (never dropped).
+    private static string StringFromValue(object value, TypeCoercionOptions? options) =>
+        value as string ?? (string)TypeCoercionHelper.Coerce(value, value.GetType(), typeof(string), options)!;
 
     private static readonly ConstructorInfo ColumnReadExceptionCtor =
         typeof(ColumnReadException).GetConstructor(new[] { typeof(int), typeof(Exception) })!;
@@ -416,9 +445,15 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
         }
 
-        if (sourceType == typeof(long) && underlyingTargetType == typeof(bool))
+        // Integer and decimal columns into bool (Oracle reports NUMBER(1) as decimal): non-zero is true,
+        // as TypeCoercionHelper's CoerceBoolean decides, without boxing the value through it.
+        if (underlyingTargetType == typeof(bool) &&
+            (sourceType == typeof(decimal) || sourceType == typeof(long) || sourceType == typeof(int) ||
+             sourceType == typeof(short) || sourceType == typeof(byte) || sourceType == typeof(sbyte) ||
+             sourceType == typeof(ushort) || sourceType == typeof(uint) || sourceType == typeof(ulong)))
         {
-            var notEqualZero = Expression.NotEqual(value, Expression.Constant(0L));
+            var typed = value.Type != sourceType ? Expression.Convert(value, sourceType) : value;
+            var notEqualZero = Expression.NotEqual(typed, Expression.Constant(Convert.ChangeType(0, sourceType), sourceType));
             return targetType != underlyingTargetType ? Expression.Convert(notEqualZero, targetType) : notEqualZero;
         }
 

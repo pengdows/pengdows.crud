@@ -35,6 +35,20 @@ public sealed class GatewayReadAllocationTests
         [Column("v", DbType.Double)] public double V { get; set; }
     }
 
+    [Table("t")]
+    public sealed class BoolValue
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("v", DbType.Boolean)] public bool V { get; set; }
+    }
+
+    [Table("t")]
+    public sealed class StringValue
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("v", DbType.String)] public string? V { get; set; }
+    }
+
     private static long AllocatedPerRow<T>(List<Dictionary<string, object>> rows) where T : class, new() =>
         AllocationMeasurement.Lowest(() => AllocatedPerRowOnce<T>(rows));
 
@@ -93,5 +107,55 @@ public sealed class GatewayReadAllocationTests
         var asDouble = AllocatedPerRow<DoubleValue>(Rows(i => 1_000_000_000_000.0 + i));
 
         Assert.True(asLong <= asDouble, $"long column {asLong} B/row, double column {asDouble} B/row");
+    }
+
+    // Oracle reports NUMBER(1) as decimal; a decimal or integer column into a bool property went
+    // through the general Coerce (boxing the value) on every row. Same result: non-zero is true.
+    [Fact]
+    public void DecimalColumnIntoBoolProperty_AllocatesNoMoreThanBoolColumn()
+    {
+        var asDecimal = AllocatedPerRow<BoolValue>(Rows(i => (decimal)(i % 2)));
+        var asBool = AllocatedPerRow<BoolValue>(Rows(i => i % 2 == 1));
+
+        Assert.True(asDecimal <= asBool, $"decimal column {asDecimal} B/row, bool column {asBool} B/row");
+    }
+
+    [Theory]
+    [InlineData(0, false)]
+    [InlineData(1, true)]
+    [InlineData(-3, true)]
+    public void DecimalAndIntegerColumns_IntoBoolProperty_NonZeroIsTrue(int stored, bool expected)
+    {
+        foreach (var value in new object[] { (decimal)stored, (short)stored, stored, (long)stored })
+        {
+            var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite));
+            var gateway = new TableGateway<BoolValue, int>(context);
+            var reader = new TrackedReader(new fakeDbDataReader(new[] { new Dictionary<string, object> { ["id"] = 1, ["v"] = value } }),
+                new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
+            reader.Read();
+
+            Assert.Equal(expected, gateway.MapReaderToObject(reader).V);
+        }
+    }
+
+    // Npgsql charges a round of work per IsDBNull call (measured 2026-10-04: ~0.12 µs); a string
+    // column is read once with GetValue, whose DBNull result is the null check.
+    [Fact]
+    public void StringColumn_IsReadWithoutIsDBNull_AndNullStaysNull()
+    {
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql));
+        var gateway = new TableGateway<StringValue, int>(context);
+        var fake = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["id"] = 1, ["v"] = "a" },
+            new Dictionary<string, object> { ["id"] = 2, ["v"] = DBNull.Value }
+        });
+        var reader = new TrackedReader(fake, new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
+
+        reader.Read();
+        Assert.Equal("a", gateway.MapReaderToObject(reader).V);
+        reader.Read();
+        Assert.Null(gateway.MapReaderToObject(reader).V);
+        Assert.Equal(0, fake.IsDBNullCallCount);
     }
 }
