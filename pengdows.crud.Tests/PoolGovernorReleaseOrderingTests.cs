@@ -52,9 +52,11 @@ public class PoolGovernorReleaseOrderingTests
         // transient staleness window called out in WaitForDrainAsync's own comments — but held
         // open indefinitely (nothing ever resets it) so the no-yield/no-cancellation-check bug in
         // the stale-signal branch becomes an observable hang instead of a microsecond race.
+        // The signal is made only by a drain waiter (PERF-024), so install an already-completed one.
         var drainSignalField = typeof(PoolGovernor).GetField("_drainSignal", NonPublicInstance);
-        var drainSignal = (TaskCompletionSource<bool>)drainSignalField!.GetValue(governor)!;
+        var drainSignal = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         drainSignal.TrySetResult(true);
+        drainSignalField!.SetValue(governor, drainSignal);
 
         using var cts = new CancellationTokenSource();
         cts.Cancel();

@@ -61,8 +61,11 @@ internal sealed class PoolGovernor : IDisposable
     private readonly bool _trackMetrics;
     private readonly bool _ownsSemaphore;
     private readonly bool _ownsTurnstile;
-    private readonly object _drainLock = new();
-    private TaskCompletionSource<bool> _drainSignal;
+    // Made by WaitForDrainAsync only while it waits, and completed by the release that drops _inUse
+    // to zero. Acquire and release touch it with no lock and no allocation (PERF-024): a waiter
+    // publishes it and then re-reads _inUse, a release decrements _inUse and then reads it, both
+    // through full fences, so a release can't miss a waiter that saw a slot in use.
+    private TaskCompletionSource<bool>? _drainSignal;
 
     // CORE-027: admission-closed state. 0 = open, 1 = closed. Checked first in every acquire
     // entry point so a caller racing a concurrent Close()/Dispose() gets a clear
@@ -117,7 +120,6 @@ internal sealed class PoolGovernor : IDisposable
             : SharedTurnstileStates.GetValue(turnstile, static _ => new TurnstileState());
         _holdTurnstile = holdTurnstile;
         _ownsTurnstile = ownsTurnstile;
-        _drainSignal = CreateDrainSignal(completed: true);
 
         if (disabled)
         {
@@ -777,37 +779,25 @@ internal sealed class PoolGovernor : IDisposable
 
         while (Interlocked.Read(ref _inUse) > 0)
         {
-            var signal = GetCurrentDrainSignal();
-
-            if (signal.Task.IsCompleted)
+            var signal = Volatile.Read(ref _drainSignal);
+            if (signal == null || signal.Task.IsCompleted)
             {
-                // Signal already set — but it may be a STALE completed signal: a concurrent
-                // Acquire()'s Interlocked.Increment(ref _inUse) can land before its own
-                // ResetDrainSignalIfNeeded() takes _drainLock, so GetCurrentDrainSignal() above
-                // can still observe the old (already-completed) instance even though _inUse is
-                // genuinely back above zero. Actually re-check _inUse — rather than trusting a
-                // signal snapshot that may already be behind current reality.
-                if (Interlocked.Read(ref _inUse) == 0)
+                // Publish a pending signal (a release unpublishes a signal before completing it, so
+                // a completed one here is stale: replace it). Waiters share one signal.
+                var fresh = CreateDrainSignal(completed: false);
+                var seen = Interlocked.CompareExchange(ref _drainSignal, fresh, signal);
+                signal = ReferenceEquals(seen, signal) ? fresh : seen;
+                if (signal == null || signal.Task.IsCompleted)
                 {
-                    break;
+                    continue;
                 }
+            }
 
-                // Stale signal, _inUse still genuinely positive: a concurrent ResetDrainSignalIfNeeded
-                // hasn't installed a fresh signal yet. Respect cancellation/timeout instead of
-                // spinning past it, and yield instead of hot-looping a CPU core waiting for the
-                // other thread's ResetDrainSignalIfNeeded to run.
-                if (effectiveToken.IsCancellationRequested)
-                {
-                    if (timeoutCts != null && timeoutCts.IsCancellationRequested && !cancellationToken.IsCancellationRequested)
-                    {
-                        throw new TimeoutException("Drain timeout");
-                    }
-
-                    throw new OperationCanceledException(cancellationToken);
-                }
-
-                await Task.Yield();
-                continue;
+            // A release that dropped _inUse to zero before the signal was published saw no signal
+            // to complete; re-read _inUse after publishing.
+            if (Interlocked.Read(ref _inUse) == 0)
+            {
+                break;
             }
 
             try
@@ -941,7 +931,6 @@ internal sealed class PoolGovernor : IDisposable
         }
 
         var inUse = Interlocked.Increment(ref _inUse);
-        ResetDrainSignalIfNeeded();
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
         return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart, releaseWriterTurnstileInterestOnRelease));
@@ -972,19 +961,16 @@ internal sealed class PoolGovernor : IDisposable
         }
 
         TestOnlyBeforeInUseDecrement?.Invoke();
-        Interlocked.Decrement(ref _inUse);
-
-        // Signal drain-waiters only if _inUse is still zero at the instant
-        // the signal is set.  The read and the TrySetResult must happen under
-        // the same lock that OnAcquired uses to reset the signal; otherwise a
-        // concurrent Acquire can increment _inUse without seeing (and
-        // resetting) the not-yet-completed signal, leaving it spuriously
-        // completed.
-        lock (_drainLock)
+        if (Interlocked.Decrement(ref _inUse) == 0)
         {
-            if (Interlocked.Read(ref _inUse) == 0 && !_drainSignal.Task.IsCompleted)
+            // Wake drain waiters. The signal is unpublished before it completes, so a waiter never
+            // finds a completed signal installed; an acquire racing in after the decrement only
+            // makes the wake spurious, and the waiter re-reads _inUse.
+            var waiting = Volatile.Read(ref _drainSignal);
+            if (waiting != null &&
+                ReferenceEquals(Interlocked.CompareExchange(ref _drainSignal, null, waiting), waiting))
             {
-                _drainSignal.TrySetResult(true);
+                waiting.TrySetResult(true);
             }
         }
     }
@@ -1042,24 +1028,6 @@ internal sealed class PoolGovernor : IDisposable
         return tcs;
     }
 
-    private void ResetDrainSignalIfNeeded()
-    {
-        lock (_drainLock)
-        {
-            if (_drainSignal.Task.IsCompleted)
-            {
-                _drainSignal = CreateDrainSignal(completed: false);
-            }
-        }
-    }
-
-    private TaskCompletionSource<bool> GetCurrentDrainSignal()
-    {
-        lock (_drainLock)
-        {
-            return _drainSignal;
-        }
-    }
 
     private sealed class TurnstileState
     {
