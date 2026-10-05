@@ -138,7 +138,7 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   `SELECT` (Snowflake refuses it in `VALUES`); spatial as EWKT both ways; `TIMESTAMP_LTZ`/`TZ` read as the exact
   `DateTimeOffset`. `VECTOR` needs the column's type (TYPE-020).
 - SAP HANA: `HanaDecimal` read with `GetDecimal`; decimals sent without trailing zeros (the driver silently cut
-  digits otherwise); spatial as WKB; `TIMESTAMP` limited to microseconds by the driver (TYPE-022); `BINTEXT` as text.
+  digits otherwise); spatial as WKB; `TIMESTAMP` keeps 7 digits (`DateTime` bound as text, gateway reads via `TO_VARCHAR(..., 'FF7')`; TYPE-022); `BINTEXT` as text.
 - DuckDB `BIT` ↔ `BitArray` (bit string); SQL Server `sql_variant` ↔ `object`; InterBase `ARRAY` ↔ `T[]` (bound with
   `IBDbType.Array`, non-zero-based results copied) and its `NONE` charset pinned to UTF-8 (the driver otherwise picks
   the system code page when code pages are registered, storing `?`); Informix `LIST`/`SET`/`MULTISET` ↔ `T[]` (written as

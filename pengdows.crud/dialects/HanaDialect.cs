@@ -164,6 +164,36 @@ internal sealed class HanaDialect : SqlDialect
     // (confirmed live), so one outside a day is rejected before binding.
     internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
 
+    // TYPE-022, confirmed live (HANA Express, Sap.Data.Hana.Net 2.29): TIMESTAMP holds 7 fractional
+    // digits (a .NET tick) but the driver truncates a DateTime to microseconds on write and on read.
+    // Seven-digit text converts into TIMESTAMP exactly and into SECONDDATE/DATE as the typed value did,
+    // in writes and WHERE alike; gateway reads select TO_VARCHAR(..., 'FF7') (RenderColumnSelect).
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        if (type is DbType.DateTime or DbType.DateTime2)
+        {
+            object? text = value switch
+            {
+                null or DBNull => DBNull.Value,
+                DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss.fffffff", System.Globalization.CultureInfo.InvariantCulture),
+                DateOnly day => day.ToDateTime(TimeOnly.MinValue).ToString("yyyy-MM-dd HH:mm:ss.fffffff", System.Globalization.CultureInfo.InvariantCulture),
+                string already => already,
+                _ => null
+            };
+            if (text != null)
+            {
+                return base.CreateDbParameter<object?>(name, DbType.String, text);
+            }
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
+
+    internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        column.DbType is DbType.DateTime or DbType.DateTime2
+            ? $"TO_VARCHAR({columnReference}, 'YYYY-MM-DD HH24:MI:SS.FF7') AS {wrappedName}"
+            : columnReference;
+
     /// <summary>
     /// HANA rejects the base "USING (VALUES (...)) AS s (col1, col2, ...)" row-constructor MERGE
     /// source outright (CONFIRMED live), but accepts an Oracle/DUAL-shaped

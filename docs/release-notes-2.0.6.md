@@ -53,6 +53,10 @@
   type 188"). `DbType.DateTime2` and `DbType.DateTimeOffset` parameters are now sent as microsecond
   text, also in your own SQL; a `DATETIME` column stores the same value as before. Gateway reads of
   these columns select `CONVERT(VARCHAR, col, 140/137)` (TYPE-022).
+- SAP HANA `TIMESTAMP` keeps all 7 fractional digits through the gateways; Sap.Data.Hana.Net cut them
+  to 6 on write and read. `DbType.DateTime`/`DateTime2` parameters are now sent as 7-digit text, also
+  in your own SQL (`SECONDDATE` and `DATE` store the same value as before), and gateway reads select
+  `TO_VARCHAR(col, '... FF7')` (TYPE-022).
 - A negative DuckDB `INTERVAL` read into a `TimeSpan` works. DuckDB.NET 1.5.6 throws for every
   negative interval; the value is now read from its stored parts. An interval with months fails with
   `DataMappingException` instead of reading as zero months (TYPE-022).
