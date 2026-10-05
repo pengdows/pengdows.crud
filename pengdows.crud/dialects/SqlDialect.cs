@@ -3613,7 +3613,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
     public virtual bool PreservesTrailingWhitespace => true;
 
     /// <inheritdoc/>
-    public virtual void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
+    /// <summary>Every dialect's paging accepts a non-negative offset and a positive limit.</summary>
+    protected static void ValidatePagingArguments(int offset, int limit)
     {
         if (offset < 0)
         {
@@ -3624,6 +3625,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
         }
+    }
+
+    public virtual void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
+    {
+        ValidatePagingArguments(offset, limit);
 
         if (SupportsOffsetFetch)
         {

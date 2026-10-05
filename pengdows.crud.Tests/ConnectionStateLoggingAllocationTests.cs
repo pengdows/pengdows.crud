@@ -12,6 +12,7 @@ namespace pengdows.crud.Tests;
 /// ("Opening connection: " + Name) on every open and close, with Debug logging off: about 4% of a
 /// SQLite ReadSingle's allocations.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class ConnectionStateLoggingAllocationTests
 {
     [Fact]

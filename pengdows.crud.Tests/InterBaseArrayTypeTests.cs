@@ -20,6 +20,7 @@ namespace pengdows.crud.Tests;
 /// System.Int32[]") unless IBDbType is set to Array before the value. Reads report System.Array and
 /// return the declared bounds, so INTEGER [1:5] comes back as a non-zero-based Int32[*].
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class InterBaseArrayTypeTests
 {
     [Table("arrays")]

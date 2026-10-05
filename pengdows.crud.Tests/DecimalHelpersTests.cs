@@ -6,6 +6,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("AllocationSerial")]
 public class DecimalHelpersTests
 {
     [Fact]

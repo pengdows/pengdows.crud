@@ -249,15 +249,7 @@ internal sealed class InterBaseDialect : SqlDialect
     /// </summary>
     public override void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
     {
-        if (offset < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(offset), offset, "Must be >= 0.");
-        }
-
-        if (limit <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
-        }
+        ValidatePagingArguments(offset, limit);
 
         if (offset == 0)
         {
@@ -336,39 +328,6 @@ internal sealed class InterBaseDialect : SqlDialect
     public override string ExtractProductNameFromVersion(string versionString)
     {
         return "InterBase";
-    }
-
-    /// <summary>
-    /// InterBase's ServerVersion uses the same legacy "LI-Vmajor.minor.build" format Firebird
-    /// inherited from the same codebase (e.g. "LI-V15.1.0.42/tcp (development)/P15"). CONFIRMED
-    /// live that the base class's own generic dotted-version regex already parses this exact real
-    /// string correctly — this override's own legacy regex is structurally redundant for every
-    /// real string seen so far, but is kept anyway as defensive symmetry with FirebirdDialect's
-    /// identical try-base-then-legacy-regex ordering.
-    /// </summary>
-    public override Version? ParseVersion(string versionString)
-    {
-        if (string.IsNullOrWhiteSpace(versionString))
-        {
-            return null;
-        }
-
-        var standardVersion = base.ParseVersion(versionString);
-        if (standardVersion != null)
-        {
-            return standardVersion;
-        }
-
-        var legacyMatch = Regex.Match(versionString, @"LI-V(\d+)\.(\d+)\.(\d+)");
-        if (legacyMatch.Success &&
-            int.TryParse(legacyMatch.Groups[1].Value, out var major) &&
-            int.TryParse(legacyMatch.Groups[2].Value, out var minor) &&
-            int.TryParse(legacyMatch.Groups[3].Value, out var build))
-        {
-            return new Version(major, minor, build);
-        }
-
-        return null;
     }
 
     // ISC codes InterBase shares with Firebird: isc_deadlock and isc_update_conflict.

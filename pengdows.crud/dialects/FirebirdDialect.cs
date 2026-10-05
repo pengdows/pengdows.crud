@@ -526,22 +526,14 @@ internal class FirebirdDialect : SqlDialect
         return "Firebird";
     }
 
-    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    // Before 2, and with no version, the default SQL-92 (DRY-019: was a switch beside the base's mapping).
+    public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping() => new()
     {
-        if (version == null)
-        {
-            return SqlStandardLevel.Sql92;
-        }
-
-        return version.Major switch
-        {
-            >= 5 => SqlStandardLevel.Sql2016,
-            >= 4 => SqlStandardLevel.Sql2011,
-            >= 3 => SqlStandardLevel.Sql2008,
-            >= 2 => SqlStandardLevel.Sql2003,
-            _ => SqlStandardLevel.Sql92
-        };
-    }
+        [2] = SqlStandardLevel.Sql2003,
+        [3] = SqlStandardLevel.Sql2008,
+        [4] = SqlStandardLevel.Sql2011,
+        [5] = SqlStandardLevel.Sql2016
+    };
 
     public override Version? ParseVersion(string versionString)
     {

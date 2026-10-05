@@ -426,15 +426,7 @@ internal sealed class InformixDialect : SqlDialect
 
     public override void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
     {
-        if (offset < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(offset), offset, "Must be >= 0.");
-        }
-
-        if (limit <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
-        }
+        ValidatePagingArguments(offset, limit);
 
         var sql = query.ToString();
         var start = 0;

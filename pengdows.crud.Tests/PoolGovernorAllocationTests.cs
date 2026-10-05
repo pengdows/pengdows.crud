@@ -12,6 +12,7 @@ namespace pengdows.crud.Tests;
 /// at shutdown. The signal is made by a drain waiter, so an acquire and release allocate only the
 /// slot's token.
 /// </summary>
+[Collection("AllocationSerial")]
 public class PoolGovernorAllocationTests
 {
     [Fact]

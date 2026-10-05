@@ -20,6 +20,7 @@ namespace pengdows.crud.Tests;
 /// GetFieldValue&lt;T&gt;. This reader boxes on GetValue as real drivers do and returns typed values
 /// from GetFieldValue&lt;T&gt;.
 /// </summary>
+[Collection("AllocationSerial")]
 public class TypedValueReadAllocationTests
 {
     [Table("t")]

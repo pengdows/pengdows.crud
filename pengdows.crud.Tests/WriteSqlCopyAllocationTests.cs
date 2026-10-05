@@ -16,6 +16,7 @@ namespace pengdows.crud.Tests;
 /// batch statement landed each copy on the large-object heap. Rendering the command is the one copy
 /// needed; nothing else may copy the text again.
 /// </summary>
+[Collection("AllocationSerial")]
 public class WriteSqlCopyAllocationTests
 {
     [Theory]

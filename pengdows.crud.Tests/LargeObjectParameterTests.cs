@@ -11,6 +11,7 @@ namespace pengdows.crud.Tests;
 /// MemoryStream written and passed without seeking back sends its content), and a MemoryStream is
 /// copied once, not buffered into a second MemoryStream first.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class LargeObjectParameterTests
 {
     [Fact]

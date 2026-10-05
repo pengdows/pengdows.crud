@@ -16,6 +16,7 @@ namespace pengdows.crud.Tests;
 /// property (ODP.NET beyond-decimal) and a DateTime column into a DateTimeOffset property (Snowflake
 /// offset timestamps), each boxing every value through a coercer.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class DataReaderMapperAllocationTests
 {
     public sealed class DecimalValue { public decimal V { get; set; } }

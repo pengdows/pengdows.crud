@@ -13,6 +13,7 @@ namespace pengdows.crud.Tests;
 /// that was a measurable part of CreateAsync's 12 µs over BuildCreate + execute. The returning insert
 /// now comes from a cached per-dialect template too.
 /// </summary>
+[Collection("AllocationSerial")]
 public class CreateWithReturningTemplateTests
 {
     [Table("rows")]

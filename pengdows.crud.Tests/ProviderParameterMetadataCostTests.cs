@@ -17,6 +17,7 @@ namespace pengdows.crud.Tests;
 /// enum name and set it through PropertyInfo.SetValue: a PostgreSQL Guid parameter measured 129 ns
 /// and 136 B against 40 ns and 96 B for an int. Stamping must allocate nothing.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class ProviderParameterMetadataCostTests
 {
     public enum Mood

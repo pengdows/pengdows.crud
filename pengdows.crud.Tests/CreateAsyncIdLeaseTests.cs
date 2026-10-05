@@ -16,6 +16,7 @@ namespace pengdows.crud.Tests;
 /// serves the fallback id query only when the id doesn't come back (GeneratedIdConnectionAffinityTests
 /// pins that fallback).
 /// </summary>
+[Collection("AllocationSerial")]
 public class CreateAsyncIdLeaseTests
 {
     [Table("lease_items")]

@@ -13,6 +13,7 @@ namespace pengdows.crud.Tests;
 /// array under a lock (plus a LINQ closure on release). The list is now an immutable array swapped
 /// under the lock on change, so these per-operation reads are lock-free and allocation-free.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class SentinelSnapshotAllocationTests
 {
     private static DatabaseContext CreateFirebirdPreventUnload() => new(new DatabaseContextConfiguration

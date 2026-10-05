@@ -15,6 +15,7 @@ namespace pengdows.crud.Tests;
 /// dictionary from each bound parameter to the command collection holding it, though every
 /// parameter of one execution goes into the same collection.
 /// </summary>
+[Collection("AllocationSerial")]
 public class ReaderDelegateAllocationTests
 {
     private static object? Field(ITrackedReader reader, string name) =>

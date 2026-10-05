@@ -22,6 +22,7 @@ namespace pengdows.crud.Tests;
 /// single-quoted with '' escapes ("SET{'it''s','a,b'}"). Array properties are written as LIST literals
 /// and read by parsing them.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class InformixCollectionTypeTests
 {
     [Table("colls")]

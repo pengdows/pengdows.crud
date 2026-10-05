@@ -14,6 +14,7 @@ namespace pengdows.crud.Tests;
 /// options). Beyond reading the rows by hand, a cached call now allocates only its lookup key's
 /// column name and type arrays.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class DataReaderMapperPlanLookupAllocationTests
 {
     private readonly ITestOutputHelper _output;

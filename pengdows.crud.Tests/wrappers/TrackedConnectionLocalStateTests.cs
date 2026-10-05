@@ -11,6 +11,7 @@ namespace pengdows.crud.Tests.wrappers;
 // (and renamed) from ConnectionLocalStateTests.cs, which tested this exact behavior under a name
 // implying a standalone ConnectionLocalState class was involved; that class had zero production
 // call sites and was deleted as dead code.
+[Collection("AllocationSerial")]
 public class TrackedConnectionLocalStateTests
 {
     [Fact]

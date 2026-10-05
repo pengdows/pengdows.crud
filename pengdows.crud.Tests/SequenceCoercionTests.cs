@@ -12,6 +12,7 @@ namespace pengdows.crud.Tests;
 /// elements already of the target type: a 1536-dimension embedding cost about 240 us and 133 KB.
 /// The result must stay what coercing each element would give.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class SequenceCoercionTests
 {
     public static IEnumerable<object[]> Cases()

@@ -13,6 +13,7 @@ namespace pengdows.crud.Tests;
 /// returned every parameter twice and built the parameter dictionaries twice. It now copies only
 /// the template's text, so it costs no more than building the same INSERT by hand.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class BuildCreateAllocationTests
 {
     [Table("people")]

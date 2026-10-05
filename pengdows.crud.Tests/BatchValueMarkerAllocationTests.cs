@@ -9,6 +9,7 @@ namespace pengdows.crud.Tests;
 /// PERF-012: the batch SQL builders allocated each cell's parameter marker as a string
 /// (string.Concat(marker, "b", index)) before appending it. The pieces are appended directly.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class BatchValueMarkerAllocationTests
 {
     [Theory]

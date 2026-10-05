@@ -348,26 +348,6 @@ internal sealed class HanaDialect : SqlDialect
         return string.Concat("USING (SELECT ", select.ToString(), " FROM DUMMY) s");
     }
 
-    public override void AppendPaging(ISqlQueryBuilder query, int offset, int limit)
-    {
-        if (offset < 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(offset), offset, "Must be >= 0.");
-        }
-
-        if (limit <= 0)
-        {
-            throw new ArgumentOutOfRangeException(nameof(limit), limit, "Must be > 0.");
-        }
-
-        // CONFIRMED live: LIMIT/OFFSET only — see SupportsOffsetFetch above.
-        query.Append(" LIMIT ").Append(limit);
-        if (offset > 0)
-        {
-            query.Append(" OFFSET ").Append(offset);
-        }
-    }
-
     public override string GetVersionQuery()
     {
         return "SELECT VERSION FROM SYS.M_DATABASE";

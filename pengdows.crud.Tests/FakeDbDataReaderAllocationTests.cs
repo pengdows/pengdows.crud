@@ -9,6 +9,7 @@ namespace pengdows.crud.Tests;
 /// fakeDb backs the library's allocation tests and benchmarks, so reading a value must not allocate
 /// on its own: GetValue and the typed getters copied the row's keys into a new array on every call.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class FakeDbDataReaderAllocationTests
 {
     [Fact]

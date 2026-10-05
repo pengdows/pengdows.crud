@@ -10,6 +10,7 @@ namespace pengdows.crud.Tests;
 /// with an object[]): measured at 374 ns and 235 B per row against 94 ns for a string property.
 /// Only the boxed result (24 B) should be allocated per value.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class EnumStringCoercionCostTests
 {
     public enum Mood

@@ -541,23 +541,18 @@ internal class OracleDialect : SqlDialect
         }
     }
 
-    public override SqlStandardLevel DetermineStandardCompliance(Version? version)
+    // Versions before 11 are SQL:1999; with no version, SQL:2003 (not the base default) (DRY-019).
+    public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping() => new()
     {
-        if (version == null)
-        {
-            return SqlStandardLevel.Sql2003;
-        }
+        [0] = SqlStandardLevel.Sql99,
+        [11] = SqlStandardLevel.Sql2003,
+        [12] = SqlStandardLevel.Sql2008,
+        [18] = SqlStandardLevel.Sql2011,
+        [19] = SqlStandardLevel.Sql2016
+    };
 
-        return version.Major switch
-        {
-            >= 21 => SqlStandardLevel.Sql2016,
-            >= 19 => SqlStandardLevel.Sql2016,
-            >= 18 => SqlStandardLevel.Sql2011,
-            >= 12 => SqlStandardLevel.Sql2008,
-            >= 11 => SqlStandardLevel.Sql2003,
-            _ => SqlStandardLevel.Sql99
-        };
-    }
+    public override SqlStandardLevel DetermineStandardCompliance(Version? version) =>
+        version == null ? SqlStandardLevel.Sql2003 : base.DetermineStandardCompliance(version);
 
     public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {

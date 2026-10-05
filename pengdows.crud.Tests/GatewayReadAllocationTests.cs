@@ -19,6 +19,7 @@ namespace pengdows.crud.Tests;
 /// column into a decimal or double property (Snowflake's beyond-Int64 fallback) did the same:
 /// +68 ns and +80 B per row.
 /// </summary>
+[Collection("AllocationSerial")]
 public sealed class GatewayReadAllocationTests
 {
     [Table("t")]
