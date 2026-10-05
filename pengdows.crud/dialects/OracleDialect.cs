@@ -286,41 +286,7 @@ internal class OracleDialect : SqlDialect
     public override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns,
         IReadOnlyList<string> parameterNames)
     {
-        if (columns == null)
-        {
-            throw new ArgumentNullException(nameof(columns));
-        }
-
-        if (parameterNames == null)
-        {
-            throw new ArgumentNullException(nameof(parameterNames));
-        }
-
-        if (columns.Count != parameterNames.Count)
-        {
-            throw new ArgumentException("Column and parameter counts must match.");
-        }
-
-        var select = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        for (var i = 0; i < columns.Count; i++)
-        {
-            if (i > 0)
-            {
-                select.Append(", ");
-            }
-
-            var placeholder = MakeParameterName(parameterNames[i]);
-            if (RendersColumnArgument(columns[i]))
-            {
-                placeholder = RenderColumnArgument(placeholder, columns[i]);
-            }
-
-            select.Append(placeholder);
-            select.Append(" AS ");
-            select.Append(WrapObjectName(columns[i].Name));
-        }
-
-        return string.Concat("USING (SELECT ", select.ToString(), " FROM DUAL) s");
+        return RenderSelectMergeSource(columns, parameterNames, " FROM DUAL", " s");
     }
 
     public override string RenderMergeOnClause(string predicate)

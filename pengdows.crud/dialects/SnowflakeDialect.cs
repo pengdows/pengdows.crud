@@ -207,28 +207,12 @@ internal class SnowflakeDialect : SqlDialect
     /// </summary>
     public override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
     {
-        ArgumentNullException.ThrowIfNull(columns);
-        ArgumentNullException.ThrowIfNull(parameterNames);
-        if (columns.Count != parameterNames.Count)
-        {
-            throw new ArgumentException("Column and parameter counts must match.");
-        }
-
-        var select = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        for (var i = 0; i < columns.Count; i++)
-        {
-            if (i > 0)
-            {
-                select.Append(", ");
-            }
-
-            select.Append(RenderColumnArgument(MakeParameterName(parameterNames[i]), columns[i]));
-            select.Append(" AS ");
-            select.Append(WrapObjectName(columns[i].Name));
-        }
-
-        return string.Concat("USING (SELECT ", select.ToString(), ") AS s");
+        return RenderSelectMergeSource(columns, parameterNames, "", " AS s");
     }
+
+    // Every value goes through RenderColumnArgument (which leaves a plain one unchanged).
+    private protected override string MergeSourceValue(string placeholder, IColumnInfo column) =>
+        RenderColumnArgument(placeholder, column);
 
     internal override void BuildBatchInsertSql(string tableName, IReadOnlyList<string> columnNames, int rowCount,
         ISqlQueryBuilder query, Func<int, int, object?>? getValue, IReadOnlyList<IColumnInfo> columns)

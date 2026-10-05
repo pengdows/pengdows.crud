@@ -75,40 +75,7 @@ internal class SybaseAseDialect : SqlDialect
     // "USING (SELECT @p0 AS col0, @p1 AS col1) AS s" is ANSI-standard and works live.
     public override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns, IReadOnlyList<string> parameterNames)
     {
-        if (columns == null)
-        {
-            throw new ArgumentNullException(nameof(columns));
-        }
-
-        if (parameterNames == null)
-        {
-            throw new ArgumentNullException(nameof(parameterNames));
-        }
-
-        if (columns.Count != parameterNames.Count)
-        {
-            throw new ArgumentException("Column and parameter counts must match.");
-        }
-
-        var select = new System.Text.StringBuilder("USING (SELECT ");
-        for (var i = 0; i < columns.Count; i++)
-        {
-            if (i > 0)
-            {
-                select.Append(", ");
-            }
-
-            var placeholder = MakeParameterName(parameterNames[i]);
-            if (RendersColumnArgument(columns[i]))
-            {
-                placeholder = RenderColumnArgument(placeholder, columns[i]);
-            }
-
-            select.Append(placeholder).Append(" AS ").Append(WrapObjectName(columns[i].Name));
-        }
-
-        select.Append(") AS s");
-        return select.ToString();
+        return RenderSelectMergeSource(columns, parameterNames, "", " AS s");
     }
 
     // Verified live (ASE 16.0 SP02): the engine strips trailing blanks from VARCHAR values on

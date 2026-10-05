@@ -1902,6 +1902,41 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>
     /// Builds the MERGE source clause (USING ...) for MERGE-based upserts.
     /// </summary>
+    /// <summary>
+    /// A one-row MERGE source as a derived table: <c>USING (SELECT v AS col, ...{fromClause}){alias}</c>,
+    /// each value its parameter through <see cref="MergeSourceValue"/> (Oracle, SAP HANA, Snowflake,
+    /// Sybase ASE; DRY-019).
+    /// </summary>
+    private protected string RenderSelectMergeSource(IReadOnlyList<IColumnInfo> columns,
+        IReadOnlyList<string> parameterNames, string fromClause, string alias)
+    {
+        ArgumentNullException.ThrowIfNull(columns);
+        ArgumentNullException.ThrowIfNull(parameterNames);
+        if (columns.Count != parameterNames.Count)
+        {
+            throw new ArgumentException("Column and parameter counts must match.");
+        }
+
+        var select = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
+        for (var i = 0; i < columns.Count; i++)
+        {
+            if (i > 0)
+            {
+                select.Append(", ");
+            }
+
+            select.Append(MergeSourceValue(MakeParameterName(parameterNames[i]), columns[i]));
+            select.Append(" AS ");
+            select.Append(WrapObjectName(columns[i].Name));
+        }
+
+        return string.Concat("USING (SELECT ", select.ToString(), fromClause, ")", alias);
+    }
+
+    /// <summary>A value in a derived-table MERGE source: its placeholder, rendered for the column.</summary>
+    private protected virtual string MergeSourceValue(string placeholder, IColumnInfo column) =>
+        RendersColumnArgument(column) ? RenderColumnArgument(placeholder, column) : placeholder;
+
     public virtual string RenderMergeSource(IReadOnlyList<IColumnInfo> columns,
         IReadOnlyList<string> parameterNames)
     {

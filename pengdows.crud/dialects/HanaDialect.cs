@@ -295,57 +295,34 @@ internal sealed class HanaDialect : SqlDialect
     public override string RenderMergeSource(IReadOnlyList<IColumnInfo> columns,
         IReadOnlyList<string> parameterNames)
     {
-        if (columns == null)
+        return RenderSelectMergeSource(columns, parameterNames, " FROM DUMMY", " s");
+    }
+
+    private protected override string MergeSourceValue(string placeholder, IColumnInfo column)
+    {
+        if (RendersColumnArgument(column))
         {
-            throw new ArgumentNullException(nameof(columns));
+            return RenderColumnArgument(placeholder, column);
         }
 
-        if (parameterNames == null)
+        if (column.DbType == DbType.Binary)
         {
-            throw new ArgumentNullException(nameof(parameterNames));
+            // CONFIRMED live (HANA-001): an untyped "? AS col" here is typed as text, so a byte[]
+            // fails into VARBINARY/BINARY; CAST(? AS BLOB) round-trips into VARBINARY, BINARY and
+            // BLOB, with no VARBINARY length cap.
+            return string.Concat("CAST(", placeholder, " AS BLOB)");
         }
 
-        if (columns.Count != parameterNames.Count)
+        if (typeof(types.valueobjects.SpatialValue).IsAssignableFrom(
+                Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType))
         {
-            throw new ArgumentException("Column and parameter counts must match.");
+            // CONFIRMED live (HANA-001): the spatial converter's WKB bytes go into ST_GEOMETRY/
+            // ST_POINT from a plain INSERT but not from this source ("The geometry data is
+            // corrupt"); ST_GeomFromWKB(?) works for MERGE insert and update.
+            return string.Concat("ST_GeomFromWKB(", placeholder, ")");
         }
 
-        var select = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        for (var i = 0; i < columns.Count; i++)
-        {
-            if (i > 0)
-            {
-                select.Append(", ");
-            }
-
-            var placeholder = MakeParameterName(parameterNames[i]);
-            if (RendersColumnArgument(columns[i]))
-            {
-                placeholder = RenderColumnArgument(placeholder, columns[i]);
-            }
-            else if (columns[i].DbType == DbType.Binary)
-            {
-                // CONFIRMED live (HANA-001): an untyped "? AS col" here is typed as text, so a byte[]
-                // fails into VARBINARY/BINARY; CAST(? AS BLOB) round-trips into VARBINARY, BINARY and
-                // BLOB, with no VARBINARY length cap.
-                placeholder = string.Concat("CAST(", placeholder, " AS BLOB)");
-            }
-            else if (typeof(types.valueobjects.SpatialValue).IsAssignableFrom(
-                         Nullable.GetUnderlyingType(columns[i].PropertyInfo.PropertyType) ??
-                         columns[i].PropertyInfo.PropertyType))
-            {
-                // CONFIRMED live (HANA-001): the spatial converter's WKB bytes go into ST_GEOMETRY/
-                // ST_POINT from a plain INSERT but not from this source ("The geometry data is
-                // corrupt"); ST_GeomFromWKB(?) works for MERGE insert and update.
-                placeholder = string.Concat("ST_GeomFromWKB(", placeholder, ")");
-            }
-
-            select.Append(placeholder);
-            select.Append(" AS ");
-            select.Append(WrapObjectName(columns[i].Name));
-        }
-
-        return string.Concat("USING (SELECT ", select.ToString(), " FROM DUMMY) s");
+        return placeholder;
     }
 
     public override string GetVersionQuery()
