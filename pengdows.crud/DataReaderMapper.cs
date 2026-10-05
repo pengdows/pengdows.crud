@@ -528,8 +528,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
         {
             // Npgsql's GetValue() returns IPAddress for inet columns, dropping the netmask; read
             // NpgsqlInet instead.
-            var readInet = typeof(InetFieldReader).GetMethod(nameof(InetFieldReader.Read))!;
-            var rawValue = Expression.Call(readInet, Expression.Convert(readerParam, typeof(IDataRecord)),
+            var readInet = typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!;
+            var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Inet), readInet, Expression.Convert(readerParam, typeof(IDataRecord)),
                 Expression.Constant(key.Ordinal));
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
@@ -591,8 +591,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
         {
             // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
             // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
-            var readInterval = typeof(IntervalFieldReader).GetMethod(nameof(IntervalFieldReader.Read))!;
-            var rawValue = Expression.Call(readInterval, Expression.Convert(readerParam, typeof(IDataRecord)),
+            var readInterval = typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!;
+            var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Interval), readInterval, Expression.Convert(readerParam, typeof(IDataRecord)),
                 Expression.Constant(key.Ordinal));
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);

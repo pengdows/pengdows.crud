@@ -12,7 +12,7 @@
 //   days, microseconds — the only Npgsql write type that keeps months; resolved by name). Falls
 //   back to ISO 8601-style text only when Npgsql isn't loaded.
 // - TryConvertFromProvider(): Handles PostgreSqlInterval, NpgsqlInterval, TimeSpan, string,
-//   NpgsqlTimeSpan. Hydration reads interval columns as NpgsqlInterval (IntervalFieldReader), so
+//   NpgsqlTimeSpan. Hydration reads interval columns as NpgsqlInterval (NpgsqlTypedFieldReader.Interval), so
 //   months and the stored days/time split round-trip.
 // - Parse(): Handles ISO 8601-style durations (Y/M/W/D date part — years fold into months, weeks
 //   into days — and H/M/S time part), plus PostgreSQL's verbose text format ("1 year 2 mons").
@@ -148,7 +148,7 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
                         if (type.FullName == "NpgsqlTypes.NpgsqlInterval")
                         {
                             // Npgsql's full-fidelity interval (months, days, microseconds), read by
-                            // IntervalFieldReader so months and the stored days/time split survive.
+                            // NpgsqlTypedFieldReader.Interval so months and the stored days/time split survive.
                             result = new PostgreSqlInterval(
                                 Convert.ToInt32(type.GetProperty("Months")!.GetValue(value), CultureInfo.InvariantCulture),
                                 Convert.ToInt32(type.GetProperty("Days")!.GetValue(value), CultureInfo.InvariantCulture),

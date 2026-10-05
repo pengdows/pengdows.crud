@@ -178,8 +178,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 // Npgsql's GetValue() returns IPAddress for inet columns, dropping the netmask; read
                 // NpgsqlInet instead.
-                var readInet = typeof(InetFieldReader).GetMethod(nameof(InetFieldReader.Read))!;
-                var rawValue = Expression.Call(readInet, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                var readInet = typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!;
+                var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Inet), readInet, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(DateTime) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(DateTimeOffset)
@@ -272,8 +272,8 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
                 // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
-                var readInterval = typeof(IntervalFieldReader).GetMethod(nameof(IntervalFieldReader.Read))!;
-                var rawValue = Expression.Call(readInterval, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                var readInterval = typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!;
+                var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Interval), readInterval, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
             else

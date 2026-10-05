@@ -811,14 +811,7 @@ internal class ByteArrayCoercion : DbCoercion<byte[]>
             case Stream stream:
                 try
                 {
-                    if (stream.CanSeek)
-                    {
-                        stream.Seek(0, SeekOrigin.Begin);
-                    }
-
-                    using var ms = new MemoryStream();
-                    stream.CopyTo(ms);
-                    value = ms.ToArray();
+                    value = LargeObjectParameter.ReadAll(stream);
                     return true;
                 }
                 catch
