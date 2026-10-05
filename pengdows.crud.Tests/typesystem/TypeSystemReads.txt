@@ -329,8 +329,8 @@ TimeSpan:1.02:00:00 -> IntervalYearMonth: throws InvalidCastException
 TimeSpan:1.02:00:00 -> IntervalDaySecond: IntervalDaySecond:1 days 02:00:00
 "[1,5)" -> Range`1: Range`1:[1, 5)
 "[1,5)" -> Range`1: Range`1:[1, 5)
-"(,5]" -> Range`1: Range`1:(0, 5]
-"(,5]" -> Range`1: Range`1:(0, 5]
+"(,5]" -> Range`1: Range`1:(, 5]
+"(,5]" -> Range`1: Range`1:(, 5]
 "empty" -> Range`1: Range`1:empty
 "empty" -> Range`1: Range`1:empty
 "[1,x)" -> Range`1: throws InvalidCastException

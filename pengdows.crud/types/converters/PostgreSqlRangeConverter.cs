@@ -12,7 +12,7 @@
 // - ConvertToProvider(): NpgsqlRange<T> for the PostgreSQL family when Npgsql is loaded
 //   (Range<T>.Empty → NpgsqlRange<T>.Empty); otherwise bracket notation / "empty" text.
 // - TryConvertFromProvider(): Handles Range<T>, string, NpgsqlRange<T>, Tuple<T?,T?>.
-// - Parse(): Parses "[1,10)", "(,100]", "[5,]" formats, and the literal "empty" (→ Range<T>.Empty).
+// - Text is read by Range<T>.TryParseText and written by Range<T>.ToCanonicalText (one grammar, DRY-013).
 // - Common types: int4range, int8range, numrange, daterange, tsrange, tstzrange.
 // - Thread-safe and immutable value objects.
 // =============================================================================
@@ -125,7 +125,7 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
         var providerType = NpgsqlRangeType;
         if (providerType == null)
         {
-            return FormatRange(value);
+            return value.ToCanonicalText();
         }
 
         if (value.IsEmptyRange)
@@ -133,7 +133,7 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
             // NpgsqlRange<T>.Empty is a static field.
             return providerType.GetField("Empty", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
                    ?? providerType.GetProperty("Empty", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
-                   ?? FormatRange(value);
+                   ?? value.ToCanonicalText();
         }
 
         var constructor = providerType.GetConstructor(new[]
@@ -142,7 +142,7 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
         });
         if (constructor == null)
         {
-            return FormatRange(value);
+            return value.ToCanonicalText();
         }
 
         return constructor.Invoke(new object[]
@@ -169,10 +169,10 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
                 return true;
             }
 
+            // DRY-013: the one range grammar; blank or other text is no range.
             if (value is string text)
             {
-                result = Parse(text);
-                return true;
+                return Range<T>.TryParseText(text, out result);
             }
 
             var type = value.GetType();
@@ -236,77 +236,5 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
     private static T ToProviderBound(T bound)
     {
         return bound is DateTimeOffset dto ? (T)(object)dto.ToUniversalTime() : bound;
-    }
-
-    private static string FormatRange(Range<T> range)
-    {
-        if (range.IsEmptyRange)
-        {
-            return "empty";
-        }
-
-        var lowerBrace = range.IsLowerInclusive ? '[' : '(';
-        var upperBrace = range.IsUpperInclusive ? ']' : ')';
-        var lower = range.HasLowerBound ? FormatValue(range.Lower) : string.Empty;
-        var upper = range.HasUpperBound ? FormatValue(range.Upper) : string.Empty;
-        return string.Concat(
-            lowerBrace.ToString(),
-            lower,
-            ",",
-            upper,
-            upperBrace.ToString());
-    }
-
-    private static Range<T> Parse(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text) || text.Length < 2)
-        {
-            return Range<T>.Empty;
-        }
-
-        text = text.Trim();
-        // PostgreSQL's canonical text for an empty range.
-        if (text.Equals("empty", StringComparison.OrdinalIgnoreCase))
-        {
-            return Range<T>.Empty;
-        }
-
-        var lowerInclusive = text[0] == '[';
-        var upperInclusive = text[^1] == ']';
-        var inner = text.Substring(1, text.Length - 2);
-        var parts = inner.Split(',', 2);
-
-        var lower = ParseValue(parts[0]);
-        var upper = parts.Length > 1 ? ParseValue(parts[1]) : default;
-
-        return new Range<T>(lower, upper, lowerInclusive, upperInclusive);
-    }
-
-    private static string FormatValue(T? value)
-    {
-        if (value == null)
-        {
-            return string.Empty;
-        }
-
-        // ISO dates are read the same under every PostgreSQL DateStyle.
-        if (value is DateOnly date)
-        {
-            return date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
-        }
-
-        return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
-    }
-
-    private static T? ParseValue(string text)
-    {
-        text = text.Trim();
-        if (text.Length == 0)
-        {
-            return default;
-        }
-
-        var converter = TypeDescriptor.GetConverter(typeof(T));
-        return (T?)converter.ConvertFromString(null, CultureInfo.InvariantCulture, text);
     }
 }

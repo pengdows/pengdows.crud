@@ -17,7 +17,7 @@
 //   * GeometryCoercion: WKB/WKT/GeoJSON to Geometry
 //   * GeographyCoercion: WKB/WKT/GeoJSON to Geography
 // - Range types:
-//   * PostgreSqlRangeIntCoercion, PostgreSqlRangeDateTimeCoercion, PostgreSqlRangeLongCoercion
+//   * PostgreSqlRangeCoercion<T> (int, long, DateTime): reads through PostgreSqlRangeConverter<T>
 // - Concurrency: RowVersionValueCoercion (SQL Server timestamp/rowversion)
 // - LOBs: BlobStreamCoercion (binary), ClobStreamCoercion (character)
 // - Handles provider-specific types via reflection (e.g., NpgsqlInet).
@@ -70,9 +70,9 @@ internal static class AdvancedCoercions
         }
 
         // Range types (generic)
-        registry.Register(new PostgreSqlRangeIntCoercion());
-        registry.Register(new PostgreSqlRangeDateTimeCoercion());
-        registry.Register(new PostgreSqlRangeLongCoercion());
+        registry.Register(new PostgreSqlRangeCoercion<int>());
+        registry.Register(new PostgreSqlRangeCoercion<DateTime>());
+        registry.Register(new PostgreSqlRangeCoercion<long>());
 
         // Concurrency/versioning
         registry.Register(new RowVersionValueCoercion());
@@ -534,138 +534,6 @@ internal class GeographyCoercion : DbCoercion<Geography>
 }
 
 /// <summary>
-/// Coercion for PostgreSQL Range&lt;int&gt; type.
-/// </summary>
-internal class PostgreSqlRangeIntCoercion : DbCoercion<Range<int>>
-{
-    public override bool TryRead(in DbValue src, out Range<int> value)
-    {
-        if (src.IsNull)
-        {
-            value = Range<int>.Empty;
-            return false;
-        }
-
-        switch (src.RawValue)
-        {
-            case Range<int> range:
-                value = range;
-                return true;
-            case string text:
-                try
-                {
-                    value = Range<int>.Parse(text);
-                    return true;
-                }
-                catch
-                {
-                    value = Range<int>.Empty;
-                    return false;
-                }
-            default:
-                // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
-                if (src.RawValue is not null &&
-                    RangeConverters.Int.TryConvertFromProvider(src.RawValue, AdvancedCoercions.AnyDatabase, out var converted))
-                {
-                    value = converted;
-                    return true;
-                }
-
-                value = Range<int>.Empty;
-                return false;
-        }
-    }
-}
-
-/// <summary>
-/// Coercion for PostgreSQL Range&lt;DateTime&gt; type.
-/// </summary>
-internal class PostgreSqlRangeDateTimeCoercion : DbCoercion<Range<DateTime>>
-{
-    public override bool TryRead(in DbValue src, out Range<DateTime> value)
-    {
-        if (src.IsNull)
-        {
-            value = Range<DateTime>.Empty;
-            return false;
-        }
-
-        switch (src.RawValue)
-        {
-            case Range<DateTime> range:
-                value = range;
-                return true;
-            case string text:
-                try
-                {
-                    value = Range<DateTime>.Parse(text);
-                    return true;
-                }
-                catch
-                {
-                    value = Range<DateTime>.Empty;
-                    return false;
-                }
-            default:
-                // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
-                if (src.RawValue is not null &&
-                    RangeConverters.DateTime.TryConvertFromProvider(src.RawValue, AdvancedCoercions.AnyDatabase, out var converted))
-                {
-                    value = converted;
-                    return true;
-                }
-
-                value = Range<DateTime>.Empty;
-                return false;
-        }
-    }
-}
-
-/// <summary>
-/// Coercion for PostgreSQL Range&lt;long&gt; type.
-/// </summary>
-internal class PostgreSqlRangeLongCoercion : DbCoercion<Range<long>>
-{
-    public override bool TryRead(in DbValue src, out Range<long> value)
-    {
-        if (src.IsNull)
-        {
-            value = Range<long>.Empty;
-            return false;
-        }
-
-        switch (src.RawValue)
-        {
-            case Range<long> range:
-                value = range;
-                return true;
-            case string text:
-                try
-                {
-                    value = Range<long>.Parse(text);
-                    return true;
-                }
-                catch
-                {
-                    value = Range<long>.Empty;
-                    return false;
-                }
-            default:
-                // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
-                if (src.RawValue is not null &&
-                    RangeConverters.Long.TryConvertFromProvider(src.RawValue, AdvancedCoercions.AnyDatabase, out var converted))
-                {
-                    value = converted;
-                    return true;
-                }
-
-                value = Range<long>.Empty;
-                return false;
-        }
-    }
-}
-
-/// <summary>
 /// Coercion for RowVersion value object (wraps byte[8] for SQL Server rowversion).
 /// </summary>
 internal class RowVersionValueCoercion : DbCoercion<RowVersion>
@@ -855,13 +723,6 @@ internal sealed class MySqlGeographyCoercion : DbCoercion<Geography>
     }
 }
 
-internal static class RangeConverters
-{
-    public static readonly PostgreSqlRangeConverter<int> Int = new();
-    public static readonly PostgreSqlRangeConverter<long> Long = new();
-    public static readonly PostgreSqlRangeConverter<DateTime> DateTime = new();
-}
-
 /// <summary>
 /// SingleStore VECTOR(n) (F32): read as packed little-endian float32 bytes (confirmed live); written
 /// as JSON array text (SqlDialect.BindsVectorsAsText).
@@ -883,5 +744,26 @@ internal sealed class PackedFloat32VectorCoercion : DbCoercion<float[]>
 
         value = null!;
         return false;
+    }
+}
+
+/// <summary>
+/// Reads a <see cref="Range{T}"/> through <see cref="PostgreSqlRangeConverter{T}"/>, which reads
+/// <c>Range&lt;T&gt;</c>, range text (one grammar, DRY-013), <c>NpgsqlRange&lt;T&gt;</c> and the other
+/// provider shapes (TYPE-002). One class for every bound type; it was three copies.
+/// </summary>
+internal sealed class PostgreSqlRangeCoercion<T> : DbCoercion<Range<T>> where T : struct
+{
+    private static readonly PostgreSqlRangeConverter<T> Converter = new();
+
+    public override bool TryRead(in DbValue src, out Range<T> value)
+    {
+        if (src.IsNull)
+        {
+            value = Range<T>.Empty;
+            return false;
+        }
+
+        return Converter.TryConvertFromProvider(src.RawValue!, AdvancedCoercions.AnyDatabase, out value);
     }
 }

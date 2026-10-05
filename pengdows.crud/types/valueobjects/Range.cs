@@ -20,6 +20,8 @@
 
 using System.Globalization;
 
+using System.Text;
+
 namespace pengdows.crud.types.valueobjects;
 
 /// <summary>
@@ -78,7 +80,10 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
     public static Range<T> Empty { get; } = new(isEmptyRange: true);
 
     /// <summary>
-    /// Parse a canonical range string like "[1,5)" or "(,10]".
+    /// Parse range text: PostgreSQL's canonical form ("[1,5)", "(,10]", quoted bounds such as
+    /// ["2026-10-05 13:45:30","2026-10-06 00:00:00"), "empty") and <see cref="ToString"/>'s form.
+    /// Each bound converts through <see cref="TypeCoercionHelper"/>. Blank text throws
+    /// <see cref="ArgumentException"/>; any other text that isn't a range throws <see cref="FormatException"/>.
     /// </summary>
     public static Range<T> Parse(string rangeText)
     {
@@ -87,89 +92,155 @@ public readonly struct Range<T> : IEquatable<Range<T>> where T : struct
             throw new ArgumentException("Range text cannot be null or empty", nameof(rangeText));
         }
 
-        rangeText = rangeText.Trim();
-
-        // PostgreSQL's canonical text for an empty range.
-        if (rangeText.Equals("empty", StringComparison.OrdinalIgnoreCase))
-        {
-            return Empty;
-        }
-
-        if (rangeText.Length < 3)
-        {
-            throw new FormatException($"Invalid range format: {rangeText}");
-        }
-
-        var startInclusive = rangeText[0] == '[';
-        var endInclusive = rangeText[^1] == ']';
-
-        if (!startInclusive && rangeText[0] != '(')
-        {
-            throw new FormatException($"Range must start with '[' or '(': {rangeText}");
-        }
-
-        if (!endInclusive && rangeText[^1] != ')')
-        {
-            throw new FormatException($"Range must end with ']' or ')': {rangeText}");
-        }
-
-        var inner = rangeText[1..^1];
-        var commaIndex = inner.IndexOf(',');
-
-        if (commaIndex == -1)
-        {
-            throw new FormatException($"Range must contain comma separator: {rangeText}");
-        }
-
-        var startText = inner[..commaIndex].Trim();
-        var endText = inner[(commaIndex + 1)..].Trim();
-
-        T? start = string.IsNullOrEmpty(startText) ? default : ParseValue(startText);
-        T? end = string.IsNullOrEmpty(endText) ? default : ParseValue(endText);
-
-        return new Range<T>(start, end, startInclusive, endInclusive);
+        // The message leaves the text out: it may be a stored value (no payload in exceptions).
+        return TryParseText(rangeText, out var range) ? range : throw new FormatException("The text is not a range.");
     }
 
-    private static T ParseValue(string text)
+    // DRY-013: the one range grammar (PostgreSqlRangeConverter reads with it too). Blank is no range.
+    internal static bool TryParseText(string? text, out Range<T> range)
     {
-        if (typeof(T) == typeof(int))
+        range = default;
+        if (string.IsNullOrWhiteSpace(text))
         {
-            return (T)(object)int.Parse(text, CultureInfo.InvariantCulture);
+            return false;
         }
 
-        if (typeof(T) == typeof(long))
+        var trimmed = text.Trim();
+        if (trimmed.Equals("empty", StringComparison.OrdinalIgnoreCase))
         {
-            return (T)(object)long.Parse(text, CultureInfo.InvariantCulture);
+            range = Empty;
+            return true;
         }
 
-        if (typeof(T) == typeof(decimal))
+        if (trimmed.Length < 3 || trimmed[0] is not ('[' or '(') || trimmed[^1] is not (']' or ')'))
         {
-            return (T)(object)decimal.Parse(text, CultureInfo.InvariantCulture);
+            return false;
         }
 
-        if (typeof(T) == typeof(double))
+        var inner = trimmed.AsSpan(1, trimmed.Length - 2);
+        if (!TryReadBound(inner, out var lowerText, out var rest) || rest.Length == 0 || rest[0] != ',' ||
+            !TryReadBound(rest[1..], out var upperText, out rest) || rest.Length != 0)
         {
-            return (T)(object)double.Parse(text, CultureInfo.InvariantCulture);
+            return false;
         }
 
-        if (typeof(T) == typeof(DateTime))
+        try
         {
-            return (T)(object)DateTime.Parse(text, CultureInfo.InvariantCulture);
+            range = new Range<T>(ParseBound(lowerText), ParseBound(upperText), trimmed[0] == '[', trimmed[^1] == ']');
+            return true;
         }
-
-        if (typeof(T) == typeof(DateOnly))
+        catch (Exception ex) when (ex is FormatException or InvalidCastException or OverflowException or ArgumentException)
         {
-            return (T)(object)DateOnly.Parse(text, CultureInfo.InvariantCulture);
+            return false;
         }
-
-        if (typeof(T) == typeof(DateTimeOffset))
-        {
-            return (T)(object)DateTimeOffset.Parse(text, CultureInfo.InvariantCulture);
-        }
-
-        // For other types, try TypeCoercionHelper
-        return (T)TypeCoercionHelper.ConvertWithCache(text, typeof(T));
     }
+
+    // Reads one bound up to the next top-level comma (or the end): blank is unbounded (null), a
+    // quoted bound is unquoted ("" and backslash escapes, as PostgreSQL writes them).
+    private static bool TryReadBound(ReadOnlySpan<char> text, out string? bound, out ReadOnlySpan<char> rest)
+    {
+        var i = 0;
+        while (i < text.Length && char.IsWhiteSpace(text[i]))
+        {
+            i++;
+        }
+
+        if (i < text.Length && text[i] == '"')
+        {
+            var value = new StringBuilder();
+            i++;
+            while (true)
+            {
+                if (i >= text.Length)
+                {
+                    bound = null;
+                    rest = default;
+                    return false;
+                }
+
+                var c = text[i++];
+                if (c == '\\' && i < text.Length)
+                {
+                    value.Append(text[i++]);
+                }
+                else if (c == '"')
+                {
+                    if (i < text.Length && text[i] == '"')
+                    {
+                        value.Append('"');
+                        i++;
+                        continue;
+                    }
+
+                    break;
+                }
+                else
+                {
+                    value.Append(c);
+                }
+            }
+
+            while (i < text.Length && char.IsWhiteSpace(text[i]))
+            {
+                i++;
+            }
+
+            bound = value.ToString();
+            rest = text[i..];
+            return rest.Length == 0 || rest[0] == ',';
+        }
+
+        var end = text[i..].IndexOf(',');
+        var raw = end < 0 ? text[i..] : text.Slice(i, end);
+        if (raw.IndexOfAny('"', '\\') >= 0)
+        {
+            bound = null;
+            rest = default;
+            return false;
+        }
+
+        var trimmed = raw.Trim();
+        bound = trimmed.Length == 0 ? null : trimmed.ToString();
+        rest = end < 0 ? ReadOnlySpan<char>.Empty : text[(i + end)..];
+        return true;
+    }
+
+    private static T? ParseBound(string? text) =>
+        text == null ? null : (T)TypeCoercionHelper.Coerce(text, typeof(string), typeof(T))!;
+
+    /// <summary>
+    /// PostgreSQL's canonical range text, each bound in ISO/invariant form to the tick and quoted where
+    /// needed, which <see cref="TryParseText"/> reads back exactly. <see cref="ToString"/> is for display.
+    /// </summary>
+    internal string ToCanonicalText()
+    {
+        if (_isEmptyRange)
+        {
+            return "empty";
+        }
+
+        return string.Concat(IsLowerInclusive ? "[" : "(",
+            HasLowerBound ? QuoteIfNeeded(FormatBound(Lower!.Value)) : string.Empty, ",",
+            HasUpperBound ? QuoteIfNeeded(FormatBound(Upper!.Value)) : string.Empty,
+            IsUpperInclusive ? "]" : ")");
+    }
+
+    private static string FormatBound(T value) => value switch
+    {
+        DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture).TrimEnd('.'),
+        DateTimeOffset dto => dto.ToString("yyyy-MM-dd HH:mm:ss.FFFFFFFzzz", CultureInfo.InvariantCulture).Replace(".+", "+").Replace(".-", "-"),
+        DateOnly date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        TimeOnly time => time.ToString("HH:mm:ss.FFFFFFF", CultureInfo.InvariantCulture).TrimEnd('.'),
+        double d => d.ToString("R", CultureInfo.InvariantCulture),
+        float f => f.ToString("R", CultureInfo.InvariantCulture),
+        IFormattable formattable => formattable.ToString(null, CultureInfo.InvariantCulture),
+        _ => value.ToString() ?? string.Empty
+    };
+
+    private static string QuoteIfNeeded(string bound) =>
+        bound.Length == 0 || bound.AsSpan().IndexOfAny("\"\\,()[] \t") >= 0
+            ? "\"" + bound.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\""
+            : bound;
 
     public override string ToString()
     {

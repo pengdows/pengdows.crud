@@ -173,9 +173,9 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void RangeCoercions_HandleNullAndInvalid()
     {
-        var intCoercion = new PostgreSqlRangeIntCoercion();
-        var dateCoercion = new PostgreSqlRangeDateTimeCoercion();
-        var longCoercion = new PostgreSqlRangeLongCoercion();
+        var intCoercion = new PostgreSqlRangeCoercion<int>();
+        var dateCoercion = new PostgreSqlRangeCoercion<DateTime>();
+        var longCoercion = new PostgreSqlRangeCoercion<long>();
 
         Assert.False(intCoercion.TryRead(new DbValue(null), out _));
         Assert.False(dateCoercion.TryRead(new DbValue(null), out _));
@@ -228,7 +228,7 @@ public class AdvancedCoercionsBranchTests
         Assert.False(new PostgreSqlIntervalCoercion().TryRead(new DbValue(new object()), out _));
         Assert.False(new IntervalYearMonthCoercion().TryRead(new DbValue(new object()), out _));
         Assert.False(new IntervalDaySecondCoercion().TryRead(new DbValue(new object()), out _));
-        Assert.False(new PostgreSqlRangeDateTimeCoercion().TryRead(new DbValue(123), out _));
+        Assert.False(new PostgreSqlRangeCoercion<DateTime>().TryRead(new DbValue(123), out _));
     }
 
     [Fact]

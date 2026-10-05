@@ -11,7 +11,7 @@
 //   * Others: Store as VARCHAR
 // - ConvertToProvider(): Returns string for PostgreSQL, raw value otherwise.
 // - TryConvertFromProvider(): Handles Cidr, string, and NpgsqlCidr.
-// - Parse(): Internal helper requiring "network/prefix" format.
+// - Text is parsed by Cidr.Parse (one parser, DRY-012).
 // - Thread-safe and immutable value objects.
 // =============================================================================
 
@@ -113,7 +113,7 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
         {
             try
             {
-                result = Parse(text);
+                result = Cidr.Parse(text);
                 return true;
             }
             catch
@@ -147,23 +147,5 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
 
         result = default!;
         return false;
-    }
-
-    private static Cidr Parse(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            throw new FormatException("cidr value cannot be empty.");
-        }
-
-        var parts = text.Split('/', 2);
-        if (parts.Length != 2)
-        {
-            throw new FormatException("cidr requires network/prefix format.");
-        }
-
-        var address = IPAddress.Parse(parts[0]);
-        var prefix = byte.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
-        return new Cidr(address, prefix);
     }
 }

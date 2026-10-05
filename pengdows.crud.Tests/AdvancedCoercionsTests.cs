@@ -118,9 +118,9 @@ public class AdvancedCoercionsTests
     [Fact]
     public void PostgreSqlRangeCoercions_ReadStringValues()
     {
-        var intCoercion = new PostgreSqlRangeIntCoercion();
-        var dateCoercion = new PostgreSqlRangeDateTimeCoercion();
-        var longCoercion = new PostgreSqlRangeLongCoercion();
+        var intCoercion = new PostgreSqlRangeCoercion<int>();
+        var dateCoercion = new PostgreSqlRangeCoercion<DateTime>();
+        var longCoercion = new PostgreSqlRangeCoercion<long>();
 
         Assert.True(intCoercion.TryRead(new DbValue("[1,10)", typeof(string)), out var intRange));
         Assert.Equal(1, intRange.Lower);

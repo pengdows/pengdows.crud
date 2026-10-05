@@ -115,12 +115,12 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         Assert.False(coercion.TryRead(new DbValue("not a timespan"), out _));
     }
 
-    // ===== PostgreSqlRangeLongCoercion =====
+    // ===== PostgreSqlRangeCoercion<long> =====
 
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_ValidString_ReturnsRange()
     {
-        var coercion = new PostgreSqlRangeLongCoercion();
+        var coercion = new PostgreSqlRangeCoercion<long>();
 
         Assert.True(coercion.TryRead(new DbValue("[100,200)", typeof(string)), out var result));
         Assert.Equal(100L, result.Lower);
@@ -130,7 +130,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeLongCoercion();
+        var coercion = new PostgreSqlRangeCoercion<long>();
 
         Assert.False(coercion.TryRead(new DbValue("not a range", typeof(string)), out _));
     }
@@ -138,7 +138,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeLongCoercion();
+        var coercion = new PostgreSqlRangeCoercion<long>();
 
         Assert.False(coercion.TryRead(new DbValue(42), out _));
     }
@@ -146,7 +146,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeLongCoercion();
+        var coercion = new PostgreSqlRangeCoercion<long>();
 
         Assert.False(coercion.TryRead(new DbValue(null), out _));
     }
@@ -154,7 +154,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_RangePassthrough()
     {
-        var coercion = new PostgreSqlRangeLongCoercion();
+        var coercion = new PostgreSqlRangeCoercion<long>();
         var range = new Range<long>(1L, 10L, true, false);
 
         Assert.True(coercion.TryRead(new DbValue(range), out var result));

@@ -115,8 +115,9 @@ public class TypesAndConvertersEdgeCaseTests
     {
         var range = Range<int>.Parse("[,10)");
 
-        // Empty bound text yields default(T) which is 0 for int, not null
-        Assert.Equal(default(int), range.Lower);
+        // DRY-013: an empty bound is unbounded; it read as a bound of default(T), 0 for int.
+        Assert.False(range.HasLowerBound);
+        Assert.Null(range.Lower);
         Assert.Equal(10, range.Upper);
         Assert.True(range.IsLowerInclusive);
         Assert.False(range.IsUpperInclusive);
@@ -128,8 +129,9 @@ public class TypesAndConvertersEdgeCaseTests
         var range = Range<int>.Parse("(5,]");
 
         Assert.Equal(5, range.Lower);
-        // Empty bound text yields default(T) which is 0 for int, not null
-        Assert.Equal(default(int), range.Upper);
+        // DRY-013: an empty bound is unbounded; it read as a bound of default(T), 0 for int.
+        Assert.False(range.HasUpperBound);
+        Assert.Null(range.Upper);
         Assert.False(range.IsLowerInclusive);
         Assert.True(range.IsUpperInclusive);
     }
@@ -1165,7 +1167,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeIntCoercion();
+        var coercion = new PostgreSqlRangeCoercion<int>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1177,7 +1179,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_RangePassthrough()
     {
-        var coercion = new PostgreSqlRangeIntCoercion();
+        var coercion = new PostgreSqlRangeCoercion<int>();
         var range = new Range<int>(1, 10, true, false);
         var src = new DbValue(range);
 
@@ -1190,7 +1192,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_ValidString()
     {
-        var coercion = new PostgreSqlRangeIntCoercion();
+        var coercion = new PostgreSqlRangeCoercion<int>();
         var src = new DbValue("[1,10)");
 
         var result = coercion.TryRead(src, out var value);
@@ -1203,7 +1205,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeIntCoercion();
+        var coercion = new PostgreSqlRangeCoercion<int>();
         var src = new DbValue("invalid");
 
         var result = coercion.TryRead(src, out var value);
@@ -1214,7 +1216,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeIntCoercion();
+        var coercion = new PostgreSqlRangeCoercion<int>();
         var src = new DbValue(42.5);
 
         var result = coercion.TryRead(src, out var value);
@@ -1225,7 +1227,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_ValidString()
     {
-        var coercion = new PostgreSqlRangeLongCoercion();
+        var coercion = new PostgreSqlRangeCoercion<long>();
         var src = new DbValue("[100,200)");
 
         var result = coercion.TryRead(src, out var value);
@@ -1238,7 +1240,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeDateTimeCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeDateTimeCoercion();
+        var coercion = new PostgreSqlRangeCoercion<DateTime>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1249,7 +1251,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeDateTimeCoercion_TryRead_ValidString()
     {
-        var coercion = new PostgreSqlRangeDateTimeCoercion();
+        var coercion = new PostgreSqlRangeCoercion<DateTime>();
         var src = new DbValue("[2024-01-01,2024-12-31)");
 
         var result = coercion.TryRead(src, out var value);

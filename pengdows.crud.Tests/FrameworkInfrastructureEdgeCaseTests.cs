@@ -76,8 +76,8 @@ public class FrameworkInfrastructureEdgeCaseTests
 
         Assert.False(converter.TryConvertFromProvider(new object(), SupportedDatabase.PostgreSql, out _));
 
-        Assert.True(converter.TryConvertFromProvider("", SupportedDatabase.PostgreSql, out var emptyResult));
-        Assert.Equal(Range<int>.Empty, emptyResult);
+        // Blank text is no range (DRY-013); it read as the empty range.
+        Assert.False(converter.TryConvertFromProvider("", SupportedDatabase.PostgreSql, out _));
 
         var openLower = new Range<int>(null, 5, true, true);
         var formatted = converter.ToProviderValue(openLower, SupportedDatabase.PostgreSql);

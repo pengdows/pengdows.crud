@@ -10,7 +10,7 @@
 //   * Others: Store as VARCHAR
 // - ConvertToProvider(): Returns string for PostgreSQL, raw value otherwise.
 // - TryConvertFromProvider(): Handles Inet, string, IPAddress, and NpgsqlInet.
-// - Parse(): Internal helper parsing "ip/prefix" format.
+// - Text is parsed by Inet.Parse (one parser, DRY-012).
 // - Thread-safe and immutable value objects.
 // =============================================================================
 
@@ -113,7 +113,7 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
         {
             try
             {
-                result = Parse(text);
+                result = Inet.Parse(text);
                 return true;
             }
             catch
@@ -146,7 +146,7 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
             {
                 if (maskValue == null && value.ToString() is { } providerText && providerText.Contains('/'))
                 {
-                    result = Parse(providerText);
+                    result = Inet.Parse(providerText);
                     return true;
                 }
 
@@ -157,23 +157,5 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
 
         result = default!;
         return false;
-    }
-
-    private static Inet Parse(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            throw new FormatException("inet value cannot be empty.");
-        }
-
-        var parts = text.Split('/', 2);
-        var address = IPAddress.Parse(parts[0]);
-        byte? prefix = null;
-        if (parts.Length == 2 && !string.IsNullOrEmpty(parts[1]))
-        {
-            prefix = byte.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture);
-        }
-
-        return new Inet(address, prefix);
     }
 }
