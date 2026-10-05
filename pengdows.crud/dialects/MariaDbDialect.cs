@@ -206,8 +206,6 @@ internal class MariaDbDialect : MySqlDialect
         {
             SpatialFormat = SpatialWireFormat.LittleEndianSridPrefixedWkb,
             RegisterTypeMappings = registry =>
-                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.MariaDb),
-            RegisterCoercions = registry =>
-                RegisterInternalFormatSpatialCoercions(registry, SupportedDatabase.MariaDb)
+                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.MariaDb)
         };
 }

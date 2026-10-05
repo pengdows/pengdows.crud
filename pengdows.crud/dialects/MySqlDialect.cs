@@ -832,8 +832,7 @@ internal class MySqlDialect : SqlDialect
             {
                 RegisterJsonMapping(registry, SupportedDatabase.MySql);
                 RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.MySql);
-            },
-            RegisterCoercions = registry => RegisterInternalFormatSpatialCoercions(registry, SupportedDatabase.MySql)
+            }
         };
 
     // Aurora MySQL: MySQL's spatial handling. The JSON mapping has never been keyed on it; its
@@ -843,9 +842,7 @@ internal class MySqlDialect : SqlDialect
         {
             SpatialFormat = SpatialWireFormat.LittleEndianSridPrefixedWkb,
             RegisterTypeMappings = registry =>
-                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.AuroraMySql),
-            RegisterCoercions = registry =>
-                RegisterInternalFormatSpatialCoercions(registry, SupportedDatabase.AuroraMySql)
+                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.AuroraMySql)
         };
 
     // SingleStore: GEOGRAPHY/GEOGRAPHYPOINT take WKT text (TYPE-002), not MySQL's internal format,
@@ -896,13 +893,5 @@ internal class MySqlDialect : SqlDialect
         };
         registry.RegisterMapping<Geometry>(database, spatial);
         registry.RegisterMapping<Geography>(database, spatial);
-    }
-
-    /// <summary>Reads the server's internal format: a 4-byte little-endian SRID then WKB (TYPE-018).</summary>
-    private protected static void RegisterInternalFormatSpatialCoercions(CoercionRegistry registry,
-        SupportedDatabase database)
-    {
-        registry.Register(database, new MySqlGeometryCoercion());
-        registry.Register(database, new MySqlGeographyCoercion());
     }
 }

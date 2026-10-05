@@ -87,7 +87,7 @@ public class NetworkConverterBehaviorTests
     {
         var shim = new NpgsqlInetShim(IPAddress.Parse(address), netmask);
 
-        Assert.True(new pengdows.crud.types.coercion.InetCoercion().TryRead(
+        Assert.True(new ConverterRead<Inet>().TryRead(
             new pengdows.crud.types.coercion.DbValue(shim), out var inet));
 
         Assert.Null(inet.PrefixLength);
@@ -99,7 +99,7 @@ public class NetworkConverterBehaviorTests
     {
         var shim = new NpgsqlInetShim(IPAddress.Parse("192.168.1.10"), 24);
 
-        Assert.True(new pengdows.crud.types.coercion.InetCoercion().TryRead(
+        Assert.True(new ConverterRead<Inet>().TryRead(
             new pengdows.crud.types.coercion.DbValue(shim), out var inet));
 
         Assert.Equal<int?>(24, inet.PrefixLength);

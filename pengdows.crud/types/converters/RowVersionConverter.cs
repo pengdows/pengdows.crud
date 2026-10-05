@@ -11,7 +11,7 @@
 //   * Oracle: RAW columns
 //   * MySQL/SQLite: No native type, use BINARY
 // - ConvertToProvider(): Returns byte[] via ToArray().
-// - TryConvertFromProvider(): Handles RowVersion, byte[], ReadOnlyMemory<byte>, ArraySegment<byte>.
+// - TryConvertFromProvider(): Handles RowVersion, byte[], ReadOnlyMemory<byte>, ArraySegment<byte>, ulong.
 // - With [Version] attribute, pengdows.crud includes version in UPDATE WHERE clause.
 // - Detects concurrent modifications when UPDATE affects 0 rows.
 // - Thread-safe and immutable value objects.
@@ -135,6 +135,14 @@ internal sealed class RowVersionConverter : AdvancedTypeConverter<RowVersion>
                     result = default!;
                     return false;
                 }
+            // A rowversion read as its number: the 8 bytes big-endian, as SQL Server stores it (DRY-010).
+            case ulong number:
+            {
+                var bytes = new byte[8];
+                System.Buffers.Binary.BinaryPrimitives.WriteUInt64BigEndian(bytes, number);
+                result = RowVersion.FromBytes(bytes);
+                return true;
+            }
             default:
                 result = default!;
                 return false;

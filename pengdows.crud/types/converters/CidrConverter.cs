@@ -124,7 +124,9 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
         }
 
         var type = value.GetType();
-        if (type.FullName?.Contains("NpgsqlCidr", StringComparison.OrdinalIgnoreCase) == true)
+        // By shape (an Address property, as NpgsqlInet/NpgsqlCidr and similar provider types have), not
+        // by type name: the coercion this replaced matched by shape, and Npgsql 8 added NpgsqlCidr (DRY-010).
+        if (type.GetProperty("Address")?.PropertyType == typeof(IPAddress))
         {
             var addressProp = type.GetProperty("Address");
             var netmaskProp = type.GetProperty("Netmask");

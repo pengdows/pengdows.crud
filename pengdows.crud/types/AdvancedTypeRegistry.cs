@@ -94,6 +94,9 @@ internal class AdvancedTypeRegistry
     private readonly ConcurrentDictionary<Type, IAdvancedTypeConverter> _converters = new();
     private readonly ConcurrentDictionary<Type, byte> _mappedTypes = new(); // concurrent hashset pattern
 
+    /// <summary>The types with a converter (for the one-reader-per-type check).</summary>
+    internal IEnumerable<Type> ConverterTypes => _converters.Keys;
+
     // Performance cache for frequently accessed combinations
     private readonly ConcurrentDictionary<MappingKey, CachedParameterConfig?> _parameterCache = new();
 

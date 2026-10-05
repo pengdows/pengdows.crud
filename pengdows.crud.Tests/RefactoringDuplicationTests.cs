@@ -181,7 +181,7 @@ public class RefactoringDuplicationTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_NullDbValue_ReturnsFalse()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var nullDbValue = new DbValue(null);
         var result = coercion.TryRead(nullDbValue, out var value);
 
@@ -192,7 +192,7 @@ public class RefactoringDuplicationTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_ValidTimeSpan_ReturnsTrue()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var ts = TimeSpan.FromHours(2);
         var dbValue = new DbValue(ts);
         var result = coercion.TryRead(dbValue, out var value);
@@ -204,7 +204,7 @@ public class RefactoringDuplicationTests
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_NullDbValue_ReturnsFalse()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
         var nullDbValue = new DbValue(null);
         var result = coercion.TryRead(nullDbValue, out var value);
 
@@ -215,7 +215,7 @@ public class RefactoringDuplicationTests
     [Fact]
     public void IntervalDaySecondCoercion_TryRead_NullDbValue_ReturnsFalse()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
         var nullDbValue = new DbValue(null);
         var result = coercion.TryRead(nullDbValue, out var value);
 
@@ -226,7 +226,7 @@ public class RefactoringDuplicationTests
     [Fact]
     public void IntervalDaySecondCoercion_TryRead_ValidTimeSpan_ReturnsTrue()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
         var ts = TimeSpan.FromDays(3).Add(TimeSpan.FromHours(4));
         var dbValue = new DbValue(ts);
         var result = coercion.TryRead(dbValue, out var value);

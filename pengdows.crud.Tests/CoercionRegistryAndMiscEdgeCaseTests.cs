@@ -156,12 +156,12 @@ public class CoercionRegistryAndMiscEdgeCaseTests
         Assert.False(coercion.TryRead(new DbValue("not an array"), out _));
     }
 
-    // ===== ClobStreamCoercion =====
+    // ===== ConverterRead<System.IO.TextReader> =====
 
     [Fact]
     public void ClobStreamCoercion_TryRead_TextReaderPassthrough()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         var reader = new StringReader("test");
 
         Assert.True(coercion.TryRead(new DbValue(reader), out var result));
@@ -171,17 +171,17 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void ClobStreamCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
 
         Assert.False(coercion.TryRead(new DbValue(42), out _));
     }
 
-    // ===== CidrCoercion =====
+    // ===== ConverterRead<Cidr> =====
 
     [Fact]
     public void CidrCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new CidrCoercion();
+        var coercion = new ConverterRead<Cidr>();
 
         Assert.False(coercion.TryRead(new DbValue("not a cidr", typeof(string)), out _));
     }
@@ -189,7 +189,7 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void CidrCoercion_TryRead_CidrPassthrough_ReturnsTrue()
     {
-        var coercion = new CidrCoercion();
+        var coercion = new ConverterRead<Cidr>();
         var cidr = Cidr.Parse("10.0.0.0/8");
 
         Assert.True(coercion.TryRead(new DbValue(cidr), out var result));
@@ -199,7 +199,7 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void CidrCoercion_TryRead_ProviderShim_MissingProps_ReturnsFalse()
     {
-        var coercion = new CidrCoercion();
+        var coercion = new ConverterRead<Cidr>();
         // Object with Cidr in name but missing expected properties
         var shim = new FakeCidrShimNoProps();
 
@@ -209,7 +209,7 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void CidrCoercion_TryRead_ProviderShim_ValidProps_ReturnsTrue()
     {
-        var coercion = new CidrCoercion();
+        var coercion = new ConverterRead<Cidr>();
         var shim = new FakeCidrShimWithProps(IPAddress.Parse("192.168.0.0"), (byte)24);
 
         Assert.True(coercion.TryRead(new DbValue(shim), out var result));
@@ -219,17 +219,17 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void CidrCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new CidrCoercion();
+        var coercion = new ConverterRead<Cidr>();
 
         Assert.False(coercion.TryRead(new DbValue(null), out _));
     }
 
-    // ===== MacAddressCoercion =====
+    // ===== ConverterRead<MacAddress> =====
 
     [Fact]
     public void MacAddressCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new MacAddressCoercion();
+        var coercion = new ConverterRead<MacAddress>();
 
         Assert.False(coercion.TryRead(new DbValue("not a mac", typeof(string)), out _));
     }
@@ -237,7 +237,7 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void MacAddressCoercion_TryRead_MacPassthrough_ReturnsTrue()
     {
-        var coercion = new MacAddressCoercion();
+        var coercion = new ConverterRead<MacAddress>();
         var mac = MacAddress.Parse("08:00:2B:01:02:03");
 
         Assert.True(coercion.TryRead(new DbValue(mac), out var result));
@@ -247,7 +247,7 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void MacAddressCoercion_TryRead_PhysicalAddress_ReturnsTrue()
     {
-        var coercion = new MacAddressCoercion();
+        var coercion = new ConverterRead<MacAddress>();
         var physical = new PhysicalAddress(new byte[] { 0x08, 0x00, 0x2B, 0x01, 0x02, 0x03 });
 
         Assert.True(coercion.TryRead(new DbValue(physical), out var result));
@@ -257,7 +257,7 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void MacAddressCoercion_TryRead_ProviderShim_NullAddress_ReturnsFalse()
     {
-        var coercion = new MacAddressCoercion();
+        var coercion = new ConverterRead<MacAddress>();
         var shim = new FakeMacAddressShim(null);
 
         Assert.False(coercion.TryRead(new DbValue(shim), out _));
@@ -266,7 +266,7 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void MacAddressCoercion_TryRead_ProviderShim_ValidAddress_ReturnsTrue()
     {
-        var coercion = new MacAddressCoercion();
+        var coercion = new ConverterRead<MacAddress>();
         var physical = new PhysicalAddress(new byte[] { 0x08, 0x00, 0x2B, 0x01, 0x02, 0x03 });
         var shim = new FakeMacAddressShim(physical);
 
@@ -277,7 +277,7 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     [Fact]
     public void MacAddressCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new MacAddressCoercion();
+        var coercion = new ConverterRead<MacAddress>();
 
         Assert.False(coercion.TryRead(new DbValue(42), out _));
     }

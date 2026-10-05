@@ -28,7 +28,7 @@ public class UnmanagedBlobStreamMaterializationTests
     {
         using var buffer = new ReaderOwnedBuffer(Expected);
 
-        Assert.True(new BlobStreamCoercion().TryRead(new DbValue(buffer.Stream), out var value));
+        Assert.True(new ConverterRead<System.IO.Stream>().TryRead(new DbValue(buffer.Stream), out var value));
         buffer.Invalidate();
 
         Assert.Equal(Expected, ReadAll(value));

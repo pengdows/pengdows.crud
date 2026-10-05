@@ -252,12 +252,12 @@ public class MissingCoercionTests
 
     #endregion
 
-    #region JsonDocumentCoercion Tests
+    #region ConverterRead<System.Text.Json.JsonDocument> Tests
 
     [Fact]
     public void JsonDocumentCoercion_TryRead_JsonDocument_ReturnsValue()
     {
-        var coercion = new JsonDocumentCoercion();
+        var coercion = new ConverterRead<System.Text.Json.JsonDocument>();
         using var doc = JsonDocument.Parse("{\"test\":true}");
         var dbValue = new DbValue(doc);
 
@@ -270,7 +270,7 @@ public class MissingCoercionTests
     [Fact]
     public void JsonDocumentCoercion_TryRead_JsonElement_ParsesCorrectly()
     {
-        var coercion = new JsonDocumentCoercion();
+        var coercion = new ConverterRead<System.Text.Json.JsonDocument>();
         using var doc = JsonDocument.Parse("{\"test\":true}");
         var dbValue = new DbValue(doc.RootElement);
 
@@ -283,7 +283,7 @@ public class MissingCoercionTests
     [Fact]
     public void JsonDocumentCoercion_TryRead_String_ParsesCorrectly()
     {
-        var coercion = new JsonDocumentCoercion();
+        var coercion = new ConverterRead<System.Text.Json.JsonDocument>();
         var dbValue = new DbValue("{\"test\":true}");
 
         var success = coercion.TryRead(dbValue, out var result);
@@ -295,7 +295,7 @@ public class MissingCoercionTests
     [Fact]
     public void JsonDocumentCoercion_TryRead_ByteArray_ParsesCorrectly()
     {
-        var coercion = new JsonDocumentCoercion();
+        var coercion = new ConverterRead<System.Text.Json.JsonDocument>();
         var bytes = System.Text.Encoding.UTF8.GetBytes("{\"test\":true}");
         var dbValue = new DbValue(bytes);
 
@@ -309,7 +309,7 @@ public class MissingCoercionTests
     public void JsonDocumentCoercion_TryRead_EmptyString_IsJsonNull()
     {
         // Blank text is the JSON null (COR-007, DRY-015).
-        var coercion = new JsonDocumentCoercion();
+        var coercion = new ConverterRead<System.Text.Json.JsonDocument>();
         var dbValue = new DbValue("");
 
         var success = coercion.TryRead(dbValue, out var result);
@@ -321,7 +321,7 @@ public class MissingCoercionTests
     [Fact]
     public void JsonDocumentCoercion_TryRead_InvalidJson_ReturnsFalse()
     {
-        var coercion = new JsonDocumentCoercion();
+        var coercion = new ConverterRead<System.Text.Json.JsonDocument>();
         var dbValue = new DbValue("{invalid}");
 
         var success = coercion.TryRead(dbValue, out var result);
@@ -333,7 +333,7 @@ public class MissingCoercionTests
     [Fact]
     public void JsonDocumentCoercion_TryRead_NullValue_ReturnsFalse()
     {
-        var coercion = new JsonDocumentCoercion();
+        var coercion = new ConverterRead<System.Text.Json.JsonDocument>();
         var dbValue = new DbValue(null);
 
         var success = coercion.TryRead(dbValue, out var result);
@@ -436,12 +436,12 @@ public class MissingCoercionTests
 
     #endregion
 
-    #region PostgreSqlIntervalCoercion Tests
+    #region ConverterRead<PostgreSqlInterval> Tests
 
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_PostgreSqlInterval_ReturnsValue()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var interval = new PostgreSqlInterval(1, 2, 3600000000); // 1 month, 2 days, 1 hour in microseconds
         var dbValue = new DbValue(interval);
 
@@ -456,7 +456,7 @@ public class MissingCoercionTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_TimeSpan_ConvertsCorrectly()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var timeSpan = TimeSpan.FromHours(26.5); // 1 day, 2 hours, 30 minutes
         var dbValue = new DbValue(timeSpan);
 
@@ -469,7 +469,7 @@ public class MissingCoercionTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_NullValue_ReturnsFalse()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var dbValue = new DbValue(null);
 
         var success = coercion.TryRead(dbValue, out var result);
@@ -481,7 +481,7 @@ public class MissingCoercionTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_InvalidType_ReturnsFalse()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var dbValue = new DbValue("invalid");
 
         var success = coercion.TryRead(dbValue, out var result);
@@ -492,12 +492,12 @@ public class MissingCoercionTests
 
     #endregion
 
-    #region RowVersionValueCoercion Tests
+    #region ConverterRead<RowVersion> Tests
 
     [Fact]
     public void RowVersionValueCoercion_TryRead_RowVersion_ReturnsValue()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var bytes = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 };
         var rowVersion = new RowVersion(bytes);
         var dbValue = new DbValue(rowVersion);
@@ -511,7 +511,7 @@ public class MissingCoercionTests
     [Fact]
     public void RowVersionValueCoercion_TryRead_8ByteArray_ConvertsCorrectly()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var bytes = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 };
         var dbValue = new DbValue(bytes);
 
@@ -524,7 +524,7 @@ public class MissingCoercionTests
     [Fact]
     public void RowVersionValueCoercion_TryRead_ULong_ConvertsCorrectly()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var ulongValue = 12345UL;
         var dbValue = new DbValue(ulongValue);
 
@@ -537,7 +537,7 @@ public class MissingCoercionTests
     [Fact]
     public void RowVersionValueCoercion_TryRead_WrongLengthArray_ReturnsFalse()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var bytes = new byte[] { 1, 2, 3 }; // Wrong length
         var dbValue = new DbValue(bytes);
 
@@ -550,7 +550,7 @@ public class MissingCoercionTests
     [Fact]
     public void RowVersionValueCoercion_TryRead_NullValue_ReturnsFalse()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var dbValue = new DbValue(null);
 
         var success = coercion.TryRead(dbValue, out var result);

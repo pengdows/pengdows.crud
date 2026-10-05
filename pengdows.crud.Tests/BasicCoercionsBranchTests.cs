@@ -101,7 +101,7 @@ public class BasicCoercionsBranchTests
     [Fact]
     public void JsonDocumentAndElementCoercions_HandleInputs()
     {
-        var docCoercion = new JsonDocumentCoercion();
+        var docCoercion = new ConverterRead<System.Text.Json.JsonDocument>();
         var elementCoercion = new JsonElementCoercion();
 
         using var doc = JsonDocument.Parse("{\"a\":1}");

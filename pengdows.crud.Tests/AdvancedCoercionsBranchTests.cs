@@ -46,7 +46,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void IntervalYearMonthCoercion_HandlesNullAndInvalid()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
         Assert.False(coercion.TryRead(new DbValue("P9999999999999999999999Y", typeof(string)), out _));
 
@@ -58,7 +58,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void IntervalDaySecondCoercion_HandlesNullAndInvalid()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
         Assert.False(coercion.TryRead(new DbValue("P9999999999999999999999D", typeof(string)), out _));
 
@@ -70,7 +70,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void InetCoercion_HandlesNullAndProviderSpecific()
     {
-        var coercion = new InetCoercion();
+        var coercion = new ConverterRead<Inet>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
 
         var inetValue = new Inet(IPAddress.Parse("10.0.0.1"), 24);
@@ -98,7 +98,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void CidrCoercion_HandlesNullAndProviderSpecific()
     {
-        var coercion = new CidrCoercion();
+        var coercion = new ConverterRead<Cidr>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
 
         var cidrValue = Cidr.Parse("192.168.0.0/16");
@@ -124,7 +124,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void MacAddressCoercion_HandlesNullAndProviderSpecific()
     {
-        var coercion = new MacAddressCoercion();
+        var coercion = new ConverterRead<MacAddress>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
 
         var macValue = MacAddress.Parse("00:11:22:33:44:55");
@@ -146,7 +146,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void GeometryCoercion_HandlesNullAndGeoJson()
     {
-        var coercion = new GeometryCoercion();
+        var coercion = new ConverterRead<Geometry>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
 
         var geomValue = Geometry.FromWellKnownText("POINT(1 2)", 0);
@@ -160,7 +160,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void GeographyCoercion_HandlesNullAndGeoJson()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
 
         Assert.True(coercion.TryRead(new DbValue("POINT(1 2)", typeof(string)), out var fromWkt));
@@ -173,9 +173,9 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void RangeCoercions_HandleNullAndInvalid()
     {
-        var intCoercion = new PostgreSqlRangeCoercion<int>();
-        var dateCoercion = new PostgreSqlRangeCoercion<DateTime>();
-        var longCoercion = new PostgreSqlRangeCoercion<long>();
+        var intCoercion = new ConverterRead<Range<int>>();
+        var dateCoercion = new ConverterRead<Range<DateTime>>();
+        var longCoercion = new ConverterRead<Range<long>>();
 
         Assert.False(intCoercion.TryRead(new DbValue(null), out _));
         Assert.False(dateCoercion.TryRead(new DbValue(null), out _));
@@ -200,7 +200,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void BlobStreamCoercion_HandlesNullAndMemory()
     {
-        var coercion = new BlobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.Stream>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
 
         var memory = new ReadOnlyMemory<byte>(new byte[] { 1, 2, 3 });
@@ -213,7 +213,7 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void ClobStreamCoercion_HandlesNullAndDefault()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         Assert.False(coercion.TryRead(new DbValue(null), out _));
         Assert.False(coercion.TryRead(new DbValue(123), out _));
 
@@ -225,16 +225,16 @@ public class AdvancedCoercionsBranchTests
     [Fact]
     public void AdditionalAdvancedCoercions_InvalidAndUnsupportedInputs_ReturnFalse()
     {
-        Assert.False(new PostgreSqlIntervalCoercion().TryRead(new DbValue(new object()), out _));
-        Assert.False(new IntervalYearMonthCoercion().TryRead(new DbValue(new object()), out _));
-        Assert.False(new IntervalDaySecondCoercion().TryRead(new DbValue(new object()), out _));
-        Assert.False(new PostgreSqlRangeCoercion<DateTime>().TryRead(new DbValue(123), out _));
+        Assert.False(new ConverterRead<PostgreSqlInterval>().TryRead(new DbValue(new object()), out _));
+        Assert.False(new ConverterRead<IntervalYearMonth>().TryRead(new DbValue(new object()), out _));
+        Assert.False(new ConverterRead<IntervalDaySecond>().TryRead(new DbValue(new object()), out _));
+        Assert.False(new ConverterRead<Range<DateTime>>().TryRead(new DbValue(123), out _));
     }
 
     [Fact]
     public void ClobStreamCoercion_NonReadableStream_ReturnsFalse()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         using var nonReadable = new NonReadableStream();
 
         Assert.False(coercion.TryRead(new DbValue(nonReadable), out _));

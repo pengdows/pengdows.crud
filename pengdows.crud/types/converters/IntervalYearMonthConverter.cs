@@ -10,7 +10,7 @@
 //   * PostgreSQL/CockroachDB: INTERVAL (ISO 8601 format)
 //   * Others: Raw value
 // - ConvertToProvider(): Returns ISO 8601 format (P3Y6M) for Oracle/PostgreSQL.
-// - TryConvertFromProvider(): Handles IntervalYearMonth and string (ISO 8601).
+// - TryConvertFromProvider(): Handles IntervalYearMonth, a month count (int/long/short) and text.
 // - Text is read by IntervalYearMonth.TryParseText (ISO, SQL/Oracle/Informix and word forms; DRY-012).
 // - Use case: Date arithmetic where month boundaries matter.
 // - Thread-safe and immutable value objects.
@@ -101,6 +101,21 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
         {
             result = interval;
             return true;
+        }
+
+        // A month count (Informix, Db2 and some drivers return one; DRY-010).
+        if (value is int or long or short)
+        {
+            try
+            {
+                result = IntervalYearMonth.FromTotalMonths(checked((int)Convert.ToInt64(value, CultureInfo.InvariantCulture)));
+                return true;
+            }
+            catch (OverflowException)
+            {
+                result = default!;
+                return false;
+            }
         }
 
         // DRY-012: the value object's strict parser; blank or unrecognized text is no interval.

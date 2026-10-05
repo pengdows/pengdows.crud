@@ -12,7 +12,7 @@
 //   * DecimalCoercion: Handles all numeric conversions with CultureInfo.InvariantCulture
 // - Binary: ByteArrayCoercion handles byte[], ReadOnlyMemory<byte>, ArraySegment<byte>, Stream
 // - Array coercions: IntArrayCoercion, StringArrayCoercion
-// - JSON coercions: JsonValueCoercion, JsonDocumentCoercion, JsonElementCoercion
+// - JSON coercions: JsonValueCoercion, JsonElementCoercion (JsonDocument: JsonDocumentConverter)
 // - PostgreSQL-specific: HStoreCoercion (ranges are AdvancedCoercions' PostgreSqlRange*Coercion)
 // - DateTime/DateTimeOffset have no coercion: TypeCoercionHelper reads them before the registry.
 // =============================================================================
@@ -52,7 +52,6 @@ internal static class BasicCoercions
 
         // JSON types
         registry.Register(new JsonValueCoercion());
-        registry.Register(new JsonDocumentCoercion());
         registry.Register(new JsonElementCoercion());
 
         // PostgreSQL types
@@ -576,39 +575,6 @@ internal class JsonValueCoercion : DbCoercion<JsonValue>
         catch (JsonException)
         {
             value = default;
-            return false;
-        }
-    }
-}
-
-internal class JsonDocumentCoercion : DbCoercion<JsonDocument>
-{
-    public override bool TryRead(in DbValue src, out JsonDocument? value)
-    {
-        value = null;
-        try
-        {
-            switch (src.RawValue)
-            {
-                case null or DBNull:
-                    return false;
-                case JsonDocument doc:
-                    value = doc;
-                    return true;
-                case JsonElement element:
-                    value = JsonDocument.Parse(element.GetRawText());
-                    return true;
-                case var raw when TypeCoercionHelper.CarriesJsonText(raw):
-                    value = JsonDocument.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(
-                        TypeCoercionHelper.ExtractJsonString(raw, JsonSerializerOptions.Default)));
-                    return true;
-                default:
-                    return false;
-            }
-        }
-        catch (JsonException)
-        {
-            value = null;
             return false;
         }
     }

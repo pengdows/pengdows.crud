@@ -5,8 +5,8 @@
 // AI SUMMARY:
 // - Converts between JsonDocument and string for database storage.
 // - ConvertToProvider(): Serializes JsonDocument to JSON string via JsonSerializer.
-// - TryConvertFromProvider(): Parses string back to JsonDocument.
-// - Handles JsonDocument pass-through and string input.
+// - TryConvertFromProvider(): JsonDocument pass-through, JsonElement, and any JSON-carrying input
+//   (text, UTF-8 bytes, streams...) through TypeCoercionHelper.ExtractJsonString.
 // - Registered by default in AdvancedTypeRegistry for JSON column support.
 // - Thread-safe and stateless.
 // =============================================================================
@@ -36,11 +36,19 @@ internal sealed class JsonDocumentConverter : AdvancedTypeConverter<JsonDocument
             return true;
         }
 
-        if (value is string json)
+        // Every JSON-carrying input through the one reader (DRY-015); blank is the JSON null (COR-007).
+        if (value is JsonElement element)
+        {
+            result = JsonDocument.Parse(element.GetRawText());
+            return true;
+        }
+
+        if (TypeCoercionHelper.CarriesJsonText(value))
         {
             try
             {
-                result = JsonDocument.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(json));
+                result = JsonDocument.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(
+                    TypeCoercionHelper.ExtractJsonString(value, JsonSerializerOptions.Default)));
                 return true;
             }
             catch (JsonException)

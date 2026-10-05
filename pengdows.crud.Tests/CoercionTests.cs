@@ -168,10 +168,8 @@ public class CoercionTests
         var rangeText = "[1,10)";
         var dbValue = new DbValue(rangeText);
 
-        var success = _registry.TryRead(dbValue, typeof(Range<int>), out var result);
-
-        Assert.True(success);
-        var range = (Range<int>)result!;
+        // Range<int> is read by its converter (DRY-010), through the coercion entry point.
+        var range = (Range<int>)TypeCoercionHelper.Coerce(dbValue.RawValue, typeof(string), typeof(Range<int>))!;
         Assert.Equal(1, range.Lower);
         Assert.Equal(10, range.Upper);
         Assert.True(range.IsLowerInclusive);

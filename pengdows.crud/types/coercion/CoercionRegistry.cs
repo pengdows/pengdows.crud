@@ -31,6 +31,20 @@ internal class CoercionRegistry
     private readonly ConcurrentDictionary<Type, IDbCoercion> _coercions = new();
     private readonly ConcurrentDictionary<(Type, SupportedDatabase), IDbCoercion> _providerSpecificCoercions = new();
 
+    /// <summary>The types with a coercion, general or for some database (for the one-reader-per-type check).</summary>
+    internal IEnumerable<(Type Type, SupportedDatabase? Provider)> RegisteredTypes()
+    {
+        foreach (var type in _coercions.Keys)
+        {
+            yield return (type, null);
+        }
+
+        foreach (var (type, provider) in _providerSpecificCoercions.Keys)
+        {
+            yield return (type, provider);
+        }
+    }
+
     public CoercionRegistry()
     {
         RegisterStandardCoercions();

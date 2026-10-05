@@ -122,7 +122,8 @@ internal sealed class MacAddressConverter : AdvancedTypeConverter<MacAddress>
         }
 
         var type = value.GetType();
-        if (type.FullName?.Contains("NpgsqlMacAddress", StringComparison.OrdinalIgnoreCase) == true)
+        // By shape (an Address property of PhysicalAddress), not by type name (DRY-010).
+        if (type.GetProperty("Address")?.PropertyType == typeof(PhysicalAddress))
         {
             var addressProp = type.GetProperty("Address");
             if (addressProp?.GetValue(value) is PhysicalAddress address)

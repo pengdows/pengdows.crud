@@ -99,6 +99,10 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         {
             switch (value)
             {
+                // Spatial values are immutable: one already of the type is read as itself (DRY-010).
+                case TSpatial spatial:
+                    result = spatial;
+                    return true;
                 case byte[] bytes:
                     result = FromWellKnownBinary(bytes, provider);
                     return true;

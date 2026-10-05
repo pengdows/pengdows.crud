@@ -7,7 +7,7 @@
 //   reader; once the reader advances or closes, that view reads zeros (confirmed live).
 // - Materialize() copies such a stream into a read-only MemoryStream while the reader is
 //   still alive, and returns every other stream unchanged.
-// - Shared by CompiledMapperFactory, DataReaderMapper, BlobStreamCoercion and
+// - Shared by CompiledMapperFactory, DataReaderMapper, BlobStreamConverter and
 //   BlobStreamConverter so every Stream read path behaves the same.
 // =============================================================================
 

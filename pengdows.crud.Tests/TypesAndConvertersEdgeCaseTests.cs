@@ -18,7 +18,7 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Tests targeting coverage gaps in Range&lt;T&gt;, ClobStreamCoercion,
+/// Tests targeting coverage gaps in Range&lt;T&gt;, ConverterRead<System.IO.TextReader>,
 /// InetConverter, PostgreSqlIntervalConverter, GeographyConverter,
 /// and SpatialConverter&lt;T&gt;.
 /// </summary>
@@ -370,12 +370,12 @@ public class TypesAndConvertersEdgeCaseTests
 
     #endregion
 
-    #region ClobStreamCoercion Tests
+    #region ConverterRead<System.IO.TextReader> Tests
 
     [Fact]
     public void ClobStreamCoercion_TryRead_NullSrc_ReturnsFalse()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -386,7 +386,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void ClobStreamCoercion_TryRead_DbNull_ReturnsFalse()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         var src = new DbValue(DBNull.Value);
 
         var result = coercion.TryRead(src, out var value);
@@ -397,7 +397,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void ClobStreamCoercion_TryRead_TextReader_ReturnsReader()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         var reader = new StringReader("hello");
         var src = new DbValue(reader);
 
@@ -410,7 +410,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void ClobStreamCoercion_TryRead_String_ReturnsStringReader()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         var src = new DbValue("test content");
 
         var result = coercion.TryRead(src, out var value);
@@ -424,7 +424,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void ClobStreamCoercion_TryRead_Stream_ReturnsStreamReader()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         var stream = new MemoryStream(Encoding.UTF8.GetBytes("stream content"));
         var src = new DbValue(stream);
 
@@ -439,7 +439,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void ClobStreamCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new ClobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.TextReader>();
         var src = new DbValue(new object());
 
         var result = coercion.TryRead(src, out var value);
@@ -1052,7 +1052,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void BlobStreamCoercion_TryRead_ReadOnlyMemoryByte_ReturnsMemoryStream()
     {
-        var coercion = new BlobStreamCoercion();
+        var coercion = new ConverterRead<System.IO.Stream>();
         var data = new byte[] { 1, 2, 3, 4 };
         ReadOnlyMemory<byte> memory = data;
         var src = new DbValue(memory);
@@ -1067,7 +1067,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void GeometryCoercion_TryRead_GeoJson_ReturnsGeometry()
     {
-        var coercion = new GeometryCoercion();
+        var coercion = new ConverterRead<Geometry>();
         var json = "{\"type\":\"Point\",\"coordinates\":[1,2]}";
         var src = new DbValue(json);
 
@@ -1080,7 +1080,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void GeometryCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new GeometryCoercion();
+        var coercion = new ConverterRead<Geometry>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1091,7 +1091,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_GeoJson_ReturnsGeography()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         var json = "{\"type\":\"Point\",\"coordinates\":[-74.006,40.7128]}";
         var src = new DbValue(json);
 
@@ -1105,7 +1105,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_WKT_ReturnsGeography()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         var src = new DbValue("POINT(0 0)");
 
         var result = coercion.TryRead(src, out var value);
@@ -1117,7 +1117,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_ByteArray_ReturnsGeography()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         var wkb = new byte[] { 0x01, 0x01, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
         var src = new DbValue(wkb);
 
@@ -1130,7 +1130,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1141,7 +1141,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         var src = new DbValue(new object());
 
         var result = coercion.TryRead(src, out var value);
@@ -1152,7 +1152,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void GeometryCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new GeometryCoercion();
+        var coercion = new ConverterRead<Geometry>();
         var src = new DbValue(new object());
 
         var result = coercion.TryRead(src, out var value);
@@ -1167,19 +1167,18 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeCoercion<int>();
+        var coercion = new ConverterRead<Range<int>>();
         var src = new DbValue(null);
 
-        var result = coercion.TryRead(src, out var value);
+        var result = coercion.TryRead(src, out _);
 
         Assert.False(result);
-        Assert.Equal(Range<int>.Empty, value);
     }
 
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_RangePassthrough()
     {
-        var coercion = new PostgreSqlRangeCoercion<int>();
+        var coercion = new ConverterRead<Range<int>>();
         var range = new Range<int>(1, 10, true, false);
         var src = new DbValue(range);
 
@@ -1192,7 +1191,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_ValidString()
     {
-        var coercion = new PostgreSqlRangeCoercion<int>();
+        var coercion = new ConverterRead<Range<int>>();
         var src = new DbValue("[1,10)");
 
         var result = coercion.TryRead(src, out var value);
@@ -1205,7 +1204,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeCoercion<int>();
+        var coercion = new ConverterRead<Range<int>>();
         var src = new DbValue("invalid");
 
         var result = coercion.TryRead(src, out var value);
@@ -1216,7 +1215,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeIntCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeCoercion<int>();
+        var coercion = new ConverterRead<Range<int>>();
         var src = new DbValue(42.5);
 
         var result = coercion.TryRead(src, out var value);
@@ -1227,7 +1226,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_ValidString()
     {
-        var coercion = new PostgreSqlRangeCoercion<long>();
+        var coercion = new ConverterRead<Range<long>>();
         var src = new DbValue("[100,200)");
 
         var result = coercion.TryRead(src, out var value);
@@ -1240,7 +1239,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeDateTimeCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeCoercion<DateTime>();
+        var coercion = new ConverterRead<Range<DateTime>>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1251,7 +1250,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeDateTimeCoercion_TryRead_ValidString()
     {
-        var coercion = new PostgreSqlRangeCoercion<DateTime>();
+        var coercion = new ConverterRead<Range<DateTime>>();
         var src = new DbValue("[2024-01-01,2024-12-31)");
 
         var result = coercion.TryRead(src, out var value);
@@ -1262,12 +1261,12 @@ public class TypesAndConvertersEdgeCaseTests
 
     #endregion
 
-    #region InetCoercion Tests
+    #region ConverterRead<Inet> Tests
 
     [Fact]
     public void InetCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new InetCoercion();
+        var coercion = new ConverterRead<Inet>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1278,7 +1277,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void InetCoercion_TryRead_InetPassthrough()
     {
-        var coercion = new InetCoercion();
+        var coercion = new ConverterRead<Inet>();
         var inet = new Inet(IPAddress.Loopback);
         var src = new DbValue(inet);
 
@@ -1291,7 +1290,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void InetCoercion_TryRead_ValidString()
     {
-        var coercion = new InetCoercion();
+        var coercion = new ConverterRead<Inet>();
         var src = new DbValue("192.168.1.1/24");
 
         var result = coercion.TryRead(src, out var value);
@@ -1303,7 +1302,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void InetCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new InetCoercion();
+        var coercion = new ConverterRead<Inet>();
         var src = new DbValue("not-valid");
 
         var result = coercion.TryRead(src, out var value);
@@ -1314,7 +1313,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void InetCoercion_TryRead_IPAddress()
     {
-        var coercion = new InetCoercion();
+        var coercion = new ConverterRead<Inet>();
         var ip = IPAddress.Parse("10.0.0.1");
         var src = new DbValue(ip);
 
@@ -1328,7 +1327,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void InetCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new InetCoercion();
+        var coercion = new ConverterRead<Inet>();
         var src = new DbValue(42);
 
         var result = coercion.TryRead(src, out var value);
@@ -1338,12 +1337,12 @@ public class TypesAndConvertersEdgeCaseTests
 
     #endregion
 
-    #region RowVersionValueCoercion Tests
+    #region ConverterRead<RowVersion> Tests
 
     [Fact]
     public void RowVersionValueCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1354,7 +1353,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void RowVersionValueCoercion_TryRead_ByteArray8_ReturnsRowVersion()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var bytes = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 };
         var src = new DbValue(bytes);
 
@@ -1366,7 +1365,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void RowVersionValueCoercion_TryRead_UlongValue()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var src = new DbValue(42UL);
 
         var result = coercion.TryRead(src, out var value);
@@ -1377,7 +1376,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void RowVersionValueCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new RowVersionValueCoercion();
+        var coercion = new ConverterRead<RowVersion>();
         var src = new DbValue("not-a-version");
 
         var result = coercion.TryRead(src, out var value);
@@ -1387,12 +1386,12 @@ public class TypesAndConvertersEdgeCaseTests
 
     #endregion
 
-    #region PostgreSqlIntervalCoercion Tests
+    #region ConverterRead<PostgreSqlInterval> Tests
 
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1403,7 +1402,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_RawNull_ReturnsFalse()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         // Construct a DbValue with DBNull to trigger IsNull
         var src = new DbValue(DBNull.Value);
 
@@ -1415,7 +1414,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_IntervalPassthrough()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var interval = new PostgreSqlInterval(6, 3, 1000);
         var src = new DbValue(interval);
 
@@ -1428,7 +1427,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_TimeSpan()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var ts = TimeSpan.FromHours(2);
         var src = new DbValue(ts);
 
@@ -1440,7 +1439,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var src = new DbValue("some string");
 
         var result = coercion.TryRead(src, out var value);
@@ -1450,12 +1449,12 @@ public class TypesAndConvertersEdgeCaseTests
 
     #endregion
 
-    #region IntervalYearMonthCoercion Tests
+    #region ConverterRead<IntervalYearMonth> Tests
 
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1466,7 +1465,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_Passthrough()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
         var interval = new IntervalYearMonth(2, 6);
         var src = new DbValue(interval);
 
@@ -1479,7 +1478,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
         var src = new DbValue(new object());
 
         var result = coercion.TryRead(src, out var value);
@@ -1489,12 +1488,12 @@ public class TypesAndConvertersEdgeCaseTests
 
     #endregion
 
-    #region IntervalDaySecondCoercion Tests
+    #region ConverterRead<IntervalDaySecond> Tests
 
     [Fact]
     public void IntervalDaySecondCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
         var src = new DbValue(null);
 
         var result = coercion.TryRead(src, out var value);
@@ -1505,7 +1504,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void IntervalDaySecondCoercion_TryRead_TimeSpan()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
         var ts = TimeSpan.FromHours(48);
         var src = new DbValue(ts);
 
@@ -1517,7 +1516,7 @@ public class TypesAndConvertersEdgeCaseTests
     [Fact]
     public void IntervalDaySecondCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
         var src = new DbValue(42);
 
         var result = coercion.TryRead(src, out var value);

@@ -16,12 +16,12 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public class IntervalAndRangeCoercionEdgeCaseTests
 {
-    // ===== IntervalYearMonthCoercion =====
+    // ===== ConverterRead<IntervalYearMonth> =====
 
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_NullRaw_ReturnsFalse()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
 
         Assert.False(coercion.TryRead(new DbValue(null), out _));
     }
@@ -29,7 +29,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
 
         // BP-124: int/long are ODP.NET's total-months representation; double stays unknown.
         Assert.False(coercion.TryRead(new DbValue(42d), out _));
@@ -38,7 +38,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
         // IntervalYearMonth.Parse doesn't throw for most strings, but the coercion
         // wraps it in try/catch. Pass a value that passes through and just parses as 0.
         // Actually, IntervalYearMonth.Parse is quite lenient. Let's use the passthrough case.
@@ -50,7 +50,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void IntervalYearMonthCoercion_TryRead_IntervalPassthrough()
     {
-        var coercion = new IntervalYearMonthCoercion();
+        var coercion = new ConverterRead<IntervalYearMonth>();
         var interval = new IntervalYearMonth(3, 6);
 
         Assert.True(coercion.TryRead(new DbValue(interval), out var result));
@@ -58,12 +58,12 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         Assert.Equal(6, result.Months);
     }
 
-    // ===== IntervalDaySecondCoercion =====
+    // ===== ConverterRead<IntervalDaySecond> =====
 
     [Fact]
     public void IntervalDaySecondCoercion_TryRead_NullRaw_ReturnsFalse()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
 
         Assert.False(coercion.TryRead(new DbValue(null), out _));
     }
@@ -71,7 +71,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void IntervalDaySecondCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
 
         Assert.False(coercion.TryRead(new DbValue(42), out _));
     }
@@ -79,7 +79,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void IntervalDaySecondCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new IntervalDaySecondCoercion();
+        var coercion = new ConverterRead<IntervalDaySecond>();
         // Parse is lenient, so test with passthrough IntervalDaySecond
         var interval = new IntervalDaySecond(1, new TimeSpan(2, 3, 4));
 
@@ -87,12 +87,12 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         Assert.Equal(1, result.Days);
     }
 
-    // ===== PostgreSqlIntervalCoercion =====
+    // ===== ConverterRead<PostgreSqlInterval> =====
 
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_NullRaw_ReturnsFalse()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
 
         Assert.False(coercion.TryRead(new DbValue(null), out _));
     }
@@ -100,7 +100,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_IntervalPassthrough()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
         var interval = new PostgreSqlInterval(0, 1, 3600000000);
 
         Assert.True(coercion.TryRead(new DbValue(interval), out var result));
@@ -110,17 +110,17 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlIntervalCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new PostgreSqlIntervalCoercion();
+        var coercion = new ConverterRead<PostgreSqlInterval>();
 
         Assert.False(coercion.TryRead(new DbValue("not a timespan"), out _));
     }
 
-    // ===== PostgreSqlRangeCoercion<long> =====
+    // ===== ConverterRead<Range<long>> =====
 
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_ValidString_ReturnsRange()
     {
-        var coercion = new PostgreSqlRangeCoercion<long>();
+        var coercion = new ConverterRead<Range<long>>();
 
         Assert.True(coercion.TryRead(new DbValue("[100,200)", typeof(string)), out var result));
         Assert.Equal(100L, result.Lower);
@@ -130,7 +130,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_InvalidString_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeCoercion<long>();
+        var coercion = new ConverterRead<Range<long>>();
 
         Assert.False(coercion.TryRead(new DbValue("not a range", typeof(string)), out _));
     }
@@ -138,7 +138,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeCoercion<long>();
+        var coercion = new ConverterRead<Range<long>>();
 
         Assert.False(coercion.TryRead(new DbValue(42), out _));
     }
@@ -146,7 +146,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new PostgreSqlRangeCoercion<long>();
+        var coercion = new ConverterRead<Range<long>>();
 
         Assert.False(coercion.TryRead(new DbValue(null), out _));
     }
@@ -154,7 +154,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     [Fact]
     public void PostgreSqlRangeLongCoercion_TryRead_RangePassthrough()
     {
-        var coercion = new PostgreSqlRangeCoercion<long>();
+        var coercion = new ConverterRead<Range<long>>();
         var range = new Range<long>(1L, 10L, true, false);
 
         Assert.True(coercion.TryRead(new DbValue(range), out var result));
@@ -232,7 +232,8 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     {
         var converter = new IntervalYearMonthConverter();
 
-        var success = converter.TryConvertFromProvider(42, SupportedDatabase.Oracle, out _);
+        // A number is a month count (DRY-010); something that is no interval at all is refused.
+        var success = converter.TryConvertFromProvider(new object(), SupportedDatabase.Oracle, out _);
         Assert.False(success);
     }
 
@@ -286,7 +287,7 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         Assert.Equal(11, result.Months);
     }
 
-    // PostgreSqlIntervalCoercion.TryWrite writes ToTimeSpan(), which drops months, but nothing
+    // ConverterRead<PostgreSqlInterval>.TryWrite writes ToTimeSpan(), which drops months, but nothing
     // on the write path calls it: a provider without an interval mapping gets the value object
     // itself, months intact.
     [Fact]

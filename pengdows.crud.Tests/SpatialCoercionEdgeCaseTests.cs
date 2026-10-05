@@ -8,16 +8,16 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Tests edge cases for GeographyCoercion and GeometryCoercion.
+/// Tests edge cases for ConverterRead<Geography> and ConverterRead<Geometry>.
 /// </summary>
 public class SpatialCoercionEdgeCaseTests
 {
-    // ===== GeographyCoercion TryRead =====
+    // ===== ConverterRead<Geography> TryRead =====
 
     [Fact]
     public void GeographyCoercion_TryRead_GeographyPassthrough()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         var geography = Geography.FromWellKnownText("POINT(1 2)", 4326);
 
         Assert.True(coercion.TryRead(new DbValue(geography), out var result));
@@ -27,7 +27,7 @@ public class SpatialCoercionEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_ByteArray_ReturnsGeography()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         var bytes = new byte[] { 1, 2, 3 };
 
         Assert.True(coercion.TryRead(new DbValue(bytes), out var result));
@@ -37,7 +37,7 @@ public class SpatialCoercionEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_GeoJsonString()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
         var json = "{\"type\":\"Point\",\"coordinates\":[1,2]}";
 
         Assert.True(coercion.TryRead(new DbValue(json, typeof(string)), out var result));
@@ -47,7 +47,7 @@ public class SpatialCoercionEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_WktString()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
 
         Assert.True(coercion.TryRead(new DbValue("POINT(1 2)", typeof(string)), out var result));
         Assert.Equal("POINT(1 2)", result.WellKnownText);
@@ -56,7 +56,7 @@ public class SpatialCoercionEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
 
         Assert.False(coercion.TryRead(new DbValue(42), out _));
     }
@@ -64,19 +64,19 @@ public class SpatialCoercionEdgeCaseTests
     [Fact]
     public void GeographyCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new GeographyCoercion();
+        var coercion = new ConverterRead<Geography>();
 
         Assert.False(coercion.TryRead(new DbValue(null), out _));
     }
 
-    // ===== GeographyCoercion TryWrite =====
+    // ===== ConverterRead<Geography> TryWrite =====
 
-    // ===== GeometryCoercion TryRead =====
+    // ===== ConverterRead<Geometry> TryRead =====
 
     [Fact]
     public void GeometryCoercion_TryRead_GeometryPassthrough()
     {
-        var coercion = new GeometryCoercion();
+        var coercion = new ConverterRead<Geometry>();
         var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
         Assert.True(coercion.TryRead(new DbValue(geometry), out var result));
@@ -86,7 +86,7 @@ public class SpatialCoercionEdgeCaseTests
     [Fact]
     public void GeometryCoercion_TryRead_GeoJsonString()
     {
-        var coercion = new GeometryCoercion();
+        var coercion = new ConverterRead<Geometry>();
         var json = "{\"type\":\"Point\",\"coordinates\":[1,2]}";
 
         Assert.True(coercion.TryRead(new DbValue(json, typeof(string)), out var result));
@@ -96,7 +96,7 @@ public class SpatialCoercionEdgeCaseTests
     [Fact]
     public void GeometryCoercion_TryRead_UnknownType_ReturnsFalse()
     {
-        var coercion = new GeometryCoercion();
+        var coercion = new ConverterRead<Geometry>();
 
         Assert.False(coercion.TryRead(new DbValue(42), out _));
     }
@@ -104,11 +104,11 @@ public class SpatialCoercionEdgeCaseTests
     [Fact]
     public void GeometryCoercion_TryRead_Null_ReturnsFalse()
     {
-        var coercion = new GeometryCoercion();
+        var coercion = new ConverterRead<Geometry>();
 
         Assert.False(coercion.TryRead(new DbValue(null), out _));
     }
 
-    // ===== GeometryCoercion TryWrite =====
+    // ===== ConverterRead<Geometry> TryWrite =====
 
 }
