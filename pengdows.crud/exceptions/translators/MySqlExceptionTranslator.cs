@@ -19,9 +19,7 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
         // CommandTimeoutException.
         if (exception is DbException dbEx0 && dialect.IsUniqueViolation(dbEx0))
         {
-            return new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName);
+            return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.Unique, database, exception, operationKind);
         }
 
         // Deadlock (1213)/Timeout (1205, or the generic LooksLikeTimeout heuristic)/
@@ -62,23 +60,17 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
         {
             if (dialect.IsCheckConstraintViolation(dbEx))
             {
-                return new CheckConstraintViolationException(
-                    $"{operationKind} violated a check constraint on {database}: {exception.Message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.Check, database, exception, operationKind);
             }
 
             if (dialect.IsForeignKeyViolation(dbEx))
             {
-                return new ForeignKeyViolationException(
-                    $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.ForeignKey, database, exception, operationKind);
             }
 
             if (dialect.IsNotNullViolation(dbEx))
             {
-                return new NotNullViolationException(
-                    $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.NotNull, database, exception, operationKind);
             }
         }
 

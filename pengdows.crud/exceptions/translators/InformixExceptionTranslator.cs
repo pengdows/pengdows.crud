@@ -60,30 +60,22 @@ internal sealed class InformixExceptionTranslator : IDbExceptionTranslator
         {
             if (dialect.IsUniqueViolation(dbEx))
             {
-                return new UniqueConstraintViolationException(
-                    $"{operationKind} violated a unique constraint on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.Unique, database, exception, operationKind);
             }
 
             if (dialect.IsNotNullViolation(dbEx))
             {
-                return new NotNullViolationException(
-                    $"{operationKind} violated a not-null constraint on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.NotNull, database, exception, operationKind);
             }
 
             if (dialect.IsCheckConstraintViolation(dbEx))
             {
-                return new CheckConstraintViolationException(
-                    $"{operationKind} violated a check constraint on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.Check, database, exception, operationKind);
             }
 
             if (dialect.IsForeignKeyViolation(dbEx))
             {
-                return new ForeignKeyViolationException(
-                    $"{operationKind} violated a foreign key constraint on {database}: {message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.ForeignKey, database, exception, operationKind);
             }
         }
 

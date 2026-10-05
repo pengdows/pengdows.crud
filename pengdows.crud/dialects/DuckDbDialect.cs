@@ -531,21 +531,21 @@ internal class DuckDbDialect : SqlDialect
     // DuckDB uses standard SQLSTATE codes; fall back to message when the driver doesn't
     // populate SqlState.
     public override bool IsUniqueViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23505") ||
         ex.Message.Contains("Duplicate key", StringComparison.OrdinalIgnoreCase) ||
         ex.Message.Contains("unique constraint", StringComparison.OrdinalIgnoreCase) ||
         ex.Message.Contains("primary key constraint", StringComparison.OrdinalIgnoreCase);
 
     public override bool IsForeignKeyViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23503") ||
         ex.Message.Contains("foreign key", StringComparison.OrdinalIgnoreCase);
 
     public override bool IsNotNullViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23502") ||
         ex.Message.Contains("NOT NULL constraint", StringComparison.OrdinalIgnoreCase);
 
     public override bool IsCheckConstraintViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23514") ||
         ex.Message.Contains("CHECK constraint", StringComparison.OrdinalIgnoreCase);
 
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
@@ -591,7 +591,7 @@ internal class DuckDbDialect : SqlDialect
         // before this method is ever called) — those four each need to positively identify ONE
         // specific kind, so a constraint signal too generic for any of them individually still
         // needs to register as a constraint violation at the category level.
-        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        if (IsIntegrityConstraintSqlState(sqlState))
         {
             category = DbErrorCategory.ConstraintViolation;
             return true;

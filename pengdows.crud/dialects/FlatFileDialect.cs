@@ -294,19 +294,19 @@ internal class FlatFileDialect : SqlDialect
     /// every FlatFile constraint violation fell through to a generic, unclassified exception.
     /// </summary>
     public override bool IsUniqueViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase);
+        HasSqlState(ex, "23505");
 
     /// <inheritdoc cref="IsUniqueViolation"/>
     public override bool IsForeignKeyViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase);
+        HasSqlState(ex, "23503");
 
     /// <inheritdoc cref="IsUniqueViolation"/>
     public override bool IsNotNullViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase);
+        HasSqlState(ex, "23502");
 
     /// <inheritdoc cref="IsUniqueViolation"/>
     public override bool IsCheckConstraintViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase);
+        HasSqlState(ex, "23514");
 
     /// <summary>
     /// pengdows.flatfile (0.2.1-preview.1+) raises <c>FlatFileException</c> with standard SQLSTATEs:

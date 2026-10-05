@@ -1053,16 +1053,16 @@ internal class PostgreSqlDialect : SqlDialect
     // Inherited by Spanner/CockroachDb/YugabyteDb/AuroraPostgreSql — all share Postgres's SQLSTATE
     // codes for these constraint-violation categories, and none override them independently.
     public override bool IsUniqueViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase);
+        HasSqlState(ex, "23505");
 
     public override bool IsForeignKeyViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase);
+        HasSqlState(ex, "23503");
 
     public override bool IsNotNullViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase);
+        HasSqlState(ex, "23502");
 
     public override bool IsCheckConstraintViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23514", StringComparison.OrdinalIgnoreCase);
+        HasSqlState(ex, "23514");
 
     // Inherited by Spanner/CockroachDb/YugabyteDb/AuroraPostgreSql — all share Postgres's SQLSTATE
     // codes here, and none override this independently.
@@ -1118,7 +1118,7 @@ internal class PostgreSqlDialect : SqlDialect
         // each match one exact SqlState (23505/23503/23502/23514), so a different or generic
         // class-23 SqlState (e.g. bare "23000", or "23P01" exclusion_violation) matches none of
         // them individually but is still, generically, a constraint violation.
-        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        if (IsIntegrityConstraintSqlState(sqlState))
         {
             category = DbErrorCategory.ConstraintViolation;
             return true;

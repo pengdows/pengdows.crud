@@ -48,23 +48,17 @@ internal sealed class SnowflakeExceptionTranslator : IDbExceptionTranslator
             var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
             if (dialect.IsUniqueViolation(dbEx))
             {
-                return new UniqueConstraintViolationException(
-                    $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.Unique, database, exception, operationKind);
             }
 
             if (dialect.IsForeignKeyViolation(dbEx))
             {
-                return new ForeignKeyViolationException(
-                    $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.ForeignKey, database, exception, operationKind);
             }
 
             if (dialect.IsNotNullViolation(dbEx))
             {
-                return new NotNullViolationException(
-                    $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
-                    database, exception, sqlState, errorCode, constraintName);
+                return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.NotNull, database, exception, operationKind);
             }
         }
 

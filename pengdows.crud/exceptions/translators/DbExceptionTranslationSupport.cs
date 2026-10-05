@@ -1,6 +1,7 @@
 using System.Data.Common;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 
 namespace pengdows.crud.exceptions.translators;
@@ -51,6 +52,61 @@ internal static partial class DbExceptionTranslationSupport
             exception,
             sqlState: TryGetSqlState(exception),
             errorCode: TryGetErrorCode(exception));
+    }
+
+    /// <summary>
+    /// The constraint violation of <paramref name="kind"/>, with the provider's SQLSTATE, error code
+    /// and constraint name; one factory for every translator (DRY-018), several of which dropped
+    /// the SQLSTATE and constraint name.
+    /// </summary>
+    public static ConstraintViolationException CreateConstraintViolation(
+        DbConstraintKind kind,
+        SupportedDatabase database,
+        Exception exception,
+        DbOperationKind operationKind)
+    {
+        var sqlState = TryGetSqlState(exception);
+        var errorCode = TryGetErrorCode(exception);
+        var constraintName = TryGetConstraintName(exception);
+        return kind switch
+        {
+            DbConstraintKind.Unique => new UniqueConstraintViolationException(
+                $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
+                database, exception, sqlState, errorCode, constraintName),
+            DbConstraintKind.ForeignKey => new ForeignKeyViolationException(
+                $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
+                database, exception, sqlState, errorCode, constraintName),
+            DbConstraintKind.NotNull => new NotNullViolationException(
+                $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
+                database, exception, sqlState, errorCode, constraintName),
+            DbConstraintKind.Check => new CheckConstraintViolationException(
+                $"{operationKind} violated a check constraint on {database}: {exception.Message}",
+                database, exception, sqlState, errorCode, constraintName),
+            _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Not a constraint kind.")
+        };
+    }
+
+    /// <summary>
+    /// The constraint violation the dialect recognizes in <paramref name="exception"/> (unique, then
+    /// foreign key, not-null, check), or null.
+    /// </summary>
+    public static ConstraintViolationException? TryCreateConstraintViolation(
+        ISqlDialect dialect,
+        Exception exception,
+        SupportedDatabase database,
+        DbOperationKind operationKind)
+    {
+        if (exception is not DbException dbEx)
+        {
+            return null;
+        }
+
+        var kind = dialect.IsUniqueViolation(dbEx) ? DbConstraintKind.Unique
+            : dialect.IsForeignKeyViolation(dbEx) ? DbConstraintKind.ForeignKey
+            : dialect.IsNotNullViolation(dbEx) ? DbConstraintKind.NotNull
+            : dialect.IsCheckConstraintViolation(dbEx) ? DbConstraintKind.Check
+            : DbConstraintKind.None;
+        return kind == DbConstraintKind.None ? null : CreateConstraintViolation(kind, database, exception, operationKind);
     }
 
     public static CommandTimeoutException CreateTimeout(

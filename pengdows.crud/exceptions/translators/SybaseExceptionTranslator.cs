@@ -37,9 +37,7 @@ internal sealed class SybaseExceptionTranslator : IDbExceptionTranslator
         // equivalent regression note).
         if (errorCode == 2601)
         {
-            return new UniqueConstraintViolationException(
-                $"{operationKind} violated a unique constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName);
+            return DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.Unique, database, exception, operationKind);
         }
 
         // AdoNetCore.AseClient throws these (with no error number) whenever it cannot obtain a
@@ -60,17 +58,11 @@ internal sealed class SybaseExceptionTranslator : IDbExceptionTranslator
 
         return errorCode switch
         {
-            233 => new NotNullViolationException(
-                $"{operationKind} violated a not-null constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
-            548 => new CheckConstraintViolationException(
-                $"{operationKind} violated a check constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
+            233 => DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.NotNull, database, exception, operationKind),
+            548 => DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.Check, database, exception, operationKind),
             // 546: child insert/update with no parent; 547: delete/update of a parent that a child
             // still references (confirmed live, ASE 16.0).
-            546 or 547 => new ForeignKeyViolationException(
-                $"{operationKind} violated a foreign key constraint on {database}: {exception.Message}",
-                database, exception, sqlState, errorCode, constraintName),
+            546 or 547 => DbExceptionTranslationSupport.CreateConstraintViolation(DbConstraintKind.ForeignKey, database, exception, operationKind),
             // 3906: the database is READ ONLY (documented) (REV-050).
             3906 => DbExceptionTranslationSupport.CreateReadOnlyViolation(database, exception, operationKind),
             1205 => new DeadlockException(

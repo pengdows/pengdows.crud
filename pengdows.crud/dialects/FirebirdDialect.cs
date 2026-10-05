@@ -733,7 +733,7 @@ internal class FirebirdDialect : SqlDialect
         // SqlState with no matching message text (or an empty message) still needs to register as
         // a constraint violation at the category level even though Translate's kind-specific
         // dispatch cannot name which kind it is.
-        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        if (IsIntegrityConstraintSqlState(sqlState))
         {
             category = DbErrorCategory.ConstraintViolation;
             return true;

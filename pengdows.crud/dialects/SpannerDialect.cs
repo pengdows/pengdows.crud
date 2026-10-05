@@ -183,12 +183,9 @@ internal sealed class SpannerDialect : PostgreSqlDialect
 
     public override string GetBaseSessionSettings() => string.Empty;
 
-    // ClassifyException's base-class generic message fallback (SqlDialect.cs) only recognizes a
-    // constraint violation via keywords like "constraint"/"violates" — Spanner's real NotNull
-    // message ("... must not be NULL in table ...") contains neither, so without this override it
-    // silently classified as Unknown even after IsNotNullViolation above was fixed to recognize
-    // it. Reuses the same four predicates IDbExceptionTranslator.Translate delegates to
-    // so this category-level classifier can't drift from the constraint-kind classifier.
+    // Spanner's own categories. Its constraint kinds (whose NotNull message, "... must not be NULL
+    // in table ...", no generic keyword matches) need nothing here: ClassifyException checks the
+    // four Is*Violation predicates above before it calls this, so a re-check here never ran (DRY-018).
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
         // Spanner (through PGAdapter) refuses a write in a read-only transaction with SQLSTATE P0001
@@ -197,12 +194,6 @@ internal sealed class SpannerDialect : PostgreSqlDialect
             ex.Message.Contains("read-only transaction", StringComparison.OrdinalIgnoreCase))
         {
             category = DbErrorCategory.ReadOnlyViolation;
-            return true;
-        }
-
-        if (IsUniqueViolation(ex) || IsForeignKeyViolation(ex) || IsNotNullViolation(ex) || IsCheckConstraintViolation(ex))
-        {
-            category = DbErrorCategory.ConstraintViolation;
             return true;
         }
 

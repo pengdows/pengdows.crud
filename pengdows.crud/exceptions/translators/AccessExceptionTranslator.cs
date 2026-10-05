@@ -64,35 +64,9 @@ internal sealed class AccessExceptionTranslator : IDbExceptionTranslator
         // IDbExceptionTranslator.Translate's doc comment) — checked before LooksLikeTimeout,
         // consistent with every other unified translator, since a constraint message could
         // incidentally contain wording a timeout heuristic might otherwise match.
-        if (exception is DbException dbEx)
+        if (DbExceptionTranslationSupport.TryCreateConstraintViolation(dialect, exception, database, operationKind) is { } violation)
         {
-            if (dialect.IsUniqueViolation(dbEx))
-            {
-                return new UniqueConstraintViolationException(
-                    $"{operationKind} violated a unique constraint on {database}: {message}",
-                    database, exception, errorCode: errorCode);
-            }
-
-            if (dialect.IsForeignKeyViolation(dbEx))
-            {
-                return new ForeignKeyViolationException(
-                    $"{operationKind} violated a foreign key constraint on {database}: {message}",
-                    database, exception, errorCode: errorCode);
-            }
-
-            if (dialect.IsNotNullViolation(dbEx))
-            {
-                return new NotNullViolationException(
-                    $"{operationKind} violated a not-null constraint on {database}: {message}",
-                    database, exception, errorCode: errorCode);
-            }
-
-            if (dialect.IsCheckConstraintViolation(dbEx))
-            {
-                return new CheckConstraintViolationException(
-                    $"{operationKind} violated a check constraint on {database}: {message}",
-                    database, exception, errorCode: errorCode);
-            }
+            return violation;
         }
 
         if (DbExceptionTranslationSupport.LooksLikeTimeout(exception))

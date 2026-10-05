@@ -484,7 +484,7 @@ internal sealed class InformixDialect : SqlDialect
     public override bool IsUniqueViolation(DbException ex) =>
         TryGetProviderErrorCode(ex) is { } code && code != ex.HResult
             ? pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.Magnitude(code) is 268 or 239
-            : string.Equals(TryGetProviderSqlState(ex), "23000", StringComparison.OrdinalIgnoreCase);
+            : HasSqlState(ex, "23000");
 
     // -691: insert violates a foreign key (parent row missing). -692: delete/update blocked
     // because a child row still references this row. Both documented on oninit.com's
@@ -693,7 +693,7 @@ internal sealed class InformixDialect : SqlDialect
         }
 
         var sqlState = TryGetProviderSqlState(ex);
-        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        if (IsIntegrityConstraintSqlState(sqlState))
         {
             category = DbErrorCategory.ConstraintViolation;
             return true;

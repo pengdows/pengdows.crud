@@ -3860,6 +3860,17 @@ internal abstract class SqlDialect : IInternalSqlDialect
     protected static int? TryGetProviderErrorMagnitude(Exception ex) =>
         pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.Magnitude(TryGetProviderErrorCode(ex));
 
+    /// <summary>Whether the provider reported SQLSTATE <paramref name="sqlState"/> (case-insensitive).</summary>
+    protected static bool HasSqlState(DbException ex, string sqlState) =>
+        string.Equals(TryGetProviderSqlState(ex), sqlState, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// ANSI SQLSTATE class 23, integrity constraint violation: a constraint violation even when no
+    /// kind check names it (a bare "23000", PostgreSQL's "23P01" exclusion_violation).
+    /// </summary>
+    protected static bool IsIntegrityConstraintSqlState(string? sqlState) =>
+        !string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal);
+
     protected static string? TryGetProviderSqlState(Exception ex)
     {
         return pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.TryGetSqlState(ex);

@@ -226,6 +226,9 @@ every CLR type and every database, whether the value round-trips and why not whe
   `TotalConnectionTimeoutFailures` count failed connection opens (they were never incremented)
   (DRY-017). Classifying a Db2/Informix error whose code is `int.MinValue` no longer throws
   `OverflowException` (DRY-018).
+- Constraint-violation exceptions from DuckDB, Firebird, FlatFile, SQLite and Access carry the
+  provider's `SqlState` and `ConstraintName` (where it reports them), as every other database's do;
+  they carried only `ErrorCode` (DRY-018).
 - Firebird `NONE`-charset text with non-Latin characters reads back correctly when another driver in
   the process has registered .NET code pages (DRY-020).
 

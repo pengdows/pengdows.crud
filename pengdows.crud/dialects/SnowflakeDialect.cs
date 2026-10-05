@@ -558,7 +558,7 @@ internal class SnowflakeDialect : SqlDialect
     // default's "not null"/"not-null" check does not match "non-nullable", so this needs its own
     // override.
     public override bool IsNotNullViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23502") ||
         ex.Message.Contains("non-nullable", StringComparison.OrdinalIgnoreCase);
 
     // Snowflake parses CHECK constraint DDL but never enforces it at runtime

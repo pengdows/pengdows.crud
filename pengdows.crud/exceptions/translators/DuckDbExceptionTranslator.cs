@@ -36,35 +36,9 @@ internal sealed class DuckDbExceptionTranslator : IDbExceptionTranslator
         // see IDbExceptionTranslator.Translate's doc comment. DuckDbDialect's overrides check the
         // identical SQLSTATE-first-then-message-pattern signals this translator used to check
         // directly, so this is a behavior-preserving delegation, not a narrowing.
-        if (exception is DbException dbEx)
+        if (DbExceptionTranslationSupport.TryCreateConstraintViolation(dialect, exception, database, operationKind) is { } violation)
         {
-            if (dialect.IsUniqueViolation(dbEx))
-            {
-                return new UniqueConstraintViolationException(
-                    $"{operationKind} violated a unique constraint on {database}: {message}",
-                    database, exception, errorCode: errorCode);
-            }
-
-            if (dialect.IsForeignKeyViolation(dbEx))
-            {
-                return new ForeignKeyViolationException(
-                    $"{operationKind} violated a foreign key constraint on {database}: {message}",
-                    database, exception, errorCode: errorCode);
-            }
-
-            if (dialect.IsNotNullViolation(dbEx))
-            {
-                return new NotNullViolationException(
-                    $"{operationKind} violated a not-null constraint on {database}: {message}",
-                    database, exception, errorCode: errorCode);
-            }
-
-            if (dialect.IsCheckConstraintViolation(dbEx))
-            {
-                return new CheckConstraintViolationException(
-                    $"{operationKind} violated a check constraint on {database}: {message}",
-                    database, exception, errorCode: errorCode);
-            }
+            return violation;
         }
 
         if (message.Contains("Cannot open file", StringComparison.OrdinalIgnoreCase) ||

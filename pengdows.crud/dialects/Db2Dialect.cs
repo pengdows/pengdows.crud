@@ -233,23 +233,23 @@ internal sealed class Db2Dialect : SqlDialect
     // Db2ExceptionTranslator's own numeric fallback so this dialect classification and that
     // translator can't silently disagree (architecture-cleanup: previously SqlState-only here).
     public override bool IsUniqueViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23505") ||
         TryGetProviderErrorMagnitude(ex) is 803;
 
     // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503 (insert/update) or 23504 (delete RESTRICT)
     public override bool IsForeignKeyViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(TryGetProviderSqlState(ex), "23504", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23503") ||
+        HasSqlState(ex, "23504") ||
         TryGetProviderErrorMagnitude(ex) is 530 or 531 or 532;
 
     // Db2 SQLCODE -407 / SQLSTATE 23502
     public override bool IsNotNullViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23502") ||
         TryGetProviderErrorMagnitude(ex) is 407;
 
     // Db2 SQLCODE -545 / SQLSTATE 23513 (note: 23513, not 23514 like Postgres/DuckDB)
     public override bool IsCheckConstraintViolation(DbException ex) =>
-        string.Equals(TryGetProviderSqlState(ex), "23513", StringComparison.OrdinalIgnoreCase) ||
+        HasSqlState(ex, "23513") ||
         TryGetProviderErrorMagnitude(ex) is 545;
 
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
@@ -287,7 +287,7 @@ internal sealed class Db2Dialect : SqlDialect
         // matches none of them individually but is still, generically, a constraint violation —
         // this branch is what lets ClassifyException's category answer stay accurate for that case
         // even though Translate's kind-specific dispatch cannot name which kind it is.
-        if (!string.IsNullOrWhiteSpace(sqlState) && sqlState.StartsWith("23", StringComparison.Ordinal))
+        if (IsIntegrityConstraintSqlState(sqlState))
         {
             category = DbErrorCategory.ConstraintViolation;
             return true;
