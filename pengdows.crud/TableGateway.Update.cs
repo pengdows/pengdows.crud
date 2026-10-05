@@ -318,8 +318,8 @@ public partial class TableGateway<TEntity, TRowID>
                     Convert.ToDecimal(originalValue, CultureInfo.InvariantCulture)) == 0;
             case DbType.DateTime:
             case DbType.DateTime2:
-                return NormalizeDateTime(Convert.ToDateTime(newValue, CultureInfo.InvariantCulture)) ==
-                       NormalizeDateTime(Convert.ToDateTime(originalValue, CultureInfo.InvariantCulture));
+                return TypeCoercionHelper.NormalizeDateTime(Convert.ToDateTime(newValue, CultureInfo.InvariantCulture)) ==
+                       TypeCoercionHelper.NormalizeDateTime(Convert.ToDateTime(originalValue, CultureInfo.InvariantCulture));
             case DbType.DateTimeOffset:
                 return NormalizeDateTimeOffset(newValue).UtcDateTime ==
                        NormalizeDateTimeOffset(originalValue).UtcDateTime;
@@ -328,16 +328,8 @@ public partial class TableGateway<TEntity, TRowID>
         }
     }
 
-    private static DateTime NormalizeDateTime(DateTime value)
-    {
-        return value.Kind switch
-        {
-            DateTimeKind.Utc => value,
-            DateTimeKind.Local => value.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-        };
-    }
-
+    // As every read path normalizes them (DRY-010): a DateTime keeps a Local offset and is otherwise UTC;
+    // timestamp text reads through TypeCoercionHelper.TryParseTimestampText.
     internal static DateTimeOffset NormalizeDateTimeOffset(object value)
     {
         switch (value)
@@ -345,85 +337,15 @@ public partial class TableGateway<TEntity, TRowID>
             case DateTimeOffset dto:
                 return dto;
             case DateTime dt:
-                return dt.Kind switch
-                {
-                    DateTimeKind.Utc => new DateTimeOffset(dt, TimeSpan.Zero),
-                    DateTimeKind.Local => new DateTimeOffset(dt),
-                    _ => new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc), TimeSpan.Zero)
-                };
+                return TypeCoercionHelper.DateTimeOffsetFromDateTime(dt, TypeCoercionOptions.Default);
             case string s:
-                return NormalizeStringDateTimeOffset(s);
+                return TypeCoercionHelper.TryParseTimestampText(s.Trim(), out var parsed)
+                    ? parsed
+                    : throw new FormatException("The value is not a timestamp.");
             default:
                 var converted = Convert.ToDateTime(value, CultureInfo.InvariantCulture);
-                return new DateTimeOffset(NormalizeDateTime(converted), TimeSpan.Zero);
+                return new DateTimeOffset(TypeCoercionHelper.NormalizeDateTime(converted), TimeSpan.Zero);
         }
-    }
-
-    private static DateTimeOffset NormalizeStringDateTimeOffset(string raw)
-    {
-        var value = raw.Trim();
-        if (value.Length == 0)
-        {
-            throw new FormatException("Value cannot be empty.");
-        }
-
-        if (HasExplicitOffset(value))
-        {
-            if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
-                    out var parsedWithOffset))
-            {
-                return parsedWithOffset;
-            }
-        }
-
-        if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
-                out var parsedDateTime))
-        {
-            return new DateTimeOffset(NormalizeDateTime(parsedDateTime), TimeSpan.Zero);
-        }
-
-        if (DateTimeOffset.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
-                out var fallback))
-        {
-            return fallback;
-        }
-
-        return DateTimeOffset.Parse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
-    }
-
-    private static bool HasExplicitOffset(string value)
-    {
-        if (value.IndexOf('Z', StringComparison.OrdinalIgnoreCase) >= 0)
-        {
-            return true;
-        }
-
-        var separatorIndex = value.LastIndexOf('T');
-        if (separatorIndex < 0)
-        {
-            separatorIndex = value.LastIndexOf('t');
-        }
-
-        if (separatorIndex < 0)
-        {
-            separatorIndex = value.LastIndexOf(' ');
-        }
-
-        if (separatorIndex < 0)
-        {
-            return false;
-        }
-
-        for (var i = separatorIndex + 1; i < value.Length; i++)
-        {
-            var c = value[i];
-            if (c == '+' || c == '-')
-            {
-                return true;
-            }
-        }
-
-        return false;
     }
 
     private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect,

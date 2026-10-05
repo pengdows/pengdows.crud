@@ -357,7 +357,7 @@ internal class SqliteDialect : SqlDialect
 
         if (value is DateTime dt)
         {
-            var utc = NormalizeUtc(dt);
+            var utc = TypeCoercionHelper.NormalizeDateTime(dt);
             return base.CreateDbParameter(name, DbType.String, utc.ToString("o", CultureInfo.InvariantCulture));
         }
 
@@ -450,16 +450,6 @@ internal class SqliteDialect : SqlDialect
     public override string UpsertIncomingColumn(string columnName)
     {
         return $"EXCLUDED.{WrapObjectName(columnName)}";
-    }
-
-    private static DateTime NormalizeUtc(DateTime value)
-    {
-        return value.Kind switch
-        {
-            DateTimeKind.Utc => value,
-            DateTimeKind.Local => value.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(value, DateTimeKind.Utc)
-        };
     }
 
     public override bool IsForeignKeyViolation(DbException ex) =>

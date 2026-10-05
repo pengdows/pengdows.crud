@@ -80,16 +80,26 @@ public class TableGatewayUpdateBranchTests : SqlLiteContextTestBase
         Assert.Throws<FormatException>(() => TableGateway<TestEntity, int>.NormalizeDateTimeOffset("not-a-date"));
     }
 
-    [Fact]
-    public void PrivateHasExplicitOffset_ExercisesSeparatorBranches()
+    // The dirty check reads timestamp text as every read path does (TypeCoercionHelper.TryParseTimestampText):
+    // a stated offset keeps its instant, text without one is UTC, and a time of day alone is no timestamp.
+    [Theory]
+    [InlineData("2024-01-01Z", "2024-01-01T00:00:00+00:00")]
+    [InlineData("2024-01-01t12:00:00+01:00", "2024-01-01T12:00:00+01:00")]
+    [InlineData("2024-01-01 12:00:00-01:00", "2024-01-01T12:00:00-01:00")]
+    [InlineData("2024-01-01", "2024-01-01T00:00:00+00:00")]
+    [InlineData(" 2024-01-01T12:00:00.1234567 ", "2024-01-01T12:00:00.1234567+00:00")]
+    public void NormalizeDateTimeOffset_TimestampText_ReadsAsTheReadPathDoes(string text, string expected)
     {
-        var method = typeof(TableGateway<TestEntity, int>).GetMethod("HasExplicitOffset",
-            BindingFlags.NonPublic | BindingFlags.Static)!;
+        var result = TableGateway<TestEntity, int>.NormalizeDateTimeOffset(text);
 
-        Assert.True((bool)method.Invoke(null, new object[] { "2024-01-01Z" })!);
-        Assert.True((bool)method.Invoke(null, new object[] { "2024-01-01t12:00:00+01:00" })!);
-        Assert.True((bool)method.Invoke(null, new object[] { "2024-01-01 12:00:00-01:00" })!);
-        Assert.False((bool)method.Invoke(null, new object[] { "2024-01-01" })!);
+        Assert.Equal(DateTimeOffset.Parse(expected, System.Globalization.CultureInfo.InvariantCulture), result);
+        Assert.Equal(DateTimeOffset.Parse(expected, System.Globalization.CultureInfo.InvariantCulture).Offset, result.Offset);
+    }
+
+    [Fact]
+    public void NormalizeDateTimeOffset_TimeOfDayText_ThrowsFormatException()
+    {
+        Assert.Throws<FormatException>(() => TableGateway<TestEntity, int>.NormalizeDateTimeOffset("13:45:30"));
     }
 
     [Fact]
