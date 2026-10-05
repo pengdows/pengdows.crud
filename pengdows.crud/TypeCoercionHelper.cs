@@ -970,36 +970,17 @@ internal static class TypeCoercionHelper
 
     internal static string JsonTextOrNullLiteral(string? text) => string.IsNullOrWhiteSpace(text) ? "null" : text;
 
+    // DRY-015: every JSON-carrying input goes through ExtractJsonString; blank is the JSON null (COR-007).
     private static JsonDocument ToJsonDocument(object value, JsonSerializerOptions options)
     {
+        if (value is JsonDocument doc)
+        {
+            return doc;
+        }
+
         try
         {
-            switch (value)
-            {
-                case JsonDocument doc:
-                    return doc;
-                case JsonElement element:
-                    return JsonDocument.Parse(element.GetRawText());
-                case JsonNode node:
-                    return JsonDocument.Parse(node.ToJsonString(options));
-                case string s:
-                    return JsonDocument.Parse(JsonTextOrNullLiteral(s));
-                case byte[] bytes when bytes.Length == 0:
-                    return JsonDocument.Parse("null");
-                case byte[] bytes:
-                    return JsonDocument.Parse(Encoding.UTF8.GetString(bytes));
-                case ArraySegment<byte> segment when segment.Count > 0:
-                    return JsonDocument.Parse(Encoding.UTF8.GetString(segment.Array!, segment.Offset, segment.Count));
-                case ReadOnlyMemory<byte> memory when !memory.IsEmpty:
-                    return JsonDocument.Parse(Encoding.UTF8.GetString(memory.Span));
-                case Stream stream:
-                    return DeserializeStreamToDocument(stream);
-                case char[] chars:
-                    return JsonDocument.Parse(new string(chars));
-                default:
-                    var serialized = JsonSerializer.Serialize(value, options);
-                    return JsonDocument.Parse(serialized);
-            }
+            return JsonDocument.Parse(JsonTextOrNullLiteral(ExtractJsonString(value, options)));
         }
         catch (JsonException ex) when (value is not Stream)
         {
@@ -1008,19 +989,11 @@ internal static class TypeCoercionHelper
         }
     }
 
-    private static JsonDocument DeserializeStreamToDocument(Stream stream)
-    {
-        if (stream.CanSeek)
-        {
-            stream.Seek(0, SeekOrigin.Begin);
-        }
-
-        using var reader = new StreamReader(stream, Encoding.UTF8, leaveOpen: true);
-        var text = reader.ReadToEnd();
-        return JsonDocument.Parse(JsonTextOrNullLiteral(text));
-    }
-
-    private static string ExtractJsonString(object value, JsonSerializerOptions options)
+    /// <summary>
+    /// The JSON text an input carries (string, UTF-8 bytes, segment, memory, stream, char[], JSON DOM),
+    /// the one reader every JSON target uses (DRY-015). Empty binary input is empty text.
+    /// </summary>
+    internal static string ExtractJsonString(object value, JsonSerializerOptions options)
     {
         switch (value)
         {
@@ -1034,9 +1007,9 @@ internal static class TypeCoercionHelper
                 return node.ToJsonString(options);
             case byte[] bytes:
                 return bytes.Length == 0 ? string.Empty : Encoding.UTF8.GetString(bytes);
-            case ArraySegment<byte> segment when segment.Count > 0:
-                return Encoding.UTF8.GetString(segment.Array!, segment.Offset, segment.Count);
-            case ReadOnlyMemory<byte> memory when !memory.IsEmpty:
+            case ArraySegment<byte> segment:
+                return segment.Count == 0 ? string.Empty : Encoding.UTF8.GetString(segment.Array!, segment.Offset, segment.Count);
+            case ReadOnlyMemory<byte> memory:
                 return Encoding.UTF8.GetString(memory.Span);
             case Stream stream:
                 return StreamToString(stream);
@@ -1046,6 +1019,10 @@ internal static class TypeCoercionHelper
                 return JsonSerializer.Serialize(value, options);
         }
     }
+
+    /// <summary>True for the inputs that carry JSON text (what <see cref="ExtractJsonString"/> reads as text).</summary>
+    internal static bool CarriesJsonText(object value) =>
+        value is string or byte[] or ArraySegment<byte> or ReadOnlyMemory<byte> or Stream or char[] or JsonNode;
 
     internal static string GetJsonText(object value, JsonSerializerOptions? options = null)
     {

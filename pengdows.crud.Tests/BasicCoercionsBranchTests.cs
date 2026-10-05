@@ -111,7 +111,9 @@ public class BasicCoercionsBranchTests
         Assert.True(docCoercion.TryRead(new DbValue("{\"b\":2}"), out var fromString));
         Assert.NotNull(fromString);
 
-        Assert.False(docCoercion.TryRead(new DbValue(""), out _));
+        // Blank text is the JSON null (COR-007, DRY-015).
+        Assert.True(docCoercion.TryRead(new DbValue(""), out var blank));
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, blank!.RootElement.ValueKind);
 
         var bytes = System.Text.Encoding.UTF8.GetBytes("{\"c\":3}");
         Assert.True(elementCoercion.TryRead(new DbValue(bytes), out var element));

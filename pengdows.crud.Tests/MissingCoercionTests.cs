@@ -306,15 +306,16 @@ public class MissingCoercionTests
     }
 
     [Fact]
-    public void JsonDocumentCoercion_TryRead_EmptyString_ReturnsFalse()
+    public void JsonDocumentCoercion_TryRead_EmptyString_IsJsonNull()
     {
+        // Blank text is the JSON null (COR-007, DRY-015).
         var coercion = new JsonDocumentCoercion();
         var dbValue = new DbValue("");
 
         var success = coercion.TryRead(dbValue, out var result);
 
-        Assert.False(success);
-        Assert.Null(result);
+        Assert.True(success);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, result!.RootElement.ValueKind);
     }
 
     [Fact]
@@ -397,15 +398,16 @@ public class MissingCoercionTests
     }
 
     [Fact]
-    public void JsonElementCoercion_TryRead_EmptyString_ReturnsFalse()
+    public void JsonElementCoercion_TryRead_EmptyString_IsJsonNull()
     {
+        // Blank text is the JSON null (COR-007, DRY-015).
         var coercion = new JsonElementCoercion();
         var dbValue = new DbValue("");
 
         var success = coercion.TryRead(dbValue, out var result);
 
-        Assert.False(success);
-        Assert.Equal(default, result);
+        Assert.True(success);
+        Assert.Equal(System.Text.Json.JsonValueKind.Null, result.ValueKind);
     }
 
     [Fact]

@@ -281,7 +281,7 @@ Object[]{Int32:1,"2"} -> List`1: List`1{Int32:1,Int32:2}
 "  " -> JsonValue: JsonValue:null
 0x7B7D -> JsonDocument: JsonDocument:{}
 0x7B7D -> JsonElement: JsonElement:{}
-0x7B7D -> JsonValue: throws InvalidCastException
+0x7B7D -> JsonValue: JsonValue:{}
 "null" -> JsonDocument: JsonDocument:null
 "null" -> JsonElement: JsonElement:null
 "null" -> JsonValue: JsonValue:null

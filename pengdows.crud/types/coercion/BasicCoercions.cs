@@ -287,45 +287,6 @@ internal class StringArrayCoercion : DbCoercion<string[]>
 }
 
 /// <summary>
-/// Coercion for JSON values - handles JSON strings and JsonDocument.
-/// </summary>
-internal class JsonValueCoercion : DbCoercion<JsonValue>
-{
-    public override bool TryRead(in DbValue src, out JsonValue value)
-    {
-        if (src.IsNull)
-        {
-            value = default;
-            return false;
-        }
-
-        switch (src.RawValue)
-        {
-            case JsonDocument doc:
-                value = new JsonValue(doc);
-                return true;
-            case JsonElement element:
-                value = new JsonValue(element);
-                return true;
-            case string str:
-                try
-                {
-                    value = JsonValue.Parse(str);
-                    return true;
-                }
-                catch
-                {
-                    value = default;
-                    return false;
-                }
-            default:
-                value = default;
-                return false;
-        }
-    }
-}
-
-/// <summary>
 /// Coercion for PostgreSQL HSTORE - handles key-value pairs.
 /// </summary>
 internal class HStoreCoercion : DbCoercion<HStore>
@@ -585,41 +546,67 @@ internal class BitArrayCoercion : DbCoercion<System.Collections.BitArray>
     }
 }
 
-/// <summary>
-/// Coercion for JsonDocument - handles JsonDocument, JsonElement, and JSON strings.
-/// </summary>
-internal class JsonDocumentCoercion : DbCoercion<JsonDocument>
+// DRY-015: the three JSON targets read the same inputs: their own DOM types, and anything carrying JSON
+// text through TypeCoercionHelper.ExtractJsonString, blank as the JSON null (COR-007).
+internal class JsonValueCoercion : DbCoercion<JsonValue>
 {
-    public override bool TryRead(in DbValue src, out JsonDocument? value)
+    public override bool TryRead(in DbValue src, out JsonValue value)
     {
-        if (src.IsNull)
-        {
-            value = null;
-            return false;
-        }
-
+        value = default;
         try
         {
             switch (src.RawValue)
             {
+                case null or DBNull:
+                    return false;
+                case JsonDocument doc:
+                    value = new JsonValue(doc);
+                    return true;
+                case JsonElement element:
+                    value = new JsonValue(element);
+                    return true;
+                case var raw when TypeCoercionHelper.CarriesJsonText(raw):
+                    value = JsonValue.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(
+                        TypeCoercionHelper.ExtractJsonString(raw, JsonSerializerOptions.Default)));
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        catch (JsonException)
+        {
+            value = default;
+            return false;
+        }
+    }
+}
+
+internal class JsonDocumentCoercion : DbCoercion<JsonDocument>
+{
+    public override bool TryRead(in DbValue src, out JsonDocument? value)
+    {
+        value = null;
+        try
+        {
+            switch (src.RawValue)
+            {
+                case null or DBNull:
+                    return false;
                 case JsonDocument doc:
                     value = doc;
                     return true;
                 case JsonElement element:
                     value = JsonDocument.Parse(element.GetRawText());
                     return true;
-                case string s when !string.IsNullOrWhiteSpace(s):
-                    value = JsonDocument.Parse(s);
-                    return true;
-                case byte[] bytes when bytes.Length > 0:
-                    value = JsonDocument.Parse(bytes);
+                case var raw when TypeCoercionHelper.CarriesJsonText(raw):
+                    value = JsonDocument.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(
+                        TypeCoercionHelper.ExtractJsonString(raw, JsonSerializerOptions.Default)));
                     return true;
                 default:
-                    value = null;
                     return false;
             }
         }
-        catch
+        catch (JsonException)
         {
             value = null;
             return false;
@@ -627,47 +614,36 @@ internal class JsonDocumentCoercion : DbCoercion<JsonDocument>
     }
 }
 
-/// <summary>
-/// Coercion for JsonElement - handles JsonElement, JsonDocument, and JSON strings.
-/// </summary>
 internal class JsonElementCoercion : DbCoercion<JsonElement>
 {
     public override bool TryRead(in DbValue src, out JsonElement value)
     {
-        if (src.IsNull)
-        {
-            value = default;
-            return false;
-        }
-
+        value = default;
         try
         {
             switch (src.RawValue)
             {
+                case null or DBNull:
+                    return false;
                 case JsonElement element:
                     value = element;
                     return true;
                 case JsonDocument doc:
                     value = doc.RootElement.Clone();
                     return true;
-                case string s when !string.IsNullOrWhiteSpace(s):
-                    using (var doc = JsonDocument.Parse(s))
+                case var raw when TypeCoercionHelper.CarriesJsonText(raw):
+                    using (var parsed = JsonDocument.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(
+                               TypeCoercionHelper.ExtractJsonString(raw, JsonSerializerOptions.Default))))
                     {
-                        value = doc.RootElement.Clone();
-                        return true;
+                        value = parsed.RootElement.Clone();
                     }
-                case byte[] bytes when bytes.Length > 0:
-                    using (var doc = JsonDocument.Parse(bytes))
-                    {
-                        value = doc.RootElement.Clone();
-                        return true;
-                    }
+
+                    return true;
                 default:
-                    value = default;
                     return false;
             }
         }
-        catch
+        catch (JsonException)
         {
             value = default;
             return false;

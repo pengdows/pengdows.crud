@@ -95,7 +95,9 @@ public class BasicCoercionsBranchTests2
     public void JsonDocumentCoercion_HandlesEmptyAndInvalid()
     {
         var coercion = new JsonDocumentCoercion();
-        Assert.False(coercion.TryRead(new DbValue("", typeof(string)), out _));
+        // Blank text is the JSON null (COR-007, DRY-015); invalid JSON is not read.
+        Assert.True(coercion.TryRead(new DbValue("", typeof(string)), out var blank));
+        Assert.Equal(JsonValueKind.Null, blank!.RootElement.ValueKind);
         Assert.False(coercion.TryRead(new DbValue("bad", typeof(string)), out _));
 
         using var doc = JsonDocument.Parse("{\"a\":1}");

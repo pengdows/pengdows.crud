@@ -119,7 +119,13 @@ public class ReadPathParityTests
         // ulong-backed [Flags] enum, a member above long.MaxValue (REV-070)
         NumericEnumCase<Wide>(1UL), NumericEnumCase<Wide>(1UL << 63), NumericEnumCase<Wide>((1UL << 63) | 1UL),
         NumericEnumCase<Wide>(2UL), StringEnumCase<Wide>("Top"), StringEnumCase<Wide>("Low, Top"),
-        StringEnumCase<Wide>("2")
+        StringEnumCase<Wide>("2"),
+        // DRY-015: the two mappers built numeric conversions separately (float into bool, floating
+        // values into enums and integers, short into an enum)
+        Case<bool>(1.0f), Case<bool>(0.0f), Case<bool>(2.5d), Case<bool>(-1.0d), Case<long>(2.0f), Case<int>(1.5f),
+        Case<short>(2.0d), Case<ulong>(2.0m), Case<byte>(1.0d), Case<int?>(1.0f),
+        NumericEnumCase<Mood>(2.0d), NumericEnumCase<Mood>(2.0f), NumericEnumCase<Mood>((short)2),
+        NumericEnumCase<Mood>(2.5d), NumericEnumCase<Small>(2.0d), NumericEnumCase<Wide>(2.0m)
     };
 
     private static object[] Case<T>(object stored) => new object[] { typeof(G<T>), typeof(T), stored };
