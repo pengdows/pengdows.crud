@@ -17,6 +17,7 @@
 // =============================================================================
 
 using System.Globalization;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -85,10 +86,10 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
 {
     protected override object? ConvertToProvider(IntervalDaySecond value, SupportedDatabase provider)
     {
-        return provider switch
+        return DatabaseTraits.For(provider).IntervalFormat switch
         {
-            SupportedDatabase.Oracle => FormatOracle(value),
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb => FormatIso(value),
+            IntervalWireFormat.OracleLiteral => FormatOracle(value),
+            IntervalWireFormat.Iso8601 => FormatIso(value),
             _ => value.TotalTime
         };
     }

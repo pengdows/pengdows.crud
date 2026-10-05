@@ -23,8 +23,13 @@ using System.Data.Common;
 using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Reflection;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
+using pengdows.crud.types.coercion;
+using pengdows.crud.types.valueobjects;
+using pengdows.crud.types;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
@@ -805,4 +810,99 @@ internal class MySqlDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
         };
+
+    // ---- Instance-free traits (REV-039): exception translator, value formats, type mappings ----
+
+    // One translator for every MySQL-wire database (MySQL, Aurora MySQL, MariaDB, TiDB, SingleStore).
+    private protected static readonly IDbExceptionTranslator MySqlFamilyExceptionTranslator =
+        new MySqlExceptionTranslator();
+
+    // MySqlParameter property names, set by reflection (no MySQL driver reference).
+    private static class MySqlNames
+    {
+        public const string DbTypeProperty = "MySqlDbType";
+        public const string Json = "JSON";
+    }
+
+    internal static DatabaseTraits CreateMySqlTraits() =>
+        new(SupportedDatabase.MySql, MySqlFamilyExceptionTranslator)
+        {
+            SpatialFormat = SpatialWireFormat.LittleEndianSridPrefixedWkb,
+            RegisterTypeMappings = registry =>
+            {
+                RegisterJsonMapping(registry, SupportedDatabase.MySql);
+                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.MySql);
+            },
+            RegisterCoercions = registry => RegisterInternalFormatSpatialCoercions(registry, SupportedDatabase.MySql)
+        };
+
+    // Aurora MySQL: MySQL's spatial handling. The JSON mapping has never been keyed on it; its
+    // dialect binds through TypeMappingProvider, which is MySql (VAR-001).
+    internal static DatabaseTraits CreateAuroraMySqlTraits() =>
+        new(SupportedDatabase.AuroraMySql, MySqlFamilyExceptionTranslator)
+        {
+            SpatialFormat = SpatialWireFormat.LittleEndianSridPrefixedWkb,
+            RegisterTypeMappings = registry =>
+                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.AuroraMySql),
+            RegisterCoercions = registry =>
+                RegisterInternalFormatSpatialCoercions(registry, SupportedDatabase.AuroraMySql)
+        };
+
+    // SingleStore: GEOGRAPHY/GEOGRAPHYPOINT take WKT text (TYPE-002), not MySQL's internal format,
+    // and a VECTOR(n) comes back as packed little-endian float32 (TYPE-002).
+    internal static DatabaseTraits CreateSingleStoreTraits() =>
+        new(SupportedDatabase.SingleStore, MySqlFamilyExceptionTranslator)
+        {
+            SpatialFormat = SpatialWireFormat.WellKnownText,
+            RegisterTypeMappings = registry =>
+            {
+                var textSpatial = new ProviderTypeMapping
+                {
+                    DbType = DbType.String,
+                    ConfigureParameter = (param, value) => param.DbType = DbType.String
+                };
+                registry.RegisterMapping<Geometry>(SupportedDatabase.SingleStore, textSpatial);
+                registry.RegisterMapping<Geography>(SupportedDatabase.SingleStore, textSpatial);
+            },
+            RegisterCoercions = registry =>
+                registry.Register(SupportedDatabase.SingleStore, new PackedFloat32VectorCoercion())
+        };
+
+    /// <summary>JSON columns bind as MySqlDbType.JSON (MySQL and TiDB).</summary>
+    private protected static void RegisterJsonMapping(AdvancedTypeRegistry registry, SupportedDatabase database)
+    {
+        registry.RegisterMapping<JsonDocument>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, MySqlNames.DbTypeProperty, MySqlNames.Json);
+            }
+        });
+    }
+
+    /// <summary>
+    /// MySQL, Aurora MySQL and MariaDB: GEOMETRY columns take the server's internal format (4-byte
+    /// SRID + WKB) as plain binary; SpatialConverter produces it. Without a mapping the value object
+    /// itself reached the driver (TYPE-018).
+    /// </summary>
+    private protected static void RegisterInternalFormatSpatialMappings(AdvancedTypeRegistry registry,
+        SupportedDatabase database)
+    {
+        var spatial = new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => param.DbType = DbType.Binary
+        };
+        registry.RegisterMapping<Geometry>(database, spatial);
+        registry.RegisterMapping<Geography>(database, spatial);
+    }
+
+    /// <summary>Reads the server's internal format: a 4-byte little-endian SRID then WKB (TYPE-018).</summary>
+    private protected static void RegisterInternalFormatSpatialCoercions(CoercionRegistry registry,
+        SupportedDatabase database)
+    {
+        registry.Register(database, new MySqlGeometryCoercion());
+        registry.Register(database, new MySqlGeographyCoercion());
+    }
 }

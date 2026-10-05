@@ -504,4 +504,9 @@ internal sealed class InformixDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // Repeatable Read
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // Dirty Read
         };
+
+    // REV-039: the translator for this database's provider exceptions; no type mappings or
+    // value formats of its own.
+    internal static DatabaseTraits CreateInformixTraits() =>
+        new(SupportedDatabase.Informix, new InformixExceptionTranslator());
 }

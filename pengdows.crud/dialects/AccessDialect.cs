@@ -158,7 +158,7 @@
 //   OleDbParameter's own automatic DbType-to-OleDbType mapping for DbType.DateTime does not
 //   produce a type Access accepts — every INSERT into a DATETIME column failed with "Data type
 //   mismatch in criteria expression" until OleDbType.Date was set explicitly. Fixed via
-//   AdvancedTypeRegistry.RegisterTemporalMappings' RegisterMapping<DateTime>(SupportedDatabase.Access, ...)
+//   this dialect's RegisterAccessTypeMappings' RegisterMapping<DateTime>(SupportedDatabase.Access, ...)
 //   entry (SetEnumProperty reflection-sets OleDbType.Date) — not a CreateDbParameter override
 //   here, to avoid adding a
 //   hard System.Data.OleDb reference to this library (matching SqliteDialect's own
@@ -184,6 +184,8 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
+using pengdows.crud.types;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
@@ -531,4 +533,59 @@ internal sealed class AccessDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
         };
+
+    // ---- Instance-free traits (REV-039): exception translator, type mappings ----
+
+    // OleDbParameter property names, set by reflection (no System.Data.OleDb reference).
+    private static class OleDbNames
+    {
+        public const string DbTypeProperty = "OleDbType";
+        public const string Date = "Date";
+        public const string Boolean = "Boolean";
+    }
+
+    internal static DatabaseTraits CreateAccessTraits() =>
+        new(SupportedDatabase.Access, new AccessExceptionTranslator())
+        {
+            RegisterTypeMappings = RegisterAccessTypeMappings
+        };
+
+    private static void RegisterAccessTypeMappings(AdvancedTypeRegistry registry)
+    {
+        // CONFIRMED live (via a real .accdb) that the generic positional-dialect bool->Int16(1/0)
+        // conversion (SqlDialect's NeedsCommonConversions path, driven by !SupportsNamedParameters —
+        // Access is positional, same as Informix/SAP HANA) does NOT round-trip correctly here: Jet's
+        // native YESNO type stores True as -1 (classic Access/VBA convention: True = -1, all bits
+        // set), not 1 — a parameterized "WHERE bool_val = ?" bound as Int16(1) matched zero rows
+        // against a stored True value (COUNT: 0), while Int16(-1) and the native OleDbType.Boolean
+        // both matched correctly (COUNT: 1). Rather than re-deriving Jet's internal -1/0 storage
+        // convention by hand, this binds the real native OleDbType.Boolean directly via reflection
+        // (same SetEnumProperty mechanism as the DateTime->OleDbType.Date mapping below), which
+        // round-trips correctly for both INSERT and equality comparison without the framework
+        // needing to know Jet's specific boolean encoding at all.
+        registry.RegisterMapping<bool>(SupportedDatabase.Access, new ProviderTypeMapping
+        {
+            DbType = DbType.Boolean,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, OleDbNames.DbTypeProperty, OleDbNames.Boolean);
+            }
+        });
+
+        // CONFIRMED live (see the file-level AI SUMMARY) that OleDbParameter's own automatic
+        // DbType-to-OleDbType mapping for DbType.DateTime does not produce a type Access accepts —
+        // every INSERT into a DATETIME column failed with "Data type mismatch in criteria
+        // expression" until OleDbType.Date was set explicitly. Reflection-based (SetEnumProperty),
+        // not a CreateDbParameter override, to avoid a hard System.Data.OleDb reference in this
+        // library — matching SqliteDialect's own reflection-based provider-namespace check for the
+        // same reason.
+        registry.RegisterMapping<DateTime>(SupportedDatabase.Access, new ProviderTypeMapping
+        {
+            DbType = DbType.DateTime,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, OleDbNames.DbTypeProperty, OleDbNames.Date);
+            }
+        });
+    }
 }

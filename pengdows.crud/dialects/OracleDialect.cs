@@ -21,6 +21,9 @@ using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
+using pengdows.crud.types.valueobjects;
+using pengdows.crud.types;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
@@ -662,7 +665,7 @@ internal class OracleDialect : SqlDialect
         if (type == DbType.Time)
         {
             parameter.DbType = DbType.Object;
-            types.AdvancedTypeRegistry.SetOracleIntervalDaySecond(parameter);
+            SetOracleIntervalDaySecond(parameter);
         }
 
         return parameter;
@@ -740,4 +743,109 @@ internal class OracleDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
         };
+
+    // ---- Instance-free traits (REV-039): exception translator, value formats, type mappings ----
+
+    // OracleParameter property names, set by reflection (no ODP.NET reference).
+    private static class OracleNames
+    {
+        public const string DbTypeProperty = "OracleDbType";
+        public const string IntervalYM = "IntervalYM";
+        public const string IntervalDS = "IntervalDS";
+        public const string TimeStampTZ = "TimeStampTZ";
+        public const string Blob = "Blob";
+        public const string Clob = "Clob";
+    }
+
+    /// <summary>Marks an ODP.NET parameter as OracleDbType.IntervalDS (no-op for other providers).</summary>
+    private static void SetOracleIntervalDaySecond(DbParameter parameter) =>
+        AdvancedTypeRegistry.SetEnumProperty(parameter, OracleNames.DbTypeProperty, OracleNames.IntervalDS);
+
+    internal static DatabaseTraits CreateOracleTraits() =>
+        new(SupportedDatabase.Oracle, new OracleExceptionTranslator())
+        {
+            // EWKT text, always with its SRID: RenderColumnArgument builds SDO_GEOMETRY from it (TYPE-021).
+            SpatialFormat = SpatialWireFormat.ExtendedWellKnownText,
+            IntervalFormat = IntervalWireFormat.OracleLiteral,
+            RegisterTypeMappings = RegisterOracleTypeMappings
+        };
+
+    private static void RegisterOracleTypeMappings(AdvancedTypeRegistry registry)
+    {
+        // bool as NUMBER(1) via Int16
+        registry.RegisterMapping<bool>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Int16,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Int16;
+                if (value is bool b)
+                {
+                    param.Value = b ? 1 : 0;
+                }
+            }
+        });
+
+        // Guid: handled by GuidFormat (GuidStorageFormat.String), not a type mapping.
+
+        registry.RegisterMapping<IntervalYearMonth>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalYM);
+            }
+        });
+
+        registry.RegisterMapping<IntervalDaySecond>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.IntervalDS);
+            }
+        });
+
+        // Oracle has no TIME type and ODP.NET rejects DbType.Time ("ORA-50028: Invalid parameter
+        // binding", confirmed live), so a time of day binds as INTERVAL DAY TO SECOND (TYPE-001).
+        // A NULL declared DbType.Time is handled the same way in this dialect.
+        registry.RegisterMapping<TimeSpan>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) => SetOracleIntervalDaySecond(param)
+        });
+
+        // DateTimeOffset uses TIMESTAMP WITH TIME ZONE (OracleDbType.TimeStampTZ)
+        registry.RegisterMapping<DateTimeOffset>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                if (value is DateTimeOffset dto)
+                {
+                    // Normalize to UTC to avoid offset loss on round-trip.
+                    param.Value = dto.ToUniversalTime();
+                }
+                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.TimeStampTZ);
+            }
+        });
+
+        // BLOB / CLOB
+        registry.RegisterMapping<Stream>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.Blob);
+            }
+        });
+        registry.RegisterMapping<TextReader>(SupportedDatabase.Oracle, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.Clob);
+            }
+        });
+    }
 }

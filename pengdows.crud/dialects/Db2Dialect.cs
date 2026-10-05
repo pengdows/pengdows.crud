@@ -22,6 +22,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.@internal;
 using pengdows.crud.infrastructure;
 
@@ -320,4 +321,9 @@ internal sealed class Db2Dialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable, // RR
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted // UR
         };
+
+    // REV-039: the translator for this database's provider exceptions; no type mappings or
+    // value formats of its own.
+    internal static DatabaseTraits CreateDb2Traits() =>
+        new(SupportedDatabase.Db2, new Db2ExceptionTranslator());
 }

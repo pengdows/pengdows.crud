@@ -406,4 +406,9 @@ internal class SybaseAseDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
         };
+
+    // REV-039: the translator for this database's provider exceptions; no type mappings or
+    // value formats of its own.
+    internal static DatabaseTraits CreateSybaseAseTraits() =>
+        new(SupportedDatabase.SybaseASE, new SybaseExceptionTranslator());
 }

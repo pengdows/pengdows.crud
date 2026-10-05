@@ -29,6 +29,7 @@ using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
 using System.Diagnostics.CodeAnalysis;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
 using pengdows.crud.types.converters;
@@ -42,6 +43,10 @@ namespace pengdows.crud.types.coercion;
 /// </summary>
 internal static class AdvancedCoercions
 {
+    // Reading an NpgsqlInterval/NpgsqlRange back does not depend on the database: the converters
+    // use their database argument only when writing.
+    internal const SupportedDatabase AnyDatabase = SupportedDatabase.Unknown;
+
     public static void RegisterAll(CoercionRegistry registry)
     {
         // Temporal types
@@ -57,15 +62,12 @@ internal static class AdvancedCoercions
         // Spatial types
         registry.Register(new GeometryCoercion());
         registry.Register(new GeographyCoercion());
-        // MySQL family: the server's internal format, a 4-byte little-endian SRID then WKB (TYPE-018).
-        foreach (var provider in new[] { SupportedDatabase.MySql, SupportedDatabase.MariaDb, SupportedDatabase.AuroraMySql })
+        // Database-specific coercions (e.g. the MySQL family's internal spatial format, TYPE-018;
+        // SingleStore's packed float32 vectors, TYPE-002) are declared by the dialects (REV-039).
+        foreach (var traits in DatabaseTraits.All)
         {
-            registry.Register(provider, new MySqlGeometryCoercion());
-            registry.Register(provider, new MySqlGeographyCoercion());
+            traits.RegisterCoercions?.Invoke(registry);
         }
-
-        // SingleStore returns a VECTOR(n) as packed little-endian float32 (TYPE-002).
-        registry.Register(SupportedDatabase.SingleStore, new PackedFloat32VectorCoercion());
 
         // Range types (generic)
         registry.Register(new PostgreSqlRangeIntCoercion());
@@ -116,7 +118,7 @@ internal class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
                 // Npgsql's full-fidelity interval (months/days/microseconds) — same conversion the
                 // gateway's hydration path uses, so both read paths agree. Strings are not accepted
                 // here: the converter's ISO parser treats unrecognized text as zero (backlog D01).
-                return IntervalConverter.TryConvertFromProvider(raw, SupportedDatabase.PostgreSql, out value);
+                return IntervalConverter.TryConvertFromProvider(raw, AdvancedCoercions.AnyDatabase, out value);
             default:
                 value = default;
                 return false;
@@ -661,7 +663,7 @@ internal class PostgreSqlRangeIntCoercion : DbCoercion<Range<int>>
             default:
                 // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
                 if (src.RawValue is not null &&
-                    RangeConverters.Int.TryConvertFromProvider(src.RawValue, SupportedDatabase.PostgreSql, out var converted))
+                    RangeConverters.Int.TryConvertFromProvider(src.RawValue, AdvancedCoercions.AnyDatabase, out var converted))
                 {
                     value = converted;
                     return true;
@@ -712,7 +714,7 @@ internal class PostgreSqlRangeDateTimeCoercion : DbCoercion<Range<DateTime>>
             default:
                 // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
                 if (src.RawValue is not null &&
-                    RangeConverters.DateTime.TryConvertFromProvider(src.RawValue, SupportedDatabase.PostgreSql, out var converted))
+                    RangeConverters.DateTime.TryConvertFromProvider(src.RawValue, AdvancedCoercions.AnyDatabase, out var converted))
                 {
                     value = converted;
                     return true;
@@ -763,7 +765,7 @@ internal class PostgreSqlRangeLongCoercion : DbCoercion<Range<long>>
             default:
                 // NpgsqlRange<T> and the other provider shapes the gateway's converter reads (TYPE-002).
                 if (src.RawValue is not null &&
-                    RangeConverters.Long.TryConvertFromProvider(src.RawValue, SupportedDatabase.PostgreSql, out var converted))
+                    RangeConverters.Long.TryConvertFromProvider(src.RawValue, AdvancedCoercions.AnyDatabase, out var converted))
                 {
                     value = converted;
                     return true;

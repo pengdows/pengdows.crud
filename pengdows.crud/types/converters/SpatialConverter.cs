@@ -23,6 +23,7 @@ using System.Buffers.Binary;
 using System.Data.SqlTypes;
 using System.Text;
 using System.Text.Json.Nodes;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -63,7 +64,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         // SQL Server builds the instance itself from a big-endian SRID + WKB
         // (SqlServerDialect.RenderColumnArgument), including from a SqlGeometry/SqlGeography read
         // with Microsoft.SqlServer.Types loaded, whose WKB and SRID the value already carries.
-        if (provider == SupportedDatabase.SqlServer)
+        var format = DatabaseTraits.For(provider).SpatialFormat;
+        if (format == SpatialWireFormat.SridPrefixedWkbForConstructor)
         {
             return SqlServerSpatialFormat.ToConstructorArgument(value);
         }
@@ -73,19 +75,20 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             return value.ProviderValue;
         }
 
-        return provider switch
+        // The format is declared by the dialect (DatabaseTraits, REV-039); the error texts name the
+        // one database that declares each format today.
+        return format switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-                => CreatePostgresSpatial(value),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql => CreateMySqlSpatial(value),
-            SupportedDatabase.SingleStore => !string.IsNullOrEmpty(value.WellKnownText)
+            SpatialWireFormat.ExtendedWkb => CreatePostgresSpatial(value),
+            SpatialWireFormat.LittleEndianSridPrefixedWkb => CreateMySqlSpatial(value),
+            SpatialWireFormat.WellKnownText => !string.IsNullOrEmpty(value.WellKnownText)
                 ? value.WellKnownText
                 : throw new NotSupportedException(
                     "SingleStore spatial values are written as WKT; create the value with FromWellKnownText."),
-            SupportedDatabase.Snowflake => CreateSnowflakeSpatial(value),
-            SupportedDatabase.SapHana => CreateWkb(value, "SAP HANA"),
+            SpatialWireFormat.ExtendedTextOrHex => CreateSnowflakeSpatial(value),
+            SpatialWireFormat.PlainWkb => CreateWkb(value, "SAP HANA"),
             // EWKT text, always with its SRID: OracleDialect builds SDO_GEOMETRY from it (TYPE-021).
-            SupportedDatabase.Oracle => ExtendedWellKnownText.From(value),
+            SpatialWireFormat.ExtendedWellKnownText => ExtendedWellKnownText.From(value),
             _ => ExtractDefaultSpatial(value)
         };
     }
@@ -274,7 +277,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
     private TSpatial FromWellKnownBinary(byte[] bytes, SupportedDatabase provider)
     {
         // MySQL/MariaDB return their internal format: a 4-byte little-endian SRID, then WKB.
-        if (provider is SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.AuroraMySql
+        if (DatabaseTraits.For(provider).SpatialFormat == SpatialWireFormat.LittleEndianSridPrefixedWkb
             && bytes.Length > 4)
         {
             var srid = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(bytes);

@@ -11,6 +11,8 @@
 //   InterBase, DuckDb, Snowflake, SybaseASE, Db2, Informix, SapHana, Access, FlatFile;
 //   anything else gets the Sql92Dialect fallback. TimescaleDB has no separate value and
 //   uses PostgreSqlDialect.
+// - CreateTraits() maps each SupportedDatabase value to the instance-free DatabaseTraits its
+//   dialect class declares (REV-039); keep it in step with CreateDialectForType().
 // - CreateDialectAsync() initializes the dialect via DetectDatabaseInfoAsync();
 //   CreateDialectForType() returns it uninitialized.
 // =============================================================================
@@ -136,6 +138,42 @@ internal static class SqlDialectFactory
             SupportedDatabase.Spanner => new SpannerDialect(factory, logger),
             SupportedDatabase.Access => new AccessDialect(factory, logger),
             _ => new Sql92Dialect(factory, logger)
+        };
+    }
+
+    /// <summary>
+    /// The instance-free traits of <paramref name="databaseType"/>, declared by the dialect class
+    /// that hosts it (REV-039). Mirrors <see cref="CreateDialectForType"/>; read through
+    /// <see cref="DatabaseTraits.For"/>, which builds them once.
+    /// </summary>
+    internal static DatabaseTraits CreateTraits(SupportedDatabase databaseType)
+    {
+        return databaseType switch
+        {
+            SupportedDatabase.SqlServer => SqlServerDialect.CreateSqlServerTraits(),
+            SupportedDatabase.PostgreSql => PostgreSqlDialect.CreatePostgreSqlTraits(),
+            SupportedDatabase.CockroachDb => CockroachDbDialect.CreateCockroachDbTraits(),
+            SupportedDatabase.YugabyteDb => YugabyteDbDialect.CreateYugabyteDbTraits(),
+            SupportedDatabase.TiDb => TiDbDialect.CreateTiDbTraits(),
+            SupportedDatabase.MySql => MySqlDialect.CreateMySqlTraits(),
+            SupportedDatabase.AuroraMySql => MySqlDialect.CreateAuroraMySqlTraits(),
+            SupportedDatabase.SingleStore => MySqlDialect.CreateSingleStoreTraits(),
+            SupportedDatabase.MariaDb => MariaDbDialect.CreateMariaDbTraits(),
+            SupportedDatabase.Sqlite => SqliteDialect.CreateSqliteTraits(),
+            SupportedDatabase.Oracle => OracleDialect.CreateOracleTraits(),
+            SupportedDatabase.Firebird => FirebirdDialect.CreateFirebirdTraits(),
+            SupportedDatabase.DuckDB => DuckDbDialect.CreateDuckDbTraits(),
+            SupportedDatabase.Snowflake => SnowflakeDialect.CreateSnowflakeTraits(),
+            SupportedDatabase.AuroraPostgreSql => PostgreSqlDialect.CreateAuroraPostgreSqlTraits(),
+            SupportedDatabase.FlatFile => FlatFileDialect.CreateFlatFileTraits(),
+            SupportedDatabase.SybaseASE => SybaseAseDialect.CreateSybaseAseTraits(),
+            SupportedDatabase.Db2 => Db2Dialect.CreateDb2Traits(),
+            SupportedDatabase.Informix => InformixDialect.CreateInformixTraits(),
+            SupportedDatabase.SapHana => HanaDialect.CreateSapHanaTraits(),
+            SupportedDatabase.InterBase => InterBaseDialect.CreateInterBaseTraits(),
+            SupportedDatabase.Spanner => SpannerDialect.CreateSpannerTraits(),
+            SupportedDatabase.Access => AccessDialect.CreateAccessTraits(),
+            _ => Sql92Dialect.CreateFallbackTraits()
         };
     }
 

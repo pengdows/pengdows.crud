@@ -23,6 +23,7 @@
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
@@ -197,4 +198,16 @@ internal class MariaDbDialect : MySqlDialect
     // SupportsExternalPooling, PoolingSettingName inherited from MySqlDialect -> base (true, "Pooling")
     public override string? MinPoolSizeSettingName => "Min Pool Size";
     public override string? MaxPoolSizeSettingName => "Max Pool Size";
+
+    // REV-039: MySQL's internal spatial format in both directions. MySQL's JSON mapping has never
+    // been keyed on MariaDB.
+    internal static DatabaseTraits CreateMariaDbTraits() =>
+        new(SupportedDatabase.MariaDb, MySqlFamilyExceptionTranslator)
+        {
+            SpatialFormat = SpatialWireFormat.LittleEndianSridPrefixedWkb,
+            RegisterTypeMappings = registry =>
+                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.MariaDb),
+            RegisterCoercions = registry =>
+                RegisterInternalFormatSpatialCoercions(registry, SupportedDatabase.MariaDb)
+        };
 }

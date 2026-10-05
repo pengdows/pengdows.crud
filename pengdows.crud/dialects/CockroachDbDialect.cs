@@ -16,6 +16,7 @@ using System.Data.Common;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
@@ -93,5 +94,17 @@ internal class CockroachDbDialect : PostgreSqlDialect
             [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.Serializable,
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.Serializable
+        };
+
+    // REV-039: CockroachDB shares PostgreSQL's type mappings and Npgsql value types, but not
+    // hstore (CockroachDB has no hstore type).
+    internal static DatabaseTraits CreateCockroachDbTraits() =>
+        new(SupportedDatabase.CockroachDb, PostgreSqlFamilyExceptionTranslator)
+        {
+            SpatialFormat = SpatialWireFormat.ExtendedWkb,
+            IntervalFormat = IntervalWireFormat.Iso8601,
+            BindsNpgsqlValueTypes = true,
+            RegisterTypeMappings = registry =>
+                RegisterPostgreSqlFamilyTypeMappings(registry, SupportedDatabase.CockroachDb)
         };
 }

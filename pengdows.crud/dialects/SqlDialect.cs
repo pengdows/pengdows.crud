@@ -202,7 +202,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
         typeof(char), typeof(string)
     }.ToFrozenSet();
 
-    protected static AdvancedTypeRegistry AdvancedTypes { get; } = AdvancedTypeRegistry.Shared;
+    // Read through, not captured in a static initializer: building the shared registry reads the
+    // dialects' static traits, so a captured copy could be taken while it is still null.
+    protected static AdvancedTypeRegistry AdvancedTypes => AdvancedTypeRegistry.Shared;
 
     protected SqlDialect(DbProviderFactory factory, ILogger logger)
     {

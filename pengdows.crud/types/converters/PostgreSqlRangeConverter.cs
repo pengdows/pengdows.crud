@@ -20,6 +20,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -113,8 +114,7 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
 {
     protected override object? ConvertToProvider(Range<T> value, SupportedDatabase provider)
     {
-        if (provider != SupportedDatabase.PostgreSql && provider != SupportedDatabase.CockroachDb &&
-            provider != SupportedDatabase.YugabyteDb)
+        if (!DatabaseTraits.For(provider).BindsNpgsqlValueTypes)
         {
             return value;
         }

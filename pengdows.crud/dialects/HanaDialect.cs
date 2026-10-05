@@ -76,6 +76,8 @@ using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
+using pengdows.crud.types.valueobjects;
+using pengdows.crud.types;
 using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 
@@ -415,5 +417,24 @@ internal sealed class HanaDialect : SqlDialect
             [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.ReadCommitted,
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
+        };
+
+    // ---- Instance-free traits (REV-039): exception translator, value formats, type mappings ----
+
+    internal static DatabaseTraits CreateSapHanaTraits() =>
+        new(SupportedDatabase.SapHana, new HanaExceptionTranslator())
+        {
+            // ST_GEOMETRY takes WKB as VARBINARY and refuses WKT text (TYPE-002).
+            SpatialFormat = SpatialWireFormat.PlainWkb,
+            RegisterTypeMappings = registry =>
+            {
+                var binarySpatial = new ProviderTypeMapping
+                {
+                    DbType = DbType.Binary,
+                    ConfigureParameter = (param, value) => param.DbType = DbType.Binary
+                };
+                registry.RegisterMapping<Geometry>(SupportedDatabase.SapHana, binarySpatial);
+                registry.RegisterMapping<Geography>(SupportedDatabase.SapHana, binarySpatial);
+            }
         };
 }

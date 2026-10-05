@@ -21,9 +21,14 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using System.Text.RegularExpressions;
+using System.Net.NetworkInformation;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
+using pengdows.crud.types.valueobjects;
+using pengdows.crud.types;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
@@ -1098,4 +1103,196 @@ internal class PostgreSqlDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
         };
+
+    // ---- Instance-free traits (REV-039): exception translator, value formats, type mappings ----
+
+    // One translator for every PostgreSQL-wire database (PostgreSQL, Aurora PostgreSQL,
+    // CockroachDB, YugabyteDB, Spanner).
+    private protected static readonly IDbExceptionTranslator PostgreSqlFamilyExceptionTranslator =
+        new PostgresExceptionTranslator();
+
+    // NpgsqlParameter property names, set by reflection (no Npgsql reference). Typos here fail
+    // silently at runtime; centralising makes them grep-able.
+    private static class NpgsqlNames
+    {
+        public const string DbTypeProperty = "NpgsqlDbType";
+        public const string DataTypeName = "DataTypeName";
+        public const string Jsonb = "Jsonb";
+        public const string Integer = "Integer";
+        public const string Text = "Text";
+        public const string Array = "Array";
+        // NpgsqlDbType member names (NpgsqlDbType has no Int4Range/TsRange; an unknown name
+        // silently left the parameter as text, which PostgreSQL rejects for a range column).
+        public const string Int4Range = "IntegerRange";
+        public const string Int8Range = "BigIntRange";
+        public const string TsRange = "TimestampRange";
+        public const string TsTzRange = "TimestampTzRange";
+        public const string DateRange = "DateRange";
+        public const string NumRange = "NumericRange";
+        public const string Inet = "Inet";
+        public const string Cidr = "Cidr";
+        public const string MacAddr = "MacAddr";
+        public const string MacAddr8 = "MacAddr8";
+        public const string Interval = "Interval";
+        public const string Uuid = "Uuid";
+        public const string Hstore = "Hstore";
+    }
+
+    internal static DatabaseTraits CreatePostgreSqlTraits() =>
+        new(SupportedDatabase.PostgreSql, PostgreSqlFamilyExceptionTranslator)
+        {
+            SpatialFormat = SpatialWireFormat.ExtendedWkb,
+            IntervalFormat = IntervalWireFormat.Iso8601,
+            BindsNpgsqlValueTypes = true,
+            RegisterTypeMappings = registry =>
+            {
+                RegisterPostgreSqlFamilyTypeMappings(registry, SupportedDatabase.PostgreSql);
+                RegisterHStoreMapping(registry, SupportedDatabase.PostgreSql);
+            }
+        };
+
+    // Aurora PostgreSQL has no type mappings or value formats of its own: its dialect binds
+    // through TypeMappingProvider, which is PostgreSql (VAR-001).
+    internal static DatabaseTraits CreateAuroraPostgreSqlTraits() =>
+        new(SupportedDatabase.AuroraPostgreSql, PostgreSqlFamilyExceptionTranslator);
+
+    /// <summary>
+    /// The parameter mappings PostgreSQL shares with CockroachDB and YugabyteDB (Npgsql types,
+    /// PostGIS-style EWKB spatial, bytea/text LOBs). Not hstore, which CockroachDB lacks.
+    /// </summary>
+    private protected static void RegisterPostgreSqlFamilyTypeMappings(AdvancedTypeRegistry registry,
+        SupportedDatabase database)
+    {
+        // JSONB
+        registry.RegisterMapping<JsonDocument>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                param.GetType().GetProperty(NpgsqlNames.DataTypeName)?.SetValue(param, "jsonb");
+                AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Jsonb);
+            }
+        });
+
+        // PostGIS and CockroachDB's built-in spatial types: EWKB bytes, produced by
+        // SpatialConverter. Geometry was registered for PostgreSQL only and Geography for none, so
+        // elsewhere the value object reached Npgsql (TYPE-002).
+        var spatial = new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => param.DbType = DbType.Binary
+        };
+        registry.RegisterMapping<Geometry>(database, spatial);
+        registry.RegisterMapping<Geography>(database, spatial);
+
+        // int[] and text[] arrays
+        registry.RegisterMapping<int[]>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array,
+                    NpgsqlNames.Integer);
+            }
+        });
+        registry.RegisterMapping<string[]>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Array,
+                    NpgsqlNames.Text);
+            }
+        });
+
+        // Ranges: int4range, tsrange, int8range, and (TYPE-009) daterange, numrange, tstzrange.
+        RegisterNpgsqlTyped<Range<int>>(registry, database, DbType.Object, NpgsqlNames.Int4Range);
+        RegisterNpgsqlTyped<Range<DateTime>>(registry, database, DbType.Object, NpgsqlNames.TsRange);
+        RegisterNpgsqlTyped<Range<long>>(registry, database, DbType.Object, NpgsqlNames.Int8Range);
+        RegisterNpgsqlTyped<Range<DateOnly>>(registry, database, DbType.Object, NpgsqlNames.DateRange);
+        RegisterNpgsqlTyped<Range<decimal>>(registry, database, DbType.Object, NpgsqlNames.NumRange);
+        RegisterNpgsqlTyped<Range<DateTimeOffset>>(registry, database, DbType.Object, NpgsqlNames.TsTzRange);
+
+        // inet, cidr
+        RegisterNpgsqlTyped<Inet>(registry, database, DbType.String, NpgsqlNames.Inet);
+        RegisterNpgsqlTyped<Cidr>(registry, database, DbType.String, NpgsqlNames.Cidr);
+
+        // macaddr (6-byte EUI-48) / macaddr8 (8-byte EUI-64) - dispatch on the actual address
+        // width, since MacAddress supports both. By the time this callback runs the registered
+        // MacAddressConverter has already unwrapped the value to a PhysicalAddress.
+        registry.RegisterMapping<MacAddress>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                var isEui64 = value is PhysicalAddress address && address.GetAddressBytes().Length == 8;
+                AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty,
+                    isEui64 ? NpgsqlNames.MacAddr8 : NpgsqlNames.MacAddr);
+            }
+        });
+
+        // interval
+        RegisterNpgsqlTyped<PostgreSqlInterval>(registry, database, DbType.Object, NpgsqlNames.Interval);
+
+        // bytea and text LOBs
+        registry.RegisterMapping<Stream>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
+        });
+        registry.RegisterMapping<TextReader>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Text);
+            }
+        });
+
+        // uuid
+        RegisterNpgsqlTyped<Guid>(registry, database, DbType.Guid, NpgsqlNames.Uuid);
+    }
+
+    private static void RegisterNpgsqlTyped<T>(AdvancedTypeRegistry registry, SupportedDatabase database,
+        DbType dbType, string npgsqlDbType)
+    {
+        registry.RegisterMapping<T>(database, new ProviderTypeMapping
+        {
+            DbType = dbType,
+            ConfigureParameter = (param, value) =>
+            {
+                AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty, npgsqlDbType);
+            }
+        });
+    }
+
+    /// <summary>
+    /// hstore. Without a mapping the raw HStore struct reached Npgsql, which rejects it ("Writing
+    /// values of 'HStore' is not supported ..."); Npgsql 9's hstore handler needs
+    /// NpgsqlDbType.Hstore with a Dictionary&lt;string,string?&gt; value (confirmed live).
+    /// </summary>
+    private protected static void RegisterHStoreMapping(AdvancedTypeRegistry registry, SupportedDatabase database)
+    {
+        registry.RegisterMapping<HStore>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                if (value is HStore hstore)
+                {
+                    var dict = new Dictionary<string, string?>(hstore.Count, StringComparer.Ordinal);
+                    foreach (var pair in hstore)
+                    {
+                        dict[pair.Key] = pair.Value;
+                    }
+
+                    param.Value = dict;
+                }
+
+                AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Hstore);
+            }
+        });
+    }
 }

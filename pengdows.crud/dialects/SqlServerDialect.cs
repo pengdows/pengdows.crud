@@ -24,9 +24,12 @@ using System.Data;
 using System.Data.Common;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Text.Json;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
+using pengdows.crud.types;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
 using pengdows.crud.wrappers;
@@ -772,4 +775,89 @@ internal class SqlServerDialect : SqlDialect
     // SafeNonBlockingReads' guarantee needs Snapshot; ReadCommitted (snapshot isolation off) falls short.
     internal override bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level) =>
         profile == IsolationProfile.SafeNonBlockingReads && level == IsolationLevel.ReadCommitted;
+
+    // ---- Instance-free traits (REV-039): exception translator, value formats, type mappings ----
+
+    // SqlParameter property names, set by reflection (no SqlClient reference).
+    private static class SqlServerNames
+    {
+        public const string DbTypeProperty = "SqlDbType";
+        public const string Timestamp = "Timestamp";
+    }
+
+    internal static DatabaseTraits CreateSqlServerTraits() =>
+        new(SupportedDatabase.SqlServer, new SqlServerExceptionTranslator())
+        {
+            SpatialFormat = SpatialWireFormat.SridPrefixedWkbForConstructor,
+            RegisterTypeMappings = RegisterSqlServerTypeMappings
+        };
+
+    private static void RegisterSqlServerTypeMappings(AdvancedTypeRegistry registry)
+    {
+        // JSON stored as NVARCHAR(MAX)
+        registry.RegisterMapping<JsonDocument>(SupportedDatabase.SqlServer, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                param.Size = -1; // NVARCHAR(MAX)
+            }
+        });
+
+        // A big-endian SRID + WKB as varbinary, which the gateway SQL turns into the
+        // geometry/geography with STGeomFromWKB (RenderColumnArgument, TYPE-002). A UDT parameter
+        // would need Microsoft.SqlServer.Types, whose spatial code is Windows-only.
+        var binarySpatial = new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => param.DbType = DbType.Binary
+        };
+        registry.RegisterMapping<Geometry>(SupportedDatabase.SqlServer, binarySpatial);
+        registry.RegisterMapping<Geography>(SupportedDatabase.SqlServer, binarySpatial);
+
+        // DateTimeOffset (value passed through unchanged)
+        registry.RegisterMapping<DateTimeOffset>(SupportedDatabase.SqlServer, new ProviderTypeMapping
+        {
+            DbType = DbType.DateTimeOffset,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.DateTimeOffset;
+                // Note: The value arriving here is typed as DateTimeOffset (the registered CLR type),
+                // so a `value is DateTime` branch can never match and has been removed.
+            }
+        });
+
+        // varbinary(max) / nvarchar(max)
+        registry.RegisterMapping<Stream>(SupportedDatabase.SqlServer, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Binary;
+                param.Size = -1; // varbinary(max)
+            }
+        });
+        registry.RegisterMapping<TextReader>(SupportedDatabase.SqlServer, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                param.Size = -1; // nvarchar(max)
+            }
+        });
+
+        // rowversion
+        registry.RegisterMapping<RowVersion>(SupportedDatabase.SqlServer, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Binary;
+                param.Size = 8;
+                AdvancedTypeRegistry.SetEnumProperty(param, SqlServerNames.DbTypeProperty, SqlServerNames.Timestamp);
+            }
+        });
+    }
 }

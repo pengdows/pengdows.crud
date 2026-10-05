@@ -14,6 +14,7 @@
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
@@ -91,4 +92,19 @@ internal class YugabyteDbDialect : PostgreSqlDialect
             return connectionString;
         }
     }
+
+    // REV-039: YugabyteDB shares PostgreSQL's type mappings, hstore and Npgsql value types. Its
+    // IntervalYearMonth/IntervalDaySecond values have never been sent as ISO 8601 text the way
+    // PostgreSQL's and CockroachDB's are; that is kept as it was.
+    internal static DatabaseTraits CreateYugabyteDbTraits() =>
+        new(SupportedDatabase.YugabyteDb, PostgreSqlFamilyExceptionTranslator)
+        {
+            SpatialFormat = SpatialWireFormat.ExtendedWkb,
+            BindsNpgsqlValueTypes = true,
+            RegisterTypeMappings = registry =>
+            {
+                RegisterPostgreSqlFamilyTypeMappings(registry, SupportedDatabase.YugabyteDb);
+                RegisterHStoreMapping(registry, SupportedDatabase.YugabyteDb);
+            }
+        };
 }

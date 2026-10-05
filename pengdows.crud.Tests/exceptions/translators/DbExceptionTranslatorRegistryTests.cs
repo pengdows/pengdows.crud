@@ -203,7 +203,7 @@ public class DbExceptionTranslatorRegistryTests
                 Assert.False(translator is FallbackExceptionTranslator,
                     $"{database} routes to FallbackExceptionTranslator but is not on the " +
                     $"documented intentional-fallback allowlist. Either add a dedicated " +
-                    $"IDbExceptionTranslator for {database} in DbExceptionTranslatorRegistry, " +
+                    $"IDbExceptionTranslator for {database} in its dialect's DatabaseTraits, " +
                     $"or add it to {nameof(IntentionalFallbackDatabases)} with a documented reason.");
             }
         }

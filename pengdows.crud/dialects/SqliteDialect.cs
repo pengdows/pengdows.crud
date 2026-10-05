@@ -24,6 +24,8 @@ using System.Data.Common;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
+using pengdows.crud.types;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
@@ -519,4 +521,60 @@ internal class SqliteDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
         };
+
+    // ---- Instance-free traits (REV-039): exception translator, type mappings ----
+
+    internal static DatabaseTraits CreateSqliteTraits() =>
+        new(SupportedDatabase.Sqlite, new SqliteExceptionTranslator())
+        {
+            RegisterTypeMappings = RegisterSqliteTypeMappings
+        };
+
+    private static void RegisterSqliteTypeMappings(AdvancedTypeRegistry registry)
+    {
+        // Decimals stored as Double (REAL)
+        registry.RegisterMapping<decimal>(SupportedDatabase.Sqlite, new ProviderTypeMapping
+        {
+            DbType = DbType.Double,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Double;
+                if (value != null)
+                {
+                    decimal dec;
+                    if (value is decimal d)
+                    {
+                        dec = d;
+                    }
+                    else
+                    {
+                        dec = Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                    }
+
+                    param.Value = (double)dec;
+
+                    // Maintain Precision/Scale metadata even when storing as double
+                    // to satisfy unit tests and provide consistent parameter shapes.
+                    var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
+                    param.Precision = (byte)Math.Max(inferredPrecision, 18);
+                    param.Scale = (byte)inferredScale;
+                }
+            }
+        });
+
+        // Byte arrays stored as BLOB
+        registry.RegisterMapping<byte[]>(SupportedDatabase.Sqlite, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Binary;
+                if (value is byte[] bytes)
+                {
+                    param.Value = bytes;
+                    param.Size = bytes.Length;
+                }
+            }
+        });
+    }
 }

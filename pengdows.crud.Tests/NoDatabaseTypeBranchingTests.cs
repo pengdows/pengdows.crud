@@ -10,37 +10,19 @@ namespace pengdows.crud.Tests;
 /// <summary>
 /// REV-039 (user rule, 2026-10-03): per-database behavior lives in the dialects. Outside
 /// <c>dialects/</c> no code may name a specific <c>SupportedDatabase</c> value: no
-/// <c>product == X</c>, no <c>switch (product)</c>, no table keyed by product. The only switch on the
-/// database is the one that creates the dialects (<c>SqlDialectFactory</c>, in <c>dialects/</c>), fed by
-/// <c>DatabaseDetectionService</c>. <c>SupportedDatabase.Unknown</c> as a "no database" value is allowed.
+/// <c>product == X</c>, no <c>switch (product)</c>, no table keyed by product. The only switches on the
+/// database are in <c>SqlDialectFactory</c> (in <c>dialects/</c>): the one that creates the dialects, fed
+/// by <c>DatabaseDetectionService</c>, and the one that maps each value to the <c>DatabaseTraits</c> its
+/// dialect declares (exception translator, type mappings, coercions, value-converter formats). <c>SupportedDatabase.Unknown</c> as a "no database" value is allowed.
 /// </summary>
 public sealed class NoDatabaseTypeBranchingTests
 {
     private static readonly Regex NamedDatabase = new(@"SupportedDatabase\.(?!Unknown\b)[A-Z][A-Za-z0-9]*",
         RegexOptions.Compiled);
 
-    // Files still being moved into the dialects, with their current count. The count may only go
-    // down; a file reaching zero must be removed from this list.
-    private static readonly Dictionary<string, int> NotYetMoved = new(StringComparer.Ordinal)
-    {
-        ["types/AdvancedTypeRegistry.cs"] = 78,
-        ["exceptions/translators/DbExceptionTranslatorRegistry.cs"] = 23,
-        ["types/converters/SpatialConverter.cs"] = 14,
-        ["types/coercion/AdvancedCoercions.cs"] = 8,
-        ["types/converters/InetConverter.cs"] = 3,
-        ["types/converters/PostgreSqlIntervalConverter.cs"] = 3,
-        ["types/converters/IntervalDaySecondConverter.cs"] = 3,
-        ["types/converters/IntervalYearMonthConverter.cs"] = 3,
-        ["types/converters/PostgreSqlRangeConverter.cs"] = 3,
-        ["types/converters/CidrConverter.cs"] = 3,
-    };
-
     private static readonly string[] AllowedFiles =
     {
-        "internal/DatabaseDetectionService.cs", // produces the value that picks the dialect
-        // User decision 2026-10-03: the per-database isolation table is a place where keying by
-        // product makes sense, so it stays in one file.
-        "isolation/IsolationResolver.cs"
+        "internal/DatabaseDetectionService.cs" // produces the value that picks the dialect
     };
 
     [Fact]
@@ -58,11 +40,7 @@ public sealed class NoDatabaseTypeBranchingTests
             .ToList();
 
         var problems = counts
-            .Where(x => !NotYetMoved.TryGetValue(x.File, out var allowed) || x.Count > allowed)
             .Select(x => $"{x.File}: {x.Count} reference(s) to a specific SupportedDatabase")
-            .Concat(NotYetMoved
-                .Where(kv => counts.All(x => x.File != kv.Key || x.Count < kv.Value))
-                .Select(kv => $"{kv.Key}: now {counts.FirstOrDefault(x => x.File == kv.Key).Count}, lower its entry (was {kv.Value})"))
             .ToList();
 
         Assert.True(problems.Count == 0, string.Join(Environment.NewLine, problems));

@@ -24,6 +24,7 @@ using System.Globalization;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using pengdows.crud.@internal;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -111,8 +112,7 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
 
     protected override object? ConvertToProvider(PostgreSqlInterval value, SupportedDatabase provider)
     {
-        if (provider is not (SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb
-            or SupportedDatabase.YugabyteDb))
+        if (!DatabaseTraits.For(provider).BindsNpgsqlValueTypes)
         {
             return value;
         }

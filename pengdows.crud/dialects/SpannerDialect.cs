@@ -55,6 +55,7 @@ using System.Data.Common;
 using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
@@ -223,4 +224,9 @@ internal sealed class SpannerDialect : PostgreSqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.RepeatableRead
         };
+
+    // REV-039: Spanner's PostgreSQL interface reports PostgreSQL error codes; none of PostgreSQL's
+    // type mappings or Npgsql value types are keyed on it.
+    internal static DatabaseTraits CreateSpannerTraits() =>
+        new(SupportedDatabase.Spanner, PostgreSqlFamilyExceptionTranslator);
 }

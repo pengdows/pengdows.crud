@@ -20,6 +20,9 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
+using pengdows.crud.types.valueobjects;
+using pengdows.crud.types;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
@@ -495,4 +498,49 @@ internal class SnowflakeDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.ReadCommitted, // Only level Snowflake supports (Degraded)
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
         };
+
+    // ---- Instance-free traits (REV-039): exception translator, value formats, type mappings ----
+
+    internal static DatabaseTraits CreateSnowflakeTraits() =>
+        new(SupportedDatabase.Snowflake, new SnowflakeExceptionTranslator())
+        {
+            // EWKT (or EWKB hex / GeoJSON) text (TYPE-002).
+            SpatialFormat = SpatialWireFormat.ExtendedTextOrHex,
+            RegisterTypeMappings = RegisterSnowflakeTypeMappings
+        };
+
+    private static void RegisterSnowflakeTypeMappings(AdvancedTypeRegistry registry)
+    {
+        // GEOGRAPHY/GEOMETRY take text (TYPE-002).
+        var textSpatial = new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) => param.DbType = DbType.String
+        };
+        registry.RegisterMapping<Geometry>(SupportedDatabase.Snowflake, textSpatial);
+        registry.RegisterMapping<Geography>(SupportedDatabase.Snowflake, textSpatial);
+
+        // BINARY / VARBINARY columns via Stream
+        registry.RegisterMapping<Stream>(SupportedDatabase.Snowflake, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
+        });
+
+        // TIMESTAMP_NTZ for DateTimeOffset (store UTC DateTime)
+        registry.RegisterMapping<DateTimeOffset>(SupportedDatabase.Snowflake, new ProviderTypeMapping
+        {
+            DbType = DbType.DateTime,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.DateTime;
+                if (value is DateTimeOffset dto)
+                {
+                    param.Value = dto.UtcDateTime;
+                }
+            }
+        });
+
+        // Guid: handled by GuidFormat (GuidStorageFormat.String), not a type mapping.
+    }
 }

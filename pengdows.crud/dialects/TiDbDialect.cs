@@ -13,6 +13,7 @@ using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
@@ -102,5 +103,12 @@ internal class TiDbDialect : MySqlDialect
             [IsolationProfile.SafeNonBlockingReads] = IsolationLevel.RepeatableRead,
             [IsolationProfile.StrictConsistency] = IsolationLevel.RepeatableRead, // Best available; TiDB doesn't enforce true Serializable (Degraded)
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
+        };
+
+    // REV-039: MySQL's JSON mapping; none of MySQL's spatial handling has been keyed on TiDB.
+    internal static DatabaseTraits CreateTiDbTraits() =>
+        new(SupportedDatabase.TiDb, MySqlFamilyExceptionTranslator)
+        {
+            RegisterTypeMappings = registry => RegisterJsonMapping(registry, SupportedDatabase.TiDb)
         };
 }

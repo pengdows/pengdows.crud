@@ -73,7 +73,7 @@ public RowVersion Rv { get; set; }
 
 ## Type reference
 
-| Type | Represents | Wired dialects (`AdvancedTypeRegistry.RegisterDefaultMappings`) |
+| Type | Represents | Wired dialects (each dialect's `DatabaseTraits.RegisterTypeMappings`, collected by `AdvancedTypeRegistry`) |
 |---|---|---|
 | `Inet` (`types/valueobjects/Inet.cs`) | IP address, optional CIDR prefix | PostgreSQL, CockroachDB, YugabyteDB → `inet` |
 | `Cidr` (`Cidr.cs`) | Network subnet, prefix required, host bits canonicalized to 0 | PostgreSQL, CockroachDB, YugabyteDB → `cidr` |
@@ -89,7 +89,7 @@ public RowVersion Rv { get; set; }
 | `HierarchyId` (`HierarchyId.cs`) | Node path such as `/1/2.5/` with SQL Server `hierarchyid` semantics (`Level`, `GetAncestor`, `IsDescendantOf`, SQL Server's depth-first ordering) | SQL Server `hierarchyid` without `Microsoft.SqlServer.Types`; text on any other database (TYPE-016, below) |
 
 `JsonDocument` (the BCL type, not `JsonValue`) is also directly mapped in
-`AdvancedTypeRegistry.RegisterJsonMappings` for PostgreSQL/CockroachDB/YugabyteDB (`jsonb`),
+the dialects' type mappings for PostgreSQL/CockroachDB/YugabyteDB (`jsonb`),
 MySQL/TiDB (`JSON`), and SQL Server (`NVARCHAR(MAX)`). `JsonValue` is a separate, provider-agnostic
 wrapper maintained in the newer coercion system — prefer it for new code since it works
 uniformly across dialects without a per-provider registration; `JsonDocument` remains supported

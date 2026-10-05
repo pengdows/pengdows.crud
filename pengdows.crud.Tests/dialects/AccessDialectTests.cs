@@ -214,7 +214,7 @@ public class AccessDialectTests
     // CONFIRMED live (this session, via a real .accdb): the generic positional-dialect
     // bool->Int16(1/0) conversion does NOT round-trip against Jet's YESNO type — True is stored
     // as -1 (classic Access convention), so "WHERE bool_val = ?" bound as Int16(1) matched zero
-    // rows. AdvancedTypeRegistry.RegisterAccessMappings binds the native OleDbType.Boolean
+    // rows. AccessDialect's type mappings (DatabaseTraits) bind the native OleDbType.Boolean
     // instead (reflection-based, same mechanism as the DateTime->OleDbType.Date fix), which
     // round-trips correctly for both INSERT and equality comparison — CreateDbParameter itself
     // only proves no exception is thrown against fakeDb's generic DbParameter (which has no real

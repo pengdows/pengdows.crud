@@ -16,6 +16,7 @@
 // =============================================================================
 
 using System.Net;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -88,13 +89,8 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
             return null;
         }
 
-        return provider switch
-        {
-            // Npgsql binds NpgsqlDbType.Cidr from NpgsqlCidr and rejects a string.
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
-                CreateNpgsqlCidr(value),
-            _ => value
-        };
+        // Npgsql binds NpgsqlDbType.Cidr from NpgsqlCidr and rejects a string.
+        return DatabaseTraits.For(provider).BindsNpgsqlValueTypes ? CreateNpgsqlCidr(value) : value;
     }
 
     private static object CreateNpgsqlCidr(Cidr value)

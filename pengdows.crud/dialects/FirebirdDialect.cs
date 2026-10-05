@@ -22,6 +22,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
@@ -761,4 +762,9 @@ internal class FirebirdDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
         };
+
+    // REV-039: the translator for this database's provider exceptions; no type mappings or
+    // value formats of its own.
+    internal static DatabaseTraits CreateFirebirdTraits() =>
+        new(SupportedDatabase.Firebird, new FirebirdExceptionTranslator());
 }

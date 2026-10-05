@@ -421,4 +421,9 @@ internal sealed class InterBaseDialect : SqlDialect
             [IsolationProfile.StrictConsistency] = IsolationLevel.Serializable,
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadCommitted
         };
+
+    // REV-039: the translator for this database's provider exceptions; no type mappings or
+    // value formats of its own.
+    internal static DatabaseTraits CreateInterBaseTraits() =>
+        new(SupportedDatabase.InterBase, new InterBaseExceptionTranslator());
 }

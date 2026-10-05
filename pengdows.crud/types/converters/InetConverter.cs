@@ -15,6 +15,7 @@
 // =============================================================================
 
 using System.Net;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -87,13 +88,8 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
             return null;
         }
 
-        return provider switch
-        {
-            // Npgsql binds NpgsqlDbType.Inet from NpgsqlInet/IPAddress and rejects a string.
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
-                CreateNpgsqlInet(value),
-            _ => value
-        };
+        // Npgsql binds NpgsqlDbType.Inet from NpgsqlInet/IPAddress and rejects a string.
+        return DatabaseTraits.For(provider).BindsNpgsqlValueTypes ? CreateNpgsqlInet(value) : value;
     }
 
     private static object CreateNpgsqlInet(Inet value)

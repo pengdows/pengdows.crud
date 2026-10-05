@@ -14,8 +14,12 @@
 // =============================================================================
 
 using System.Data.Common;
+using System.Data;
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions.translators;
+using pengdows.crud.types;
 using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.dialects;
@@ -85,4 +89,33 @@ internal class Sql92Dialect : SqlDialect
     /// the fallback dialect to prevent silent SQL generation errors.
     /// </summary>
     public override bool SupportsDropTableIfExists => false;
+
+    // ---- Instance-free traits (REV-039) ----
+
+    /// <summary>
+    /// Traits for Unknown, and for any value the dialect factory gives this fallback dialect.
+    /// </summary>
+    internal static DatabaseTraits CreateFallbackTraits() =>
+        new(SupportedDatabase.Unknown, new FallbackExceptionTranslator())
+        {
+            // The most compatible format (doubles for decimals), which works for most lightweight
+            // providers.
+            RegisterTypeMappings = registry =>
+                registry.RegisterMapping<decimal>(SupportedDatabase.Unknown, new ProviderTypeMapping
+                {
+                    DbType = DbType.Double,
+                    ConfigureParameter = (param, value) =>
+                    {
+                        param.DbType = DbType.Double;
+                        if (value != null)
+                        {
+                            decimal dec = value is decimal d ? d : Convert.ToDecimal(value, CultureInfo.InvariantCulture);
+                            param.Value = (double)dec;
+                            var (p, s) = DecimalHelpers.Infer(dec);
+                            param.Precision = (byte)Math.Max(p, 18);
+                            param.Scale = (byte)s;
+                        }
+                    }
+                })
+        };
 }
