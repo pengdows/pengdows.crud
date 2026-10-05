@@ -189,4 +189,43 @@ public sealed class HanaArrayTests
 
         Assert.Equal("[4,5]", exec.ExecutedNonQueryCommands.Single(c => c.CommandText.StartsWith("UPDATE t", StringComparison.Ordinal)).Parameters.Single().Value);
     }
+
+    private static (pengdows.crud.dialects.SqlDialect Dialect, IColumnInfo Ints) HanaParts(DatabaseContext context)
+    {
+        var info = pengdows.crud.@internal.DatabaseContextTypeMapExtensions.GetInternalTypeMapRegistry(context).GetTableInfo<Row>();
+        return ((pengdows.crud.dialects.SqlDialect)context.Dialect, info.Columns["ints"]);
+    }
+
+    // A binder that set the array on the parameter itself still gets JSON text.
+    [Fact]
+    public async Task MarkColumnParameter_ArrayValue_BecomesJsonText()
+    {
+        var (context, _) = Hana();
+        await using var _c = context;
+        var (dialect, ints) = HanaParts(context);
+        var parameter = new fakeDbParameter { Value = new[] { 1, 2 } };
+
+        dialect.MarkColumnParameter(parameter, ints);
+
+        Assert.Equal("[1,2]", parameter.Value);
+        Assert.Equal(DbType.String, parameter.DbType);
+    }
+
+    // A null array whose expression isn't in the command (hand-written SQL) is left alone.
+    [Fact]
+    public async Task PrepareCommand_NullArrayWithoutItsExpression_LeavesTheCommand()
+    {
+        var (context, _) = Hana();
+        await using var _c = context;
+        var (dialect, ints) = HanaParts(context);
+        var parameter = new fakeDbParameter { Value = DBNull.Value };
+        dialect.MarkColumnParameter(parameter, ints);
+        using var command = new fakeDbCommand { CommandText = "SELECT 'a?' FROM DUMMY" };
+        command.Parameters.Add(parameter);
+
+        await dialect.PrepareCommandAsync(command, default);
+
+        Assert.Equal("SELECT 'a?' FROM DUMMY", command.CommandText);
+        Assert.Single(command.Parameters);
+    }
 }

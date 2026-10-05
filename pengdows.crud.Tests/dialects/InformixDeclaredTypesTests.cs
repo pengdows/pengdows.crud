@@ -36,6 +36,8 @@ public sealed class InformixDeclaredTypesTests
         [Column("clb", DbType.String)] public string? Clb { get; set; }
         [Column("plain", DbType.String)] public string? Plain { get; set; }
         [Column("byt", DbType.Binary)] public byte[]? Byt { get; set; }
+        [Column("tfrac", DbType.Time)] public TimeOnly? TFrac { get; set; }
+        [Json] [Column("js", DbType.String)] public string[]? Js { get; set; }
     }
 
     [Table("ifx_pk_types")]
@@ -55,7 +57,8 @@ public sealed class InformixDeclaredTypesTests
         new("blb", typeof(byte[]), "BLOB"),
         new("clb", typeof(string), "CLOB"),
         new("plain", typeof(string), "VARCHAR"),
-        new("byt", typeof(byte[]), "BYTE")
+        new("byt", typeof(byte[]), "BYTE"),
+        new("tfrac", typeof(DateTime), "DATETIME HOUR TO FRACTION(3)")
     };
 
     private static (DatabaseContext Context, fakeDbFactory Factory, fakeDbConnection Exec) Informix()
@@ -78,7 +81,7 @@ public sealed class InformixDeclaredTypesTests
     {
         Id = 1, Txt = "text value", Doc = "{\"a\":1}", Frac = new TimeSpan(0, 13, 45, 30).Add(TimeSpan.FromTicks(1234567)),
         Secs = new TimeSpan(13, 45, 30), Blb = new byte[] { 1, 2, 3 }, Clb = "clob value", Plain = "plain",
-        Byt = new byte[] { 9, 8 }
+        Byt = new byte[] { 9, 8 }, TFrac = new TimeOnly(13, 45, 30).Add(TimeSpan.FromTicks(1234567))
     };
 
     private static async Task<CapturedCommand> InsertAsync()
@@ -200,5 +203,34 @@ public sealed class InformixDeclaredTypesTests
         await new TableGateway<Row, int>(context).CreateAsync(row);
 
         Assert.DoesNotContain(exec.ExecutedNonQueryCommands, c => c.CommandText.StartsWith("INSERT INTO pengdows_lob_stage", StringComparison.Ordinal));
+    }
+
+    // A TimeOnly is written like a TimeSpan (truncated to the column's digits); a null stays null.
+    [Fact]
+    public async Task HourToFraction_TimeOnly_IsTruncatedText_NullStaysNull()
+    {
+        var insert = await InsertAsync();
+        Assert.Contains(insert.Parameters, p => Equals(p.Value, "13:45:30.123"));
+
+        var (context, _, exec) = Informix();
+        await using var _c = context;
+        var row = Sample();
+        row.TFrac = null;
+        await new TableGateway<Row, int>(context).CreateAsync(row);
+        Assert.Single(exec.ExecutedNonQueryCommands, c => c.CommandText.StartsWith("INSERT INTO \"ifx_types\"", StringComparison.Ordinal));
+    }
+
+    // A column with no declared-type handling still gets the base rendering (JSON here).
+    [Fact]
+    public async Task JsonColumn_FallsThroughToTheBaseRendering()
+    {
+        var (context, _, _) = Informix();
+        await using var _c = context;
+        var dialect = (pengdows.crud.dialects.SqlDialect)context.Dialect;
+        var js = pengdows.crud.@internal.DatabaseContextTypeMapExtensions.GetInternalTypeMapRegistry(context)
+            .GetTableInfo<Row>().Columns["js"];
+
+        Assert.True(dialect.RendersColumnArgument(js));
+        Assert.Equal(dialect.RenderJsonArgument("?", js), dialect.RenderColumnArgument("?", js));
     }
 }

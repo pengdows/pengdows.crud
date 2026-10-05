@@ -551,18 +551,12 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             sc.Query.Append(" FROM ").Append(table).Append(" WHERE 1 = 0");
             await using var reader = await sc.ExecuteReaderAsync(ExecutionType.Read, CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
-            if (reader is not IInternalTrackedReader tracked)
-            {
-                return found;
-            }
-
             // By name: the result's columns are the ones selected, but matching names doesn't depend on it.
-            var record = tracked.InnerReader;
-            for (var i = 0; i < record.FieldCount; i++)
+            for (var i = 0; i < reader.FieldCount; i++)
             {
-                var name = record.GetName(i);
+                var name = reader.GetName(i);
                 var column = columns.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
-                var declared = column == null ? null : record.GetDataTypeName(i);
+                var declared = column == null ? null : reader.GetDataTypeName(i);
                 if (!string.IsNullOrEmpty(declared))
                 {
                     found.Add((column!, declared));
