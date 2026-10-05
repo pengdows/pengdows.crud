@@ -228,4 +228,25 @@ public sealed class HanaArrayTests
         Assert.Equal("SELECT 'a?' FROM DUMMY", command.CommandText);
         Assert.Single(command.Parameters);
     }
+
+    // A '?' in a comment isn't a marker: the null array after it is still found and rewritten.
+    [Fact]
+    public async Task PrepareCommand_NullArray_SkipsMarkersInComments()
+    {
+        var (context, _) = Hana();
+        await using var _c = context;
+        var (dialect, ints) = HanaParts(context);
+        var parameter = new fakeDbParameter { Value = DBNull.Value };
+        dialect.MarkColumnParameter(parameter, ints);
+        using var command = new fakeDbCommand
+        {
+            CommandText = "-- why?\nUPDATE t SET a = " + IntArray
+        };
+        command.Parameters.Add(parameter);
+
+        await dialect.PrepareCommandAsync(command, default);
+
+        Assert.Equal("-- why?\nUPDATE t SET a = NULL", command.CommandText);
+        Assert.Empty(command.Parameters);
+    }
 }

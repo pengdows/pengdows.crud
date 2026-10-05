@@ -129,7 +129,12 @@ internal abstract class DbCoercion<T> : IDbCoercion<T>
 
     // Match the interface exactly
     public abstract bool TryRead(in DbValue src, out T? value);
-    public abstract bool TryWrite(T? value, DbParameter parameter);
+    /// <summary>Writes the value as is, NULL as DBNull; override to convert or type the parameter.</summary>
+    public virtual bool TryWrite(T? value, DbParameter parameter)
+    {
+        parameter.Value = (object?)value ?? DBNull.Value;
+        return true;
+    }
 
     // IDbCoercion implementation
     public bool TryRead(in DbValue src, Type targetType, out object? value)

@@ -15,8 +15,6 @@
 // =============================================================================
 
 using System.Buffers.Binary;
-using System.Data.Common;
-using System.Diagnostics.CodeAnalysis;
 using System.Text;
 
 namespace pengdows.crud.types.coercion;
@@ -100,28 +98,22 @@ internal static class HanaArrayCoercion
         new($"The SAP HANA ARRAY doesn't decode as {element.Name} elements; map an INTEGER ARRAY to int[], " +
             "BIGINT to long[], SMALLINT to short[], DOUBLE to double[], REAL to float[] and (N)VARCHAR to string[].");
 
+    // Decodes as NullableElements and refuses a NULL element.
     private sealed class Fixed<T> : DbCoercion<T[]> where T : struct
     {
-        private readonly int _width;
-        private readonly bool _hasIndicator;
-        private readonly ReadValue<T> _read;
+        private readonly NullableElements<T> _elements;
 
-        public Fixed(int width, bool hasIndicator, ReadValue<T> read)
-        {
-            _width = width;
-            _hasIndicator = hasIndicator;
-            _read = read;
-        }
+        public Fixed(int width, bool hasIndicator, ReadValue<T> read) =>
+            _elements = new NullableElements<T>(width, hasIndicator, read);
 
         public override bool TryRead(in DbValue src, out T[] value)
         {
-            if (src.RawValue is not byte[] bytes)
+            if (!_elements.TryRead(src, out var decoded))
             {
                 value = null!;
                 return false;
             }
 
-            var decoded = DecodeFixed(bytes, _width, _hasIndicator, _read);
             value = new T[decoded.Length];
             for (var i = 0; i < decoded.Length; i++)
             {
@@ -129,12 +121,6 @@ internal static class HanaArrayCoercion
                     $"The SAP HANA ARRAY holds a NULL element; read it into a {typeof(T).Name}?[] property.");
             }
 
-            return true;
-        }
-
-        public override bool TryWrite([AllowNull] T[] value, DbParameter parameter)
-        {
-            parameter.Value = value is null ? DBNull.Value : value;
             return true;
         }
     }
@@ -164,11 +150,6 @@ internal static class HanaArrayCoercion
             return true;
         }
 
-        public override bool TryWrite([AllowNull] T?[] value, DbParameter parameter)
-        {
-            parameter.Value = value is null ? DBNull.Value : value;
-            return true;
-        }
     }
 
     private sealed class Strings : DbCoercion<string[]>
@@ -226,11 +207,6 @@ internal static class HanaArrayCoercion
             return true;
         }
 
-        public override bool TryWrite([AllowNull] string[] value, DbParameter parameter)
-        {
-            parameter.Value = value is null ? DBNull.Value : value;
-            return true;
-        }
     }
 }
 

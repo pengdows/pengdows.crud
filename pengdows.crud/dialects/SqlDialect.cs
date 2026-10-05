@@ -496,6 +496,18 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>True when <see cref="PrepareCommandAsync"/> may do anything, so other dialects skip the call.</summary>
     internal virtual bool PreparesCommands => false;
 
+    /// <summary>
+    /// For <see cref="PrepareCommandAsync"/>: replaces the rendered argument
+    /// <c>CommandText[start..end)</c> with <c>NULL</c> and drops parameter <paramref name="parameterIndex"/>,
+    /// whose only marker was inside it. Used where no expression keeps a NULL value NULL (a SAP HANA
+    /// ARRAY, a Snowflake VECTOR).
+    /// </summary>
+    private protected static void ReplaceArgumentWithNull(DbCommand command, int parameterIndex, int start, int end)
+    {
+        command.CommandText = string.Concat(command.CommandText.AsSpan(0, start), "NULL", command.CommandText.AsSpan(end));
+        command.Parameters.RemoveAt(parameterIndex);
+    }
+
     internal virtual System.Data.Common.DbTransaction? BeginDdlTransaction(System.Data.Common.DbConnection connection,
         TimeSpan? lockWait) => null;
 

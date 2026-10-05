@@ -9,6 +9,8 @@
 //   comments and /* */ block comments (nested, as PostgreSQL nests them).
 // - Used to skip Prepare() where the dialect can't prepare a multi-statement command
 //   (SqlDialect.PreparesMultiStatementCommands; CockroachDB).
+// - FindPositionalMarker(): the n-th positional '?' outside quotes and comments (SAP HANA's null
+//   ARRAY rewrite, TYPE-020).
 // =============================================================================
 
 namespace pengdows.crud.@internal;
@@ -67,6 +69,46 @@ internal static class SqlStatementScanner
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// The offset of the <paramref name="n"/>-th (0-based) positional '?' marker outside quoted text
+    /// and comments, or -1.
+    /// </summary>
+    public static int FindPositionalMarker(string sql, int n)
+    {
+        ArgumentNullException.ThrowIfNull(sql);
+        var i = 0;
+        while (i < sql.Length)
+        {
+            var c = sql[i];
+            if (c == '-' && Next(sql, i) == '-')
+            {
+                i = SkipLineComment(sql, i);
+                continue;
+            }
+
+            if (c == '/' && Next(sql, i) == '*')
+            {
+                i = SkipBlockComment(sql, i);
+                continue;
+            }
+
+            if (c == '?' && n-- == 0)
+            {
+                return i;
+            }
+
+            i = c switch
+            {
+                '\'' => SkipQuoted(sql, i, '\''),
+                '"' => SkipQuoted(sql, i, '"'),
+                '$' => SkipDollarQuoted(sql, i),
+                _ => i + 1
+            };
+        }
+
+        return -1;
     }
 
     private static char Next(string sql, int i) => i + 1 < sql.Length ? sql[i + 1] : '\0';

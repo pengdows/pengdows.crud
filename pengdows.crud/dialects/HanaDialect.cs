@@ -176,7 +176,7 @@ internal sealed class HanaDialect : SqlDialect
         // the ARRAY with ARRAY(SELECT V FROM JSON_TABLE(?, ...) ORDER BY O), as the gateways do.
         if (value is Array array and not byte[] && ArrayElementSqlType(array.GetType()) != null)
         {
-            return base.CreateDbParameter<object?>(name, DbType.String, ArrayJson(array));
+            return base.CreateDbParameter<object?>(name, DbType.String, TypeCoercionHelper.GetJsonText(array));
         }
 
         if (type is DbType.DateTime or DbType.DateTime2)
@@ -227,8 +227,6 @@ internal sealed class HanaDialect : SqlDialect
     private static string? ArrayElementSqlType(IColumnInfo column) =>
         column.IsJsonType ? null : ArrayElementSqlType(column.PropertyInfo.PropertyType);
 
-    private static string ArrayJson(Array array) => System.Text.Json.JsonSerializer.Serialize(array, array.GetType());
-
     public override bool RendersColumnArgument(IColumnInfo column) =>
         ArrayElementSqlType(column) != null || base.RendersColumnArgument(column);
 
@@ -251,7 +249,7 @@ internal sealed class HanaDialect : SqlDialect
         if (parameter.Value is Array array and not byte[])
         {
             parameter.DbType = DbType.String;
-            parameter.Value = ArrayJson(array);
+            parameter.Value = TypeCoercionHelper.GetJsonText(array);
         }
 
         parameter.SourceColumn = ArrayMarker;
@@ -273,7 +271,7 @@ internal sealed class HanaDialect : SqlDialect
             }
 
             var text = command.CommandText;
-            var marker = NthMarker(text, i);
+            var marker = SqlStatementScanner.FindPositionalMarker(text, i);
             if (marker < ArrayPrefix.Length ||
                 string.CompareOrdinal(text, marker - ArrayPrefix.Length, ArrayPrefix, 0, ArrayPrefix.Length) != 0)
             {
@@ -286,41 +284,11 @@ internal sealed class HanaDialect : SqlDialect
                 continue;
             }
 
-            var start = marker - ArrayPrefix.Length;
-            command.CommandText = string.Concat(text.AsSpan(0, start), "NULL", text.AsSpan(end + ArraySuffix.Length));
-            command.Parameters.RemoveAt(i);
+            ReplaceArgumentWithNull(command, i, marker - ArrayPrefix.Length, end + ArraySuffix.Length);
         }
 
         return default;
     }
-
-    // The offset of the n-th (0-based) positional marker outside quoted text, or -1.
-    private static int NthMarker(string text, int n)
-    {
-        var quote = '\0';
-        for (var i = 0; i < text.Length; i++)
-        {
-            var c = text[i];
-            if (quote != '\0')
-            {
-                if (c == quote)
-                {
-                    quote = '\0';
-                }
-            }
-            else if (c is '\'' or '"')
-            {
-                quote = c;
-            }
-            else if (c == '?' && n-- == 0)
-            {
-                return i;
-            }
-        }
-
-        return -1;
-    }
-
     internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
         column.DbType is DbType.DateTime or DbType.DateTime2
             ? $"TO_VARCHAR({columnReference}, 'YYYY-MM-DD HH24:MI:SS.FF7') AS {wrappedName}"

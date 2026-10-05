@@ -854,12 +854,6 @@ internal class BitArrayCoercion : DbCoercion<System.Collections.BitArray>
                 return false;
         }
     }
-
-    public override bool TryWrite(System.Collections.BitArray? value, DbParameter parameter)
-    {
-        parameter.Value = value ?? (object)DBNull.Value;
-        return true;
-    }
 }
 
 /// <summary>

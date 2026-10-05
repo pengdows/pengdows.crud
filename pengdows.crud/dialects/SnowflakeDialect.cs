@@ -156,7 +156,7 @@ internal class SnowflakeDialect : SqlDialect
         if (parameter.Value is Array array)
         {
             parameter.DbType = DbType.String;
-            parameter.Value = System.Text.Json.JsonSerializer.Serialize(array, array.GetType());
+            parameter.Value = TypeCoercionHelper.GetJsonText(array);
         }
 
         parameter.SourceColumn = VectorMarker;
@@ -191,8 +191,7 @@ internal class SnowflakeDialect : SqlDialect
             }
             else
             {
-                command.CommandText = string.Concat(text.AsSpan(0, start), "NULL", text.AsSpan(dimension + 4));
-                command.Parameters.RemoveAt(i);
+                ReplaceArgumentWithNull(command, i, start, dimension + 4);
             }
         }
 

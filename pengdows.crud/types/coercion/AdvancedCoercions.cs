@@ -1051,10 +1051,4 @@ internal sealed class PackedFloat32VectorCoercion : DbCoercion<float[]>
         value = null!;
         return false;
     }
-
-    public override bool TryWrite([AllowNull] float[] value, DbParameter parameter)
-    {
-        parameter.Value = value is null ? DBNull.Value : value;
-        return true;
-    }
 }
