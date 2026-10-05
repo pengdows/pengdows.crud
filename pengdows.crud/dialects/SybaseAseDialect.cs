@@ -143,15 +143,7 @@ internal class SybaseAseDialect : SqlDialect
         // WHERE alike. Truncated, never rounded.
         if (type is DbType.DateTime2 or DbType.DateTimeOffset)
         {
-            object? text = value switch
-            {
-                null or DBNull => DBNull.Value,
-                DateTime dt => BigDateTimeText(dt),
-                DateTimeOffset dto => BigDateTimeText(dto.UtcDateTime),
-                DateOnly day => BigDateTimeText(day.ToDateTime(TimeOnly.MinValue)),
-                string already => already,
-                _ => null
-            };
+            var text = TimestampText(value, BigDateTimeFormat);
             if (text != null)
             {
                 return base.CreateDbParameter<object?>(name, DbType.String, text);
@@ -170,8 +162,7 @@ internal class SybaseAseDialect : SqlDialect
         return base.CreateDbParameter(name, type, value);
     }
 
-    private static string BigDateTimeText(DateTime value) =>
-        value.ToString("yyyy-MM-dd HH:mm:ss.ffffff", System.Globalization.CultureInfo.InvariantCulture);
+    private const string BigDateTimeFormat = "yyyy-MM-dd HH:mm:ss.ffffff";
 
     private static string BigTimeText(TimeSpan value) =>
         value.ToString(@"hh\:mm\:ss\.ffffff", System.Globalization.CultureInfo.InvariantCulture);

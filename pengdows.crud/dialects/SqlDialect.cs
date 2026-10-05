@@ -1121,6 +1121,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// read path parses it (TypeCoercionHelper).
     /// </summary>
     /// <summary>
+    /// A timestamp as invariant text in <paramref name="format"/>, for a driver that loses precision
+    /// on a typed DateTime but converts text exactly (SAP HANA, Sybase ASE): a DateTimeOffset as its
+    /// UTC wall time, a DateOnly at midnight, text as given, NULL as NULL; null for anything else.
+    /// The format truncates, never rounds.
+    /// </summary>
+    protected static object? TimestampText(object? value, string format) => value switch
+    {
+        null or DBNull => DBNull.Value,
+        DateTime dt => dt.ToString(format, CultureInfo.InvariantCulture),
+        DateTimeOffset dto => dto.UtcDateTime.ToString(format, CultureInfo.InvariantCulture),
+        DateOnly day => day.ToDateTime(TimeOnly.MinValue).ToString(format, CultureInfo.InvariantCulture),
+        string already => already,
+        _ => null
+    };
+
+    /// <summary>
     /// A value declared <see cref="DbType.DateTimeOffset"/> that is not one (a DateTime, timestamp
     /// text), read as its instant so it binds as a DateTimeOffset does. Re-dispatch it with
     /// <c>CreateDbParameter(name, type, instant)</c> before handling DateTime or text values.

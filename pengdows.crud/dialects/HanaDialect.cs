@@ -181,14 +181,7 @@ internal sealed class HanaDialect : SqlDialect
 
         if (type is DbType.DateTime or DbType.DateTime2)
         {
-            object? text = value switch
-            {
-                null or DBNull => DBNull.Value,
-                DateTime dt => dt.ToString("yyyy-MM-dd HH:mm:ss.fffffff", System.Globalization.CultureInfo.InvariantCulture),
-                DateOnly day => day.ToDateTime(TimeOnly.MinValue).ToString("yyyy-MM-dd HH:mm:ss.fffffff", System.Globalization.CultureInfo.InvariantCulture),
-                string already => already,
-                _ => null
-            };
+            var text = TimestampText(value, "yyyy-MM-dd HH:mm:ss.fffffff");
             if (text != null)
             {
                 return base.CreateDbParameter<object?>(name, DbType.String, text);
