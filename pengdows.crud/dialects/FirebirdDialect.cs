@@ -76,6 +76,14 @@ internal class FirebirdDialect : SqlDialect
     internal FirebirdDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger)
     {
+        // FirebirdClient's NONE charset is the ANSI code page when .NET code pages are registered first
+        // (another driver in the process does it), else UTF-8: with a code page, non-Latin text in a NONE
+        // column was read as "h\uFFFDllo" (confirmed live). Pin it to UTF-8, as for InterBase.
+        var driver = factory.GetType().Assembly;
+        if (driver.GetName().Name?.StartsWith("FirebirdSql", StringComparison.Ordinal) == true)
+        {
+            DriverCharsetPin.PinNoneToUtf8(driver, "FirebirdSql.Data.Common.Charset", logger);
+        }
     }
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.Firebird;

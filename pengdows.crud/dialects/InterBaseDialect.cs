@@ -125,11 +125,11 @@ internal sealed class InterBaseDialect : SqlDialect
         : base(factory, logger)
     {
         // The driver's NONE charset turns into the system code page when .NET code pages are
-        // registered first, storing other text as '?'; pin it to UTF-8 (InterBaseCharsetPin).
+        // registered first, storing other text as '?'; pin it to UTF-8 (DriverCharsetPin).
         var driver = factory.GetType().Assembly;
         if (driver.GetName().Name?.StartsWith("InterBaseSql", StringComparison.Ordinal) == true)
         {
-            InterBaseCharsetPin.PinNoneToUtf8(driver, logger);
+            DriverCharsetPin.PinNoneToUtf8(driver, "InterBaseSql.Data.Common.Charset", logger);
         }
     }
 
