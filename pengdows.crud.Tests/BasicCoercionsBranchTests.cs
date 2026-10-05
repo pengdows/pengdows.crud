@@ -65,42 +65,6 @@ public class BasicCoercionsBranchTests
             coercion.TryRead(new DbValue("x"), out _));
     }
 
-    [Fact]
-    public void DateTimeCoercion_HandlesKindsAndStrings()
-    {
-        var coercion = new DateTimeCoercion();
-        var local = new DateTime(2024, 1, 1, 0, 0, 0, DateTimeKind.Local);
-
-        Assert.True(coercion.TryRead(new DbValue(local), out var fromLocal));
-        Assert.Equal(DateTimeKind.Utc, fromLocal.Kind);
-
-        var dtoText =
-            new DateTimeOffset(2024, 1, 2, 3, 4, 5, TimeSpan.Zero).ToString("O", CultureInfo.InvariantCulture);
-        Assert.True(coercion.TryRead(new DbValue(dtoText), out var fromDtoString));
-        Assert.Equal(DateTimeKind.Utc, fromDtoString.Kind);
-
-        var dtText =
-            new DateTime(2024, 1, 3, 4, 5, 6, DateTimeKind.Unspecified).ToString("O", CultureInfo.InvariantCulture);
-        Assert.True(coercion.TryRead(new DbValue(dtText), out var fromDtString));
-        Assert.Equal(DateTimeKind.Utc, fromDtString.Kind);
-    }
-
-    [Fact]
-    public void DateTimeOffsetAndTimeSpanCoercions_HandleFallbacks()
-    {
-        var dtoCoercion = new DateTimeOffsetCoercion();
-        var tsCoercion = new TimeSpanCoercion();
-
-        Assert.True(dtoCoercion.TryRead(new DbValue(DateTime.UtcNow), out var dto));
-        Assert.NotEqual(DateTimeOffset.MinValue, dto);
-
-        Assert.True(tsCoercion.TryRead(new DbValue(1.5), out var ts));
-        Assert.Equal(TimeSpan.FromSeconds(1.5), ts);
-
-        Assert.True(tsCoercion.TryRead(new DbValue("00:01:00"), out var fromString));
-        Assert.Equal(TimeSpan.FromMinutes(1), fromString);
-    }
-
     // Snowflake.Data (and some other drivers) return a TIME column as a DateTime anchored to a date,
     // so a TimeSpan property must take its time of day. TYPE-001.
     [Fact]
@@ -158,16 +122,6 @@ public class BasicCoercionsBranchTests
     }
 
     [Fact]
-    public void AdditionalBasicCoercions_UnsupportedInputs_ReturnFalse()
-    {
-        Assert.False(new IntArrayCoercion().TryRead(new DbValue(123), out _));
-        Assert.False(new HStoreCoercion().TryRead(new DbValue(123), out _));
-        Assert.False(new IntRangeCoercion().TryRead(new DbValue(123), out _));
-        Assert.False(new DateTimeRangeCoercion().TryRead(new DbValue(123), out _));
-        Assert.False(new BooleanCoercion().TryRead(new DbValue(new object()), out _));
-    }
-
-    [Fact]
     public void HStoreCoercion_ReadsNpgsqlDictionaryShape()
     {
         // Npgsql 9 hydrates a real hstore column as Dictionary<string, string?>, not text.
@@ -182,15 +136,6 @@ public class BasicCoercionsBranchTests
         Assert.True(value.ContainsKey("nickname"));
         Assert.Null(value["nickname"]);
         Assert.Equal(2, value.Count);
-    }
-
-    [Fact]
-    public void DateTimeCoercion_FallbackStringParse_UsesDateTimeParserPath()
-    {
-        var coercion = new DateTimeCoercion();
-
-        Assert.True(coercion.TryRead(new DbValue("2024-01-03 04:05:06"), out var parsed));
-        Assert.Equal(DateTimeKind.Utc, parsed.Kind);
     }
 
     [Fact]

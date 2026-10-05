@@ -8,16 +8,13 @@
 // - Primitive coercions:
 //   * GuidCoercion: Handles Guid, byte[16], string, ReadOnlyMemory<byte>, ArraySegment, char[]
 //   * BooleanCoercion: Handles bool, string (t/f/y/n/1/0), char, all numeric types
-//   * DateTimeCoercion: Normalizes reads to UTC, handles DateTime, DateTimeOffset, strings
-//   * DateTimeOffsetCoercion: Handles DateTimeOffset and DateTime conversion
 //   * TimeSpanCoercion: Handles TimeSpan, double (seconds), time strings
 //   * DecimalCoercion: Handles all numeric conversions with CultureInfo.InvariantCulture
 // - Binary: ByteArrayCoercion handles byte[], ReadOnlyMemory<byte>, ArraySegment<byte>, Stream
 // - Array coercions: IntArrayCoercion, StringArrayCoercion
 // - JSON coercions: JsonValueCoercion, JsonDocumentCoercion, JsonElementCoercion
-// - PostgreSQL-specific: HStoreCoercion, IntRangeCoercion, DateTimeRangeCoercion
-//   (CoercionRegistry registers AdvancedCoercions afterwards, so its Range<int>/Range<DateTime>
-//   coercions replace IntRangeCoercion/DateTimeRangeCoercion in the registry)
+// - PostgreSQL-specific: HStoreCoercion (ranges are AdvancedCoercions' PostgreSqlRange*Coercion)
+// - DateTime/DateTimeOffset have no coercion: TypeCoercionHelper reads them before the registry.
 // =============================================================================
 
 using System.Data;
@@ -39,8 +36,6 @@ internal static class BasicCoercions
         // Primitive types
         registry.Register(new GuidCoercion());
         registry.Register(new BooleanCoercion());
-        registry.Register(new DateTimeCoercion());
-        registry.Register(new DateTimeOffsetCoercion());
         registry.Register(new TimeSpanCoercion());
         registry.Register(new DateOnlyCoercion());
         registry.Register(new TimeOnlyCoercion());
@@ -62,8 +57,6 @@ internal static class BasicCoercions
 
         // PostgreSQL types
         registry.Register(new HStoreCoercion());
-        registry.Register(new IntRangeCoercion());
-        registry.Register(new DateTimeRangeCoercion());
     }
 }
 
@@ -105,51 +98,6 @@ internal class GuidCoercion : DbCoercion<Guid>
                 return false;
         }
     }
-
-    public override bool TryWrite(Guid value, DbParameter parameter)
-    {
-        parameter.Value = value;
-        parameter.DbType = DbType.Guid;
-        return true;
-    }
-}
-
-/// <summary>
-/// Coercion for DateTimeOffset - handles DateTimeOffset and DateTime.
-/// </summary>
-internal class DateTimeOffsetCoercion : DbCoercion<DateTimeOffset>
-{
-    public override bool TryRead(in DbValue src, out DateTimeOffset value)
-    {
-        if (src.IsNull)
-        {
-            value = DateTimeOffset.MinValue;
-            return false;
-        }
-
-        switch (src.RawValue)
-        {
-            case DateTimeOffset dto:
-                value = dto;
-                return true;
-            case DateTime dt:
-                // Treat as UTC by default for consistency with how we store them
-                value = dt.Kind == DateTimeKind.Unspecified
-                    ? new DateTimeOffset(DateTime.SpecifyKind(dt, DateTimeKind.Utc))
-                    : new DateTimeOffset(dt);
-                return true;
-            default:
-                value = DateTimeOffset.MinValue;
-                return false;
-        }
-    }
-
-    public override bool TryWrite(DateTimeOffset value, DbParameter parameter)
-    {
-        parameter.Value = value;
-        parameter.DbType = DbType.DateTimeOffset;
-        return true;
-    }
 }
 
 /// <summary>
@@ -187,13 +135,6 @@ internal class TimeSpanCoercion : DbCoercion<TimeSpan>
                 value = TimeSpan.Zero;
                 return false;
         }
-    }
-
-    public override bool TryWrite(TimeSpan value, DbParameter parameter)
-    {
-        parameter.Value = value;
-        parameter.DbType = DbType.Time;
-        return true;
     }
 }
 
@@ -235,13 +176,6 @@ internal class DateOnlyCoercion : DbCoercion<DateOnly>
                 value = default;
                 return false;
         }
-    }
-
-    public override bool TryWrite(DateOnly value, DbParameter parameter)
-    {
-        parameter.Value = value.ToDateTime(TimeOnly.MinValue);
-        parameter.DbType = DbType.Date;
-        return true;
     }
 }
 
@@ -288,13 +222,6 @@ internal class TimeOnlyCoercion : DbCoercion<TimeOnly>
                 return false;
         }
     }
-
-    public override bool TryWrite(TimeOnly value, DbParameter parameter)
-    {
-        parameter.Value = value.ToTimeSpan();
-        parameter.DbType = DbType.Time;
-        return true;
-    }
 }
 
 /// <summary>
@@ -333,18 +260,6 @@ internal class IntArrayCoercion : DbCoercion<int[]>
                 return false;
         }
     }
-
-    public override bool TryWrite(int[]? value, DbParameter parameter)
-    {
-        if (value == null)
-        {
-            parameter.Value = DBNull.Value;
-            return true;
-        }
-
-        parameter.Value = value;
-        return true;
-    }
 }
 
 /// <summary>
@@ -368,18 +283,6 @@ internal class StringArrayCoercion : DbCoercion<string[]>
 
         value = null;
         return false;
-    }
-
-    public override bool TryWrite(string[]? value, DbParameter parameter)
-    {
-        if (value == null)
-        {
-            parameter.Value = DBNull.Value;
-            return true;
-        }
-
-        parameter.Value = value;
-        return true;
     }
 }
 
@@ -419,13 +322,6 @@ internal class JsonValueCoercion : DbCoercion<JsonValue>
                 value = default;
                 return false;
         }
-    }
-
-    public override bool TryWrite(JsonValue value, DbParameter parameter)
-    {
-        parameter.Value = value.AsString();
-        parameter.DbType = DbType.String;
-        return true;
     }
 }
 
@@ -467,91 +363,6 @@ internal class HStoreCoercion : DbCoercion<HStore>
 
         value = default;
         return false;
-    }
-
-    public override bool TryWrite(HStore value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
-    }
-}
-
-/// <summary>
-/// Coercion for integer ranges - handles PostgreSQL int4range.
-/// </summary>
-internal class IntRangeCoercion : DbCoercion<Range<int>>
-{
-    public override bool TryRead(in DbValue src, out Range<int> value)
-    {
-        if (src.IsNull)
-        {
-            value = default;
-            return false;
-        }
-
-        if (src.RawValue is string str)
-        {
-            try
-            {
-                value = Range<int>.Parse(str);
-                return true;
-            }
-            catch
-            {
-                value = default;
-                return false;
-            }
-        }
-
-        value = default;
-        return false;
-    }
-
-    public override bool TryWrite(Range<int> value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
-    }
-}
-
-/// <summary>
-/// Coercion for DateTime ranges - handles PostgreSQL tsrange, tstzrange.
-/// </summary>
-internal class DateTimeRangeCoercion : DbCoercion<Range<DateTime>>
-{
-    public override bool TryRead(in DbValue src, out Range<DateTime> value)
-    {
-        if (src.IsNull)
-        {
-            value = default;
-            return false;
-        }
-
-        if (src.RawValue is string str)
-        {
-            try
-            {
-                value = Range<DateTime>.Parse(str);
-                return true;
-            }
-            catch
-            {
-                value = default;
-                return false;
-            }
-        }
-
-        value = default;
-        return false;
-    }
-
-    public override bool TryWrite(Range<DateTime> value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
     }
 }
 
@@ -620,13 +431,6 @@ internal class BooleanCoercion : DbCoercion<bool>
         }
     }
 
-    public override bool TryWrite(bool value, DbParameter parameter)
-    {
-        parameter.Value = value;
-        parameter.DbType = DbType.Boolean;
-        return true;
-    }
-
     private static bool EvaluateCharBoolean(char lower)
     {
         return lower switch
@@ -634,60 +438,6 @@ internal class BooleanCoercion : DbCoercion<bool>
             't' or 'y' or '1' => true,
             'f' or 'n' or '0' => false,
             _ => throw new InvalidCastException($"Cannot convert character '{lower}' to Boolean.")
-        };
-    }
-}
-
-/// <summary>
-/// Coercion for DateTime - handles DateTime, DateTimeOffset, and strings.
-/// Reads are normalized to UTC; writes pass the value through unchanged.
-/// </summary>
-internal class DateTimeCoercion : DbCoercion<DateTime>
-{
-    public override bool TryRead(in DbValue src, out DateTime value)
-    {
-        if (src.IsNull)
-        {
-            value = DateTime.MinValue;
-            return false;
-        }
-
-        switch (src.RawValue)
-        {
-            case DateTime dt:
-                value = DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
-                return true;
-            case DateTimeOffset dto:
-                value = DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
-                return true;
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind,
-                out var dto):
-                value = DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Utc);
-                return true;
-            case string s
-                when DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt):
-                value = DateTime.SpecifyKind(ConvertToUtc(dt), DateTimeKind.Utc);
-                return true;
-            default:
-                value = DateTime.MinValue;
-                return false;
-        }
-    }
-
-    public override bool TryWrite(DateTime value, DbParameter parameter)
-    {
-        parameter.Value = value;
-        parameter.DbType = DbType.DateTime;
-        return true;
-    }
-
-    private static DateTime ConvertToUtc(DateTime dt)
-    {
-        return dt.Kind switch
-        {
-            DateTimeKind.Utc => dt,
-            DateTimeKind.Local => dt.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(dt, DateTimeKind.Utc)
         };
     }
 }
@@ -737,13 +487,6 @@ internal class DecimalCoercion : DbCoercion<decimal>
                 }
         }
     }
-
-    public override bool TryWrite(decimal value, DbParameter parameter)
-    {
-        parameter.Value = value;
-        parameter.DbType = DbType.Decimal;
-        return true;
-    }
 }
 
 /// <summary>
@@ -774,13 +517,6 @@ internal sealed class DecFloatDoubleCoercion : DbCoercion<double>
 
         // Anything else keeps the general conversion path.
         return false;
-    }
-
-    public override bool TryWrite(double value, DbParameter parameter)
-    {
-        parameter.Value = value;
-        parameter.DbType = DbType.Double;
-        return true;
     }
 }
 
@@ -823,13 +559,6 @@ internal class ByteArrayCoercion : DbCoercion<byte[]>
                 value = null;
                 return false;
         }
-    }
-
-    public override bool TryWrite(byte[]? value, DbParameter parameter)
-    {
-        parameter.Value = value ?? (object)DBNull.Value;
-        parameter.DbType = DbType.Binary;
-        return true;
     }
 }
 
@@ -896,20 +625,6 @@ internal class JsonDocumentCoercion : DbCoercion<JsonDocument>
             return false;
         }
     }
-
-    public override bool TryWrite(JsonDocument? value, DbParameter parameter)
-    {
-        if (value == null)
-        {
-            parameter.Value = DBNull.Value;
-            parameter.DbType = DbType.String;
-            return true;
-        }
-
-        parameter.Value = value.RootElement.GetRawText();
-        parameter.DbType = DbType.String;
-        return true;
-    }
 }
 
 /// <summary>
@@ -957,12 +672,5 @@ internal class JsonElementCoercion : DbCoercion<JsonElement>
             value = default;
             return false;
         }
-    }
-
-    public override bool TryWrite(JsonElement value, DbParameter parameter)
-    {
-        parameter.Value = value.GetRawText();
-        parameter.DbType = DbType.String;
-        return true;
     }
 }

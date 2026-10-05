@@ -31,7 +31,7 @@ public sealed class CoveragePush_TypeCoercionAndCompiledMapperTests
         typeof(TypeCoercionHelper).GetMethod("ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
-            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode) },
+            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode), typeof(TypeCoercionOptions) },
             null)!;
 
     // COR-002: blank text is not a number, Guid, date or flag. It read as 0/Guid.Empty/default/false

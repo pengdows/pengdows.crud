@@ -182,125 +182,9 @@ public class MissingCoercionTests
         Assert.False(success);
     }
 
-    [Fact]
-    public void BooleanCoercion_TryWrite_True_SetsCorrectly()
-    {
-        var coercion = new BooleanCoercion();
-        var parameter = new fakeDbParameter();
-
-        var success = coercion.TryWrite(true, parameter);
-
-        Assert.True(success);
-        Assert.Equal(true, parameter.Value);
-        Assert.Equal(DbType.Boolean, parameter.DbType);
-    }
-
     #endregion
 
     #region DateTimeCoercion Tests
-
-    [Fact]
-    public void DateTimeCoercion_TryRead_DateTimeUtc_ReturnsUtc()
-    {
-        var coercion = new DateTimeCoercion();
-        var utcTime = DateTime.UtcNow;
-        var dbValue = new DbValue(utcTime);
-
-        var success = coercion.TryRead(dbValue, out var result);
-
-        Assert.True(success);
-        Assert.Equal(DateTimeKind.Utc, result.Kind);
-    }
-
-    [Fact]
-    public void DateTimeCoercion_TryRead_DateTimeLocal_ConvertsToUtc()
-    {
-        var coercion = new DateTimeCoercion();
-        var localTime = DateTime.Now;
-        var dbValue = new DbValue(localTime);
-
-        var success = coercion.TryRead(dbValue, out var result);
-
-        Assert.True(success);
-        Assert.Equal(DateTimeKind.Utc, result.Kind);
-    }
-
-    [Fact]
-    public void DateTimeCoercion_TryRead_DateTimeUnspecified_BecomesUtc()
-    {
-        var coercion = new DateTimeCoercion();
-        var unspecifiedTime = new DateTime(2023, 1, 1, 12, 0, 0, DateTimeKind.Unspecified);
-        var dbValue = new DbValue(unspecifiedTime);
-
-        var success = coercion.TryRead(dbValue, out var result);
-
-        Assert.True(success);
-        Assert.Equal(DateTimeKind.Utc, result.Kind);
-    }
-
-    [Fact]
-    public void DateTimeCoercion_TryRead_DateTimeOffset_ConvertsToUtc()
-    {
-        var coercion = new DateTimeCoercion();
-        var dto = DateTimeOffset.Now;
-        var dbValue = new DbValue(dto);
-
-        var success = coercion.TryRead(dbValue, out var result);
-
-        Assert.True(success);
-        Assert.Equal(DateTimeKind.Utc, result.Kind);
-        Assert.Equal(dto.UtcDateTime.Date, result.Date);
-    }
-
-    [Fact]
-    public void DateTimeCoercion_TryRead_StringDateTimeOffset_ConvertsToUtc()
-    {
-        var coercion = new DateTimeCoercion();
-        var dbValue = new DbValue("2023-01-01T12:00:00+00:00");
-
-        var success = coercion.TryRead(dbValue, out var result);
-
-        Assert.True(success);
-        Assert.Equal(DateTimeKind.Utc, result.Kind);
-    }
-
-    [Fact]
-    public void DateTimeCoercion_TryRead_StringDateTime_ConvertsToUtc()
-    {
-        var coercion = new DateTimeCoercion();
-        var dbValue = new DbValue("2023-01-01T12:00:00");
-
-        var success = coercion.TryRead(dbValue, out var result);
-
-        Assert.True(success);
-        Assert.Equal(DateTimeKind.Utc, result.Kind);
-    }
-
-    [Fact]
-    public void DateTimeCoercion_TryRead_NullValue_ReturnsFalse()
-    {
-        var coercion = new DateTimeCoercion();
-        var dbValue = new DbValue(null);
-
-        var success = coercion.TryRead(dbValue, out var result);
-
-        Assert.False(success);
-        Assert.Equal(DateTime.MinValue, result);
-    }
-
-    [Fact]
-    public void DateTimeCoercion_TryWrite_DateTime_SetsCorrectly()
-    {
-        var coercion = new DateTimeCoercion();
-        var parameter = new fakeDbParameter();
-        var dateTime = DateTime.UtcNow;
-
-        var success = coercion.TryWrite(dateTime, parameter);
-
-        Assert.True(success);
-        Assert.Equal(dateTime, parameter.Value);
-        Assert.Equal(DbType.DateTime, parameter.DbType);
-    }
 
     #endregion
 
@@ -364,19 +248,6 @@ public class MissingCoercionTests
 
         Assert.False(success);
         Assert.Equal(0m, result);
-    }
-
-    [Fact]
-    public void DecimalCoercion_TryWrite_Decimal_SetsCorrectly()
-    {
-        var coercion = new DecimalCoercion();
-        var parameter = new fakeDbParameter();
-
-        var success = coercion.TryWrite(123.45m, parameter);
-
-        Assert.True(success);
-        Assert.Equal(123.45m, parameter.Value);
-        Assert.Equal(DbType.Decimal, parameter.DbType);
     }
 
     #endregion
@@ -470,33 +341,6 @@ public class MissingCoercionTests
         Assert.Null(result);
     }
 
-    [Fact]
-    public void JsonDocumentCoercion_TryWrite_JsonDocument_SetsCorrectly()
-    {
-        var coercion = new JsonDocumentCoercion();
-        var parameter = new fakeDbParameter();
-        using var doc = JsonDocument.Parse("{\"test\":true}");
-
-        var success = coercion.TryWrite(doc, parameter);
-
-        Assert.True(success);
-        Assert.NotNull(parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
-    [Fact]
-    public void JsonDocumentCoercion_TryWrite_Null_SetsDbNull()
-    {
-        var coercion = new JsonDocumentCoercion();
-        var parameter = new fakeDbParameter();
-
-        var success = coercion.TryWrite(null, parameter);
-
-        Assert.True(success);
-        Assert.Equal(DBNull.Value, parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
     #endregion
 
     #region JsonElementCoercion Tests
@@ -588,20 +432,6 @@ public class MissingCoercionTests
         Assert.Equal(default, result);
     }
 
-    [Fact]
-    public void JsonElementCoercion_TryWrite_JsonElement_SetsCorrectly()
-    {
-        var coercion = new JsonElementCoercion();
-        var parameter = new fakeDbParameter();
-        using var doc = JsonDocument.Parse("{\"test\":true}");
-
-        var success = coercion.TryWrite(doc.RootElement, parameter);
-
-        Assert.True(success);
-        Assert.NotNull(parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
     #endregion
 
     #region PostgreSqlIntervalCoercion Tests
@@ -656,20 +486,6 @@ public class MissingCoercionTests
 
         Assert.False(success);
         Assert.Equal(default, result);
-    }
-
-    [Fact]
-    public void PostgreSqlIntervalCoercion_TryWrite_Interval_SetsCorrectly()
-    {
-        var coercion = new PostgreSqlIntervalCoercion();
-        var parameter = new fakeDbParameter();
-        var interval = new PostgreSqlInterval(1, 2, 3600000000); // 1 month, 2 days, 1 hour in microseconds
-
-        var success = coercion.TryWrite(interval, parameter);
-
-        Assert.True(success);
-        Assert.NotNull(parameter.Value);
-        Assert.Equal(DbType.Object, parameter.DbType);
     }
 
     #endregion
@@ -739,22 +555,6 @@ public class MissingCoercionTests
 
         Assert.False(success);
         Assert.Equal(default, result);
-    }
-
-    [Fact]
-    public void RowVersionValueCoercion_TryWrite_RowVersion_SetsCorrectly()
-    {
-        var coercion = new RowVersionValueCoercion();
-        var parameter = new fakeDbParameter();
-        var bytes = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 };
-        var rowVersion = new RowVersion(bytes);
-
-        var success = coercion.TryWrite(rowVersion, parameter);
-
-        Assert.True(success);
-        Assert.Equal(bytes, parameter.Value);
-        Assert.Equal(DbType.Binary, parameter.DbType);
-        Assert.Equal(8, parameter.Size);
     }
 
     #endregion

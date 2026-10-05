@@ -57,28 +57,6 @@ public class TypeCoercionHelperBehaviorTests
             TypeCoercionHelper.Coerce("not-a-date", typeof(string), typeof(DateTime)));
     }
 
-    [Fact]
-    public void CoerceEnum_SetNullAndLog_LoggerExceptionsIgnored()
-    {
-        var registry = new TypeMapRegistry();
-        registry.Register<EnumHolder>();
-        var column = registry.GetTableInfo<EnumHolder>().Columns.Values
-            .First(c => c.PropertyInfo.Name == nameof(EnumHolder.State));
-        var previousLogger = TypeCoercionHelper.Logger;
-        try
-        {
-            TypeCoercionHelper.Logger = new ThrowingLogger();
-            var result =
-                TypeCoercionHelper.Coerce("invalid", typeof(string), column, EnumParseFailureMode.SetNullAndLog);
-            // A non-nullable enum property gets its default; null failed to unbox (DRY-007).
-            Assert.Equal(default(TestState), result);
-        }
-        finally
-        {
-            TypeCoercionHelper.Logger = previousLogger;
-        }
-    }
-
     private sealed class ThrowingLogger : ILogger
     {
         IDisposable ILogger.BeginScope<TState>(TState state) => NoopDisposable.Instance;

@@ -85,20 +85,4 @@ public class HanaArrayCoercionTests
         Assert.Throws<FormatException>(() => Read(typeof(string[]), Hex("010000000180")));
     }
 
-    [Fact]
-    public void Write_PassesTheArrayThrough_NullAsDBNull()
-    {
-        var parameter = new fakeDbParameter();
-        foreach (var (type, value) in new (Type, object?)[]
-                 {
-                     (typeof(int[]), new[] { 1 }), (typeof(int?[]), new int?[] { 1, null }), (typeof(string[]), new[] { "a" })
-                 })
-        {
-            var coercion = Registry.GetCoercion(type, SupportedDatabase.SapHana)!;
-            Assert.True(coercion.TryWrite(value, parameter));
-            Assert.Same(value, parameter.Value);
-            Assert.True(coercion.TryWrite(null, parameter));
-            Assert.Equal(DBNull.Value, parameter.Value);
-        }
-    }
 }

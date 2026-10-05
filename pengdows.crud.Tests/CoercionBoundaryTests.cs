@@ -17,115 +17,6 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public class CoercionBoundaryTests
 {
-    [Fact]
-    public void DateTimeRangeCoercion_TryRead_ValidRangeString_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new DateTimeRangeCoercion();
-        var dbValue = new DbValue("[2023-01-01,2023-01-02)", typeof(string));
-
-        // Act
-        var result = coercion.TryRead(dbValue, out var range);
-
-        // Assert
-        Assert.True(result);
-        // Verify range parsing worked (exact properties depend on Range<T> implementation)
-        Assert.NotEqual(default, range);
-    }
-
-    [Fact]
-    public void DateTimeRangeCoercion_TryRead_NullValue_ReturnsFalse()
-    {
-        // Arrange
-        var coercion = new DateTimeRangeCoercion();
-        var dbValue = new DbValue(null);
-
-        // Act
-        var result = coercion.TryRead(dbValue, out var range);
-
-        // Assert
-        Assert.False(result);
-        Assert.Equal(default, range);
-    }
-
-    [Fact]
-    public void DateTimeRangeCoercion_TryRead_InvalidString_ReturnsFalse()
-    {
-        // Arrange
-        var coercion = new DateTimeRangeCoercion();
-        var dbValue = new DbValue("invalid range format", typeof(string));
-
-        // Act
-        var result = coercion.TryRead(dbValue, out var range);
-
-        // Assert
-        Assert.False(result);
-        Assert.Equal(default, range);
-    }
-
-    [Fact]
-    public void DateTimeRangeCoercion_TryWrite_ValidRange_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new DateTimeRangeCoercion();
-        var mockParam = new Mock<DbParameter>();
-        var range = Range<DateTime>.Parse("[2023-01-01,2023-01-02)");
-
-        // Act
-        var result = coercion.TryWrite(range, mockParam.Object);
-
-        // Assert
-        Assert.True(result);
-        mockParam.VerifySet(p => p.Value = It.IsAny<string>(), Times.Once);
-        mockParam.VerifySet(p => p.DbType = DbType.String, Times.Once);
-    }
-
-    [Fact]
-    public void IntRangeCoercion_TryRead_ValidRangeString_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new IntRangeCoercion();
-        var dbValue = new DbValue("[1,10)", typeof(string));
-
-        // Act
-        var result = coercion.TryRead(dbValue, out var range);
-
-        // Assert
-        Assert.True(result);
-        Assert.NotEqual(default, range);
-    }
-
-    [Fact]
-    public void IntRangeCoercion_TryRead_NullValue_ReturnsFalse()
-    {
-        // Arrange
-        var coercion = new IntRangeCoercion();
-        var dbValue = new DbValue(null);
-
-        // Act
-        var result = coercion.TryRead(dbValue, out var range);
-
-        // Assert
-        Assert.False(result);
-        Assert.Equal(default, range);
-    }
-
-    [Fact]
-    public void IntRangeCoercion_TryWrite_ValidRange_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new IntRangeCoercion();
-        var mockParam = new Mock<DbParameter>();
-        var range = Range<int>.Parse("[1,10)");
-
-        // Act
-        var result = coercion.TryWrite(range, mockParam.Object);
-
-        // Assert
-        Assert.True(result);
-        mockParam.VerifySet(p => p.Value = It.IsAny<string>(), Times.Once);
-        mockParam.VerifySet(p => p.DbType = DbType.String, Times.Once);
-    }
 
     [Fact]
     public void DbCoercion_TargetType_ReturnsCorrectType()
@@ -172,37 +63,6 @@ public class CoercionBoundaryTests
     }
 
     [Fact]
-    public void DbCoercion_TryWrite_ValidValue_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new TestDbCoercion();
-        var mockParam = new Mock<DbParameter>();
-        var testValue = new TestType { Value = "test" };
-
-        // Act
-        var result = coercion.TryWrite(testValue, mockParam.Object);
-
-        // Assert
-        Assert.True(result);
-        mockParam.VerifySet(p => p.Value = "test", Times.Once);
-    }
-
-    [Fact]
-    public void DbCoercion_TryWrite_NullValue_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new TestDbCoercion();
-        var mockParam = new Mock<DbParameter>();
-
-        // Act
-        var result = coercion.TryWrite(null, mockParam.Object);
-
-        // Assert
-        Assert.True(result);
-        mockParam.VerifySet(p => p.Value = DBNull.Value, Times.Once);
-    }
-
-    [Fact]
     public void HStoreCoercion_TryRead_ValidHStoreString_ReturnsTrue()
     {
         // Arrange
@@ -246,22 +106,6 @@ public class CoercionBoundaryTests
         // Assert
         Assert.False(result);
         Assert.Equal(default, hstore);
-    }
-
-    [Fact]
-    public void HStoreCoercion_TryWrite_ValidHStore_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new HStoreCoercion();
-        var mockParam = new Mock<DbParameter>();
-        var hstore = new HStore(new Dictionary<string, string?> { { "key1", "value1" } });
-
-        // Act
-        var result = coercion.TryWrite(hstore, mockParam.Object);
-
-        // Assert
-        Assert.True(result);
-        mockParam.VerifySet(p => p.Value = It.IsAny<string>(), Times.Once);
     }
 
     [Fact]
@@ -345,22 +189,6 @@ public class CoercionBoundaryTests
     }
 
     [Fact]
-    public void IntArrayCoercion_TryWrite_ValidArray_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new IntArrayCoercion();
-        var mockParam = new Mock<DbParameter>();
-        var intArray = new int[] { 1, 2, 3, 4, 5 };
-
-        // Act
-        var result = coercion.TryWrite(intArray, mockParam.Object);
-
-        // Assert
-        Assert.True(result);
-        mockParam.VerifySet(p => p.Value = It.IsAny<object>(), Times.Once);
-    }
-
-    [Fact]
     public void StringArrayCoercion_TryRead_ValidArrayValue_ReturnsTrue()
     {
         // Arrange
@@ -413,22 +241,6 @@ public class CoercionBoundaryTests
     }
 
     [Fact]
-    public void StringArrayCoercion_TryWrite_ValidArray_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new StringArrayCoercion();
-        var mockParam = new Mock<DbParameter>();
-        var stringArray = new string[] { "hello", "world", "test" };
-
-        // Act
-        var result = coercion.TryWrite(stringArray, mockParam.Object);
-
-        // Assert
-        Assert.True(result);
-        mockParam.VerifySet(p => p.Value = It.IsAny<object>(), Times.Once);
-    }
-
-    [Fact]
     public void TimeSpanCoercion_TryRead_ValidTimeSpanString_ReturnsTrue()
     {
         // Arrange
@@ -473,22 +285,6 @@ public class CoercionBoundaryTests
         Assert.Equal(default, timespan);
     }
 
-    [Fact]
-    public void TimeSpanCoercion_TryWrite_ValidTimeSpan_ReturnsTrue()
-    {
-        // Arrange
-        var coercion = new TimeSpanCoercion();
-        var mockParam = new Mock<DbParameter>();
-        var timespan = new TimeSpan(1, 2, 3, 4);
-
-        // Act
-        var result = coercion.TryWrite(timespan, mockParam.Object);
-
-        // Assert
-        Assert.True(result);
-        mockParam.VerifySet(p => p.Value = It.IsAny<object>(), Times.Once);
-    }
-
     // Test implementation of DbCoercion<T> for testing the base class
     private class TestDbCoercion : DbCoercion<TestType>
     {
@@ -501,12 +297,6 @@ public class CoercionBoundaryTests
             }
 
             value = new TestType { Value = src.RawValue?.ToString() ?? "" };
-            return true;
-        }
-
-        public override bool TryWrite(TestType? value, DbParameter parameter)
-        {
-            parameter.Value = value?.Value ?? (object)DBNull.Value;
             return true;
         }
     }

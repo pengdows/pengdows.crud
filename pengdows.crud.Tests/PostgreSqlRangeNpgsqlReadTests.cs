@@ -15,7 +15,7 @@ public class PostgreSqlRangeNpgsqlReadTests
     [Fact]
     public void ObjectCoercer_NpgsqlRangeOfInt_MapsToRange()
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(Range<int>), EnumParseFailureMode.Throw);
+        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(Range<int>), EnumParseFailureMode.Throw, null);
 
         var result = coercer(new NpgsqlTypes.NpgsqlRange<int>
             { LowerBound = 1, UpperBound = 10, LowerBoundIsInclusive = true, UpperBoundIsInclusive = false });
@@ -26,7 +26,7 @@ public class PostgreSqlRangeNpgsqlReadTests
     [Fact]
     public void ObjectCoercer_NpgsqlRangeOfLong_MapsToRange()
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(Range<long>), EnumParseFailureMode.Throw);
+        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(Range<long>), EnumParseFailureMode.Throw, null);
 
         var result = coercer(new NpgsqlTypes.NpgsqlRange<long>
             { LowerBound = -5, UpperBound = long.MaxValue, LowerBoundIsInclusive = true, UpperBoundIsInclusive = true });
@@ -39,7 +39,7 @@ public class PostgreSqlRangeNpgsqlReadTests
     {
         var lower = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var upper = new DateTime(2026, 12, 31, 0, 0, 0, DateTimeKind.Utc);
-        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(Range<DateTime>), EnumParseFailureMode.Throw);
+        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(Range<DateTime>), EnumParseFailureMode.Throw, null);
 
         var result = coercer(new NpgsqlTypes.NpgsqlRange<DateTime>
             { LowerBound = lower, UpperBound = upper, LowerBoundIsInclusive = true, UpperBoundIsInclusive = false });

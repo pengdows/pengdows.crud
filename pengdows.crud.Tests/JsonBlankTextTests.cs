@@ -69,23 +69,9 @@ public class JsonBlankTextTests : SqlLiteContextTestBase
     [MemberData(nameof(BlankTexts))]
     public void Coerce_BlankJson_ReadsAsJsonNull(string blank)
     {
-        var columns = TypeMap.GetTableInfo<Row>().Columns;
-
-        Assert.Null(TypeCoercionHelper.Coerce(blank, typeof(string), columns["Data"]));
-        Assert.Null(TypeCoercionHelper.Coerce(blank, typeof(string), columns["MaybeCount"]));
-        Assert.Equal("null", ((JsonValue)TypeCoercionHelper.Coerce(blank, typeof(string), columns["Raw"])!).ToString());
         Assert.Null(TypeCoercionHelper.Coerce(blank, typeof(string), typeof(JsonNode)));
         Assert.Equal("null", ((JsonValue)TypeCoercionHelper.Coerce(blank, typeof(string), typeof(JsonValue))!).ToString());
         Assert.Equal(JsonValueKind.Null, ((JsonDocument)TypeCoercionHelper.Coerce(blank, typeof(string), typeof(JsonDocument))!).RootElement.ValueKind);
-    }
-
-    [Theory]
-    [MemberData(nameof(BlankTexts))]
-    public void Coerce_BlankJsonIntoNonNullableValueType_Fails(string blank)
-    {
-        var column = TypeMap.GetTableInfo<Row>().Columns["Count"];
-
-        Assert.ThrowsAny<JsonException>(() => TypeCoercionHelper.Coerce(blank, typeof(string), column));
     }
 
     [Theory]

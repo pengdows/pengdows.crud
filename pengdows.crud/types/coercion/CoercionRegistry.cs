@@ -9,7 +9,6 @@
 // - Register<T>(): Registers coercion for a CLR type (optionally provider-specific).
 // - GetCoercion(): Retrieves coercion, preferring provider-specific if available.
 // - TryRead(): Converts DbValue to target type using registered coercion.
-// - TryWrite(): Configures DbParameter using registered coercion.
 // - RegisterStandardCoercions(): Calls BasicCoercions + AdvancedCoercions.RegisterAll().
 // - DbCoercion<T>: Abstract base class reducing boilerplate for implementations.
 // =============================================================================
@@ -88,26 +87,6 @@ internal class CoercionRegistry
     }
 
     /// <summary>
-    /// Attempt to write a value to a database parameter using registered coercions.
-    /// </summary>
-    public bool TryWrite(object? value, DbParameter parameter, SupportedDatabase? provider = null)
-    {
-        if (value == null)
-        {
-            parameter.Value = DBNull.Value;
-            return true;
-        }
-
-        var coercion = GetCoercion(value.GetType(), provider);
-        if (coercion != null)
-        {
-            return coercion.TryWrite(value, parameter);
-        }
-
-        return false;
-    }
-
-    /// <summary>
     /// Register standard "weird" database type coercions.
     /// </summary>
     private void RegisterStandardCoercions()
@@ -129,12 +108,6 @@ internal abstract class DbCoercion<T> : IDbCoercion<T>
 
     // Match the interface exactly
     public abstract bool TryRead(in DbValue src, out T? value);
-    /// <summary>Writes the value as is, NULL as DBNull; override to convert or type the parameter.</summary>
-    public virtual bool TryWrite(T? value, DbParameter parameter)
-    {
-        parameter.Value = (object?)value ?? DBNull.Value;
-        return true;
-    }
 
     // IDbCoercion implementation
     public bool TryRead(in DbValue src, Type targetType, out object? value)
@@ -149,21 +122,6 @@ internal abstract class DbCoercion<T> : IDbCoercion<T>
         }
 
         value = null;
-        return false;
-    }
-
-    public bool TryWrite(object? value, DbParameter parameter)
-    {
-        if (value is T typedValue)
-        {
-            return TryWrite(typedValue, parameter);
-        }
-
-        if (value == null)
-        {
-            return TryWrite(default, parameter);
-        }
-
         return false;
     }
 }

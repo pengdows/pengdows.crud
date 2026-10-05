@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.Tests.Logging;
 using Xunit;
@@ -64,27 +65,42 @@ public sealed class SecurityRegressionTests
         Assert.Equal(context.ConnectionString, transaction.ConnectionString);
     }
 
+    // Malformed JSON never puts the payload in the exception chain or the logs, on the gateway's
+    // [Json] column read and on the typed read scalar reads and DataReaderMapper use.
     [Fact]
-    public void Coerce_InvalidJson_DoesNotLogPayloadValue()
+    public async System.Threading.Tasks.Task InvalidJson_DoesNotExposePayloadValue()
     {
         var logger = new ListLoggerProvider();
         using var loggerFactory = new LoggerFactory(new[] { logger });
         TypeCoercionHelper.Logger = loggerFactory.CreateLogger("TypeCoercion");
+        const string payload = "{\"secret\":\"hunter2\"";
 
         try
         {
-            var columnInfo = new ColumnInfo
+            var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+            factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite });
+            var exec = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite };
+            exec.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["id"] = 1, ["payload"] = payload } });
+            factory.Connections.Add(exec);
+            await using var context = new DatabaseContext(new DatabaseContextConfiguration
             {
-                Name = "payload",
-                PropertyInfo = typeof(SecurityJsonEntity).GetProperty(nameof(SecurityJsonEntity.Payload))!,
-                IsJsonType = true,
-                JsonSerializerOptions = JsonSerializerOptions.Default
-            };
+                ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+                DbMode = DbMode.Standard
+            }, factory, loggerFactory);
 
-            var ex = Assert.Throws<JsonException>(() =>
-                TypeCoercionHelper.Coerce("{\"secret\":\"hunter2\"", typeof(string), columnInfo));
+            var gatewayFailure = await Assert.ThrowsAnyAsync<Exception>(async () =>
+                await new TableGateway<SecurityJsonEntity, int>(context).RetrieveOneAsync(1));
+            var typedFailure = Assert.ThrowsAny<Exception>(() =>
+                TypeCoercionHelper.Coerce(payload, typeof(string), typeof(JsonDocument)));
 
-            Assert.DoesNotContain("hunter2", ex.Message, StringComparison.Ordinal);
+            foreach (var failure in new[] { gatewayFailure, typedFailure })
+            {
+                for (Exception? e = failure; e != null; e = e.InnerException)
+                {
+                    Assert.DoesNotContain("hunter2", e.Message, StringComparison.Ordinal);
+                }
+            }
+
             Assert.DoesNotContain(logger.Entries, entry => entry.Message.Contains("hunter2", StringComparison.Ordinal));
         }
         finally
@@ -164,8 +180,12 @@ public sealed class SecurityRegressionTests
         }
     }
 
-    private sealed class SecurityJsonEntity
+    [pengdows.crud.attributes.Table("secure")]
+    public sealed class SecurityJsonEntity
     {
-        public JsonDocument? Payload { get; set; }
+        [pengdows.crud.attributes.Id] [pengdows.crud.attributes.Column("id", System.Data.DbType.Int32)] public int Id { get; set; }
+
+        [pengdows.crud.attributes.Json] [pengdows.crud.attributes.Column("payload", System.Data.DbType.String)]
+        public Dictionary<string, string>? Payload { get; set; }
     }
 }

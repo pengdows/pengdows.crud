@@ -39,8 +39,6 @@ public class TypeCoercionHelperResolveCoercerTests
             value = null;
             return false;
         }
-
-        public override bool TryWrite(FieldTypeTarget? value, DbParameter parameter) => false;
     }
 
     private enum SampleStatus { Active, Inactive }
@@ -81,14 +79,14 @@ public class TypeCoercionHelperResolveCoercerTests
             "ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
-            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode) },
+            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode), typeof(TypeCoercionOptions) },
             null);
 
         return (Func<object?, object?>)method!.Invoke(null, new object?[]
         {
             sourceType,
             targetType,
-            EnumParseFailureMode.Throw
+            EnumParseFailureMode.Throw, null
         })!;
     }
 
@@ -124,33 +122,13 @@ public class TypeCoercionHelperResolveCoercerTests
     }
 
     [Fact]
-    public void ResolveCoercer_UsesProvidedFieldTypeWhenObservingDbType()
-    {
-        var coercion = new FieldTypeObserverCoercion();
-        CoercionRegistry.Shared.Register(coercion);
-
-        var resolved = TypeCoercionHelper.ResolveCoercer(
-            new StubColumnInfo(),
-            SupportedDatabase.Sqlite,
-            EnumParseFailureMode.Throw,
-            TypeCoercionOptions.Default,
-            fieldType: typeof(string));
-
-        var result = resolved("payload");
-
-        var typed = Assert.IsType<FieldTypeTarget>(result!);
-        Assert.Equal("payload", typed.Value);
-        Assert.Equal(typeof(string), coercion.LastObservedDbType);
-    }
-
-    [Fact]
     public void ResolveCoercer_ForTypePair_ConvertsValue()
     {
         var method = typeof(TypeCoercionHelper).GetMethod(
             "ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
-            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode) },
+            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode), typeof(TypeCoercionOptions) },
             null);
 
         Assert.NotNull(method);
@@ -159,7 +137,7 @@ public class TypeCoercionHelperResolveCoercerTests
         {
             typeof(string),
             typeof(int),
-            EnumParseFailureMode.Throw
+            EnumParseFailureMode.Throw, null
         })!;
 
         var result = resolved("42");
@@ -168,108 +146,6 @@ public class TypeCoercionHelperResolveCoercerTests
     }
 
     // --- ResolveCoercer(IColumnInfo, ...) branch coverage ---
-
-    [Fact]
-    public void ResolveCoercer_WithEnumColumn_HandlesNullAndNonNull()
-    {
-        var column = new StubColumnInfo
-        {
-            PropertyInfo = typeof(EnumHolder).GetProperty(nameof(EnumHolder.Status))!,
-            EnumType = typeof(SampleStatus),
-            IsEnum = true
-        };
-
-        var resolved = TypeCoercionHelper.ResolveCoercer(
-            column, SupportedDatabase.Sqlite, EnumParseFailureMode.Throw, TypeCoercionOptions.Default);
-
-        Assert.Null(resolved(null));
-        Assert.Equal(SampleStatus.Active, resolved("Active"));
-    }
-
-    [Fact]
-    public void ResolveCoercer_WithJsonColumn_HandlesNullAndNonNull()
-    {
-        var column = new StubColumnInfo
-        {
-            PropertyInfo = typeof(JsonTypedHolder).GetProperty(nameof(JsonTypedHolder.Value))!,
-            IsJsonType = true
-        };
-
-        var resolved = TypeCoercionHelper.ResolveCoercer(
-            column, SupportedDatabase.Sqlite, EnumParseFailureMode.Throw, TypeCoercionOptions.Default);
-
-        Assert.Null(resolved(null));
-        Assert.Equal("hello", resolved("hello"));
-    }
-
-    [Fact]
-    public void ResolveCoercer_WithDateTimeOffsetColumn_HandlesNullAndNonNull()
-    {
-        var column = new StubColumnInfo
-        {
-            PropertyInfo = typeof(DateTimeOffsetHolder).GetProperty(nameof(DateTimeOffsetHolder.Value))!
-        };
-
-        var resolved = TypeCoercionHelper.ResolveCoercer(
-            column, SupportedDatabase.Sqlite, EnumParseFailureMode.Throw, TypeCoercionOptions.Default);
-
-        Assert.Null(resolved(null));
-        var result = resolved(DateTime.UtcNow);
-        Assert.IsType<DateTimeOffset>(result);
-    }
-
-    [Fact]
-    public void ResolveCoercer_WithDateTimeColumn_HandlesNullAndNonNull()
-    {
-        var column = new StubColumnInfo
-        {
-            PropertyInfo = typeof(DateTimeHolder).GetProperty(nameof(DateTimeHolder.Value))!
-        };
-
-        var resolved = TypeCoercionHelper.ResolveCoercer(
-            column, SupportedDatabase.Sqlite, EnumParseFailureMode.Throw, TypeCoercionOptions.Default);
-
-        Assert.Null(resolved(null));
-        var result = resolved(DateTimeOffset.UtcNow);
-        Assert.IsType<DateTime>(result);
-    }
-
-    [Fact]
-    public void ResolveCoercer_WithRegisteredCoercion_HandlesNullSuccessAndFallback()
-    {
-        var coercion = new FieldTypeObserverCoercion();
-        CoercionRegistry.Shared.Register(coercion);
-
-        var resolved = TypeCoercionHelper.ResolveCoercer(
-            new StubColumnInfo(), SupportedDatabase.Sqlite, EnumParseFailureMode.Throw, TypeCoercionOptions.Default,
-            fieldType: typeof(string));
-
-        Assert.Null(resolved(null));
-
-        var success = Assert.IsType<FieldTypeTarget>(resolved("payload")!);
-        Assert.Equal("payload", success.Value);
-
-        // TryRead returns false for a non-string source, forcing the ConvertWithCache fallback path.
-        Assert.ThrowsAny<Exception>(() => resolved(123));
-    }
-
-    [Fact]
-    public void ResolveCoercer_FallsBackToFullCoerceDispatch_WhenNoOtherPathMatches()
-    {
-        var column = new StubColumnInfo
-        {
-            PropertyInfo = typeof(NeverRegisteredHolder).GetProperty(nameof(NeverRegisteredHolder.Value))!
-        };
-
-        var resolved = TypeCoercionHelper.ResolveCoercer(
-            column, SupportedDatabase.Sqlite, EnumParseFailureMode.Throw, TypeCoercionOptions.Default,
-            fieldType: typeof(NeverRegisteredTarget));
-
-        Assert.Null(resolved(null));
-
-        var identity = new NeverRegisteredTarget { Text = "same-instance" };
-        Assert.Same(identity, resolved(identity));
-    }
 
     // --- ResolveCoercer(Type, Type, EnumParseFailureMode) branch coverage ---
 

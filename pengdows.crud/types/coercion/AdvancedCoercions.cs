@@ -126,13 +126,6 @@ internal class PostgreSqlIntervalCoercion : DbCoercion<PostgreSqlInterval>
     }
 
     private static readonly PostgreSqlIntervalConverter IntervalConverter = new();
-
-    public override bool TryWrite([AllowNull] PostgreSqlInterval value, DbParameter parameter)
-    {
-        parameter.Value = value.ToTimeSpan();
-        parameter.DbType = DbType.Object;
-        return true;
-    }
 }
 
 /// <summary>
@@ -183,15 +176,6 @@ internal class IntervalYearMonthCoercion : DbCoercion<IntervalYearMonth>
                 return false;
         }
     }
-
-    public override bool TryWrite([AllowNull] IntervalYearMonth value, DbParameter parameter)
-    {
-        // Format as ISO 8601 duration: P{years}Y{months}M
-        var formatted = $"P{value.Years}Y{value.Months}M";
-        parameter.Value = formatted;
-        parameter.DbType = DbType.String;
-        return true;
-    }
 }
 
 /// <summary>
@@ -237,14 +221,6 @@ internal class IntervalDaySecondCoercion : DbCoercion<IntervalDaySecond>
                 value = default;
                 return false;
         }
-    }
-
-    public override bool TryWrite([AllowNull] IntervalDaySecond value, DbParameter parameter)
-    {
-        // For most databases, write as TimeSpan-compatible
-        parameter.Value = value.TotalTime;
-        parameter.DbType = DbType.Object;
-        return true;
     }
 }
 
@@ -311,13 +287,6 @@ internal class InetCoercion : DbCoercion<Inet>
                 return false;
         }
     }
-
-    public override bool TryWrite([AllowNull] Inet value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
-    }
 }
 
 /// <summary>
@@ -357,13 +326,6 @@ internal class HierarchyIdCoercion : DbCoercion<HierarchyId>
         {
             return false;
         }
-    }
-
-    public override bool TryWrite([AllowNull] HierarchyId value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
     }
 }
 
@@ -421,13 +383,6 @@ internal class CidrCoercion : DbCoercion<Cidr>
                 value = default;
                 return false;
         }
-    }
-
-    public override bool TryWrite([AllowNull] Cidr value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
     }
 }
 
@@ -487,13 +442,6 @@ internal class MacAddressCoercion : DbCoercion<MacAddress>
                 return false;
         }
     }
-
-    public override bool TryWrite([AllowNull] MacAddress value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
-    }
 }
 
 /// <summary>
@@ -539,29 +487,6 @@ internal class GeometryCoercion : DbCoercion<Geometry>
             return false;
         }
     }
-
-    public override bool TryWrite([AllowNull] Geometry value, DbParameter parameter)
-    {
-        if (value is null)
-        {
-            parameter.Value = DBNull.Value;
-            parameter.DbType = DbType.Binary;
-            return true;
-        }
-
-        if (!value.WellKnownBinary.IsEmpty)
-        {
-            parameter.Value = SpatialConverter<Geometry>.AddSridToWkb(value.WellKnownBinary.Span, value.Srid);
-            parameter.DbType = DbType.Binary;
-        }
-        else
-        {
-            parameter.Value = SpatialConverter<Geometry>.AddSridToWkt(value.WellKnownText!, value.Srid);
-            parameter.DbType = DbType.String;
-        }
-
-        return true;
-    }
 }
 
 /// <summary>
@@ -605,29 +530,6 @@ internal class GeographyCoercion : DbCoercion<Geography>
             value = default!;
             return false;
         }
-    }
-
-    public override bool TryWrite([AllowNull] Geography value, DbParameter parameter)
-    {
-        if (value is null)
-        {
-            parameter.Value = DBNull.Value;
-            parameter.DbType = DbType.Binary;
-            return true;
-        }
-
-        if (!value.WellKnownBinary.IsEmpty)
-        {
-            parameter.Value = SpatialConverter<Geography>.AddSridToWkb(value.WellKnownBinary.Span, value.Srid);
-            parameter.DbType = DbType.Binary;
-        }
-        else
-        {
-            parameter.Value = SpatialConverter<Geography>.AddSridToWkt(value.WellKnownText!, value.Srid);
-            parameter.DbType = DbType.String;
-        }
-
-        return true;
     }
 }
 
@@ -673,13 +575,6 @@ internal class PostgreSqlRangeIntCoercion : DbCoercion<Range<int>>
                 return false;
         }
     }
-
-    public override bool TryWrite([AllowNull] Range<int> value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
-    }
 }
 
 /// <summary>
@@ -723,13 +618,6 @@ internal class PostgreSqlRangeDateTimeCoercion : DbCoercion<Range<DateTime>>
                 value = Range<DateTime>.Empty;
                 return false;
         }
-    }
-
-    public override bool TryWrite([AllowNull] Range<DateTime> value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
     }
 }
 
@@ -775,13 +663,6 @@ internal class PostgreSqlRangeLongCoercion : DbCoercion<Range<long>>
                 return false;
         }
     }
-
-    public override bool TryWrite([AllowNull] Range<long> value, DbParameter parameter)
-    {
-        parameter.Value = value.ToString();
-        parameter.DbType = DbType.String;
-        return true;
-    }
 }
 
 /// <summary>
@@ -819,14 +700,6 @@ internal class RowVersionValueCoercion : DbCoercion<RowVersion>
                 return false;
         }
     }
-
-    public override bool TryWrite([AllowNull] RowVersion value, DbParameter parameter)
-    {
-        parameter.Value = value.ToArray();
-        parameter.DbType = DbType.Binary;
-        parameter.Size = 8;
-        return true;
-    }
 }
 
 /// <summary>
@@ -863,25 +736,6 @@ internal class BlobStreamCoercion : DbCoercion<Stream>
                 value = default!;
                 return false;
         }
-    }
-
-    public override bool TryWrite([AllowNull] Stream value, DbParameter parameter)
-    {
-        if (value is null)
-        {
-            parameter.Value = DBNull.Value;
-            parameter.DbType = DbType.Binary;
-            return true;
-        }
-
-        if (value.CanSeek)
-        {
-            value.Seek(0, SeekOrigin.Begin);
-        }
-
-        parameter.Value = value;
-        parameter.DbType = DbType.Binary;
-        return true;
     }
 }
 
@@ -921,13 +775,6 @@ internal class ClobStreamCoercion : DbCoercion<TextReader>
                 value = default!;
                 return false;
         }
-    }
-
-    public override bool TryWrite([AllowNull] TextReader value, DbParameter parameter)
-    {
-        parameter.Value = value;
-        parameter.DbType = DbType.String;
-        return true;
     }
 }
 
@@ -990,13 +837,6 @@ internal sealed class MySqlGeometryCoercion : DbCoercion<Geometry>
 
         return Fallback.TryRead(src, out value);
     }
-
-    public override bool TryWrite([AllowNull] Geometry value, DbParameter parameter)
-    {
-        parameter.DbType = DbType.Binary;
-        parameter.Value = value is null ? DBNull.Value : MySqlSpatialFormat.Join(value);
-        return true;
-    }
 }
 
 internal sealed class MySqlGeographyCoercion : DbCoercion<Geography>
@@ -1012,13 +852,6 @@ internal sealed class MySqlGeographyCoercion : DbCoercion<Geography>
         }
 
         return Fallback.TryRead(src, out value);
-    }
-
-    public override bool TryWrite([AllowNull] Geography value, DbParameter parameter)
-    {
-        parameter.DbType = DbType.Binary;
-        parameter.Value = value is null ? DBNull.Value : MySqlSpatialFormat.Join(value);
-        return true;
     }
 }
 

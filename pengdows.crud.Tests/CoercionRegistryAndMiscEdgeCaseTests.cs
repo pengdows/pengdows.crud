@@ -22,30 +22,6 @@ public class CoercionRegistryAndMiscEdgeCaseTests
     // ===== CoercionRegistry =====
 
     [Fact]
-    public void CoercionRegistry_TryWrite_NullValue_SetsDBNull()
-    {
-        var registry = new CoercionRegistry();
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        var success = registry.TryWrite(null, param.Object);
-        Assert.True(success);
-        param.VerifySet(p => p.Value = DBNull.Value, Times.Once);
-    }
-
-    [Fact]
-    public void CoercionRegistry_TryWrite_UnregisteredType_ReturnsFalse()
-    {
-        var registry = new CoercionRegistry();
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        // Use a type that's definitely not registered
-        var success = registry.TryWrite(new UnregisteredType(), param.Object);
-        Assert.False(success);
-    }
-
-    [Fact]
     public void CoercionRegistry_TryRead_UnregisteredType_ReturnsFalse()
     {
         var registry = new CoercionRegistry();
@@ -92,18 +68,6 @@ public class CoercionRegistryAndMiscEdgeCaseTests
         var success = registry.TryRead(dbValue, typeof(Guid), out var value);
         Assert.True(success);
         Assert.Equal(guid, value);
-    }
-
-    [Fact]
-    public void CoercionRegistry_TryWrite_RegisteredType_Succeeds()
-    {
-        var registry = new CoercionRegistry();
-        var guid = Guid.NewGuid();
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        var success = registry.TryWrite(guid, param.Object);
-        Assert.True(success);
     }
 
     // ===== JsonValueCoercion =====
@@ -164,55 +128,6 @@ public class CoercionRegistryAndMiscEdgeCaseTests
 
     // ===== DateTimeOffsetCoercion =====
 
-    [Fact]
-    public void DateTimeOffsetCoercion_TryRead_DateTime_Converts()
-    {
-        var coercion = new DateTimeOffsetCoercion();
-        var dt = new DateTime(2023, 6, 15, 12, 0, 0, DateTimeKind.Utc);
-
-        Assert.True(coercion.TryRead(new DbValue(dt), out var result));
-        Assert.Equal(new DateTimeOffset(dt), result);
-    }
-
-    [Fact]
-    public void DateTimeOffsetCoercion_TryRead_DateTimeOffset_Passthrough()
-    {
-        var coercion = new DateTimeOffsetCoercion();
-        var dto = new DateTimeOffset(2023, 6, 15, 12, 0, 0, TimeSpan.FromHours(5));
-
-        Assert.True(coercion.TryRead(new DbValue(dto), out var result));
-        Assert.Equal(dto, result);
-    }
-
-    [Fact]
-    public void DateTimeOffsetCoercion_TryRead_UnknownType_ReturnsFalse()
-    {
-        var coercion = new DateTimeOffsetCoercion();
-
-        Assert.False(coercion.TryRead(new DbValue("not a date"), out _));
-    }
-
-    [Fact]
-    public void DateTimeOffsetCoercion_TryRead_Null_ReturnsFalse()
-    {
-        var coercion = new DateTimeOffsetCoercion();
-
-        Assert.False(coercion.TryRead(new DbValue(null), out _));
-    }
-
-    [Fact]
-    public void DateTimeOffsetCoercion_TryWrite_SetsValue()
-    {
-        var coercion = new DateTimeOffsetCoercion();
-        var dto = DateTimeOffset.UtcNow;
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(dto, param.Object));
-        param.VerifySet(p => p.Value = dto, Times.Once);
-        param.VerifySet(p => p.DbType = DbType.DateTimeOffset, Times.Once);
-    }
-
     // ===== StringArrayCoercion =====
 
     [Fact]
@@ -241,29 +156,6 @@ public class CoercionRegistryAndMiscEdgeCaseTests
         Assert.False(coercion.TryRead(new DbValue("not an array"), out _));
     }
 
-    [Fact]
-    public void StringArrayCoercion_TryWrite_NullArray_SetsDBNull()
-    {
-        var coercion = new StringArrayCoercion();
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(null, param.Object));
-        param.VerifySet(p => p.Value = DBNull.Value, Times.Once);
-    }
-
-    [Fact]
-    public void StringArrayCoercion_TryWrite_ValidArray_SetsValue()
-    {
-        var coercion = new StringArrayCoercion();
-        var arr = new[] { "a", "b" };
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(arr, param.Object));
-        param.VerifySet(p => p.Value = arr, Times.Once);
-    }
-
     // ===== ClobStreamCoercion =====
 
     [Fact]
@@ -282,17 +174,6 @@ public class CoercionRegistryAndMiscEdgeCaseTests
         var coercion = new ClobStreamCoercion();
 
         Assert.False(coercion.TryRead(new DbValue(42), out _));
-    }
-
-    [Fact]
-    public void ClobStreamCoercion_TryWrite_NullValue_SetsValue()
-    {
-        var coercion = new ClobStreamCoercion();
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(null, param.Object));
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
     // ===== CidrCoercion =====
@@ -501,12 +382,6 @@ public class CoercionRegistryAndMiscEdgeCaseTests
         {
             value = default;
             return !src.IsNull;
-        }
-
-        public override bool TryWrite(TestRegisteredType value, System.Data.Common.DbParameter parameter)
-        {
-            parameter.Value = _name;
-            return true;
         }
     }
 

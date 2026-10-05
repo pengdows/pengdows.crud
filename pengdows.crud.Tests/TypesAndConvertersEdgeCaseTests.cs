@@ -445,33 +445,6 @@ public class TypesAndConvertersEdgeCaseTests
         Assert.False(result);
     }
 
-    [Fact]
-    public void ClobStreamCoercion_TryWrite_NonNullTextReader_SetsValueAndDbType()
-    {
-        var coercion = new ClobStreamCoercion();
-        var reader = new StringReader("hello");
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(reader, parameter);
-
-        Assert.True(result);
-        Assert.Same(reader, parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
-    [Fact]
-    public void ClobStreamCoercion_TryWrite_Null_SetsNullValueAndDbType()
-    {
-        var coercion = new ClobStreamCoercion();
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(null, parameter);
-
-        Assert.True(result);
-        Assert.Null(parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
     #endregion
 
     #region InetConverter Tests
@@ -1090,32 +1063,6 @@ public class TypesAndConvertersEdgeCaseTests
     }
 
     [Fact]
-    public void BlobStreamCoercion_TryWrite_NonNullStream_SetsValueAndDbType()
-    {
-        var coercion = new BlobStreamCoercion();
-        var stream = new MemoryStream(new byte[] { 1, 2, 3 });
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(stream, parameter);
-
-        Assert.True(result);
-        Assert.Same(stream, parameter.Value);
-        Assert.Equal(DbType.Binary, parameter.DbType);
-    }
-
-    [Fact]
-    public void BlobStreamCoercion_TryWrite_Null_SetsDbNull()
-    {
-        var coercion = new BlobStreamCoercion();
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(null, parameter);
-
-        Assert.True(result);
-        Assert.Equal(DBNull.Value, parameter.Value);
-    }
-
-    [Fact]
     public void GeometryCoercion_TryRead_GeoJson_ReturnsGeometry()
     {
         var coercion = new GeometryCoercion();
@@ -1187,73 +1134,6 @@ public class TypesAndConvertersEdgeCaseTests
         var result = coercion.TryRead(src, out var value);
 
         Assert.False(result);
-    }
-
-    [Fact]
-    public void GeographyCoercion_TryWrite_Null_SetsDbNull()
-    {
-        var coercion = new GeographyCoercion();
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(null, parameter);
-
-        Assert.True(result);
-        Assert.Equal(DBNull.Value, parameter.Value);
-    }
-
-    [Fact]
-    public void GeographyCoercion_TryWrite_WithWKB_SetsBinaryValue()
-    {
-        var coercion = new GeographyCoercion();
-        var wkb = new byte[] { 0x01, 0x01, 0x00, 0x00, 0x00, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-        var geog = Geography.FromWellKnownBinary(wkb, 4326);
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(geog, parameter);
-
-        Assert.True(result);
-        Assert.IsType<byte[]>(parameter.Value);
-        Assert.Equal(DbType.Binary, parameter.DbType);
-    }
-
-    [Fact]
-    public void GeographyCoercion_TryWrite_WithWKT_SetsStringValue()
-    {
-        var coercion = new GeographyCoercion();
-        var geog = Geography.FromWellKnownText("POINT(0 0)", 4326);
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(geog, parameter);
-
-        Assert.True(result);
-        Assert.Equal("SRID=4326;POINT(0 0)", parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
-    [Fact]
-    public void GeometryCoercion_TryWrite_Null_SetsDbNull()
-    {
-        var coercion = new GeometryCoercion();
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(null, parameter);
-
-        Assert.True(result);
-        Assert.Equal(DBNull.Value, parameter.Value);
-    }
-
-    [Fact]
-    public void GeometryCoercion_TryWrite_WithWKT_SetsStringValue()
-    {
-        var coercion = new GeometryCoercion();
-        var geom = Geometry.FromWellKnownText("POINT(1 2)", 0);
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(geom, parameter);
-
-        Assert.True(result);
-        Assert.Equal("POINT(1 2)", parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
     }
 
     [Fact]
@@ -1340,20 +1220,6 @@ public class TypesAndConvertersEdgeCaseTests
         var result = coercion.TryRead(src, out var value);
 
         Assert.False(result);
-    }
-
-    [Fact]
-    public void PostgreSqlRangeIntCoercion_TryWrite_WritesString()
-    {
-        var coercion = new PostgreSqlRangeIntCoercion();
-        var range = new Range<int>(1, 10, true, false);
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(range, parameter);
-
-        Assert.True(result);
-        Assert.Equal(DbType.String, parameter.DbType);
-        Assert.Contains("1", (string)parameter.Value!);
     }
 
     [Fact]
@@ -1468,20 +1334,6 @@ public class TypesAndConvertersEdgeCaseTests
         Assert.False(result);
     }
 
-    [Fact]
-    public void InetCoercion_TryWrite_SetsStringValue()
-    {
-        var coercion = new InetCoercion();
-        var inet = new Inet(IPAddress.Parse("192.168.1.1"), 24);
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(inet, parameter);
-
-        Assert.True(result);
-        Assert.Equal("192.168.1.1/24", parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
     #endregion
 
     #region RowVersionValueCoercion Tests
@@ -1592,19 +1444,6 @@ public class TypesAndConvertersEdgeCaseTests
         var result = coercion.TryRead(src, out var value);
 
         Assert.False(result);
-    }
-
-    [Fact]
-    public void PostgreSqlIntervalCoercion_TryWrite_SetsTimeSpanAndDbType()
-    {
-        var coercion = new PostgreSqlIntervalCoercion();
-        var interval = new PostgreSqlInterval(0, 1, 3_600_000_000); // 1 day, 1 hour
-        var parameter = new fakeDbParameter();
-
-        var result = coercion.TryWrite(interval, parameter);
-
-        Assert.True(result);
-        Assert.Equal(DbType.Object, parameter.DbType);
     }
 
     #endregion

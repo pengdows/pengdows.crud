@@ -66,46 +66,6 @@ public class DbCoercionNonGenericTests
     }
 
     [Fact]
-    public void TryWrite_WithTypedValue_Delegates()
-    {
-        IDbCoercion coercion = new GuidCoercion();
-        var guid = Guid.NewGuid();
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        var success = coercion.TryWrite(guid, param.Object);
-
-        Assert.True(success);
-        param.VerifySet(p => p.Value = guid, Times.Once);
-        param.VerifySet(p => p.DbType = DbType.Guid, Times.Once);
-    }
-
-    [Fact]
-    public void TryWrite_WithNull_DelegatesDefault()
-    {
-        IDbCoercion coercion = new GuidCoercion();
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        var success = coercion.TryWrite(null, param.Object);
-
-        Assert.True(success);
-        param.VerifySet(p => p.Value = Guid.Empty, Times.Once);
-    }
-
-    [Fact]
-    public void TryWrite_WrongType_ReturnsFalse()
-    {
-        IDbCoercion coercion = new GuidCoercion();
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        var success = coercion.TryWrite("not a guid", param.Object);
-
-        Assert.False(success);
-    }
-
-    [Fact]
     public void TargetType_ReturnsCorrectType()
     {
         IDbCoercion coercion = new GuidCoercion();

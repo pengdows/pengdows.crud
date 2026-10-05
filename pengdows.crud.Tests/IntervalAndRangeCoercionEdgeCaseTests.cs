@@ -58,19 +58,6 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         Assert.Equal(6, result.Months);
     }
 
-    [Fact]
-    public void IntervalYearMonthCoercion_TryWrite_FormatsIso()
-    {
-        var coercion = new IntervalYearMonthCoercion();
-        var interval = new IntervalYearMonth(2, 3);
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(interval, param.Object));
-        param.VerifySet(p => p.Value = "P2Y3M", Times.Once);
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
-    }
-
     // ===== IntervalDaySecondCoercion =====
 
     [Fact]
@@ -100,19 +87,6 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         Assert.Equal(1, result.Days);
     }
 
-    [Fact]
-    public void IntervalDaySecondCoercion_TryWrite_SetsTotalTime()
-    {
-        var coercion = new IntervalDaySecondCoercion();
-        var interval = new IntervalDaySecond(2, new TimeSpan(3, 4, 5));
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(interval, param.Object));
-        param.VerifySet(p => p.Value = interval.TotalTime, Times.Once);
-        param.VerifySet(p => p.DbType = DbType.Object, Times.Once);
-    }
-
     // ===== PostgreSqlIntervalCoercion =====
 
     [Fact]
@@ -139,19 +113,6 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         var coercion = new PostgreSqlIntervalCoercion();
 
         Assert.False(coercion.TryRead(new DbValue("not a timespan"), out _));
-    }
-
-    [Fact]
-    public void PostgreSqlIntervalCoercion_TryWrite_SetsTimeSpan()
-    {
-        var coercion = new PostgreSqlIntervalCoercion();
-        var interval = new PostgreSqlInterval(0, 1, 3600000000);
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(interval, param.Object));
-        param.VerifySet(p => p.Value = interval.ToTimeSpan(), Times.Once);
-        param.VerifySet(p => p.DbType = DbType.Object, Times.Once);
     }
 
     // ===== PostgreSqlRangeLongCoercion =====
@@ -199,18 +160,6 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         Assert.True(coercion.TryRead(new DbValue(range), out var result));
         Assert.Equal(range.Lower, result.Lower);
         Assert.Equal(range.Upper, result.Upper);
-    }
-
-    [Fact]
-    public void PostgreSqlRangeLongCoercion_TryWrite_FormatsString()
-    {
-        var coercion = new PostgreSqlRangeLongCoercion();
-        var range = new Range<long>(100L, 200L, true, false);
-        var param = new Mock<System.Data.Common.DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(range, param.Object));
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
     // ===== IntervalYearMonthConverter =====

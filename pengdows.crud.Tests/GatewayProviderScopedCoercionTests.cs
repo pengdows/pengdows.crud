@@ -79,12 +79,6 @@ public sealed class GatewayProviderScopedCoercionTests
             value = src.RawValue is string text ? new Marker { Text = "firebird:" + text } : null;
             return value != null;
         }
-
-        public override bool TryWrite(Marker? value, DbParameter parameter)
-        {
-            parameter.Value = value?.Text;
-            return true;
-        }
     }
 
     [Table("t")]

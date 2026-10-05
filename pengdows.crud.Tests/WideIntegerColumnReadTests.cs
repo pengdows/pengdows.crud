@@ -110,7 +110,7 @@ public sealed class WideIntegerColumnReadTests
     [InlineData(typeof(ulong))]
     public void ResolvedCoercer_BigIntegerIntoARegisteredNumericTarget_ConvertsExactly(Type target)
     {
-        var coerce = TypeCoercionHelper.ResolveCoercer(typeof(object), target, EnumParseFailureMode.Throw);
+        var coerce = TypeCoercionHelper.ResolveCoercer(typeof(object), target, EnumParseFailureMode.Throw, null);
 
         var result = coerce(BigInteger.Parse(ULongMax));
 
@@ -121,7 +121,7 @@ public sealed class WideIntegerColumnReadTests
     [Fact]
     public void ResolvedCoercer_BigIntegerBeyondTheTarget_ThrowsOverflow()
     {
-        var coerce = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(decimal), EnumParseFailureMode.Throw);
+        var coerce = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(decimal), EnumParseFailureMode.Throw, null);
 
         Assert.Throws<OverflowException>(() => coerce(BigInteger.Parse(Nines38)));
     }

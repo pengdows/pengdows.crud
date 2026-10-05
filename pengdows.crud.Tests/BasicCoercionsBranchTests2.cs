@@ -23,17 +23,6 @@ public class BasicCoercionsBranchTests2
     }
 
     [Fact]
-    public void DateTimeOffsetCoercion_HandlesNullAndDateTime()
-    {
-        var coercion = new DateTimeOffsetCoercion();
-        Assert.False(coercion.TryRead(new DbValue(null), out _));
-
-        var dt = new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-        Assert.True(coercion.TryRead(new DbValue(dt), out var result));
-        Assert.Equal(dt, result.UtcDateTime);
-    }
-
-    [Fact]
     public void TimeSpanCoercion_HandlesInvalidString()
     {
         var coercion = new TimeSpanCoercion();
@@ -49,15 +38,8 @@ public class BasicCoercionsBranchTests2
         Assert.False(intCoercion.TryRead(new DbValue(null), out _));
         Assert.False(intCoercion.TryRead(new DbValue("bad", typeof(string)), out _));
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-        Assert.True(intCoercion.TryWrite(null, param.Object));
-        Assert.Equal(DBNull.Value, param.Object.Value);
-
         var stringCoercion = new StringArrayCoercion();
         Assert.False(stringCoercion.TryRead(new DbValue(123), out _));
-        Assert.True(stringCoercion.TryWrite(null, param.Object));
-        Assert.Equal(DBNull.Value, param.Object.Value);
     }
 
     [Fact]
@@ -79,17 +61,6 @@ public class BasicCoercionsBranchTests2
     }
 
     [Fact]
-    public void RangeCoercions_RejectInvalidStrings()
-    {
-        var intCoercion = new IntRangeCoercion();
-        var dateCoercion = new DateTimeRangeCoercion();
-
-        Assert.False(intCoercion.TryRead(new DbValue(null), out _));
-        Assert.False(intCoercion.TryRead(new DbValue("bad", typeof(string)), out _));
-        Assert.False(dateCoercion.TryRead(new DbValue("bad", typeof(string)), out _));
-    }
-
-    [Fact]
     public void BooleanCoercion_HandlesInvalidInput()
     {
         var coercion = new BooleanCoercion();
@@ -97,17 +68,6 @@ public class BasicCoercionsBranchTests2
 
         Assert.Throws<InvalidCastException>(() =>
             coercion.TryRead(new DbValue('x', typeof(char)), out _));
-    }
-
-    [Fact]
-    public void DateTimeCoercion_HandlesInvalidString()
-    {
-        var coercion = new DateTimeCoercion();
-        Assert.False(coercion.TryRead(new DbValue("bad", typeof(string)), out _));
-
-        var dto = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
-        Assert.True(coercion.TryRead(new DbValue(dto), out var fromDto));
-        Assert.Equal(DateTimeKind.Utc, fromDto.Kind);
     }
 
     [Fact]

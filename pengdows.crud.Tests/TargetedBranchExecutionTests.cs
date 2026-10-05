@@ -177,18 +177,16 @@ public sealed class TargetedBranchExecutionTests
             "ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
-            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode) },
+            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode), typeof(TypeCoercionOptions) },
             null);
 
         Assert.NotNull(resolve);
 
-        var toDateTimeOffset = Assert.IsType<Func<object?, object?>>(resolve!.Invoke(null,
-            new object[] { typeof(string), typeof(DateTimeOffset), EnumParseFailureMode.Throw })!);
+        var toDateTimeOffset = Assert.IsType<Func<object?, object?>>(resolve!.Invoke(null, new object?[] { typeof(string), typeof(DateTimeOffset), EnumParseFailureMode.Throw, null })!);
         var dto = Assert.IsType<DateTimeOffset>(toDateTimeOffset("2026-01-01T00:00:00Z")!);
         Assert.Equal(TimeSpan.Zero, dto.Offset);
 
-        var toDateTime = Assert.IsType<Func<object?, object?>>(resolve.Invoke(null,
-            new object[] { typeof(DateTimeOffset), typeof(DateTime), EnumParseFailureMode.Throw })!);
+        var toDateTime = Assert.IsType<Func<object?, object?>>(resolve.Invoke(null, new object?[] { typeof(DateTimeOffset), typeof(DateTime), EnumParseFailureMode.Throw, null })!);
         var dt = Assert.IsType<DateTime>(toDateTime(new DateTimeOffset(2026, 1, 1, 6, 0, 0, TimeSpan.FromHours(6)))!);
         Assert.Equal(DateTimeKind.Utc, dt.Kind);
     }

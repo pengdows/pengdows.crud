@@ -54,19 +54,6 @@ public class CoercionTests
         Assert.Equal(originalGuid, result);
     }
 
-    [Fact]
-    public void GuidCoercion_ShouldWriteToParameter()
-    {
-        var guid = Guid.NewGuid();
-        var parameter = new fakeDbParameter();
-
-        var success = _registry.TryWrite(guid, parameter);
-
-        Assert.True(success);
-        Assert.Equal(guid, parameter.Value);
-        Assert.Equal(DbType.Guid, parameter.DbType);
-    }
-
     #endregion
 
     #region ByteArray Tests
@@ -142,19 +129,6 @@ public class CoercionTests
     }
 
     [Fact]
-    public void JsonValueCoercion_ShouldWriteAsString()
-    {
-        var jsonValue = new JsonValue("{\"key\":\"value\"}");
-        var parameter = new fakeDbParameter();
-
-        var success = _registry.TryWrite(jsonValue, parameter);
-
-        Assert.True(success);
-        Assert.Equal("{\"key\":\"value\"}", parameter.Value);
-        Assert.Equal(DbType.String, parameter.DbType);
-    }
-
-    [Fact]
     public void JsonValueCoercion_ShouldRejectInvalidJson()
     {
         var invalidJson = "{invalid json";
@@ -184,27 +158,6 @@ public class CoercionTests
         Assert.Equal("value3", hstore["key3"]);
     }
 
-    [Fact]
-    public void HStoreCoercion_ShouldWriteCanonicalFormat()
-    {
-        var data = new System.Collections.Generic.Dictionary<string, string?>
-        {
-            ["key1"] = "value1",
-            ["key2"] = null,
-            ["key3"] = "value with spaces"
-        };
-        var hstore = new HStore(data);
-        var parameter = new fakeDbParameter();
-
-        var success = _registry.TryWrite(hstore, parameter);
-
-        Assert.True(success);
-        var output = (string)parameter.Value!;
-        Assert.Contains("key1", output);
-        Assert.Contains("NULL", output);
-        Assert.Contains("\"value with spaces\"", output);
-    }
-
     #endregion
 
     #region Range Tests
@@ -223,23 +176,6 @@ public class CoercionTests
         Assert.Equal(10, range.Upper);
         Assert.True(range.IsLowerInclusive);
         Assert.False(range.IsUpperInclusive);
-    }
-
-    [Fact]
-    public void DateTimeRangeCoercion_ShouldHandleDateRanges()
-    {
-        var start = new DateTime(2023, 1, 1);
-        var end = new DateTime(2023, 12, 31);
-        var range = new Range<DateTime>(start, end, true, false);
-        var parameter = new fakeDbParameter();
-
-        var success = _registry.TryWrite(range, parameter);
-
-        Assert.True(success);
-        var rangeText = (string)parameter.Value!;
-        Assert.Contains("2023", rangeText);
-        Assert.StartsWith("[", rangeText);
-        Assert.EndsWith(")", rangeText);
     }
 
     #endregion
@@ -328,44 +264,6 @@ public class CoercionTests
     #endregion
 
     #region DateTimeOffset Tests
-
-    [Fact]
-    public void DateTimeOffsetCoercion_ShouldHandleDateTimeOffset()
-    {
-        var dto = DateTimeOffset.Now;
-        var dbValue = new DbValue(dto);
-
-        var success = _registry.TryRead(dbValue, typeof(DateTimeOffset), out var result);
-
-        Assert.True(success);
-        Assert.Equal(dto, result);
-    }
-
-    [Fact]
-    public void DateTimeOffsetCoercion_ShouldHandleDateTime()
-    {
-        var dt = DateTime.Now;
-        var dbValue = new DbValue(dt);
-
-        var success = _registry.TryRead(dbValue, typeof(DateTimeOffset), out var result);
-
-        Assert.True(success);
-        var dto = (DateTimeOffset)result!;
-        Assert.Equal(dt, dto.DateTime);
-    }
-
-    [Fact]
-    public void DateTimeOffsetCoercion_ShouldWriteWithCorrectDbType()
-    {
-        var dto = DateTimeOffset.Now;
-        var parameter = new fakeDbParameter();
-
-        var success = _registry.TryWrite(dto, parameter);
-
-        Assert.True(success);
-        Assert.Equal(dto, parameter.Value);
-        Assert.Equal(DbType.DateTimeOffset, parameter.DbType);
-    }
 
     #endregion
 

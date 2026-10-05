@@ -67,7 +67,8 @@ public class TypeHandlingBenchmarks
         _dateTimeStringCoercer = TypeCoercionHelper.ResolveCoercer(
             typeof(string),
             typeof(DateTime),
-            EnumParseFailureMode.Throw);
+            EnumParseFailureMode.Throw,
+            null);
         _intArray = new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
         _stringArray = new[] { "hello", "world", "test", "coercion", "performance" };
 
@@ -141,61 +142,62 @@ public class TypeHandlingBenchmarks
     }
 
     // ============================================================================
-    // COERCION REGISTRY: Type Conversion (Write Operations)
+    // PARAMETER WRITES: the live write path (AdvancedTypeRegistry.TryConfigureParameter; DRY-010 removed
+    // the coercion registry's write side, which production never called)
     // ============================================================================
 
     [Benchmark]
     public bool Coercion_Guid_Write()
     {
-        return _coercionRegistry!.TryWrite(_guid, _parameter!, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _guid.GetType(), _guid, SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool Coercion_RowVersion_Write()
     {
-        return _coercionRegistry!.TryWrite(_rowVersionBytes!, _parameter!, SupportedDatabase.SqlServer);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _rowVersionBytes.GetType(), _rowVersionBytes!, SupportedDatabase.SqlServer);
     }
 
     [Benchmark]
     public bool Coercion_Json_Write()
     {
-        return _coercionRegistry!.TryWrite(_jsonValue, _parameter!, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _jsonValue.GetType(), _jsonValue, SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool Coercion_HStore_Write()
     {
-        return _coercionRegistry!.TryWrite(_hstoreValue, _parameter!, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _hstoreValue.GetType(), _hstoreValue, SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool Coercion_Range_Write()
     {
-        return _coercionRegistry!.TryWrite(_rangeValue, _parameter!, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _rangeValue.GetType(), _rangeValue, SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool Coercion_TimeSpan_Write()
     {
-        return _coercionRegistry!.TryWrite(_timeSpan, _parameter!);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _timeSpan.GetType(), _timeSpan, SupportedDatabase.Unknown);
     }
 
     [Benchmark]
     public bool Coercion_DateTimeOffset_Write()
     {
-        return _coercionRegistry!.TryWrite(_dateTimeOffset, _parameter!);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _dateTimeOffset.GetType(), _dateTimeOffset, SupportedDatabase.Unknown);
     }
 
     [Benchmark]
     public bool Coercion_IntArray_Write()
     {
-        return _coercionRegistry!.TryWrite(_intArray!, _parameter!, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _intArray.GetType(), _intArray!, SupportedDatabase.PostgreSql);
     }
 
     [Benchmark]
     public bool Coercion_StringArray_Write()
     {
-        return _coercionRegistry!.TryWrite(_stringArray!, _parameter!, SupportedDatabase.PostgreSql);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _stringArray.GetType(), _stringArray!, SupportedDatabase.PostgreSql);
     }
 
     // ============================================================================
@@ -318,7 +320,7 @@ public class TypeHandlingBenchmarks
     [Benchmark]
     public bool ProviderSpecific_SqlServerJson()
     {
-        return _coercionRegistry!.TryWrite(_jsonValue, _parameter!, SupportedDatabase.SqlServer);
+        return _advancedRegistry!.TryConfigureParameter(_parameter!, _jsonValue.GetType(), _jsonValue, SupportedDatabase.SqlServer);
     }
 
     [Benchmark]
@@ -336,10 +338,10 @@ public class TypeHandlingBenchmarks
     public bool HotPath_MixedCoercion()
     {
         var success = true;
-        success &= _coercionRegistry!.TryWrite(_guid, _parameter!);
-        success &= _coercionRegistry!.TryWrite(_jsonValue, _parameter!);
-        success &= _coercionRegistry!.TryWrite(_rangeValue, _parameter!);
-        success &= _coercionRegistry!.TryWrite(_timeSpan, _parameter!);
+        success &= _advancedRegistry!.TryConfigureParameter(_parameter!, _guid.GetType(), _guid, SupportedDatabase.Unknown);
+        success &= _advancedRegistry!.TryConfigureParameter(_parameter!, _jsonValue.GetType(), _jsonValue, SupportedDatabase.Unknown);
+        success &= _advancedRegistry!.TryConfigureParameter(_parameter!, _rangeValue.GetType(), _rangeValue, SupportedDatabase.Unknown);
+        success &= _advancedRegistry!.TryConfigureParameter(_parameter!, _timeSpan.GetType(), _timeSpan, SupportedDatabase.Unknown);
         return success;
     }
 

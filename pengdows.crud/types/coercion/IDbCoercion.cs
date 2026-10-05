@@ -5,12 +5,12 @@
 // AI SUMMARY:
 // - Defines contract for converting between database values and .NET types.
 // - DbValue: Lightweight readonly struct wrapping raw value + optional DbType.
-// - IDbCoercion: Non-generic interface with TryRead/TryWrite methods.
+// - IDbCoercion: Non-generic read interface (TryRead). Coercions only read: parameters are written
+//   by the AdvancedTypeRegistry converters and the dialects (DRY-010).
 // - IDbCoercion<T>: Generic strongly-typed interface for specific type handling.
 // - TryRead(): Convert database value to .NET type (returns success bool).
-// - TryWrite(): Configure DbParameter from .NET value.
 // - Designed for high performance and AOT compatibility.
-// - Implementations: GuidCoercion, BooleanCoercion, DateTimeCoercion, JsonValueCoercion, etc.
+// - Implementations: GuidCoercion, BooleanCoercion, JsonValueCoercion, etc.
 // =============================================================================
 
 using System.Data.Common;
@@ -56,14 +56,6 @@ internal interface IDbCoercion
     bool TryRead(in DbValue src, Type targetType, out object? value);
 
     /// <summary>
-    /// Attempt to write a .NET value to a database parameter.
-    /// </summary>
-    /// <param name="value">The .NET value to write</param>
-    /// <param name="parameter">The database parameter to configure</param>
-    /// <returns>True if parameter was successfully configured</returns>
-    bool TryWrite(object? value, DbParameter parameter);
-
-    /// <summary>
     /// The .NET type this coercion handles.
     /// </summary>
     Type TargetType { get; }
@@ -78,9 +70,4 @@ internal interface IDbCoercion<T> : IDbCoercion
     /// Attempt to read a database value into the target type.
     /// </summary>
     bool TryRead(in DbValue src, out T? value);
-
-    /// <summary>
-    /// Write a strongly-typed value to a database parameter.
-    /// </summary>
-    bool TryWrite(T? value, DbParameter parameter);
 }

@@ -31,7 +31,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         typeof(TypeCoercionHelper).GetMethod("ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
-            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode) },
+            new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode), typeof(TypeCoercionOptions) },
             null)!;
 
     [Theory]
@@ -76,7 +76,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         {
             typeof(string),
             typeof(string),
-            EnumParseFailureMode.Throw
+            EnumParseFailureMode.Throw, null
         })!;
 
         var value = coercer("identity");

@@ -205,41 +205,6 @@ internal static class TypeCoercionHelper
         return lambda.Compile();
     }
 
-    internal static object? Coerce(
-        object? value,
-        Type dbFieldType,
-        IColumnInfo columnInfo,
-        EnumParseFailureMode parseMode = EnumParseFailureMode.Throw,
-        TypeCoercionOptions? options = null)
-    {
-        if (Utils.IsNullOrDbNull(value))
-        {
-            return null;
-        }
-
-        options ??= TypeCoercionOptions.Default;
-
-        var targetType = columnInfo.PropertyInfo.PropertyType;
-        var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-        if (runtimeTarget.IsAssignableFrom(dbFieldType) && !columnInfo.IsJsonType && columnInfo.EnumType == null)
-        {
-            return value;
-        }
-
-        if (columnInfo.EnumType != null)
-        {
-            return CoerceEnum(value!, columnInfo.EnumType, parseMode, columnInfo.PropertyInfo.PropertyType);
-        }
-
-        if (columnInfo.IsJsonType)
-        {
-            return CoerceJsonValue(value!, targetType, columnInfo, options);
-        }
-
-        return CoerceCore(value!, dbFieldType, targetType, options);
-    }
-
     public static object? Coerce(
         object? value,
         Type sourceType,
@@ -293,7 +258,7 @@ internal static class TypeCoercionHelper
             // COR-007: a JSON type reads blank text as the JSON literal null, as a [Json] column does.
             if (IsJsonValueType(underlyingTarget))
             {
-                return CoerceJsonValue(s, targetType, null, options);
+                return CoerceJsonValue(s, targetType, options);
             }
 
             throw BlankText(underlyingTarget);
@@ -933,7 +898,6 @@ internal static class TypeCoercionHelper
     private static object? CoerceJsonValue(
         object value,
         Type targetType,
-        IColumnInfo? columnInfo,
         TypeCoercionOptions options)
     {
         var actualTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
@@ -942,7 +906,7 @@ internal static class TypeCoercionHelper
             return value;
         }
 
-        var serializerOptions = columnInfo?.JsonSerializerOptions ?? JsonSerializerOptions.Default;
+        var serializerOptions = JsonSerializerOptions.Default;
 
         if (actualTarget == typeof(string) || actualTarget == typeof(ReadOnlyMemory<char>))
         {
@@ -1105,97 +1069,8 @@ internal static class TypeCoercionHelper
     }
 
     /// <summary>
-    /// Resolves the coercion delegate for a column at plan-build time so that the
-    /// hot per-row path skips registry lookups entirely.
-    /// </summary>
-    /// <param name="column">Column metadata (target type, enum type, JSON flag).</param>
-    /// <param name="provider">Database provider for registry dispatch.</param>
-    /// <param name="parseMode">Enum parse-failure behaviour.</param>
-    /// <param name="options">Provider-wide coercion options (time policy, etc.).</param>
-    internal static Func<object?, object?> ResolveCoercer(
-        IColumnInfo column,
-        SupportedDatabase provider,
-        EnumParseFailureMode parseMode,
-        TypeCoercionOptions options,
-        Type? fieldType = null)
-    {
-        var targetType = column.PropertyInfo.PropertyType;
-        var runtimeTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
-        var sourceType = fieldType;
-
-        // --- fast-path delegates, resolved once and captured in the closure ---
-
-        if (column.EnumType != null)
-        {
-            var enumType = column.EnumType;
-            return value => value == null ? null : CoerceEnum(value, enumType, parseMode, targetType);
-        }
-
-        if (column.IsJsonType)
-        {
-            return value => value == null ? null : CoerceJsonValue(value, targetType, column, options);
-        }
-
-        if (runtimeTarget == typeof(DateTimeOffset))
-        {
-            return value => value == null ? null : CoerceDateTimeOffset(value, options);
-        }
-
-        if (runtimeTarget == typeof(DateTime))
-        {
-            return value => value == null ? null : CoerceDateTime(value, options);
-        }
-
-        var guidBytesBigEndian = options.GuidBytesBigEndian;
-        var decodesGuidBytes = runtimeTarget == typeof(Guid);
-
-        // Try to resolve a registered coercion once; if found, the returned
-        // delegate calls TryRead directly — no registry scan at runtime.
-        var coercion = types.coercion.CoercionRegistry.Shared.GetCoercion(runtimeTarget, provider);
-        if (coercion != null)
-        {
-            return value =>
-            {
-                if (value == null)
-                {
-                    return null;
-                }
-
-                if (decodesGuidBytes && TryDecodeGuidBytes(value, guidBytesBigEndian, out var guid))
-                {
-                    return guid;
-                }
-
-                var dbValue = new types.coercion.DbValue(value, sourceType ?? value.GetType());
-                if (coercion.TryRead(in dbValue, runtimeTarget, out var result))
-                {
-                    return result;
-                }
-
-                // Fallback to robust conversion cache
-                return ConvertRegisteredFallback(value, runtimeTarget, options);
-            };
-        }
-
-        // Fallback: full Coerce dispatch covers char[]→string, AdvancedTypeRegistry,
-        // Convert.ChangeType, etc.  The registry lookups here are unavoidable for
-        // types that have no registered coercion.
-        return value => value == null ? null : Coerce(value, sourceType ?? value.GetType(), column, parseMode, options);
-    }
-
-    /// <summary>
-    /// Resolves a coercion delegate for a known source/target type pair.
-    /// This is used by DataReaderMapper to pre-bind the conversion path
-    /// once per plan and avoid repeated registry lookups on every row.
-    /// </summary>
-    internal static Func<object?, object?> ResolveCoercer(
-        Type sourceType,
-        Type targetType,
-        EnumParseFailureMode parseMode) => ResolveCoercer(sourceType, targetType, parseMode, null);
-
-    /// <summary>
-    /// As <see cref="ResolveCoercer(Type, Type, EnumParseFailureMode)"/>, converting with the
-    /// reader's dialect options: its provider-specific coercions and Guid byte order (TYPE-002).
+    /// Resolves a coercion delegate for a known source/target type pair once per plan (DataReaderMapper),
+    /// converting with the reader's dialect options: its provider-specific coercions and Guid byte order (TYPE-002).
     /// </summary>
     internal static Func<object?, object?> ResolveCoercer(
         Type sourceType,

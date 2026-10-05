@@ -26,7 +26,7 @@ public sealed class WideIntegerDecimalCoercionCostTests
     [MemberData(nameof(WideValues))]
     public void MapperCoercer_WideIntegerToDecimal_ConvertsWithoutThrowing(object value, decimal expected)
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(value.GetType(), typeof(decimal), EnumParseFailureMode.Throw);
+        var coercer = TypeCoercionHelper.ResolveCoercer(value.GetType(), typeof(decimal), EnumParseFailureMode.Throw, null);
         var thread = Environment.CurrentManagedThreadId;
         var thrown = 0;
         void OnFirstChance(object? sender, FirstChanceExceptionEventArgs e)
@@ -55,7 +55,7 @@ public sealed class WideIntegerDecimalCoercionCostTests
     [Fact]
     public void MapperCoercer_WideIntegerBeyondDecimal_StillFails()
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(BigInteger), typeof(decimal), EnumParseFailureMode.Throw);
+        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(BigInteger), typeof(decimal), EnumParseFailureMode.Throw, null);
 
         Assert.ThrowsAny<Exception>(() => coercer(BigInteger.Pow(10, 40)));
     }

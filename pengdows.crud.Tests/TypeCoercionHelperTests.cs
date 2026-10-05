@@ -64,37 +64,6 @@ public class TypeCoercionHelperTests
     }
 
     [Fact]
-    public void Coerce_WithEnumString_ParsesValue()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = GetProperty<EnumHolder>(nameof(EnumHolder.EnumValue)),
-            IsEnum = true,
-            EnumType = typeof(SampleEnum)
-        };
-
-        var result = TypeCoercionHelper.Coerce("Value", typeof(string), column, EnumParseFailureMode.Throw);
-
-        Assert.Equal(SampleEnum.Value, result);
-    }
-
-    [Fact]
-    public void Coerce_WithEnumNumber_ReturnsDefaultOnFailure()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = GetProperty<EnumHolder>(nameof(EnumHolder.EnumValue)),
-            IsEnum = true,
-            EnumType = typeof(SampleEnum)
-        };
-
-        var result = TypeCoercionHelper.Coerce(99, typeof(int), column, EnumParseFailureMode.SetNullAndLog);
-
-        // A non-nullable enum property gets its default; null failed to unbox (DRY-007).
-        Assert.Equal(default(SampleEnum), result);
-    }
-
-    [Fact]
     public void Coerce_WithGuidSources_SupportsVariousRepresentations()
     {
         var options = TypeCoercionOptions.Default;
@@ -143,52 +112,6 @@ public class TypeCoercionHelperTests
         var result = (DateTime)TypeCoercionHelper.Coerce(dto, typeof(DateTimeOffset), typeof(DateTime))!;
 
         Assert.Equal(DateTimeKind.Utc, result.Kind);
-    }
-
-    [Fact]
-    public void CoerceJsonValue_ToJsonElement()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = GetProperty<EnumHolder>(nameof(EnumHolder.JsonElement)),
-            IsJsonType = true
-        };
-
-        var json = "{\"id\":1}";
-        var value = TypeCoercionHelper.Coerce(json, typeof(string), column);
-
-        Assert.IsType<JsonElement>(value);
-        Assert.Equal(1, ((JsonElement)value!).GetProperty("id").GetInt32());
-    }
-
-    [Fact]
-    public void CoerceJsonValue_ToJsonNode()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = GetProperty<EnumHolder>(nameof(EnumHolder.JsonNode)),
-            IsJsonType = true
-        };
-
-        var json = JsonNode.Parse("{\"name\":\"test\"}");
-        var value = TypeCoercionHelper.Coerce(json!, json!.GetType(), column);
-
-        Assert.IsAssignableFrom<JsonNode>(value);
-    }
-
-    [Fact]
-    public void CoerceJsonValue_DeserializesCustomType()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = GetProperty<EnumHolder>(nameof(EnumHolder.JsonText)),
-            IsJsonType = true
-        };
-
-        var json = "\"hello\"";
-        var value = TypeCoercionHelper.Coerce(json, typeof(string), column);
-
-        Assert.Equal("\"hello\"", value);
     }
 
     [Fact]

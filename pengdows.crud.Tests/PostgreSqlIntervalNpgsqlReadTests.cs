@@ -72,7 +72,7 @@ namespace pengdows.crud.Tests
         public void ObjectCoercer_NpgsqlInterval_PreservesAllComponents(int months, int days, long time)
         {
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), typeof(PostgreSqlInterval),
-                EnumParseFailureMode.Throw);
+                EnumParseFailureMode.Throw, null);
 
             var result = coercer(new NpgsqlTypes.NpgsqlInterval(months, days, time));
 

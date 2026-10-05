@@ -14,7 +14,7 @@ namespace pengdows.crud.Tests;
 public class AdvancedCoercionsTests
 {
     [Fact]
-    public void PostgreSqlIntervalCoercion_ReadsTimeSpan_AndWrites()
+    public void PostgreSqlIntervalCoercion_ReadsTimeSpan()
     {
         var coercion = new PostgreSqlIntervalCoercion();
         var span = TimeSpan.FromHours(3);
@@ -22,16 +22,10 @@ public class AdvancedCoercionsTests
         Assert.True(coercion.TryRead(new DbValue(span), out var interval));
         Assert.Equal(span, interval.ToTimeSpan());
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(interval, param.Object));
-        param.VerifySet(p => p.Value = interval.ToTimeSpan(), Times.Once);
-        param.VerifySet(p => p.DbType = DbType.Object, Times.Once);
     }
 
     [Fact]
-    public void IntervalYearMonthCoercion_ReadsString_AndWrites()
+    public void IntervalYearMonthCoercion_ReadsString()
     {
         var coercion = new IntervalYearMonthCoercion();
 
@@ -39,16 +33,10 @@ public class AdvancedCoercionsTests
         Assert.Equal(2, interval.Years);
         Assert.Equal(3, interval.Months);
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(interval, param.Object));
-        param.VerifySet(p => p.Value = "P2Y3M", Times.Once);
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
     [Fact]
-    public void IntervalDaySecondCoercion_ReadsTimeSpanAndString_AndWrites()
+    public void IntervalDaySecondCoercion_ReadsTimeSpanAndString()
     {
         var coercion = new IntervalDaySecondCoercion();
         var span = TimeSpan.FromDays(1) + TimeSpan.FromMinutes(5);
@@ -60,16 +48,10 @@ public class AdvancedCoercionsTests
         Assert.Equal(2, parsed.Days);
         Assert.Equal(new TimeSpan(3, 4, 5), parsed.Time);
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(parsed, param.Object));
-        param.VerifySet(p => p.Value = parsed.TotalTime, Times.Once);
-        param.VerifySet(p => p.DbType = DbType.Object, Times.Once);
     }
 
     [Fact]
-    public void InetCoercion_ReadsMultipleInputs_AndWrites()
+    public void InetCoercion_ReadsMultipleInputs()
     {
         var coercion = new InetCoercion();
         var ip = IPAddress.Parse("10.0.0.1");
@@ -80,32 +62,20 @@ public class AdvancedCoercionsTests
         Assert.True(coercion.TryRead(new DbValue(ip), out var fromIp));
         Assert.Equal(ip, fromIp.Address);
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(fromString, param.Object));
-        param.VerifySet(p => p.Value = "10.0.0.1/24", Times.Once);
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
     [Fact]
-    public void CidrCoercion_ReadsString_AndWrites()
+    public void CidrCoercion_ReadsString()
     {
         var coercion = new CidrCoercion();
 
         Assert.True(coercion.TryRead(new DbValue("192.168.0.0/16", typeof(string)), out var cidr));
         Assert.Equal("192.168.0.0/16", cidr.ToString());
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(cidr, param.Object));
-        param.VerifySet(p => p.Value = "192.168.0.0/16", Times.Once);
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
     [Fact]
-    public void MacAddressCoercion_ReadsMultipleInputs_AndWrites()
+    public void MacAddressCoercion_ReadsMultipleInputs()
     {
         var coercion = new MacAddressCoercion();
         var physical = new PhysicalAddress(new byte[] { 0x00, 0x11, 0x22, 0x33, 0x44, 0x55 });
@@ -114,16 +84,10 @@ public class AdvancedCoercionsTests
         Assert.True(coercion.TryRead(new DbValue(physical), out var fromPhysical));
         Assert.Equal(physical, fromPhysical.Address);
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(fromString, param.Object));
-        param.VerifySet(p => p.Value = "00:11:22:33:44:55", Times.Once);
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
     [Fact]
-    public void GeometryCoercion_ReadsBinaryAndText_AndWrites()
+    public void GeometryCoercion_ReadsBinaryAndText()
     {
         var coercion = new GeometryCoercion();
         var bytes = new byte[] { 1, 2, 3 };
@@ -134,21 +98,10 @@ public class AdvancedCoercionsTests
         Assert.True(coercion.TryRead(new DbValue("POINT(1 2)", typeof(string)), out var fromText));
         Assert.Equal("POINT(1 2)", fromText.WellKnownText);
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(Geometry.FromWellKnownBinary(bytes, 0), param.Object));
-        param.VerifySet(p => p.DbType = DbType.Binary, Times.Once);
-
-        var textParam = new Mock<DbParameter>();
-        textParam.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(Geometry.FromWellKnownText("POINT(1 2)", 0), textParam.Object));
-        textParam.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
     [Fact]
-    public void GeographyCoercion_ReadsBinaryAndGeoJson_AndWrites()
+    public void GeographyCoercion_ReadsBinaryAndGeoJson()
     {
         var coercion = new GeographyCoercion();
         var bytes = new byte[] { 4, 5, 6 };
@@ -160,17 +113,6 @@ public class AdvancedCoercionsTests
         Assert.True(coercion.TryRead(new DbValue(json, typeof(string)), out var fromJson));
         Assert.Equal(json, fromJson.GeoJson);
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(Geography.FromWellKnownBinary(bytes, 4326), param.Object));
-        param.VerifySet(p => p.DbType = DbType.Binary, Times.Once);
-
-        var textParam = new Mock<DbParameter>();
-        textParam.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(Geography.FromWellKnownText("POINT(1 2)", 4326), textParam.Object));
-        textParam.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
     [Fact]
@@ -194,7 +136,7 @@ public class AdvancedCoercionsTests
     }
 
     [Fact]
-    public void RowVersionValueCoercion_ReadsBytesAndUlong_AndWrites()
+    public void RowVersionValueCoercion_ReadsBytesAndUlong()
     {
         var coercion = new RowVersionValueCoercion();
         var bytes = new byte[] { 0, 0, 0, 0, 0, 0, 0, 1 };
@@ -212,16 +154,10 @@ public class AdvancedCoercionsTests
         Assert.True(coercion.TryRead(new DbValue(value), out var fromUlong));
         Assert.Equal(expected, fromUlong.ToArray());
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(fromBytes, param.Object));
-        param.VerifySet(p => p.DbType = DbType.Binary, Times.Once);
-        param.VerifySet(p => p.Size = 8, Times.Once);
     }
 
     [Fact]
-    public void BlobStreamCoercion_ReadsStreamAndBytes_AndWrites()
+    public void BlobStreamCoercion_ReadsStreamAndBytes()
     {
         var coercion = new BlobStreamCoercion();
         var stream = new MemoryStream(new byte[] { 1, 2, 3, 4 });
@@ -234,27 +170,10 @@ public class AdvancedCoercionsTests
         Assert.True(coercion.TryRead(new DbValue(new byte[] { 9, 8, 7 }), out var fromBytes));
         Assert.Equal(3, fromBytes.Length);
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(stream, param.Object));
-        param.VerifySet(p => p.DbType = DbType.Binary, Times.Once);
     }
 
     [Fact]
-    public void BlobStreamCoercion_WriteNull_SetsDbNull()
-    {
-        var coercion = new BlobStreamCoercion();
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(null, param.Object));
-        param.VerifySet(p => p.Value = DBNull.Value, Times.Once);
-        param.VerifySet(p => p.DbType = DbType.Binary, Times.Once);
-    }
-
-    [Fact]
-    public void ClobStreamCoercion_ReadsStringAndStream_AndWrites()
+    public void ClobStreamCoercion_ReadsStringAndStream()
     {
         var coercion = new ClobStreamCoercion();
 
@@ -265,21 +184,6 @@ public class AdvancedCoercionsTests
         Assert.True(coercion.TryRead(new DbValue(stream), out var fromStream));
         Assert.Equal("stream", fromStream.ReadToEnd());
 
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(new StringReader("value"), param.Object));
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
     }
 
-    [Fact]
-    public void ClobStreamCoercion_WriteNull_SetsDbType()
-    {
-        var coercion = new ClobStreamCoercion();
-        var param = new Mock<DbParameter>();
-        param.SetupAllProperties();
-
-        Assert.True(coercion.TryWrite(null, param.Object));
-        param.VerifySet(p => p.DbType = DbType.String, Times.Once);
-    }
 }

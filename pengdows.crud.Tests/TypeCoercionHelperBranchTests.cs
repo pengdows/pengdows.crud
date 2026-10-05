@@ -173,52 +173,6 @@ public class TypeCoercionHelperBranchTests
     }
 
     [Fact]
-    public void Coerce_ReturnsAssignableValueWhenNoJsonOrEnum()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = typeof(SampleHolder).GetProperty(nameof(SampleHolder.Name))!,
-            IsJsonType = false,
-            EnumType = null
-        };
-
-        var value = "unchanged";
-        var result = TypeCoercionHelper.Coerce(value, typeof(string), column);
-
-        Assert.Same(value, result);
-    }
-
-    [Fact]
-    public void Coerce_WithEnumValue_PassesThroughInstance()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = typeof(SampleHolder).GetProperty(nameof(SampleHolder.EnumValue))!,
-            IsEnum = true,
-            EnumType = typeof(SampleEnum)
-        };
-
-        var value = SampleEnum.Second;
-        var result = TypeCoercionHelper.Coerce(value, typeof(SampleEnum), column, EnumParseFailureMode.Throw);
-
-        Assert.Equal(value, result);
-    }
-
-    [Fact]
-    public void Coerce_WithNullValue_ReturnsNull()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = typeof(SampleHolder).GetProperty(nameof(SampleHolder.Name))!,
-            IsJsonType = false,
-            EnumType = null
-        };
-
-        Assert.Null(TypeCoercionHelper.Coerce(null, typeof(string), column));
-        Assert.Null(TypeCoercionHelper.Coerce(DBNull.Value, typeof(string), column));
-    }
-
-    [Fact]
     public void Coerce_UsesAdvancedConverterFallback()
     {
         AdvancedTypeRegistry.Shared.RegisterConverter(new TestPayloadConverter());
@@ -228,20 +182,6 @@ public class TypeCoercionHelperBranchTests
 
         Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce(123, typeof(int), typeof(TestPayload)));
-    }
-
-    [Fact]
-    public void CoerceEnum_InvalidParseMode_ReturnsNull()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = typeof(SampleHolder).GetProperty(nameof(SampleHolder.EnumValue))!,
-            IsEnum = true,
-            EnumType = typeof(SampleEnum)
-        };
-
-        var result = TypeCoercionHelper.Coerce("Unknown", typeof(string), column, (EnumParseFailureMode)99);
-        Assert.Null(result);
     }
 
     [Fact]
@@ -415,17 +355,4 @@ public class TypeCoercionHelperBranchTests
         Assert.Equal("{\"i\":9}", TypeCoercionHelper.GetJsonText(Encoding.UTF8.GetBytes("{\"i\":9}"), options));
     }
 
-    [Fact]
-    public void CoerceJsonValue_UsesDefaultOptionsAndWhitespaceJsonNodeReturnsNull()
-    {
-        var column = new TestColumnInfo
-        {
-            PropertyInfo = typeof(SampleHolder).GetProperty(nameof(SampleHolder.Node))!,
-            IsJsonType = true,
-            JsonSerializerOptions = null!
-        };
-
-        var result = TypeCoercionHelper.Coerce("   ", typeof(string), column);
-        Assert.Null(result);
-    }
 }
