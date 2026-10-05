@@ -12,7 +12,7 @@ public class TableGatewayBehaviorTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={SupportedDatabase.MySql}", factory);
-        var helper = new TableGateway<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context, new StubAuditValueResolver("mysql-user"));
         var entity = new TestEntity { Id = 1, Name = "foo" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();

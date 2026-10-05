@@ -211,6 +211,21 @@ every CLR type and every database, whether the value round-trips and why not whe
   `Guid` read into a `string` property is its invariant canonical text (ISO 8601, `"c"`, `"D"`) on
   every database; 2.0.5 used the culture's `ToString` (and failed a `Guid` with
   `InvalidCastException`). The update dirty check reads timestamp text the same way.
+- **Upserts handle audit fields as creates do.** Without an `IAuditValueResolver`, `UpsertAsync`
+  and `BatchUpsertAsync` (both gateways) left `[CreatedOn]`/`[LastUpdatedOn]` at `default`
+  (writing `0001-01-01`, which SQL Server's `DATETIME` rejects) and wrote or dropped
+  `[CreatedBy]`/`[LastUpdatedBy]` silently. They now stamp the timestamps and, for an entity with a
+  user audit field, throw the `InvalidOperationException` `CreateAsync` and `UpdateAsync` throw;
+  `BatchUpdateAsync` throws it too instead of writing `[LastUpdatedBy]` as NULL (DRY-016).
+- The single-row ON CONFLICT upsert of an entity with an opaque (`byte[]`/`RowVersion`) version no
+  longer guards on it: the guard compared the stored version with the inserted one, so an existing
+  row was never updated. Creating such an entity with a null version no longer throws
+  `InvalidCastException` (DRY-016).
+- `CommandsTimedOut` counts a provider timeout wrapped in an outer exception (Npgsql's client-side
+  timeout), which was already thrown as `CommandTimeoutException`; `TotalConnectionFailures` and
+  `TotalConnectionTimeoutFailures` count failed connection opens (they were never incremented)
+  (DRY-017). Classifying a Db2/Informix error whose code is `int.MinValue` no longer throws
+  `OverflowException` (DRY-018).
 - Firebird `NONE`-charset text with non-Latin characters reads back correctly when another driver in
   the process has registered .NET code pages (DRY-020).
 

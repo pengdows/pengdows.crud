@@ -39,9 +39,11 @@ A resolver is only mandatory if the entity has a **user-identity** audit attribu
 (`[CreatedBy]`/`[LastUpdatedBy]`). If neither is present — only `[CreatedOn]`/`[LastUpdatedOn]` —
 no resolver is needed at all; timestamps use `DateTime.UtcNow` directly. Constructing a gateway
 for an entity with `[CreatedBy]`/`[LastUpdatedBy]` but no resolver supplied does **not** fail at
-construction — it fails at the first `CreateAsync`/`UpdateAsync` call, with
+construction — it fails at the first write (create, update or upsert, single or batch), with
 `InvalidOperationException("AuditValues resolver is required for user-based audit fields.")`
-(`BaseTableGateway.Audit.cs`'s `SetAuditFields`/`ResolveAuditValuesForBatch`).
+(`BaseTableGateway.Audit.cs`'s `SetAuditFields`/`ResolveAuditValuesForBatch`). Every write path
+stamps the timestamp fields the same way, with or without a resolver (2.0.5's upserts left them
+unset and skipped user fields silently without one).
 
 ## What happens on CREATE
 
@@ -115,8 +117,8 @@ path used elsewhere in the library.
 entire `BatchCreateAsync`/`BatchUpdateAsync`/`BatchUpsertAsync` call, then applies the same
 resolved `IAuditValues` instance to every entity in the batch via the
 `SetAuditFields(obj, updateOnly, auditValues)` overload — confirmed directly in
-`TableGateway.Batch.cs`/`PrimaryKeyTableGateway.Upsert.cs` (`var auditValues = _auditValueResolver
-!= null && _hasAuditColumns ? ... .Resolve() : null`, computed once before the entity loop). This
+`BaseTableGateway.Upsert.cs` and the batch-update builders (`var auditValues = _hasAuditColumns ?
+ResolveAuditValuesForBatch() : null`, computed once before the entity loop). This
 means every row in one batch call shares the identical timestamp and resolved user identity — by
 design, not an inconsistency — since a resolver call typically represents "who is running this
 operation right now," which doesn't change mid-batch. See

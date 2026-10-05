@@ -701,7 +701,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
                 ConnectionString = "Server=localhost;EmulatedProduct=MySql", DbMode = DbMode.SingleConnection
             },
             factory, NullLoggerFactory.Instance, typeMap);
-        var helper = new TableGateway<VersionedUpsertBatchEntity, int>(context);
+        var helper = new TableGateway<VersionedUpsertBatchEntity, int>(context, new StubAuditValueResolver("batch-upsert-user"));
 
         var a = new VersionedUpsertBatchEntity { Id = 1, Name = "a", Version = 1 };
         var b = new VersionedUpsertBatchEntity { Id = 2, Name = "b", Version = 1 };
@@ -733,7 +733,7 @@ public class TableGatewayBatchTests : IAsyncLifetime
                 ConnectionString = "Data Source=test;EmulatedProduct=Firebird", DbMode = DbMode.SingleConnection
             },
             factory, NullLoggerFactory.Instance, typeMap);
-        var helper = new TableGateway<VersionedUpsertBatchEntity, int>(context);
+        var helper = new TableGateway<VersionedUpsertBatchEntity, int>(context, new StubAuditValueResolver("batch-upsert-user"));
 
         var a = new VersionedUpsertBatchEntity { Id = 1, Name = "a", Version = 1 };
         var b = new VersionedUpsertBatchEntity { Id = 2, Name = "b", Version = 1 };

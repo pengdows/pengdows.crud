@@ -140,9 +140,8 @@ public partial class PrimaryKeyTableGateway<TEntity>
         var ctx = context ?? _context;
         var dialect = GetDialect(ctx);
 
-        var auditValues = _auditValueResolver != null && _hasAuditColumns
-            ? ResolveAuditValuesForBatch()
-            : null;
+        // Throws for user audit fields without a resolver, as UpdateAsync does.
+        var auditValues = _hasAuditColumns ? ResolveAuditValuesForBatch() : null;
 
         var result = new List<ISqlContainer>(entities.Count);
         foreach (var entity in entities)

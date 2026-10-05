@@ -38,7 +38,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     public void BuildUpsert_OnConflict_BumpsVersion()
     {
         TypeMap.Register<TestEntity>();
-        var helper = new TableGateway<TestEntity, int>(Context);
+        var helper = new TableGateway<TestEntity, int>(Context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "v" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
@@ -54,7 +54,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory);
         TypeMap.Register<TestEntity>();
-        var helper = new TableGateway<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "v" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
@@ -69,7 +69,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
         TypeMap.Register<TestEntity>();
-        var helper = new TableGateway<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "v" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();
@@ -242,7 +242,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.False(context.GetDialect().MergeUpdateRequiresTargetAlias);
 
         TypeMap.Register<TestEntity>();
-        var helper = new TableGateway<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context, AuditValueResolver);
         var entity = new TestEntity { Id = 1, Name = "v" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();

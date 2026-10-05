@@ -230,7 +230,7 @@ public class Db2DialectTests
     public void BuildUpsert_UsesMerge_ForDb2()
     {
         var context = CreateContext();
-        var helper = new TableGateway<TestEntity, int>(context);
+        var helper = new TableGateway<TestEntity, int>(context, new StubAuditValueResolver("db2-user"));
         var entity = new TestEntity { Id = 1, Name = "foo" };
         var sc = helper.BuildUpsert(entity);
         var sql = sc.Query.ToString();

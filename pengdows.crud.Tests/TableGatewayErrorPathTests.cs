@@ -251,7 +251,7 @@ public class TableGatewayErrorPathTests : IAsyncLifetime
     [Fact]
     public void BuildUpsert_ValidEntity_ReturnsContainer()
     {
-        var helper = new TableGateway<TestEntity, long>(Context);
+        var helper = new TableGateway<TestEntity, long>(Context, AuditValueResolver);
         var entity = new TestEntity { Name = "Test" };
 
         var container = helper.BuildUpsert(entity);

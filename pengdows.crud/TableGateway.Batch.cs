@@ -241,9 +241,8 @@ public partial class TableGateway<TEntity, TRowID>
                 "Single-ID operations require a designated Id column; use composite-key helpers.");
 
         // Resolve audit values once for the whole batch
-        var auditValues = _auditValueResolver != null && _hasAuditColumns
-            ? ResolveAuditValuesForBatch()
-            : null;
+        // Throws for user audit fields without a resolver, as UpdateAsync does.
+        var auditValues = _hasAuditColumns ? ResolveAuditValuesForBatch() : null;
 
         // Prepare all entities
         foreach (var entity in entities)

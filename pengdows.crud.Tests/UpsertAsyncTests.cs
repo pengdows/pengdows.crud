@@ -168,7 +168,10 @@ public class UpsertAsyncTests : RealSqliteContextTestBase, IAsyncLifetime
         await Assert.ThrowsAsync<ConcurrencyConflictException>(async () =>
             await gateway.UpsertAsync(staleEntity, context));
 
-        Assert.Equal(1, staleEntity.LastUpdatedOnSetCount);
+        // Stamped once before the write (time-only audit fields need no resolver, as on create)
+        // and restored exactly once after the conflict.
+        Assert.Equal(2, staleEntity.LastUpdatedOnSetCount);
+        Assert.Null(staleEntity.LastUpdatedOn);
     }
 
     [Table("audited_versioned_upsert")]

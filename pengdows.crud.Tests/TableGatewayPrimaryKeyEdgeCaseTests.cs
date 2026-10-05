@@ -987,29 +987,18 @@ public class TableGatewayPrimaryKeyEdgeCaseTests
         public string? UpdatedBy { get; set; }
     }
 
-    [Fact]
-    public void BuildUpsert_SqlServer_AuditedEntityNoResolver_SkipsLastUpdatedBy()
+    // A user audit field needs a resolver on every write, as CreateAsync/UpdateAsync document; the
+    // upsert silently dropped [LastUpdatedBy] instead (DRY-016).
+    [Theory]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    public void BuildUpsert_AuditedEntityNoResolver_Throws(SupportedDatabase db)
     {
-        // No audit resolver — should skip LastUpdatedBy in MERGE SET clause
-        using var ctx = MakeContext(SupportedDatabase.SqlServer);
+        using var ctx = MakeContext(db);
         var gw = new PrimaryKeyTableGateway<GapAuditedMergeEntity>(ctx);
         var entity = new GapAuditedMergeEntity { Id = 1, Name = "test" };
 
-        // Should not throw — resolver is null so LastUpdatedBy is skipped
-        var sc = gw.BuildUpsert(entity);
-        Assert.NotNull(sc);
-    }
-
-    [Fact]
-    public void BuildUpsert_PostgreSql_AuditedEntityNoResolver_SkipsLastUpdatedBy()
-    {
-        // No audit resolver — should skip LastUpdatedBy in ON CONFLICT SET clause
-        using var ctx = MakeContext(SupportedDatabase.PostgreSql);
-        var gw = new PrimaryKeyTableGateway<GapAuditedMergeEntity>(ctx);
-        var entity = new GapAuditedMergeEntity { Id = 1, Name = "test" };
-
-        var sc = gw.BuildUpsert(entity);
-        Assert.NotNull(sc);
+        Assert.Throws<InvalidOperationException>(() => gw.BuildUpsert(entity));
     }
 
     // =========================================================================

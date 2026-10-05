@@ -22,7 +22,8 @@ public abstract partial class BaseTableGateway<TEntity>
     /// <summary>Sets an entity's audit fields and starts its version before an insert or upsert.</summary>
     private protected void PrepareForInsertOrUpsert(TEntity e)
     {
-        if (_auditValueResolver != null)
+        // As CreateAsync: time-only fields are set without a resolver, user fields require one.
+        if (_hasAuditColumns)
         {
             SetAuditFields(e, false);
         }
@@ -35,7 +36,7 @@ public abstract partial class BaseTableGateway<TEntity>
     /// </summary>
     private protected void PrepareForInsertOrUpsert(TEntity e, IAuditValues? cachedAuditValues)
     {
-        if (_auditValueResolver != null)
+        if (_hasAuditColumns)
         {
             SetAuditFields(e, false, cachedAuditValues);
         }
@@ -57,9 +58,8 @@ public abstract partial class BaseTableGateway<TEntity>
         var insertableColumns = GetCachedInsertableColumns();
 
         // Resolve audit values once for the whole batch (not once per entity)
-        var auditValues = _auditValueResolver != null && _hasAuditColumns
-            ? ResolveAuditValuesForBatch()
-            : null;
+        // Throws for user audit fields without a resolver, as CreateAsync does.
+        var auditValues = _hasAuditColumns ? ResolveAuditValuesForBatch() : null;
 
         // Prepare all entities
         foreach (var entity in entities)
@@ -110,9 +110,8 @@ public abstract partial class BaseTableGateway<TEntity>
         var insertableColumns = GetCachedInsertableColumns();
 
         // Resolve audit values once for the whole batch (not once per entity)
-        var auditValues = _auditValueResolver != null && _hasAuditColumns
-            ? ResolveAuditValuesForBatch()
-            : null;
+        // Throws for user audit fields without a resolver, as CreateAsync does.
+        var auditValues = _hasAuditColumns ? ResolveAuditValuesForBatch() : null;
 
         // Prepare all entities
         foreach (var entity in entities)
