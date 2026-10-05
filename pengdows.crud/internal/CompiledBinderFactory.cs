@@ -153,8 +153,7 @@ internal static class CompiledBinderFactory<TEntity> where TEntity : class, new(
     // and the DbType for a NULL in a provider-typed column (WRT-011). Decided once, when compiled.
     private static Expression MarkJson(Expression createParamCall, IColumnInfo column, ISqlDialect dialect)
     {
-        if (!column.IsJsonType && !column.IsEnum &&
-            (dialect as dialects.SqlDialect)?.NullParameterDbType(column) == null)
+        if (dialect is not dialects.SqlDialect { } sqlDialect || !sqlDialect.MarksColumnParameter(column))
         {
             return createParamCall;
         }

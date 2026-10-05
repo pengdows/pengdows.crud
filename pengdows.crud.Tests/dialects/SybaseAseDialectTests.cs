@@ -46,23 +46,23 @@ public class SybaseAseDialectTests
     // parameter outright ("Unsupported .net type System.DateTimeOffset") and ASE has no
     // offset-aware temporal type, so the dialect stores the UTC instant as a plain DateTime.
     [Fact]
-    public void CreateDbParameter_NonNullDateTimeOffset_CoercesToUnspecifiedUtcDateTime()
+    // The UTC instant, as microsecond text (TYPE-022: a typed DateTime loses its microseconds; text
+    // converts into BIGDATETIME exactly and into DATETIME as the typed value did).
+    public void CreateDbParameter_NonNullDateTimeOffset_IsTheUtcInstantAsText()
     {
         var dto = new DateTimeOffset(2026, 2, 21, 12, 34, 56, TimeSpan.FromHours(-5));
         var param = Dialect().CreateDbParameter<DateTimeOffset?>("p", DbType.DateTimeOffset, dto);
 
-        Assert.Equal(DbType.DateTime, param.DbType);
-        var stored = Assert.IsType<DateTime>(param.Value);
-        Assert.Equal(DateTimeKind.Unspecified, stored.Kind);
-        Assert.Equal(dto.UtcDateTime, DateTime.SpecifyKind(stored, DateTimeKind.Utc));
+        Assert.Equal(DbType.String, param.DbType);
+        Assert.Equal("2026-02-21 17:34:56.000000", param.Value);
     }
 
     [Fact]
-    public void CreateDbParameter_NullDateTimeOffset_CoercesToDbTypeDateTimeWithDbNull()
+    public void CreateDbParameter_NullDateTimeOffset_IsATextNull()
     {
         var param = Dialect().CreateDbParameter<DateTimeOffset?>("p", DbType.DateTimeOffset, null);
 
-        Assert.Equal(DbType.DateTime, param.DbType);
+        Assert.Equal(DbType.String, param.DbType);
         Assert.Equal(DBNull.Value, param.Value);
     }
 

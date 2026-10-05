@@ -132,12 +132,25 @@ internal class SybaseAseDialect : SqlDialect
         // temporal type. Store the UTC instant as a plain DateTime, matching Db2/Firebird/
         // InterBase. Null is remapped too: the driver rejects DbType.DateTimeOffset regardless
         // of the value.
-        if (type == DbType.DateTimeOffset)
+        // TYPE-022, confirmed live (ASE 16.0, AseClient 0.19.2): a typed DateTime is truncated to
+        // milliseconds on the way in, so BIGDATETIME lost its microseconds. Microsecond text converts
+        // implicitly into BIGDATETIME exactly and into DATETIME as a typed value would, in writes and
+        // WHERE alike. Truncated, never rounded.
+        if (type is DbType.DateTime2 or DbType.DateTimeOffset)
         {
-            object coerced = value is DateTimeOffset dto
-                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
-                : DBNull.Value;
-            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+            object? text = value switch
+            {
+                null or DBNull => DBNull.Value,
+                DateTime dt => BigDateTimeText(dt),
+                DateTimeOffset dto => BigDateTimeText(dto.UtcDateTime),
+                DateOnly day => BigDateTimeText(day.ToDateTime(TimeOnly.MinValue)),
+                string already => already,
+                _ => null
+            };
+            if (text != null)
+            {
+                return base.CreateDbParameter<object?>(name, DbType.String, text);
+            }
         }
 
         // CONFIRMED live (ASE 16.0, AdoNetCore.AseClient 0.19.2): a NULL typed DbType.Boolean is sent
@@ -151,6 +164,59 @@ internal class SybaseAseDialect : SqlDialect
 
         return base.CreateDbParameter(name, type, value);
     }
+
+    private static string BigDateTimeText(DateTime value) =>
+        value.ToString("yyyy-MM-dd HH:mm:ss.ffffff", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string BigTimeText(TimeSpan value) =>
+        value.ToString(@"hh\:mm\:ss\.ffffff", System.Globalization.CultureInfo.InvariantCulture);
+
+    // TYPE-022, confirmed live: BIGTIME refuses text without CONVERT ("Implicit conversion from
+    // UNIVARCHAR to BIGTIME is not allowed"), and a typed TimeSpan loses its microseconds. The
+    // gateways write a time column as CONVERT(BIGTIME, text), which a TIME column accepts as well.
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        column.DbType == DbType.Time || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        column.DbType == DbType.Time
+            ? string.Concat("CONVERT(BIGTIME, ", parameterMarker, ")")
+            : base.RenderColumnArgument(parameterMarker, column);
+
+    internal override bool MarksColumnParameter(IColumnInfo column) =>
+        column.DbType == DbType.Time || base.MarksColumnParameter(column);
+
+    public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        base.MarkColumnParameter(parameter, column);
+        if (column.DbType != DbType.Time)
+        {
+            return;
+        }
+
+        var text = parameter.Value switch
+        {
+            TimeSpan span => BigTimeText(span),
+            TimeOnly time => BigTimeText(time.ToTimeSpan()),
+            _ => null
+        };
+        parameter.DbType = DbType.String;
+        if (text != null)
+        {
+            parameter.Value = text;
+        }
+    }
+
+    // TYPE-022, confirmed live: AseClient decodes BIGDATETIME a few microseconds off (.123456 as
+    // .1229952) and can't read BIGTIME at all ("Unsupported data type 188"). Styles 140 and 137
+    // render them exactly (yyyy-mm-dd hh:mm:ss.ffffff, hh:mm:ss.ffffff); DATETIME and TIME read the
+    // same way.
+    internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        column.DbType switch
+        {
+            DbType.DateTime2 or DbType.DateTimeOffset => $"CONVERT(VARCHAR(26), {columnReference}, 140) AS {wrappedName}",
+            DbType.Time => $"CONVERT(VARCHAR(15), {columnReference}, 137) AS {wrappedName}",
+            _ => columnReference
+        };
 
     // Verified live: this ASE build rejects the multi-row VALUES clause the base
     // implementation generates ("INSERT INTO t (...) VALUES (r1...), (r2...)") with

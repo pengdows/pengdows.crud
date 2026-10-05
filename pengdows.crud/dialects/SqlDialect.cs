@@ -445,6 +445,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// Firebird: a WAIT transaction, so DDL after writes doesn't fail on the garbage collector's
     /// hold on the table (WRT-001).
     /// </summary>
+    /// <summary>
+    /// True when <see cref="MarkColumnParameter"/> changes this column's parameter, so a compiled
+    /// binder calls it (it skips the call otherwise): JSON, enums, a provider-typed NULL, and whatever
+    /// a dialect adds (Sybase ASE time columns, TYPE-022).
+    /// </summary>
+    internal virtual bool MarksColumnParameter(IColumnInfo column) =>
+        column.IsJsonType || column.IsEnum || NullParameterDbType(column) != null;
+
     internal virtual System.Data.Common.DbTransaction? BeginDdlTransaction(System.Data.Common.DbConnection connection,
         TimeSpan? lockWait) => null;
 

@@ -48,6 +48,11 @@
 
 ## Reads that now work
 
+- Sybase ASE `BIGDATETIME` keeps its microseconds through the gateways (2.0.5 wrote milliseconds and
+  read values a few microseconds off), and `BIGTIME` can be read at all (2.0.5: "Unsupported data
+  type 188"). `DbType.DateTime2` and `DbType.DateTimeOffset` parameters are now sent as microsecond
+  text, also in your own SQL; a `DATETIME` column stores the same value as before. Gateway reads of
+  these columns select `CONVERT(VARCHAR, col, 140/137)` (TYPE-022).
 - A negative DuckDB `INTERVAL` read into a `TimeSpan` works. DuckDB.NET 1.5.6 throws for every
   negative interval; the value is now read from its stored parts. An interval with months fails with
   `DataMappingException` instead of reading as zero months (TYPE-022).

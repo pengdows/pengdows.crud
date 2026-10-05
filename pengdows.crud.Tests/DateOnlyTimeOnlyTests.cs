@@ -229,7 +229,11 @@ public sealed class DateOnlyTimeOnlyTests
             .Select(i => container.GetParameterValue("i" + i))
             .ToList();
         Assert.Contains(ExpectedDate(dialect, DbType.Date), values);
-        Assert.Contains(ExpectedTime(dialect), values);
+        // A gateway column is bound as the dialect marks it (Sybase ASE: time columns as text, TYPE-022).
+        var atColumn = new TypeMapRegistry().GetTableInfo<CalendarEntity>().Columns["at"];
+        var expectedAt = dialect.CreateDbParameter("e", DbType.Time, SampleTime.ToTimeSpan());
+        InternalSqlDialectExtensions.MarkColumnParameter(dialect, expectedAt, atColumn);
+        Assert.Contains(expectedAt.Value, values);
     }
 
     [Theory]
