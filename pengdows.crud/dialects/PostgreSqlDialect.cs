@@ -1015,25 +1015,20 @@ internal class PostgreSqlDialect : SqlDialect
     /// subclasses can reuse the same logic without duplicating it.
     /// Silently ignores failures when the parameter is not an Npgsql parameter type.
     /// </summary>
+    // Through ProviderPropertySetter's compiled, cached setters: this ran reflection (two property
+    // lookups, an enum parse, PropertyInfo.SetValue) on every parameter (DRY-019). A parameter that
+    // isn't Npgsql's has neither property, and is left alone; one whose setter refuses the type is too.
     protected void SetNpgsqlParameterType(DbParameter parameter, string npgsqlDbTypeName, string dataTypeName)
     {
         try
         {
-            var type = parameter.GetType();
-            var npgsqlDbTypeProp = type.GetProperty(NpgsqlDbTypeProperty);
-            if (npgsqlDbTypeProp != null)
-            {
-                if (Enum.TryParse(npgsqlDbTypeProp.PropertyType, npgsqlDbTypeName, true, out var enumVal))
-                {
-                    npgsqlDbTypeProp.SetValue(parameter, enumVal);
-                }
-            }
-
-            type.GetProperty(DataTypeNameProperty)?.SetValue(parameter, dataTypeName);
+            ProviderPropertySetter.Set(parameter, NpgsqlDbTypeProperty, npgsqlDbTypeName);
+            ProviderPropertySetter.Set(parameter, DataTypeNameProperty, dataTypeName);
         }
-        catch
+        catch (Exception ex) when (ex is not OutOfMemoryException)
         {
-            // Not an Npgsql parameter or the property is absent — ignore.
+            Logger.LogDebug(ex, "Could not set Npgsql type {Type} on parameter {Parameter}.", npgsqlDbTypeName,
+                parameter.ParameterName);
         }
     }
 
