@@ -140,11 +140,13 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   `SELECT` (Snowflake refuses it in `VALUES`); spatial as EWKT both ways; `TIMESTAMP_LTZ`/`TZ` read as the exact
   `DateTimeOffset`. `VECTOR` needs the column's type (TYPE-020).
 - SAP HANA: `HanaDecimal` read with `GetDecimal`; decimals sent without trailing zeros (the driver silently cut
-  digits otherwise); spatial as WKB; `TIMESTAMP` keeps 7 digits (`DateTime` bound as text, gateway reads via `TO_VARCHAR(..., 'FF7')`; TYPE-022); `BINTEXT` as text.
+  digits otherwise); spatial as WKB; `TIMESTAMP` keeps 7 digits (`DateTime` bound as text, gateway reads via `TO_VARCHAR(..., 'FF7')`; TYPE-022); `BINTEXT` as text;
+  `ARRAY` ↔ `int[]`/`long[]`/`short[]`/`double[]`/`float[]`/`string[]` (JSON text through `ARRAY(SELECT V FROM JSON_TABLE(?, ...) ORDER BY O)`,
+  read by decoding the driver's wire bytes; element type must match the column's; TYPE-020).
 - DuckDB `BIT` ↔ `BitArray` (bit string); SQL Server `sql_variant` ↔ `object`; InterBase `ARRAY` ↔ `T[]` (bound with
   `IBDbType.Array`, non-zero-based results copied) and its `NONE` charset pinned to UTF-8 (the driver otherwise picks
   the system code page when code pages are registered, storing `?`); Informix `LIST`/`SET`/`MULTISET` ↔ `T[]` (written as
-  `LIST{...}`, read by parsing the literal). Not yet: HANA `ARRAY`, Informix `ROW` (TYPE-020); ASE has no `XML` type.
+  `LIST{...}`, read by parsing the literal). Not yet: Informix `ROW` (TYPE-020); ASE has no `XML` type.
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.

@@ -172,6 +172,13 @@ internal sealed class HanaDialect : SqlDialect
     // in writes and WHERE alike; gateway reads select TO_VARCHAR(..., 'FF7') (RenderColumnSelect).
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        // TYPE-020: an array is bound as its JSON text (the driver refuses array parameters); build
+        // the ARRAY with ARRAY(SELECT V FROM JSON_TABLE(?, ...) ORDER BY O), as the gateways do.
+        if (value is Array array and not byte[] && ArrayElementSqlType(array.GetType()) != null)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.String, ArrayJson(array));
+        }
+
         if (type is DbType.DateTime or DbType.DateTime2)
         {
             object? text = value switch
@@ -189,6 +196,129 @@ internal sealed class HanaDialect : SqlDialect
         }
 
         return base.CreateDbParameter(name, type, value);
+    }
+
+    // ── ARRAY columns (TYPE-020), confirmed live (HANA Express 2.00.088, Sap.Data.Hana.Net 2.29): the
+    // driver refuses array parameters and HANA converts no text or binary into an ARRAY, but an ARRAY
+    // subquery over JSON_TABLE builds one from a single JSON text parameter, in INSERT, UPDATE and both
+    // MERGE arms, null elements and empty arrays included. JSON_TABLE types only INT, BIGINT, DOUBLE,
+    // DECIMAL, (N)VARCHAR and date/time columns, and HANA converts INT into a SMALLINT element and
+    // DOUBLE into REAL. Reads decode the driver's bytes (HanaArrayCoercion).
+    private const string ArrayMarker = "\u0001pengdows:hana:array";
+    private const string ArrayPrefix = "ARRAY(SELECT V FROM JSON_TABLE(";
+    private const string ArraySuffix = ") ORDER BY O)";
+
+    private static string? ArrayElementSqlType(Type arrayType)
+    {
+        if (!arrayType.IsArray || arrayType == typeof(byte[]))
+        {
+            return null;
+        }
+
+        var element = arrayType.GetElementType()!;
+        element = Nullable.GetUnderlyingType(element) ?? element;
+        return element == typeof(int) || element == typeof(short) ? "INT"
+            : element == typeof(long) ? "BIGINT"
+            : element == typeof(double) || element == typeof(float) ? "DOUBLE"
+            : element == typeof(string) ? "NVARCHAR(5000)"
+            : null;
+    }
+
+    private static string? ArrayElementSqlType(IColumnInfo column) =>
+        column.IsJsonType ? null : ArrayElementSqlType(column.PropertyInfo.PropertyType);
+
+    private static string ArrayJson(Array array) => System.Text.Json.JsonSerializer.Serialize(array, array.GetType());
+
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        ArrayElementSqlType(column) != null || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        ArrayElementSqlType(column) is { } elementType
+            ? string.Concat(ArrayPrefix, parameterMarker, ", '$[*]' COLUMNS (O FOR ORDINALITY, V ", elementType, " PATH '$')", ArraySuffix)
+            : base.RenderColumnArgument(parameterMarker, column);
+
+    internal override bool MarksColumnParameter(IColumnInfo column) =>
+        ArrayElementSqlType(column) != null || base.MarksColumnParameter(column);
+
+    public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        base.MarkColumnParameter(parameter, column);
+        if (ArrayElementSqlType(column) == null)
+        {
+            return;
+        }
+
+        if (parameter.Value is Array array and not byte[])
+        {
+            parameter.DbType = DbType.String;
+            parameter.Value = ArrayJson(array);
+        }
+
+        parameter.SourceColumn = ArrayMarker;
+    }
+
+    internal override bool PreparesCommands => true;
+
+    // No expression keeps a NULL array NULL (JSON_TABLE over NULL is an empty array, and HANA has no
+    // typed NULL ARRAY literal, confirmed live), so a null value's ARRAY(...) becomes NULL here and its
+    // parameter is dropped. The gateways render the expression, so its text is known.
+    internal override ValueTask PrepareCommandAsync(DbCommand command, CancellationToken cancellationToken)
+    {
+        for (var i = command.Parameters.Count - 1; i >= 0; i--)
+        {
+            var parameter = command.Parameters[i];
+            if (parameter.SourceColumn != ArrayMarker || parameter.Value is not (null or DBNull))
+            {
+                continue;
+            }
+
+            var text = command.CommandText;
+            var marker = NthMarker(text, i);
+            if (marker < ArrayPrefix.Length ||
+                string.CompareOrdinal(text, marker - ArrayPrefix.Length, ArrayPrefix, 0, ArrayPrefix.Length) != 0)
+            {
+                continue;
+            }
+
+            var end = text.IndexOf(ArraySuffix, marker, StringComparison.Ordinal);
+            if (end < 0)
+            {
+                continue;
+            }
+
+            var start = marker - ArrayPrefix.Length;
+            command.CommandText = string.Concat(text.AsSpan(0, start), "NULL", text.AsSpan(end + ArraySuffix.Length));
+            command.Parameters.RemoveAt(i);
+        }
+
+        return default;
+    }
+
+    // The offset of the n-th (0-based) positional marker outside quoted text, or -1.
+    private static int NthMarker(string text, int n)
+    {
+        var quote = '\0';
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (quote != '\0')
+            {
+                if (c == quote)
+                {
+                    quote = '\0';
+                }
+            }
+            else if (c is '\'' or '"')
+            {
+                quote = c;
+            }
+            else if (c == '?' && n-- == 0)
+            {
+                return i;
+            }
+        }
+
+        return -1;
     }
 
     internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
@@ -435,6 +565,8 @@ internal sealed class HanaDialect : SqlDialect
                 };
                 registry.RegisterMapping<Geometry>(SupportedDatabase.SapHana, binarySpatial);
                 registry.RegisterMapping<Geography>(SupportedDatabase.SapHana, binarySpatial);
-            }
+            },
+            RegisterCoercions = registry =>
+                types.coercion.HanaArrayCoercion.RegisterAll(registry, SupportedDatabase.SapHana)
         };
 }

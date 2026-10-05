@@ -72,6 +72,11 @@
   type 188"). `DbType.DateTime2` and `DbType.DateTimeOffset` parameters are now sent as microsecond
   text, also in your own SQL; a `DATETIME` column stores the same value as before. Gateway reads of
   these columns select `CONVERT(VARCHAR, col, 140/137)` (TYPE-022).
+- SAP HANA `ARRAY` columns map to `int[]`, `long[]`, `short[]`, `double[]`, `float[]` and `string[]`
+  (nullable elements allowed). 2.0.5 failed ("The parameter data type of Int32[] is invalid") and read
+  the column as raw bytes. Arrays are bound as JSON text and built with `ARRAY(SELECT V FROM
+  JSON_TABLE(?, ...) ORDER BY O)`, and reads decode the driver's bytes; see
+  [advanced-types.md](advanced-types.md) (TYPE-020).
 - SAP HANA `TIMESTAMP` keeps all 7 fractional digits through the gateways; Sap.Data.Hana.Net cut them
   to 6 on write and read. `DbType.DateTime`/`DateTime2` parameters are now sent as 7-digit text, also
   in your own SQL (`SECONDDATE` and `DATE` store the same value as before), and gateway reads select
