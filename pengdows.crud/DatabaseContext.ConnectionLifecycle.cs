@@ -650,20 +650,79 @@ public partial class DatabaseContext
     /// </summary>
     internal void ExecuteSessionSettings(IDbConnection connection, bool readOnly)
     {
-        if (!_sessionSettingsDetectionCompleted)
+        if (SessionSettingsToRun(connection, readOnly) is not { } settings)
         {
             return;
         }
 
-        // If this DataSource has session settings baked into its PostgreSQL startup Options
-        // parameter, the pool-return RESET ALL already restored the correct values — skip.
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = settings;
+            cmd.ExecuteNonQuery();
+        }
+        catch (Exception ex)
+        {
+            SessionSettingsFailed(ex);
+            return;
+        }
+
+        SessionSettingsApplied(connection, start);
+    }
+
+    internal async ValueTask ExecuteSessionSettingsAsync(
+        IDbConnection connection,
+        bool readOnly,
+        CancellationToken cancellationToken = default)
+    {
+        if (SessionSettingsToRun(connection, readOnly) is not { } settings)
+        {
+            return;
+        }
+
+        var start = System.Diagnostics.Stopwatch.GetTimestamp();
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = settings;
+            if (cmd is DbCommand dbCommand)
+            {
+                await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            SessionSettingsFailed(ex);
+            return;
+        }
+
+        SessionSettingsApplied(connection, start);
+    }
+
+    // What ExecuteSessionSettings and its async twin share (DRY-017). The settings to send on a
+    // first open, or null when there is nothing to send (detection not done; settings baked into the
+    // PostgreSQL DataSource's startup Options, which the pool's RESET ALL restores; none to apply).
+    private string? SessionSettingsToRun(IDbConnection connection, bool readOnly)
+    {
+        if (!_sessionSettingsDetectionCompleted)
+        {
+            return null;
+        }
+
         if (_dataSource != null && (readOnly ? _roSettingsBakedIntoDataSource : _rwSettingsBakedIntoDataSource))
         {
-            if (connection is ITrackedConnection bakedTc)
-            {
-                bakedTc.LocalState.MarkSessionSettingsApplied();
-            }
-            return;
+            MarkSessionSettingsApplied(connection);
+            return null;
         }
 
         var settingsToApply = readOnly
@@ -685,139 +744,44 @@ public partial class DatabaseContext
                     Dialect?.GetType().Name ?? "unknown", Name);
             }
 
-            if (connection is ITrackedConnection t)
-            {
-                t.LocalState.MarkSessionSettingsApplied();
-            }
-            return;
+            MarkSessionSettingsApplied(connection);
+            return null;
         }
 
         _logger.LogDebug("Applying session settings for {Name} (ReadOnly: {ReadOnly})",
             Name, readOnly);
+        return settingsToApply;
+    }
 
-        var sessionInitStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = settingsToApply;
-            cmd.ExecuteNonQuery();
-            var sessionInitMs = MetricsCollector.ToMilliseconds(
-                System.Diagnostics.Stopwatch.GetTimestamp() - sessionInitStart);
-            _metricsCollector?.RecordSessionInitDuration(sessionInitMs);
-        }
-        catch (Exception ex)
-        {
-            // Default (SessionInitializationFailureMode.BestEffort): log the failure and return the
-            // connection without marking settings applied. The connection proceeds in an unknown
-            // session state. FailClosed throws ConnectionException instead (below).
-            //
-            // Intentional trade-off: failing hard here would surface every transient SET
-            // failure (e.g., a momentary DB hiccup) as a connection acquisition exception.
-            // Instead, callers that require strict read-only enforcement should verify
-            // the transaction isolation level and not rely solely on session settings.
-            //
-            // MarkSessionSettingsApplied() is NOT called, so a second checkout of this
-            // logical connection will retry the SET on next first-open. For StandardMode
-            // (ephemeral connections) each TrackedConnection is fresh anyway.
-            _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
-            if (_sessionInitializationFailureMode == SessionInitializationFailureMode.FailClosed)
-            {
-                throw new ConnectionException(
-                    $"Failed to apply session settings for connection '{Name}' and SessionInitializationFailureMode.FailClosed is configured.",
-                    Product, ex);
-            }
-            return;
-        }
+    private void SessionSettingsApplied(IDbConnection connection, long startTimestamp)
+    {
+        _metricsCollector?.RecordSessionInitDuration(
+            MetricsCollector.ToMilliseconds(System.Diagnostics.Stopwatch.GetTimestamp() - startTimestamp));
+        MarkSessionSettingsApplied(connection);
+    }
 
-        if (connection is ITrackedConnection tc)
+    private static void MarkSessionSettingsApplied(IDbConnection connection)
+    {
+        if (connection is ITrackedConnection tracked)
         {
-            tc.LocalState.MarkSessionSettingsApplied();
+            tracked.LocalState.MarkSessionSettingsApplied();
         }
     }
 
-    internal async ValueTask ExecuteSessionSettingsAsync(
-        IDbConnection connection,
-        bool readOnly,
-        CancellationToken cancellationToken = default)
+    // Default (SessionInitializationFailureMode.BestEffort): log the failure and return the
+    // connection without marking settings applied, so the next first-open of this logical
+    // connection retries the SET; the connection proceeds in an unknown session state. Failing hard
+    // would surface every transient SET failure as a connection acquisition exception; callers that
+    // require strict read-only enforcement should verify the transaction, not rely solely on session
+    // settings. FailClosed throws ConnectionException instead.
+    private void SessionSettingsFailed(Exception ex)
     {
-        if (!_sessionSettingsDetectionCompleted)
+        _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
+        if (_sessionInitializationFailureMode == SessionInitializationFailureMode.FailClosed)
         {
-            return;
-        }
-
-        // If this DataSource has session settings baked into its PostgreSQL startup Options
-        // parameter, the pool-return RESET ALL already restored the correct values — skip.
-        if (_dataSource != null && (readOnly ? _roSettingsBakedIntoDataSource : _rwSettingsBakedIntoDataSource))
-        {
-            if (connection is ITrackedConnection bakedTc)
-            {
-                bakedTc.LocalState.MarkSessionSettingsApplied();
-            }
-            return;
-        }
-
-        var settingsToApply = readOnly
-            ? _cachedReadOnlySessionSettings
-            : _cachedReadWriteSessionSettings;
-
-        if (string.IsNullOrWhiteSpace(settingsToApply))
-        {
-            if (readOnly)
-            {
-                _logger.LogDebug(
-                    "Dialect {Dialect} does not emit session-level read-only SQL; " +
-                    "read-only intent must be enforced at the transaction level for {Name}.",
-                    Dialect?.GetType().Name ?? "unknown", Name);
-            }
-
-            if (connection is ITrackedConnection t)
-            {
-                t.LocalState.MarkSessionSettingsApplied();
-            }
-            return;
-        }
-
-        _logger.LogDebug("Applying session settings for {Name} (ReadOnly: {ReadOnly})",
-            Name, readOnly);
-
-        var sessionInitStart = System.Diagnostics.Stopwatch.GetTimestamp();
-        try
-        {
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = settingsToApply;
-            if (cmd is DbCommand dbCommand)
-            {
-                await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                cancellationToken.ThrowIfCancellationRequested();
-                cmd.ExecuteNonQuery();
-            }
-
-            var sessionInitMs = MetricsCollector.ToMilliseconds(
-                System.Diagnostics.Stopwatch.GetTimestamp() - sessionInitStart);
-            _metricsCollector?.RecordSessionInitDuration(sessionInitMs);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to apply session settings for {Name}", Name);
-            if (_sessionInitializationFailureMode == SessionInitializationFailureMode.FailClosed)
-            {
-                throw new ConnectionException(
-                    $"Failed to apply session settings for connection '{Name}' and SessionInitializationFailureMode.FailClosed is configured.",
-                    Product, ex);
-            }
-            return;
-        }
-
-        if (connection is ITrackedConnection tc)
-        {
-            tc.LocalState.MarkSessionSettingsApplied();
+            throw new ConnectionException(
+                $"Failed to apply session settings for connection '{Name}' and SessionInitializationFailureMode.FailClosed is configured.",
+                Product, ex);
         }
     }
 
