@@ -175,8 +175,12 @@ public class RealAsyncLockerTests
         using var ctsWait = new CancellationTokenSource(TimeSpan.FromSeconds(5));
         await semaphore.WaitAsync(ctsWait.Token);
         var locker = new RealAsyncLocker(semaphore);
-        using var cts = new CancellationTokenSource(50);
-        await Assert.ThrowsAsync<OperationCanceledException>(async () => await locker.TryLockAsync(TimeSpan.FromSeconds(1), cts.Token));
+        // Cancel explicitly once the wait has started: a 50 ms timer against a 1 s lock timeout lost
+        // the race when the full suite stalled the machine for a second, so the timeout won.
+        using var cts = new CancellationTokenSource();
+        var waiting = locker.TryLockAsync(TimeSpan.FromMinutes(1), cts.Token);
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await waiting);
         semaphore.Release();
     }
 
