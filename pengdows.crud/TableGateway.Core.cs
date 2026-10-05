@@ -114,6 +114,16 @@ public partial class TableGateway<TEntity, TRowID> :
     private readonly ConditionalWeakTable<ISqlDialect, Lazy<CachedContainerTemplates>> _containersByDialect =
         new();
 
+    private protected override void ResetDialectCaches(ISqlDialect dialect)
+    {
+        base.ResetDialectCaches(dialect);
+        _insertBinders.Remove(dialect);
+        _upsertBinders.Remove(dialect);
+        _updateBinders.Remove(dialect);
+        _templatesByDialect.Remove(dialect);
+        _containersByDialect.Remove(dialect);
+    }
+
 
     // Unified constructor accepting optional audit resolver and optional logger (by name)
     public TableGateway(IDatabaseContext databaseContext,
@@ -150,6 +160,11 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var ctx = context ?? _context;
+        if (DeclaredTypesPending(ctx))
+        {
+            return CreateAfterDeclaredTypesAsync(entity, ctx, cancellationToken);
+        }
+
         GeneratedKeyPlan plan;
         ISqlDialect dialect;
         try
@@ -165,6 +180,14 @@ public partial class TableGateway<TEntity, TRowID> :
         return plan is GeneratedKeyPlan.Returning or GeneratedKeyPlan.OutputInserted && _idColumn is { IsIdWritable: false }
             ? CreateWithReturningAsync(entity, ctx, dialect, cancellationToken)
             : CreateCoreAsync(entity, ctx, cancellationToken);
+    }
+
+    // TYPE-020: the first write on a context learns the table's declared column types first.
+    private async ValueTask<bool> CreateAfterDeclaredTypesAsync(TEntity entity, IDatabaseContext ctx,
+        CancellationToken cancellationToken)
+    {
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false);
+        return await CreateAsync(entity, ctx, cancellationToken).ConfigureAwait(false);
     }
 
     // RETURNING/OUTPUT: the INSERT reports the id itself (Postgres, SQL Server, SQLite, ...).
@@ -943,6 +966,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken, forRead: true).ConfigureAwait(false); // TYPE-020
         var dialect = GetDialect(ctx);
 
         // Set-valued dialects: BuildRetrieve binds one scalar for a single id and one typed array
@@ -1038,6 +1062,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken, forRead: true).ConfigureAwait(false); // TYPE-020
 
         // Get the container to use (with try-catch for error handling)
         await using var container = GetRetrieveContainer(list, ctx);
@@ -1318,6 +1343,7 @@ public partial class TableGateway<TEntity, TRowID> :
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken, forRead: true).ConfigureAwait(false); // TYPE-020
         var list = new List<TEntity> { objectToRetrieve };
         await using var sc = BuildRetrieve(list, string.Empty, ctx);
         return await LoadSingleAsync(sc, cancellationToken).ConfigureAwait(false);
@@ -1328,6 +1354,7 @@ public partial class TableGateway<TEntity, TRowID> :
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken, forRead: true).ConfigureAwait(false); // TYPE-020
         if (_idColumn == null)
         {
             throw new InvalidOperationException(
@@ -1417,6 +1444,7 @@ public partial class TableGateway<TEntity, TRowID> :
         CancellationToken cancellationToken = default)
     {
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
 
         // BuildUpdateAsync mutates audit fields as a side effect of building the UPDATE, before
         // anything executes. Restore them whenever the write doesn't actually succeed — including

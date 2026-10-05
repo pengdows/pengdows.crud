@@ -89,6 +89,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
         if (entities.Count == 1)
         {
             return await CreateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false) ? 1 : 0;

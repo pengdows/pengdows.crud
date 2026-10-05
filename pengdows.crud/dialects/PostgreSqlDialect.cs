@@ -128,6 +128,22 @@ internal class PostgreSqlDialect : SqlDialect
             return timetz;
         }
 
+        // TYPE-020: a C# enum written by name in your own SQL ("WHERE mood = {P}m") must reach a
+        // user-defined ENUM column as the column's type, so it goes untyped, as the gateways send it.
+        // Npgsql can't write a CLR enum at all ("Writing values of '...' is not supported", confirmed live),
+        // so its name goes; CockroachDB takes it as text.
+        if (value is Enum enumValue && type is DbType.String or DbType.AnsiString or DbType.StringFixedLength
+                or DbType.AnsiStringFixedLength)
+        {
+            var enumName = base.CreateDbParameter<object?>(name, type, enumValue.ToString());
+            if (SendsEnumParametersUntyped)
+            {
+                SetNpgsqlDbTypeOnly(enumName, "Unknown");
+            }
+
+            return enumName;
+        }
+
         // TYPE-002, confirmed live (Npgsql 9): Npgsql can't infer pg_lsn from an
         // NpgsqlLogSequenceNumber and refuses the parameter unless the type is named.
         if (value is not null && value.GetType().FullName == "NpgsqlTypes.NpgsqlLogSequenceNumber")
@@ -192,17 +208,41 @@ internal class PostgreSqlDialect : SqlDialect
     // ENUM column refuses. An empty SELECT of the target's own columns followed by one SELECT per row,
     // UNION ALL, gives each value its column's type instead, with no type name needed. Only for rows
     // holding such an enum: a long UNION ALL plans more slowly than one VALUES list.
-    private static bool HasEnumStoredByName(IReadOnlyList<IColumnInfo> columns)
+    private bool HasEnumStoredByName(IReadOnlyList<IColumnInfo> columns)
     {
         foreach (var column in columns)
         {
-            if (column.IsEnum && column.EnumAsString)
+            if ((column.IsEnum && column.EnumAsString) || IsStringIntoNonTextColumn(column))
             {
                 return true;
             }
         }
 
         return false;
+    }
+
+    // TYPE-020: a string property bound to a column whose declared type isn't text (a user-defined
+    // ENUM, uuid, ...) is written like a C# enum stored by name: untyped where the dialect does that,
+    // and through the table-typed source in MERGE/batch update. Learned from the declared types.
+    private static bool IsStringProperty(IColumnInfo column) =>
+        !column.IsJsonType && !column.IsEnum &&
+        (Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType) == typeof(string);
+
+    internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) => !forRead && IsStringProperty(column);
+
+    private bool IsStringIntoNonTextColumn(IColumnInfo column) =>
+        IsStringProperty(column) && DeclaredTypeOf(column) is { } declared && !IsTextType(declared);
+
+    private static bool IsTextType(string declared)
+    {
+        var name = declared.Contains('.') ? declared[(declared.LastIndexOf('.') + 1)..] : declared;
+        return name.StartsWith("text", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("character", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("varchar", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("bpchar", StringComparison.OrdinalIgnoreCase) ||
+               name.StartsWith("char", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("name", StringComparison.OrdinalIgnoreCase) ||
+               name.Equals("string", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void AppendTypedSourceTemplate(ISqlQueryBuilder query, string tableName, IReadOnlyList<string> columns)
@@ -510,7 +550,7 @@ internal class PostgreSqlDialect : SqlDialect
     public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
     {
         base.MarkColumnParameter(parameter, column);
-        if (column.IsEnum && column.EnumAsString && SendsEnumParametersUntyped)
+        if (((column.IsEnum && column.EnumAsString) || IsStringIntoNonTextColumn(column)) && SendsEnumParametersUntyped)
         {
             SetNpgsqlDbTypeOnly(parameter, "Unknown");
         }
@@ -521,6 +561,9 @@ internal class PostgreSqlDialect : SqlDialect
     /// CockroachDB assigns text to an ENUM itself and refuses an untyped value in a VALUES list.
     /// </summary>
     internal virtual bool SendsEnumParametersUntyped => true;
+
+    internal override bool MarksColumnParameter(IColumnInfo column) =>
+        IsStringIntoNonTextColumn(column) || base.MarksColumnParameter(column);
 
     private protected static void SetNpgsqlDbTypeOnly(DbParameter parameter, string npgsqlDbTypeName)
     {

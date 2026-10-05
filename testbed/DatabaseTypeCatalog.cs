@@ -333,9 +333,14 @@ public static class DatabaseTypeCatalog
             Declaration: "DOUBLE PRECISION[]", ClrType: typeof(double[]), DbType: System.Data.DbType.Object, Sample: new[] { 1.5, -1.25e300 }),
         new("ENUM", ColumnTypeCategory.UserDefined, IsUserDefined: true,
             Declaration: "pengdows_mood", ClrType: typeof(CatalogMood), DbType: System.Data.DbType.String, Sample: CatalogMood.happy,
+            Notes: "A C# enum is written untyped (gateways and your own SQL), so PostgreSQL applies the enum type; MERGE " +
+                   "upserts and batch updates of such rows use a table-typed source (TYPE-002, TYPE-020).",
+            Setup: "DROP TABLE IF EXISTS type_rt; DROP TYPE IF EXISTS pengdows_mood; CREATE TYPE pengdows_mood AS ENUM ('sad', 'ok', 'happy')"),
+        new("pengdows_mood (string)", ColumnTypeCategory.Other,
+            Declaration: "pengdows_mood", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "happy",
             Comparable: false,
-            Notes: "A C# enum is written untyped so PostgreSQL applies the enum type; a string property, a MERGE upsert " +
-                   "(PostgreSQL 15+) and WHERE in your own SQL still need CAST(@p AS type) (TYPE-002; 3.0 will name the type).",
+            Notes: "A string property: the gateways learn the column's declared type and write it like a C# enum (TYPE-020). " +
+                   "A plain string parameter in your own WHERE still needs CAST(@p AS pengdows_mood).",
             Setup: "DROP TABLE IF EXISTS type_rt; DROP TYPE IF EXISTS pengdows_mood; CREATE TYPE pengdows_mood AS ENUM ('sad', 'ok', 'happy')"),
         new("HSTORE", ColumnTypeCategory.Other,
             Declaration: "HSTORE", ClrType: typeof(pengdows.crud.types.valueobjects.HStore), DbType: System.Data.DbType.Object,

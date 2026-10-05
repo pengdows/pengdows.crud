@@ -33,6 +33,12 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     // ties each entry's lifetime to its dialect instance so the cache doesn't grow without bound.
     private readonly ConditionalWeakTable<ISqlDialect, Lazy<PkTemplates>> _pkTemplatesByDialect = new();
 
+    private protected override void ResetDialectCaches(ISqlDialect dialect)
+    {
+        base.ResetDialectCaches(dialect);
+        _pkTemplatesByDialect.Remove(dialect);
+    }
+
     // Batch SQL can group multiple entities into a single container. Keep the ownership metadata
     // weakly attached to that container so a partial batch failure restores audit fields only for
     // containers that never completed, without extending the container's lifetime.
@@ -328,6 +334,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         try
         {
             var ctx = context ?? _context;
+            await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
             await using var sc = BuildCreate(entity, ctx);
             return RestoreAuditFieldsIfFailed(
                 await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false) == 1,
@@ -354,6 +361,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken, forRead: true).ConfigureAwait(false); // TYPE-020
         await using var sc = BuildRetrieve(new[] { objectToRetrieve }, string.Empty, ctx);
         return await LoadSingleAsync(sc, cancellationToken).ConfigureAwait(false);
     }

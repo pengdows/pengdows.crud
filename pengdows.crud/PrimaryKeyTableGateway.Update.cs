@@ -26,7 +26,17 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
-        return ValueTask.FromResult(BuildUpdateByPk(objectToUpdate, ctx));
+        return DeclaredTypesPending(ctx)
+            ? BuildUpdateAfterDeclaredTypesAsync(objectToUpdate, ctx, cancellationToken)
+            : ValueTask.FromResult(BuildUpdateByPk(objectToUpdate, ctx));
+    }
+
+    // TYPE-020: the first build on a context learns the table's declared column types first.
+    private async ValueTask<ISqlContainer> BuildUpdateAfterDeclaredTypesAsync(TEntity objectToUpdate,
+        IDatabaseContext ctx, CancellationToken cancellationToken)
+    {
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false);
+        return BuildUpdateByPk(objectToUpdate, ctx);
     }
 
     /// <inheritdoc/>
@@ -53,6 +63,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         try
         {
             var ctx = context ?? _context;
+            await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
             await using var sc = await BuildUpdateAsync(objectToUpdate, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
@@ -86,6 +97,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         try
         {
             var ctx = context ?? _context;
+            await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
             await using var sc =
                 await BuildUpdateAsync(objectToUpdate, loadOriginal, ctx, cancellationToken).ConfigureAwait(false);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
@@ -169,6 +181,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
         if (entities.Count == 1)
         {
             return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);

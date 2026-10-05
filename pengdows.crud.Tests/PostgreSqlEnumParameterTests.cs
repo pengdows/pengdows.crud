@@ -56,6 +56,36 @@ public sealed class PostgreSqlEnumParameterTests
             p => Assert.NotEqual(fakeNpgsqlDbType.Unknown, p.NpgsqlDbType));
     }
 
+    // TYPE-020: in your own SQL ("WHERE mood = {P}m"), a C# enum value is a name the server must read
+    // as the column's type, so it is sent untyped too; plain strings keep their text type.
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    public void UserSql_EnumValueParameter_IsUntyped(SupportedDatabase product)
+    {
+        using var context = Context(product);
+        using var sc = context.CreateSqlContainer();
+
+        var p = (fakeDbNpgsqlParameter)sc.AddParameterWithValue("m", DbType.String, Mood.Happy);
+        var text = (fakeDbNpgsqlParameter)sc.AddParameterWithValue("t", DbType.String, "Happy");
+
+        Assert.Equal(fakeNpgsqlDbType.Unknown, p.NpgsqlDbType);
+        Assert.Equal("Happy", p.Value); // Npgsql can't write a CLR enum (confirmed live): its name goes
+        Assert.NotEqual(fakeNpgsqlDbType.Unknown, text.NpgsqlDbType);
+    }
+
+    [Fact]
+    public void UserSql_EnumValueParameter_OnCockroachDb_IsItsNameAsText()
+    {
+        using var context = Context(SupportedDatabase.CockroachDb);
+        using var sc = context.CreateSqlContainer();
+
+        var p = (fakeDbNpgsqlParameter)sc.AddParameterWithValue("m", DbType.String, Mood.Happy);
+
+        Assert.Equal("Happy", p.Value);
+        Assert.NotEqual(fakeNpgsqlDbType.Unknown, p.NpgsqlDbType);
+    }
+
     private static Row Sample(int id = 1) => new() { Id = id, Mood = Mood.Happy, Note = "note text" };
 
     [Theory]

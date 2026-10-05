@@ -246,7 +246,7 @@ plain .NET type (verified live, TYPE-005).
 | PostgreSQL `BIT(n)` | `BitArray` | |
 | SQL Server 2025 `VECTOR(n)`, Oracle 23ai `VECTOR` | `float[]` (or `double[]`, `List<float>`) with `[Column(..., DbType.Object)]` | Written as exact text (`[1.5,2,-3]`, each element in shortest round-trip form), which both servers convert implicitly; SqlClient and ODP.NET reject a raw `float[]`. Read from ODP.NET's `float[]`, SqlClient 6.1+'s `SqlVector<float>` (exact), or SqlClient 6.0's text. **SqlClient 6.0 prints 8 significant digits**, so about 2% of arbitrary `float` values come back one bit off (and `-0` as `0`); use SqlClient 6.1+ for exact reads. A `float[]` parameter is a `VECTOR_DISTANCE` argument: `CAST({P}p AS VECTOR(n))` on SQL Server, `TO_VECTOR({P}p)` on Oracle. (TYPE-015) |
 | pgvector `vector(n)` | `float[]` | Npgsql binds a `float[]` as `real[]`, which pgvector's assignment cast stores. Npgsql has no handler for `vector` without the `Pgvector.Npgsql` plugin, so the dialect reads the column's binary value through `GetBytes` (no plugin or `::real[]` cast needed; the plugin's `Pgvector.Vector` also converts). Same on CockroachDB's `VECTOR`. Comparisons need `CAST({P}p AS vector)`. (TYPE-015, TYPE-002) |
-| PostgreSQL user-defined `ENUM` | a C# enum with `DbType.String` | Sent untyped on PostgreSQL and YugabyteDB, so the server applies the enum type (a text parameter is refused: "column is of type mood but expression is of type text"). CockroachDB accepts text into an ENUM column (and refuses untyped values in a `VALUES` list), so it keeps text. A MERGE upsert (PostgreSQL 15+) and a batch update would type a `VALUES` source as text, so for rows with such an enum their source is an empty `SELECT` of the table's own columns followed by one `SELECT` per row, `UNION ALL`, which gives each value its column's type (TYPE-020/WRT-007, all three live). Not covered: a plain `string` property and `WHERE` in your own SQL; use `CAST({P}p AS mood)` there. (TYPE-002) |
+| PostgreSQL user-defined `ENUM` | a C# enum or a `string` with `DbType.String` | A `string` property is written like a C# enum once the gateway has learned that the column's declared type isn't text ([declared column types](#declared-column-types)). A C# enum value in your own SQL is sent as its name, untyped, too (Npgsql can't write a CLR enum at all). Sent untyped on PostgreSQL and YugabyteDB, so the server applies the enum type (a text parameter is refused: "column is of type mood but expression is of type text"). CockroachDB accepts text into an ENUM column (and refuses untyped values in a `VALUES` list), so it keeps text. A MERGE upsert (PostgreSQL 15+) and a batch update would type a `VALUES` source as text, so for rows with such an enum their source is an empty `SELECT` of the table's own columns followed by one `SELECT` per row, `UNION ALL`, which gives each value its column's type (TYPE-020/WRT-007, all three live). Not covered: a plain `string` parameter in your own SQL (no column to learn from); pass the C# enum, or use `CAST({P}p AS mood)`. (TYPE-002, TYPE-020) |
 | PostgreSQL `timetz` | `DateTimeOffset` with `DbType.Time` | Sent as `time with time zone` with its offset kept (as `DbType.DateTimeOffset` it would be `timestamptz`, which `WHERE` can't compare to a `timetz`). |
 | PostgreSQL `pg_lsn` | `NpgsqlTypes.NpgsqlLogSequenceNumber` | Npgsql can't infer the type from the value; the dialect names it. Npgsql's own geometric types (`NpgsqlPoint`, `NpgsqlBox`, ...) and `NpgsqlTsVector`/`NpgsqlTsQuery` pass through as is. |
 
@@ -262,6 +262,24 @@ whole: `2.0` reads as `2`, `2.7` fails (gateway: `DataMappingException` naming t
 scalar reads: `InvalidCastException`), as a value beyond the property's range does. 2.0.5 truncated
 it on the gateway and rounded it to even elsewhere (COR-009). A `decimal` column (Oracle `NUMBER`)
 reads into an enum property; 2.0.5 failed to build the mapper (COR-013).
+
+## Declared column types
+
+A few columns can only be written correctly if pengdows knows the column's declared database type,
+which the entity doesn't say: a `string` property bound to a PostgreSQL user-defined `ENUM` column,
+an Informix `BLOB`/`CLOB`/`TEXT`/`BSON` column, an Informix `DATETIME HOUR TO FRACTION(n)` column.
+For those dialects, the first async operation through a gateway on a context learns the types of the
+columns that matter, once per table, with one zero-row query of those columns:
+
+```sql
+SELECT "mood", "body" FROM "notes" WHERE 1 = 0
+```
+
+It reads only the provider's result metadata (`GetDataTypeName`). It runs through the same context, so
+inside a transaction it uses the transaction's connection. A read-only user can run it, and if it
+fails (permissions, a write-only context) nothing changes: the column is written as before. `Build*`
+methods never query; they use the types once a gateway has learned them on that context. Dialects that
+need no declared types never probe. PostgreSQL needs them only for writes, so its reads don't probe.
 
 ## Not a public extension point
 

@@ -195,10 +195,15 @@ public class TableGatewayCreateAsyncStateMachineTests
         _typeMap.Register<TestEntitySimple>();
         var entity = new TestEntitySimple { Name = "Test" };
 
-        var connection = (fakeDbConnection)factory.CreateConnection();
-        connection.SetFailOnCommand(); // Command creation fails
+        // Command creation fails on every connection the create uses (the first is the declared-type
+        // probe, TYPE-020, whose own failure is ignored).
         factory.Connections.Clear();
-        factory.Connections.Add(connection);
+        for (var i = 0; i < 2; i++)
+        {
+            var connection = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
+            connection.SetFailOnCommand();
+            factory.Connections.Add(connection);
+        }
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => helper.CreateAsync(entity, context).AsTask()
         );

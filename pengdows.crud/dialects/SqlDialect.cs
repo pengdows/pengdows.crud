@@ -447,6 +447,36 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// Firebird: a WAIT transaction, so DDL after writes doesn't fail on the garbage collector's
     /// hold on the table (WRT-001).
     /// </summary>
+    // Declared column types (TYPE-020): learned once per table by the gateways (a zero-row SELECT's
+    // GetDataTypeName) for the columns this dialect asks for, kept per dialect instance (one per
+    // context) and keyed by column object.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<IColumnInfo, string> _declaredTypes = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _declaredTypeTables =
+        new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// True when writing (<paramref name="forRead"/> false) or reading this column correctly depends on
+    /// its declared database type, so the gateways learn it (<see cref="DeclaredTypeOf"/>) before such
+    /// an operation. Default: never.
+    /// </summary>
+    internal virtual bool NeedsDeclaredType(IColumnInfo column, bool forRead) => false;
+
+    /// <summary>The column's declared database type as the provider names it, once learned; else null.</summary>
+    internal string? DeclaredTypeOf(IColumnInfo column) =>
+        _declaredTypes.TryGetValue(column, out var declared) ? declared : null;
+
+    internal bool HasProbedDeclaredTypes(string wrappedTableName) => _declaredTypeTables.ContainsKey(wrappedTableName);
+
+    internal void RecordDeclaredTypes(string wrappedTableName, IEnumerable<(IColumnInfo Column, string DeclaredType)> types)
+    {
+        foreach (var (column, declared) in types)
+        {
+            _declaredTypes.AddOrUpdate(column, declared);
+        }
+
+        _declaredTypeTables[wrappedTableName] = 0;
+    }
+
     /// <summary>
     /// True when <see cref="MarkColumnParameter"/> changes this column's parameter, so a compiled
     /// binder calls it (it skips the call otherwise): JSON, enums, a provider-typed NULL, and whatever

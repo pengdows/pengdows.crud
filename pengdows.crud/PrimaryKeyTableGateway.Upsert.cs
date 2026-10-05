@@ -113,6 +113,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         try
         {
             var ctx = context ?? _context;
+            await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
             var dialect = GetDialect(ctx);
             await using var sc = BuildUpsert(entity, ctx);
             var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
@@ -218,6 +219,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
         if (entities.Count == 1)
         {
             return await UpsertAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);

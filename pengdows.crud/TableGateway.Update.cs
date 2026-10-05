@@ -40,9 +40,12 @@ public partial class TableGateway<TEntity, TRowID>
     {
         var ctx = context ?? _context;
         // Optimization: for version-less entities without original load, building is fully synchronous
+        // (once the table's declared column types are applied, TYPE-020).
         if (_versionColumn == null)
         {
-            return ValueTask.FromResult(BuildUpdate(objectToUpdate, ctx));
+            return DeclaredTypesPending(ctx)
+                ? BuildUpdateAfterDeclaredTypesAsync(objectToUpdate, ctx, cancellationToken)
+                : ValueTask.FromResult(BuildUpdate(objectToUpdate, ctx));
         }
 
         return BuildUpdateAsync(objectToUpdate, true, ctx, cancellationToken);
@@ -56,6 +59,13 @@ public partial class TableGateway<TEntity, TRowID>
 
     private static InvalidOperationException NoChanges() => new("No changes detected for update.");
 
+    private async ValueTask<ISqlContainer> BuildUpdateAfterDeclaredTypesAsync(TEntity objectToUpdate,
+        IDatabaseContext ctx, CancellationToken cancellationToken)
+    {
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false);
+        return BuildUpdate(objectToUpdate, ctx);
+    }
+
     // The UPDATE, or null when no column changed: UpdateAsync returns 0 for that without an
     // exception (COR-012); BuildUpdateAsync throws, as documented.
     private async ValueTask<ISqlContainer?> TryBuildUpdateAsync(TEntity objectToUpdate, bool loadOriginal,
@@ -67,6 +77,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
         if (_idColumn == null)
         {
             throw new NotSupportedException(

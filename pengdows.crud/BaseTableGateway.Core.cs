@@ -463,6 +463,127 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         return ctx.GetDialect();
     }
 
+    // TYPE-020: per dialect instance, which operations need the table's declared column types and
+    // whether this gateway has applied them. Its SQL caches are rebuilt once, when applied.
+    private sealed class DeclaredTypeState
+    {
+        public bool ReadNeeded;
+        public bool WriteNeeded;
+        public volatile bool Applied;
+    }
+
+    private readonly ConditionalWeakTable<ISqlDialect, DeclaredTypeState> _declaredTypeStates = new();
+
+    // The fast path is a lookup only: the lambdas live in AddDeclaredTypeState, so their closure
+    // (allocated at method entry) isn't paid on every call.
+    private DeclaredTypeState DeclaredTypeStateFor(SqlDialect dialect) =>
+        _declaredTypeStates.TryGetValue(dialect, out var state) ? state : AddDeclaredTypeState(dialect);
+
+    private DeclaredTypeState AddDeclaredTypeState(SqlDialect dialect)
+    {
+        var state = new DeclaredTypeState
+        {
+            ReadNeeded = _tableInfo.OrderedColumns.Any(c => dialect.NeedsDeclaredType(c, forRead: true)),
+            WriteNeeded = _tableInfo.OrderedColumns.Any(c => dialect.NeedsDeclaredType(c, forRead: false))
+        };
+        state.Applied = !state.ReadNeeded && !state.WriteNeeded;
+        return _declaredTypeStates.GetValue(dialect, _ => state);
+    }
+
+    /// <summary>
+    /// True when a write (or, with <paramref name="forRead"/>, a read) on this context needs the
+    /// table's declared column types and this gateway hasn't applied them yet; the async entry points
+    /// then call <see cref="EnsureDeclaredTypesAsync"/> before building SQL.
+    /// </summary>
+    private protected bool DeclaredTypesPending(IDatabaseContext ctx, bool forRead = false) =>
+        GetDialect(ctx) is SqlDialect dialect && DeclaredTypeStateFor(dialect) is { Applied: false } state &&
+        (forRead ? state.ReadNeeded : state.WriteNeeded);
+
+    /// <summary>
+    /// TYPE-020: learns the declared database type of every column the dialect asks about
+    /// (<c>SqlDialect.NeedsDeclaredType</c>) once per table and context, from the provider's metadata
+    /// for "SELECT cols FROM table WHERE 1 = 0", then rebuilds this gateway's cached SQL for the
+    /// dialect. A failed probe (permissions, a write-only context) is logged and changes nothing.
+    /// </summary>
+    private protected ValueTask EnsureDeclaredTypesAsync(IDatabaseContext ctx, CancellationToken cancellationToken,
+        bool forRead = false) =>
+        DeclaredTypesPending(ctx, forRead) ? EnsureDeclaredTypesSlowAsync(ctx, cancellationToken) : default;
+
+    private async ValueTask EnsureDeclaredTypesSlowAsync(IDatabaseContext ctx, CancellationToken cancellationToken)
+    {
+        var dialect = (SqlDialect)GetDialect(ctx);
+        var needed = _tableInfo.OrderedColumns
+            .Where(c => dialect.NeedsDeclaredType(c, forRead: true) || dialect.NeedsDeclaredType(c, forRead: false))
+            .ToList();
+        var table = BuildWrappedTableName(dialect);
+        if (!dialect.HasProbedDeclaredTypes(table))
+        {
+            dialect.RecordDeclaredTypes(table, await ProbeDeclaredTypesAsync(ctx, dialect, table, needed, cancellationToken)
+                .ConfigureAwait(false));
+        }
+
+        ResetDialectCaches(dialect);
+        DeclaredTypeStateFor(dialect).Applied = true;
+    }
+
+    private static async ValueTask<List<(IColumnInfo, string)>> ProbeDeclaredTypesAsync(IDatabaseContext ctx,
+        SqlDialect dialect, string table, IReadOnlyList<IColumnInfo> columns, CancellationToken cancellationToken)
+    {
+        var found = new List<(IColumnInfo, string)>(columns.Count);
+        try
+        {
+            await using var sc = ctx.CreateSqlContainer();
+            sc.Query.Append("SELECT ");
+            for (var i = 0; i < columns.Count; i++)
+            {
+                if (i > 0)
+                {
+                    sc.Query.Append(", ");
+                }
+
+                sc.Query.Append(dialect.WrapSimpleName(columns[i].Name));
+            }
+
+            sc.Query.Append(" FROM ").Append(table).Append(" WHERE 1 = 0");
+            await using var reader = await sc.ExecuteReaderAsync(ExecutionType.Read, CommandType.Text, cancellationToken)
+                .ConfigureAwait(false);
+            if (reader is not IInternalTrackedReader tracked)
+            {
+                return found;
+            }
+
+            // By name: the result's columns are the ones selected, but matching names doesn't depend on it.
+            var record = tracked.InnerReader;
+            for (var i = 0; i < record.FieldCount; i++)
+            {
+                var name = record.GetName(i);
+                var column = columns.FirstOrDefault(c => string.Equals(c.Name, name, StringComparison.OrdinalIgnoreCase));
+                var declared = column == null ? null : record.GetDataTypeName(i);
+                if (!string.IsNullOrEmpty(declared))
+                {
+                    found.Add((column!, declared));
+                }
+            }
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            Logger.LogDebug(ex, "Could not read the declared column types of {Table}; writing it without them", table);
+            found.Clear();
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// Drops this gateway's cached SQL for <paramref name="dialect"/> once its declared column types
+    /// are known, so it is rebuilt with them. Derived gateways drop their own caches too.
+    /// </summary>
+    private protected virtual void ResetDialectCaches(ISqlDialect dialect)
+    {
+        _queryCache.Remove(dialect);
+        _whereParameterNames.Remove(dialect);
+    }
+
     /// <summary>
     /// DEC-012: the ON DUPLICATE KEY UPDATE fragment with each column whose incoming-row reference
     /// the dialect can't trust set from that column's own parameter instead. Returns the fragment

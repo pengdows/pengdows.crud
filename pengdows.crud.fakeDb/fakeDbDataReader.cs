@@ -57,15 +57,24 @@ public class fakeDbDataReader : DbDataReader
     {
         if (!ReferenceEquals(row, _keysRow))
         {
-            _keys = row.Keys.ToArray();
+            // Declared columns fix the ordinal order; a row's own key order otherwise.
+            _keys = Columns != null ? Columns.Select(c => c.Name).ToArray() : row.Keys.ToArray();
             _keysRow = row;
         }
 
         return _keys;
     }
 
+    /// <summary>
+    /// The result's declared columns. When set, FieldCount, GetName, GetOrdinal, GetFieldType and
+    /// GetDataTypeName come from them, also for a result with no rows, as a real provider reports a
+    /// result's metadata (e.g. for a "SELECT cols FROM t WHERE 1 = 0" metadata probe).
+    /// </summary>
+    public IReadOnlyList<fakeDbColumn>? Columns { get; set; }
+
     public override int FieldCount
-        => CurrentRow?.Count
+        => Columns?.Count
+           ?? CurrentRow?.Count
            ?? (CurrentRows.Count > 0 ? CurrentRows[0].Count : 0);
 
     public override bool HasRows
@@ -502,6 +511,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override string GetName(int i)
     {
+        if (Columns != null)
+        {
+            return Columns[i].Name;
+        }
+
         var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
             ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
@@ -510,6 +524,19 @@ public class fakeDbDataReader : DbDataReader
 
     public override int GetOrdinal(string name)
     {
+        if (Columns != null)
+        {
+            for (var c = 0; c < Columns.Count; c++)
+            {
+                if (string.Equals(Columns[c].Name, name, StringComparison.Ordinal))
+                {
+                    return c;
+                }
+            }
+
+            throw new IndexOutOfRangeException($"Column '{name}' not found.");
+        }
+
         var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
             ?? throw new IndexOutOfRangeException("No data rows.");
         var keys = GetKeys(row);
@@ -642,6 +669,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override string GetDataTypeName(int i)
     {
+        if (Columns != null)
+        {
+            return Columns[i].DataTypeName;
+        }
+
         if (UnloadableUdtColumns != null && UnloadableUdtColumns.TryGetValue(GetName(i), out var udtName))
         {
             return udtName;
@@ -727,6 +759,11 @@ public class fakeDbDataReader : DbDataReader
 
     public override Type GetFieldType(int ordinal)
     {
+        if (Columns != null)
+        {
+            return Columns[ordinal].FieldType;
+        }
+
         if (IsHandlerlessColumn(ordinal))
         {
             throw HandlerlessRead(ordinal, "System.Object");

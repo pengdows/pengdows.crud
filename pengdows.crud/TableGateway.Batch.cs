@@ -126,6 +126,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
         // Single entity fast path
         if (entities.Count == 1)
         {
@@ -192,6 +193,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
         // Single entity fast path
         if (entities.Count == 1)
         {
@@ -434,6 +436,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
         // Single entity fast path
         if (entities.Count == 1)
         {

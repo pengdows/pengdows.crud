@@ -40,6 +40,13 @@
   upsert (PostgreSQL 15+) and a batch update on PostgreSQL, CockroachDB and YugabyteDB. 2.0.5 failed
   with "column is of type ... but expression is of type text". Those statements now take their rows
   from a source typed by the table itself, only when a row holds such an enum (TYPE-020, WRT-007).
+- A `string` property bound to a PostgreSQL-family user-defined `ENUM` (or other non-text) column
+  now writes through every gateway path, and a C# enum value used as a parameter in your own SQL is
+  sent as its name. 2.0.5 failed both ("column is of type ... but expression is of type text";
+  "Writing values of '...' is not supported"). To do this, the first async gateway call on a context
+  runs one zero-row metadata query per table, `SELECT <columns> FROM <table> WHERE 1 = 0`, for the
+  dialects and columns that need a declared type. It is described in
+  [advanced-types.md](advanced-types.md#declared-column-types) (TYPE-020).
 - Informix upserts of `INTERVAL`, `LIST`/`SET`/`MULTISET` and `BOOLEAN` columns work. 2.0.5 threw
   `NotSupportedException` ("does not support a Object column in the source row") or failed with
   "Value does not match the type of column". The MERGE now carries only the key columns in its

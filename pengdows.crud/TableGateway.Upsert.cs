@@ -53,6 +53,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
+        await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
         var dialect = GetDialect(ctx);
         var auditSnapshot = SnapshotAuditFields(entity);
 

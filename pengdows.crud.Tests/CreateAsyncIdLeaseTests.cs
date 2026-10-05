@@ -67,6 +67,8 @@ public class CreateAsyncIdLeaseTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var context = new DatabaseContext("Data Source=lease;EmulatedProduct=PostgreSql", factory);
+        // The first write learns the table's declared column types (TYPE-020) on its own connection.
+        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql });
         var exec = new fakeDbConnection { EmulatedProduct = SupportedDatabase.PostgreSql };
         exec.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["id"] = 7 } });
         factory.Connections.Add(exec);
