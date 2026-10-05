@@ -51,6 +51,9 @@ Artifacts/
 output.txt
 coverage-*.xml
 coverage-*.json
+coverage.net*.json
+*.trx.log
+*.cs.tmp
 artifacts/
 !artifacts/
 artifacts/*
