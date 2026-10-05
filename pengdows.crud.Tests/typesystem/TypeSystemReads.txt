@@ -1,0 +1,351 @@
+Int32:1 -> Int32: Int32:1
+Int32:1 -> Int64: Int64:1
+Int32:1 -> Int16: Int16:1
+Int32:1 -> Byte: Byte:1
+Int32:1 -> Double: double:1
+Int32:1 -> Single: float:1
+Int32:1 -> Decimal: decimal:1
+Int32:1 -> Boolean: Boolean:True
+Int32:1 -> UInt64: UInt64:1
+Int32:1 -> Nullable`1?: Int32:1
+Int64:1 -> Int32: Int32:1
+Int64:1 -> Int64: Int64:1
+Int64:1 -> Int16: Int16:1
+Int64:1 -> Byte: Byte:1
+Int64:1 -> Double: double:1
+Int64:1 -> Single: float:1
+Int64:1 -> Decimal: decimal:1
+Int64:1 -> Boolean: Boolean:True
+Int64:1 -> UInt64: UInt64:1
+Int64:1 -> Nullable`1?: Int32:1
+Int16:1 -> Int32: Int32:1
+Int16:1 -> Int64: Int64:1
+Int16:1 -> Int16: Int16:1
+Int16:1 -> Byte: Byte:1
+Int16:1 -> Double: double:1
+Int16:1 -> Single: float:1
+Int16:1 -> Decimal: decimal:1
+Int16:1 -> Boolean: Boolean:True
+Int16:1 -> UInt64: UInt64:1
+Int16:1 -> Nullable`1?: Int32:1
+Byte:1 -> Int32: Int32:1
+Byte:1 -> Int64: Int64:1
+Byte:1 -> Int16: Int16:1
+Byte:1 -> Byte: Byte:1
+Byte:1 -> Double: double:1
+Byte:1 -> Single: float:1
+Byte:1 -> Decimal: decimal:1
+Byte:1 -> Boolean: Boolean:True
+Byte:1 -> UInt64: UInt64:1
+Byte:1 -> Nullable`1?: Int32:1
+double:1 -> Int32: Int32:1
+double:1 -> Int64: Int64:1
+double:1 -> Int16: Int16:1
+double:1 -> Byte: Byte:1
+double:1 -> Double: double:1
+double:1 -> Single: float:1
+double:1 -> Decimal: decimal:1
+double:1 -> Boolean: Boolean:True
+double:1 -> UInt64: UInt64:1
+double:1 -> Nullable`1?: Int32:1
+double:1.5 -> Int32: throws InvalidCastException
+double:1.5 -> Int64: throws InvalidCastException
+double:1.5 -> Int16: throws InvalidCastException
+double:1.5 -> Byte: throws InvalidCastException
+double:1.5 -> Double: double:1.5
+double:1.5 -> Single: float:1.5
+double:1.5 -> Decimal: decimal:1.5
+double:1.5 -> Boolean: Boolean:True
+double:1.5 -> UInt64: throws InvalidCastException
+double:1.5 -> Nullable`1?: throws InvalidCastException
+float:1.5 -> Int32: throws InvalidCastException
+float:1.5 -> Int64: throws InvalidCastException
+float:1.5 -> Int16: throws InvalidCastException
+float:1.5 -> Byte: throws InvalidCastException
+float:1.5 -> Double: double:1.5
+float:1.5 -> Single: float:1.5
+float:1.5 -> Decimal: decimal:1.5
+float:1.5 -> Boolean: Boolean:True
+float:1.5 -> UInt64: throws InvalidCastException
+float:1.5 -> Nullable`1?: throws InvalidCastException
+decimal:1 -> Int32: Int32:1
+decimal:1 -> Int64: Int64:1
+decimal:1 -> Int16: Int16:1
+decimal:1 -> Byte: Byte:1
+decimal:1 -> Double: double:1
+decimal:1 -> Single: float:1
+decimal:1 -> Decimal: decimal:1
+decimal:1 -> Boolean: Boolean:True
+decimal:1 -> UInt64: UInt64:1
+decimal:1 -> Nullable`1?: Int32:1
+decimal:2.7 -> Int32: throws InvalidCastException
+decimal:2.7 -> Int64: throws InvalidCastException
+decimal:2.7 -> Int16: throws InvalidCastException
+decimal:2.7 -> Byte: throws InvalidCastException
+decimal:2.7 -> Double: double:2.7
+decimal:2.7 -> Single: float:2.7
+decimal:2.7 -> Decimal: decimal:2.7
+decimal:2.7 -> Boolean: Boolean:True
+decimal:2.7 -> UInt64: throws InvalidCastException
+decimal:2.7 -> Nullable`1?: throws InvalidCastException
+"1" -> Int32: Int32:1
+"1" -> Int64: Int64:1
+"1" -> Int16: Int16:1
+"1" -> Byte: Byte:1
+"1" -> Double: double:1
+"1" -> Single: float:1
+"1" -> Decimal: decimal:1
+"1" -> Boolean: Boolean:True
+"1" -> UInt64: UInt64:1
+"1" -> Nullable`1?: Int32:1
+"2.7" -> Int32: throws InvalidCastException
+"2.7" -> Int64: throws InvalidCastException
+"2.7" -> Int16: throws InvalidCastException
+"2.7" -> Byte: throws InvalidCastException
+"2.7" -> Double: double:2.7
+"2.7" -> Single: float:2.7
+"2.7" -> Decimal: decimal:2.7
+"2.7" -> Boolean: Boolean:True
+"2.7" -> UInt64: throws InvalidCastException
+"2.7" -> Nullable`1?: throws InvalidCastException
+Boolean:True -> Int32: Int32:1
+Boolean:True -> Int64: Int64:1
+Boolean:True -> Int16: Int16:1
+Boolean:True -> Byte: Byte:1
+Boolean:True -> Double: double:1
+Boolean:True -> Single: float:1
+Boolean:True -> Decimal: decimal:1
+Boolean:True -> Boolean: Boolean:True
+Boolean:True -> UInt64: UInt64:1
+Boolean:True -> Nullable`1?: Int32:1
+Int64:9223372036854775807 -> Int32: throws InvalidCastException
+Int64:9223372036854775807 -> Int64: Int64:9223372036854775807
+Int64:9223372036854775807 -> Int16: throws InvalidCastException
+Int64:9223372036854775807 -> Byte: throws InvalidCastException
+Int64:9223372036854775807 -> Double: double:9.223372036854776E+18
+Int64:9223372036854775807 -> Single: float:9.223372E+18
+Int64:9223372036854775807 -> Decimal: decimal:9223372036854775807
+Int64:9223372036854775807 -> Boolean: Boolean:True
+Int64:9223372036854775807 -> UInt64: UInt64:9223372036854775807
+Int64:9223372036854775807 -> Nullable`1?: throws InvalidCastException
+UInt64:18446744073709551615 -> Int32: throws InvalidCastException
+UInt64:18446744073709551615 -> Int64: throws InvalidCastException
+UInt64:18446744073709551615 -> Int16: throws InvalidCastException
+UInt64:18446744073709551615 -> Byte: throws InvalidCastException
+UInt64:18446744073709551615 -> Double: double:1.8446744073709552E+19
+UInt64:18446744073709551615 -> Single: float:1.8446744E+19
+UInt64:18446744073709551615 -> Decimal: decimal:18446744073709551615
+UInt64:18446744073709551615 -> Boolean: Boolean:True
+UInt64:18446744073709551615 -> UInt64: UInt64:18446744073709551615
+UInt64:18446744073709551615 -> Nullable`1?: throws InvalidCastException
+"Sad" -> Mood: Mood:Sad
+"Sad" -> Nullable`1?: Mood:Sad
+"2" -> Mood: Mood:Sad
+"2" -> Nullable`1?: Mood:Sad
+Int32:2 -> Mood: Mood:Sad
+Int32:2 -> Nullable`1?: Mood:Sad
+Int64:2 -> Mood: Mood:Sad
+Int64:2 -> Nullable`1?: Mood:Sad
+"sad" -> Mood: Mood:Sad
+"sad" -> Nullable`1?: Mood:Sad
+"Nope" -> Mood: throws EnumValueException
+"Nope" -> Nullable`1?: throws EnumValueException
+Int32:9 -> Mood: throws EnumValueException
+Int32:9 -> Nullable`1?: throws EnumValueException
+Guid:0f8fad5b-d9cb-469f-a165-70867728950e -> Guid: Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+Guid:0f8fad5b-d9cb-469f-a165-70867728950e -> String: throws InvalidCastException
+"0f8fad5b-d9cb-469f-a165-70867728950e" -> Guid: Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+"0f8fad5b-d9cb-469f-a165-70867728950e" -> String: "0f8fad5b-d9cb-469f-a165-70867728950e"
+0x5BAD8F0FCBD99F46A16570867728950E -> Guid
+    Guid:5bad8f0f-cbd9-9f46-a165-70867728950e  [PostgreSql,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,Spanner,Informix,SapHana,InterBase,Access]
+    Guid:0f8fad5b-d9cb-469f-a165-70867728950e  [SqlServer,Oracle,SybaseASE]
+0x5BAD8F0FCBD99F46A16570867728950E -> String: throws InvalidCastException
+"{0f8fad5b-d9cb-469f-a165-70867728950e}" -> Guid: Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+"{0f8fad5b-d9cb-469f-a165-70867728950e}" -> String: "{0f8fad5b-d9cb-469f-a165-70867728950e}"
+"nope" -> Guid: throws InvalidCastException
+"nope" -> String: "nope"
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateTime: DateTime:2026-10-05T13:45:30.1234567Z/Utc
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateOnly: DateOnly:10/05/2026
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> TimeOnly: TimeOnly:13:45
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> TimeSpan: TimeSpan:13:45:30.1234567
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> String: "10/05/2026 13:45:30"
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateTime: DateTime:2026-10-05T13:45:30.1234567Z/Utc
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateOnly: DateOnly:10/05/2026
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> TimeOnly: TimeOnly:13:45
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> TimeSpan: TimeSpan:13:45:30.1234567
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> String: "10/05/2026 13:45:30"
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateTime: DateTime:2026-10-05T13:45:30.1234567Z/Utc
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateTimeOffset: DateTimeOffset:2026-10-05T15:45:30.1234567+02:00
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateOnly: DateOnly:10/05/2026
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> TimeOnly: TimeOnly:15:45
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> TimeSpan: throws InvalidCastException
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> String: throws InvalidCastException
+"2026-10-05 13:45:30.1234567" -> DateTime: DateTime:2026-10-05T13:45:30.1234567Z/Utc
+"2026-10-05 13:45:30.1234567" -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
+"2026-10-05 13:45:30.1234567" -> DateOnly: DateOnly:10/05/2026
+"2026-10-05 13:45:30.1234567" -> TimeOnly: TimeOnly:13:45
+"2026-10-05 13:45:30.1234567" -> TimeSpan: throws InvalidCastException
+"2026-10-05 13:45:30.1234567" -> String: "2026-10-05 13:45:30.1234567"
+"2026-10-05T13:45:30.1234567+02:00" -> DateTime: DateTime:2026-10-05T11:45:30.1234567Z/Utc
+"2026-10-05T13:45:30.1234567+02:00" -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+"2026-10-05T13:45:30.1234567+02:00" -> DateOnly: DateOnly:10/05/2026
+"2026-10-05T13:45:30.1234567+02:00" -> TimeOnly: TimeOnly:13:45
+"2026-10-05T13:45:30.1234567+02:00" -> TimeSpan: throws InvalidCastException
+"2026-10-05T13:45:30.1234567+02:00" -> String: "2026-10-05T13:45:30.1234567+02:00"
+"2026-10-05" -> DateTime: DateTime:2026-10-05T00:00:00.0000000Z/Utc
+"2026-10-05" -> DateTimeOffset: DateTimeOffset:2026-10-05T00:00:00.0000000+00:00
+"2026-10-05" -> DateOnly: DateOnly:10/05/2026
+"2026-10-05" -> TimeOnly: TimeOnly:00:00
+"2026-10-05" -> TimeSpan: throws InvalidCastException
+"2026-10-05" -> String: "2026-10-05"
+"13:45:30.5" -> DateTime: DateTime:2026-10-05T13:45:30.5000000Z/Utc
+"13:45:30.5" -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.5000000+00:00
+"13:45:30.5" -> DateOnly: DateOnly:10/05/2026
+"13:45:30.5" -> TimeOnly: TimeOnly:13:45
+"13:45:30.5" -> TimeSpan: TimeSpan:13:45:30.5000000
+"13:45:30.5" -> String: "13:45:30.5"
+TimeSpan:13:45:30 -> DateTime: throws InvalidCastException
+TimeSpan:13:45:30 -> DateTimeOffset: throws InvalidCastException
+TimeSpan:13:45:30 -> DateOnly: throws InvalidCastException
+TimeSpan:13:45:30 -> TimeOnly: TimeOnly:13:45
+TimeSpan:13:45:30 -> TimeSpan: TimeSpan:13:45:30
+TimeSpan:13:45:30 -> String: throws InvalidCastException
+DateOnly:10/05/2026 -> DateTime: throws InvalidCastException
+DateOnly:10/05/2026 -> DateTimeOffset: throws InvalidCastException
+DateOnly:10/05/2026 -> DateOnly: DateOnly:10/05/2026
+DateOnly:10/05/2026 -> TimeOnly: throws InvalidCastException
+DateOnly:10/05/2026 -> TimeSpan: throws InvalidCastException
+DateOnly:10/05/2026 -> String: throws InvalidCastException
+TimeOnly:13:45 -> DateTime: throws InvalidCastException
+TimeOnly:13:45 -> DateTimeOffset: throws InvalidCastException
+TimeOnly:13:45 -> DateOnly: throws InvalidCastException
+TimeOnly:13:45 -> TimeOnly: TimeOnly:13:45
+TimeOnly:13:45 -> TimeSpan: TimeSpan:13:45:30
+TimeOnly:13:45 -> String: throws InvalidCastException
+Int64:1759671930 -> DateTime: throws InvalidCastException
+Int64:1759671930 -> DateTimeOffset: throws InvalidCastException
+Int64:1759671930 -> DateOnly: throws InvalidCastException
+Int64:1759671930 -> TimeOnly: throws InvalidCastException
+Int64:1759671930 -> TimeSpan: throws InvalidCastException
+Int64:1759671930 -> String: "1759671930"
+"abc" -> String: "abc"
+"abc" -> Byte[]: throws FormatException
+"abc" -> Char: throws FormatException
+Char[]{'a','b'} -> String: "ab"
+Char[]{'a','b'} -> Byte[]: 0x6162
+Char[]{'a','b'} -> Char: throws InvalidCastException
+0x6869 -> String: throws InvalidCastException
+0x6869 -> Byte[]: 0x6869
+0x6869 -> Char: throws InvalidCastException
+'z' -> String: "z"
+'z' -> Byte[]: throws InvalidCastException
+'z' -> Char: 'z'
+"[1,2,3]" -> Int32[]
+    Int32[]{Int32:1,Int32:2,Int32:3}  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
+    throws FormatException  [Informix]
+"[1,2,3]" -> Single[]
+    Single[]{float:1,float:2,float:3}  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
+    throws FormatException  [Informix]
+"[1,2,3]" -> String[]
+    throws InvalidCastException  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
+    throws FormatException  [Informix]
+"[1,2,3]" -> List`1: List`1{Int32:1,Int32:2,Int32:3}
+"{1,2,3}" -> Int32[]: throws FormatException
+"{1,2,3}" -> Single[]: throws FormatException
+"{1,2,3}" -> String[]
+    throws InvalidCastException  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
+    throws FormatException  [Informix]
+"{1,2,3}" -> List`1: throws FormatException
+Int32[]{Int32:1,Int32:2} -> Int32[]: Int32[]{Int32:1,Int32:2}
+Int32[]{Int32:1,Int32:2} -> Single[]: Single[]{float:1,float:2}
+Int32[]{Int32:1,Int32:2} -> String[]: String[]{"1","2"}
+Int32[]{Int32:1,Int32:2} -> List`1: List`1{Int32:1,Int32:2}
+Int64[]{Int64:1,Int64:2} -> Int32[]: Int32[]{Int32:1,Int32:2}
+Int64[]{Int64:1,Int64:2} -> Single[]: Single[]{float:1,float:2}
+Int64[]{Int64:1,Int64:2} -> String[]: String[]{"1","2"}
+Int64[]{Int64:1,Int64:2} -> List`1: List`1{Int32:1,Int32:2}
+Object[]{Int32:1,"2"} -> Int32[]: Int32[]{Int32:1,Int32:2}
+Object[]{Int32:1,"2"} -> Single[]: Single[]{float:1,float:2}
+Object[]{Int32:1,"2"} -> String[]: String[]{"1","2"}
+Object[]{Int32:1,"2"} -> List`1: List`1{Int32:1,Int32:2}
+"{"a":1}" -> JsonDocument: JsonDocument:{"a":1}
+"{"a":1}" -> JsonElement: JsonElement:{"a":1}
+"{"a":1}" -> JsonValue: JsonValue:{"a":1}
+"" -> JsonDocument: JsonDocument:null
+"" -> JsonElement: JsonElement:null
+"" -> JsonValue: JsonValue:null
+"  " -> JsonDocument: JsonDocument:null
+"  " -> JsonElement: JsonElement:null
+"  " -> JsonValue: JsonValue:null
+0x7B7D -> JsonDocument: JsonDocument:{}
+0x7B7D -> JsonElement: JsonElement:{}
+0x7B7D -> JsonValue: throws InvalidCastException
+"null" -> JsonDocument: JsonDocument:null
+"null" -> JsonElement: JsonElement:null
+"null" -> JsonValue: JsonValue:null
+"POINT(1 2)" -> Geometry: Geometry:srid=0:wkb=
+"POINT(1 2)" -> Geography: Geography:srid=4326:wkb=
+"SRID=4326;POINT(1 2)" -> Geometry: Geometry:srid=4326:wkb=
+"SRID=4326;POINT(1 2)" -> Geography: Geography:srid=4326:wkb=
+0x0101000000000000000000F03F0000000000000040 -> Geometry
+    Geometry:srid=0:wkb=0101000000000000000000F03F0000000000000040  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
+    Geometry:srid=257:wkb=00000000000000F03F0000000000000040  [MariaDb,MySql,AuroraMySql]
+0x0101000000000000000000F03F0000000000000040 -> Geography
+    Geography:srid=4326:wkb=0101000000000000000000F03F0000000000000040  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
+    Geography:srid=257:wkb=00000000000000F03F0000000000000040  [MariaDb,MySql,AuroraMySql]
+0x0101000020E6100000000000000000F03F0000000000000040 -> Geometry
+    Geometry:srid=4326:wkb=0101000000000000000000F03F0000000000000040  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
+    Geometry:srid=257:wkb=20E6100000000000000000F03F0000000000000040  [MariaDb,MySql,AuroraMySql]
+0x0101000020E6100000000000000000F03F0000000000000040 -> Geography
+    Geography:srid=4326:wkb=0101000020E6100000000000000000F03F0000000000000040  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
+    Geography:srid=257:wkb=20E6100000000000000000F03F0000000000000040  [MariaDb,MySql,AuroraMySql]
+"{"type":"Point","coordinates":[1,2]}" -> Geometry: Geometry:srid=0:wkb=
+"{"type":"Point","coordinates":[1,2]}" -> Geography: Geography:srid=4326:wkb=
+"192.168.0.1/24" -> Inet: Inet:192.168.0.1/24
+"192.168.0.1/24" -> Cidr: Cidr:192.168.0.0/24
+"192.168.0.1/24" -> MacAddress: throws InvalidCastException
+"10.0.0.0/8" -> Inet: Inet:10.0.0.0/8
+"10.0.0.0/8" -> Cidr: Cidr:10.0.0.0/8
+"10.0.0.0/8" -> MacAddress: throws InvalidCastException
+"08:00:2b:01:02:03" -> Inet: throws InvalidCastException
+"08:00:2b:01:02:03" -> Cidr: throws InvalidCastException
+"08:00:2b:01:02:03" -> MacAddress: MacAddress:08:00:2B:01:02:03
+"::1" -> Inet: Inet:::1
+"::1" -> Cidr: throws InvalidCastException
+"::1" -> MacAddress: throws InvalidCastException
+"P1Y2M" -> IntervalYearMonth: IntervalYearMonth:1 years 2 months
+"P1Y2M" -> IntervalDaySecond: IntervalDaySecond:0 days 00:00:00
+"p1y2m" -> IntervalYearMonth: IntervalYearMonth:1 years 2 months
+"p1y2m" -> IntervalDaySecond: IntervalDaySecond:0 days 00:00:00
+"1-2" -> IntervalYearMonth: IntervalYearMonth:0 years 0 months
+"1-2" -> IntervalDaySecond: IntervalDaySecond:0 days 00:00:00
+"P1DT2H3M4S" -> IntervalYearMonth: IntervalYearMonth:0 years 3 months
+"P1DT2H3M4S" -> IntervalDaySecond: IntervalDaySecond:1 days 02:03:04
+"p1dt2h3m4s" -> IntervalYearMonth: IntervalYearMonth:0 years 3 months
+"p1dt2h3m4s" -> IntervalDaySecond: IntervalDaySecond:1 days 00:00:00
+TimeSpan:1.02:00:00 -> IntervalYearMonth: throws InvalidCastException
+TimeSpan:1.02:00:00 -> IntervalDaySecond: IntervalDaySecond:1 days 02:00:00
+"[1,5)" -> Range`1: Range`1:[1, 5)
+"[1,5)" -> Range`1: Range`1:[1, 5)
+"(,5]" -> Range`1: Range`1:(0, 5]
+"(,5]" -> Range`1: Range`1:(0, 5]
+"empty" -> Range`1: Range`1:empty
+"empty" -> Range`1: Range`1:empty
+"[1,x)" -> Range`1: throws InvalidCastException
+"[1,x)" -> Range`1: throws InvalidCastException
+0x0000000000000009 -> RowVersion: RowVersion:0000000000000009
+UInt64:9 -> RowVersion: RowVersion:0000000000000009
+0x0102 -> RowVersion: throws InvalidCastException
+"10110" -> BitArray: BitArray:10110
+0x05 -> BitArray: throws InvalidCastException
+"/1/2/" -> HierarchyId: HierarchyId:/1/2/
+"/1/2/" -> Int128: throws FormatException
+"/1/2/" -> BigInteger: throws FormatException
+"170141183460469231731687303715884105727" -> HierarchyId: throws InvalidCastException
+"170141183460469231731687303715884105727" -> Int128: Int128:170141183460469231731687303715884105727
+"170141183460469231731687303715884105727" -> BigInteger: BigInteger:170141183460469231731687303715884105727
+Int64:5 -> HierarchyId: throws InvalidCastException
+Int64:5 -> Int128: Int128:5
+Int64:5 -> BigInteger: BigInteger:5

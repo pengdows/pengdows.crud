@@ -1,0 +1,1196 @@
+== PostgreSql
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+  Guid as String: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String "Sad" NpgsqlDbType=Unknown
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2} NpgsqlDbType=-2147483639
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"} NpgsqlDbType=-2147483629
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: String "{"a":1}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Geography: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Inet: String "192.168.0.1/24"
+  Cidr: String "10.0.0.0/8"
+  MacAddress: String PhysicalAddress:08002B010203
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object "[1,5)"
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== SqlServer
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x5BAD8F0FCBD99F46A16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: String "[1.5,-2]"
+  double[]: String "[0.5,2]"
+  JsonDocument: String "{"a":1}"
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Binary 0x000010E60101000000000000000000F03F0000000000000040
+  Geography: Binary 0x000010E60101000000000000000000F03F0000000000000040
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== Oracle
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Int16 Int32:1
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x5BAD8F0FCBD99F46A16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: Object DateTimeOffset:2026-10-05T11:45:30.1234567+00:00
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Object TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Object TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: String "[1.5,-2]"
+  double[]: String "[0.5,2]"
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: String "SRID=4326;POINT(1 2)"
+  Geography: String "SRID=4326;POINT(1 2)"
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object "+0001-02"
+  IntervalDaySecond: Object "+000000001 02:03:04.000000"
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== Firebird
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Int16 Int16:1
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== CockroachDb
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+  Guid as String: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String "Sad"
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2} NpgsqlDbType=-2147483639
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"} NpgsqlDbType=-2147483629
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: String "{"a":1}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Geography: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Inet: String "192.168.0.1/24"
+  Cidr: String "10.0.0.0/8"
+  MacAddress: String PhysicalAddress:08002B010203
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object "[1,5)"
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== MariaDb
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Byte Byte:1
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Binary 0xE61000000101000000000000000000F03F0000000000000040
+  Geography: Binary 0xE61000000101000000000000000000F03F0000000000000040
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== MySql
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Byte Byte:1
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: String "{"a":1}"
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Binary 0xE61000000101000000000000000000F03F0000000000000040
+  Geography: Binary 0xE61000000101000000000000000000F03F0000000000000040
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== Sqlite
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: String "18446744073709551615"
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Double double:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: String "2026-10-05T13:45:30.1234567Z"
+  DateTime Unspecified DateTime2: String "2026-10-05T13:45:30.1234567Z"
+  DateTime as Date: String "2026-10-05T00:00:00.0000000Z"
+  DateTimeOffset: String "2026-10-05T11:45:30.1234567Z"
+  DateOnly: String "2026-10-05T00:00:00.0000000Z"
+  TimeOnly: String "13:45:30.1234567"
+  TimeSpan as Time: String "13:45:30.1234567"
+  TimeSpan as Object: String "2.00:00:00"
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== DuckDB
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: String "2 days 00:00:00.000000"
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: String "101"
+  Int128: String "36893488147419103228"
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== YugabyteDb
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+  Guid as String: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String "Sad" NpgsqlDbType=Unknown
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2} NpgsqlDbType=-2147483639
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"} NpgsqlDbType=-2147483629
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: String "{"a":1}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Geography: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Inet: String "192.168.0.1/24"
+  Cidr: String "10.0.0.0/8"
+  MacAddress: String PhysicalAddress:08002B010203
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object "[1,5)"
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== TiDb
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Byte Byte:1
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: String "{"a":1}"
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== Snowflake
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time DateTime:1970-01-01T13:45:30.1234567/Unspecified
+  TimeSpan as Time: Time DateTime:1970-01-01T13:45:30.1234567/Unspecified
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: String "SRID=4326;POINT(1 2)"
+  Geography: String "SRID=4326;POINT(1 2)"
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== AuroraMySql
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Byte Byte:1
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: String "{"a":1}"
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Binary 0xE61000000101000000000000000000F03F0000000000000040
+  Geography: Binary 0xE61000000101000000000000000000F03F0000000000000040
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== AuroraPostgreSql
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+  Guid as String: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String "Sad" NpgsqlDbType=Unknown
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2} NpgsqlDbType=-2147483639
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"} NpgsqlDbType=-2147483629
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: String "{"a":1}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Geography: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Inet: String "192.168.0.1/24"
+  Cidr: String "10.0.0.0/8"
+  MacAddress: String PhysicalAddress:08002B010203
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object "[1,5)"
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== Db2
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Int16 Int16:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== FlatFile
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateOnly:10/05/2026
+  DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateOnly: Date DateOnly:10/05/2026
+  TimeOnly: Time TimeOnly:13:45
+  TimeSpan as Time: Time TimeOnly:13:45
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== SingleStore
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Byte Byte:1
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: String "13:45:30.123456"
+  TimeSpan as Time: String "13:45:30.123456"
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: String "[1.5,-2]"
+  double[]: String "[0.5,2]"
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: String "POINT(1 2)"
+  Geography: String "POINT(1 2)"
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== SybaseASE
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x5BAD8F0FCBD99F46A16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: String "2026-10-05 13:45:30.123456"
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: String "2026-10-05 11:45:30.123456"
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== Spanner
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: String "0f8fad5b-d9cb-469f-a165-70867728950e" NpgsqlDbType=Unknown
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: String "13:45:30.1234567"
+  TimeSpan as Time: String "13:45:30.1234567"
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String "Sad" NpgsqlDbType=Unknown
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== Informix
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Int16 Int16:1
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: AnsiString TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: String "LIST{1,-2}"
+  long?[]: throws ArgumentException
+  string[]: String "LIST{'a','b"c'}"
+  float[]: String "LIST{1.5,-2}"
+  double[]: String "LIST{0.5,2}"
+  JsonDocument: AnsiString JsonDocument:{"a":1}
+  JsonElement: AnsiString JsonElement:[1,2]
+  Geometry: AnsiString Geometry:srid=4326:wkb=
+  Geography: AnsiString Geography:srid=4326:wkb=
+  Inet: AnsiString Inet:192.168.0.1/24
+  Cidr: AnsiString Cidr:10.0.0.0/8
+  MacAddress: AnsiString MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: AnsiString IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: AnsiString IntervalDaySecond:1 days 02:03:04
+  Range<int>: AnsiString Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: AnsiString BitArray:101
+  Int128: AnsiString BigInteger:36893488147419103228
+  BigInteger: AnsiString BigInteger:123456789012345678901234567890
+== SapHana
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Int16 Int16:1
+  byte: Byte Byte:200
+  sbyte: Int16 Int16:-5
+  short: Int16 Int16:-300
+  ushort: Int32 Int32:60000
+  int: Int32 Int32:-42
+  uint: Int64 Int64:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: Decimal decimal:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: String "2026-10-05 13:45:30.1234567"
+  DateTime Unspecified DateTime2: String "2026-10-05 13:45:30.1234567"
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: AnsiString TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: String "[1,-2]"
+  long?[]: String "[1,null]"
+  string[]: String "["a","b\u0022c"]"
+  float[]: String "[1.5,-2]"
+  double[]: String "[0.5,2]"
+  JsonDocument: AnsiString JsonDocument:{"a":1}
+  JsonElement: AnsiString JsonElement:[1,2]
+  Geometry: Binary 0x0101000000000000000000F03F0000000000000040
+  Geography: Binary 0x0101000000000000000000F03F0000000000000040
+  Inet: AnsiString Inet:192.168.0.1/24
+  Cidr: AnsiString Cidr:10.0.0.0/8
+  MacAddress: AnsiString MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: AnsiString IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: AnsiString IntervalDaySecond:1 days 02:03:04
+  Range<int>: AnsiString Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: AnsiString BitArray:101
+  Int128: AnsiString BigInteger:36893488147419103228
+  BigInteger: AnsiString BigInteger:123456789012345678901234567890
+== InterBase
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Int64 Int64:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2} IBDbType=Array
+  long?[]: Object Nullable`1[]{Int64:1,null} IBDbType=Array
+  string[]: Object String[]{"a","b"c"} IBDbType=Array
+  float[]: Object Single[]{float:1.5,float:-2} IBDbType=Array
+  double[]: Object Double[]{double:0.5,double:2} IBDbType=Array
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890
+== Access
+  null String: String DBNull
+  DBNull Int32: Int32 DBNull
+  bool: Boolean Boolean:True
+  byte: Byte Byte:200
+  sbyte: SByte SByte:-5
+  short: Int16 Int16:-300
+  ushort: UInt16 UInt16:60000
+  int: Int32 Int32:-42
+  uint: UInt32 UInt32:4000000000
+  long: Decimal decimal:-9223372036854775808
+  ulong: UInt64 UInt64:18446744073709551615
+  float: Single float:1.5
+  double: Double double:0.1
+  decimal: Decimal decimal:123.45
+  string: String "héllo"
+  ansi string: AnsiString "abc"
+  char as String: String "x"
+  Guid as Guid: Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+  Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
+  Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
+  DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified DateTime2: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime as Date: DateTime DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateOnly: DateTime DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Object: Object TimeSpan:2.00:00:00
+  byte[]: Binary 0x0102FF
+  enum as String: String Mood:Sad
+  enum as Int32: Int32 Mood:Sad
+  int[]: Object Int32[]{Int32:1,Int32:-2}
+  long?[]: Object Nullable`1[]{Int64:1,null}
+  string[]: Object String[]{"a","b"c"}
+  float[]: Object Single[]{float:1.5,float:-2}
+  double[]: Object Double[]{double:0.5,double:2}
+  JsonDocument: Object JsonDocument:{"a":1}
+  JsonElement: Object JsonElement:[1,2]
+  Geometry: Object Geometry:srid=4326:wkb=
+  Geography: Object Geography:srid=4326:wkb=
+  Inet: Object Inet:192.168.0.1/24
+  Cidr: Object Cidr:10.0.0.0/8
+  MacAddress: Object MacAddress:08:00:2B:01:02:03
+  IntervalYearMonth: Object IntervalYearMonth:1 years 2 months
+  IntervalDaySecond: Object IntervalDaySecond:1 days 02:03:04
+  Range<int>: Object Range`1:[1, 5)
+  HierarchyId: String "/1/2/"
+  RowVersion: Binary 0x0000000000000009
+  BitArray: Object BitArray:101
+  Int128: Object BigInteger:36893488147419103228
+  BigInteger: Object BigInteger:123456789012345678901234567890

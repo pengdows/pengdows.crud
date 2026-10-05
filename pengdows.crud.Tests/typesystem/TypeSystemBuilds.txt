@@ -1,0 +1,644 @@
+== PostgreSql
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+    i7 = String "Happy" NpgsqlDbType=Unknown
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1::jsonb, @i2, @i3, @i4, @i5, @i6::jsonb)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]" DataTypeName=jsonb NpgsqlDbType=Jsonb
+    i2 = Object Int32[]{Int32:1,Int32:2} NpgsqlDbType=-2147483639
+    i3 = Object Single[]{float:1.5}
+    i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
+    i5 = String "10.0.0.1"
+    i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+== SqlServer
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTimeOffset DateTimeOffset:2026-10-05T01:02:03.0000000-05:00
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, CASE WHEN @i4 IS NULL THEN NULL ELSE geometry::STGeomFromWKB(SUBSTRING(CAST(@i4 AS varbinary(max)), 5, DATALENGTH(@i4)), CAST(SUBSTRING(CAST(@i4 AS varbinary(max)), 1, 4) AS int)) END, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = String "[1.5]"
+    i4 = Binary 0x000010E60101000000000000000000F03F0000000000000040
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== Oracle
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6, :i7, :i8, :i9)
+    i0 = Int32 Int32:0
+    i1 = Int16 Int32:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = String "0f8fad5b-d9cb-469f-a165-70867728950e"
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = Object DateTimeOffset:2026-10-05T06:02:03.0000000+00:00
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Object TimeSpan:01:02:03
+    i6 = Object TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (:i0, :i1, :i2, :i3, (SELECT CASE WHEN x IS NULL THEN NULL ELSE SDO_GEOMETRY(SUBSTR(x, INSTR(x, ';') + 1), NULLIF(TO_NUMBER(SUBSTR(x, 6, INSTR(x, ';') - 6)), 0)) END FROM (SELECT TO_CLOB(:i4) x FROM DUAL)), :i5, :i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = String "[1.5]"
+    i4 = String "SRID=4326;POINT(1 2)"
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== Firebird
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Int16 Int16:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Binary 0x0F8FAD5BD9CB469FA16570867728950E
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = Object FbZonedDateTime:10/5/2026 6:02:03 AM UTC
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== CockroachDb
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1::jsonb, @i2, @i3, @i4, @i5, @i6::jsonb)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]" DataTypeName=jsonb NpgsqlDbType=Jsonb
+    i2 = Object Int32[]{Int32:1,Int32:2} NpgsqlDbType=-2147483639
+    i3 = Object Single[]{float:1.5}
+    i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
+    i5 = String "10.0.0.1"
+    i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+== MariaDb
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Byte Byte:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Binary 0xE61000000101000000000000000000F03F0000000000000040
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== MySql
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Byte Byte:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Binary 0xE61000000101000000000000000000F03F0000000000000040
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== Sqlite
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Double double:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = String "0f8fad5b-d9cb-469f-a165-70867728950e"
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "2026-10-05T01:02:03.0000000Z"
+    i2 = String "2026-10-05T01:02:03.1234567Z"
+    i3 = String "2026-10-05T06:02:03.0000000Z"
+    i4 = String "2026-10-05T00:00:00.0000000Z"
+    i5 = String "01:02:03"
+    i6 = String "01:02:03"
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== DuckDB
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES ($i0, $i1, $i2, $i3, $i4, $i5, $i6, $i7, $i8, $i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = String "0f8fad5b-d9cb-469f-a165-70867728950e"
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES ($i0, $i1, $i2, $i3, $i4, $i5, $i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTimeOffset DateTimeOffset:2026-10-05T01:02:03.0000000-05:00
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES ($i0, $i1, $i2, $i3, $i4, $i5, $i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== YugabyteDb
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+    i7 = String "Happy" NpgsqlDbType=Unknown
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1::jsonb, @i2, @i3, @i4, @i5, @i6::jsonb)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]" DataTypeName=jsonb NpgsqlDbType=Jsonb
+    i2 = Object Int32[]{Int32:1,Int32:2} NpgsqlDbType=-2147483639
+    i3 = Object Single[]{float:1.5}
+    i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
+    i5 = String "10.0.0.1"
+    i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+== TiDb
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Byte Byte:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== Snowflake
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6, :i7, :i8, :i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = String "0f8fad5b-d9cb-469f-a165-70867728950e"
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time DateTime:1970-01-01T01:02:03.0000000/Unspecified
+    i6 = Time DateTime:1970-01-01T01:02:03.0000000/Unspecified
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") SELECT :i0, PARSE_JSON(:i1), PARSE_JSON(:i2)::VECTOR(INT, 0), PARSE_JSON(:i3)::VECTOR(FLOAT, 0), :i4, :i5, PARSE_JSON(:i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = String "[1,2]"
+    i3 = String "[1.5]"
+    i4 = String "SRID=4326;POINT(1 2)"
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== AuroraMySql
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Byte Byte:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Binary 0xE61000000101000000000000000000F03F0000000000000040
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== AuroraPostgreSql
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e NpgsqlDbType=Uuid
+    i7 = String "Happy" NpgsqlDbType=Unknown
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1::jsonb, @i2, @i3, @i4, @i5, @i6::jsonb)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]" DataTypeName=jsonb NpgsqlDbType=Jsonb
+    i2 = Object Int32[]{Int32:1,Int32:2} NpgsqlDbType=-2147483639
+    i3 = Object Single[]{float:1.5}
+    i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
+    i5 = String "10.0.0.1"
+    i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+== Db2
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = String "0f8fad5b-d9cb-469f-a165-70867728950e"
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000/Unspecified
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== FlatFile
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6, :i7, :i8, :i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTimeOffset DateTimeOffset:2026-10-05T01:02:03.0000000-05:00
+    i4 = Date DateOnly:10/05/2026
+    i5 = Time TimeOnly:01:02
+    i6 = Time TimeOnly:01:02
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== SingleStore
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Byte Byte:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = String "01:02:03"
+    i6 = String "01:02:03"
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = String "[1.5]"
+    i4 = String "POINT(1 2)"
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== SybaseASE
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, CONVERT(BIGTIME, @i5), CONVERT(BIGTIME, @i6))
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = String "2026-10-05 01:02:03.123456"
+    i3 = String "2026-10-05 06:02:03.000000"
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = String "01:02:03.000000"
+    i6 = String "01:02:03.000000"
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== Spanner
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = String "0f8fad5b-d9cb-469f-a165-70867728950e" NpgsqlDbType=Unknown
+    i7 = String "Happy" NpgsqlDbType=Unknown
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = String "01:02:03.0000000"
+    i6 = String "01:02:03.0000000"
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1::jsonb, @i2, @i3, @i4, @i5, @i6::jsonb)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]" DataTypeName=jsonb NpgsqlDbType=Jsonb
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
+== Informix
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = Int16 Int16:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = String "0f8fad5b-d9cb-469f-a165-70867728950e"
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (?, ?, ?, ?, ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000/Unspecified
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (?, ?, ?, ?, ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = String "LIST{1,2}"
+    i3 = String "LIST{1.5}"
+    i4 = AnsiString Geometry:srid=4326:wkb=
+    i5 = AnsiString Inet:10.0.0.1
+    i6 = AnsiString "{}"
+== SapHana
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = Int16 Int16:1
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = String "0f8fad5b-d9cb-469f-a165-70867728950e"
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (?, ?, ?, ?, ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = String "2026-10-05 01:02:03.0000000"
+    i2 = String "2026-10-05 01:02:03.1234567"
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000Z/Utc
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (?, ?, ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V INT PATH '$')) ORDER BY O), ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V DOUBLE PATH '$')) ORDER BY O), ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = String "[1,2]"
+    i3 = String "[1.5]"
+    i4 = Binary 0x0101000000000000000000F03F0000000000000040
+    i5 = AnsiString Inet:10.0.0.1
+    i6 = AnsiString "{}"
+== InterBase
+  Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Int64 Int64:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Binary 0x0F8FAD5BD9CB469FA16570867728950E
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000/Unspecified
+    i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2} IBDbType=Array
+    i3 = Object Single[]{float:1.5} IBDbType=Array
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
+== Access
+  Scalars: INSERT INTO [t_scalar] ([id], [b], [l], [d], [f], [s], [g], [e], [en], [bin]) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = Boolean Boolean:True
+    i2 = Double double:7
+    i3 = Decimal decimal:1.25
+    i4 = Double double:0.5
+    i5 = String "x"
+    i6 = Guid Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+    i7 = String "Happy"
+    i8 = Int32 Int32:2
+    i9 = Binary 0x0102
+  Temporal: INSERT INTO [t_time] ([id], [dt], [dt2], [dto], [d], [t], [ts]) VALUES (?, ?, ?, ?, ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
+    i2 = DateTime DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i3 = DateTime DateTime:2026-10-05T06:02:03.0000000/Unspecified
+    i4 = DateTime DateTime:2026-10-05T00:00:00.0000000/Unspecified
+    i5 = Time TimeSpan:01:02:03
+    i6 = Time TimeSpan:01:02:03
+  Advanced: INSERT INTO [t_adv] ([id], [j], [ia], [fa], [geo], [inet], [doc]) VALUES (?, ?, ?, ?, ?, ?, ?)
+    i0 = Int32 Int32:0
+    i1 = String "["a"]"
+    i2 = Object Int32[]{Int32:1,Int32:2}
+    i3 = Object Single[]{float:1.5}
+    i4 = Object Geometry:srid=4326:wkb=
+    i5 = Object Inet:10.0.0.1
+    i6 = String "{}"
