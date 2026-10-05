@@ -1439,7 +1439,7 @@ public static class DatabaseTypeCatalog
             Notes: "Unordered; Informix converts the LIST literal the library writes.",
             Declaration: "MULTISET(DECIMAL(10,2) NOT NULL)", ClrType: typeof(decimal[]), DbType: System.Data.DbType.Object, Sample: new[] { 12.5m, 12.5m }, Comparable: false),
         new("ROW(...)", ColumnTypeCategory.UserDefined,
-            Notes: "Named or unnamed ROW types. Informix.Net.Core reads them as literal text (\"ROW(3          ,'three')\", numbers padded) and takes one as a parameter; mapping a ROW to a structure needs its declared fields (TYPE-020, 3.0)."),
+            Notes: "Named or unnamed ROW types. Informix.Net.Core reads them as literal text (\"ROW(3          ,'three')\", numbers padded, so text doesn't round-trip exactly) and takes a literal as a text parameter (a DATE field needs ?::ROW(...)); GetDataTypeName reports only \"ROW\", with no fields, so no structure mapping (TYPE-020, live 2026-10-05). Read fields typed with col.a."),
         new("<DISTINCT/OPAQUE type>", ColumnTypeCategory.UserDefined, IsUserDefined: true,
             Notes: "Includes DataBlade-provided predefined opaque types (spatial, time-series, large-object locators, etc.) — no finite list exists; treat any unrecognized Informix type name as a UDT, not an error."),
         new("CHAR(36) (Guid)", ColumnTypeCategory.Other,

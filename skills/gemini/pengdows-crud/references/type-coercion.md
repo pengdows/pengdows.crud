@@ -147,7 +147,7 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
 - DuckDB `BIT` ↔ `BitArray` (bit string); SQL Server `sql_variant` ↔ `object`; InterBase `ARRAY` ↔ `T[]` (bound with
   `IBDbType.Array`, non-zero-based results copied) and its `NONE` charset pinned to UTF-8 (the driver otherwise picks
   the system code page when code pages are registered, storing `?`); Informix `LIST`/`SET`/`MULTISET` ↔ `T[]` (written as
-  `LIST{...}`, read by parsing the literal). Not yet: Informix `ROW` (TYPE-020); ASE has no `XML` type.
+  `LIST{...}`, read by parsing the literal). Informix `ROW` ↔ `string` only (driver reports no fields; read them as `col.a`; TYPE-020); ASE has no `XML` type.
 - Snowflake scale-0 `NUMBER` beyond `long` (Snowflake.Data reports it as `Int64` and overflows) → `ulong`, `decimal`,
   `double`, `BigInteger` or `Int128`/`UInt128`: read from its text as `BigInteger`, then checked casts; a `long`
   property that can't hold it throws `DataMappingException`.
