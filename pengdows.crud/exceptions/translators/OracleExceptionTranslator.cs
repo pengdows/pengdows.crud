@@ -25,6 +25,22 @@ namespace pengdows.crud.exceptions.translators;
 /// </remarks>
 internal sealed class OracleExceptionTranslator : IDbExceptionTranslator
 {
+    private static bool ListenerAtCapacity(Exception exception)
+    {
+        for (var current = exception; current != null; current = current.InnerException)
+        {
+            var message = current.Message;
+            if (message.Contains("ORA-12516", StringComparison.Ordinal) ||
+                message.Contains("ORA-12519", StringComparison.Ordinal) ||
+                message.Contains("ORA-12520", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public DatabaseException Translate(ISqlDialect dialect, Exception exception, DbOperationKind operationKind)
     {
         var database = dialect.DatabaseType;
@@ -43,9 +59,14 @@ internal sealed class OracleExceptionTranslator : IDbExceptionTranslator
         // 50201: ODP.NET could not connect. The server-wide 'processes' limit also surfaces as this
         // (wrapping ORA-12537, confirmed live), but so does any other failed connect, so it stays a
         // plain connection failure.
+        // Confirmed live 2026-10-04 (full integration run): with the server's process slots in use it
+        // wraps "ORA-12516: ... Listener ... does not have a protocol handler ... ready"; ORA-12516/
+        // 12519/12520 are the listener's no-free-handler errors, i.e. the server is at capacity.
         if (errorCode == 50201)
         {
-            return DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
+            return ListenerAtCapacity(exception)
+                ? DbExceptionTranslationSupport.CreateTooManyConnections(database, exception, operationKind)
+                : DbExceptionTranslationSupport.CreateConnection(database, exception, operationKind);
         }
 
         // Constraint-kind classification (Unique/FK/NotNull/Check) is delegated to the dialect —

@@ -10,6 +10,12 @@ internal sealed class NumberedDbException : DbException
         Number = number;
     }
 
+    public NumberedDbException(int number, string message, System.Exception inner)
+        : base(message, inner)
+    {
+        Number = number;
+    }
+
     public int Number { get; }
 }
 

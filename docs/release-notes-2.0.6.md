@@ -83,6 +83,13 @@
 - Oracle's array-bound batch insert and batch update now apply a column's conversion as a single-row
   write does; spatial is the first Oracle column type that needs one.
 
+## Errors
+
+- On Oracle, a connect refused because the server is out of process slots (ODP.NET's ORA-50201
+  wrapping the listener's ORA-12516, ORA-12519 or ORA-12520) is now a `TooManyConnectionsException`
+  (transient), like ORA-00018/00020; it was a plain `ConnectionException`. Found under load in the full
+  integration run.
+
 ## Metrics
 
 - `RowsAffectedTotal` counts each write's rows once; 2.0.5 counted them twice, so the total halves

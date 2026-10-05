@@ -174,6 +174,29 @@ public class OracleTranslatorTests
         Assert.IsType<ConnectionException>(result);
     }
 
+    // Confirmed live 2026-10-04 (Oracle Free 23ai, ODP.NET, full integration run): with the server's
+    // process slots in use, the connect fails as ORA-50201 wrapping a network error whose message is
+    // "ORA-12516: Cannot connect to database. Listener ... does not have a protocol handler ... ready".
+    // ORA-12516/12519/12520 are the listener's no-free-handler errors: the server is at capacity, not
+    // unreachable, so it is a TooManyConnectionsException (transient). A bare 50201 stays a plain
+    // connection failure (above).
+    [Theory]
+    [InlineData("ORA-12516: Cannot connect to database. Listener at host localhost/127.0.0.1 port 32969 does not have a protocol handler for TCP ready or registered for service FREEPDB1.")]
+    [InlineData("ORA-12519: TNS:no appropriate service handler found")]
+    [InlineData("ORA-12520: TNS:listener could not find available handler for requested type of server")]
+    public void ConnectionFailure_ORA50201_WrappingListenerAtCapacity_Maps_TooManyConnections(string inner)
+    {
+        var raw = new NumberedDbException(50201,
+            "ORA-50201: Oracle Communication: Failed to connect to server or failed to parse connect string",
+            new InvalidOperationException("ORA-50201: Oracle Communication: Failed to connect to server or failed to parse connect string",
+                new InvalidOperationException(inner)));
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Oracle), raw, DbOperationKind.Query);
+
+        Assert.IsType<TooManyConnectionsException>(result);
+        Assert.True(result.IsTransient);
+    }
+
     // Per-user session limit (confirmed live 2026-09-27, gvenzl/oracle-free with a profile
     // SESSIONS_PER_USER 3, ODP.NET 23.8.0): OracleException.Number 2391. The server-wide
     // 'processes' limit surfaces as ORA-50201 wrapping ORA-12537, which is indistinguishable from any other failed connect, so it stays a plain ConnectionException (covered above). ORA-00018
