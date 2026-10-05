@@ -439,9 +439,12 @@ public class TypeSystemCharacterizationTests
     private static string PinnedPath(string name, [CallerFilePath] string here = "") =>
         Path.Combine(Path.GetDirectoryName(here)!, name);
 
-    private static void AssertPinned(string name, string actual)
+    private static void AssertPinned(string name, string actual) => AssertPinnedFile(PinnedPath(name), actual);
+
+    // The file at path holds actual, or is rewritten with it under PIN_TYPES=1.
+    internal static void AssertPinnedFile(string path, string actual)
     {
-        var path = PinnedPath(name);
+        var name = Path.GetFileName(path);
         if (Environment.GetEnvironmentVariable("PIN_TYPES") == "1")
         {
             File.WriteAllText(path, actual);
