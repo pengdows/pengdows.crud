@@ -120,6 +120,19 @@ public sealed class GatewayReadAllocationTests
         Assert.True(asDecimal <= asBool, $"decimal column {asDecimal} B/row, bool column {asBool} B/row");
     }
 
+    // A float or double column into a bool still went through the general Coerce (DataReaderMapper
+    // read it typed): one numeric expression builder now serves both mappers (DRY-010).
+    [Fact]
+    public void DoubleColumnIntoBoolProperty_AllocatesNoMoreThanBoolColumn()
+    {
+        var asDouble = AllocatedPerRow<BoolValue>(Rows(i => (double)(i % 2)));
+        var asFloat = AllocatedPerRow<BoolValue>(Rows(i => (float)(i % 2)));
+        var asBool = AllocatedPerRow<BoolValue>(Rows(i => i % 2 == 1));
+
+        Assert.True(asDouble <= asBool && asFloat <= asBool,
+            $"double column {asDouble} B/row, float column {asFloat} B/row, bool column {asBool} B/row");
+    }
+
     [Theory]
     [InlineData(0, false)]
     [InlineData(1, true)]

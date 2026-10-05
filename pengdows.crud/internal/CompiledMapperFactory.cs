@@ -429,40 +429,11 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 : result;
         }
 
-        // Simple numeric/bool conversions. Checked: a value the property can't hold (a BIGINT above
-        // int.MaxValue into an int) throws OverflowException, reported as DataMappingException,
-        // instead of wrapping to a different number (TYPE-008, REV-046).
-        if (NumericTypes.IsNumeric(sourceType) && NumericTypes.IsNumeric(underlyingTargetType))
+        // Numeric columns into numeric, enum and bool properties, as DataReaderMapper reads them.
+        if (NumericExpressions.Handles(sourceType, underlyingTargetType))
         {
-            // An enum converts through its underlying integer: there is no decimal-to-enum conversion,
-            // so a decimal column (Oracle NUMBER) into an enum failed to compile (COR-013).
-            var numericTarget = underlyingTargetType.IsEnum ? Enum.GetUnderlyingType(underlyingTargetType) : underlyingTargetType;
-
-            // A fractional value into an integer must be whole (COR-009); truncating lost the fraction.
-            if (value.Type == sourceType && WholeNumber.RequireFor(sourceType, numericTarget) is { } requireWhole)
-            {
-                value = Expression.Call(requireWhole, value);
-            }
-
-            Expression converted = Expression.ConvertChecked(value, numericTarget);
-            if (numericTarget != underlyingTargetType)
-            {
-                converted = Expression.Convert(converted, underlyingTargetType);
-            }
-
+            var converted = NumericExpressions.Convert(value, sourceType, underlyingTargetType);
             return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
-        }
-
-        // Integer and decimal columns into bool (Oracle reports NUMBER(1) as decimal): non-zero is true,
-        // as BooleanCoercion decides, without boxing the value through it.
-        if (underlyingTargetType == typeof(bool) &&
-            (sourceType == typeof(decimal) || sourceType == typeof(long) || sourceType == typeof(int) ||
-             sourceType == typeof(short) || sourceType == typeof(byte) || sourceType == typeof(sbyte) ||
-             sourceType == typeof(ushort) || sourceType == typeof(uint) || sourceType == typeof(ulong)))
-        {
-            var typed = value.Type != sourceType ? Expression.Convert(value, sourceType) : value;
-            var notEqualZero = Expression.NotEqual(typed, Expression.Constant(Convert.ChangeType(0, sourceType), sourceType));
-            return targetType != underlyingTargetType ? Expression.Convert(notEqualZero, targetType) : notEqualZero;
         }
 
         // Date and time conversions TypeCoercionHelper.Coerce would make, without boxing the value or

@@ -656,21 +656,9 @@ public sealed class DataReaderMapper : IDataReaderMapper
             {
                 valueExpression = rawValue;
             }
-            else if (underlyingTarget == typeof(bool) && NumericTypes.IsNumeric(key.FieldType))
+            else if (NumericExpressions.Handles(key.FieldType, underlyingTarget))
             {
-                // Non-zero is true; NaN fails (NumericTruth, DRY-003).
-                var nonZero = key.FieldType == typeof(double)
-                    ? Expression.Call(typeof(NumericTruth).GetMethod(nameof(NumericTruth.FromDouble))!, rawValue)
-                    : key.FieldType == typeof(float)
-                        ? Expression.Call(typeof(NumericTruth).GetMethod(nameof(NumericTruth.FromFloat))!, rawValue)
-                        : (Expression)Expression.NotEqual(rawValue, Expression.Default(key.FieldType));
-                valueExpression = targetType != underlyingTarget
-                    ? Expression.Convert(nonZero, targetType)
-                    : nonZero;
-            }
-            else if (NumericTypes.IsNumeric(key.FieldType) && NumericTypes.IsNumeric(underlyingTarget))
-            {
-                var converted = BuildNumericConversion(rawValue, key.FieldType, underlyingTarget);
+                var converted = NumericExpressions.Convert(rawValue, key.FieldType, underlyingTarget);
                 valueExpression = targetType != underlyingTarget
                     ? Expression.Convert(converted, targetType)
                     : converted;
@@ -723,75 +711,6 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
 
         return true;
-    }
-
-    private static Expression BuildNumericConversion(Expression rawValue, Type sourceType, Type targetType)
-    {
-        if (sourceType == targetType)
-        {
-            return rawValue;
-        }
-
-        // Integral → integral narrowing (e.g. long → int, long → short, int → byte). Checked: a
-        // value that doesn't fit throws OverflowException instead of wrapping to a different
-        // number (TYPE-008, REV-046); the cost is one overflow branch.
-        if (NumericTypes.IsIntegral(sourceType) && NumericTypes.IsIntegral(targetType))
-        {
-            return Expression.ConvertChecked(rawValue, targetType);
-        }
-
-        // float/double/decimal → integral: the value must be whole (COR-009), then converts checked.
-        // Convert.ToXxx rounded to even (2.7 → 3, 2.5 → 2) where the gateway truncated.
-        if (WholeNumber.RequireFor(sourceType, targetType) is { } requireWhole)
-        {
-            return Expression.ConvertChecked(Expression.Call(requireWhole, rawValue), targetType);
-        }
-
-        if (targetType == typeof(decimal) && (sourceType == typeof(double) || sourceType == typeof(float)))
-        {
-            var method = ResolveConvertMethod(targetType, sourceType);
-            if (method != null)
-            {
-                return Expression.Call(method, rawValue);
-            }
-        }
-
-        if ((targetType == typeof(double) || targetType == typeof(float)) && sourceType == typeof(decimal))
-        {
-            var method = ResolveConvertMethod(targetType, sourceType);
-            if (method != null)
-            {
-                return Expression.Call(method, rawValue);
-            }
-        }
-
-        return Expression.ConvertChecked(rawValue, targetType);
-    }
-
-    private static MethodInfo? ResolveConvertMethod(Type targetType, Type sourceType)
-    {
-        var methodName = targetType switch
-        {
-            var t when t == typeof(byte) => nameof(Convert.ToByte),
-            var t when t == typeof(sbyte) => nameof(Convert.ToSByte),
-            var t when t == typeof(short) => nameof(Convert.ToInt16),
-            var t when t == typeof(ushort) => nameof(Convert.ToUInt16),
-            var t when t == typeof(int) => nameof(Convert.ToInt32),
-            var t when t == typeof(uint) => nameof(Convert.ToUInt32),
-            var t when t == typeof(long) => nameof(Convert.ToInt64),
-            var t when t == typeof(ulong) => nameof(Convert.ToUInt64),
-            var t when t == typeof(float) => nameof(Convert.ToSingle),
-            var t when t == typeof(double) => nameof(Convert.ToDouble),
-            var t when t == typeof(decimal) => nameof(Convert.ToDecimal),
-            _ => string.Empty
-        };
-
-        if (string.IsNullOrEmpty(methodName))
-        {
-            return null;
-        }
-
-        return typeof(Convert).GetMethod(methodName, new[] { sourceType });
     }
 
     private static Type ResolveFieldType(DbDataReader reader, int ordinal, Func<int, Type?>? unresolved = null)

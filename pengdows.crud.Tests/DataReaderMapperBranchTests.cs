@@ -94,33 +94,6 @@ public class DataReaderMapperBranchTests
         Assert.Equal("123", result[0].Value.ToString(null, null));
     }
 
-    [Fact]
-    public void PrivateNumericHelpers_ExerciseAllConversionBranches()
-    {
-        var buildNumericConversion = typeof(DataReaderMapper)
-            .GetMethod("BuildNumericConversion", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("BuildNumericConversion not found.");
-
-        var resolveConvertMethod = typeof(DataReaderMapper)
-            .GetMethod("ResolveConvertMethod", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? throw new InvalidOperationException("ResolveConvertMethod not found.");
-
-        var rawInt = Expression.Parameter(typeof(int), "v");
-        var rawLong = Expression.Parameter(typeof(long), "v");
-        var rawDouble = Expression.Parameter(typeof(double), "v");
-        var rawDecimal = Expression.Parameter(typeof(decimal), "v");
-
-        _ = buildNumericConversion.Invoke(null, new object[] { rawInt, typeof(int), typeof(int) });
-        _ = buildNumericConversion.Invoke(null, new object[] { rawLong, typeof(long), typeof(int) });
-        _ = buildNumericConversion.Invoke(null, new object[] { rawDouble, typeof(double), typeof(int) });
-        _ = buildNumericConversion.Invoke(null, new object[] { rawDouble, typeof(double), typeof(decimal) });
-        _ = buildNumericConversion.Invoke(null, new object[] { rawDecimal, typeof(decimal), typeof(double) });
-        _ = buildNumericConversion.Invoke(null, new object[] { rawDecimal, typeof(decimal), typeof(char) });
-
-        var unsupported = resolveConvertMethod.Invoke(null, new object[] { typeof(DateTime), typeof(int) });
-        Assert.Null(unsupported);
-    }
-
     private sealed class DateTimeEntity
     {
         public DateTime Timestamp { get; set; }
