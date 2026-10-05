@@ -27,8 +27,8 @@ public class NpgsqlEnumNameLivenessTests
     [Fact]
     public void EveryNpgsqlDbTypeNameConstant_MatchesARealEnumMember()
     {
-        var registryType = typeof(AdvancedTypeRegistry);
-        var namesType = registryType.GetNestedType("NpgsqlNames", BindingFlags.NonPublic);
+        // The PostgreSQL dialect owns its Npgsql names (REV-039).
+        var namesType = typeof(pengdows.crud.dialects.PostgreSqlDialect).GetNestedType("NpgsqlNames", BindingFlags.NonPublic);
         Assert.NotNull(namesType);
 
         var realEnumNames = Enum.GetNames(typeof(NpgsqlDbType)).ToHashSet(StringComparer.Ordinal);
