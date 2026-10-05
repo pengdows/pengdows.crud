@@ -62,7 +62,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
         var sc = BuildBaseRetrieve("o");
 
         sc.Query.Append(" WHERE ");
-        sc.Query.Append(sc.WrapObjectName("o.customer_id"));
+        sc.Query.Append(sc.WrapObjectName("o." + ColumnName(nameof(Order.CustomerId))));
         sc.Query.Append(" = ");
         var param = sc.AddParameterWithValue("customerId", DbType.Int64, customerId);
         sc.Query.Append(sc.MakeParameterName(param));

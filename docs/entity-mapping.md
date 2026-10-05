@@ -65,6 +65,16 @@ column/parameter ordering — see "Ordinal ordering" below.
 **Duplicate column names** (two properties mapping to the same `[Column("x", ...)]` name) throw
 `SqlGenerationException` at registration.
 
+**Column names in custom SQL.** Rather than repeating a `[Column]` name as a string, ask for it by
+property: `ColumnName(nameof(Order.CustomerId))` on a gateway (`ITableGateway`/`IPrimaryKeyTableGateway`)
+returns `"customer_id"` for that gateway's entity, and `ctx.ColumnName<Customer>(nameof(Customer.Name))`
+(an extension on `IDatabaseContext`, so transactions too) does the same for any entity, registering it
+on first use. The result is unquoted: wrap it for the container's context,
+`sc.WrapObjectName("o." + ColumnName(nameof(Order.CustomerId)))`. An unknown property or one without
+`[Column]` throws `ArgumentException`, and property names are case-sensitive. Inherited mapped
+properties resolve too. A custom `ITableGateway` implementation compiled against 2.0.5 gets a default
+`ColumnName` that throws `NotSupportedException`.
+
 **`Stream` and `TextReader` properties** are written as their whole content, read when the
 parameter is bound: a seekable stream is rewound first (so a `MemoryStream` you just wrote to needs
 no `Seek(0)`), and a `TextReader` is read to its end. Content before a stream's current position is

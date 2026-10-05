@@ -73,6 +73,7 @@ method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildUpdateAsync(TEntit
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildUpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<pengdows.crud.ISqlContainer>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildUpsert(TEntity, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::BuildWhereByPrimaryKey(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.ISqlContainer, string) -> void
+method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::ColumnName(string) -> string
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CountAllAsync(pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CountWhereAsync(string, string, bool, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::CountWhereEqualsAsync(string, string, string, string, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
@@ -171,6 +172,7 @@ method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpdateAsync(TEntity,
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildUpsert(TEntity, pengdows.crud.IDatabaseContext) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildWhere(string, System.Collections.Generic.IEnumerable`1<TRowID>, pengdows.crud.ISqlContainer) -> pengdows.crud.ISqlContainer
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::BuildWhereByPrimaryKey(System.Collections.Generic.IReadOnlyCollection`1<TEntity>, pengdows.crud.ISqlContainer, string) -> void
+method pengdows.crud.ITableGateway`2<TEntity, TRowID>::ColumnName(string) -> string
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CountAllAsync(pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CountWhereAsync(string, string, bool, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>
 method pengdows.crud.ITableGateway`2<TEntity, TRowID>::CountWhereEqualsAsync(string, string, string, string, pengdows.crud.IDatabaseContext) -> System.Threading.Tasks.ValueTask`1<long>

@@ -122,6 +122,10 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     /// <inheritdoc/>
     public string WrappedTableName { get; init; } = null!;
 
+    /// <inheritdoc cref="IPrimaryKeyTableGateway{TEntity}.ColumnName"/>
+    public string ColumnName(string propertyName) =>
+        ColumnNameResolver.Resolve(_tableInfo, typeof(TEntity), propertyName);
+
     /// <inheritdoc/>
     public EnumParseFailureMode EnumParseBehavior { get; init; }
 

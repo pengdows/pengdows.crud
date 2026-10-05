@@ -388,7 +388,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
         var ctx = context ?? Context;
         await using var sc = BuildBaseRetrieve("o", ctx);
         sc.Query.Append(" WHERE ");
-        sc.Query.Append(sc.WrapObjectName("o.customer_id"));
+        sc.Query.Append(sc.WrapObjectName("o." + ColumnName(nameof(Order.CustomerId))));
         sc.Query.Append(" = ");
         var p = sc.AddParameterWithValue("cid", DbType.Int64, customerId);
         sc.Query.Append(sc.MakeParameterName(p));
@@ -433,7 +433,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
 8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite `Standard` -> `SingleWriter`); where `Best` picks `PreventDatabaseUnload` (LocalDB, Firebird) an explicit `Standard` is honored
-9. **Always use WrapObjectName()** — for column names and aliases in custom SQL
+9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `ctx.BeginTransaction()`
 11. **ISqlContainer execution methods return ValueTask** — not Task, for reduced allocations
 12. **All async methods have CancellationToken overloads** — pass tokens through for proper cancellation

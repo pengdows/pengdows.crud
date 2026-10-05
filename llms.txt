@@ -147,6 +147,8 @@ database-agnostic policy decoupled from connection identity — is in
   entity-mapping attributes (`[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/
   `[Json]`/enum/correlation-token/`[NonInsertable]`/`[NonUpdateable]`), a summary matrix, valid
   combinations, and the exact `TypeMapRegistry` validation rules that throw `SqlGenerationException`.
+  Also `ColumnName(nameof(Entity.Prop))` (gateways) / `ctx.ColumnName<T>(...)` for mapped column names
+  in custom SQL.
 - [`docs/audit-fields.md`](docs/audit-fields.md) — the full audit-field lifecycle: the
   `IAuditValueResolver` contract (synchronous only, unwrapped exception propagation), what's set
   on CREATE (both `Created*`/`LastUpdated*` pairs) vs. UPDATE (only `LastUpdated*`),

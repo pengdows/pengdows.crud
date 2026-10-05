@@ -39,6 +39,8 @@ public class SemVerCompatibilityDefaultMemberTests
         { typeof(ITableGateway<SemVerEntity, int>), "set_AuditCreationPolicy" },
         { typeof(IPrimaryKeyTableGateway<SemVerEntity>), "get_AuditCreationPolicy" },
         { typeof(IPrimaryKeyTableGateway<SemVerEntity>), "set_AuditCreationPolicy" },
+        { typeof(ITableGateway<SemVerEntity, int>), "ColumnName" },
+        { typeof(IPrimaryKeyTableGateway<SemVerEntity>), "ColumnName" },
         { typeof(ITransactionContext), nameof(ITransactionContext.ReleaseSavepointAsync) },
         { typeof(IDataSourceInformation), "get_" + nameof(IDataSourceInformation.ParsedVersion) },
         { typeof(ITenantContextRegistry), nameof(ITenantContextRegistry.AcquireLease) }
@@ -160,6 +162,22 @@ public class SemVerCompatibilityDefaultMemberTests
         var ex = Assert.Throws<TargetInvocationException>(() =>
             init.Invoke(gateway, new object[] { AuditCreationPolicy.Authoritative }));
         Assert.IsType<NotSupportedException>(ex.InnerException);
+    }
+
+    [Fact]
+    public void ITableGateway_ColumnName_Default_IsNotSupported()
+    {
+        var gateway = new Mock<ITableGateway<SemVerEntity, int>> { CallBase = true }.Object;
+
+        Assert.Throws<NotSupportedException>(() => gateway.ColumnName("Id"));
+    }
+
+    [Fact]
+    public void IPrimaryKeyTableGateway_ColumnName_Default_IsNotSupported()
+    {
+        var gateway = new Mock<IPrimaryKeyTableGateway<SemVerEntity>> { CallBase = true }.Object;
+
+        Assert.Throws<NotSupportedException>(() => gateway.ColumnName("Id"));
     }
 
     [Fact]

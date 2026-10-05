@@ -40,6 +40,7 @@ namespace pengdows.crud;
 internal class TableInfo : ITableInfo
 {
     private IReadOnlyList<IColumnInfo>? _orderedColumns;
+    private IReadOnlyDictionary<string, IColumnInfo>? _columnsByPropertyName;
     private IReadOnlyList<IColumnInfo>? _primaryKeys;
 
     /// <summary>
@@ -122,6 +123,26 @@ internal class TableInfo : ITableInfo
             var computed = Columns.Values.OrderBy(c => c.Ordinal).ToList();
             Interlocked.CompareExchange(ref _orderedColumns, computed, null);
             return _orderedColumns!;
+        }
+    }
+
+    /// <summary>
+    /// Columns keyed by CLR property name (ordinal: C# property names are case-sensitive), for
+    /// <c>ColumnName</c> lookups. Lazily computed and cached like <see cref="OrderedColumns"/>.
+    /// </summary>
+    internal IReadOnlyDictionary<string, IColumnInfo> ColumnsByPropertyName
+    {
+        get
+        {
+            var existing = Volatile.Read(ref _columnsByPropertyName);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var computed = Columns.Values.ToDictionary(c => c.PropertyInfo.Name, StringComparer.Ordinal);
+            Interlocked.CompareExchange(ref _columnsByPropertyName, computed, null);
+            return _columnsByPropertyName!;
         }
     }
 

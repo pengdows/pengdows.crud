@@ -34,6 +34,14 @@
   it on the gateway (`2`) and rounded it to even in `DataReaderMapper` and scalar reads (`3`)
   (COR-009).
 
+## New API
+
+- `ColumnName(string propertyName)` on `ITableGateway`/`IPrimaryKeyTableGateway`, and
+  `ColumnName<TEntity>(string propertyName)` as an `IDatabaseContext` extension, return a property's
+  mapped `[Column]` name for custom SQL: `sc.WrapObjectName("o." + ColumnName(nameof(Order.CustomerId)))`
+  instead of a hard-coded `"o.customer_id"`. Both interface members have default implementations, so
+  implementations compiled against 2.0.5 still load. See [entity-mapping.md](entity-mapping.md).
+
 ## Writes that now work
 
 - A C# enum stored by name in a PostgreSQL-family user-defined `ENUM` column now works in a MERGE

@@ -205,6 +205,23 @@ var aliasedColumn = sc.WrapObjectName("o.total");
 
 **IMPORTANT:** Always use `WrapObjectName()` for all table names, column names, and aliases in custom SQL to ensure proper quoting per database dialect.
 
+### Mapped column names: `ColumnName`
+
+Don't hard-code a column name that `[Column]` already declares. `ColumnName(nameof(...))` returns the
+mapped (unquoted) name, so renaming the property or the column can't leave custom SQL behind:
+
+```csharp
+// Inside a gateway subclass: this gateway's entity
+sc.Query.Append(sc.WrapObjectName("o." + ColumnName(nameof(Order.CustomerId))));   // "o"."customer_id"
+
+// Any entity, e.g. a joined table: an IDatabaseContext (or transaction) extension
+sc.Query.Append(sc.WrapObjectName("c." + ctx.ColumnName<Customer>(nameof(Customer.Name))));
+```
+
+`nameof` is a compile-time constant (no expression tree, no allocation) and the lookup is cached per
+entity. An unknown or unmapped property throws `ArgumentException`; names are case-sensitive.
+Methods that take a column name, like `CountWhereEqualsAsync`, accept the result as well.
+
 ## Complete Example
 
 ```csharp

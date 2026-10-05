@@ -59,6 +59,22 @@ public interface IPrimaryKeyTableGateway<TEntity>
             }
         }
     }
+
+    /// <summary>
+    /// Returns the database column name that <typeparamref name="TEntity"/>'s property
+    /// <paramref name="propertyName"/> is mapped to with <c>[Column]</c>, for custom SQL. Pass
+    /// <c>nameof(TEntity.Property)</c> so a renamed property or column can't leave a hard-coded
+    /// name behind, and wrap the result for your container's context:
+    /// <c>sc.WrapObjectName("o." + ColumnName(nameof(Order.CustomerId)))</c>.
+    /// </summary>
+    /// <param name="propertyName">The CLR property name (case-sensitive).</param>
+    /// <returns>The unquoted column name.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="propertyName"/> is null.</exception>
+    /// <exception cref="ArgumentException">The property doesn't exist or has no <c>[Column]</c> mapping.</exception>
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    string ColumnName(string propertyName) =>
+        throw new NotSupportedException($"{GetType().Name} does not support {nameof(ColumnName)}.");
+
     // =========================================================================
     // CREATE
     // =========================================================================
