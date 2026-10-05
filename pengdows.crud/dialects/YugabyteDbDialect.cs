@@ -45,7 +45,7 @@ internal class YugabyteDbDialect : PostgreSqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        return $"{base.GetBaseSessionSettings()}\nSET client_encoding = 'UTF8';\nSET lock_timeout = '30s';";
+        return base.GetBaseSessionSettings() + DistributedSessionSettings;
     }
 
     /// <summary>

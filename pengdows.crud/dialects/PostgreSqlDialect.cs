@@ -678,6 +678,11 @@ internal class PostgreSqlDialect : SqlDialect
             "Failed to configure PostgreSQL session settings");
     }
 
+    // What the distributed PostgreSQL-compatible databases (CockroachDB, YugabyteDB) add to the
+    // PostgreSQL session settings.
+    private protected const string DistributedSessionSettings =
+        "\nSET client_encoding = 'UTF8';\nSET lock_timeout = '30s';";
+
     public override string GetBaseSessionSettings()
     {
         // Always enforce the full baseline on every connection checkout.

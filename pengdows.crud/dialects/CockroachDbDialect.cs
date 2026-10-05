@@ -54,7 +54,7 @@ internal class CockroachDbDialect : PostgreSqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        return $"{base.GetBaseSessionSettings()}\nSET client_encoding = 'UTF8';\nSET lock_timeout = '30s';";
+        return base.GetBaseSessionSettings() + DistributedSessionSettings;
     }
 
     public override Version? ParseVersion(string versionString)
