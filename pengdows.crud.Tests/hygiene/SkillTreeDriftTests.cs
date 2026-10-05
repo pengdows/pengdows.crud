@@ -49,7 +49,12 @@ public class SkillTreeDriftTests
         foreach (var file in Directory.GetFiles(Path.Combine(other, "references"), "*.md"))
         {
             var name = Path.GetFileName(file);
-            if (name != "SKILL.md" && !File.Exists(Path.Combine(claude, name)))
+            if (name == "SKILL.md")
+            {
+                // A second SKILL.md under references/ is never compared, so it goes stale unseen.
+                drift.Add($"references/SKILL.md: stray copy of SKILL.md in {otherTree}");
+            }
+            else if (!File.Exists(Path.Combine(claude, name)))
             {
                 drift.Add($"{name}: only in {otherTree}");
             }

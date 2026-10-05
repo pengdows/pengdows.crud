@@ -1,11 +1,7 @@
 # pengdows.crud OpenTelemetry Metrics
 
 > **STATUS: SHIPPED.** `pengdows.crud.opentelemetry` is a real, built, tested package
-> (`pengdows.crud.opentelemetry/`, tests in `pengdows.crud.Tests/opentelemetry/`). This
-> file supersedes the pre-implementation plan (`opentelemetry-metrics-plan.md`), which
-> still says "nothing described here exists" — that framing went stale the moment the
-> package shipped, so treat that file and anything citing its instrument-name list as
-> wrong. The package's own
+> (`pengdows.crud.opentelemetry/`, tests in `pengdows.crud.Tests/opentelemetry/`). The package's own
 > [`README.md`](../pengdows.crud.opentelemetry/README.md) is the primary reference for
 > installation and the metrics table; this file keeps the design rationale (why it's
 > shaped the way it is) and points at source for the full, current instrument list rather

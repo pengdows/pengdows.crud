@@ -1,1 +1,0 @@
-No containers are used for Sqlite, so no need to wrap container start/stop etc.

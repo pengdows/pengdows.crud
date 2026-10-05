@@ -54,6 +54,8 @@ coverage-*.json
 coverage.net*.json
 *.trx.log
 *.cs.tmp
+test_output*.txt
+*.skill
 artifacts/
 !artifacts/
 artifacts/*

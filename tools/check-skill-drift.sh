@@ -42,7 +42,11 @@ compare_tree() {
   for f in "$other_dir"/references/*.md; do
     local name
     name=$(basename "$f")
-    if [ ! -f "$CLAUDE_DIR/$name" ]; then
+    if [ "$name" = "SKILL.md" ]; then
+      # A second SKILL.md under references/ is never compared, so it goes stale unseen.
+      echo "DRIFT: $f is a stray copy of SKILL.md"
+      fail=1
+    elif [ ! -f "$CLAUDE_DIR/$name" ]; then
       echo "DRIFT: $f has no counterpart at $CLAUDE_DIR/$name"
       fail=1
     fi

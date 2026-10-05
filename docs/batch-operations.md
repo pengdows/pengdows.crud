@@ -198,7 +198,7 @@ This keeps generated statements within provider limits without exposing a user-c
 - `TableGateway<T,TId>` batch update keys its WHERE/match condition on the `[Id]` column on every path, exactly like single-row `UpdateAsync`; `[PrimaryKey]` columns are ordinary updateable SET columns, and `[CreatedBy]`/`[CreatedOn]` are never written. An entity with no `[Id]` throws `NotSupportedException` — use `PrimaryKeyTableGateway<TEntity>` for `[PrimaryKey]`-only entities.
 - Batch upsert uses multi-row `ON CONFLICT` or `ON DUPLICATE KEY` only when the connected product advertises those capabilities; otherwise it falls back to one `BuildUpsert(...)` container per entity.
 - Batch delete by IDs uses chunked `WHERE ... IN (...)`.
-- Batch delete by entity collection builds one delete container per entity because each delete is keyed by the mapped `[Id]` or `[PrimaryKey]` values from that entity.
+- Batch delete by entity collection matches on the `[PrimaryKey]` columns. `TableGateway<TEntity, TRowID>` chunks the entities like batch delete by IDs, one `DELETE ... WHERE (pk1 = ... AND pk2 = ...) OR (...)` per chunk, and throws `InvalidOperationException` for an entity with no `[PrimaryKey]` (use batch delete by IDs there). `PrimaryKeyTableGateway<TEntity>` builds one `DELETE` per entity, comparing a null key part with `IS NULL`.
 
 ### Important Constraints
 
@@ -216,7 +216,7 @@ This keeps generated statements within provider limits without exposing a user-c
 | Batch update | `SupportsBatchUpdate` | one update container per entity |
 | Batch upsert | `SupportsInsertOnConflict` / `SupportsOnDuplicateKey` | one `BuildUpsert(...)` container per entity |
 | Batch delete by IDs | always available on `TableGateway<TEntity, TRowID>` | n/a |
-| Batch delete by entities | always available | one delete container per entity |
+| Batch delete by entities | always available (needs `[PrimaryKey]` columns) | `TableGateway`: one chunked `DELETE ... WHERE (...) OR (...)`; `PrimaryKeyTableGateway`: one container per entity |
 
 ### Upsert Shape Used Today
 
