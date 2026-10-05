@@ -367,9 +367,14 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         provider == SupportedDatabase.SingleStore ? "ROWSTORE " : string.Empty;
 
     // Oracle's test user's default tablespace is SYSTEM, where JSON/XMLTYPE/VECTOR/SecureFiles LOBs
-    // can't be created (ORA-43853); VectorRoundTripTests does the same.
-    private static string TableSuffix(SupportedDatabase provider) =>
-        provider == SupportedDatabase.Oracle ? " TABLESPACE USERS" : string.Empty;
+    // can't be created (ORA-43853); VectorRoundTripTests does the same. A FlatFile (CSV) field tells
+    // NULL from '' only with a NULLTOKEN (DRY-024), as the other FlatFile tables declare.
+    private static string TableSuffix(SupportedDatabase provider) => provider switch
+    {
+        SupportedDatabase.Oracle => " TABLESPACE USERS",
+        SupportedDatabase.FlatFile => " WITH (NULLTOKEN = '<<NULL>>')",
+        _ => string.Empty
+    };
 
     private static SupportedDatabase Provider(IDatabaseContext context) => context.Product;
 
