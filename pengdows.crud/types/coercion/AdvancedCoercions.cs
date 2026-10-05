@@ -510,14 +510,14 @@ internal class GeographyCoercion : DbCoercion<Geography>
                     value = geog;
                     return true;
                 case byte[] bytes:
-                    GeographyConverter.ExtractSridFromEwkb(bytes, out var srid, out var normalized);
+                    GeometryConverter.ExtractSridFromEwkb(bytes, out var srid, out var normalized);
                     value = Geography.FromWellKnownBinary(normalized, srid == 0 ? 4326 : srid);
                     return true;
                 case string text when text.StartsWith("{"):
                     value = Geography.FromGeoJson(text, 4326);
                     return true;
                 case string text:
-                    var (textSrid, wkt) = GeographyConverter.ExtractSridFromText(text);
+                    var (textSrid, wkt) = GeometryConverter.ExtractSridFromText(text);
                     value = Geography.FromWellKnownText(wkt, textSrid == 0 ? 4326 : textSrid);
                     return true;
                 default:

@@ -264,12 +264,10 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     }
 
     [Fact]
-    public void IntervalYearMonthParse_UnknownCharacters_Ignores()
+    public void IntervalYearMonthParse_UnknownCharacters_Fail()
     {
-        // Characters that aren't Y or M are ignored
-        var result = IntervalYearMonth.Parse("P2Y3M5X");
-        Assert.Equal(2, result.Years);
-        Assert.Equal(3, result.Months);
+        // DRY-012: unknown letters were skipped, so other text read as a wrong value; now it fails.
+        Assert.Throws<FormatException>(() => IntervalYearMonth.Parse("P2Y3M5X"));
     }
 
     [Fact]

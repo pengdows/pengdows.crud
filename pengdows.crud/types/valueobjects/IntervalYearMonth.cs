@@ -15,6 +15,9 @@
 // - Thread-safe and immutable.
 // =============================================================================
 
+using System.Globalization;
+using System.Text.RegularExpressions;
+
 namespace pengdows.crud.types.valueobjects;
 
 /// <summary>
@@ -64,6 +67,11 @@ public readonly struct IntervalYearMonth : IEquatable<IntervalYearMonth>
         return new IntervalYearMonth(years, months);
     }
 
+    /// <summary>
+    /// Parses ISO-8601 (<c>P1Y2M</c>), SQL/Oracle/Informix (<c>+0001-02</c>, <c>1-2</c>) or word
+    /// (<c>1 year 2 mons</c>, <see cref="ToString"/>'s <c>1 years 2 months</c>) text, ignoring case.
+    /// Blank text is a zero interval; any other text throws <see cref="FormatException"/>.
+    /// </summary>
     public static IntervalYearMonth Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -71,42 +79,74 @@ public readonly struct IntervalYearMonth : IEquatable<IntervalYearMonth>
             return new IntervalYearMonth(0, 0);
         }
 
+        return TryParseText(text, out var value)
+            ? value
+            : throw new FormatException("The text is not an INTERVAL YEAR TO MONTH.");
+    }
+
+    // DRY-012: the one strict parser (the converter reads with it too). Blank is not an interval here.
+    private static readonly Regex IsoForm = new(@"^(?<neg>-)?P?(?=[+-]?\d+[YM])(?:(?<y>[+-]?\d+)Y)?(?:(?<m>[+-]?\d+)M)?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex SqlForm = new(@"^(?<neg>[+-])?(?<y>\d+)-(?<m>\d+)$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex WordForm = new(
+        @"^(?=[+-]?\d)(?:(?<y>[+-]?\d+)\s*years?)?\s*(?:(?<m>[+-]?\d+)\s*(?:months?|mons?))?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    internal static bool TryParseText(string? text, out IntervalYearMonth value)
+    {
+        value = default;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
         var trimmed = text.Trim();
-        if (trimmed.StartsWith("P", StringComparison.OrdinalIgnoreCase))
+        var match = IsoForm.Match(trimmed);
+        var sql = false;
+        if (!match.Success)
         {
-            trimmed = trimmed.Substring(1);
+            match = SqlForm.Match(trimmed);
+            sql = match.Success;
         }
 
-        var years = 0;
-        var months = 0;
-        var buffer = string.Empty;
-
-        foreach (var c in trimmed)
+        if (!match.Success)
         {
-            if (char.IsDigit(c) || c == '-' || c == '+')
-            {
-                buffer += c;
-                continue;
-            }
-
-            if (buffer.Length == 0)
-            {
-                continue;
-            }
-
-            switch (c)
-            {
-                case 'Y' or 'y':
-                    years = int.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
-                    break;
-                case 'M' or 'm':
-                    months = int.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
-                    break;
-            }
-
-            buffer = string.Empty;
+            match = WordForm.Match(trimmed);
         }
 
-        return new IntervalYearMonth(years, months);
+        if (!match.Success || (!match.Groups["y"].Success && !match.Groups["m"].Success) ||
+            !TryComponent(match.Groups["y"], out var years) || !TryComponent(match.Groups["m"], out var months) ||
+            (sql && months > 11))
+        {
+            return false;
+        }
+
+        if (match.Groups["neg"].Value == "-")
+        {
+            years = -years;
+            months = -months;
+        }
+
+        try
+        {
+            value = new IntervalYearMonth(years, months);
+            _ = value.TotalMonths;
+            return true;
+        }
+        catch (OverflowException)
+        {
+            value = default;
+            return false;
+        }
+    }
+
+    private static bool TryComponent(Group group, out int number)
+    {
+        number = 0;
+        return !group.Success ||
+               int.TryParse(group.Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out number);
     }
 }

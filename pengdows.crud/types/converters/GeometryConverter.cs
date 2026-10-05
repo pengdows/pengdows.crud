@@ -192,7 +192,7 @@ internal sealed class GeometryConverter : SpatialConverter<Geometry>
         return (0, text);
     }
 
-    private static int ExtractSridFromGeoJson(string json)
+    internal static int ExtractSridFromGeoJson(string json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {

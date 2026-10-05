@@ -299,7 +299,7 @@ Object[]{Int32:1,"2"} -> List`1: List`1{Int32:1,Int32:2}
     Geometry:srid=4326:wkb=0101000000000000000000F03F0000000000000040  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
     Geometry:srid=257:wkb=20E6100000000000000000F03F0000000000000040  [MariaDb,MySql,AuroraMySql]
 0x0101000020E6100000000000000000F03F0000000000000040 -> Geography
-    Geography:srid=4326:wkb=0101000020E6100000000000000000F03F0000000000000040  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
+    Geography:srid=4326:wkb=0101000000000000000000F03F0000000000000040  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
     Geography:srid=257:wkb=20E6100000000000000000F03F0000000000000040  [MariaDb,MySql,AuroraMySql]
 "{"type":"Point","coordinates":[1,2]}" -> Geometry: Geometry:srid=0:wkb=
 "{"type":"Point","coordinates":[1,2]}" -> Geography: Geography:srid=4326:wkb=
@@ -316,15 +316,15 @@ Object[]{Int32:1,"2"} -> List`1: List`1{Int32:1,Int32:2}
 "::1" -> Cidr: throws InvalidCastException
 "::1" -> MacAddress: throws InvalidCastException
 "P1Y2M" -> IntervalYearMonth: IntervalYearMonth:1 years 2 months
-"P1Y2M" -> IntervalDaySecond: IntervalDaySecond:0 days 00:00:00
+"P1Y2M" -> IntervalDaySecond: throws InvalidCastException
 "p1y2m" -> IntervalYearMonth: IntervalYearMonth:1 years 2 months
-"p1y2m" -> IntervalDaySecond: IntervalDaySecond:0 days 00:00:00
-"1-2" -> IntervalYearMonth: IntervalYearMonth:0 years 0 months
-"1-2" -> IntervalDaySecond: IntervalDaySecond:0 days 00:00:00
-"P1DT2H3M4S" -> IntervalYearMonth: IntervalYearMonth:0 years 3 months
+"p1y2m" -> IntervalDaySecond: throws InvalidCastException
+"1-2" -> IntervalYearMonth: IntervalYearMonth:1 years 2 months
+"1-2" -> IntervalDaySecond: throws InvalidCastException
+"P1DT2H3M4S" -> IntervalYearMonth: throws InvalidCastException
 "P1DT2H3M4S" -> IntervalDaySecond: IntervalDaySecond:1 days 02:03:04
-"p1dt2h3m4s" -> IntervalYearMonth: IntervalYearMonth:0 years 3 months
-"p1dt2h3m4s" -> IntervalDaySecond: IntervalDaySecond:1 days 00:00:00
+"p1dt2h3m4s" -> IntervalYearMonth: throws InvalidCastException
+"p1dt2h3m4s" -> IntervalDaySecond: IntervalDaySecond:1 days 02:03:04
 TimeSpan:1.02:00:00 -> IntervalYearMonth: throws InvalidCastException
 TimeSpan:1.02:00:00 -> IntervalDaySecond: IntervalDaySecond:1 days 02:00:00
 "[1,5)" -> Range`1: Range`1:[1, 5)

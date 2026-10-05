@@ -11,7 +11,7 @@
 //   * Others: TimeSpan equivalent
 // - ConvertToProvider(): Returns ISO 8601 format (P5DT12H30M45.5S) for Oracle/PostgreSQL.
 // - TryConvertFromProvider(): Handles IntervalDaySecond, TimeSpan, and string.
-// - Parse(): Handles ISO 8601 duration format with time component.
+// - Text is read by IntervalDaySecond.TryParseText (ISO, SQL/Oracle/Informix and word forms; DRY-012).
 // - Components: Days (int) and Time (TimeSpan).
 // - Thread-safe and immutable value objects.
 // =============================================================================
@@ -106,9 +106,9 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
                 case TimeSpan span:
                     result = IntervalDaySecond.FromTimeSpan(span);
                     return true;
+                // DRY-012: the value object's strict parser; blank or unrecognized text is no interval.
                 case string text:
-                    result = Parse(text);
-                    return true;
+                    return IntervalDaySecond.TryParseText(text, out result);
                 default:
                     result = default!;
                     return false;
@@ -135,107 +135,22 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
             (absolute.Ticks % TimeSpan.TicksPerSecond).ToString("D7", CultureInfo.InvariantCulture)[..6]);
     }
 
+    // ISO-8601 to the tick; a negative interval is "-P..." with absolute components, as Parse reads it.
     private static string FormatIso(IntervalDaySecond value)
     {
-        var time = value.Time;
+        var total = value.TotalTime;
+        var absolute = total.Duration();
+        var fraction = absolute.Ticks % TimeSpan.TicksPerSecond;
         return string.Concat(
-            "P",
-            value.Days.ToString(CultureInfo.InvariantCulture),
+            total < TimeSpan.Zero ? "-P" : "P",
+            absolute.Days.ToString(CultureInfo.InvariantCulture),
             "DT",
-            time.Hours.ToString(CultureInfo.InvariantCulture),
+            absolute.Hours.ToString(CultureInfo.InvariantCulture),
             "H",
-            time.Minutes.ToString(CultureInfo.InvariantCulture),
+            absolute.Minutes.ToString(CultureInfo.InvariantCulture),
             "M",
-            (time.Seconds + time.Milliseconds / 1000.0).ToString(CultureInfo.InvariantCulture),
+            absolute.Seconds.ToString(CultureInfo.InvariantCulture),
+            fraction == 0 ? "" : "." + fraction.ToString("D7", CultureInfo.InvariantCulture).TrimEnd('0'),
             "S");
-    }
-
-    private static IntervalDaySecond Parse(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return new IntervalDaySecond(0, TimeSpan.Zero);
-        }
-
-        var trimmed = text.Trim();
-        if (trimmed.StartsWith("P", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed.Substring(1);
-        }
-
-        var timeIndex = trimmed.IndexOf('T');
-        var datePart = trimmed;
-        string? timePart = null;
-        if (timeIndex >= 0)
-        {
-            datePart = trimmed.Substring(0, timeIndex);
-            timePart = trimmed.Substring(timeIndex + 1);
-        }
-
-        var days = 0;
-        if (!string.IsNullOrEmpty(datePart))
-        {
-            var buffer = string.Empty;
-            foreach (var c in datePart)
-            {
-                if (char.IsDigit(c) || c == '-' || c == '+')
-                {
-                    buffer += c;
-                    continue;
-                }
-
-                if (buffer.Length == 0)
-                {
-                    continue;
-                }
-
-                if (c == 'D')
-                {
-                    days = int.Parse(buffer, CultureInfo.InvariantCulture);
-                }
-
-                buffer = string.Empty;
-            }
-        }
-
-        var hours = 0;
-        var minutes = 0;
-        var seconds = 0.0;
-
-        if (!string.IsNullOrEmpty(timePart))
-        {
-            var buffer = string.Empty;
-            foreach (var c in timePart)
-            {
-                if (char.IsDigit(c) || c == '-' || c == '+' || c == '.')
-                {
-                    buffer += c;
-                    continue;
-                }
-
-                if (buffer.Length == 0)
-                {
-                    continue;
-                }
-
-                switch (c)
-                {
-                    case 'H':
-                        hours = int.Parse(buffer, CultureInfo.InvariantCulture);
-                        break;
-                    case 'M':
-                        minutes = int.Parse(buffer, CultureInfo.InvariantCulture);
-                        break;
-                    case 'S':
-                        seconds = double.Parse(buffer, CultureInfo.InvariantCulture);
-                        break;
-                }
-
-                buffer = string.Empty;
-            }
-        }
-
-        var timeSpan = TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds);
-        return new IntervalDaySecond(days, timeSpan);
     }
 }

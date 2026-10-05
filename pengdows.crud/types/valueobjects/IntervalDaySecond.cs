@@ -10,9 +10,12 @@
 //   * Time: TimeSpan - hours, minutes, seconds, milliseconds
 //   * TotalTime: TimeSpan - combined Days as TimeSpan + Time
 // - FromTimeSpan(): Splits TimeSpan into Days + residual Time.
-// - Parse(): Parses ISO 8601 format (P{days}DT{hours}H{mins}M{secs}S).
+// - Parse(): ISO 8601, SQL/Oracle/Informix and word forms, strict (DRY-012).
 // - Thread-safe and immutable.
 // =============================================================================
+
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace pengdows.crud.types.valueobjects;
 
@@ -67,6 +70,12 @@ public readonly struct IntervalDaySecond : IEquatable<IntervalDaySecond>
         return new IntervalDaySecond(days, residual);
     }
 
+    /// <summary>
+    /// Parses ISO-8601 (<c>P1DT2H3M4.5S</c>), SQL/Oracle/Informix (<c>+000000001 02:03:04.123456</c>,
+    /// <c>02:03:04</c>) or word (<c>1 day 02:03:04</c>, <see cref="ToString"/>'s form) text, ignoring
+    /// case, exactly to the tick (further digits are truncated). Blank text is a zero interval; any
+    /// other text throws <see cref="FormatException"/>.
+    /// </summary>
     public static IntervalDaySecond Parse(string text)
     {
         if (string.IsNullOrWhiteSpace(text))
@@ -74,85 +83,105 @@ public readonly struct IntervalDaySecond : IEquatable<IntervalDaySecond>
             return new IntervalDaySecond(0, TimeSpan.Zero);
         }
 
+        return TryParseText(text, out var value)
+            ? value
+            : throw new FormatException("The text is not an INTERVAL DAY TO SECOND.");
+    }
+
+    // DRY-012: the one strict parser (the converter reads with it too). Blank is not an interval here.
+    private static readonly Regex IsoForm = new(
+        @"^(?<neg>-)?P?(?=[+-]?\d|T)(?:(?<d>[+-]?\d+)D)?(?<t>T(?:(?<h>[+-]?\d+)H)?(?:(?<mi>[+-]?\d+)M)?(?:(?<s>[+-]?\d+)(?:\.(?<f>\d+))?S)?)?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex ClockForm = new(
+        @"^(?<neg>[+-])?(?:(?<d>\d+)\s+)?(?<h>\d+):(?<mi>\d{1,2})(?::(?<s>\d{1,2})(?:\.(?<f>\d+))?)?$",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex WordForm = new(
+        @"^(?<d>[+-]?\d+)\s*days?(?:\s+(?<clockneg>[+-])?(?<h>\d+):(?<mi>\d{2})(?::(?<s>\d{2})(?:\.(?<f>\d+))?)?)?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    internal static bool TryParseText(string? text, out IntervalDaySecond value)
+    {
+        value = default;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
         var trimmed = text.Trim();
-        if (trimmed.StartsWith("P", StringComparison.OrdinalIgnoreCase))
+        try
         {
-            trimmed = trimmed.Substring(1);
-        }
-
-        var timeIndex = trimmed.IndexOf('T');
-        var datePart = trimmed;
-        string? timePart = null;
-        if (timeIndex >= 0)
-        {
-            datePart = trimmed.Substring(0, timeIndex);
-            timePart = trimmed.Substring(timeIndex + 1);
-        }
-
-        var days = 0;
-        if (!string.IsNullOrEmpty(datePart))
-        {
-            var buffer = string.Empty;
-            foreach (var c in datePart)
+            var iso = IsoForm.Match(trimmed);
+            if (iso.Success)
             {
-                if (char.IsDigit(c) || c == '-' || c == '+')
+                var hasTime = iso.Groups["h"].Success || iso.Groups["mi"].Success || iso.Groups["s"].Success;
+                if ((iso.Groups["t"].Success && !hasTime) || (!hasTime && !iso.Groups["d"].Success))
                 {
-                    buffer += c;
-                    continue;
+                    return false;
                 }
 
-                if (buffer.Length == 0)
-                {
-                    continue;
-                }
-
-                if (c == 'D' || c == 'd')
-                {
-                    days = int.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
-                }
-
-                buffer = string.Empty;
+                var ticks = checked(Component(iso.Groups["d"]) * TimeSpan.TicksPerDay +
+                                    Component(iso.Groups["h"]) * TimeSpan.TicksPerHour +
+                                    Component(iso.Groups["mi"]) * TimeSpan.TicksPerMinute +
+                                    SecondsTicks(iso.Groups["s"], iso.Groups["f"]));
+                value = FromTimeSpan(TimeSpan.FromTicks(iso.Groups["neg"].Success ? -ticks : ticks));
+                return true;
             }
-        }
 
-        var hours = 0;
-        var minutes = 0;
-        var seconds = 0.0;
-
-        if (!string.IsNullOrEmpty(timePart))
-        {
-            var buffer = string.Empty;
-            foreach (var c in timePart)
+            var clock = ClockForm.Match(trimmed);
+            var words = clock.Success ? Match.Empty : WordForm.Match(trimmed);
+            var match = clock.Success ? clock : words;
+            if (!match.Success)
             {
-                if (char.IsDigit(c) || c == '-' || c == '+' || c == '.')
-                {
-                    buffer += c;
-                    continue;
-                }
-
-                if (buffer.Length == 0)
-                {
-                    continue;
-                }
-
-                switch (c)
-                {
-                    case 'H' or 'h':
-                        hours = int.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
-                        break;
-                    case 'M' or 'm':
-                        minutes = int.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
-                        break;
-                    case 'S' or 's':
-                        seconds = double.Parse(buffer, System.Globalization.CultureInfo.InvariantCulture);
-                        break;
-                }
-
-                buffer = string.Empty;
+                return false;
             }
+
+            var minutes = Component(match.Groups["mi"]);
+            var seconds = Component(match.Groups["s"]);
+            if (minutes > 59 || seconds > 59 || (match.Groups["d"].Success && match.Groups["h"].Success && Component(match.Groups["h"]) > 23))
+            {
+                return false;
+            }
+
+            var clockTicks = checked(Component(match.Groups["h"]) * TimeSpan.TicksPerHour + minutes * TimeSpan.TicksPerMinute +
+                                     SecondsTicks(match.Groups["s"], match.Groups["f"]));
+            var days = Component(match.Groups["d"]);
+            long total;
+            if (clock.Success)
+            {
+                total = checked(days * TimeSpan.TicksPerDay + clockTicks);
+                total = match.Groups["neg"].Value == "-" ? -total : total;
+            }
+            else
+            {
+                total = checked(days * TimeSpan.TicksPerDay + (match.Groups["clockneg"].Value == "-" ? -clockTicks : clockTicks));
+            }
+
+            value = FromTimeSpan(TimeSpan.FromTicks(total));
+            return true;
+        }
+        catch (Exception ex) when (ex is OverflowException or FormatException or ArgumentOutOfRangeException)
+        {
+            value = default;
+            return false;
+        }
+    }
+
+    private static long Component(Group group) =>
+        group.Success ? long.Parse(group.Value, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture) : 0;
+
+    // Whole seconds plus up to 7 fraction digits as ticks; further digits are truncated, never rounded.
+    private static long SecondsTicks(Group seconds, Group fraction)
+    {
+        var whole = Component(seconds);
+        if (!fraction.Success)
+        {
+            return checked(whole * TimeSpan.TicksPerSecond);
         }
 
-        var timeSpan = TimeSpan.FromHours(hours) + TimeSpan.FromMinutes(minutes) + TimeSpan.FromSeconds(seconds);
-        return new IntervalDaySecond(days, timeSpan);
+        var digits = fraction.Value.Length > 7 ? fraction.Value[..7] : fraction.Value.PadRight(7, '0');
+        var ticks = long.Parse(digits, NumberStyles.None, CultureInfo.InvariantCulture);
+        return checked(whole * TimeSpan.TicksPerSecond + (seconds.Value.StartsWith('-') ? -ticks : ticks));
     }
 }

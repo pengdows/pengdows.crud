@@ -11,7 +11,7 @@
 //   * Others: Raw value
 // - ConvertToProvider(): Returns ISO 8601 format (P3Y6M) for Oracle/PostgreSQL.
 // - TryConvertFromProvider(): Handles IntervalYearMonth and string (ISO 8601).
-// - Parse(): Handles ISO 8601 duration format (P{years}Y{months}M).
+// - Text is read by IntervalYearMonth.TryParseText (ISO, SQL/Oracle/Informix and word forms; DRY-012).
 // - Use case: Date arithmetic where month boundaries matter.
 // - Thread-safe and immutable value objects.
 // =============================================================================
@@ -103,18 +103,10 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
             return true;
         }
 
+        // DRY-012: the value object's strict parser; blank or unrecognized text is no interval.
         if (value is string text)
         {
-            try
-            {
-                result = Parse(text);
-                return true;
-            }
-            catch
-            {
-                result = default!;
-                return false;
-            }
+            return IntervalYearMonth.TryParseText(text, out result);
         }
 
         result = default!;
@@ -139,51 +131,5 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
             "Y",
             value.Months.ToString(CultureInfo.InvariantCulture),
             "M");
-    }
-
-    private static IntervalYearMonth Parse(string text)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return new IntervalYearMonth(0, 0);
-        }
-
-        var trimmed = text.Trim();
-        if (trimmed.StartsWith("P", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed.Substring(1);
-        }
-
-        var years = 0;
-        var months = 0;
-        var buffer = string.Empty;
-
-        foreach (var c in trimmed)
-        {
-            if (char.IsDigit(c) || c == '-' || c == '+')
-            {
-                buffer += c;
-                continue;
-            }
-
-            if (buffer.Length == 0)
-            {
-                continue;
-            }
-
-            switch (c)
-            {
-                case 'Y':
-                    years = int.Parse(buffer, CultureInfo.InvariantCulture);
-                    break;
-                case 'M':
-                    months = int.Parse(buffer, CultureInfo.InvariantCulture);
-                    break;
-            }
-
-            buffer = string.Empty;
-        }
-
-        return new IntervalYearMonth(years, months);
     }
 }

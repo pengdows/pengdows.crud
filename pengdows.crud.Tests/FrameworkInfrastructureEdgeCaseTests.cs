@@ -57,11 +57,8 @@ public class FrameworkInfrastructureEdgeCaseTests
     {
         var converter = new IntervalYearMonthConverter();
 
-        var whitespaceParsed =
-            converter.TryConvertFromProvider("   ", SupportedDatabase.PostgreSql, out var whitespaceResult);
-        Assert.True(whitespaceParsed);
-        Assert.Equal(0, whitespaceResult.Years);
-        Assert.Equal(0, whitespaceResult.Months);
+        // Blank text is no interval on the read path (COR-002, DRY-012).
+        Assert.False(converter.TryConvertFromProvider("   ", SupportedDatabase.PostgreSql, out _));
 
         var invalidParsed =
             converter.TryConvertFromProvider("P999999999999999999999Y", SupportedDatabase.PostgreSql, out _);
