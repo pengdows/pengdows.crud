@@ -116,6 +116,89 @@ internal class SnowflakeDialect : SqlDialect
 
     internal override bool AllowsColumnArgumentsInValues => false;
 
+    // ── VECTOR (TYPE-020), confirmed live: Snowflake.Data can't bind it and Snowflake takes a value
+    // only as PARSE_JSON(:p)::VECTOR(FLOAT|INT, n) with n its exact dimension (text, an ARRAY or a cast
+    // without the dimension are refused). The driver reports the column only as VECTOR, so the cast is
+    // rendered with dimension 0 and PrepareCommandAsync sets each value's length (a NULL becomes NULL).
+    // Reads come back as JSON array text, which coerces to the array.
+    private const string VectorMarker = "\u0001pengdows:snowflake:vector";
+
+    private static string? VectorElementType(IColumnInfo column)
+    {
+        if (column.IsJsonType)
+        {
+            return null;
+        }
+
+        var type = column.PropertyInfo.PropertyType;
+        return type == typeof(float[]) || type == typeof(double[]) ? "FLOAT" : type == typeof(int[]) ? "INT" : null;
+    }
+
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        VectorElementType(column) != null || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        VectorElementType(column) is { } element
+            ? string.Concat("PARSE_JSON(", parameterMarker, ")::VECTOR(", element, ", 0)")
+            : base.RenderColumnArgument(parameterMarker, column);
+
+    internal override bool MarksColumnParameter(IColumnInfo column) =>
+        VectorElementType(column) != null || base.MarksColumnParameter(column);
+
+    public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        base.MarkColumnParameter(parameter, column);
+        if (VectorElementType(column) == null)
+        {
+            return;
+        }
+
+        if (parameter.Value is Array array)
+        {
+            parameter.DbType = DbType.String;
+            parameter.Value = System.Text.Json.JsonSerializer.Serialize(array, array.GetType());
+        }
+
+        parameter.SourceColumn = VectorMarker;
+    }
+
+    internal override bool PreparesCommands => true;
+
+    internal override ValueTask PrepareCommandAsync(DbCommand command, CancellationToken cancellationToken)
+    {
+        for (var i = command.Parameters.Count - 1; i >= 0; i--)
+        {
+            var parameter = command.Parameters[i];
+            if (parameter.SourceColumn != VectorMarker)
+            {
+                continue;
+            }
+
+            var text = command.CommandText;
+            var start = text.IndexOf(string.Concat("PARSE_JSON(:", parameter.ParameterName.TrimStart(':'), ")::VECTOR("),
+                StringComparison.Ordinal);
+            var dimension = start < 0 ? -1 : text.IndexOf(", 0)", start, StringComparison.Ordinal);
+            if (dimension < 0)
+            {
+                continue;
+            }
+
+            if (parameter.Value is string json)
+            {
+                var length = json.AsSpan().Trim().SequenceEqual("[]") ? 0 : json.Count(c => c == ',') + 1;
+                command.CommandText = string.Concat(text.AsSpan(0, dimension + 2),
+                    length.ToString(System.Globalization.CultureInfo.InvariantCulture), text.AsSpan(dimension + 3));
+            }
+            else
+            {
+                command.CommandText = string.Concat(text.AsSpan(0, start), "NULL", text.AsSpan(dimension + 4));
+                command.Parameters.RemoveAt(i);
+            }
+        }
+
+        return default;
+    }
+
     // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime; GetValue returns the DateTimeOffset.
     internal override bool ReportsOffsetTimestampsAsDateTime => true;
 

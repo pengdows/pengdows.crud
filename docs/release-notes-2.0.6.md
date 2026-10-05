@@ -72,6 +72,9 @@
   type 188"). `DbType.DateTime2` and `DbType.DateTimeOffset` parameters are now sent as microsecond
   text, also in your own SQL; a `DATETIME` column stores the same value as before. Gateway reads of
   these columns select `CONVERT(VARCHAR, col, 140/137)` (TYPE-022).
+- Snowflake `VECTOR(FLOAT, n)` and `VECTOR(INT, n)` columns map to `float[]`/`double[]` and `int[]`.
+  2.0.5 failed to write them (Snowflake.Data can't bind a vector). They are written as
+  `PARSE_JSON(:p)::VECTOR(..., n)`, with `n` taken from each value when the command runs (TYPE-020).
 - SAP HANA `ARRAY` columns map to `int[]`, `long[]`, `short[]`, `double[]`, `float[]` and `string[]`
   (nullable elements allowed). 2.0.5 failed ("The parameter data type of Int32[] is invalid") and read
   the column as raw bytes. Arrays are bound as JSON text and built with `ARRAY(SELECT V FROM

@@ -138,7 +138,8 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   (compare with `'t'`/`'f'`) and a `TimeSpan` parameter in user SQL (driver truncates to seconds; TYPE-022). ASE `BIGDATETIME`/`BIGTIME` round-trip to the microsecond through the gateways (`DateTime2`/`DateTimeOffset` bound as text, `CONVERT(BIGTIME, ...)` writes, `CONVERT(VARCHAR, col, 140/137)` reads); in your own SQL compare a `BIGTIME` with `CONVERT(BIGTIME, {P}p)` (TYPE-022).
 - Snowflake: `VARIANT`/`OBJECT`/`ARRAY` written as `PARSE_JSON(:p)`, with inserts/MERGE source/batch update values from a
   `SELECT` (Snowflake refuses it in `VALUES`); spatial as EWKT both ways; `TIMESTAMP_LTZ`/`TZ` read as the exact
-  `DateTimeOffset`. `VECTOR` needs the column's type (TYPE-020).
+  `DateTimeOffset`. `VECTOR` ↔ `float[]`/`double[]`/`int[]` as `PARSE_JSON(:p)::VECTOR(FLOAT|INT, n)`, `n` set from each value's
+  length at execution (the driver reports no dimension), read from JSON text (TYPE-020).
 - SAP HANA: `HanaDecimal` read with `GetDecimal`; decimals sent without trailing zeros (the driver silently cut
   digits otherwise); spatial as WKB; `TIMESTAMP` keeps 7 digits (`DateTime` bound as text, gateway reads via `TO_VARCHAR(..., 'FF7')`; TYPE-022); `BINTEXT` as text;
   `ARRAY` ↔ `int[]`/`long[]`/`short[]`/`double[]`/`float[]`/`string[]` (JSON text through `ARRAY(SELECT V FROM JSON_TABLE(?, ...) ORDER BY O)`,

@@ -1026,8 +1026,14 @@ public static class DatabaseTypeCatalog
         new("GEOMETRY", ColumnTypeCategory.Spatial,
             Declaration: "GEOMETRY", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object,
             Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POLYGON((0 0, 4 0, 4 4, 0 0))", 0), Comparable: false),
-        new("VECTOR", ColumnTypeCategory.Vector,
-            Notes: "Snowflake.Data can't bind it and Snowflake takes it only through an explicit cast (PARSE_JSON(:p)::VECTOR(FLOAT, 3)), which needs the column's type (TYPE-020, 3.0)."),
+        // TYPE-020: written as PARSE_JSON(:p)::VECTOR(FLOAT|INT, n), n set from each value's length when the
+        // command is prepared (Snowflake.Data can't bind it, the driver reports no dimension); read as JSON text.
+        new("VECTOR(FLOAT, n)", ColumnTypeCategory.Vector,
+            Declaration: "VECTOR(FLOAT, 3)", ClrType: typeof(float[]), DbType: System.Data.DbType.Object, Sample: new[] { 1.5f, 2f, -3.25f }, Comparable: false),
+        new("VECTOR(FLOAT, n) (double[])", ColumnTypeCategory.Vector,
+            Declaration: "VECTOR(FLOAT, 2)", ClrType: typeof(double[]), DbType: System.Data.DbType.Object, Sample: new[] { 0.5, -0.25 }, Comparable: false),
+        new("VECTOR(INT, n)", ColumnTypeCategory.Vector,
+            Declaration: "VECTOR(INT, 2)", ClrType: typeof(int[]), DbType: System.Data.DbType.Object, Sample: new[] { 7, -8 }, Comparable: false),
     };
 
     // ── Db2 LUW 11.5.x ──────────────────────────────────────────────────────
