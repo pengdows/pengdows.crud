@@ -144,29 +144,6 @@ public partial class TableGateway<TEntity, TRowID>
         throw new NotSupportedException(UpsertNoWritableKeyMessage);
     }
 
-    private void PrepareForInsertOrUpsert(TEntity e)
-    {
-        if (_auditValueResolver != null)
-        {
-            SetAuditFields(e, false);
-        }
-
-        InitializeVersion(e);
-    }
-
-    /// <summary>
-    /// Batch variant: applies pre-resolved audit values instead of calling Resolve() per entity.
-    /// </summary>
-    private void PrepareForInsertOrUpsert(TEntity e, IAuditValues? cachedAuditValues)
-    {
-        if (_auditValueResolver != null)
-        {
-            SetAuditFields(e, false, cachedAuditValues);
-        }
-
-        InitializeVersion(e);
-    }
-
     private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
     {
         var ctx = context ?? _context;

@@ -66,7 +66,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
         foreach (var chunk in chunks)
         {
-            result.Add(BuildPkBatchInsertContainer(chunk, insertableColumns, ctx, dialect));
+            result.Add(BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect));
         }
 
         return result;

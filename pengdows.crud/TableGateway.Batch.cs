@@ -347,16 +347,18 @@ public partial class TableGateway<TEntity, TRowID>
         _ = ResolveUpsertKey();
 
         // For databases that support multi-row upsert via ON CONFLICT or ON DUPLICATE KEY
+        var dialect = GetDialect(ctx);
+        var template = GetTemplatesForDialect(dialect);
         if (ctx.DataSourceInfo.SupportsInsertOnConflict)
         {
-            return BuildBatchUpsertOnConflict(entities, ctx);
+            return BuildBatchUpsertOnConflict(entities, ctx, ResolveUpsertKey(), template.UpsertUpdateFragmentOnConflict,
+                template.UpsertOnConflictVersionWhere, OverridesSystemIdentity(dialect));
         }
 
         if (ctx.DataSourceInfo.SupportsOnDuplicateKey &&
-            !UpsertFragmentHasUnreliableIncoming(GetDialect(ctx),
-                GetTemplatesForDialect(GetDialect(ctx)).UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values))
+            !UpsertFragmentHasUnreliableIncoming(dialect, template.UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values))
         {
-            return BuildBatchUpsertOnDuplicate(entities, ctx);
+            return BuildBatchUpsertOnDuplicate(entities, ctx, template.UpsertUpdateFragmentOnConflict);
         }
 
         // Fallback: databases with MERGE (SQL Server, Oracle, Firebird), unknown, or a batch whose
@@ -426,63 +428,6 @@ public partial class TableGateway<TEntity, TRowID>
     // VALUE on dialects that support it; single-row and batch upsert share this rule (BP-117).
     private bool OverridesSystemIdentity(ISqlDialect dialect) =>
         dialect is SqlDialect { SupportsOverridingSystemValue: true } && _idColumn?.IsIdWritable == true;
-
-    private ISqlContainer BuildBatchInsertContainer(
-        IReadOnlyList<TEntity> chunk,
-        IReadOnlyList<IColumnInfo> insertableColumns,
-        IDatabaseContext ctx,
-        ISqlDialect dialect,
-        bool overridesSystemIdentity = false)
-    {
-        var sc = ctx.CreateSqlContainer();
-        var counters = new ClauseCounters();
-
-        var wrappedTableName = BuildWrappedTableName(dialect);
-        var wrappedColumnNames = new string[insertableColumns.Count];
-        for (var i = 0; i < insertableColumns.Count; i++)
-        {
-            wrappedColumnNames[i] = dialect.WrapSimpleName(insertableColumns[i].Name);
-        }
-
-        var columnCount = insertableColumns.Count;
-        var cells = ExtractBatchCells(chunk, insertableColumns);
-
-        // Delegate structure to dialect (ANSI VALUES, Oracle INSERT ALL, etc.)
-        dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
-            (row, col) => cells[row * columnCount + col], insertableColumns);
-
-        if (overridesSystemIdentity)
-        {
-            // Only reached for PostgreSQL-family dialects, whose (non-overridden) ANSI
-            // BuildBatchInsertSql emits ") VALUES " exactly once, right after the column list.
-            sc.Query.Replace(") VALUES ", ") OVERRIDING SYSTEM VALUE VALUES ");
-        }
-
-        // Value binding for each entity
-        for (var row = 0; row < chunk.Count; row++)
-        {
-            for (var c = 0; c < columnCount; c++)
-            {
-                var column = insertableColumns[c];
-                var value = cells[row * columnCount + c];
-
-                // Skip parameter creation if it was inlined as NULL literal
-                if (value == null || value == DBNull.Value)
-                {
-                    continue;
-                }
-
-                var name = counters.NextBatch();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                dialect.MarkColumnParameter(p, column);
-
-                sc.AddParameter(p);
-            }
-        }
-
-        TrackBatchContainer(sc, chunk);
-        return sc;
-    }
 
     /// <summary>
     /// FEAT-005: builds a single-row-shaped INSERT (one parameter per column, not per cell) whose
@@ -564,106 +509,6 @@ public partial class TableGateway<TEntity, TRowID>
 
         TrackBatchContainer(sc, chunk);
         return sc;
-    }
-
-    private IReadOnlyList<ISqlContainer> BuildBatchUpsertOnConflict(
-        IReadOnlyList<TEntity> entities, IDatabaseContext context)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        var insertableColumns = GetCachedInsertableColumns();
-        var template = GetTemplatesForDialect(dialect);
-
-        // Resolve audit values once for the whole batch (not once per entity)
-        var auditValues = _auditValueResolver != null && _hasAuditColumns
-            ? ResolveAuditValuesForBatch()
-            : null;
-
-        // Prepare all entities
-        foreach (var entity in entities)
-        {
-            PrepareForInsertOrUpsert(entity, auditValues);
-        }
-
-        // Resolve conflict key once for all chunks.
-        var conflictCols = ResolveUpsertKey();
-
-        // Batches always use ON CONFLICT, even on a dialect that also supports MERGE (PostgreSQL
-        // 15+), so they take the ON CONFLICT fragment, never the MERGE one.
-        var updateFragment = template.UpsertUpdateFragmentOnConflict;
-
-        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
-        var result = new List<ISqlContainer>(chunks.Count);
-        var overridesSystemIdentity = OverridesSystemIdentity(dialect);
-
-        foreach (var chunk in chunks)
-        {
-            var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect, overridesSystemIdentity);
-
-            // Append ON CONFLICT clause
-            sc.Query.Append(" ON CONFLICT (");
-            for (var i = 0; i < conflictCols.Count; i++)
-            {
-                if (i > 0)
-                {
-                    sc.Query.Append(", ");
-                }
-
-                sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
-            }
-
-            sc.Query.Append(") DO UPDATE SET ").Append(updateFragment);
-
-            if (template.UpsertOnConflictVersionWhere != null)
-            {
-                sc.Query.Append(" ").Append(template.UpsertOnConflictVersionWhere);
-            }
-
-            result.Add(sc);
-        }
-
-        return result;
-    }
-
-    private IReadOnlyList<ISqlContainer> BuildBatchUpsertOnDuplicate(
-        IReadOnlyList<TEntity> entities, IDatabaseContext context)
-    {
-        var ctx = context ?? _context;
-        var dialect = GetDialect(ctx);
-        var insertableColumns = GetCachedInsertableColumns();
-        var template = GetTemplatesForDialect(dialect);
-
-        // Resolve audit values once for the whole batch (not once per entity)
-        var auditValues = _auditValueResolver != null && _hasAuditColumns
-            ? ResolveAuditValuesForBatch()
-            : null;
-
-        // Prepare all entities
-        foreach (var entity in entities)
-        {
-            PrepareForInsertOrUpsert(entity, auditValues);
-        }
-
-        var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);
-        var result = new List<ISqlContainer>(chunks.Count);
-
-        foreach (var chunk in chunks)
-        {
-            var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect);
-
-            // MySQL 8.0.20+: declare the row alias (AS `incoming`) between VALUES and ON DUPLICATE KEY UPDATE
-            var incomingAlias = dialect.UpsertIncomingAlias;
-            if (!string.IsNullOrEmpty(incomingAlias))
-            {
-                sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
-            }
-
-            // Append ON DUPLICATE KEY UPDATE clause
-            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
-            result.Add(sc);
-        }
-
-        return result;
     }
 
 }

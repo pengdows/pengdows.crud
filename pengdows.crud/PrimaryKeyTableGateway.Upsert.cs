@@ -175,16 +175,17 @@ public partial class PrimaryKeyTableGateway<TEntity>
             }
         }
 
+        var pkTemplate = GetPkTemplatesForDialect(GetDialect(ctx));
         if (ctx.DataSourceInfo.SupportsInsertOnConflict)
         {
-            return BuildPkBatchUpsertOnConflict(entities, ctx);
+            return BuildBatchUpsertOnConflict(entities, ctx, _tableInfo.PrimaryKeys, pkTemplate.UpsertUpdateFragmentOnConflict,
+                pkTemplate.UpsertOnConflictVersionWhere, overridesSystemIdentity: false);
         }
 
         if (ctx.DataSourceInfo.SupportsOnDuplicateKey &&
-            !UpsertFragmentHasUnreliableIncoming(GetDialect(ctx),
-                GetPkTemplatesForDialect(GetDialect(ctx)).UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values))
+            !UpsertFragmentHasUnreliableIncoming(GetDialect(ctx), pkTemplate.UpsertUpdateFragmentOnConflict, _tableInfo.Columns.Values))
         {
-            return BuildPkBatchUpsertOnDuplicate(entities, ctx);
+            return BuildBatchUpsertOnDuplicate(entities, ctx, pkTemplate.UpsertUpdateFragmentOnConflict);
         }
 
         // Fallback: one-by-one (MERGE or unsupported — BuildUpsert handles its own guard)
@@ -231,30 +232,10 @@ public partial class PrimaryKeyTableGateway<TEntity>
     // Private: dialect-specific upsert builders
     // =========================================================================
 
-    private void PrepareForPkUpsert(TEntity entity)
-    {
-        if (_auditValueResolver != null)
-        {
-            SetAuditFields(entity, false);
-        }
-
-        InitializeVersion(entity);
-    }
-
-    private void PrepareForPkUpsert(TEntity entity, IAuditValues? cachedAuditValues)
-    {
-        if (_auditValueResolver != null)
-        {
-            SetAuditFields(entity, false, cachedAuditValues);
-        }
-
-        InitializeVersion(entity);
-    }
-
     private ISqlContainer BuildPkUpsertOnConflict(TEntity entity, IDatabaseContext context)
     {
         var dialect = GetDialect(context);
-        PrepareForPkUpsert(entity);
+        PrepareForInsertOrUpsert(entity);
 
         var insertableColumns = GetCachedInsertableColumns();
         var template = GetPkTemplatesForDialect(dialect);
@@ -289,7 +270,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
     private ISqlContainer BuildPkUpsertOnDuplicate(TEntity entity, IDatabaseContext context)
     {
         var dialect = GetDialect(context);
-        PrepareForPkUpsert(entity);
+        PrepareForInsertOrUpsert(entity);
 
         var insertableColumns = GetCachedInsertableColumns();
         var template = GetPkTemplatesForDialect(dialect);
@@ -319,7 +300,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
         var dialect = GetDialect(context);
         ThrowIfVersionedMergeUpsertUnsupported(dialect);
-        PrepareForPkUpsert(entity);
+        PrepareForInsertOrUpsert(entity);
 
         var insertableColumns = GetCachedInsertableColumns();
         var template = GetPkTemplatesForDialect(dialect);
@@ -440,7 +421,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
     private ISqlContainer BuildPkFirebirdMergeUpsert(TEntity entity, IDatabaseContext context)
     {
         var dialect = GetDialect(context);
-        PrepareForPkUpsert(entity);
+        PrepareForInsertOrUpsert(entity);
 
         var insertableColumns = GetCachedInsertableColumns();
         var parameters = new List<DbParameter>(insertableColumns.Count);
@@ -513,144 +494,5 @@ public partial class PrimaryKeyTableGateway<TEntity>
     // =========================================================================
     // Batch upsert helpers
     // =========================================================================
-
-    private IReadOnlyList<ISqlContainer> BuildPkBatchUpsertOnConflict(IReadOnlyList<TEntity> entities,
-        IDatabaseContext context)
-    {
-        var dialect = GetDialect(context);
-        var insertableColumns = GetCachedInsertableColumns();
-        var template = GetPkTemplatesForDialect(dialect);
-
-        var auditValues = _auditValueResolver != null && _hasAuditColumns
-            ? ResolveAuditValuesForBatch()
-            : null;
-
-        foreach (var entity in entities)
-        {
-            PrepareForPkUpsert(entity, auditValues);
-        }
-
-        var pkCols = _tableInfo.PrimaryKeys;
-        var chunks = ChunkList(entities, insertableColumns.Count, context.MaxParameterLimit,
-            dialect.MaxRowsPerBatch);
-        var result = new List<ISqlContainer>(chunks.Count);
-
-        foreach (var chunk in chunks)
-        {
-            var sc = BuildPkBatchInsertContainer(chunk, insertableColumns, context, dialect);
-
-            sc.Query.Append(" ON CONFLICT (");
-            for (var i = 0; i < pkCols.Count; i++)
-            {
-                if (i > 0)
-                {
-                    sc.Query.Append(", ");
-                }
-
-                sc.Query.Append(dialect.WrapSimpleName(pkCols[i].Name));
-            }
-
-            // Batches always use ON CONFLICT, even on a dialect that also supports MERGE
-            // (PostgreSQL 15+), so they take the ON CONFLICT fragment, never the MERGE one.
-            var updateFragment = template.UpsertUpdateFragmentOnConflict;
-
-            sc.Query.Append(") DO UPDATE SET ").Append(updateFragment);
-
-            if (template.UpsertOnConflictVersionWhere != null)
-            {
-                sc.Query.Append(" ").Append(template.UpsertOnConflictVersionWhere);
-            }
-
-            result.Add(sc);
-        }
-
-        return result;
-    }
-
-    private IReadOnlyList<ISqlContainer> BuildPkBatchUpsertOnDuplicate(IReadOnlyList<TEntity> entities,
-        IDatabaseContext context)
-    {
-        var dialect = GetDialect(context);
-        var insertableColumns = GetCachedInsertableColumns();
-        var template = GetPkTemplatesForDialect(dialect);
-
-        var auditValues = _auditValueResolver != null && _hasAuditColumns
-            ? ResolveAuditValuesForBatch()
-            : null;
-
-        foreach (var entity in entities)
-        {
-            PrepareForPkUpsert(entity, auditValues);
-        }
-
-        var chunks = ChunkList(entities, insertableColumns.Count, context.MaxParameterLimit,
-            dialect.MaxRowsPerBatch);
-        var result = new List<ISqlContainer>(chunks.Count);
-
-        foreach (var chunk in chunks)
-        {
-            var sc = BuildPkBatchInsertContainer(chunk, insertableColumns, context, dialect);
-
-            var incomingAlias = dialect.UpsertIncomingAlias;
-            if (!string.IsNullOrEmpty(incomingAlias))
-            {
-                sc.Query.Append(" AS ").Append(dialect.WrapSimpleName(incomingAlias));
-            }
-
-            sc.Query.Append(" ON DUPLICATE KEY UPDATE ").Append(template.UpsertUpdateFragmentOnConflict);
-            result.Add(sc);
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Builds a multi-row INSERT container shared by batch create and batch upsert paths.
-    /// Mirrors the logic in TableGateway.Batch.cs BuildBatchInsertContainer.
-    /// </summary>
-    private ISqlContainer BuildPkBatchInsertContainer(
-        IReadOnlyList<TEntity> chunk,
-        IReadOnlyList<IColumnInfo> insertableColumns,
-        IDatabaseContext ctx,
-        ISqlDialect dialect)
-    {
-        var sc = ctx.CreateSqlContainer();
-        var counters = new ClauseCounters();
-
-        var wrappedTableName = BuildWrappedTableName(dialect);
-        var wrappedColumnNames = new string[insertableColumns.Count];
-        for (var i = 0; i < insertableColumns.Count; i++)
-        {
-            wrappedColumnNames[i] = dialect.WrapSimpleName(insertableColumns[i].Name);
-        }
-
-        var columnCount = insertableColumns.Count;
-        var cells = ExtractBatchCells(chunk, insertableColumns);
-        dialect.BuildBatchInsertSql(wrappedTableName, wrappedColumnNames, chunk.Count, sc.Query,
-            (row, col) => cells[row * columnCount + col], insertableColumns);
-
-        for (var row = 0; row < chunk.Count; row++)
-        {
-            for (var c = 0; c < columnCount; c++)
-            {
-                var column = insertableColumns[c];
-                var value = cells[row * columnCount + c];
-
-                if (value == null || value == DBNull.Value)
-                {
-                    continue;
-                }
-
-                var name = counters.NextBatch();
-                var p = dialect.CreateDbParameter(name, column.DbType, value);
-                dialect.MarkColumnParameter(p, column);
-
-                sc.AddParameter(p);
-            }
-        }
-
-        TrackBatchContainer(sc, chunk);
-        return sc;
-    }
 
 }
