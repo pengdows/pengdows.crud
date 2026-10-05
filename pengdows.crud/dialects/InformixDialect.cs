@@ -531,10 +531,7 @@ internal sealed class InformixDialect : SqlDialect
         // Db2/Sybase/Firebird/InterBase. Null is remapped too: the driver rejects the DbType itself.
         if (type == DbType.DateTimeOffset)
         {
-            object coerced = value is DateTimeOffset dto
-                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
-                : DBNull.Value;
-            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, UtcWallTime(value));
         }
 
         // INTEGER's and SMALLINT's smallest value is their NULL representation (IBM docs: ranges

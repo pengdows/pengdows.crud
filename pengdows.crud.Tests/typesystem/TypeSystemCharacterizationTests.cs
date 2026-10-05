@@ -64,6 +64,10 @@ public class TypeSystemCharacterizationTests
         yield return ("DateTime Unspecified DateTime2", DbType.DateTime2, new DateTime(2026, 10, 5, 13, 45, 30).AddTicks(1234567));
         yield return ("DateTime as Date", DbType.Date, new DateTime(2026, 10, 5));
         yield return ("DateTimeOffset", DbType.DateTimeOffset, new DateTimeOffset(2026, 10, 5, 13, 45, 30, TimeSpan.FromHours(2)).AddTicks(1234567));
+        yield return ("null DateTimeOffset", DbType.DateTimeOffset, null);
+        yield return ("DateTime Utc as DateTimeOffset", DbType.DateTimeOffset, new DateTime(2026, 10, 5, 13, 45, 30, DateTimeKind.Utc).AddTicks(1234567));
+        yield return ("DateTime Unspecified as DateTimeOffset", DbType.DateTimeOffset, new DateTime(2026, 10, 5, 13, 45, 30).AddTicks(1234567));
+        yield return ("text as DateTimeOffset", DbType.DateTimeOffset, "2026-10-05T13:45:30.1234567+02:00");
         yield return ("DateOnly", DbType.Date, new DateOnly(2026, 10, 5));
         yield return ("TimeOnly", DbType.Time, new TimeOnly(13, 45, 30).Add(TimeSpan.FromTicks(1234567)));
         yield return ("TimeSpan as Time", DbType.Time, new TimeSpan(0, 13, 45, 30).Add(TimeSpan.FromTicks(1234567)));
@@ -454,6 +458,70 @@ public class TypeSystemCharacterizationTests
             var e = i < pinned.Length ? pinned[i] : "<end>";
             Assert.True(a == e, $"{name} line {i + 1} changed:\n  pinned: {e}\n  now:    {a}");
         }
+    }
+
+    // A value is never bound as NULL: a dialect that remapped a DbType it can't bind sent anything but
+    // the one CLR type it expected as DBNull (a DateTime declared DateTimeOffset on Db2, Informix and
+    // Access). Refusing loudly is fine; storing NULL is not.
+    [Fact]
+    public void Writes_NeverBindAValueAsNull()
+    {
+        var nulled = new List<string>();
+        foreach (var product in Products())
+        {
+            var dialect = (SqlDialect)SqlDialectFactory.CreateDialectForType(product, FactoryFor(product), NullLogger.Instance);
+            foreach (var (label, type, value) in WriteSamples().Where(s => s.Value is not null and not DBNull))
+            {
+                DbParameter parameter;
+                try
+                {
+                    parameter = dialect.CreateDbParameter("p", type, value);
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                if (parameter.Value is null or DBNull)
+                {
+                    nulled.Add($"{product}: {label}");
+                }
+            }
+        }
+
+        Assert.True(nulled.Count == 0, string.Join(Environment.NewLine, nulled));
+    }
+
+    // A DateTime (Unspecified is UTC) or timestamp text declared DateTimeOffset binds exactly as the
+    // DateTimeOffset of its instant does, on every database.
+    [Fact]
+    public void Writes_DeclaredDateTimeOffset_BindsAsItsInstant()
+    {
+        var at = new DateTime(2026, 10, 5, 13, 45, 30).AddTicks(1234567);
+        var utc = new DateTimeOffset(at, TimeSpan.Zero);
+        var cases = new (object Value, DateTimeOffset Instant)[]
+        {
+            (DateTime.SpecifyKind(at, DateTimeKind.Utc), utc),
+            (at, utc),
+            ("2026-10-05 13:45:30.1234567", utc),
+            ("2026-10-05T15:45:30.1234567+02:00", utc.ToOffset(TimeSpan.FromHours(2)))
+        };
+        var drifted = new List<string>();
+        foreach (var product in Products())
+        {
+            var dialect = (SqlDialect)SqlDialectFactory.CreateDialectForType(product, FactoryFor(product), NullLogger.Instance);
+            foreach (var (value, instant) in cases)
+            {
+                var expected = ShowParameter(dialect.CreateDbParameter("p", DbType.DateTimeOffset, instant));
+                var actual = ShowParameter(dialect.CreateDbParameter("p", DbType.DateTimeOffset, value));
+                if (actual != expected)
+                {
+                    drifted.Add($"{product}: {value} bound {actual}, its instant {expected}");
+                }
+            }
+        }
+
+        Assert.True(drifted.Count == 0, string.Join(Environment.NewLine, drifted));
     }
 
     [Fact]

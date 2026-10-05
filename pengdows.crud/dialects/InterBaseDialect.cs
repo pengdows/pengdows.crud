@@ -222,10 +222,9 @@ internal sealed class InterBaseDialect : SqlDialect
     /// </summary>
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        if (type == DbType.DateTimeOffset && value is DateTimeOffset dto)
+        if (type == DbType.DateTimeOffset)
         {
-            return base.CreateDbParameter<object?>(name, DbType.DateTime,
-                DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified));
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, UtcWallTime(value));
         }
 
         // An ARRAY column binds only when IBDbType is Array before the value is set: IBParameter

@@ -127,6 +127,11 @@ internal class SybaseAseDialect : SqlDialect
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        if (IsDeclaredInstant(type, value, out var instant))
+        {
+            return CreateDbParameter(name, type, instant);
+        }
+
         // Verified live (testbed): AdoNetCore.AseClient rejects a DateTimeOffset parameter
         // outright ("Unsupported .net type System.DateTimeOffset"), and ASE has no offset-aware
         // temporal type. Store the UTC instant as a plain DateTime, matching Db2/Firebird/

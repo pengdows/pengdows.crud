@@ -666,9 +666,9 @@ internal class FirebirdDialect : SqlDialect
             // Firebird 3 (no zoned types), before detection, or without the driver type: coerce to a
             // UTC DateTime (Unspecified kind prevents provider-side time-zone adjustment).
             object? zoned = null;
-            if (value is DateTimeOffset zonedSource && IsInitialized && ProductInfo.ParsedVersion?.Major >= 4)
+            if (IsInitialized && ProductInfo.ParsedVersion?.Major >= 4 && TryGetInstant(value, out var instant))
             {
-                zoned = FirebirdZonedDateTimeInterop.CreateUtc(zonedSource, Factory.GetType().Assembly);
+                zoned = FirebirdZonedDateTimeInterop.CreateUtc(instant, Factory.GetType().Assembly);
             }
 
             if (zoned != null)
@@ -679,10 +679,7 @@ internal class FirebirdDialect : SqlDialect
             else
             {
                 targetType = DbType.DateTime;
-                if (value is DateTimeOffset dto)
-                {
-                    targetValue = DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified);
-                }
+                targetValue = UtcWallTime(value);
             }
         }
 

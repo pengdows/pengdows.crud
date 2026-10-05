@@ -118,10 +118,7 @@ internal sealed class Db2Dialect : SqlDialect
         // so a null nullable DateTimeOffset must be remapped too, not just a populated one.
         if (type == DbType.DateTimeOffset)
         {
-            object coerced = value is DateTimeOffset dto
-                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
-                : DBNull.Value;
-            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, UtcWallTime(value));
         }
 
         return base.CreateDbParameter(name, type, value);

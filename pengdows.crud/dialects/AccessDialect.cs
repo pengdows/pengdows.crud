@@ -336,10 +336,7 @@ internal sealed class AccessDialect : SqlDialect
         // AdvancedTypeRegistry. Null is remapped too: the driver rejects the DbType itself.
         if (type == DbType.DateTimeOffset)
         {
-            object coerced = value is DateTimeOffset dto
-                ? DateTime.SpecifyKind(dto.UtcDateTime, DateTimeKind.Unspecified)
-                : DBNull.Value;
-            return base.CreateDbParameter<object?>(name, DbType.DateTime, coerced);
+            return base.CreateDbParameter<object?>(name, DbType.DateTime, UtcWallTime(value));
         }
 
         // CONFIRMED live (ACE with native Large Number): an OleDbType.BigInt parameter is rejected

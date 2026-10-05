@@ -350,6 +350,11 @@ internal class SqliteDialect : SqlDialect
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        if (IsDeclaredInstant(type, value, out var instant))
+        {
+            return CreateDbParameter(name, type, instant);
+        }
+
         if (value is bool b && IsNumericDbType(type))
         {
             return base.CreateDbParameter(name, type, b ? 1 : 0);

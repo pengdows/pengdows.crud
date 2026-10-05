@@ -1115,6 +1115,54 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     protected virtual bool NormalizeDateTimeOffsetToUtc => false;
 
+    /// <summary>
+    /// The instant a value declared <see cref="DbType.DateTimeOffset"/> holds: a DateTimeOffset's own,
+    /// a DateTime's as every write path normalizes it (Unspecified is UTC), timestamp text's as every
+    /// read path parses it (TypeCoercionHelper).
+    /// </summary>
+    /// <summary>
+    /// A value declared <see cref="DbType.DateTimeOffset"/> that is not one (a DateTime, timestamp
+    /// text), read as its instant so it binds as a DateTimeOffset does. Re-dispatch it with
+    /// <c>CreateDbParameter(name, type, instant)</c> before handling DateTime or text values.
+    /// </summary>
+    protected static bool IsDeclaredInstant<T>(DbType type, T value, out DateTimeOffset instant)
+    {
+        instant = default;
+        return type == DbType.DateTimeOffset && value is not DateTimeOffset && TryGetInstant(value, out instant);
+    }
+
+    protected static bool TryGetInstant(object? value, out DateTimeOffset instant)
+    {
+        switch (value)
+        {
+            case DateTimeOffset dto:
+                instant = dto;
+                return true;
+            case DateTime dt:
+                instant = new DateTimeOffset(TypeCoercionHelper.NormalizeDateTime(dt), TimeSpan.Zero);
+                return true;
+            case string s:
+                return TypeCoercionHelper.TryParseTimestampText(s.Trim(), out instant);
+            default:
+                instant = default;
+                return false;
+        }
+    }
+
+    /// <summary>
+    /// What a database with no offset-aware type (or a driver with no DateTimeOffset mapping) stores
+    /// for a value declared <see cref="DbType.DateTimeOffset"/>: its instant's UTC wall time, Unspecified
+    /// so no provider applies its own time-zone adjustment; NULL stays NULL. Anything else is passed
+    /// on for the provider to bind or refuse, never sent as NULL (Db2, Informix and Access sent a
+    /// DateTime or text declared DateTimeOffset as NULL).
+    /// </summary>
+    protected static object UtcWallTime(object? value) =>
+        value is null or DBNull
+            ? DBNull.Value
+            : TryGetInstant(value, out var instant)
+                ? DateTime.SpecifyKind(instant.UtcDateTime, DateTimeKind.Unspecified)
+                : value;
+
     // Feature support based on SQL standards and database capabilities
     public virtual bool SupportsJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
     public virtual bool SupportsOuterJoins => MaxSupportedStandard >= SqlStandardLevel.Sql92;
@@ -2002,6 +2050,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
                         "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        // Re-dispatched virtually, so each dialect's DateTimeOffset handling applies to it.
+        if (IsDeclaredInstant(type, value, out var instant))
+        {
+            return CreateDbParameter(name, type, instant);
+        }
+
         // RowVersion is an opaque 8-byte version token: bind its raw bytes (re-dispatched
         // virtually so per-dialect byte[] handling still applies), the same DbType.Binary
         // payload every provider already accepts for a byte[] [Version] column.
