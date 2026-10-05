@@ -97,4 +97,16 @@ public sealed class IntegrationProgressTests : IDisposable
         Assert.True(summary.IndexOf("| B | MySql | 9.0s |", StringComparison.Ordinal) <
                     summary.IndexOf("| A | MySql | 1.0s |", StringComparison.Ordinal));
     }
+
+    // run-integration-tests.sh runs one process per two-database batch: each batch's summary is its
+    // own file, or the last batch's would replace the others'.
+    [Theory]
+    [InlineData("net10.0", null, "net10.0")]
+    [InlineData("net10.0", "", "net10.0")]
+    [InlineData("net8.0", "Oracle,Db2", "net8.0-Oracle-Db2")]
+    [InlineData("net8.0", " Sqlite , PostgreSql ", "net8.0-Sqlite-PostgreSql")]
+    public void RunLabel_NamesTheFrameworkAndTheBatch(string framework, string? only, string expected)
+    {
+        Assert.Equal(expected, IntegrationProgress.RunLabel(framework, only));
+    }
 }

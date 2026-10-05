@@ -139,4 +139,38 @@ public class IntegrationTestConfigurationTests
         Assert.Contains(SupportedDatabase.Spanner, providers);
         Assert.Contains(SupportedDatabase.FlatFile, providers);
     }
+
+    // run-integration-tests.sh runs the suite two databases at a time (one test process per batch,
+    // so at most two databases' containers are up at once, as the testbed's dispatcher does); its
+    // list of always-on databases must be BaseProviders, in order.
+    [Fact]
+    public void RunScriptBatches_AreTheAlwaysOnProviders()
+    {
+        var script = File.ReadAllText(Path.Combine(RepoRoot(), "run-integration-tests.sh"));
+        var match = System.Text.RegularExpressions.Regex.Match(script, @"always_on_databases=\(([^)]*)\)");
+        Assert.True(match.Success, "run-integration-tests.sh declares no always_on_databases=(...) list");
+
+        var listed = match.Groups[1].Value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+
+        Assert.Equal(IntegrationTestConfiguration.BaseProviders.Select(p => p.ToString()), listed);
+
+        // Every database it can schedule has a weight (expected seconds), longest first.
+        foreach (var database in listed.Concat(new[] { "Snowflake", "SapHana", "InterBase", "Access" }))
+        {
+            Assert.Matches(@"\[" + database + @"\]=\d+", script);
+        }
+    }
+
+    private static string RepoRoot()
+    {
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir != null; dir = dir.Parent)
+        {
+            if (File.Exists(Path.Combine(dir.FullName, "pengdows.crud.sln")))
+            {
+                return dir.FullName;
+            }
+        }
+
+        throw new InvalidOperationException("pengdows.crud.sln not found above the test directory.");
+    }
 }

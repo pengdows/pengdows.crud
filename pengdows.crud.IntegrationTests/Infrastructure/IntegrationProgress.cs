@@ -17,7 +17,7 @@ internal sealed class IntegrationProgress
     private static readonly Lazy<IntegrationProgress> SharedInstance = new(() =>
     {
         var progress = new IntegrationProgress(ResolveDirectory(), () => DateTime.UtcNow, TimeSpan.FromMinutes(1),
-            TargetFramework());
+            RunLabel(TargetFramework(), Environment.GetEnvironmentVariable("INTEGRATION_ONLY")));
         progress.Append($"=== run started {DateTime.UtcNow:u} ({TargetFramework()}, pid {Environment.ProcessId})");
         AppDomain.CurrentDomain.ProcessExit += (_, _) => progress.TryWriteSummary();
         return progress;
@@ -47,7 +47,7 @@ internal sealed class IntegrationProgress
         _clock = clock;
         Directory.CreateDirectory(directory);
         ProgressPath = Path.Combine(directory, "progress.log");
-        // One summary per target framework: run-integration-tests.sh runs net8.0 then net10.0.
+        // One summary per run label (RunLabel): framework, and database when the run is limited.
         SummaryPath = Path.Combine(directory, runLabel is null ? "summary.md" : $"summary-{runLabel}.md");
         if (heartbeatInterval is { } interval)
         {
@@ -195,6 +195,17 @@ internal sealed class IntegrationProgress
     {
         var end = text.IndexOfAny(['\r', '\n']);
         return (end < 0 ? text : text[..end]).Trim();
+    }
+
+    /// <summary>
+    /// The summary's name: the target framework, and the databases when the run is limited to some
+    /// (run-integration-tests.sh runs one process per database, two at a time).
+    /// </summary>
+    internal static string RunLabel(string framework, string? only)
+    {
+        var databases = (only ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return databases.Length == 0 ? framework : framework + "-" + string.Join("-", databases);
     }
 
     private static string ResolveDirectory()

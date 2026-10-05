@@ -135,19 +135,85 @@ done
 export LD_LIBRARY_PATH
 export INFORMIXDIR="${INFORMIXDIR:-${root}/pengdows.crud.IntegrationTests/bin/Release/net10.0/native}"
 
-# One target framework at a time, each with its own sqlhosts file. The Informix client resolves the
-# server through INFORMIXSQLHOSTS, and each test process writes its own container's port there;
-# with both frameworks running at once on one shared file, the last write won and both processes
-# used the same Informix database, dropping and recreating each other's tables (confirmed:
-# "table not in the database" / unique-violation failures only on Informix). Sequential runs also
-# halve the peak Docker load. Override with INTEGRATION_FRAMEWORKS="net10.0" to run just one.
-for tfm in ${INTEGRATION_FRAMEWORKS:-net8.0 net10.0}; do
-  INFORMIXSQLHOSTS="${INFORMIXSQLHOSTS_BASE:-${TMPDIR:-/tmp}/pengdows-informix-sqlhosts}-${tfm}" \
+# The suite runs one database per test process, at most two at a time (INTEGRATION_PARALLEL), like
+# the testbed's two-slot dispatcher: every database up at once saturated the host and ran Oracle
+# Free out of server processes (ORA-12516). The queue is longest first by expected seconds, so the
+# slow databases start at once and the short ones fill the other slot instead of one slow database
+# finishing alone at the end. The weights start from the testbed's StartupWeightSeconds; the timing
+# table printed at the end is the measurement to tune them with. INTEGRATION_ONLY limits the queue.
+#
+# always_on_databases must match IntegrationTestConfiguration.BaseProviders
+# (IntegrationTestConfigurationTests.RunScriptBatches_AreTheAlwaysOnProviders).
+always_on_databases=(Sqlite PostgreSql SqlServer MySql MariaDb Firebird CockroachDb DuckDB Oracle YugabyteDb TiDb FlatFile Db2 Informix SybaseASE Spanner SingleStore)
+declare -A integration_weights=(
+  [SapHana]=300 [Db2]=60 [Oracle]=45 [SybaseASE]=45 [Spanner]=30 [SqlServer]=25 [TiDb]=20
+  [YugabyteDb]=20 [Informix]=20 [SingleStore]=15 [CockroachDb]=12 [MySql]=8 [MariaDb]=8
+  [Firebird]=8 [PostgreSql]=5 [Snowflake]=5 [InterBase]=5 [Access]=5 [Sqlite]=1 [DuckDB]=1
+  [FlatFile]=1
+)
+
+if [[ -n "${INTEGRATION_ONLY:-}" ]]; then
+  IFS=',' read -r -a requested <<< "${INTEGRATION_ONLY// /}"
+else
+  requested=("${always_on_databases[@]}")
+  [[ "${INCLUDE_SNOWFLAKE:-}" == "true" ]] && requested+=(Snowflake)
+  [[ "${INCLUDE_SAPHANA:-}" == "true" ]] && requested+=(SapHana)
+  [[ "${INCLUDE_INTERBASE:-}" == "true" ]] && requested+=(InterBase)
+  [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && requested+=(Access)
+fi
+mapfile -t queue < <(for db in "${requested[@]}"; do echo "${integration_weights[$db]:-10} ${db}"; done |
+  sort -k1,1nr -k2,2 | awk '{print $2}')
+parallel="${INTEGRATION_PARALLEL:-2}"
+failed=()
+
+run_database() {
+  local tfm="$1" db="$2" started=${SECONDS} status=0
+  INTEGRATION_ONLY="${db}" \
+  INFORMIXSQLHOSTS="${INFORMIXSQLHOSTS_BASE:-${TMPDIR:-/tmp}/pengdows-informix-sqlhosts}-${tfm}-${db}" \
     dotnet test "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" \
-      -c Release -f "${tfm}" \
+      -c Release -f "${tfm}" --no-build \
       --results-directory "${results}" \
-      --logger "trx;LogFileName=IntegrationTests-${tfm}.trx"
+      --logger "trx;LogFileName=IntegrationTests-${tfm}-${db}.trx" \
+      > "${results}/IntegrationTests-${tfm}-${db}.log" 2>&1 || status=$?
+  echo "${db} $((SECONDS - started)) ${status}" >> "${results}/timings-${tfm}.txt"
+  return "${status}"
+}
+
+# One target framework at a time: each process still gets its own sqlhosts file (the Informix
+# client resolves its server through INFORMIXSQLHOSTS, and a shared file let concurrent processes
+# use each other's Informix database). Override with INTEGRATION_FRAMEWORKS="net10.0" for one.
+for tfm in ${INTEGRATION_FRAMEWORKS:-net8.0 net10.0}; do
+  dotnet build "${root}/pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj" -c Release -f "${tfm}"
+  : > "${results}/timings-${tfm}.txt"
+  declare -A running=()
+  for db in "${queue[@]}"; do
+    while (( ${#running[@]} >= parallel )); do
+      wait -n || true
+      for pid in "${!running[@]}"; do
+        if ! kill -0 "${pid}" 2>/dev/null; then
+          wait "${pid}" || failed+=("${tfm} ${running[$pid]}")
+          unset "running[$pid]"
+        fi
+      done
+    done
+    echo "[${tfm}] starting ${db}"
+    run_database "${tfm}" "${db}" &
+    running[$!]="${db}"
+  done
+  for pid in "${!running[@]}"; do
+    wait "${pid}" || failed+=("${tfm} ${running[$pid]}")
+  done
+  unset running
+
+  echo "== ${tfm}: seconds per database (tune integration_weights with these) =="
+  sort -k2,2nr "${results}/timings-${tfm}.txt" |
+    awk '{printf "  %-12s %6ss  %s\n", $1, $2, ($3 == 0 ? "passed" : "FAILED (exit " $3 ")")}'
 done
+
+if (( ${#failed[@]} > 0 )); then
+  echo "Integration suite failed on: ${failed[*]} (logs: ${results}/IntegrationTests-<tfm>-<db>.log)" >&2
+  exit 1
+fi
 
 # testbed is multi-targeted (net8.0;net10.0); run the matrix on each. Override with
 # TESTBED_FRAMEWORKS="net10.0" to run just one.
