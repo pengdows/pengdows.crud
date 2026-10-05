@@ -81,10 +81,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         {
             SpatialWireFormat.ExtendedWkb => CreatePostgresSpatial(value),
             SpatialWireFormat.LittleEndianSridPrefixedWkb => CreateMySqlSpatial(value),
-            SpatialWireFormat.WellKnownText => !string.IsNullOrEmpty(value.WellKnownText)
-                ? value.WellKnownText
-                : throw new NotSupportedException(
-                    "SingleStore spatial values are written as WKT; create the value with FromWellKnownText."),
+            // Plain WKT, a value built from WKB decoded to it.
+            SpatialWireFormat.WellKnownText => ExtendedWellKnownText.WellKnownTextOf(value),
             SpatialWireFormat.ExtendedTextOrHex => CreateSnowflakeSpatial(value),
             SpatialWireFormat.PlainWkb => CreateWkb(value, "SAP HANA"),
             // EWKT text, always with its SRID: OracleDialect builds SDO_GEOMETRY from it (TYPE-021).

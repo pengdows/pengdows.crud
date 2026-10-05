@@ -43,14 +43,16 @@ public sealed class SingleStoreTypeBindingTests
         Assert.Equal("POLYGON((0 0, 4 0, 4 4, 0 0))", sc.GetParameterValue("i2"));
     }
 
+    // A value built from WKB (read from another database) is written as its WKT, decoded as Oracle's
+    // EWKT is (WellKnownBinaryDecoder); it was refused.
     [Fact]
-    public void BuildCreate_SpatialFromWkbOnly_IsRefused()
+    public void BuildCreate_SpatialFromWkbOnly_WritesItsWkt()
     {
         var wkb = pengdows.crud.types.converters.WellKnownTextEncoder.Encode("POINT(1 2)");
 
-        var ex = Assert.ThrowsAny<Exception>(() => Build(new Row { Id = 1, Geog = Geography.FromWellKnownBinary(wkb, 4326) }));
+        using var sc = Build(new Row { Id = 1, Geog = Geography.FromWellKnownBinary(wkb, 4326) });
 
-        Assert.IsType<NotSupportedException>(ex.GetBaseException());
+        Assert.Equal("POINT (1 2)", sc.GetParameterValue("i1"));
     }
 
     // SingleStore returns a VECTOR(n) (F32) as its packed little-endian float32 bytes (confirmed live).

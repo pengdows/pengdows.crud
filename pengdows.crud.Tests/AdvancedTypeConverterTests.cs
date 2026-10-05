@@ -580,8 +580,8 @@ public class AdvancedTypeConverterTests
         var stream = new NonSeekableStream(new byte[] { 1, 2, 3 });
         var result = converter.ToProviderValue(stream, SupportedDatabase.SqlServer);
 
-        Assert.Same(stream, result);
-        // Just verify it doesn't throw on non-seekable stream
+        // A non-seekable stream is read from where it is, without seeking.
+        Assert.Equal(new byte[] { 1, 2, 3 }, result);
     }
 
     [Fact]
@@ -661,13 +661,13 @@ public class AdvancedTypeConverterTests
     }
 
     [Fact]
-    public void ClobStreamConverter_ToProviderValue_ReturnsInputValue()
+    public void ClobStreamConverter_ToProviderValue_IsTheText()
     {
         var converter = new ClobStreamConverter();
         var reader = new StringReader("test");
         var result = converter.ToProviderValue(reader, SupportedDatabase.Oracle);
 
-        Assert.Same(reader, result);
+        Assert.Equal("test", result);
     }
 
     #endregion
@@ -819,7 +819,7 @@ public class AdvancedTypeConverterTests
     }
 
     [Fact]
-    public void BlobStreamConverter_ToProviderValue_ShouldResetPosition()
+    public void BlobStreamConverter_ToProviderValue_IsTheBytesFromTheBeginning()
     {
         var converter = new BlobStreamConverter();
         var stream = new MemoryStream(new byte[] { 1, 2, 3 });
@@ -827,8 +827,7 @@ public class AdvancedTypeConverterTests
 
         var result = converter.ToProviderValue(stream, SupportedDatabase.SqlServer);
 
-        Assert.Same(stream, result);
-        Assert.Equal(0, stream.Position); // Should be reset to beginning
+        Assert.Equal(new byte[] { 1, 2, 3 }, result);
     }
 
     #endregion

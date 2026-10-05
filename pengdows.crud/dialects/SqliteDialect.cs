@@ -440,7 +440,9 @@ internal class SqliteDialect : SqlDialect
     private static double? AsExactDouble(decimal value)
     {
         var dbl = (double)value;
-        return (decimal)dbl == value ? dbl : null;
+        // The decimals nearest decimal.MaxValue/MinValue round to a double outside decimal's range,
+        // which can't be cast back (it overflowed); none of them is exact.
+        return Math.Abs(dbl) < (double)decimal.MaxValue && (decimal)dbl == value ? dbl : null;
     }
 
     // Connection pooling properties for SQLite (provider-aware)

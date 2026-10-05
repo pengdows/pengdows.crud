@@ -30,4 +30,26 @@ public class SpatialSridDriftTests
             Assert.Equal(4326, g.Srid);
         }
     }
+
+    // Found by TypeCompletenessTests: SingleStore takes spatial values as WKT and refused one built from
+    // WKB (any value read from another database) instead of writing its WKB as WKT, as Oracle's EWKT
+    // does. Text with an SRID prefix is written without it.
+    [Theory]
+    [InlineData("wkb")]
+    [InlineData("wkt")]
+    [InlineData("ewkt")]
+    public void SingleStore_WritesEverySpatialValueAsPlainWkt(string source)
+    {
+        var wkb = Convert.FromHexString(PlainWkb);
+        Geometry geometry = source switch
+        {
+            "wkb" => Geometry.FromWellKnownBinary(wkb, 4326),
+            "wkt" => Geometry.FromWellKnownText("POINT (1 2)", 4326),
+            _ => Geometry.FromWellKnownText("SRID=4326;POINT (1 2)", 4326)
+        };
+        Geography geography = source == "wkb" ? Geography.FromWellKnownBinary(wkb, 4326) : Geography.FromWellKnownText("POINT (1 2)", 4326);
+
+        Assert.Equal("POINT (1 2)", new GeometryConverter().ToProviderValue(geometry, SupportedDatabase.SingleStore));
+        Assert.Equal("POINT (1 2)", new GeographyConverter().ToProviderValue(geography, SupportedDatabase.SingleStore));
+    }
 }

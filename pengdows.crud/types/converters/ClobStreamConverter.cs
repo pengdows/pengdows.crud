@@ -11,7 +11,7 @@
 //   * Oracle: CLOB, NCLOB columns
 //   * MySQL: TEXT, LONGTEXT columns
 //   * SQLite: TEXT type
-// - ConvertToProvider(): Returns TextReader directly.
+// - ConvertToProvider(): Returns the reader's text.
 // - TryConvertFromProvider(): Handles TextReader, string, Stream, ReadOnlyMemory<char>.
 // - Stream conversion: UTF-8 with BOM detection, leaves stream open.
 // - Thread-safe converter, but returned TextReaders are NOT thread-safe.
@@ -75,10 +75,9 @@ namespace pengdows.crud.types.converters;
 /// </example>
 internal sealed class ClobStreamConverter : AdvancedTypeConverter<TextReader>
 {
-    protected override object? ConvertToProvider(TextReader value, SupportedDatabase provider)
-    {
-        return value;
-    }
+    // The text, as every provider binds a CLOB (live-verified, PortableAdvancedTypeRoundTripTests).
+    protected override object? ConvertToProvider(TextReader value, SupportedDatabase provider) =>
+        value.ReadToEnd();
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out TextReader result)
     {

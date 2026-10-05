@@ -2222,13 +2222,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
         else
         {
-            handled = runtimeType != null &&
-                      ((AdvancedTypes.IsMappedType(runtimeType) &&
-                        AdvancedTypes.TryConfigureParameter(parameter, runtimeType, value, TypeMappingProvider)) ||
-                       // Provider LOB mappings are keyed by Stream/TextReader, but the runtime type
-                       // is a concrete subclass (MemoryStream, StringReader, ...) that never matches.
-                       // Materialize to byte[]/string rather than handing the provider a raw
-                       // instance it cannot bind.
+            // A Stream/TextReader subclass is mapped as Stream/TextReader, as its mappings are keyed.
+            var mappedType = runtimeType == null ? null : AdvancedTypeRegistry.WriteType(runtimeType);
+            handled = mappedType != null &&
+                      ((AdvancedTypes.IsMappedType(mappedType) &&
+                        AdvancedTypes.TryConfigureParameter(parameter, mappedType, value, TypeMappingProvider)) ||
+                       // A database with no LOB mapping gets the bytes or text, never a raw instance
+                       // it cannot bind.
                        LargeObjectParameter.TryMaterialize(parameter, value));
         }
 

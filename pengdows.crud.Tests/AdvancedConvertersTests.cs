@@ -136,8 +136,7 @@ public class AdvancedConvertersTests
         var seekable = new MemoryStream(new byte[] { 9, 8, 7, 6 });
         seekable.Seek(2, SeekOrigin.Begin);
         var providerValue = converter.ToProviderValue(seekable, SupportedDatabase.Sqlite);
-        Assert.Same(seekable, providerValue);
-        Assert.Equal(0, seekable.Position);
+        Assert.Equal(new byte[] { 9, 8, 7, 6 }, providerValue);
     }
 
     [Fact]

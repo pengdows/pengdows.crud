@@ -11,7 +11,7 @@
 //   * Oracle: BLOB columns (returns Oracle-specific stream)
 //   * MySQL: BLOB, LONGBLOB columns
 //   * SQLite: BLOB type
-// - ConvertToProvider(): Returns Stream, seeks to beginning if seekable.
+// - ConvertToProvider(): Returns the stream's bytes from its beginning (LargeObjectParameter.ReadAll).
 // - TryConvertFromProvider(): Handles Stream, byte[], ReadOnlyMemory<byte>, ArraySegment<byte>.
 // - Memory efficiency: Wraps byte[] in MemoryStream without copying.
 // - Thread-safe converter, but returned streams are NOT thread-safe.
@@ -75,15 +75,10 @@ namespace pengdows.crud.types.converters;
 /// </example>
 internal sealed class BlobStreamConverter : AdvancedTypeConverter<Stream>
 {
-    protected override object? ConvertToProvider(Stream value, SupportedDatabase provider)
-    {
-        if (value.CanSeek)
-        {
-            value.Seek(0, SeekOrigin.Begin);
-        }
-
-        return value;
-    }
+    // The bytes, as every provider binds a BLOB (live-verified, PortableAdvancedTypeRoundTripTests);
+    // a raw stream was handed only to the providers with a Stream mapping, never verified.
+    protected override object? ConvertToProvider(Stream value, SupportedDatabase provider) =>
+        coercion.LargeObjectParameter.ReadAll(value);
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Stream result)
     {

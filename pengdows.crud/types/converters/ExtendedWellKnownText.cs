@@ -5,7 +5,8 @@
 // AI SUMMARY:
 // - From(): the value's own WKT (any SRID prefix replaced by the value's SRID) or its WKB decoded.
 // - A GeoJSON-only value throws NotSupportedException.
-// - Used where a database builds geometries only from text (Oracle SDO_GEOMETRY, TYPE-021).
+// - Used where a database builds geometries only from text (Oracle SDO_GEOMETRY, TYPE-021);
+//   WellKnownTextOf() is the plain WKT a WKT-only database takes (SingleStore).
 // =============================================================================
 
 using System.Globalization;
@@ -21,7 +22,7 @@ internal static class ExtendedWellKnownText
     }
 
     // The value as plain WKT: its own text (any SRID prefix dropped), or its WKB decoded.
-    private static string WellKnownTextOf(SpatialValue value)
+    internal static string WellKnownTextOf(SpatialValue value)
     {
         if (!string.IsNullOrEmpty(value.WellKnownText))
         {

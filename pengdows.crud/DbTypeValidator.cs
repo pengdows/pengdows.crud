@@ -50,14 +50,18 @@ internal static class DbTypeValidator
     // Numeric types are validated as a group (any numeric CLR → any numeric DbType).
     // Enums are accepted for all numeric and string DbTypes.
     // FrozenSet values ensure the per-DbType sets are fully immutable.
+    // Accepted types a value is a subclass of, never an instance of itself: a MemoryStream or FileStream
+    // is a Stream, a StringReader a TextReader.
+    private static readonly Type[] AbstractAcceptableTypes = { typeof(Stream), typeof(TextReader) };
+
     private static readonly FrozenDictionary<DbType, FrozenSet<Type>> AcceptableTypes =
         new Dictionary<DbType, FrozenSet<Type>>
         {
             [DbType.Boolean] = new HashSet<Type> { typeof(bool) }.ToFrozenSet(),
 
-            [DbType.String] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
+            [DbType.String] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid), typeof(TextReader) }.ToFrozenSet(),
             [DbType.StringFixedLength] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
-            [DbType.AnsiString] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
+            [DbType.AnsiString] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid), typeof(TextReader) }.ToFrozenSet(),
             [DbType.AnsiStringFixedLength] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
             [DbType.Xml] = new HashSet<Type> { typeof(string) }.ToFrozenSet(),
 
@@ -139,7 +143,8 @@ internal static class DbTypeValidator
 
         if (AcceptableTypes.TryGetValue(dbType, out var acceptable))
         {
-            if (acceptable.Count == 0 || acceptable.Contains(clrType))
+            if (acceptable.Count == 0 || acceptable.Contains(clrType) ||
+                Array.Exists(AbstractAcceptableTypes, t => t.IsAssignableFrom(clrType) && acceptable.Contains(t)))
             {
                 return null;
             }

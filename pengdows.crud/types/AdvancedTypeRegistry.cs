@@ -241,6 +241,20 @@ internal class AdvancedTypeRegistry
         return true;
     }
 
+    /// <summary>
+    /// The type a value of <paramref name="clrType"/> is mapped as when written: a Stream or TextReader
+    /// subclass (MemoryStream, FileStream, StringReader) as Stream or TextReader, which the mappings
+    /// are registered for; any other type as itself.
+    /// </summary>
+    internal static Type WriteType(Type clrType) =>
+        clrType.IsValueType || clrType == typeof(string)
+            ? clrType
+            : typeof(Stream).IsAssignableFrom(clrType)
+                ? typeof(Stream)
+                : typeof(TextReader).IsAssignableFrom(clrType)
+                    ? typeof(TextReader)
+                    : clrType;
+
     internal bool IsMappedType(Type clrType)
     {
         clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
