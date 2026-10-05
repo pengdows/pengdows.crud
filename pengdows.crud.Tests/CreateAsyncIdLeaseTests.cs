@@ -54,10 +54,11 @@ public class CreateAsyncIdLeaseTests
             item.Id = Convert.ToInt32(await sc.ExecuteScalarOrNullAsync<object>(ExecutionType.Write));
         }
 
-        var create = await AllocationMeasurement.LowestAsync(() => Measure(Create));
-        var statement = await AllocationMeasurement.LowestAsync(() => Measure(Statement));
+        var create = await AllocationMeasurement.LowestAsync(() => AllocationMeasurement.PerRunAsync(Create));
+        var statement = await AllocationMeasurement.LowestAsync(() => AllocationMeasurement.PerRunAsync(Statement));
 
         Assert.Equal(7, lastId);
+        Assert.True(statement != long.MaxValue, "every pass resumed on another thread");
         Assert.True(create <= statement, $"CreateAsync {create} B, the statement alone {statement} B");
     }
 
@@ -100,17 +101,5 @@ public class CreateAsyncIdLeaseTests
             await new TableGateway<Item, int>(context).CreateAsync(new Item { Name = "n" }));
 
         Assert.Equal(1, exec.DisposeCount);
-    }
-
-    private static async Task<long> Measure(Func<Task> operation)
-    {
-        await operation(); // warm caches
-        var before = GC.GetAllocatedBytesForCurrentThread();
-        for (var i = 0; i < 20; i++)
-        {
-            await operation();
-        }
-
-        return (GC.GetAllocatedBytesForCurrentThread() - before) / 20;
     }
 }

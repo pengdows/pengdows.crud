@@ -801,11 +801,11 @@
   Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
   DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
-  DateTime as Date: Date DateOnly:10/05/2026
+  DateTime as Date: Date DateOnly:2026-10-05
   DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
-  DateOnly: Date DateOnly:10/05/2026
-  TimeOnly: Time TimeOnly:13:45
-  TimeSpan as Time: Time TimeOnly:13:45
+  DateOnly: Date DateOnly:2026-10-05
+  TimeOnly: Time TimeOnly:13:45:30.1234567
+  TimeSpan as Time: Time TimeOnly:13:45:30.1234567
   TimeSpan as Object: Object TimeSpan:2.00:00:00
   byte[]: Binary 0x0102FF
   enum as String: String Mood:Sad

@@ -168,7 +168,7 @@ internal class DateOnlyCoercion : DbCoercion<DateOnly>
                 return true;
             // Keep the string's own wall-clock date: parsing to DateTime would convert an explicit
             // offset ("...Z", SQLite's stored form) to local time and move the date.
-            case string s when DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var dto):
+            case string s when TypeCoercionHelper.TryParseTimestampText(s, out var dto):
                 value = DateOnly.FromDateTime(dto.DateTime);
                 return true;
             default:

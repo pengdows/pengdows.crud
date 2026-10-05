@@ -303,6 +303,11 @@ internal static class TypeCoercionHelper
         }
 
         // Fallback: char[] to string conversion (not in coercion registry)
+        if (underlyingTarget == typeof(string) && TryFormatCanonicalText(value, out var canonical))
+        {
+            return canonical;
+        }
+
         if (underlyingTarget == typeof(string) && sourceType == typeof(char[]))
         {
             return new string((char[])value);
@@ -844,10 +849,27 @@ internal static class TypeCoercionHelper
     /// Timestamp text: a stated offset keeps its instant; text without one is UTC, as an unspecified
     /// DateTime is everywhere else. DateTimeOffset.TryParse alone assumed the machine's local time,
     /// so the same text read differently on differently configured hosts (REV-059). One parse,
-    /// where the old path tried DateTimeOffset then DateTime.
+    /// where the old path tried DateTimeOffset then DateTime. Text with no date (a time of day) is not a
+    /// timestamp: it took today's date, a value that depended on the day it was read.
     /// </summary>
-    private static bool TryParseTimestampText(string s, out DateTimeOffset value) =>
-        DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out value);
+    internal static bool TryParseTimestampText(string s, out DateTimeOffset value)
+    {
+        if (!DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out value))
+        {
+            return false;
+        }
+
+        // DateTimeOffset.TryParse refuses NoCurrentDateDefault, so a DateTime parse with it tells whether
+        // the text had a date: a time of day comes back on 0001-01-01, which only text saying 0001 means.
+        if (DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.NoCurrentDateDefault, out var probe) &&
+            probe is { Year: 1, Month: 1, Day: 1 } && !s.Contains("0001", StringComparison.Ordinal))
+        {
+            value = default;
+            return false;
+        }
+
+        return true;
+    }
 
     /// <summary>
     /// Normalizes a DateTime returned by a database driver to DateTimeKind.Utc.
@@ -967,6 +989,27 @@ internal static class TypeCoercionHelper
     private static bool IsJsonValueType(Type type) =>
         type == typeof(JsonDocument) || type == typeof(JsonElement) || typeof(JsonNode).IsAssignableFrom(type) ||
         type == typeof(types.valueobjects.JsonValue);
+
+    /// <summary>
+    /// A scalar read into a string: its canonical invariant text, exact to the tick (ISO 8601 round-trip
+    /// for timestamps, yyyy-MM-dd, HH:mm:ss.FFFFFFF, the TimeSpan "c" form, a Guid's "D" form). A
+    /// DateTime read as "MM/dd/yyyy HH:mm:ss" without its fraction and the others failed (DRY-010).
+    /// </summary>
+    internal static bool TryFormatCanonicalText(object value, out string text)
+    {
+        text = value switch
+        {
+            DateTime dt => dt.ToString("o", CultureInfo.InvariantCulture),
+            DateTimeOffset dto => dto.ToString("o", CultureInfo.InvariantCulture),
+            DateOnly date => date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            TimeOnly time => time.ToString(time.Ticks % TimeSpan.TicksPerSecond == 0 ? "HH:mm:ss" : "HH:mm:ss.FFFFFFF",
+                CultureInfo.InvariantCulture),
+            TimeSpan span => span.ToString("c", CultureInfo.InvariantCulture),
+            Guid guid => guid.ToString("D"),
+            _ => null!
+        };
+        return text != null;
+    }
 
     internal static string JsonTextOrNullLiteral(string? text) => string.IsNullOrWhiteSpace(text) ? "null" : text;
 

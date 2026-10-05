@@ -435,9 +435,9 @@
     i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
     i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
     i3 = DateTimeOffset DateTimeOffset:2026-10-05T01:02:03.0000000-05:00
-    i4 = Date DateOnly:10/05/2026
-    i5 = Time TimeOnly:01:02
-    i6 = Time TimeOnly:01:02
+    i4 = Date DateOnly:2026-10-05
+    i5 = Time TimeOnly:01:02:03.0000000
+    i6 = Time TimeOnly:01:02:03.0000000
   Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6)
     i0 = Int32 Int32:0
     i1 = String "["a"]"

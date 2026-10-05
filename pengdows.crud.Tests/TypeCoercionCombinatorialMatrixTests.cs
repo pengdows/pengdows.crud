@@ -62,11 +62,11 @@ public sealed class TypeCoercionCombinatorialMatrixTests
         yield return [(byte)1, typeof(bool), true];
         yield return [(byte)0, typeof(bool), false];
 
-        // Guid -> string is deliberately NOT in this matrix — see
-        // Coerce_GuidToString_ThrowsInvalidCastException below, a real asymmetry this matrix
-        // found: string -> Guid succeeds (case below), but Guid -> string does not.
+        // Guid <-> string both ways: the matrix found Guid -> string failing (string -> Guid worked);
+        // every scalar now reads into a string as its canonical text (DRY-010).
         var guid = Guid.NewGuid();
         yield return [guid.ToString(), typeof(Guid), guid];
+        yield return [guid, typeof(string), guid.ToString("D")];
     }
 
     [Theory]
@@ -79,26 +79,5 @@ public sealed class TypeCoercionCombinatorialMatrixTests
         Assert.NotNull(result);
         Assert.IsType(targetType, result);
         Assert.Equal(expected, result);
-    }
-
-    [Fact]
-    public void Coerce_GuidToString_ThrowsInvalidCastException()
-    {
-        // Found by this matrix, not previously characterized anywhere: TypeCoercionHelper.Coerce's
-        // generic (value, sourceType, targetType) overload supports string -> Guid (case above)
-        // but NOT the reverse. Guid doesn't implement IConvertible, and CoerceCore's registry/
-        // advanced-converter paths apparently don't special-case Guid -> string either, so it
-        // falls all the way to ConvertWithCache's Convert.ChangeType-based fallback, which throws.
-        // This does not necessarily affect normal entity Guid columns, which go through dialect-
-        // specific storage-format handling (see docs — PassThrough/String/Binary per dialect), not
-        // this generic helper — but it's a real, surprising gap in this specific public API that's
-        // worth locking down rather than leaving uncharacterized.
-        var guid = Guid.NewGuid();
-
-        var ex = Assert.Throws<InvalidCastException>(
-            () => TypeCoercionHelper.Coerce(guid, typeof(Guid), typeof(string)));
-
-        Assert.Contains("Guid", ex.Message);
-        Assert.Contains("String", ex.Message);
     }
 }

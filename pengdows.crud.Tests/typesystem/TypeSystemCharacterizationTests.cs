@@ -254,6 +254,8 @@ public class TypeSystemCharacterizationTests
         decimal m => "decimal:" + m.ToString(CultureInfo.InvariantCulture),
         DateTime dt => "DateTime:" + dt.ToString("o", CultureInfo.InvariantCulture) + "/" + dt.Kind,
         DateTimeOffset dto => "DateTimeOffset:" + dto.ToString("o", CultureInfo.InvariantCulture),
+        TimeOnly time => "TimeOnly:" + time.ToString("HH:mm:ss.fffffff", CultureInfo.InvariantCulture),
+        DateOnly date => "DateOnly:" + date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
         JsonDocument doc => "JsonDocument:" + doc.RootElement.GetRawText(),
         JsonElement el => "JsonElement:" + el.GetRawText(),
         SpatialValue sv => sv.GetType().Name + ":srid=" + sv.Srid + ":wkb=" + Convert.ToHexString(sv.WellKnownBinary.Span),

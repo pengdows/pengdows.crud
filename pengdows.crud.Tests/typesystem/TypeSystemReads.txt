@@ -153,7 +153,7 @@ Int64:2 -> Nullable`1?: Mood:Sad
 Int32:9 -> Mood: throws EnumValueException
 Int32:9 -> Nullable`1?: throws EnumValueException
 Guid:0f8fad5b-d9cb-469f-a165-70867728950e -> Guid: Guid:0f8fad5b-d9cb-469f-a165-70867728950e
-Guid:0f8fad5b-d9cb-469f-a165-70867728950e -> String: throws InvalidCastException
+Guid:0f8fad5b-d9cb-469f-a165-70867728950e -> String: "0f8fad5b-d9cb-469f-a165-70867728950e"
 "0f8fad5b-d9cb-469f-a165-70867728950e" -> Guid: Guid:0f8fad5b-d9cb-469f-a165-70867728950e
 "0f8fad5b-d9cb-469f-a165-70867728950e" -> String: "0f8fad5b-d9cb-469f-a165-70867728950e"
 0x5BAD8F0FCBD99F46A16570867728950E -> Guid
@@ -166,64 +166,64 @@ Guid:0f8fad5b-d9cb-469f-a165-70867728950e -> String: throws InvalidCastException
 "nope" -> String: "nope"
 DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateTime: DateTime:2026-10-05T13:45:30.1234567Z/Utc
 DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
-DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateOnly: DateOnly:10/05/2026
-DateTime:2026-10-05T13:45:30.1234567Z/Utc -> TimeOnly: TimeOnly:13:45
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateOnly: DateOnly:2026-10-05
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> TimeOnly: TimeOnly:13:45:30.1234567
 DateTime:2026-10-05T13:45:30.1234567Z/Utc -> TimeSpan: TimeSpan:13:45:30.1234567
-DateTime:2026-10-05T13:45:30.1234567Z/Utc -> String: "10/05/2026 13:45:30"
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> String: "2026-10-05T13:45:30.1234567Z"
 DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateTime: DateTime:2026-10-05T13:45:30.1234567Z/Utc
 DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
-DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateOnly: DateOnly:10/05/2026
-DateTime:2026-10-05T13:45:30.1234567/Unspecified -> TimeOnly: TimeOnly:13:45
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateOnly: DateOnly:2026-10-05
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> TimeOnly: TimeOnly:13:45:30.1234567
 DateTime:2026-10-05T13:45:30.1234567/Unspecified -> TimeSpan: TimeSpan:13:45:30.1234567
-DateTime:2026-10-05T13:45:30.1234567/Unspecified -> String: "10/05/2026 13:45:30"
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> String: "2026-10-05T13:45:30.1234567"
 DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateTime: DateTime:2026-10-05T13:45:30.1234567Z/Utc
 DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateTimeOffset: DateTimeOffset:2026-10-05T15:45:30.1234567+02:00
-DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateOnly: DateOnly:10/05/2026
-DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> TimeOnly: TimeOnly:15:45
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateOnly: DateOnly:2026-10-05
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> TimeOnly: TimeOnly:15:45:30.1234567
 DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> TimeSpan: throws InvalidCastException
-DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> String: throws InvalidCastException
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> String: "2026-10-05T15:45:30.1234567+02:00"
 "2026-10-05 13:45:30.1234567" -> DateTime: DateTime:2026-10-05T13:45:30.1234567Z/Utc
 "2026-10-05 13:45:30.1234567" -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
-"2026-10-05 13:45:30.1234567" -> DateOnly: DateOnly:10/05/2026
-"2026-10-05 13:45:30.1234567" -> TimeOnly: TimeOnly:13:45
+"2026-10-05 13:45:30.1234567" -> DateOnly: DateOnly:2026-10-05
+"2026-10-05 13:45:30.1234567" -> TimeOnly: TimeOnly:13:45:30.1234567
 "2026-10-05 13:45:30.1234567" -> TimeSpan: throws InvalidCastException
 "2026-10-05 13:45:30.1234567" -> String: "2026-10-05 13:45:30.1234567"
 "2026-10-05T13:45:30.1234567+02:00" -> DateTime: DateTime:2026-10-05T11:45:30.1234567Z/Utc
 "2026-10-05T13:45:30.1234567+02:00" -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
-"2026-10-05T13:45:30.1234567+02:00" -> DateOnly: DateOnly:10/05/2026
-"2026-10-05T13:45:30.1234567+02:00" -> TimeOnly: TimeOnly:13:45
+"2026-10-05T13:45:30.1234567+02:00" -> DateOnly: DateOnly:2026-10-05
+"2026-10-05T13:45:30.1234567+02:00" -> TimeOnly: TimeOnly:13:45:30.1234567
 "2026-10-05T13:45:30.1234567+02:00" -> TimeSpan: throws InvalidCastException
 "2026-10-05T13:45:30.1234567+02:00" -> String: "2026-10-05T13:45:30.1234567+02:00"
 "2026-10-05" -> DateTime: DateTime:2026-10-05T00:00:00.0000000Z/Utc
 "2026-10-05" -> DateTimeOffset: DateTimeOffset:2026-10-05T00:00:00.0000000+00:00
-"2026-10-05" -> DateOnly: DateOnly:10/05/2026
-"2026-10-05" -> TimeOnly: TimeOnly:00:00
+"2026-10-05" -> DateOnly: DateOnly:2026-10-05
+"2026-10-05" -> TimeOnly: TimeOnly:00:00:00.0000000
 "2026-10-05" -> TimeSpan: throws InvalidCastException
 "2026-10-05" -> String: "2026-10-05"
-"13:45:30.5" -> DateTime: DateTime:2026-10-05T13:45:30.5000000Z/Utc
-"13:45:30.5" -> DateTimeOffset: DateTimeOffset:2026-10-05T13:45:30.5000000+00:00
-"13:45:30.5" -> DateOnly: DateOnly:10/05/2026
-"13:45:30.5" -> TimeOnly: TimeOnly:13:45
+"13:45:30.5" -> DateTime: throws InvalidCastException
+"13:45:30.5" -> DateTimeOffset: throws InvalidCastException
+"13:45:30.5" -> DateOnly: throws InvalidCastException
+"13:45:30.5" -> TimeOnly: TimeOnly:13:45:30.5000000
 "13:45:30.5" -> TimeSpan: TimeSpan:13:45:30.5000000
 "13:45:30.5" -> String: "13:45:30.5"
 TimeSpan:13:45:30 -> DateTime: throws InvalidCastException
 TimeSpan:13:45:30 -> DateTimeOffset: throws InvalidCastException
 TimeSpan:13:45:30 -> DateOnly: throws InvalidCastException
-TimeSpan:13:45:30 -> TimeOnly: TimeOnly:13:45
+TimeSpan:13:45:30 -> TimeOnly: TimeOnly:13:45:30.0000000
 TimeSpan:13:45:30 -> TimeSpan: TimeSpan:13:45:30
-TimeSpan:13:45:30 -> String: throws InvalidCastException
-DateOnly:10/05/2026 -> DateTime: throws InvalidCastException
-DateOnly:10/05/2026 -> DateTimeOffset: throws InvalidCastException
-DateOnly:10/05/2026 -> DateOnly: DateOnly:10/05/2026
-DateOnly:10/05/2026 -> TimeOnly: throws InvalidCastException
-DateOnly:10/05/2026 -> TimeSpan: throws InvalidCastException
-DateOnly:10/05/2026 -> String: throws InvalidCastException
-TimeOnly:13:45 -> DateTime: throws InvalidCastException
-TimeOnly:13:45 -> DateTimeOffset: throws InvalidCastException
-TimeOnly:13:45 -> DateOnly: throws InvalidCastException
-TimeOnly:13:45 -> TimeOnly: TimeOnly:13:45
-TimeOnly:13:45 -> TimeSpan: TimeSpan:13:45:30
-TimeOnly:13:45 -> String: throws InvalidCastException
+TimeSpan:13:45:30 -> String: "13:45:30"
+DateOnly:2026-10-05 -> DateTime: throws InvalidCastException
+DateOnly:2026-10-05 -> DateTimeOffset: throws InvalidCastException
+DateOnly:2026-10-05 -> DateOnly: DateOnly:2026-10-05
+DateOnly:2026-10-05 -> TimeOnly: throws InvalidCastException
+DateOnly:2026-10-05 -> TimeSpan: throws InvalidCastException
+DateOnly:2026-10-05 -> String: "2026-10-05"
+TimeOnly:13:45:30.0000000 -> DateTime: throws InvalidCastException
+TimeOnly:13:45:30.0000000 -> DateTimeOffset: throws InvalidCastException
+TimeOnly:13:45:30.0000000 -> DateOnly: throws InvalidCastException
+TimeOnly:13:45:30.0000000 -> TimeOnly: TimeOnly:13:45:30.0000000
+TimeOnly:13:45:30.0000000 -> TimeSpan: TimeSpan:13:45:30
+TimeOnly:13:45:30.0000000 -> String: "13:45:30"
 Int64:1759671930 -> DateTime: throws InvalidCastException
 Int64:1759671930 -> DateTimeOffset: throws InvalidCastException
 Int64:1759671930 -> DateOnly: throws InvalidCastException
