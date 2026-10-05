@@ -929,12 +929,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
         BuildBatchUpdateSql(tableName, columnNames, keyColumns, rowCount, query, getValue);
     }
 
-    /// <summary>
-    /// Appends an ANSI multi-row INSERT ... VALUES; with <paramref name="columns"/>, each value is
-    /// written through <see cref="RenderColumnArgument"/> where the dialect asks for it.
-    /// </summary>
-    private protected void AppendAnsiBatchInsert(string tableName, IReadOnlyList<string> columnNames, int rowCount,
-        ISqlQueryBuilder query, Func<int, int, object?>? getValue, IReadOnlyList<IColumnInfo>? columns)
+    private protected static void ValidateBatchInsertArguments(string tableName, IReadOnlyList<string> columnNames,
+        int rowCount)
     {
         if (string.IsNullOrWhiteSpace(tableName))
         {
@@ -950,6 +946,49 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             throw new ArgumentException("Row count must be greater than zero.", nameof(rowCount));
         }
+    }
+
+    /// <summary>
+    /// A multi-row insert written as one INSERT per row inside a wrapper: <paramref name="prefix"/>,
+    /// then per row <paramref name="rowStart"/> table (columns) VALUES (...) <paramref name="rowEnd"/>,
+    /// then <paramref name="suffix"/> (Oracle's INSERT ALL ... SELECT 1 FROM DUAL, Firebird's
+    /// EXECUTE BLOCK). A NULL value is written inline; the others are b0, b1, ... parameters.
+    /// </summary>
+    private protected void AppendStatementPerRowBatchInsert(string tableName, IReadOnlyList<string> columnNames,
+        int rowCount, ISqlQueryBuilder query, Func<int, int, object?>? getValue, string prefix, string rowStart,
+        string rowEnd, string suffix)
+    {
+        ValidateBatchInsertArguments(tableName, columnNames, rowCount);
+        query.Append(prefix);
+        var colList = string.Join(", ", columnNames);
+        var paramIdx = 0;
+        for (var row = 0; row < rowCount; row++)
+        {
+            query.Append(rowStart).Append(tableName).Append(" (").Append(colList).Append(") VALUES (");
+            for (var col = 0; col < columnNames.Count; col++)
+            {
+                if (col > 0)
+                {
+                    query.Append(", ");
+                }
+
+                AppendBatchCell(query, getValue?.Invoke(row, col), null, col, ref paramIdx);
+            }
+
+            query.Append(rowEnd);
+        }
+
+        query.Append(suffix);
+    }
+
+    /// <summary>
+    /// Appends an ANSI multi-row INSERT ... VALUES; with <paramref name="columns"/>, each value is
+    /// written through <see cref="RenderColumnArgument"/> where the dialect asks for it.
+    /// </summary>
+    private protected void AppendAnsiBatchInsert(string tableName, IReadOnlyList<string> columnNames, int rowCount,
+        ISqlQueryBuilder query, Func<int, int, object?>? getValue, IReadOnlyList<IColumnInfo>? columns)
+    {
+        ValidateBatchInsertArguments(tableName, columnNames, rowCount);
 
         query.Append("INSERT INTO ");
         query.Append(tableName);
@@ -992,15 +1031,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     query.Append(", ");
                 }
 
-                var val = getValue?.Invoke(row, col);
-                if (val == null || val == DBNull.Value)
-                {
-                    query.Append("NULL");
-                }
-                else
-                {
-                    AppendBatchValue(query, columns, col, paramIdx++);
-                }
+                AppendBatchCell(query, getValue?.Invoke(row, col), columns, col, ref paramIdx);
             }
 
             if (!fromSelect)
@@ -1014,6 +1045,22 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// Appends batch parameter b{index}, wrapped by <see cref="RenderColumnArgument"/> when the
     /// column's dialect asks for it.
     /// </summary>
+    /// <summary>
+    /// One batch value: NULL inline (no parameter), otherwise the next b{n} parameter, written through
+    /// the column's argument rendering where it has one (DRY-019: copied in five builders).
+    /// </summary>
+    private protected void AppendBatchCell(ISqlQueryBuilder query, object? value, IReadOnlyList<IColumnInfo>? columns,
+        int column, ref int index)
+    {
+        if (value == null || value == DBNull.Value)
+        {
+            query.Append("NULL");
+            return;
+        }
+
+        AppendBatchValue(query, columns, column, index++);
+    }
+
     private protected void AppendBatchValue(ISqlQueryBuilder query, IReadOnlyList<IColumnInfo>? columns, int column,
         int index)
     {

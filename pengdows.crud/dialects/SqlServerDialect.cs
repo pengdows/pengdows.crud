@@ -364,15 +364,7 @@ internal class SqlServerDialect : SqlDialect
                     query.Append(", ");
                 }
 
-                var val = getValue?.Invoke(row, col);
-                if (val == null || val == DBNull.Value)
-                {
-                    query.Append("NULL");
-                }
-                else
-                {
-                    AppendBatchValue(query, columns, col, paramIdx++);
-                }
+                AppendBatchCell(query, getValue?.Invoke(row, col), columns, col, ref paramIdx);
             }
 
             query.Append(')');

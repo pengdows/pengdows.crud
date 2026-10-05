@@ -325,16 +325,7 @@ internal class PostgreSqlDialect : SqlDialect
                     query.Append(", ");
                 }
 
-                var val = getValue?.Invoke(row, col);
-                if (val == null || val == DBNull.Value)
-                {
-                    query.Append("NULL");
-                }
-                else
-                {
-                    query.Append(ParameterMarker).Append('b')
-                        .Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                }
+                AppendBatchCell(query, getValue?.Invoke(row, col), null, col, ref paramIdx);
             }
         }
 
@@ -400,17 +391,7 @@ internal class PostgreSqlDialect : SqlDialect
                 {
                     query.Append(", ");
                 }
-                var val = getValue?.Invoke(row, col);
-                if (val == null || val == DBNull.Value)
-                {
-                    query.Append("NULL");
-                }
-                else
-                {
-                    query.Append(ParameterMarker);
-                    query.Append('b');
-                    query.Append(paramIdx++.ToString(System.Globalization.CultureInfo.InvariantCulture));
-                }
+                AppendBatchCell(query, getValue?.Invoke(row, col), null, col, ref paramIdx);
             }
 
             query.Append(')');
