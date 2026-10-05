@@ -720,25 +720,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         // A savepoint command runs on the shared connection like any other command, so it goes
         // through the same reader-aware lock: it fails fast while a reader is still open instead
         // of racing it.
-        await _reusableLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.Transaction = _transaction;
-            cmd.CommandText = _dialect.GetSavepointSql(name);
-            if (cmd is DbCommand db)
-            {
-                await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                cmd.ExecuteNonQuery();
-            }
-        }
-        finally
-        {
-            await _reusableLocker.DisposeAsync().ConfigureAwait(false);
-        }
+        await ExecuteSavepointCommandAsync(_dialect.GetSavepointSql(name), cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -758,25 +740,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
 
         // See SavepointAsync for why this goes through the reader-aware lock.
-        await _reusableLocker.LockAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            using var cmd = _connection.CreateCommand();
-            cmd.Transaction = _transaction;
-            cmd.CommandText = _dialect.GetRollbackToSavepointSql(name);
-            if (cmd is DbCommand db)
-            {
-                await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
-            }
-            else
-            {
-                cmd.ExecuteNonQuery();
-            }
-        }
-        finally
-        {
-            await _reusableLocker.DisposeAsync().ConfigureAwait(false);
-        }
+        await ExecuteSavepointCommandAsync(_dialect.GetRollbackToSavepointSql(name), cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -798,12 +762,18 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
 
         // See SavepointAsync for why this goes through the reader-aware lock.
+        await ExecuteSavepointCommandAsync(_dialect.GetReleaseSavepointSql(name), cancellationToken).ConfigureAwait(false);
+    }
+
+    // One savepoint command on the transaction's connection (DRY-017: three copies).
+    private async ValueTask ExecuteSavepointCommandAsync(string sql, CancellationToken cancellationToken)
+    {
         await _reusableLocker.LockAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             using var cmd = _connection.CreateCommand();
             cmd.Transaction = _transaction;
-            cmd.CommandText = _dialect.GetReleaseSavepointSql(name);
+            cmd.CommandText = sql;
             if (cmd is DbCommand db)
             {
                 await db.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
@@ -819,6 +789,28 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
     }
 
+    // Released after completing. Dispose() can race a completion and dispose the lock first;
+    // swallowing that is safe (the connection was already closed). False when it had been disposed.
+    private bool TryReleaseCompletionLock()
+    {
+        try
+        {
+            _completionLock.Release();
+            return true;
+        }
+        catch (ObjectDisposedException)
+        {
+            return false;
+        }
+    }
+
+    private void MarkCompleted(bool committed) =>
+        Interlocked.Exchange(ref committed ? ref _committed : ref _rolledBack, 1);
+
+    private TransactionException CompletionFailed(Exception ex, bool committed) =>
+        new($"Transaction {(committed ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
+            _context.Product, ex, isTransient: (ex as DatabaseException)?.IsTransient);
+
     private void CompleteTransactionWithWait(Action action, bool markCommitted)
     {
         // Use internal completion lock only; do not contend with user lock
@@ -833,16 +825,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
         finally
         {
-            // Guard against ObjectDisposedException: if Dispose() races with this Release()
-            // it may have already called _completionLock.Dispose(). Swallowing the exception
-            // here is safe — the connection was already closed in CompleteTransaction.finally.
-            try
-            {
-                _completionLock.Release();
-            }
-            catch (ObjectDisposedException)
-            {
-            }
+            TryReleaseCompletionLock();
         }
     }
 
@@ -861,14 +844,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         }
         finally
         {
-            // Guard against ObjectDisposedException: same race as the sync path.
-            try
-            {
-                _completionLock.Release();
-            }
-            catch (ObjectDisposedException)
-            {
-            }
+            TryReleaseCompletionLock();
         }
     }
 
@@ -892,14 +868,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             {
                 action();
 
-                if (markCommitted)
-                {
-                    Interlocked.Exchange(ref _committed, 1);
-                }
-                else
-                {
-                    Interlocked.Exchange(ref _rolledBack, 1);
-                }
+                MarkCompleted(markCommitted);
             }
             catch (OperationCanceledException)
             {
@@ -911,10 +880,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             {
                 // Do NOT reset _completedState — connection is already closed in finally.
                 // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
-                throw new TransactionException(
-                    $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
-                    _context.Product, ex,
-                    isTransient: (ex as DatabaseException)?.IsTransient);
+                throw CompletionFailed(ex, markCommitted);
             }
             finally
             {
@@ -952,14 +918,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             {
                 await action().ConfigureAwait(false);
 
-                if (markCommitted)
-                {
-                    Interlocked.Exchange(ref _committed, 1);
-                }
-                else
-                {
-                    Interlocked.Exchange(ref _rolledBack, 1);
-                }
+                MarkCompleted(markCommitted);
             }
             catch (OperationCanceledException)
             {
@@ -971,10 +930,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             {
                 // Do NOT reset _completedState — connection is already closed in finally.
                 // Leaving it as 1 (completed) prevents Dispose from attempting rollback on a dead connection.
-                throw new TransactionException(
-                    $"Transaction {(markCommitted ? "commit" : "rollback")} failed on {_context.Product}: {ex.Message}",
-                    _context.Product, ex,
-                    isTransient: (ex as DatabaseException)?.IsTransient);
+                throw CompletionFailed(ex, markCommitted);
             }
             finally
             {
@@ -1086,11 +1042,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                     }
                     finally
                     {
-                        try
-                        {
-                            _completionLock.Release();
-                        }
-                        catch (ObjectDisposedException)
+                        if (!TryReleaseCompletionLock())
                         {
                             shouldDisposeLock = false;
                         }
@@ -1211,11 +1163,7 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
                     }
                     finally
                     {
-                        try
-                        {
-                            _completionLock.Release();
-                        }
-                        catch (ObjectDisposedException)
+                        if (!TryReleaseCompletionLock())
                         {
                             shouldDisposeLock = false;
                         }

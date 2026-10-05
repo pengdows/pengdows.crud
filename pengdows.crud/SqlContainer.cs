@@ -1304,48 +1304,17 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
             commandFailed = true;
-            metrics?.CommandTimedOut(startTimestamp);
-            activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
-            var translated = TranslateDatabaseException(ex, operationKind);
-            AddSanitizedExceptionEvent(activity, translated);
-            throw translated;
+            throw CommandTimedOut(ex, metrics, startTimestamp, activity, operationKind);
         }
         catch (Exception ex) when (ex is not DatabaseException)
         {
             commandFailed = true;
-            if (!LooksLikeProviderException(ex))
+            if (CommandFailed(ex, metrics, startTimestamp, activity, operationKind) is { } translated)
             {
-                metrics?.CommandFailed(startTimestamp);
-                if (metrics != null)
-                {
-                    metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
-                }
-
-                if (activity != null)
-                {
-                    activity.SetStatus(ActivityStatusCode.Error);
-                }
-
-                AddSanitizedExceptionEvent(activity, ex);
-
-                throw;
+                throw translated;
             }
 
-            metrics?.CommandFailed(startTimestamp);
-            var translated = TranslateDatabaseException(ex, operationKind);
-            if (metrics != null)
-            {
-                metrics.RecordDbError(ClassifyTranslatedException(translated));
-            }
-
-            if (activity != null)
-            {
-                activity.SetStatus(ActivityStatusCode.Error);
-            }
-
-            AddSanitizedExceptionEvent(activity, translated);
-
-            throw translated;
+            throw;
         }
         finally
         {
@@ -1796,11 +1765,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         catch (Exception ex) when (ex is not DatabaseException && IsTimeout(ex))
         {
             commandFailed = true;
-            metrics?.CommandTimedOut(startTimestamp);
-            activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
-            var translated = TranslateDatabaseException(ex, operationKind);
-            AddSanitizedExceptionEvent(activity, translated);
-            throw translated;
+            throw CommandTimedOut(ex, metrics, startTimestamp, activity, operationKind);
         }
         catch (OverflowException ex) when (_dialect is SqlDialect { DecodesResultRowsAtExecute: true })
         {
@@ -1818,39 +1783,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         catch (Exception ex) when (ex is not DatabaseException)
         {
             commandFailed = true;
-            if (!LooksLikeProviderException(ex))
+            if (CommandFailed(ex, metrics, startTimestamp, activity, operationKind) is { } translated)
             {
-                metrics?.CommandFailed(startTimestamp);
-                if (metrics != null)
-                {
-                    metrics.RecordDbError(_context.GetDialect().ClassifyException(ex));
-                }
-
-                if (activity != null)
-                {
-                    activity.SetStatus(ActivityStatusCode.Error);
-                }
-
-                AddSanitizedExceptionEvent(activity, ex);
-
-                throw;
+                throw translated;
             }
 
-            metrics?.CommandFailed(startTimestamp);
-            var translated = TranslateDatabaseException(ex, operationKind);
-            if (metrics != null)
-            {
-                metrics.RecordDbError(ClassifyTranslatedException(translated));
-            }
-
-            if (activity != null)
-            {
-                activity.SetStatus(ActivityStatusCode.Error);
-            }
-
-            AddSanitizedExceptionEvent(activity, translated);
-
-            throw translated;
+            throw;
         }
         finally
         {
@@ -2182,6 +2120,39 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
         var typeName = exception.GetType().FullName;
         return typeName != null && Array.IndexOf(KnownNonDbExceptionProviderExceptionTypeNames, typeName) >= 0;
+    }
+
+    // The failure handling ExecuteNonQueryAsync and ExecuteReaderAsyncInternal share (DRY-017): each
+    // records the metrics and the activity and returns what to throw, so the catch keeps its throw.
+
+    private DatabaseException CommandTimedOut(Exception ex, MetricsCollector? metrics, long startTimestamp,
+        Activity? activity, DbOperationKind operationKind)
+    {
+        metrics?.CommandTimedOut(startTimestamp);
+        activity?.SetStatus(ActivityStatusCode.Error, "Timeout");
+        var translated = TranslateDatabaseException(ex, operationKind);
+        AddSanitizedExceptionEvent(activity, translated);
+        return translated;
+    }
+
+    // The translated provider failure, or null for an exception that isn't the provider's, which
+    // propagates as itself.
+    private DatabaseException? CommandFailed(Exception ex, MetricsCollector? metrics, long startTimestamp,
+        Activity? activity, DbOperationKind operationKind)
+    {
+        metrics?.CommandFailed(startTimestamp);
+        activity?.SetStatus(ActivityStatusCode.Error);
+        if (!LooksLikeProviderException(ex))
+        {
+            metrics?.RecordDbError(_context.GetDialect().ClassifyException(ex));
+            AddSanitizedExceptionEvent(activity, ex);
+            return null;
+        }
+
+        var translated = TranslateDatabaseException(ex, operationKind);
+        metrics?.RecordDbError(ClassifyTranslatedException(translated));
+        AddSanitizedExceptionEvent(activity, translated);
+        return translated;
     }
 
     private DatabaseException TranslateDatabaseException(Exception exception, DbOperationKind operationKind)
