@@ -75,23 +75,7 @@ public abstract partial class BaseTableGateway<TEntity>
             var sc = BuildBatchInsertContainer(chunk, insertableColumns, ctx, dialect, overridesSystemIdentity);
 
             // Append ON CONFLICT clause
-            sc.Query.Append(" ON CONFLICT (");
-            for (var i = 0; i < conflictColumns.Count; i++)
-            {
-                if (i > 0)
-                {
-                    sc.Query.Append(", ");
-                }
-
-                sc.Query.Append(dialect.WrapSimpleName(conflictColumns[i].Name));
-            }
-
-            sc.Query.Append(") DO UPDATE SET ").Append(updateFragment);
-
-            if (versionWhere != null)
-            {
-                sc.Query.Append(' ').Append(versionWhere);
-            }
+            AppendOnConflictClause(sc.Query, dialect, conflictColumns, updateFragment, versionWhere);
 
             result.Add(sc);
         }
@@ -200,5 +184,30 @@ public abstract partial class BaseTableGateway<TEntity>
 
         TrackBatchContainer(sc, chunk);
         return sc;
+    }
+
+    /// <summary>
+    /// Appends <c> ON CONFLICT (keys) DO UPDATE SET fragment [WHERE version guard]</c>, the tail of every
+    /// ON CONFLICT upsert, single-row and batch.
+    /// </summary>
+    private protected static void AppendOnConflictClause(ISqlQueryBuilder query, ISqlDialect dialect,
+        IReadOnlyList<IColumnInfo> conflictColumns, string? updateFragment, string? versionWhere)
+    {
+        query.Append(" ON CONFLICT (");
+        for (var i = 0; i < conflictColumns.Count; i++)
+        {
+            if (i > 0)
+            {
+                query.Append(", ");
+            }
+
+            query.Append(dialect.WrapSimpleName(conflictColumns[i].Name));
+        }
+
+        query.Append(") DO UPDATE SET ").Append(updateFragment);
+        if (versionWhere != null)
+        {
+            query.Append(' ').Append(versionWhere);
+        }
     }
 }

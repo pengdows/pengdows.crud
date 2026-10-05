@@ -198,25 +198,10 @@ public partial class TableGateway<TEntity, TRowID>
 
             sc.Query.Append(" VALUES (")
                 .Append(valSb.AsSpan())
-                .Append(") ON CONFLICT (");
-
-            for (var i = 0; i < conflictCols.Count; i++)
-            {
-                if (i > 0)
-                {
-                    sc.Query.Append(", ");
-                }
-                sc.Query.Append(dialect.WrapSimpleName(conflictCols[i].Name));
-            }
-
-            sc.Query.Append(") DO UPDATE SET ")
-                .Append(template.UpsertUpdateFragmentOnConflict);
-
+                .Append(")");
             // The version guard the batch upsert uses too: none for an opaque version (DRY-016).
-            if (template.UpsertOnConflictVersionWhere != null)
-            {
-                sc.Query.Append(' ').Append(template.UpsertOnConflictVersionWhere);
-            }
+            AppendOnConflictClause(sc.Query, dialect, conflictCols, template.UpsertUpdateFragmentOnConflict,
+                template.UpsertOnConflictVersionWhere);
 
             sc.AddParameters(parameters);
             return sc;

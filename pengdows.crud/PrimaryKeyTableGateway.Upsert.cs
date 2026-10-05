@@ -243,25 +243,8 @@ public partial class PrimaryKeyTableGateway<TEntity>
         var sc = context.CreateSqlContainer();
         var parameters = AppendInsertIntoColumnsAndValues(sc, dialect, insertableColumns, entity);
 
-        sc.Query.Append(" ON CONFLICT (");
-
-        var pkCols = _tableInfo.PrimaryKeys;
-        for (var i = 0; i < pkCols.Count; i++)
-        {
-            if (i > 0)
-            {
-                sc.Query.Append(", ");
-            }
-
-            sc.Query.Append(dialect.WrapSimpleName(pkCols[i].Name));
-        }
-
-        sc.Query.Append(") DO UPDATE SET ").Append(template.UpsertUpdateFragmentOnConflict);
-
-        if (template.UpsertOnConflictVersionWhere != null)
-        {
-            sc.Query.Append(" ").Append(template.UpsertOnConflictVersionWhere);
-        }
+        AppendOnConflictClause(sc.Query, dialect, _tableInfo.PrimaryKeys, template.UpsertUpdateFragmentOnConflict,
+            template.UpsertOnConflictVersionWhere);
 
         sc.AddParameters(parameters);
         return sc;
