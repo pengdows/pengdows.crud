@@ -39,7 +39,9 @@ public class ReusableAsyncLockerTests
     [Fact]
     public async Task Lock_Contended_WaitsUntilReleased()
     {
-        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        // The blocking Lock() runs on its own thread: on a pool thread, a loaded full-suite run could
+        // starve it (and the deadline below) and fail the test without a locking defect.
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30));
         var semaphore = new SemaphoreSlim(1, 1);
         var locker = new ReusableAsyncLocker(semaphore);
 
@@ -47,11 +49,11 @@ public class ReusableAsyncLockerTests
         await semaphore.WaitAsync(cts.Token);
 
         var acquired = false;
-        var task = Task.Run(() =>
+        var task = Task.Factory.StartNew(() =>
         {
             locker.Lock(); // Goes to slow path (lines 51-52)
             acquired = true;
-        });
+        }, CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
 
         await Task.Delay(50, cts.Token);
         Assert.False(acquired);

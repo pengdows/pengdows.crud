@@ -39,10 +39,6 @@ public partial class PrimaryKeyTableGateway<TEntity> :
         _pkTemplatesByDialect.Remove(dialect);
     }
 
-    // Batch SQL can group multiple entities into a single container. Keep the ownership metadata
-    // weakly attached to that container so a partial batch failure restores audit fields only for
-    // containers that never completed, without extending the container's lifetime.
-    private readonly ConditionalWeakTable<ISqlContainer, IReadOnlyList<TEntity>> _batchContainerEntities = new();
 
     /// <summary>Cached SQL fragments specific to PK-based operations.</summary>
     private sealed class PkTemplates

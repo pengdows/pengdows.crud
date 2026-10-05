@@ -95,29 +95,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return await CreateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false) ? 1 : 0;
         }
 
-        var auditSnapshots = _hasAuditColumns
-            ? entities.Select(SnapshotAuditFields).ToArray()
-            : Array.Empty<AuditFieldSnapshot>();
-        var containers = BuildBatchCreate(entities, ctx);
-        var total = 0;
-        var completedContainers = 0;
-        try
-        {
-            foreach (var sc in containers)
-            {
-                await using var owned = sc;
-                cancellationToken.ThrowIfCancellationRequested();
-                total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-                completedContainers++;
-            }
-        }
-        catch
-        {
-            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
-            throw;
-        }
-
-        return total;
+        var auditSnapshots = SnapshotBatchAuditFields(entities);
+        return await ExecuteBatchAsync(entities, BuildBatchCreate(entities, ctx), auditSnapshots,
+            BatchCheck.None, ctx, cancellationToken).ConfigureAwait(false);
     }
 
     // =========================================================================
@@ -211,15 +191,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
-        var containers = BuildBatchDelete(entities, ctx);
-        var total = 0;
-        foreach (var sc in containers)
-        {
-            await using var owned = sc;
-            cancellationToken.ThrowIfCancellationRequested();
-            total += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-        }
-
-        return total;
+        return await ExecuteBatchAsync(Array.Empty<TEntity>(), BuildBatchDelete(entities, ctx),
+            null, BatchCheck.None, ctx, cancellationToken).ConfigureAwait(false);
     }
 }

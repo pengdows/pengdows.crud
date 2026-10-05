@@ -37,7 +37,6 @@ namespace pengdows.crud;
 /// </summary>
 public partial class TableGateway<TEntity, TRowID>
 {
-    private readonly ConditionalWeakTable<ISqlContainer, IReadOnlyList<TEntity>> _batchContainerEntities = new();
     /// <inheritdoc/>
     public IReadOnlyList<ISqlContainer> BuildBatchCreate(
         IReadOnlyList<TEntity> entities, IDatabaseContext? context = null)
@@ -134,31 +133,9 @@ public partial class TableGateway<TEntity, TRowID>
             return success ? 1 : 0;
         }
 
-        var auditSnapshots = _hasAuditColumns
-            ? entities.Select(SnapshotAuditFields).ToArray()
-            : Array.Empty<AuditFieldSnapshot>();
-        var containers = BuildBatchCreate(entities, ctx);
-        var totalAffected = 0;
-        var completedContainers = 0;
-
-        try
-        {
-            foreach (var sc in containers)
-            {
-                await using var owned = sc;
-                cancellationToken.ThrowIfCancellationRequested();
-                totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
-                    .ConfigureAwait(false);
-                completedContainers++;
-            }
-        }
-        catch
-        {
-            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
-            throw;
-        }
-
-        return totalAffected;
+        var auditSnapshots = SnapshotBatchAuditFields(entities);
+        return await ExecuteBatchAsync(entities, BuildBatchCreate(entities, ctx), auditSnapshots,
+            BatchCheck.None, ctx, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -215,31 +192,9 @@ public partial class TableGateway<TEntity, TRowID>
             return affected;
         }
 
-        var auditSnapshots = _hasAuditColumns
-            ? entities.Select(SnapshotAuditFields).ToArray()
-            : Array.Empty<AuditFieldSnapshot>();
-        var containers = BuildBatchUpdate(entities, ctx);
-        var totalAffected = 0;
-        var completedContainers = 0;
-
-        try
-        {
-            foreach (var sc in containers)
-            {
-                await using var owned = sc;
-                cancellationToken.ThrowIfCancellationRequested();
-                totalAffected += await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
-                    .ConfigureAwait(false);
-                completedContainers++;
-            }
-        }
-        catch
-        {
-            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
-            throw;
-        }
-
-        return totalAffected;
+        var auditSnapshots = SnapshotBatchAuditFields(entities);
+        return await ExecuteBatchAsync(entities, BuildBatchUpdate(entities, ctx), auditSnapshots,
+            BatchCheck.None, ctx, cancellationToken).ConfigureAwait(false);
     }
 
     /// <inheritdoc/>
@@ -446,44 +401,9 @@ public partial class TableGateway<TEntity, TRowID>
         // MERGE-family dialects use one container per entity. Preserve successful entities'
         // prepared audit state while restoring only the first container that did not execute and
         // every container after it if execution aborts partway through the batch.
-        var auditSnapshots = _hasAuditColumns
-            ? entities.Select(SnapshotAuditFields).ToArray()
-            : Array.Empty<AuditFieldSnapshot>();
-        var containers = BuildBatchUpsert(entities, ctx);
-        var totalAffected = 0;
-        var completedContainers = 0;
-        var versionConflictDetectionApplies = BatchUpsertCanDetectVersionConflict(ctx);
-
-        try
-        {
-            foreach (var sc in containers)
-            {
-                await using var owned = sc;
-                cancellationToken.ThrowIfCancellationRequested();
-                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken)
-                    .ConfigureAwait(false);
-
-                // A guarded upsert that skips a stale row reports it as not affected. ON DUPLICATE
-                // KEY (MySQL family) and Firebird carry no guard, so they are excluded.
-                if (versionConflictDetectionApplies &&
-                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities) &&
-                    affected < chunkEntities.Count)
-                {
-                    throw BatchVersionConflict(ctx, chunkEntities, affected);
-                }
-
-                totalAffected += affected;
-                completedContainers++;
-            }
-        }
-        catch
-        {
-            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
-
-            throw;
-        }
-
-        return totalAffected;
+        var auditSnapshots = SnapshotBatchAuditFields(entities);
+        return await ExecuteBatchAsync(entities, BuildBatchUpsert(entities, ctx), auditSnapshots,
+            BatchUpsertCanDetectVersionConflict(ctx) ? BatchCheck.UpsertGuard : BatchCheck.None, ctx, cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -746,45 +666,4 @@ public partial class TableGateway<TEntity, TRowID>
         return result;
     }
 
-    private void TrackBatchContainer(ISqlContainer container, IReadOnlyList<TEntity> entities)
-    {
-        _batchContainerEntities.Remove(container);
-        _batchContainerEntities.Add(container, entities);
-    }
-
-    private void RestoreBatchAuditFields(
-        IReadOnlyList<ISqlContainer> containers,
-        int firstUnexecutedContainer,
-        IReadOnlyList<TEntity> entities,
-        IReadOnlyList<AuditFieldSnapshot> snapshots)
-    {
-        if (!_hasAuditColumns)
-        {
-            return;
-        }
-
-        // Each entity's snapshot by reference identity, built once (its first position, as the
-        // linear search found): the search per entity made the restore O(N x chunk) (REV-065).
-        var snapshotIndex = new Dictionary<TEntity, int>(entities.Count, ReferenceEqualityComparer.Instance);
-        for (var entityIndex = 0; entityIndex < entities.Count; entityIndex++)
-        {
-            snapshotIndex.TryAdd(entities[entityIndex], entityIndex);
-        }
-
-        for (var containerIndex = firstUnexecutedContainer; containerIndex < containers.Count; containerIndex++)
-        {
-            if (!_batchContainerEntities.TryGetValue(containers[containerIndex], out var chunk))
-            {
-                continue;
-            }
-
-            foreach (var entity in chunk)
-            {
-                if (snapshotIndex.TryGetValue(entity, out var entityIndex))
-                {
-                    RestoreAuditFields(entity, snapshots[entityIndex]);
-                }
-            }
-        }
-    }
 }

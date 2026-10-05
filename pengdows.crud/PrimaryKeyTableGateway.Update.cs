@@ -183,49 +183,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return await UpdateAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
-        var auditSnapshots = _hasAuditColumns
-            ? entities.Select(SnapshotAuditFields).ToArray()
-            : Array.Empty<AuditFieldSnapshot>();
-        var containers = BuildBatchUpdate(entities, ctx);
-        var total = 0;
-        var completedContainers = 0;
-        try
-        {
-            foreach (var sc in containers)
-            {
-                await using var owned = sc;
-                cancellationToken.ThrowIfCancellationRequested();
-                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-
-                // BuildBatchUpdate builds one container per entity for this gateway, and an
-                // UPDATE's WHERE clause deterministically matches or doesn't, so 0 affected on a
-                // versioned container is a version conflict (or a deleted row) on that entity.
-                if (_versionColumn != null && affected == 0 &&
-                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities))
-                {
-                    throw BatchVersionConflict(ctx, chunkEntities, affected);
-                }
-
-                // This container's UPDATE succeeded, so its [Version] increment took effect.
-                if (affected != 0 && _batchContainerEntities.TryGetValue(sc, out var updatedEntities))
-                {
-                    foreach (var entity in updatedEntities)
-                    {
-                        WriteBackIncrementedVersion(entity);
-                    }
-                }
-
-                total += affected;
-                completedContainers++;
-            }
-        }
-        catch
-        {
-            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
-            throw;
-        }
-
-        return total;
+        var auditSnapshots = SnapshotBatchAuditFields(entities);
+        return await ExecuteBatchAsync(entities, BuildBatchUpdate(entities, ctx), auditSnapshots,
+            BatchCheck.Update, ctx, cancellationToken).ConfigureAwait(false);
     }
 
     // =========================================================================

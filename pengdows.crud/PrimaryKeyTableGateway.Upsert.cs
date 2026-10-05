@@ -222,40 +222,9 @@ public partial class PrimaryKeyTableGateway<TEntity>
             return await UpsertAsync(entities[0], ctx, cancellationToken).ConfigureAwait(false);
         }
 
-        var auditSnapshots = _hasAuditColumns
-            ? entities.Select(SnapshotAuditFields).ToArray()
-            : Array.Empty<AuditFieldSnapshot>();
-        var containers = BuildBatchUpsert(entities, ctx);
-        var total = 0;
-        var completedContainers = 0;
-        var versionConflictDetectionApplies = BatchUpsertCanDetectVersionConflict(ctx);
-        try
-        {
-            foreach (var sc in containers)
-            {
-                await using var owned = sc;
-                cancellationToken.ThrowIfCancellationRequested();
-                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
-
-                // A guarded upsert that skips a stale row reports it as not affected.
-                if (versionConflictDetectionApplies &&
-                    _batchContainerEntities.TryGetValue(sc, out var chunkEntities) &&
-                    affected < chunkEntities.Count)
-                {
-                    throw BatchVersionConflict(ctx, chunkEntities, affected);
-                }
-
-                total += affected;
-                completedContainers++;
-            }
-        }
-        catch
-        {
-            RestoreBatchAuditFields(containers, completedContainers, entities, auditSnapshots);
-            throw;
-        }
-
-        return total;
+        var auditSnapshots = SnapshotBatchAuditFields(entities);
+        return await ExecuteBatchAsync(entities, BuildBatchUpsert(entities, ctx), auditSnapshots,
+            BatchUpsertCanDetectVersionConflict(ctx) ? BatchCheck.UpsertGuard : BatchCheck.None, ctx, cancellationToken).ConfigureAwait(false);
     }
 
     // =========================================================================
@@ -684,45 +653,4 @@ public partial class PrimaryKeyTableGateway<TEntity>
         return sc;
     }
 
-    private void TrackBatchContainer(ISqlContainer container, IReadOnlyList<TEntity> entities)
-    {
-        _batchContainerEntities.Remove(container);
-        _batchContainerEntities.Add(container, entities);
-    }
-
-    private void RestoreBatchAuditFields(
-        IReadOnlyList<ISqlContainer> containers,
-        int firstUnexecutedContainer,
-        IReadOnlyList<TEntity> entities,
-        IReadOnlyList<AuditFieldSnapshot> snapshots)
-    {
-        if (!_hasAuditColumns)
-        {
-            return;
-        }
-
-        // Each entity's snapshot by reference identity, built once (its first position, as the
-        // linear search found): the search per entity made the restore O(N x chunk) (REV-065).
-        var snapshotIndex = new Dictionary<TEntity, int>(entities.Count, ReferenceEqualityComparer.Instance);
-        for (var entityIndex = 0; entityIndex < entities.Count; entityIndex++)
-        {
-            snapshotIndex.TryAdd(entities[entityIndex], entityIndex);
-        }
-
-        for (var containerIndex = firstUnexecutedContainer; containerIndex < containers.Count; containerIndex++)
-        {
-            if (!_batchContainerEntities.TryGetValue(containers[containerIndex], out var chunk))
-            {
-                continue;
-            }
-
-            foreach (var entity in chunk)
-            {
-                if (snapshotIndex.TryGetValue(entity, out var entityIndex))
-                {
-                    RestoreAuditFields(entity, snapshots[entityIndex]);
-                }
-            }
-        }
-    }
 }
