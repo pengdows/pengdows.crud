@@ -626,16 +626,7 @@ internal sealed class InformixDialect : SqlDialect
     // its own confirmed SET TRANSACTION READ ONLY support.
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
 
-    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
-    {
-        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "Informix");
-    }
-
-    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "Informix", cancellationToken);
-    }
+    protected override string? ReadOnlyTransactionSql => SetTransactionReadOnlySql;
 
     // No ApplicationName-equivalent connection-string keyword exists on
     // Informix.Net.Core.IfxConnectionStringBuilder (CONFIRMED via reflection, 51 properties

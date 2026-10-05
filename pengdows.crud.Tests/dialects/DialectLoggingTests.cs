@@ -34,7 +34,7 @@ public class DialectLoggingTests
 
         Assert.Contains(provider.Entries,
             // A Warning: the transaction is not read-only at the database (REV-051).
-            e => e.Level == LogLevel.Warning && e.Message.Contains("Failed to apply MariaDB read-only session settings"));
+            e => e.Level == LogLevel.Warning && e.Message.Contains("Failed to apply MariaDb read-only session settings"));
     }
 
     private sealed class FakeOracleConnection : IDbConnection

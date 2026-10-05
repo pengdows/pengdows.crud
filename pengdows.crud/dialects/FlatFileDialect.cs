@@ -211,17 +211,7 @@ internal class FlatFileDialect : SqlDialect
     public override bool SupportsReadOnlyTransactions => true;
 
     /// <inheritdoc cref="SupportsReadOnlyTransactions"/>
-    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
-    {
-        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "FlatFile");
-    }
-
-    /// <inheritdoc cref="SupportsReadOnlyTransactions"/>
-    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "FlatFile", cancellationToken);
-    }
+    protected override string? ReadOnlyTransactionSql => SetTransactionReadOnlySql;
 
     /// <summary>
     /// pengdows.flatfile has no stored-procedure/trigger/control-flow support at all (confirmed:

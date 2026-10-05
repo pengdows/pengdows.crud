@@ -2523,15 +2523,25 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return ex is NotSupportedException or InvalidOperationException;
     }
 
+    /// <summary>
+    /// The statement that makes a read-only transaction read-only at the database, sent when one
+    /// begins (a failure is logged, not thrown); none by default.
+    /// </summary>
+    protected virtual string? ReadOnlyTransactionSql => null;
+
     public virtual void TryEnterReadOnlyTransaction(ITransactionContext transaction)
     {
+        if (ReadOnlyTransactionSql is { } sql)
+        {
+            TryExecuteReadOnlySql(transaction, sql, DatabaseType.ToString());
+        }
     }
 
     public virtual ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return ValueTask.CompletedTask;
-    }
+        CancellationToken cancellationToken = default) =>
+        ReadOnlyTransactionSql is { } sql
+            ? TryExecuteReadOnlySqlAsync(transaction, sql, DatabaseType.ToString(), cancellationToken)
+            : ValueTask.CompletedTask;
 
     /// <summary>
     /// Returns SQL to reset the session back to read-write after a read-only transaction completes.

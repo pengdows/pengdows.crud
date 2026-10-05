@@ -609,16 +609,7 @@ internal class MySqlDialect : SqlDialect
         ProductInfo.ParsedVersion is { } version &&
         version >= UpsertAliasVersionThreshold;
 
-    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
-    {
-        TryExecuteReadOnlySql(transaction, SetSessionReadOnlySql, "MySQL");
-    }
-
-    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return TryExecuteReadOnlySqlAsync(transaction, SetSessionReadOnlySql, "MySQL", cancellationToken);
-    }
+    protected override string? ReadOnlyTransactionSql => SetSessionReadOnlySql;
 
     // Connection pooling properties for MySQL (provider-aware)
     // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)

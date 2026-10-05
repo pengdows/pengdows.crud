@@ -172,16 +172,7 @@ internal class MariaDbDialect : MySqlDialect
 
     internal override string? GetReadOnlyTransactionResetSql() => MariaDbReadWriteSql;
 
-    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
-    {
-        TryExecuteReadOnlySql(transaction, MariaDbReadOnlySql, "MariaDB");
-    }
-
-    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return TryExecuteReadOnlySqlAsync(transaction, MariaDbReadOnlySql, "MariaDB", cancellationToken);
-    }
+    protected override string? ReadOnlyTransactionSql => MariaDbReadOnlySql;
 
     private bool IsAtLeast(int major, int minor)
     {

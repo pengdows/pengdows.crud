@@ -393,16 +393,7 @@ internal sealed class HanaDialect : SqlDialect
     // it was a flat syntax error on both Db2 and Sybase ASE this same session.
     private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
 
-    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
-    {
-        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "SAP HANA");
-    }
-
-    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "SAP HANA", cancellationToken);
-    }
+    protected override string? ReadOnlyTransactionSql => SetTransactionReadOnlySql;
 
     // Isolation-level data: GetSupportedIsolationLevels/GetIsolationProfileMapping at the end of this file.
 

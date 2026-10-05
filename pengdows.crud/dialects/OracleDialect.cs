@@ -554,16 +554,7 @@ internal class OracleDialect : SqlDialect
     public override SqlStandardLevel DetermineStandardCompliance(Version? version) =>
         version == null ? SqlStandardLevel.Sql2003 : base.DetermineStandardCompliance(version);
 
-    public override void TryEnterReadOnlyTransaction(ITransactionContext transaction)
-    {
-        TryExecuteReadOnlySql(transaction, SetTransactionReadOnlySql, "Oracle");
-    }
-
-    public override ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
-        CancellationToken cancellationToken = default)
-    {
-        return TryExecuteReadOnlySqlAsync(transaction, SetTransactionReadOnlySql, "Oracle", cancellationToken);
-    }
+    protected override string? ReadOnlyTransactionSql => SetTransactionReadOnlySql;
 
     // Connection pooling properties for Oracle
     // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
