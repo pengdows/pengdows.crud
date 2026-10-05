@@ -352,7 +352,7 @@ public partial class DatabaseContext
             return null;
         }
 
-        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        var governor = GovernorFor(executionType);
         if (governor == null)
         {
             ThrowIfGovernorMissingAfterDisposal();
@@ -410,6 +410,62 @@ public partial class DatabaseContext
     {
         return GetStandardConnectionWithExecutionType(executionType, isShared);
     }
+
+    /// <summary>
+    /// Opens <paramref name="connection"/> unless it is open, under the connection-open gate where the
+    /// provider needs opens serialized (DuckDB). One copy for commands and transactions (DRY-017).
+    /// </summary>
+    internal static void OpenConnection(IDatabaseContext context, ITrackedConnection connection)
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            using var openLock = dbContext.GetConnectionOpenLock();
+            openLock.Lock();
+            if (connection.State != ConnectionState.Open)
+            {
+                connection.Open();
+            }
+
+            return;
+        }
+
+        connection.Open();
+    }
+
+    /// <inheritdoc cref="OpenConnection"/>
+    internal static async ValueTask OpenConnectionAsync(IDatabaseContext context, ITrackedConnection connection,
+        CancellationToken cancellationToken)
+    {
+        if (connection.State == ConnectionState.Open)
+        {
+            return;
+        }
+
+        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
+        {
+            await using var openLock = dbContext.GetConnectionOpenLock();
+            await openLock.LockAsync(cancellationToken).ConfigureAwait(false);
+            if (connection.State != ConnectionState.Open)
+            {
+                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return;
+        }
+
+        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    // The reader pool's governor and connection string serve reads; the writer's everything else.
+    private PoolGovernor? GovernorFor(ExecutionType executionType) =>
+        executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+
+    private string ConnectionStringFor(bool useReader) => useReader ? _readerConnectionString : _connectionString;
 
     internal ILockerAsync GetConnectionOpenLock()
     {
@@ -551,7 +607,7 @@ public partial class DatabaseContext
         {
             var roIntent = executionType == ExecutionType.Read;
             var useReader = roIntent && ShouldUseReadOnlyForReadIntent() && HasDedicatedReadConnectionString();
-            var connectionString = useReader ? _readerConnectionString : _connectionString;
+            var connectionString = ConnectionStringFor(useReader);
             var conn = FactoryCreateConnection(executionType, connectionString, isShared, slot);
             return conn;
         }
@@ -582,7 +638,7 @@ public partial class DatabaseContext
         {
             var roIntent = executionType == ExecutionType.Read;
             var useReader = roIntent && ShouldUseReadOnlyForReadIntent() && HasDedicatedReadConnectionString();
-            var connectionString = useReader ? _readerConnectionString : _connectionString;
+            var connectionString = ConnectionStringFor(useReader);
             var conn = FactoryCreateConnection(executionType, connectionString, isShared, slot);
             return conn;
         }
@@ -803,7 +859,7 @@ public partial class DatabaseContext
         var useReader = roIntent && ShouldUseReadOnlyForReadIntent() && HasDedicatedReadConnectionString();
 
         var activeConnectionString = string.IsNullOrWhiteSpace(connectionString)
-            ? (useReader ? _readerConnectionString : _connectionString)
+            ? ConnectionStringFor(useReader)
             : connectionString;
 
         if (_logger.IsEnabled(LogLevel.Debug))
@@ -905,7 +961,7 @@ public partial class DatabaseContext
             return default;
         }
 
-        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        var governor = GovernorFor(executionType);
         if (governor == null)
         {
             ThrowIfGovernorMissingAfterDisposal();
@@ -931,7 +987,7 @@ public partial class DatabaseContext
             return default;
         }
 
-        var governor = executionType == ExecutionType.Read ? _readerGovernor : _writerGovernor;
+        var governor = GovernorFor(executionType);
         if (governor == null)
         {
             ThrowIfGovernorMissingAfterDisposal();

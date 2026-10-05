@@ -295,27 +295,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return gate;
     }
 
-    private static void OpenConnectionWithOptionalLock(IDatabaseContext context, ITrackedConnection connection)
-    {
-        if (connection.State == ConnectionState.Open)
-        {
-            return;
-        }
-
-        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
-        {
-            using var openLock = dbContext.GetConnectionOpenLock();
-            openLock.Lock();
-            if (connection.State != ConnectionState.Open)
-            {
-                connection.Open();
-            }
-
-            return;
-        }
-
-        connection.Open();
-    }
+    private static void OpenConnectionWithOptionalLock(IDatabaseContext context, ITrackedConnection connection) =>
+        DatabaseContext.OpenConnection(context, connection);
 
     /// <inheritdoc/>
     public Guid TransactionId { get; } = Guid.NewGuid();
@@ -1283,28 +1264,9 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         return tx;
     }
 
-    private static async ValueTask OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
+    private static ValueTask OpenConnectionWithOptionalLockAsync(IDatabaseContext context,
         ITrackedConnection connection,
-        CancellationToken cancellationToken)
-    {
-        if (connection.State == ConnectionState.Open)
-        {
-            return;
-        }
-
-        if (context is DatabaseContext dbContext && dbContext.RequiresSerializedOpen)
-        {
-            await using var openLock = dbContext.GetConnectionOpenLock();
-            await openLock.LockAsync(cancellationToken).ConfigureAwait(false);
-            if (connection.State != ConnectionState.Open)
-            {
-                await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-            }
-
-            return;
-        }
-
-        await connection.OpenAsync(cancellationToken).ConfigureAwait(false);
-    }
+        CancellationToken cancellationToken) =>
+        DatabaseContext.OpenConnectionAsync(context, connection, cancellationToken);
 
 }
