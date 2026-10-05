@@ -203,7 +203,7 @@ internal class SqlServerDialect : SqlDialect
 
         // GetBytes returns SQL Server's stored spatial encoding (TYPE-002).
         var geography = type == typeof(Geography);
-        var (srid, wkb) = types.converters.SqlServerSpatialFormat.Decode(UnresolvedColumnReader.ReadBytes(record, ordinal), geography);
+        var (srid, wkb) = types.converters.SqlServerSpatialFormat.Decode(TypeCoercionHelper.ReadBytes(record, ordinal), geography);
         return geography ? Geography.FromWellKnownBinary(wkb, srid) : Geometry.FromWellKnownBinary(wkb, srid);
     }
 

@@ -522,7 +522,7 @@ internal class PostgreSqlDialect : SqlDialect
 
     internal override object ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type)
     {
-        var bytes = UnresolvedColumnReader.ReadBytes(record, ordinal);
+        var bytes = TypeCoercionHelper.ReadBytes(record, ordinal);
         if (type == typeof(float[]))
         {
             // pgvector's binary format: int16 dimensions, int16 unused, then big-endian float4s.

@@ -48,7 +48,7 @@ internal static class ProviderValueFieldReader
         {
             if (_readBytes)
             {
-                return record.IsDBNull(ordinal) ? DBNull.Value : ReadGuidBytes(record, ordinal, _bigEndian);
+                return record.IsDBNull(ordinal) ? DBNull.Value : TypeCoercionHelper.ReadGuidFromBytes(record, ordinal, _bigEndian);
             }
 
             try
@@ -57,23 +57,11 @@ internal static class ProviderValueFieldReader
             }
             catch (InvalidCastException)
             {
-                var guid = ReadGuidBytes(record, ordinal, _bigEndian);
+                var guid = TypeCoercionHelper.ReadGuidFromBytes(record, ordinal, _bigEndian);
                 _readBytes = true;
                 return guid;
             }
         }
-    }
-
-    private static Guid ReadGuidBytes(IDataRecord record, int ordinal, bool bigEndian)
-    {
-        var bytes = UnresolvedColumnReader.ReadBytes(record, ordinal);
-        if (bytes.Length != 16)
-        {
-            throw new InvalidCastException(
-                $"Column {ordinal} can't be read as a Guid: the provider refused its value and its bytes are {bytes.Length} long, not 16.");
-        }
-
-        return new Guid(bytes, bigEndian);
     }
 
     /// <summary>
