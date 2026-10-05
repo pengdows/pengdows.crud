@@ -12,7 +12,7 @@
 //   anything else gets the Sql92Dialect fallback. TimescaleDB has no separate value and
 //   uses PostgreSqlDialect.
 // - CreateTraits() maps each SupportedDatabase value to the instance-free DatabaseTraits its
-//   dialect class declares (REV-039); keep it in step with CreateDialectForType().
+//   dialect class declares (REV-039); both read the one Registrations table.
 // - CreateDialectAsync() initializes the dialect via DetectDatabaseInfoAsync();
 //   CreateDialectForType() returns it uninitialized.
 // =============================================================================
@@ -107,75 +107,52 @@ internal static class SqlDialectFactory
         return dialect;
     }
 
+    // One row per database: its dialect and its instance-free traits, so the two can't fall out of
+    // step (DRY-019: they were two parallel switches). Anything else gets the SQL-92 fallback.
+    private static readonly Dictionary<SupportedDatabase,
+        (Func<DbProviderFactory, ILogger, ISqlDialect> Create, Func<DatabaseTraits> Traits)> Registrations = new()
+    {
+        [SupportedDatabase.SqlServer] = (static (factory, logger) => new SqlServerDialect(factory, logger), static () => SqlServerDialect.CreateSqlServerTraits()),
+        [SupportedDatabase.PostgreSql] = (static (factory, logger) => new PostgreSqlDialect(factory, logger), static () => PostgreSqlDialect.CreatePostgreSqlTraits()),
+        [SupportedDatabase.CockroachDb] = (static (factory, logger) => new CockroachDbDialect(factory, logger), static () => CockroachDbDialect.CreateCockroachDbTraits()),
+        [SupportedDatabase.YugabyteDb] = (static (factory, logger) => new YugabyteDbDialect(factory, logger), static () => YugabyteDbDialect.CreateYugabyteDbTraits()),
+        [SupportedDatabase.TiDb] = (static (factory, logger) => new TiDbDialect(factory, logger), static () => TiDbDialect.CreateTiDbTraits()),
+        [SupportedDatabase.MySql] = (static (factory, logger) => new MySqlDialect(factory, logger), static () => MySqlDialect.CreateMySqlTraits()),
+        [SupportedDatabase.AuroraMySql] = (static (factory, logger) => new MySqlDialect(factory, logger, SupportedDatabase.AuroraMySql), static () => MySqlDialect.CreateAuroraMySqlTraits()),
+        [SupportedDatabase.SingleStore] = (static (factory, logger) => new MySqlDialect(factory, logger, SupportedDatabase.SingleStore), static () => MySqlDialect.CreateSingleStoreTraits()),
+        [SupportedDatabase.MariaDb] = (static (factory, logger) => new MariaDbDialect(factory, logger), static () => MariaDbDialect.CreateMariaDbTraits()),
+        [SupportedDatabase.Sqlite] = (static (factory, logger) => new SqliteDialect(factory, logger), static () => SqliteDialect.CreateSqliteTraits()),
+        [SupportedDatabase.Oracle] = (static (factory, logger) => new OracleDialect(factory, logger), static () => OracleDialect.CreateOracleTraits()),
+        [SupportedDatabase.Firebird] = (static (factory, logger) => new FirebirdDialect(factory, logger), static () => FirebirdDialect.CreateFirebirdTraits()),
+        [SupportedDatabase.DuckDB] = (static (factory, logger) => new DuckDbDialect(factory, logger), static () => DuckDbDialect.CreateDuckDbTraits()),
+        [SupportedDatabase.Snowflake] = (static (factory, logger) => new SnowflakeDialect(factory, logger), static () => SnowflakeDialect.CreateSnowflakeTraits()),
+        [SupportedDatabase.AuroraPostgreSql] = (static (factory, logger) => new PostgreSqlDialect(factory, logger, SupportedDatabase.AuroraPostgreSql), static () => PostgreSqlDialect.CreateAuroraPostgreSqlTraits()),
+        [SupportedDatabase.FlatFile] = (static (factory, logger) => new FlatFileDialect(factory, logger), static () => FlatFileDialect.CreateFlatFileTraits()),
+        [SupportedDatabase.SybaseASE] = (static (factory, logger) => new SybaseAseDialect(factory, logger), static () => SybaseAseDialect.CreateSybaseAseTraits()),
+        [SupportedDatabase.Db2] = (static (factory, logger) => new Db2Dialect(factory, logger), static () => Db2Dialect.CreateDb2Traits()),
+        [SupportedDatabase.Informix] = (static (factory, logger) => new InformixDialect(factory, logger), static () => InformixDialect.CreateInformixTraits()),
+        [SupportedDatabase.SapHana] = (static (factory, logger) => new HanaDialect(factory, logger), static () => HanaDialect.CreateSapHanaTraits()),
+        [SupportedDatabase.InterBase] = (static (factory, logger) => new InterBaseDialect(factory, logger), static () => InterBaseDialect.CreateInterBaseTraits()),
+        [SupportedDatabase.Spanner] = (static (factory, logger) => new SpannerDialect(factory, logger), static () => SpannerDialect.CreateSpannerTraits()),
+        [SupportedDatabase.Access] = (static (factory, logger) => new AccessDialect(factory, logger), static () => AccessDialect.CreateAccessTraits()),
+    };
+
     public static ISqlDialect CreateDialectForType(
         SupportedDatabase databaseType,
         DbProviderFactory factory,
-        ILogger logger)
-    {
-        return databaseType switch
-        {
-            SupportedDatabase.SqlServer => new SqlServerDialect(factory, logger),
-            SupportedDatabase.PostgreSql => new PostgreSqlDialect(factory, logger),
-            SupportedDatabase.CockroachDb => new CockroachDbDialect(factory, logger),
-            SupportedDatabase.YugabyteDb => new YugabyteDbDialect(factory, logger),
-            SupportedDatabase.TiDb => new TiDbDialect(factory, logger),
-            SupportedDatabase.MySql => new MySqlDialect(factory, logger),
-            SupportedDatabase.AuroraMySql => new MySqlDialect(factory, logger, SupportedDatabase.AuroraMySql),
-            SupportedDatabase.SingleStore => new MySqlDialect(factory, logger, SupportedDatabase.SingleStore),
-            SupportedDatabase.MariaDb => new MariaDbDialect(factory, logger),
-            SupportedDatabase.Sqlite => new SqliteDialect(factory, logger),
-            SupportedDatabase.Oracle => new OracleDialect(factory, logger),
-            SupportedDatabase.Firebird => new FirebirdDialect(factory, logger),
-            SupportedDatabase.DuckDB => new DuckDbDialect(factory, logger),
-            SupportedDatabase.Snowflake => new SnowflakeDialect(factory, logger),
-            SupportedDatabase.AuroraPostgreSql => new PostgreSqlDialect(factory, logger, SupportedDatabase.AuroraPostgreSql),
-            SupportedDatabase.FlatFile => new FlatFileDialect(factory, logger),
-            SupportedDatabase.SybaseASE => new SybaseAseDialect(factory, logger),
-            SupportedDatabase.Db2 => new Db2Dialect(factory, logger),
-            SupportedDatabase.Informix => new InformixDialect(factory, logger),
-            SupportedDatabase.SapHana => new HanaDialect(factory, logger),
-            SupportedDatabase.InterBase => new InterBaseDialect(factory, logger),
-            SupportedDatabase.Spanner => new SpannerDialect(factory, logger),
-            SupportedDatabase.Access => new AccessDialect(factory, logger),
-            _ => new Sql92Dialect(factory, logger)
-        };
-    }
+        ILogger logger) =>
+        Registrations.TryGetValue(databaseType, out var registration)
+            ? registration.Create(factory, logger)
+            : new Sql92Dialect(factory, logger);
 
     /// <summary>
     /// The instance-free traits of <paramref name="databaseType"/>, declared by the dialect class
-    /// that hosts it (REV-039). Mirrors <see cref="CreateDialectForType"/>; read through
-    /// <see cref="DatabaseTraits.For"/>, which builds them once.
+    /// that hosts it (REV-039); read through <see cref="DatabaseTraits.For"/>, which builds them once.
     /// </summary>
-    internal static DatabaseTraits CreateTraits(SupportedDatabase databaseType)
-    {
-        return databaseType switch
-        {
-            SupportedDatabase.SqlServer => SqlServerDialect.CreateSqlServerTraits(),
-            SupportedDatabase.PostgreSql => PostgreSqlDialect.CreatePostgreSqlTraits(),
-            SupportedDatabase.CockroachDb => CockroachDbDialect.CreateCockroachDbTraits(),
-            SupportedDatabase.YugabyteDb => YugabyteDbDialect.CreateYugabyteDbTraits(),
-            SupportedDatabase.TiDb => TiDbDialect.CreateTiDbTraits(),
-            SupportedDatabase.MySql => MySqlDialect.CreateMySqlTraits(),
-            SupportedDatabase.AuroraMySql => MySqlDialect.CreateAuroraMySqlTraits(),
-            SupportedDatabase.SingleStore => MySqlDialect.CreateSingleStoreTraits(),
-            SupportedDatabase.MariaDb => MariaDbDialect.CreateMariaDbTraits(),
-            SupportedDatabase.Sqlite => SqliteDialect.CreateSqliteTraits(),
-            SupportedDatabase.Oracle => OracleDialect.CreateOracleTraits(),
-            SupportedDatabase.Firebird => FirebirdDialect.CreateFirebirdTraits(),
-            SupportedDatabase.DuckDB => DuckDbDialect.CreateDuckDbTraits(),
-            SupportedDatabase.Snowflake => SnowflakeDialect.CreateSnowflakeTraits(),
-            SupportedDatabase.AuroraPostgreSql => PostgreSqlDialect.CreateAuroraPostgreSqlTraits(),
-            SupportedDatabase.FlatFile => FlatFileDialect.CreateFlatFileTraits(),
-            SupportedDatabase.SybaseASE => SybaseAseDialect.CreateSybaseAseTraits(),
-            SupportedDatabase.Db2 => Db2Dialect.CreateDb2Traits(),
-            SupportedDatabase.Informix => InformixDialect.CreateInformixTraits(),
-            SupportedDatabase.SapHana => HanaDialect.CreateSapHanaTraits(),
-            SupportedDatabase.InterBase => InterBaseDialect.CreateInterBaseTraits(),
-            SupportedDatabase.Spanner => SpannerDialect.CreateSpannerTraits(),
-            SupportedDatabase.Access => AccessDialect.CreateAccessTraits(),
-            _ => Sql92Dialect.CreateFallbackTraits()
-        };
-    }
+    internal static DatabaseTraits CreateTraits(SupportedDatabase databaseType) =>
+        Registrations.TryGetValue(databaseType, out var registration)
+            ? registration.Traits()
+            : Sql92Dialect.CreateFallbackTraits();
 
     private static SupportedDatabase InferDatabaseTypeFromProvider(DbProviderFactory factory)
     {
