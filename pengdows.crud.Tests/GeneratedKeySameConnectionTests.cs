@@ -22,12 +22,25 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public sealed class GeneratedKeySameConnectionTests
 {
-    private static (DatabaseContext Context, fakeDbFactory Factory, fakeDbConnection Exec) CreateInformix()
+    // The first gateway call learns the table's declared column types (TYPE-020): on its own
+    // connection, or inside a transaction on the transaction's, where it reads the first queued result.
+    private static (DatabaseContext Context, fakeDbFactory Factory, fakeDbConnection Exec) CreateInformix(
+        bool inTransaction = false)
     {
         var factory = new fakeDbFactory(SupportedDatabase.Informix);
         factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.Informix });
+        if (!inTransaction)
+        {
+            factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.Informix });
+        }
+
         var exec = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Informix };
         exec.ScalarResolver = sql => sql.Contains("DBINFO", StringComparison.Ordinal) ? 42L : null;
+        if (inTransaction)
+        {
+            exec.EnqueueReaderResult(Array.Empty<Dictionary<string, object?>>());
+        }
+
         exec.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["id"] = 42L } });
         factory.Connections.Add(exec);
         var context = new DatabaseContext(new DatabaseContextConfiguration
@@ -77,7 +90,7 @@ public sealed class GeneratedKeySameConnectionTests
     [Fact]
     public async Task CreateAsync_SessionScopedFunction_InsideATransaction_UsesTheTransactionConnection()
     {
-        var (context, factory, exec) = CreateInformix();
+        var (context, factory, exec) = CreateInformix(inTransaction: true);
         await using var _ = context;
         var gateway = new TableGateway<Widget, long>(context);
 
@@ -101,6 +114,7 @@ public sealed class GeneratedKeySameConnectionTests
         var factory = new fakeDbFactory(SupportedDatabase.Informix);
         var shared = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Informix };
         shared.ScalarResolver = sql => sql.Contains("DBINFO", StringComparison.Ordinal) ? 42L : null;
+        shared.EnqueueReaderResult(Array.Empty<Dictionary<string, object?>>()); // the declared-type probe (TYPE-020)
         shared.EnqueueReaderResult(new[] { new Dictionary<string, object?> { ["id"] = 42L } });
         factory.Connections.Add(shared);
         await using var context = new DatabaseContext(new DatabaseContextConfiguration

@@ -61,6 +61,8 @@ public sealed class InformixBigSerialReadTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.Informix);
         factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.Informix });
+        // The first gateway call learns the table's declared column types (TYPE-020) on its own connection.
+        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.Informix });
         var exec = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Informix };
         exec.EnqueueReaderResult(new fakeDbDataReader(new[]
         {

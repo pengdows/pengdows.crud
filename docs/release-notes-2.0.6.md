@@ -51,7 +51,15 @@
   `NotSupportedException` ("does not support a Object column in the source row") or failed with
   "Value does not match the type of column". The MERGE now carries only the key columns in its
   source and binds every other value directly in `UPDATE SET` and `INSERT VALUES`, where the column
-  types it (WRT-004, WRT-005). `BYTE`, `BLOB` and `CLOB` upserts still fail (WRT-006).
+  types it (WRT-004, WRT-005).
+- Informix `BLOB`, `CLOB`, `TEXT`, `BYTE`, `BSON` and `DATETIME HOUR TO FRACTION(n)` columns now
+  round-trip through every gateway path. 2.0.5 failed `BLOB`/`CLOB` updates and upserts and small
+  `BLOB`/`CLOB` inserts ("Illegal attempt to use Text/Byte host variable"), `TEXT` writes, `BYTE`/`TEXT`
+  upserts and `BSON` writes, and truncated a time of day to whole seconds. With the column's declared type
+  (above), `TEXT` is bound as `IfxType.Text`, `BSON` goes through `::JSON::BSON` and is read as `::JSON`, a
+  time of day is written as text cast to the column's type, and `BLOB`/`CLOB` values (and `BYTE`/`TEXT`
+  values in a MERGE) are staged in a session temp table, `pengdows_lob_stage`, and read back by key
+  (WRT-006, TYPE-020, TYPE-022).
 
 ## Reads that now work
 

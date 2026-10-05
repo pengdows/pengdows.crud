@@ -591,7 +591,8 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     /// </summary>
     /// <summary>
     /// The MERGE pieces for a dialect that binds values directly (<c>SqlDialect.MergeBindsValuesDirectly</c>,
-    /// WRT-004): the source holds only <paramref name="keyColumns"/>; UPDATE SET and INSERT VALUES use
+    /// WRT-004): the source holds <paramref name="keyColumns"/> (plus any column the dialect sources,
+    /// <c>SqlDialect.MergeSourcesColumn</c>); UPDATE SET and INSERT VALUES use
     /// each other column's parameter as a <c>{P}name</c> token, so a value used in both is bound at
     /// each use, in order, on a positional provider.
     /// </summary>
@@ -612,11 +613,23 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             index[columns[i]] = i;
         }
 
-        var keyPlaceholders = new string[keyColumns.Count];
-        for (var i = 0; i < keyColumns.Count; i++)
+        var keys = new HashSet<IColumnInfo>(keyColumns);
+        var sourceColumns = new List<IColumnInfo>(keyColumns);
+        foreach (var column in columns)
         {
-            keyPlaceholders[i] = Token(index[keyColumns[i]]);
+            if (!keys.Contains(column) && sqlDialect.MergeSourcesColumn(column))
+            {
+                sourceColumns.Add(column);
+            }
         }
+
+        var sourcePlaceholders = new string[sourceColumns.Count];
+        for (var i = 0; i < sourceColumns.Count; i++)
+        {
+            sourcePlaceholders[i] = Token(index[sourceColumns[i]]);
+        }
+
+        var inSource = new HashSet<IColumnInfo>(sourceColumns);
 
         var targetAlias = dialect.MergeUpdateRequiresTargetAlias ? "t." : "";
         var update = new System.Text.StringBuilder();
@@ -627,10 +640,10 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
                 update.Append(", ");
             }
 
-            update.Append(targetAlias).Append(dialect.WrapSimpleName(column.Name)).Append(" = ").Append(Token(index[column]));
+            update.Append(targetAlias).Append(dialect.WrapSimpleName(column.Name)).Append(" = ")
+                .Append(inSource.Contains(column) ? "s." + dialect.WrapSimpleName(column.Name) : Token(index[column]));
         }
 
-        var keys = new HashSet<IColumnInfo>(keyColumns);
         var values = new System.Text.StringBuilder();
         for (var i = 0; i < columns.Count; i++)
         {
@@ -639,10 +652,10 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
                 values.Append(", ");
             }
 
-            values.Append(keys.Contains(columns[i]) ? "s." + dialect.WrapSimpleName(columns[i].Name) : Token(i));
+            values.Append(inSource.Contains(columns[i]) ? "s." + dialect.WrapSimpleName(columns[i].Name) : Token(i));
         }
 
-        return (sqlDialect.RenderMergeSourceFromPlaceholders(keyColumns, keyPlaceholders), update.ToString(), values.ToString());
+        return (sqlDialect.RenderMergeSourceFromPlaceholders(sourceColumns, sourcePlaceholders), update.ToString(), values.ToString());
     }
 
     private protected static string ReuseParametersForUnreliableIncoming(ISqlDialect dialect, string fragment,

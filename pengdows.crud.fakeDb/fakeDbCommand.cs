@@ -561,7 +561,9 @@ public class fakeDbCommand : DbCommand
 
     protected override DbParameter CreateDbParameter()
     {
-        return new fakeDbParameter();
+        // Like a real provider's command, the parameter is the provider's own type, so a factory's
+        // parameter-metadata emulation (Npgsql, Informix, ...) applies here too.
+        return (Connection as fakeDbConnection)?.FactoryReference?.CreateParameter() ?? new fakeDbParameter();
     }
 
     protected override void Dispose(bool disposing)
@@ -579,7 +581,13 @@ public class fakeDbCommand : DbCommand
         var parameters = new List<CapturedParameter>(_parameterCollection.Count);
         foreach (DbParameter parameter in _parameterCollection)
         {
-            parameters.Add(new CapturedParameter(parameter.ParameterName, parameter.Value) { DbType = parameter.DbType });
+            parameters.Add(new CapturedParameter(parameter.ParameterName, parameter.Value)
+            {
+                DbType = parameter.DbType,
+                ProviderType = parameter is fakeDbInformixParameter { IfxType: not fakeIfxType.Unset } informix
+                    ? informix.IfxType.ToString()
+                    : null
+            });
         }
 
         return new CapturedCommand(CommandText, parameters);

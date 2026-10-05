@@ -12,6 +12,12 @@ public sealed record CapturedParameter(string Name, object? Value)
     /// The parameter's DbType when the command executed (what a real provider would bind it as).
     /// </summary>
     public DbType DbType { get; init; }
+
+    /// <summary>
+    /// The provider-specific type a dialect stamped on the parameter (for example an emulated
+    /// <c>IfxType</c>, see <see cref="fakeDbInformixParameter"/>), by name; null when none was set.
+    /// </summary>
+    public string? ProviderType { get; init; }
 }
 
 /// <summary>

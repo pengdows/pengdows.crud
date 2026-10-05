@@ -132,8 +132,10 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   is fetched with the row; `DbType.DateTime2`/`DbType.Xml` are remapped. Firebird: `TIME WITH TIME ZONE` from a
   `DateTimeOffset` with `DbType.Time`; `BINARY`/`VARBINARY` read as `byte[]` (TYPE-002).
 - SingleStore: spatial as WKT (`GEOGRAPHYPOINT` ~1e-7°), `VECTOR` written as JSON text / read from packed float32.
-  Spanner: Guid sent untyped, uuid read from bytes, arrays read with nullable elements. Known gaps: Informix `TEXT`/`BSON`
-  and `BOOLEAN` in `WHERE` (TYPE-020), Informix time-of-day fractions (driver, TYPE-022). ASE `BIGDATETIME`/`BIGTIME` round-trip to the microsecond through the gateways (`DateTime2`/`DateTimeOffset` bound as text, `CONVERT(BIGTIME, ...)` writes, `CONVERT(VARCHAR, col, 140/137)` reads); in your own SQL compare a `BIGTIME` with `CONVERT(BIGTIME, {P}p)` (TYPE-022).
+  Spanner: Guid sent untyped, uuid read from bytes, arrays read with nullable elements. Informix `TEXT`/`BYTE`/`BLOB`/`CLOB`/`BSON` and
+  `HOUR TO FRACTION(n)` work through the gateways via declared types (`TEXT` as `IfxType.Text`, `BSON` via `::JSON::BSON`/`::JSON`,
+  `BLOB`/`CLOB` and MERGE `BYTE`/`TEXT` staged in temp table `pengdows_lob_stage`; WRT-006/TYPE-020); known gaps: `BOOLEAN` in user `WHERE`
+  (compare with `'t'`/`'f'`) and a `TimeSpan` parameter in user SQL (driver truncates to seconds; TYPE-022). ASE `BIGDATETIME`/`BIGTIME` round-trip to the microsecond through the gateways (`DateTime2`/`DateTimeOffset` bound as text, `CONVERT(BIGTIME, ...)` writes, `CONVERT(VARCHAR, col, 140/137)` reads); in your own SQL compare a `BIGTIME` with `CONVERT(BIGTIME, {P}p)` (TYPE-022).
 - Snowflake: `VARIANT`/`OBJECT`/`ARRAY` written as `PARSE_JSON(:p)`, with inserts/MERGE source/batch update values from a
   `SELECT` (Snowflake refuses it in `VALUES`); spatial as EWKT both ways; `TIMESTAMP_LTZ`/`TZ` read as the exact
   `DateTimeOffset`. `VECTOR` needs the column's type (TYPE-020).

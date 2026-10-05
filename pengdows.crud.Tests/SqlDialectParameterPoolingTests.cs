@@ -32,6 +32,24 @@ public class SqlDialectParameterPoolingTests
         Assert.Null(secondProvider.DataTypeName);
     }
 
+    // WRT-006, found live on Informix: the staged-LOB marker rides on SourceColumn, so a pooled
+    // parameter that kept it made the next plain parameter look staged ("Illegal attempt to
+    // convert Text/Byte blob type" on an UPDATE ... WHERE id = ?).
+    [Fact]
+    public void CreateDbParameter_ReusedParameterClearsSourceColumn()
+    {
+        var dialect = new TestDialect(new FakeProviderFactory());
+
+        var first = dialect.CreateDbParameter("p0", DbType.Binary, new byte[] { 1 });
+        first.SourceColumn = "marker";
+        dialect.ReturnParameterToPool(first);
+
+        var second = dialect.CreateDbParameter("p1", DbType.Int32, 2);
+
+        Assert.Same(first, second);
+        Assert.Equal(string.Empty, second.SourceColumn);
+    }
+
     /// <summary>
     /// Regression test: Npgsql tracks whether NpgsqlDbType was explicitly set.
     /// Setting NpgsqlDbType=0 via reflection marks it as "explicitly set", causing

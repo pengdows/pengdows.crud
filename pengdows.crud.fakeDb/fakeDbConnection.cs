@@ -550,6 +550,9 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         _factoryRef = factory;
     }
 
+    /// <summary>The factory that created this connection, when one did.</summary>
+    internal fakeDbFactory? FactoryReference => _factoryRef;
+
     /// <summary>
     /// Simulates a broken connection by setting state to Broken
     /// </summary>

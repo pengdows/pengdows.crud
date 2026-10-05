@@ -51,6 +51,10 @@ Beyond the built-in schemas:
 - `SetEmulatedTypeName(string)`/`TypeNameStartsWith(string)` — fake `GetType().FullName`, for code
   that string-matches a connection's type name (e.g. checking for `"Npgsql."`) without a real
   provider assembly present.
+- `fakeDbFactory.EmulatesNpgsqlParameterMetadata` / `EmulatesInterBaseParameterMetadata` /
+  `EmulatesInformixParameterMetadata` — parameters (from the factory and from a command's
+  `CreateParameter()`) carry the provider's own type property (`NpgsqlDbType`/`DataTypeName`,
+  `IBDbType`, `IfxType`), so a test can see what a dialect stamps on them.
 - `SchemaTable` — bypass the embedded schema entirely and hand fakeDb an arbitrary
   `DataSourceProductName`/`Version` pair that doesn't correspond to any real emulated product.
 
@@ -198,7 +202,8 @@ The point of most of the above is to reach an assertion afterward. On `fakeDbCon
 - `fakeDbFactory.ThrowOnStateChangeAccessAfterDispose = true` (or the same property on `fakeDbConnection`) — adding or removing a `StateChange` handler after the connection is disposed throws `ObjectDisposedException`, as AdoNetCore.AseClient's `AseConnection` does
 - `ExecutedNonQueryCommands`/`ExecutedReaderCommands` (`List<CapturedCommand>`, where
   `CapturedCommand` is `(string CommandText, IReadOnlyList<CapturedParameter> Parameters)`) —
-  snapshots the **bound parameter name and value at the exact moment of execution**. This is the
+  snapshots the **bound parameter name and value at the exact moment of execution** (plus its
+  `DbType`, and `ProviderType`: an emulated provider type such as `IfxType`, by name). This is the
   only reliable way to inspect a real bound value when the caller disposes the command before an
   awaited call returns control to you:
 

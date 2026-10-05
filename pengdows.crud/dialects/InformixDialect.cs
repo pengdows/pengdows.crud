@@ -135,6 +135,217 @@ internal sealed class InformixDialect : SqlDialect
         return RenderMergeSourceFromPlaceholders(columns, placeholders);
     }
 
+    // ── Declared column types (TYPE-020, WRT-006, TYPE-022), all confirmed live (Informix 15,
+    // Informix.Net.Core 4.1501): the driver reports each column's declared type through
+    // GetDataTypeName ("TEXT", "BSON", "BLOB", "CLOB", "DATETIME HOUR TO FRACTION(5)"; GetSchemaTable
+    // throws on these tables, "IfxType 99 is invalid").
+    // - TEXT binds only from an IfxType.Text parameter (a string parameter: "Illegal attempt to
+    //   convert Text/Byte blob type").
+    // - BSON is written from JSON text as ?::JSON::BSON and read back as col::JSON.
+    // - DATETIME HOUR TO FRACTION(n) keeps its fraction only from text cast to that type; a TimeSpan
+    //   is truncated to whole seconds by the driver.
+    // - BLOB/CLOB take no host variable below ~9,000 bytes on INSERT and none at any size on UPDATE,
+    //   and the driver's locator API fails (GetIfxBlob + Open: an empty IfxException, then a native
+    //   crash). A session temp table with BYTE/TEXT columns does take them, and BYTE::BLOB /
+    //   TEXT::CLOB convert, so the value is staged there (PrepareCommandAsync) and the statement reads
+    //   it back by key: (SELECT b::BLOB FROM pengdows_lob_stage WHERE k = ?) — INSERT, UPDATE and
+    //   both MERGE arms, any size (50 KB live).
+    private const string StageTable = "pengdows_lob_stage";
+    private const string StagedBlob = "\u0001pengdows:stage:b";
+    private const string StagedClob = "\u0001pengdows:stage:c";
+    // BYTE/TEXT: staged only for a MERGE, whose source alone takes them; INSERT and UPDATE bind them
+    // directly and refuse the staged subquery ("A blob data type must be supplied within this context").
+    private const string StagedBlobInMerge = "\u0001pengdows:stage:b:merge";
+    private const string StagedClobInMerge = "\u0001pengdows:stage:c:merge";
+
+    private static bool IsStringOrBytes(IColumnInfo column)
+    {
+        var type = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        return type == typeof(string) || type == typeof(byte[]);
+    }
+
+    internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
+        forRead ? !column.IsEnum && IsStringOrBytes(column) : (!column.IsEnum && IsStringOrBytes(column)) || column.DbType == DbType.Time;
+
+    private bool DeclaredAs(IColumnInfo column, string type) =>
+        string.Equals(DeclaredTypeOf(column), type, StringComparison.OrdinalIgnoreCase);
+
+    // The n of a declared DATETIME HOUR TO FRACTION(n) time column, or null.
+    private int? FractionDigits(IColumnInfo column)
+    {
+        if (column.DbType != DbType.Time || DeclaredTypeOf(column) is not { } declared ||
+            !declared.StartsWith("DATETIME HOUR TO FRACTION", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var open = declared.IndexOf('(');
+        return open > 0 && int.TryParse(declared.AsSpan(open + 1, declared.Length - open - 2), out var n) ? n : 3;
+    }
+
+    // The stage column a declared BYTE/BLOB ('b') or TEXT/CLOB ('c') value goes through, and the cast
+    // that reads it back as the target's type ("" for BYTE/TEXT themselves); null for other columns.
+    private (char Stage, string Cast)? Staged(IColumnInfo column) => DeclaredTypeOf(column) switch
+    {
+        { } t when t.Equals("BLOB", StringComparison.OrdinalIgnoreCase) => ('b', "::BLOB"),
+        { } t when t.Equals("BYTE", StringComparison.OrdinalIgnoreCase) => ('b', ""),
+        { } t when t.Equals("CLOB", StringComparison.OrdinalIgnoreCase) => ('c', "::CLOB"),
+        { } t when t.Equals("TEXT", StringComparison.OrdinalIgnoreCase) => ('c', ""),
+        _ => null
+    };
+
+    // MERGE takes a BYTE/TEXT value only from a staged subquery in its source (live: a host variable or
+    // a subquery in its UPDATE SET fails, "Illegal attempt to use Text/Byte host variable" / "A blob
+    // data type must be supplied within this context"); BLOB/CLOB bind directly like the other values.
+    internal override bool MergeSourcesColumn(IColumnInfo column) => Staged(column) is { Cast: "" };
+
+    private static string StagedValue(char stage, string cast, string parameterMarker) =>
+        string.Concat("(SELECT ", stage.ToString(), cast, " FROM ", StageTable, " WHERE k = ", parameterMarker, ")");
+
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        DeclaredAs(column, "BSON") || Staged(column) is { Cast.Length: > 0 } ||
+        FractionDigits(column) != null || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column)
+    {
+        if (DeclaredAs(column, "BSON"))
+        {
+            return string.Concat(parameterMarker, "::JSON::BSON");
+        }
+
+        if (Staged(column) is { Cast.Length: > 0 } staged)
+        {
+            return StagedValue(staged.Stage, staged.Cast, parameterMarker);
+        }
+
+        if (FractionDigits(column) is { } digits)
+        {
+            return string.Concat("CAST(", parameterMarker, " AS DATETIME HOUR TO FRACTION(",
+                digits.ToString(System.Globalization.CultureInfo.InvariantCulture), "))");
+        }
+
+        return base.RenderColumnArgument(parameterMarker, column);
+    }
+
+    internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        DeclaredAs(column, "BSON") ? string.Concat(columnReference, "::JSON AS ", wrappedName) : columnReference;
+
+    internal override bool MarksColumnParameter(IColumnInfo column) =>
+        Staged(column) != null || FractionDigits(column) != null || base.MarksColumnParameter(column);
+
+    public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        base.MarkColumnParameter(parameter, column);
+        if (Staged(column) is { } staged)
+        {
+            var inMergeOnly = staged.Cast.Length == 0;
+            parameter.SourceColumn = staged.Stage == 'b'
+                ? inMergeOnly ? StagedBlobInMerge : StagedBlob
+                : inMergeOnly ? StagedClobInMerge : StagedClob;
+            if (inMergeOnly && staged.Stage == 'c')
+            {
+                ProviderPropertySetter.Set(parameter, "IfxType", "Text");
+            }
+        }
+        else if (FractionDigits(column) is { } digits)
+        {
+            var time = parameter.Value switch
+            {
+                TimeSpan span => span,
+                TimeOnly timeOnly => timeOnly.ToTimeSpan(),
+                _ => (TimeSpan?)null
+            };
+            parameter.DbType = DbType.String;
+            if (time is { } t)
+            {
+                // Truncated to the column's digits, never rounded.
+                var text = t.ToString(@"hh\:mm\:ss", System.Globalization.CultureInfo.InvariantCulture);
+                parameter.Value = digits == 0
+                    ? text
+                    : string.Concat(text, ".", t.ToString("fffffff", System.Globalization.CultureInfo.InvariantCulture)[..digits]);
+            }
+        }
+    }
+
+    internal override bool PreparesCommands => true;
+
+    internal override async ValueTask PrepareCommandAsync(DbCommand command, CancellationToken cancellationToken)
+    {
+        var isMerge = command.CommandText.StartsWith("MERGE", StringComparison.OrdinalIgnoreCase);
+        bool IsStaged(DbParameter parameter) =>
+            parameter.SourceColumn is StagedBlob or StagedClob ||
+            (isMerge && parameter.SourceColumn is StagedBlobInMerge or StagedClobInMerge);
+
+        var any = false;
+        foreach (DbParameter parameter in command.Parameters)
+        {
+            if (IsStaged(parameter))
+            {
+                any = true;
+                break;
+            }
+        }
+
+        if (!any || command.Connection is not { } connection)
+        {
+            return;
+        }
+
+        async Task RunAsync(string sql, params DbParameter[] parameters)
+        {
+            await using var stage = connection.CreateCommand();
+            stage.Transaction = command.Transaction;
+            stage.CommandText = sql;
+            foreach (var p in parameters)
+            {
+                stage.Parameters.Add(p);
+            }
+
+            await stage.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+
+        DbParameter Make(DbCommand owner, DbType type, object? value)
+        {
+            var p = owner.CreateParameter();
+            p.DbType = type;
+            p.Value = value ?? DBNull.Value;
+            return p;
+        }
+
+        await RunAsync($"CREATE TEMP TABLE IF NOT EXISTS {StageTable} (k INT, b BYTE, c TEXT) WITH NO LOG").ConfigureAwait(false);
+        await RunAsync($"DELETE FROM {StageTable}").ConfigureAwait(false);
+        var key = 0;
+        for (var i = 0; i < command.Parameters.Count; i++)
+        {
+            var parameter = command.Parameters[i];
+            if (!IsStaged(parameter))
+            {
+                continue;
+            }
+
+            var blob = parameter.SourceColumn is StagedBlob or StagedBlobInMerge;
+
+            object? keyValue = null;
+            if (parameter.Value is not null and not DBNull)
+            {
+                keyValue = ++key;
+                await using var factoryCommand = connection.CreateCommand();
+                var value = Make(factoryCommand, blob ? DbType.Binary : DbType.String, parameter.Value);
+                if (!blob)
+                {
+                    ProviderPropertySetter.Set(value, "IfxType", "Text");
+                }
+
+                await RunAsync(blob
+                        ? $"INSERT INTO {StageTable} (k, b) VALUES (?, ?)"
+                        : $"INSERT INTO {StageTable} (k, c) VALUES (?, ?)",
+                    Make(factoryCommand, DbType.Int32, keyValue), value).ConfigureAwait(false);
+            }
+
+            command.Parameters[i] = Make(command, DbType.Int32, keyValue);
+        }
+    }
+
     // WRT-004/WRT-005, confirmed live (Informix 15, Informix.Net.Core): INTERVAL, LIST/SET/MULTISET and
     // BOOLEAN values can't go through the source (each needs a CAST to its declared type; a bool
     // binds as SMALLINT, which a BOOLEAN column refuses from the source) but bind directly in UPDATE
@@ -152,9 +363,17 @@ internal sealed class InformixDialect : SqlDialect
                 select.Append(", ");
             }
 
-            select.Append("CAST(").Append(placeholders[i]).Append(" AS ")
-                .Append(GetMergeSourceCastType(columns[i].IsJsonType ? DbType.String : columns[i].DbType))
-                .Append(") AS ").Append(WrapObjectName(columns[i].Name));
+            if (Staged(columns[i]) is { Cast: "" } staged)
+            {
+                select.Append(StagedValue(staged.Stage, "", placeholders[i]));
+            }
+            else
+            {
+                select.Append("CAST(").Append(placeholders[i]).Append(" AS ")
+                    .Append(GetMergeSourceCastType(columns[i].IsJsonType ? DbType.String : columns[i].DbType)).Append(')');
+            }
+
+            select.Append(" AS ").Append(WrapObjectName(columns[i].Name));
         }
 
         select.Append(" FROM sysmaster:sysdual) s");

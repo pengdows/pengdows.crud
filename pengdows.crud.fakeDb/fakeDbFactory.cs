@@ -369,8 +369,19 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             return new fakeDbInterBaseParameter();
         }
 
+        if (EmulatesInformixParameterMetadata)
+        {
+            return new fakeDbInformixParameter();
+        }
+
         return EmulatesNpgsqlParameterMetadata ? new fakeDbNpgsqlParameter() : new fakeDbParameter();
     }
+
+    /// <summary>
+    /// When true, parameters carry Informix.Net.Core's <c>IfxType</c> property (see
+    /// <see cref="fakeDbInformixParameter"/>).
+    /// </summary>
+    public bool EmulatesInformixParameterMetadata { get; set; }
 
     /// <summary>
     /// When true, parameters carry ODP.NET's <c>OracleDbType</c> property, so tests can see what a

@@ -485,6 +485,17 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool MarksColumnParameter(IColumnInfo column) =>
         column.IsJsonType || column.IsEnum || NullParameterDbType(column) != null;
 
+    /// <summary>
+    /// Runs on a command after its parameters are bound and before it executes, on its own connection
+    /// and transaction; a dialect that must move a value out of the command first does it here
+    /// (Informix stages BLOB/CLOB values, WRT-006). Default: nothing.
+    /// </summary>
+    internal virtual ValueTask PrepareCommandAsync(System.Data.Common.DbCommand command, CancellationToken cancellationToken) =>
+        default;
+
+    /// <summary>True when <see cref="PrepareCommandAsync"/> may do anything, so other dialects skip the call.</summary>
+    internal virtual bool PreparesCommands => false;
+
     internal virtual System.Data.Common.DbTransaction? BeginDdlTransaction(System.Data.Common.DbConnection connection,
         TimeSpan? lockWait) => null;
 
@@ -1826,6 +1837,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool MergeBindsValuesDirectly => false;
 
     /// <summary>
+    /// With <see cref="MergeBindsValuesDirectly"/>: true for a non-key column whose value must still go
+    /// through the MERGE source (UPDATE SET and INSERT VALUES then read <c>s.column</c>), as Informix
+    /// needs for BYTE/TEXT.
+    /// </summary>
+    internal virtual bool MergeSourcesColumn(IColumnInfo column) => false;
+
+    /// <summary>
     /// The MERGE source for <paramref name="columns"/> with the given placeholders (already rendered
     /// through <see cref="RenderColumnArgument"/>); used with <see cref="MergeBindsValuesDirectly"/>.
     /// </summary>
@@ -1921,6 +1939,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
             param.ParameterName = string.Empty;
             param.Value = null;
+            // A dialect may mark a parameter through SourceColumn (Informix's staged LOBs, WRT-006).
+            param.SourceColumn = string.Empty;
             // CONFIRMED live: Informix.Net.Core's IfxParameter.set_DbType eagerly validates against
             // its own TypeMap and throws on DbType.Object ("No mapping exists from DbType Object to
             // a known IfxType"). The reset value is transient (CreateDbParameter<T> overwrites it with

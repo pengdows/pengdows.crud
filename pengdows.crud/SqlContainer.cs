@@ -2009,6 +2009,12 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             arrayBindDialect.ConfigureArrayBinding(cmd, ArrayBindRowCount.Value);
         }
 
+        // WRT-006: a dialect may move values out of the command first (Informix BLOB/CLOB staging).
+        if (_dialect is SqlDialect { PreparesCommands: true } preparingDialect)
+        {
+            await preparingDialect.PrepareCommandAsync(cmd, cancellationToken).ConfigureAwait(false);
+        }
+
         if (traceTimings)
         {
             tParamsAdded = Stopwatch.GetTimestamp();
