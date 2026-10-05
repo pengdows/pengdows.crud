@@ -181,6 +181,13 @@ internal static partial class DbExceptionTranslationSupport
         return false;
     }
 
+    /// <summary>
+    /// The magnitude of a provider error code that is reported negative (Db2 and Informix SQLCODEs),
+    /// or null when there is none. Math.Abs threw OverflowException for int.MinValue, inside the error
+    /// path (DRY-018).
+    /// </summary>
+    public static int? Magnitude(int? code) => code is { } c && c != int.MinValue ? Math.Abs(c) : null;
+
     public static int? TryGetErrorCode(Exception exception)
     {
         var type = exception.GetType();

@@ -1,3 +1,5 @@
+using System.Data;
+using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -47,6 +49,37 @@ public class TypeHydrationTests : DatabaseTestBase
     {
         var creator = new TypeHydrationTableCreator(context);
         await creator.CreateTableAsync();
+    }
+
+    // DRY-021: a DateTime declared DbType.DateTimeOffset was bound as NULL on Db2, Informix and Access
+    // and given the host's local offset on SQL Server, Oracle, DuckDB and Snowflake. It binds as the
+    // DateTimeOffset of its instant (Unspecified is UTC) on every database.
+    [SkippableFact]
+    public async Task TypeHydration_DateTimeDeclaredDateTimeOffset_StoresItsUtcInstant()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            var full = new TableGateway<TypeHydrationEntity, long>(context);
+            await full.CreateAsync(MakeTypicalRow(1_010L), context);
+
+            var at = new DateTime(2024, 6, 1, 12, 34, 56, DateTimeKind.Unspecified);
+            var declared = new TableGateway<DateTimeDeclaredOffsetRow, long>(context);
+            Assert.Equal(1, await declared.UpdateAsync(new DateTimeDeclaredOffsetRow { Id = 1_010L, At = at }, context));
+
+            var stored = await full.RetrieveOneAsync(1_010L, context);
+            Assert.NotNull(stored);
+            Assert.Equal(DateTime.SpecifyKind(at, DateTimeKind.Utc), stored!.ColDateTimeOffset.UtcDateTime);
+
+            var readBack = await declared.RetrieveOneAsync(1_010L, context);
+            Assert.Equal(DateTime.SpecifyKind(at, DateTimeKind.Utc), readBack!.At.ToUniversalTime());
+        });
+    }
+
+    [Table("type_hydration")]
+    public class DateTimeDeclaredOffsetRow
+    {
+        [Id][Column("id", DbType.Int64)] public long Id { get; set; }
+        [Column("col_datetimeoffset", DbType.DateTimeOffset)] public DateTime At { get; set; }
     }
 
     // ─────────────────────────────────────────────────────────────────────────

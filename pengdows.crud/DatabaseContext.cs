@@ -150,6 +150,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private StateChangeEventHandler _stateChangeHandler = null!;
     private Action<ITrackedConnection> _firstOpenHandlerRw = null!;
     private Action<ITrackedConnection> _firstOpenHandlerRo = null!;
+
+    // Every TrackedConnection reports a failed open here (TotalConnectionFailures); built once.
+    private Action<Exception>? _openFailedHandler;
     private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRw = null!;
     private Func<ITrackedConnection, CancellationToken, Task> _firstOpenHandlerAsyncRo = null!;
     private DataSourceInformation _dataSourceInfo = null!;

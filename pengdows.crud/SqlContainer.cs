@@ -2140,18 +2140,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
     // provider timeout and silently translates them into CommandTimeoutException whenever they
     // originate from inside an actual command execution (as opposed to, e.g., BeginTransaction,
     // which never reaches this code path) — destroying the documented type-identity contract.
-    private static bool IsTimeout(Exception exception)
-    {
-        if (exception is PoolSaturatedException || exception is ModeContentionException)
-        {
-            return false;
-        }
-
-        return exception is TimeoutException ||
-               exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
-               (exception is DbException &&
-                exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase));
-    }
+    // The translators' check (DRY-017): it walks the inner exceptions, so a provider timeout wrapped
+    // as Npgsql wraps a client-side CommandTimeout is counted as the CommandTimeoutException it becomes.
+    private static bool IsTimeout(Exception exception) =>
+        exception is not (PoolSaturatedException or ModeContentionException) &&
+        pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.LooksLikeTimeout(exception);
 
     /// <summary>
     /// Known non-<see cref="DbException"/> provider exception types that must still be routed

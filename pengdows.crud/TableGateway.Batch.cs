@@ -85,7 +85,7 @@ public partial class TableGateway<TEntity, TRowID>
                 SetAuditFields(entity, false, auditValues);
             }
 
-            PrepareVersionForCreate(entity);
+            InitializeVersion(entity);
         }
 
         // Array binding uses exactly one parameter per column regardless of row count (the array
@@ -469,8 +469,7 @@ public partial class TableGateway<TEntity, TRowID>
                     _batchContainerEntities.TryGetValue(sc, out var chunkEntities) &&
                     affected < chunkEntities.Count)
                 {
-                    throw new ConcurrencyConflictException(
-                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                    throw BatchVersionConflict(ctx, chunkEntities, affected);
                 }
 
                 totalAffected += affected;
@@ -493,60 +492,15 @@ public partial class TableGateway<TEntity, TRowID>
     /// batch operations (by design, for cross-dialect portability), so the affected-row count alone
     /// can't identify which entities were stale.
     /// </summary>
-    private string BuildBatchConflictMessage(IReadOnlyList<TEntity> chunkEntities, int affected)
-    {
-        if (chunkEntities.Count == 1)
-        {
-            return $"Concurrency conflict on {typeof(TEntity).Name} " +
-                   $"({DescribeEntityKeyForConflictMessage(chunkEntities[0])}): version mismatch or row deleted.";
-        }
-
-        return $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) " +
-               $"affected but {affected} succeeded. Which specific entity/entities conflicted cannot be " +
-               "individually identified from this batch SQL shape — no RETURNING/OUTPUT is used for batch " +
-               "operations, by design, for cross-dialect portability. Re-read every entity in this batch " +
-               "from the database before retrying; do not assume only some are stale.";
-    }
-
-    private string DescribeEntityKeyForConflictMessage(TEntity entity)
-    {
-        if (_idColumn != null)
-        {
-            return $"{_idColumn.Name}={_idColumn.MakeParameterValueFromField(entity)}";
-        }
-
-        if (_tableInfo.PrimaryKeys.Count > 0)
-        {
-            return string.Join(", ",
-                _tableInfo.PrimaryKeys.Select(pk => $"{pk.Name}={pk.MakeParameterValueFromField(entity)}"));
-        }
-
-        return "key unknown";
-    }
+    // The [Id] where there is one, else the [PrimaryKey] columns.
+    private protected override string DescribeConflictKey(TEntity entity) =>
+        _idColumn != null
+            ? $"{_idColumn.Name}={_idColumn.MakeParameterValueFromField(entity)}"
+            : base.DescribeConflictKey(entity);
 
     // =========================================================================
     // Private helpers
     // =========================================================================
-
-    private void PrepareVersionForCreate(TEntity entity)
-    {
-        if (_versionColumn == null)
-        {
-            return;
-        }
-
-        var current = _versionColumn.MakeParameterValueFromField(entity);
-        if (current == null || Utils.IsZeroNumeric(current))
-        {
-            var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                         _versionColumn.PropertyInfo.PropertyType;
-            if (Utils.IsZeroNumeric(TypeCoercionHelper.ConvertWithCache(0, target)))
-            {
-                var one = TypeCoercionHelper.ConvertWithCache(1, target);
-                SetColumnValue(_versionColumn, entity, one);
-            }
-        }
-    }
 
     // A writable [Id] upserted into a GENERATED ALWAYS identity column needs OVERRIDING SYSTEM
     // VALUE on dialects that support it; single-row and batch upsert share this rule (BP-117).

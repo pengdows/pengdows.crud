@@ -150,6 +150,26 @@ public class PrimaryKeyTableGatewayTests
     // Helpers
     // -------------------------------------------------------------------------
 
+    // DRY-016 listed PK BatchDeleteAsync as skipping the entry cancellation check; every batch entry
+    // point checks it, before any work and even for an empty batch. Pinned so none of them drifts.
+    [Fact]
+    public async Task BatchMethods_CanceledToken_ThrowBeforeAnyWork()
+    {
+        var gateway = new PrimaryKeyTableGateway<Category>(MakeContext(SupportedDatabase.Sqlite));
+        using var cts = new System.Threading.CancellationTokenSource();
+        cts.Cancel();
+        var one = new[] { new Category { Code = "a", Label = "x" } };
+
+        foreach (var batch in new[] { one, Array.Empty<Category>() })
+        {
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await gateway.BatchCreateAsync(batch, null, cts.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await gateway.BatchUpdateAsync(batch, null, cts.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await gateway.BatchUpsertAsync(batch, null, cts.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await gateway.BatchDeleteAsync(batch, null, cts.Token));
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await ((IPrimaryKeyTableGateway<Category>)gateway).DeleteAsync(batch, null, cts.Token));
+        }
+    }
+
     private static IDatabaseContext MakeContext(SupportedDatabase db)
     {
         var factory = new fakeDbFactory(db);

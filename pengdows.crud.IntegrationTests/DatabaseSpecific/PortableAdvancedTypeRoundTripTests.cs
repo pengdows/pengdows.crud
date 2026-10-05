@@ -122,6 +122,62 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
         });
     }
 
+    // DRY-022: a Stream declared DbType.Binary and a TextReader declared DbType.String (the natural
+    // declarations) failed to build the gateway's templates; only DbType.Object worked. They now get
+    // the dialect's LOB mapping and are sent as their bytes and text, on create and update alike.
+    [SkippableFact]
+    public async Task StreamAndReader_DeclaredBinaryAndString_RoundTripThroughCreateAndUpdate()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            async Task Write(bool update, byte[] content, string notes)
+            {
+                if (provider == SupportedDatabase.TiDb)
+                {
+                    var row = new TiDbDeclaredLobEntity
+                    {
+                        Id = 2, Payload = "{\"a\":1}", Bytes = [1], Content = new MemoryStream(content), Notes = new StringReader(notes)
+                    };
+                    var gateway = new TableGateway<TiDbDeclaredLobEntity, int>(context);
+                    _ = update ? await gateway.UpdateAsync(row, context) : await gateway.CreateAsync(row, context) ? 1 : 0;
+                    return;
+                }
+
+                using var document = JsonDocument.Parse("{\"a\":1}");
+                var entity = new DeclaredLobEntity
+                {
+                    Id = 2, Payload = document, Bytes = [1], Content = new MemoryStream(content), Notes = new StringReader(notes)
+                };
+                var lobs = new TableGateway<DeclaredLobEntity, int>(context);
+                _ = update ? await lobs.UpdateAsync(entity, context) : await lobs.CreateAsync(entity, context) ? 1 : 0;
+            }
+
+            async Task Expect(string step, byte[] content, string notes)
+            {
+                // Read back through the DbType.Object entity, whose reads are verified above.
+                var (stream, reader) = provider == SupportedDatabase.TiDb
+                    ? await new TableGateway<TiDbPortableTypeEntity, int>(context).RetrieveOneAsync(2, context) is { } t
+                        ? (t.Content, t.Notes) : default
+                    : await new TableGateway<PortableAdvancedTypeEntity, int>(context).RetrieveOneAsync(2, context) is { } e
+                        ? (e.Content, e.Notes) : default;
+                Assert.True(stream != null && reader != null, $"{step}: no row");
+                await using (stream)
+                using (reader)
+                {
+                    using var bytes = new MemoryStream();
+                    await stream!.CopyToAsync(bytes);
+                    Assert.Equal(content, bytes.ToArray());
+                    Assert.Equal(notes, await reader!.ReadToEndAsync());
+                }
+            }
+
+            await Write(update: false, [5, 4, 3], $"declared notes for {provider}");
+            await Expect("create", [5, 4, 3], $"declared notes for {provider}");
+            await Write(update: true, [7, 7], "updated");
+            await Expect("update", [7, 7], "updated");
+        });
+    }
+
     private static async Task RoundTripTiDbThroughPortableJsonColumn(IDatabaseContext context)
     {
         var expected = new TiDbPortableTypeEntity
@@ -194,5 +250,45 @@ internal sealed class TiDbPortableTypeEntity
     public Stream Content { get; set; } = null!;
 
     [Column("notes", DbType.Object)]
+    public TextReader Notes { get; set; } = null!;
+}
+
+[Table("portable_advanced_types")]
+internal sealed class DeclaredLobEntity
+{
+    [Id]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("payload", DbType.String)]
+    public JsonDocument Payload { get; set; } = null!;
+
+    [Column("bytes", DbType.Binary)]
+    public byte[] Bytes { get; set; } = [];
+
+    [Column("content", DbType.Binary)]
+    public Stream Content { get; set; } = null!;
+
+    [Column("notes", DbType.String)]
+    public TextReader Notes { get; set; } = null!;
+}
+
+[Table("portable_advanced_types")]
+internal sealed class TiDbDeclaredLobEntity
+{
+    [Id]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("payload", DbType.String)]
+    public string Payload { get; set; } = string.Empty;
+
+    [Column("bytes", DbType.Binary)]
+    public byte[] Bytes { get; set; } = [];
+
+    [Column("content", DbType.Binary)]
+    public Stream Content { get; set; } = null!;
+
+    [Column("notes", DbType.String)]
     public TextReader Notes { get; set; } = null!;
 }

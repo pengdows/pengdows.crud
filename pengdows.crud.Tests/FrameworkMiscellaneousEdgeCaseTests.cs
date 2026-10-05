@@ -322,15 +322,25 @@ public class FrameworkMiscellaneousEdgeCaseTests
         }
     }
 
+    // A provider error whose message says it timed out; the same check the translators use for the
+    // thrown type (DRY-017), so a non-provider exception's wording no longer counts.
+    private sealed class ProviderError : System.Data.Common.DbException
+    {
+        public ProviderError(string message) : base(message)
+        {
+        }
+    }
+
     [Theory]
     [InlineData("Connection timeout occurred")]
     [InlineData("Operation TIMEOUT")]
+    [InlineData("The connection attempt timed out")]
     public void DatabaseContext_IsTimeoutException_DetectsTimeoutInMessage(string message)
     {
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var context = new DatabaseContext("Data Source=test", factory);
-        var exception = new InvalidOperationException(message);
+        var exception = new ProviderError(message);
         var initialTimeouts = context.TotalConnectionTimeoutFailures;
 
         // Act

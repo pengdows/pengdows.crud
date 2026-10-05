@@ -107,6 +107,9 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     private readonly Action<DbConnection>? _onDispose;
     private readonly Action<ITrackedConnection>? _onFirstOpen;
     private readonly Func<ITrackedConnection, CancellationToken, Task>? _onFirstOpenAsync;
+
+    // Told of every failed open (the context's connection-failure counters).
+    private readonly Action<Exception>? _onOpenFailed;
     private readonly StateChangeEventHandler? _onStateChange;
     private readonly SemaphoreSlim? _semaphoreSlim;
     private static readonly TimeSpan SharedDisposeTimeout = TimeSpan.FromSeconds(5);
@@ -246,9 +249,11 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         PoolSlot? slot = null,
         string? namePrefix = null,
         Func<ITrackedConnection, CancellationToken, Task>? onFirstOpenAsync = null,
-        TimeSpan? sharedDisposeTimeout = null
+        TimeSpan? sharedDisposeTimeout = null,
+        Action<Exception>? onOpenFailed = null
     )
     {
+        _onOpenFailed = onOpenFailed;
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
         _onStateChange = onStateChange;
         _onFirstOpen = onFirstOpen;
@@ -409,6 +414,10 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         {
             _connection.Open();
         }
+        catch (Exception ex) when (ReportOpenFailure(ex))
+        {
+            throw; // unreachable: ReportOpenFailure returns false
+        }
         finally
         {
             if (shouldTime)
@@ -511,6 +520,13 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             _onFirstOpen?.Invoke(this);
     }
 
+    // An exception filter: reports the failure without catching it, so the stack is untouched.
+    private bool ReportOpenFailure(Exception exception)
+    {
+        _onOpenFailed?.Invoke(exception);
+        return false;
+    }
+
     public async ValueTask OpenAsync(CancellationToken cancellationToken = default)
     {
         // See the sync Open() guard above for the full rationale — same idempotency contract.
@@ -534,6 +550,10 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         try
         {
             await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ReportOpenFailure(ex))
+        {
+            throw; // unreachable: ReportOpenFailure returns false
         }
         finally
         {

@@ -125,13 +125,10 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 RestoreAuditFields(entity, auditSnapshot);
                 if (_versionColumn != null)
                 {
-                    var canDetect = dialect.SupportsOnConflictWhere
-                        || (dialect.SupportsMerge && dialect.MergeUpsertReportsSkippedVersionRow());
+                    var canDetect = UpsertCanDetectVersionConflict(dialect);
                     if (canDetect)
                     {
-                        throw new ConcurrencyConflictException(
-                            $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                            ctx.Product);
+                        throw VersionConflict(ctx);
                     }
                 }
             }
@@ -245,8 +242,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                     _batchContainerEntities.TryGetValue(sc, out var chunkEntities) &&
                     affected < chunkEntities.Count)
                 {
-                    throw new ConcurrencyConflictException(
-                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                    throw BatchVersionConflict(ctx, chunkEntities, affected);
                 }
 
                 total += affected;
@@ -273,18 +269,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             SetAuditFields(entity, false);
         }
 
-        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())
-        {
-            return;
-        }
-
-        var v = _versionColumn.MakeParameterValueFromField(entity);
-        if (v == null || Utils.IsZeroNumeric(v))
-        {
-            var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                    _versionColumn.PropertyInfo.PropertyType;
-            SetColumnValue(_versionColumn, entity, TypeCoercionHelper.ConvertWithCache(1, t));
-        }
+        InitializeVersion(entity);
     }
 
     private void PrepareForPkUpsert(TEntity entity, IAuditValues? cachedAuditValues)
@@ -294,18 +279,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             SetAuditFields(entity, false, cachedAuditValues);
         }
 
-        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())
-        {
-            return;
-        }
-
-        var v = _versionColumn.MakeParameterValueFromField(entity);
-        if (v == null || Utils.IsZeroNumeric(v))
-        {
-            var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                    _versionColumn.PropertyInfo.PropertyType;
-            SetColumnValue(_versionColumn, entity, TypeCoercionHelper.ConvertWithCache(1, t));
-        }
+        InitializeVersion(entity);
     }
 
     private ISqlContainer BuildPkUpsertOnConflict(TEntity entity, IDatabaseContext context)

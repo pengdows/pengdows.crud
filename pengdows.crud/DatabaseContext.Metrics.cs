@@ -20,6 +20,7 @@
 
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.metrics;
@@ -172,10 +173,16 @@ public partial class DatabaseContext
     /// <param name="exception">The exception that caused the failure</param>
     internal void TrackConnectionFailure(Exception exception)
     {
+        if (exception is OperationCanceledException)
+        {
+            return;
+        }
+
         Interlocked.Increment(ref _totalConnectionFailures);
 
         // Track specific timeout failures
-        if (IsTimeoutException(exception))
+        if (exception is not (PoolSaturatedException or ModeContentionException) &&
+            pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.LooksLikeTimeout(exception))
         {
             Interlocked.Increment(ref _totalConnectionTimeoutFailures);
         }
@@ -189,13 +196,6 @@ public partial class DatabaseContext
     internal void TrackConnectionReuse()
     {
         Interlocked.Increment(ref _totalConnectionsReused);
-    }
-
-    private static bool IsTimeoutException(Exception exception)
-    {
-        return exception is TimeoutException ||
-               exception.GetType().Name.Contains("Timeout", StringComparison.OrdinalIgnoreCase) ||
-               exception.Message.Contains("timeout", StringComparison.OrdinalIgnoreCase);
     }
 
     private DatabaseMetrics CreateMetricsSnapshot()

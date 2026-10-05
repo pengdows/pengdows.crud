@@ -288,6 +288,7 @@ public partial class DatabaseContext
             // configured). No outer try-catch needed here for the sync handlers.
             _firstOpenHandlerRw = tc => ExecuteSessionSettings(tc, false);
             _firstOpenHandlerRo = tc => ExecuteSessionSettings(tc, true);
+            _openFailedHandler = TrackConnectionFailure;
             // The async handlers keep a thin outer catch — NOT to re-catch session-settings
             // failures (ExecuteSessionSettingsAsync already handles those, including the
             // FailClosed throw), but purely as a safety net for the logging call inside its

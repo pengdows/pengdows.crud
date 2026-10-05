@@ -3856,6 +3856,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.TryGetErrorCode(ex);
     }
 
+    /// <summary>The magnitude of the provider's error code (negative SQLCODEs), or null.</summary>
+    protected static int? TryGetProviderErrorMagnitude(Exception ex) =>
+        pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.Magnitude(TryGetProviderErrorCode(ex));
+
     protected static string? TryGetProviderSqlState(Exception ex)
     {
         return pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.TryGetSqlState(ex);

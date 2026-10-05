@@ -88,6 +88,45 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         Assert.DoesNotContain("+ 1", sql);
     }
 
+    // DRY-016: the single-row ON CONFLICT upsert guarded an opaque (byte[]/RowVersion) version with
+    // WHERE t.version = EXCLUDED.version. The database generates that value, so the guard compared it
+    // with whatever the INSERT carried and an existing row was never updated; the batch upsert
+    // (UpsertOnConflictVersionWhere) and every other path leave an opaque version unguarded.
+    [Fact]
+    public void BuildUpsert_ByteArrayVersion_OnConflict_HasNoVersionGuard()
+    {
+        TypeMap.Register<ByteVersionEntity>();
+        var helper = new TableGateway<ByteVersionEntity, int>(Context);
+
+        var sql = helper.BuildUpsert(new ByteVersionEntity { Id = 1, Name = "v" }).Query.ToString();
+
+        Assert.Contains("ON CONFLICT", sql);
+        Assert.DoesNotContain("EXCLUDED." + Context.WrapObjectName("Version"), sql);
+        Assert.DoesNotContain(" WHERE ", sql);
+    }
+
+    // An opaque version left null is the database's to set: create and upsert leave it alone (one
+    // InitializeVersion for every path, DRY-016).
+    [Fact]
+    public void BuildCreateAndUpsert_NullByteArrayVersion_LeaveItNull()
+    {
+        TypeMap.Register<ByteVersionEntity>();
+        var helper = new TableGateway<ByteVersionEntity, int>(Context);
+
+        var created = new ByteVersionEntity { Id = 1, Name = "v", Version = null! };
+        using (helper.BuildCreate(created))
+        {
+        }
+
+        var upserted = new ByteVersionEntity { Id = 2, Name = "v", Version = null! };
+        using (helper.BuildUpsert(upserted))
+        {
+        }
+
+        Assert.Null(created.Version);
+        Assert.Null(upserted.Version);
+    }
+
     [Fact]
     public void BuildUpsert_OnConflict_UpdateSet_IsStable()
     {

@@ -483,7 +483,7 @@ internal sealed class InformixDialect : SqlDialect
     // no Informix error code is available (none, or only the exception's HRESULT).
     public override bool IsUniqueViolation(DbException ex) =>
         TryGetProviderErrorCode(ex) is { } code && code != ex.HResult
-            ? Math.Abs(code) is 268 or 239
+            ? pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.Magnitude(code) is 268 or 239
             : string.Equals(TryGetProviderSqlState(ex), "23000", StringComparison.OrdinalIgnoreCase);
 
     // -691: insert violates a foreign key (parent row missing). -692: delete/update blocked
@@ -491,16 +491,16 @@ internal sealed class InformixDialect : SqlDialect
     // Informix error-code reference (community-maintained but consistent with IBM's own
     // numbering scheme elsewhere).
     public override bool IsForeignKeyViolation(DbException ex) =>
-        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) is 691 or 692;
+        TryGetProviderErrorMagnitude(ex) is 691 or 692;
 
     // -391: "Cannot insert null into column" (IIUG community reference, consistent with
     // Informix's numbering).
     public override bool IsNotNullViolation(DbException ex) =>
-        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 391;
+        TryGetProviderErrorMagnitude(ex) is 391;
 
     // -530: CHECK constraint violation.
     public override bool IsCheckConstraintViolation(DbException ex) =>
-        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 530;
+        TryGetProviderErrorMagnitude(ex) is 530;
 
     // Advisory-level category classification (ISqlDialect.AnalyzeException/ClassifyException)
     // lives in SqlDialect.cs's private TryClassifyProviderException switch on this branch - 2.0.6
@@ -665,7 +665,7 @@ internal sealed class InformixDialect : SqlDialect
             return true;
         }
 
-        var code = TryGetProviderErrorCode(ex) is { } raw ? Math.Abs(raw) : (int?)null;
+        var code = TryGetProviderErrorMagnitude(ex);
 
         // -143: deadlock (IBM performance-tuning docs).
         if (code == 143)

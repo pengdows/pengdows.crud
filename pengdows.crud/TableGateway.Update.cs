@@ -347,29 +347,4 @@ public partial class TableGateway<TEntity, TRowID>
                 return new DateTimeOffset(TypeCoercionHelper.NormalizeDateTime(converted), TimeSpan.Zero);
         }
     }
-
-    private DbParameter? AppendVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect,
-        ref ClauseCounters counters)
-    {
-        if (versionValue == null)
-        {
-            sc.Query.Append(SqlFragments.And).Append(WrapColumnReference(dialect, _versionColumn!.Name)).Append(" IS NULL");
-            return null;
-        }
-
-        var name = counters.NextVer();
-        var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
-        sc.Query.Append(SqlFragments.And).Append(WrapColumnReference(dialect, _versionColumn.Name)).Append(" = ");
-        if (dialect.SupportsNamedParameters)
-        {
-            sc.Query.Append(dialect.ParameterMarker);
-            sc.Query.Append(name);
-        }
-        else
-        {
-            sc.Query.Append('?');
-        }
-
-        return pVersion;
-    }
 }

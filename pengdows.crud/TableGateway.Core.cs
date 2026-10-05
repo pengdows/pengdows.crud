@@ -653,20 +653,7 @@ public partial class TableGateway<TEntity, TRowID> :
             SetAuditFields(entity, false);
         }
 
-        if (_versionColumn != null)
-        {
-            var current = _versionColumn.MakeParameterValueFromField(entity);
-            if (current == null || Utils.IsZeroNumeric(current))
-            {
-                var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                             _versionColumn.PropertyInfo.PropertyType;
-                if (Utils.IsZeroNumeric(TypeCoercionHelper.ConvertWithCache(0, target)))
-                {
-                    var one = TypeCoercionHelper.ConvertWithCache(1, target);
-                    SetColumnValue(_versionColumn, entity, one);
-                }
-            }
-        }
+        InitializeVersion(entity);
     }
 
     /// <summary>
@@ -1472,9 +1459,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 RestoreAuditFields(objectToUpdate, auditSnapshot);
                 if (_versionColumn != null)
                 {
-                    throw new ConcurrencyConflictException(
-                        $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                        ctx.Product);
+                    throw VersionConflict(ctx);
                 }
             }
             else

@@ -307,7 +307,7 @@ public partial class PrimaryKeyTableGateway<TEntity> :
             SetAuditFields(entity, false);
         }
 
-        PrepareVersionForCreate(entity);
+        InitializeVersion(entity);
 
         var insertableColumns = GetCachedInsertableColumns();
         var sc = ctx.CreateSqlContainer();
@@ -369,25 +369,6 @@ public partial class PrimaryKeyTableGateway<TEntity> :
     // =========================================================================
     // Private helpers
     // =========================================================================
-
-    private void PrepareVersionForCreate(TEntity entity)
-    {
-        if (_versionColumn == null)
-        {
-            return;
-        }
-
-        var current = _versionColumn.MakeParameterValueFromField(entity);
-        if (current == null || Utils.IsZeroNumeric(current))
-        {
-            var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                         _versionColumn.PropertyInfo.PropertyType;
-            if (Utils.IsZeroNumeric(TypeCoercionHelper.ConvertWithCache(0, target)))
-            {
-                SetColumnValue(_versionColumn, entity, TypeCoercionHelper.ConvertWithCache(1, target));
-            }
-        }
-    }
 
     /// <summary>
     /// Appends "INSERT INTO {table} ({cols}) VALUES ({params})" to <paramref name="sc"/>

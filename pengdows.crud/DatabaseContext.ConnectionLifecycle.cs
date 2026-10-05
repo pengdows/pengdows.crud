@@ -896,7 +896,8 @@ public partial class DatabaseContext
             _modeLockTimeout,
             slot,
             namePrefix,
-            firstOpenHandlerAsync
+            firstOpenHandlerAsync,
+            onOpenFailed: _openFailedHandler
         );
     }
 

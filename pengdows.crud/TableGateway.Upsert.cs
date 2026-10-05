@@ -73,15 +73,12 @@ public partial class TableGateway<TEntity, TRowID>
             {
                 if (_versionColumn != null)
                 {
-                    var canDetect = dialect.SupportsOnConflictWhere
-                        || (dialect.SupportsMerge && dialect.MergeUpsertReportsSkippedVersionRow());
+                    var canDetect = UpsertCanDetectVersionConflict(dialect);
                     if (canDetect)
                     {
                         // The enclosing catch below restores audit fields for this path -
                         // don't restore here too, or it happens twice.
-                        throw new ConcurrencyConflictException(
-                            $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                            ctx.Product);
+                        throw VersionConflict(ctx);
                     }
                 }
 
@@ -154,18 +151,7 @@ public partial class TableGateway<TEntity, TRowID>
             SetAuditFields(e, false);
         }
 
-        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())
-        {
-            return;
-        }
-
-        var v = _versionColumn.MakeParameterValueFromField(e);
-        if (v == null || Utils.IsZeroNumeric(v))
-        {
-            var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                    _versionColumn.PropertyInfo.PropertyType;
-            _versionColumn.PropertyInfo.SetValue(e, TypeCoercionHelper.ConvertWithCache(1, t));
-        }
+        InitializeVersion(e);
     }
 
     /// <summary>
@@ -178,18 +164,7 @@ public partial class TableGateway<TEntity, TRowID>
             SetAuditFields(e, false, cachedAuditValues);
         }
 
-        if (_versionColumn == null || _versionColumn.IsOpaqueVersionColumn())
-        {
-            return;
-        }
-
-        var v = _versionColumn.MakeParameterValueFromField(e);
-        if (v == null || Utils.IsZeroNumeric(v))
-        {
-            var t = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
-                    _versionColumn.PropertyInfo.PropertyType;
-            _versionColumn.PropertyInfo.SetValue(e, TypeCoercionHelper.ConvertWithCache(1, t));
-        }
+        InitializeVersion(e);
     }
 
     private ISqlContainer BuildUpsertOnConflict(TEntity entity, IDatabaseContext context)
@@ -260,16 +235,10 @@ public partial class TableGateway<TEntity, TRowID>
             sc.Query.Append(") DO UPDATE SET ")
                 .Append(template.UpsertUpdateFragmentOnConflict);
 
-            if (_versionColumn != null && dialect.SupportsOnConflictWhere)
+            // The version guard the batch upsert uses too: none for an opaque version (DRY-016).
+            if (template.UpsertOnConflictVersionWhere != null)
             {
-                var wrappedVersion = dialect.WrapSimpleName(_versionColumn.Name);
-                sc.Query.Append(" WHERE ")
-                    .Append(BuildWrappedTableName(dialect))
-                    .Append(".")
-                    .Append(wrappedVersion)
-                    .Append(" = ")
-                    .Append("EXCLUDED.")
-                    .Append(wrappedVersion);
+                sc.Query.Append(' ').Append(template.UpsertOnConflictVersionWhere);
             }
 
             sc.AddParameters(parameters);

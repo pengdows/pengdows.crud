@@ -234,23 +234,23 @@ internal sealed class Db2Dialect : SqlDialect
     // translator can't silently disagree (architecture-cleanup: previously SqlState-only here).
     public override bool IsUniqueViolation(DbException ex) =>
         string.Equals(TryGetProviderSqlState(ex), "23505", StringComparison.OrdinalIgnoreCase) ||
-        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 803;
+        TryGetProviderErrorMagnitude(ex) is 803;
 
     // Db2 SQLCODE -530/-531/-532 / SQLSTATE 23503 (insert/update) or 23504 (delete RESTRICT)
     public override bool IsForeignKeyViolation(DbException ex) =>
         string.Equals(TryGetProviderSqlState(ex), "23503", StringComparison.OrdinalIgnoreCase) ||
         string.Equals(TryGetProviderSqlState(ex), "23504", StringComparison.OrdinalIgnoreCase) ||
-        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) is 530 or 531 or 532;
+        TryGetProviderErrorMagnitude(ex) is 530 or 531 or 532;
 
     // Db2 SQLCODE -407 / SQLSTATE 23502
     public override bool IsNotNullViolation(DbException ex) =>
         string.Equals(TryGetProviderSqlState(ex), "23502", StringComparison.OrdinalIgnoreCase) ||
-        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 407;
+        TryGetProviderErrorMagnitude(ex) is 407;
 
     // Db2 SQLCODE -545 / SQLSTATE 23513 (note: 23513, not 23514 like Postgres/DuckDB)
     public override bool IsCheckConstraintViolation(DbException ex) =>
         string.Equals(TryGetProviderSqlState(ex), "23513", StringComparison.OrdinalIgnoreCase) ||
-        Math.Abs(TryGetProviderErrorCode(ex) ?? 0) == 545;
+        TryGetProviderErrorMagnitude(ex) is 545;
 
     protected override bool TryClassifyProviderException(DbException ex, out DbErrorCategory category)
     {
@@ -264,7 +264,7 @@ internal sealed class Db2Dialect : SqlDialect
 
         var sqlState = TryGetProviderSqlState(ex);
         var errorCode = TryGetProviderErrorCode(ex);
-        var code = errorCode.HasValue ? Math.Abs(errorCode.Value) : (int?)null;
+        var code = pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.Magnitude(errorCode);
 
         // Db2 SQLSTATE 40001 covers both deadlock (SQLCODE -911 reason 2) and lock timeout
         // (SQLCODE -911 reason 68 / -913) — SQLSTATE alone can't disambiguate; treated as

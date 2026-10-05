@@ -58,7 +58,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 SetAuditFields(entity, false, auditValues);
             }
 
-            PrepareVersionForCreate(entity);
+            InitializeVersion(entity);
         }
 
         var chunks = ChunkList(entities, insertableColumns.Count, ctx.MaxParameterLimit, dialect.MaxRowsPerBatch);

@@ -69,9 +69,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
             if (rowsAffected == 0 && _versionColumn != null)
             {
-                throw new ConcurrencyConflictException(
-                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                    ctx.Product);
+                throw VersionConflict(ctx);
             }
 
             if (rowsAffected != 0)
@@ -104,9 +102,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             RestoreAuditFieldsIfFailed(rowsAffected != 0, objectToUpdate, auditSnapshot);
             if (rowsAffected == 0 && _versionColumn != null)
             {
-                throw new ConcurrencyConflictException(
-                    $"Concurrency conflict on {typeof(TEntity).Name}: version mismatch or row deleted.",
-                    ctx.Product);
+                throw VersionConflict(ctx);
             }
 
             if (rowsAffected != 0)
@@ -207,8 +203,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
                 if (_versionColumn != null && affected == 0 &&
                     _batchContainerEntities.TryGetValue(sc, out var chunkEntities))
                 {
-                    throw new ConcurrencyConflictException(
-                        BuildBatchConflictMessage(chunkEntities, affected), ctx.Product);
+                    throw BatchVersionConflict(ctx, chunkEntities, affected);
                 }
 
                 // This container's UPDATE succeeded, so its [Version] increment took effect.
@@ -352,7 +347,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         if (_versionColumn != null)
         {
             var versionValue = _versionColumn.MakeParameterValueFromField(entity);
-            var versionParam = AppendPkVersionCondition(sc, versionValue, dialect, ref counters);
+            var versionParam = AppendVersionCondition(sc, versionValue, dialect, ref counters);
             if (versionParam != null)
             {
                 parameters.Add(versionParam);
@@ -361,59 +356,5 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
         sc.AddParameters(parameters);
         return sc;
-    }
-
-    private DbParameter? AppendPkVersionCondition(ISqlContainer sc, object? versionValue, ISqlDialect dialect,
-        ref ClauseCounters counters)
-    {
-        if (versionValue == null)
-        {
-            sc.Query.Append(SqlFragments.And)
-                .Append(WrapColumnReference(dialect, _versionColumn!.Name))
-                .Append(" IS NULL");
-            return null;
-        }
-
-        var name = counters.NextVer();
-        var pVersion = dialect.CreateDbParameter(name, _versionColumn!.DbType, versionValue);
-        sc.Query.Append(SqlFragments.And)
-            .Append(WrapColumnReference(dialect, _versionColumn.Name))
-            .Append(" = ");
-        if (dialect.SupportsNamedParameters)
-        {
-            sc.Query.Append(dialect.ParameterMarker);
-            sc.Query.Append(name);
-        }
-        else
-        {
-            sc.Query.Append('?');
-        }
-
-        return pVersion;
-    }
-
-    /// <summary>
-    /// Builds the message for a batch version conflict. A single-entity container names the entity
-    /// by its [PrimaryKey] values; a multi-row chunk (batched ON CONFLICT upsert) cannot attribute
-    /// the conflict to a specific entity from the affected-row count alone.
-    /// </summary>
-    private string BuildBatchConflictMessage(IReadOnlyList<TEntity> chunkEntities, int affected)
-    {
-        if (chunkEntities.Count == 1)
-        {
-            return $"Concurrency conflict on {typeof(TEntity).Name} " +
-                   $"({DescribeEntityKeyForConflictMessage(chunkEntities[0])}): version mismatch or row deleted.";
-        }
-
-        return $"Concurrency conflict on {typeof(TEntity).Name}: expected {chunkEntities.Count} row(s) " +
-               $"affected but {affected} succeeded. Which specific entity/entities conflicted cannot be " +
-               "individually identified from this batch SQL shape. Re-read every entity in this batch " +
-               "from the database before retrying; do not assume only some are stale.";
-    }
-
-    private string DescribeEntityKeyForConflictMessage(TEntity entity)
-    {
-        return string.Join(", ",
-            _tableInfo.PrimaryKeys.Select(pk => $"{pk.Name}={pk.MakeParameterValueFromField(entity)}"));
     }
 }
