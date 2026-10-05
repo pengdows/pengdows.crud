@@ -17,7 +17,8 @@ public class TestTableCreator
 
     // InterBase shares Firebird's DDL except: no BIGINT keyword (NUMERIC(18,0) is its 64-bit
     // integer), and text columns take the database's NONE charset, which InterBaseDialect pins to
-    // UTF-8 (its driver's Charset=UTF8 is broken, TYPE-022) (HARN-011).
+    // UTF-8 (with the driver's Charset=UTF8 the server can't return non-ASCII text from a NONE
+    // column, TYPE-022) (HARN-011).
     private bool IsFirebirdFamily => _context.Product is SupportedDatabase.Firebird or SupportedDatabase.InterBase;
 
     private string BigIntType => _context.Product == SupportedDatabase.InterBase ? "NUMERIC(18,0)" : "BIGINT";

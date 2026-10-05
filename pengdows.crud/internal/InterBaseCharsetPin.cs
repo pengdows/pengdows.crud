@@ -6,7 +6,8 @@
 // - The driver builds its charset table once, in a static initializer: NONE resolves to the system
 //   code page when .NET code pages are registered (SqlClient and many libraries register them), else
 //   to UTF-8. With a code page, text outside it is stored as '?' with no error (confirmed live: SQL
-//   Server then InterBase in one process), and the driver's Charset=UTF8 mode is broken (TYPE-022).
+//   Server then InterBase in one process); with Charset=UTF8 instead, the server can't return
+//   non-ASCII text from a NONE column (TYPE-022), so the default charset is the one that works there.
 // - PinNoneToUtf8(): sets the NONE charset's encoding to UTF-8 by reflection, so text round-trips
 //   whatever was loaded first (maintainer decision 2026-10-03). It changes that driver's process-wide
 //   state; when the driver's shape differs it logs and returns false rather than throwing.
