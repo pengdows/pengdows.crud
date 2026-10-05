@@ -231,7 +231,10 @@ internal sealed class PoolGovernor : IDisposable
         }
     }
 
-    public PoolSlot Acquire(CancellationToken cancellationToken = default)
+    // Every acquire's preconditions (DRY-017: four copies): throws when the governor is closed,
+    // forbidden or not initialized; false when it is disabled, where every acquire succeeds with no slot.
+    [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(_semaphore))]
+    private bool Gates()
     {
         ThrowIfClosed();
         if (_forbidden)
@@ -241,12 +244,22 @@ internal sealed class PoolGovernor : IDisposable
 
         if (_disabled)
         {
-            return default;
+            return false;
         }
 
         if (_semaphore == null)
         {
             throw new InvalidOperationException(NotInitializedMessage);
+        }
+
+        return true;
+    }
+
+    public PoolSlot Acquire(CancellationToken cancellationToken = default)
+    {
+        if (!Gates())
+        {
+            return default;
         }
 
         var turnstileAcquired = false;
@@ -416,21 +429,10 @@ internal sealed class PoolGovernor : IDisposable
 
     public bool TryAcquire(out PoolSlot slot, CancellationToken cancellationToken = default)
     {
-        ThrowIfClosed();
-        if (_forbidden)
-        {
-            throw new PoolForbiddenException(_label, _poolKeyHash);
-        }
-
-        if (_disabled)
+        if (!Gates())
         {
             slot = default;
             return true;
-        }
-
-        if (_semaphore == null)
-        {
-            throw new InvalidOperationException(NotInitializedMessage);
         }
 
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
@@ -493,20 +495,9 @@ internal sealed class PoolGovernor : IDisposable
 
     public async ValueTask<PoolSlot> AcquireAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfClosed();
-        if (_forbidden)
-        {
-            throw new PoolForbiddenException(_label, _poolKeyHash);
-        }
-
-        if (_disabled)
+        if (!Gates())
         {
             return default;
-        }
-
-        if (_semaphore == null)
-        {
-            throw new InvalidOperationException(NotInitializedMessage);
         }
 
         var turnstileAcquired = false;
@@ -679,20 +670,9 @@ internal sealed class PoolGovernor : IDisposable
 
     public async ValueTask<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
     {
-        ThrowIfClosed();
-        if (_forbidden)
-        {
-            throw new PoolForbiddenException(_label, _poolKeyHash);
-        }
-
-        if (_disabled)
+        if (!Gates())
         {
             return (true, default);
-        }
-
-        if (_semaphore == null)
-        {
-            throw new InvalidOperationException(NotInitializedMessage);
         }
 
         var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
