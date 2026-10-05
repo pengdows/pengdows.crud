@@ -48,6 +48,10 @@
 
 ## Reads that now work
 
+- An integer beyond `long` (Snowflake `NUMBER`) read into a `double` through the gateway rounds to
+  the nearest double, as `DataReaderMapper` and `TypeCoercionHelper` do; it was truncated
+  (DRY-009).
+
 - Sybase ASE `BIGDATETIME` keeps its microseconds through the gateways (2.0.5 wrote milliseconds and
   read values a few microseconds off), and `BIGTIME` can be read at all (2.0.5: "Unsupported data
   type 188"). `DbType.DateTime2` and `DbType.DateTimeOffset` parameters are now sent as microsecond

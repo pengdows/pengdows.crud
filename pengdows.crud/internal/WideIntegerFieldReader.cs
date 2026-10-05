@@ -57,7 +57,10 @@ internal static class WideIntegerFieldReader
         }
         catch (OverflowException) when (TryReadText(record, ordinal, out var value))
         {
-            return (double)(BigInteger)value;
+            // (double)BigInteger truncates; parsing the digits rounds to nearest, as TypeCoercionHelper
+            // does (DRY-009).
+            return double.Parse(((BigInteger)value).ToString(CultureInfo.InvariantCulture), NumberStyles.Integer,
+                CultureInfo.InvariantCulture);
         }
     }
 

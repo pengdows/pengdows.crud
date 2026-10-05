@@ -400,6 +400,9 @@ internal static class TypeCoercionHelper
             case ReadOnlyMemory<byte> { Length: 16 } memory:
                 guid = new Guid(memory.Span, bigEndian);
                 return true;
+            case ArraySegment<byte> { Count: 16 } segment:
+                guid = new Guid(segment.AsSpan(), bigEndian);
+                return true;
             default:
                 guid = null!;
                 return false;

@@ -154,6 +154,40 @@ public sealed class WideIntegerColumnReadTests
         return (context, exec);
     }
 
+    [Table("double_rows")]
+    private sealed class DoubleRow
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("v", DbType.Double)] public double V { get; set; }
+    }
+
+    // DRY-009 (3): a wide integer into a double rounds to nearest everywhere, as TypeCoercionHelper
+    // does; the gateway's typed read truncated it ((double)BigInteger).
+    [Fact]
+    public async Task ValueBeyondInt64_IntoDouble_RoundsToNearestOnEveryPath()
+    {
+        var expected = double.Parse(ULongMax, System.Globalization.CultureInfo.InvariantCulture);
+        fakeDbDataReader DoubleReader() => new(new[] { new Dictionary<string, object> { ["id"] = 1, ["v"] = ULongMax } })
+        {
+            Int64TextColumns = new HashSet<string> { "v" }
+        };
+
+        var (context, exec) = Context();
+        await using var _ = context;
+        exec.EnqueueReaderResult(DoubleReader());
+        var viaGateway = await new TableGateway<DoubleRow, int>(context).RetrieveOneAsync(1);
+
+        var (mapperContext, mapperExec) = Context();
+        await using var __ = mapperContext;
+        mapperExec.EnqueueReaderResult(DoubleReader());
+        await using var sc = mapperContext.CreateSqlContainer("SELECT * FROM double_rows");
+        await using var reader = await sc.ExecuteReaderAsync();
+        var viaMapper = Assert.Single(await DataReaderMapper.LoadAsync<DoubleRow>(reader, new MapperOptions(Strict: true, ColumnsOnly: true)));
+
+        Assert.Equal(expected, viaGateway!.V);
+        Assert.Equal(expected, viaMapper.V);
+    }
+
     [Table("wide_rows")]
     private sealed class WideRow
     {
