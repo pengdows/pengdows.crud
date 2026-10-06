@@ -75,6 +75,15 @@ public abstract class DatabaseTestBase : IAsyncLifetime
         foreach (var (provider, context) in DatabaseContexts)
         {
             var setupStart = DateTime.UtcNow;
+            // Spanner DDL takes seconds per statement: the class's next test only empties the
+            // tables its setup made (SpannerSchemaReuse; HARN-015).
+            if (ReusesSchemaAcrossTests && await SpannerSchemaReuse.TryReuseAsync(context, GetType()))
+            {
+                IntegrationTraceLog.Write(provider,
+                    $"schema reused (truncated) elapsedMs={(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}", Output);
+                continue;
+            }
+
             Output.WriteLine($"[{setupStart:HH:mm:ss.fff}] Resetting {provider} database...");
             IntegrationTraceLog.Write(provider, "cleanup start", Output);
             await RunWithTimeoutAsync(() => CleanupDatabaseAsync(provider, context), SetupTimeout, provider,
@@ -84,7 +93,12 @@ public abstract class DatabaseTestBase : IAsyncLifetime
             Output.WriteLine(
                 $"[{DateTime.UtcNow:HH:mm:ss.fff}] {provider} cleanup complete, running SetupDatabaseAsync...");
             IntegrationTraceLog.Write(provider, "setup start", Output);
+            SpannerSchemaReuse.Forget(context);
             await RunWithTimeoutAsync(() => SetupDatabaseAsync(provider, context), SetupTimeout, provider, "setup");
+            if (ReusesSchemaAcrossTests)
+            {
+                await SpannerSchemaReuse.RecordAsync(context, GetType());
+            }
             IntegrationTraceLog.Write(provider,
                 $"setup done elapsedMs={(DateTime.UtcNow - setupStart).TotalMilliseconds:F0}", Output);
             Output.WriteLine(
@@ -239,6 +253,13 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                 "INTEGRATION_TEST_TIMEOUT_SECONDS if the work is legitimately slower.");
         }
     }
+
+    /// <summary>
+    /// Whether this class's next test on Spanner may reuse the schema its setup made, emptied, instead
+    /// of dropping and recreating it (SpannerSchemaReuse). False for a class whose setup also inserts
+    /// rows, which TRUNCATE would remove.
+    /// </summary>
+    protected virtual bool ReusesSchemaAcrossTests => true;
 
     /// <summary>
     /// Override to perform database-specific setup (create tables, etc.)

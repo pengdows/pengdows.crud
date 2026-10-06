@@ -50,6 +50,9 @@ public class DeadlockConflictTests : DatabaseTestBase
         return base.GetSupportedProviders().Where(p => p == SupportedDatabase.MySql);
     }
 
+    // Full reset before every test: its setup inserts the rows the deadlock tests lock (SpannerSchemaReuse).
+    protected override bool ReusesSchemaAcrossTests => false;
+
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
         var table = IntegrationObjectNameHelper.Table(context, TableName);

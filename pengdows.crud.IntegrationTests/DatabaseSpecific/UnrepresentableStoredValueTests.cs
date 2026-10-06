@@ -32,6 +32,9 @@ public sealed class UnrepresentableStoredValueTests : DatabaseTestBase
         _ => ("NUMERIC", "'NaN'")
     };
 
+    // Full reset before every test: its setup inserts the legacy rows the tests read (SpannerSchemaReuse).
+    protected override bool ReusesSchemaAcrossTests => false;
+
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
         var (ddl, literal) = Case(provider);

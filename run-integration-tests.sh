@@ -139,17 +139,18 @@ export INFORMIXDIR="${INFORMIXDIR:-${root}/pengdows.crud.IntegrationTests/bin/Re
 # the testbed's two-slot dispatcher: every database up at once saturated the host and ran Oracle
 # Free out of server processes (ORA-12516). The queue is longest first by expected seconds, so the
 # slow databases start at once and the short ones fill the other slot instead of one slow database
-# finishing alone at the end. The weights start from the testbed's StartupWeightSeconds; the timing
-# table printed at the end is the measurement to tune them with. INTEGRATION_ONLY limits the queue.
+# finishing alone at the end. The weights are seconds per database measured on net10.0 (2026-10-05,
+# one process each, two at a time); refresh them from the timing table printed at the end, which a
+# single database's whole suite dominates (Spanner). INTEGRATION_ONLY limits the queue.
 #
 # always_on_databases must match IntegrationTestConfiguration.BaseProviders
 # (IntegrationTestConfigurationTests.RunScriptBatches_AreTheAlwaysOnProviders).
 always_on_databases=(Sqlite PostgreSql SqlServer MySql MariaDb Firebird CockroachDb DuckDB Oracle YugabyteDb TiDb FlatFile Db2 Informix SybaseASE Spanner SingleStore)
 declare -A integration_weights=(
-  [SapHana]=300 [Db2]=60 [Oracle]=45 [SybaseASE]=45 [Spanner]=30 [SqlServer]=25 [TiDb]=20
-  [YugabyteDb]=20 [Informix]=20 [SingleStore]=15 [CockroachDb]=12 [MySql]=8 [MariaDb]=8
-  [Firebird]=8 [PostgreSql]=5 [Snowflake]=5 [InterBase]=5 [Access]=5 [Sqlite]=1 [DuckDB]=1
-  [FlatFile]=1
+  [Snowflake]=1146 [Spanner]=1025 [SapHana]=437 [Db2]=356 [Firebird]=278 [YugabyteDb]=228
+  [SqlServer]=209 [CockroachDb]=187 [SybaseASE]=151 [Oracle]=150 [SingleStore]=146 [DuckDB]=143
+  [MySql]=135 [MariaDb]=133 [PostgreSql]=130 [Sqlite]=129 [TiDb]=128 [Informix]=124
+  [InterBase]=121 [Access]=120 [FlatFile]=116
 )
 
 if [[ -n "${INTEGRATION_ONLY:-}" ]]; then

@@ -28,6 +28,9 @@ public class InsertReturningTests : DatabaseTestBase
     {
     }
 
+    // Full reset before every test: its setup creates sequences, which TRUNCATE does not reset (SpannerSchemaReuse).
+    protected override bool ReusesSchemaAcrossTests => false;
+
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
         await DropTableIfExistsAsync(context).ConfigureAwait(false);

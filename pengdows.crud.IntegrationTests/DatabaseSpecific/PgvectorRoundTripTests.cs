@@ -23,6 +23,9 @@ public sealed class PgvectorRoundTripTests : DatabaseTestBase
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() => [SupportedDatabase.PostgreSql];
 
+    // Full reset before every test: its setup inserts rows (SpannerSchemaReuse).
+    protected override bool ReusesSchemaAcrossTests => false;
+
     protected override Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context) =>
         Task.CompletedTask;
 
