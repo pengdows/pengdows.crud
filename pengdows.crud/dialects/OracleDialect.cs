@@ -566,6 +566,10 @@ internal class OracleDialect : SqlDialect
         }
     }
 
+    // ODP.NET 21 (3.21) returns TIMESTAMP WITH TIME ZONE from GetValue as its wall time with no offset;
+    // its GetDateTimeOffset returns the value (ODP.NET 23 returns it from GetValue; both confirmed live).
+    internal override string? OffsetTimestampDataTypeName => "TimeStampTZ";
+
     internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
         IsSpatial(column)
             ? $"CASE WHEN {columnReference} IS NULL THEN NULL ELSE 'SRID=' || " +
@@ -775,19 +779,14 @@ internal class OracleDialect : SqlDialect
             ConfigureParameter = (param, value) => SetOracleIntervalDaySecond(param)
         });
 
-        // DateTimeOffset uses TIMESTAMP WITH TIME ZONE (OracleDbType.TimeStampTZ)
+        // DateTimeOffset uses TIMESTAMP WITH TIME ZONE (OracleDbType.TimeStampTZ), which keeps the
+        // offset, so the value is sent as given (confirmed live, ODP.NET 23.26 and 3.21). A column with
+        // no offset is declared DateTime and gets the UTC instant before this mapping is reached.
         registry.RegisterMapping<DateTimeOffset>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
-            {
-                if (value is DateTimeOffset dto)
-                {
-                    // Normalize to UTC to avoid offset loss on round-trip.
-                    param.Value = dto.ToUniversalTime();
-                }
-                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.TimeStampTZ);
-            }
+                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.TimeStampTZ)
         });
 
         // BLOB / CLOB

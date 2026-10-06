@@ -157,6 +157,33 @@ public sealed class SnowflakeTypeFixesTests
         Assert.Equal(Convert.ToHexString(pengdows.crud.types.converters.SpatialConverter<pengdows.crud.types.valueobjects.Geography>.AddSridToWkb(wkb, 4326)), hex);
     }
 
+    // TIMESTAMP_TZ keeps the offset: Snowflake.Data binds a DateTimeOffset declared DbType.DateTimeOffset
+    // as TIMESTAMP_TZ with it (SFDataConverter, checked against 5.6.0), so it is sent as given. It was
+    // sent as a UTC DateTime and read back at +00:00.
+    [Fact]
+    public void DateTimeOffset_DeclaredDateTimeOffset_KeepsItsOffset()
+    {
+        var value = new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5)).AddTicks(1234567);
+
+        var parameter = SnowflakeContext().CreateDbParameter("p", DbType.DateTimeOffset, value);
+
+        Assert.Equal(DbType.DateTimeOffset, parameter.DbType);
+        var bound = Assert.IsType<DateTimeOffset>(parameter.Value);
+        Assert.Equal(value, bound);
+        Assert.Equal(value.Offset, bound.Offset);
+    }
+
+    // A column with no offset (TIMESTAMP_NTZ) still stores the UTC instant.
+    [Fact]
+    public void DateTimeOffset_DeclaredDateTime_IsItsUtcInstant()
+    {
+        var value = new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5));
+
+        var parameter = SnowflakeContext().CreateDbParameter("p", DbType.DateTime, value);
+
+        Assert.Equal(value.UtcDateTime, Assert.IsType<DateTime>(parameter.Value));
+    }
+
     [Fact]
     public void SessionSettings_ReturnSpatialAsEwkt()
     {

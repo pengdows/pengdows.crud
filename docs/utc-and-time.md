@@ -70,19 +70,22 @@ A `DateTimeOffset` carries two things: an instant, and the offset it was written
   `2026-10-05 13:45:30+02:00` is stored as `11:45:30` and reads back as `2026-10-05 11:45:30+00:00`,
   the same instant.
 - **The original offset is kept only where the column type can hold one.** SQL Server's
-  `DATETIMEOFFSET` does. PostgreSQL's `timestamptz` does not, despite its name: it stores the UTC
-  instant and displays it in the session's zone. Oracle (`TIMESTAMP WITH TIME ZONE`) and Snowflake
-  (`TIMESTAMP_TZ`) could, but are sent the UTC instant: a parameter can't tell which column it is
-  going to, and a value sent with its offset into a plain `TIMESTAMP` column stores its local wall
-  time there (confirmed live on Oracle), so the instant is the only safe thing to send. Once a value
-  is in a column without an offset, the offset is gone and nothing can recover it.
+  `DATETIMEOFFSET`, Oracle's `TIMESTAMP WITH TIME ZONE` and Snowflake's `TIMESTAMP_TZ` do (all
+  confirmed live; Oracle with ODP.NET 23 and 3.21). PostgreSQL's `timestamptz` does not, despite its
+  name: it stores the UTC instant and displays it in the session's zone, as do Oracle's
+  `TIMESTAMP WITH LOCAL TIME ZONE` and Snowflake's `TIMESTAMP_LTZ`. Once a value is in a column
+  without an offset, the offset is gone and nothing can recover it.
 
-**Declare the column you have.** Declare `DbType.DateTimeOffset` only on a column that holds an
-offset or an instant (`DATETIMEOFFSET`, `timestamptz`, `TIMESTAMP WITH TIME ZONE`, ...). For a
-`DateTimeOffset` property on a plain timestamp column, declare `DbType.DateTime2` (or `DateTime`):
-the value is then stored as its UTC wall time on every database. SQL Server takes the declaration at
-its word: a `DateTimeOffset` declared `DbType.DateTimeOffset` but stored in a `DATETIME2` column keeps
-its local wall time, so `13:45+02:00` lands as `13:45`. Before 2.0.6, a `DateTimeOffset` declared
+**Declare the column you have.** A parameter can't tell which column it is going to, so the declared
+`DbType` decides what is sent. Declare `DbType.DateTimeOffset` only on a column that holds an offset
+or an instant (`DATETIMEOFFSET`, `timestamptz`, `TIMESTAMP WITH TIME ZONE`, `TIMESTAMP_TZ`, ...): the
+value is sent with its offset. For a `DateTimeOffset` property on a plain timestamp column, declare
+`DbType.DateTime2` (or `DateTime`): the value is then stored as its UTC wall time on every database.
+A `DateTimeOffset` declared `DbType.DateTimeOffset` but stored in a column with no offset (SQL Server
+`DATETIME2`, Oracle `TIMESTAMP`, Snowflake `TIMESTAMP_NTZ`) keeps its local wall time, so
+`13:45+02:00` lands as `13:45`. Before 2.0.6, Oracle and Snowflake sent every `DateTimeOffset` as its
+UTC instant, so their offset-aware columns read back at `+00:00`, and a plain column declared
+`DbType.DateTimeOffset` held the UTC wall time; declare that column `DbType.DateTime` now to keep it so. Before 2.0.6, a `DateTimeOffset` declared
 `DateTime`/`DateTime2` was stored that way too on SQL Server, Firebird, Db2, DuckDB, FlatFile,
 Sybase ASE, Informix, InterBase and Access; rows written then hold the wall time.
 

@@ -409,9 +409,9 @@ internal class SnowflakeDialect : SqlDialect
 
     public override object? PrepareParameterValue(object? value, DbType dbType)
     {
-        if (value is DateTimeOffset dto)
+        if (value is DateTimeOffset dto && dbType != DbType.DateTimeOffset)
         {
-            // Snowflake TIMESTAMP_NTZ does not store offsets; normalize to UTC instant.
+            // A column with no offset (TIMESTAMP_NTZ) stores the UTC instant.
             return dto.UtcDateTime;
         }
 
@@ -461,9 +461,9 @@ internal class SnowflakeDialect : SqlDialect
         // comma-separated ALTER SESSION SET command.
         //
         // CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ: the Snowflake.Data driver defaults
-        // to TIMESTAMP_LTZ for DateTime bind variables; since the dialect normalises
-        // DateTimeOffset → UTC DateTime for NTZ columns we must override this to prevent
-        // the driver from attaching timezone metadata at bind time.
+        // to TIMESTAMP_LTZ for DateTime bind variables; a DateTime (and a DateTimeOffset bound
+        // for a column with no offset) is a UTC wall time, so this override keeps the driver
+        // from attaching timezone metadata at bind time.
         //
         // LOCK_TIMEOUT = 30000 s (≈8.3 h): intentionally shorter than the Snowflake default
         // of 43200 s (12 h); long-held locks in a data-access layer indicate a bug.
@@ -585,18 +585,13 @@ internal class SnowflakeDialect : SqlDialect
             ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
         });
 
-        // TIMESTAMP_NTZ for DateTimeOffset (store UTC DateTime)
+        // DateTimeOffset binds as TIMESTAMP_TZ with its offset (Snowflake.Data's SFDataConverter does this
+        // for DbType.DateTimeOffset), which TIMESTAMP_TZ keeps and TIMESTAMP_LTZ stores as the instant. A
+        // column with no offset is declared DateTime and gets the UTC instant before this mapping.
         registry.RegisterMapping<DateTimeOffset>(SupportedDatabase.Snowflake, new ProviderTypeMapping
         {
-            DbType = DbType.DateTime,
-            ConfigureParameter = (param, value) =>
-            {
-                param.DbType = DbType.DateTime;
-                if (value is DateTimeOffset dto)
-                {
-                    param.Value = dto.UtcDateTime;
-                }
-            }
+            DbType = DbType.DateTimeOffset,
+            ConfigureParameter = (param, value) => { param.DbType = DbType.DateTimeOffset; }
         });
 
         // Guid: handled by GuidFormat (GuidStorageFormat.String), not a type mapping.

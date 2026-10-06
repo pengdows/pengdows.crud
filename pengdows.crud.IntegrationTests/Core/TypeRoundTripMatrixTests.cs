@@ -266,7 +266,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
             }
 
             var actual = valueProperty.GetValue(loaded);
-            if (!SameValue(entry.Sample, actual, Provider(context)))
+            if (!SameStoredValue(entry, entry.Sample, actual, Provider(context)))
             {
                 return $"gateway read: wrote {Show(entry.Sample)}, read {Show(actual)}";
             }
@@ -294,7 +294,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
                 .Append(IntegrationObjectNameHelper.Table(context, TableName));
             await using var reader = await select.ExecuteReaderAsync();
             var mapped = await DataReaderMapper.LoadObjectsFromDataReaderAsync<MappedValue<T>>(reader);
-            if (mapped.Count != 1 || !SameValue(entry.Sample, mapped[0].V, Provider(context)))
+            if (mapped.Count != 1 || !SameStoredValue(entry, entry.Sample, mapped[0].V, Provider(context)))
             {
                 return mapped.Count == 1
                     ? $"DataReaderMapper: wrote {Show(entry.Sample)}, read {Show(mapped[0].V)} ({select.Query})"
@@ -506,6 +506,11 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
     };
 
     private static SupportedDatabase Provider(IDatabaseContext context) => context.Product;
+
+    // A column that keeps a DateTimeOffset's offset reads back with it, not only at the same instant.
+    private static bool SameStoredValue(ColumnTypeDescriptor entry, object? expected, object? actual, SupportedDatabase provider) =>
+        SameValue(expected, actual, provider) &&
+        (!entry.KeepsOffset || expected is not DateTimeOffset offset || actual is DateTimeOffset read && read.Offset == offset.Offset);
 
     private static bool SameValue(object? expected, object? actual, SupportedDatabase provider)
     {

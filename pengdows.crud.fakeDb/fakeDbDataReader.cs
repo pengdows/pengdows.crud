@@ -306,6 +306,11 @@ public class fakeDbDataReader : DbDataReader
                 "Microsoft.SqlServer.Types, Version=16.0.0.0, Culture=neutral, PublicKeyToken=89845dcd8080cc91");
         }
 
+        if (IsOffsetDroppedByGetValue(i) && row[keys[i]] is DateTimeOffset dropped)
+        {
+            return DateTime.SpecifyKind(dropped.DateTime, DateTimeKind.Unspecified);
+        }
+
         if (row[keys[i]] is fakeDbInterval interval)
         {
             return interval.ToDriverTimeSpan();
@@ -429,6 +434,32 @@ public class fakeDbDataReader : DbDataReader
     /// wall time with no offset (for TIMESTAMP_TZ the real driver throws instead).
     /// </summary>
     public ISet<string>? DateTimeOffsetReportedAsDateTimeColumns { get; set; }
+
+    /// <summary>
+    /// Columns holding a <see cref="DateTimeOffset"/> that emulate ODP.NET 21 (Oracle.ManagedDataAccess.Core
+    /// 3.21) on TIMESTAMP WITH TIME ZONE (confirmed live, Oracle 23ai): <see cref="GetFieldType"/> reports
+    /// <see cref="DateTime"/>, <see cref="GetValue"/> returns the value's wall time with no offset,
+    /// <see cref="GetDataTypeName"/> returns "TimeStampTZ", and <see cref="GetDateTimeOffset"/> returns
+    /// the DateTimeOffset. ODP.NET 23 returns the DateTimeOffset from GetValue instead.
+    /// </summary>
+    public ISet<string>? OffsetDroppedByGetValueColumns { get; set; }
+
+    private bool IsOffsetDroppedByGetValue(int i) =>
+        OffsetDroppedByGetValueColumns != null && OffsetDroppedByGetValueColumns.Contains(GetName(i));
+
+    /// <summary>
+    /// The DateTimeOffset of an <see cref="OffsetDroppedByGetValueColumns"/> column, as ODP.NET's
+    /// <c>OracleDataReader.GetDateTimeOffset</c> returns it; any other column throws
+    /// <see cref="InvalidCastException"/>, as ODP.NET does for TIMESTAMP, DATE and TIMESTAMP WITH LOCAL
+    /// TIME ZONE.
+    /// </summary>
+    public DateTimeOffset GetDateTimeOffset(int i)
+    {
+        CheckSequentialAccess(i);
+        return IsOffsetDroppedByGetValue(i) && RawValue(i) is DateTimeOffset offsetValue
+            ? offsetValue
+            : throw new InvalidCastException("Specified cast is not valid.");
+    }
 
     /// <summary>
     /// Field types reported for columns regardless of the value they hold, as a provider reports its
@@ -689,6 +720,11 @@ public class fakeDbDataReader : DbDataReader
             return ".<unknown>";
         }
 
+        if (IsOffsetDroppedByGetValue(i))
+        {
+            return "TimeStampTZ";
+        }
+
         if (RawValue(i) is fakeDbInterval)
         {
             return "Interval";
@@ -784,7 +820,7 @@ public class fakeDbDataReader : DbDataReader
             return typeof(object);
         }
 
-        if (IsDateTimeOffsetReportedAsDateTime(ordinal))
+        if (IsDateTimeOffsetReportedAsDateTime(ordinal) || IsOffsetDroppedByGetValue(ordinal))
         {
             return typeof(DateTime);
         }

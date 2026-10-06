@@ -100,7 +100,10 @@ public sealed record ColumnTypeDescriptor(
     object? Sample = null,
     bool Comparable = true,
     // SQL the matrix runs before declaring the column (an extension or a user-defined type it needs).
-    string? Setup = null);
+    string? Setup = null,
+    // The column stores a DateTimeOffset's offset, so the matrix checks it reads back with it (not
+    // only the same instant).
+    bool KeepsOffset = false);
 
 public static class DatabaseTypeCatalog
 {
@@ -441,7 +444,7 @@ public static class DatabaseTypeCatalog
             Sample: new DateTime(2026, 10, 1, 13, 45, 30, 123, 456, DateTimeKind.Utc).AddTicks(7)),
         new("DATETIMEOFFSET(n)", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
             Declaration: "DATETIMEOFFSET(7)", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset,
-            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, 123, 456, TimeSpan.FromHours(-5))),
+            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, 123, 456, TimeSpan.FromHours(-5)), KeepsOffset: true),
         new("UNIQUEIDENTIFIER", ColumnTypeCategory.Other,
             Declaration: "UNIQUEIDENTIFIER", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid, Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
         new("XML", ColumnTypeCategory.Other,
@@ -842,7 +845,7 @@ public static class DatabaseTypeCatalog
             Sample: new DateTime(2026, 10, 1, 13, 45, 30, DateTimeKind.Utc).AddTicks(1234567)),
         new("TIMESTAMP(n) WITH TIME ZONE", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
             Declaration: "TIMESTAMP(7) WITH TIME ZONE", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset,
-            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5)).AddTicks(1234567)),
+            Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5)).AddTicks(1234567), KeepsOffset: true),
         new("TIMESTAMP(n) WITH LOCAL TIME ZONE", ColumnTypeCategory.Temporal, IsTemporal: true,
             Declaration: "TIMESTAMP(6) WITH LOCAL TIME ZONE", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
             Sample: new DateTime(2026, 10, 1, 13, 45, 30, 123, 456, DateTimeKind.Utc)),
@@ -1006,7 +1009,7 @@ public static class DatabaseTypeCatalog
         new("TIMESTAMP_NTZ", ColumnTypeCategory.Temporal, IsTemporal: true, Aliases: new[] { "DATETIME", "TIMESTAMP" },
             Declaration: "TIMESTAMP_NTZ(9)", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime, Sample: new DateTime(2026, 10, 1, 13, 45, 30, DateTimeKind.Utc).AddTicks(1234567)),
         new("TIMESTAMP_TZ", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
-            Declaration: "TIMESTAMP_TZ(9)", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset, Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5)).AddTicks(1234567)),
+            Declaration: "TIMESTAMP_TZ(9)", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset, Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5)).AddTicks(1234567), KeepsOffset: true),
         new("TIMESTAMP_LTZ", ColumnTypeCategory.Temporal, IsTemporal: true, HasTimeZone: true,
             Declaration: "TIMESTAMP_LTZ(9)", ClrType: typeof(DateTimeOffset), DbType: System.Data.DbType.DateTimeOffset, Sample: new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.Zero).AddTicks(1234567)),
         new("VARCHAR(36) (Guid)", ColumnTypeCategory.Other,

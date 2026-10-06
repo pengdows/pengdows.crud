@@ -535,12 +535,13 @@ public sealed class DataReaderMapper : IDataReaderMapper
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }
         else if (key.FieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset) &&
-                 (key.Coercion?.ReadsOffsetTimestampsFromValue ?? false))
+                 (key.Coercion?.ReadsOffsetTimestampsSpecially ?? false))
         {
             // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact
-            // DateTimeOffset (TYPE-002); read the value.
-            var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
-            var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
+            // DateTimeOffset (TYPE-002); ODP.NET 21 returns only a TIMESTAMP WITH TIME ZONE's wall time.
+            var rawValue = Expression.Call(OffsetTimestampFieldReader.ReadMethod,
+                Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal),
+                Expression.Constant(key.Coercion!.OffsetTimestampDataTypeName, typeof(string)));
             var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
             valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
         }

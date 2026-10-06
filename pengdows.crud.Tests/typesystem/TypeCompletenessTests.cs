@@ -121,7 +121,6 @@ public class TypeCompletenessTests
     private static readonly Dictionary<(string Label, string Database), string> Known = new()
     {
         [("DateTimeOffset", "*")] = "no offset-aware type, or one that " + OffsetLost,
-        [("DateTimeOffset", "Oracle")] = "normalized to UTC on write (TIMESTAMP WITH TIME ZONE): " + OffsetLost,
         [("DateTimeOffset", "SybaseASE")] = "BIGDATETIME text " + Microseconds + "; " + OffsetLost,
         [("DateTime", "SybaseASE")] = "BIGDATETIME " + Microseconds,
         [("TimeOnly", "SingleStore")] = "TIME(6) " + Microseconds,

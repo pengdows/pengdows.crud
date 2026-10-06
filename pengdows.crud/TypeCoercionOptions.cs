@@ -29,6 +29,18 @@ public sealed record TypeCoercionOptions(
     internal bool ReadsOffsetTimestampsFromValue { get; init; }
 
     /// <summary>
+    /// The provider data type name of an offset timestamp column whose GetValue may drop the offset
+    /// (<c>SqlDialect.OffsetTimestampDataTypeName</c>); null when there is none.
+    /// </summary>
+    internal string? OffsetTimestampDataTypeName { get; init; }
+
+    /// <summary>
+    /// A DateTimeOffset property on a column reported as DateTime reads the column's value
+    /// (<see cref="pengdows.crud.@internal.OffsetTimestampFieldReader"/>), not its DateTime.
+    /// </summary>
+    internal bool ReadsOffsetTimestampsSpecially => ReadsOffsetTimestampsFromValue || OffsetTimestampDataTypeName != null;
+
+    /// <summary>
     /// Collection columns arrive as literal text (<c>SqlDialect.ReturnsCollectionsAsLiteralText</c>).
     /// </summary>
     internal bool ReadsCollectionLiterals { get; init; }
@@ -48,6 +60,7 @@ public sealed record TypeCoercionOptions(
         Provider = dialect is dialects.SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : dialect.DatabaseType,
         GuidBytesBigEndian = dialect is not dialects.SqlDialect { StoresGuidBytesBigEndian: false },
         ReadsOffsetTimestampsFromValue = dialect is dialects.SqlDialect { ReportsOffsetTimestampsAsDateTime: true },
+        OffsetTimestampDataTypeName = (dialect as dialects.SqlDialect)?.OffsetTimestampDataTypeName,
         ReadsCollectionLiterals = dialect is dialects.SqlDialect { ReturnsCollectionsAsLiteralText: true }
     };
 }

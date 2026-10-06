@@ -183,13 +183,15 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(DateTime) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(DateTimeOffset)
-                     && coercionOptions?.ReadsOffsetTimestampsFromValue == true)
+                     && coercionOptions?.ReadsOffsetTimestampsSpecially == true)
             {
                 // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact
-                // DateTimeOffset, while GetDateTime gives local wall time or throws (TYPE-002): read the
-                // value, which converts as before when it is a DateTime.
-                var getValue = GetValueMethod;
-                var rawValue = Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), getValue, ordinalExpr);
+                // DateTimeOffset, while GetDateTime gives local wall time or throws (TYPE-002); ODP.NET 21
+                // returns only the wall time of a TIMESTAMP WITH TIME ZONE, read with its GetDateTimeOffset.
+                // A value that is a DateTime converts as before.
+                var rawValue = Expression.Call(OffsetTimestampFieldReader.ReadMethod,
+                    Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr,
+                    Expression.Constant(coercionOptions.OffsetTimestampDataTypeName, typeof(string)));
                 valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(object) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(Guid))

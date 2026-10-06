@@ -870,6 +870,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool ReportsOffsetTimestampsAsDateTime => false;
 
     /// <summary>
+    /// The provider data type name (GetDataTypeName) of an offset timestamp column whose GetValue may
+    /// return only the wall time, as a DateTime, while the reader's GetDateTimeOffset(int) returns the
+    /// value (ODP.NET 21 on TIMESTAMP WITH TIME ZONE); null when the driver has no such column type.
+    /// </summary>
+    internal virtual string? OffsetTimestampDataTypeName => null;
+
+    /// <summary>
     /// True when the driver returns collection columns as their literal text (Informix.Net.Core:
     /// "LIST{1          ,2          }"), so an array property is read by parsing the literal.
     /// </summary>

@@ -46,7 +46,7 @@ public class SnowflakeDialectTests
     public void SnowflakeDialect_GetBaseSessionSettings_IncludesClientTimestampTypeMapping()
     {
         // The Snowflake .NET driver defaults to TIMESTAMP_LTZ for DateTime binding.
-        // Since the dialect normalises DateTimeOffset → UTC DateTime for NTZ columns,
+        // A DateTime (and a DateTimeOffset bound for a column with no offset) is a UTC wall time, so
         // the session must explicitly set CLIENT_TIMESTAMP_TYPE_MAPPING = TIMESTAMP_NTZ
         // to avoid timezone metadata being attached at bind time.
         var dialect = CreateDialect();

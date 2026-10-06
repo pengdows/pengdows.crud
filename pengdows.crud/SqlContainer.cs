@@ -1557,7 +1557,11 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return new ScalarResult<T>(ScalarStatus.None, default);
         }
 
-        var value = reader.GetValue(0);
+        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+        // ODP.NET 21 returns a TIMESTAMP WITH TIME ZONE's wall time from GetValue; read its offset.
+        var value = targetType == typeof(DateTimeOffset) && DefaultCoercionOptions.OffsetTimestampDataTypeName is { } offsetType
+            ? OffsetTimestampFieldReader.Read(reader, 0, offsetType)
+            : reader.GetValue(0);
 
         if (Utils.IsNullOrDbNull(value))
         {
@@ -1569,7 +1573,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             return new ScalarResult<T>(ScalarStatus.Value, (T)value);
         }
 
-        var targetType = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
         var coerced = (T?)TypeCoercionHelper.Coerce(value, reader.GetFieldType(0), targetType,
             DefaultCoercionOptions);
         return new ScalarResult<T>(ScalarStatus.Value, coerced);

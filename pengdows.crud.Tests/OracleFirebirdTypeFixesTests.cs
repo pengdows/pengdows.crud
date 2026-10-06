@@ -189,6 +189,88 @@ public sealed class OracleFirebirdTypeFixesTests
         Assert.Equal(new DateTimeOffset(1, 1, 1, 18, 45, 30, TimeSpan.Zero), value);
     }
 
+    // TIMESTAMP WITH TIME ZONE keeps the offset, so a DateTimeOffset is sent with it (it was sent at
+    // UTC and read back at +00:00). Confirmed live on Oracle 23ai with ODP.NET 23.26 and 3.21.
+    private static readonly DateTimeOffset Zoned = new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5)).AddTicks(1234567);
+
+    [Fact]
+    public void Oracle_DateTimeOffset_KeepsItsOffset()
+    {
+        var parameter = Oracle().CreateDbParameter("p", DbType.DateTimeOffset, Zoned);
+
+        var bound = Assert.IsType<DateTimeOffset>(parameter.Value);
+        Assert.Equal(Zoned, bound);
+        Assert.Equal(Zoned.Offset, bound.Offset);
+    }
+
+    [Table("tz_rows")]
+    public sealed class ZonedRow
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("tz", DbType.DateTimeOffset)] public DateTimeOffset Tz { get; set; }
+        [Column("ts", DbType.DateTimeOffset)] public DateTimeOffset? Ts { get; set; }
+    }
+
+    // ODP.NET 3.21 returns a TIMESTAMP WITH TIME ZONE from GetValue as its wall time with no offset
+    // (read as UTC, it was 5 hours off for -05:00); its GetDateTimeOffset returns the value. A plain
+    // TIMESTAMP ("ts") still reads as UTC.
+    [Fact]
+    public async Task RetrieveOneAsync_OffsetDroppedByGetValue_KeepsTheOffset()
+    {
+        var (context, exec) = Context(SupportedDatabase.Oracle);
+        await using var _ = context;
+        exec.EnqueueReaderResult(ZonedReader());
+
+        var row = await new TableGateway<ZonedRow, int>(context).RetrieveOneAsync(1);
+
+        AssertZoned(row!);
+    }
+
+    [Fact]
+    public async Task DataReaderMapper_OffsetDroppedByGetValue_KeepsTheOffset()
+    {
+        var (context, exec) = Context(SupportedDatabase.Oracle);
+        await using var _ = context;
+        exec.EnqueueReaderResult(ZonedReader());
+        await using var sc = context.CreateSqlContainer("SELECT id, tz, ts FROM tz_rows");
+        await using var reader = await sc.ExecuteReaderAsync();
+
+        AssertZoned(Assert.Single(await DataReaderMapper.LoadAsync<ZonedRow>(reader, new MapperOptions(Strict: true, ColumnsOnly: true))));
+    }
+
+    [Fact]
+    public async Task ExecuteScalar_OffsetDroppedByGetValue_KeepsTheOffset()
+    {
+        var (context, exec) = Context(SupportedDatabase.Oracle);
+        await using var _ = context;
+        exec.EnqueueReaderResult(new fakeDbDataReader(new[] { new Dictionary<string, object> { ["tz"] = Zoned } })
+        {
+            OffsetDroppedByGetValueColumns = new HashSet<string> { "tz" }
+        });
+        await using var sc = context.CreateSqlContainer("SELECT tz FROM tz_rows");
+
+        var read = await sc.ExecuteScalarRequiredAsync<DateTimeOffset>();
+
+        Assert.Equal(Zoned, read);
+        Assert.Equal(Zoned.Offset, read.Offset);
+    }
+
+    private static void AssertZoned(ZonedRow row)
+    {
+        Assert.Equal(Zoned, row.Tz);
+        Assert.Equal(Zoned.Offset, row.Tz.Offset);
+        Assert.Equal(new DateTimeOffset(Zoned.DateTime, TimeSpan.Zero), row.Ts);
+    }
+
+    private static fakeDbDataReader ZonedReader() =>
+        new(new[]
+        {
+            new Dictionary<string, object> { ["id"] = 1, ["tz"] = Zoned, ["ts"] = DateTime.SpecifyKind(Zoned.DateTime, DateTimeKind.Unspecified) }
+        })
+        {
+            OffsetDroppedByGetValueColumns = new HashSet<string> { "tz" }
+        };
+
     private static (DatabaseContext Context, fakeDbConnection Exec) Context(SupportedDatabase product, string? version = null)
     {
         var factory = new fakeDbFactory(product);
