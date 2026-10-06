@@ -437,6 +437,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         foreach (var dataSource in retired)
         {
+            ClearPoolBestEffort(dataSource);
             DisposeBestEffort(dataSource, "retired data source");
         }
 
@@ -453,10 +454,31 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             readerOwned = null;
         }
 
+        ClearPoolBestEffort(primaryOwned);
+        ClearPoolBestEffort(readerOwned);
         DisposeBestEffort(primaryOwned, "data source");
         DisposeBestEffort(readerOwned, "reader data source");
         _dataSource = null;
         _readerDataSource = null;
+    }
+
+    // HARN-016: a data source this context created releases its pooled connections first where the
+    // provider's pool would otherwise outlive it (the dialect decides). Best effort, like disposal.
+    private void ClearPoolBestEffort(DbDataSource? dataSource)
+    {
+        if (dataSource == null || _dialect is not SqlDialect dialect)
+        {
+            return;
+        }
+
+        try
+        {
+            dialect.ClearOwnedDataSourcePool(dataSource);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Clearing the pool of a data source this context created failed.");
+        }
     }
 
     // Best-effort disposal: a failure must not stop the rest of the shutdown, but it is logged, never
@@ -509,6 +531,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         foreach (var dataSource in retired)
         {
+            ClearPoolBestEffort(dataSource);
             await DisposeBestEffortAsync(dataSource, "retired data source").ConfigureAwait(false);
         }
 
@@ -525,6 +548,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
             readerOwned = null;
         }
 
+        ClearPoolBestEffort(primaryOwned);
+        ClearPoolBestEffort(readerOwned);
         await DisposeBestEffortAsync(primaryOwned, "data source").ConfigureAwait(false);
         await DisposeBestEffortAsync(readerOwned, "reader data source").ConfigureAwait(false);
         _dataSource = null;

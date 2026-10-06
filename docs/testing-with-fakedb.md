@@ -117,6 +117,30 @@ connection, queues the reader on it, and pre-inserts it into `factory.Connection
 `CreateConnection()` call returns it — useful when the code under test constructs its own
 connection via the factory rather than one you already hold.
 
+### Declared columns (result metadata)
+
+A real provider reports a result's columns even when it has no rows: names, CLR field types, the
+database's own type names, and in its schema table a column's precision and scale. Set
+`fakeDbDataReader.Columns` to reproduce that, for code that reads metadata (the gateways run a
+zero-row `SELECT cols FROM t WHERE 1 = 0` to learn declared column types):
+
+```csharp
+conn.EnqueueReaderResult(new fakeDbDataReader(Array.Empty<Dictionary<string, object>>())
+{
+    Columns = new[]
+    {
+        new fakeDbColumn("id", typeof(int), "int"),
+        new fakeDbColumn("at", typeof(DateTime), "datetime2") { NumericScale = 3 },
+        new fakeDbColumn("span", typeof(TimeSpan), "IntervalDS") { NumericPrecision = 9, NumericScale = 6 }
+    }
+});
+```
+
+With `Columns` set, `FieldCount`, `GetName`, `GetOrdinal`, `GetFieldType` and `GetDataTypeName` come
+from them, and `GetSchemaTable()` returns a table with `ColumnName`, `ColumnOrdinal`, `DataType`,
+`DataTypeName`, `NumericPrecision`, `NumericScale` and `AllowDBNull` (`DBNull` where unset). Without
+`Columns`, `GetSchemaTable()` returns null.
+
 ## Failure injection
 
 Failure injection exists at three levels — command, connection, and factory — so a test can target

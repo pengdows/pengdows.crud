@@ -110,9 +110,15 @@ The instant stays UTC either way: that's the part every query, index and compari
 When a column holds fewer fractional digits than .NET's seven, the extra digits are dropped, not
 rounded. Rounding up can move a value across a second, a day or a year boundary (23:59:59.9999999
 rounded to `TIME(0)` becomes 24:00:00, which isn't a valid time). MySQL 8.0.8+ sessions set
-`TIME_TRUNCATE_FRACTIONAL` for this; MariaDB, PostgreSQL, Firebird, Db2, DuckDB, Informix and
-SQL Server's `DATETIME2`/`TIME` truncate on their own (checked live with a value one tick before
-midnight). Still rounding today: SQL Server `DATETIME`/`SMALLDATETIME`, Sybase ASE `SMALLDATETIME`,
-Oracle `TIMESTAMP WITH LOCAL TIME ZONE` and a `TimeSpan` into an Oracle `INTERVAL DAY TO SECOND(6)`
-(DRY-028); TiDB (and MySQL before 8.0.8) can't truncate either. Send values at the column's
-precision there.
+`TIME_TRUNCATE_FRACTIONAL` for this; MariaDB, PostgreSQL, Firebird, Db2, DuckDB and Informix
+truncate on their own. SQL Server (`DATETIME`, `SMALLDATETIME`, and `DATETIME2`/`TIME`/
+`DATETIMEOFFSET` below scale 7), Oracle (`DATE`, `TIMESTAMP(n)`, `INTERVAL DAY TO SECOND(n)`) and
+Sybase ASE (`SMALLDATETIME`) round instead, so the gateways learn each temporal column's declared
+type and scale once per table (the same zero-row metadata query as other declared types, on the
+first async operation) and truncate the value to it before binding it. Checked live on every
+database with a value one tick before midnight, which must never come back as the next day.
+
+That covers gateway writes. A `Build*` call before the table's first async operation, and
+parameters in your own SQL, are sent as given; so are values on TiDB (and MySQL before 8.0.8), which
+can't truncate, and Sybase ASE `DATETIME`, which its driver reports exactly like `BIGDATETIME`.
+Send values at the column's precision there.

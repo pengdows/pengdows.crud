@@ -81,6 +81,29 @@ public sealed class OracleIntervalRoundTripTests : DatabaseTestBase
             Assert.Equal(new IntervalDaySecond(1, new TimeSpan(2, 3, 4) + TimeSpan.FromTicks(9999990)), actual.DaySecond);
         });
     }
+
+    // DRY-028: a TimeSpan was sent with all its digits and Oracle rounded it into SECOND(6); the gateway
+    // now learns the column's scale and truncates the value to it.
+    [SkippableFact]
+    public async Task TimeSpan_IntoSixDigitColumn_IsTruncatedNeverRounded()
+    {
+        await RunTestAgainstProviderAsync(SupportedDatabase.Oracle, async context =>
+        {
+            var row = new OracleIntervalEntity
+            {
+                Id = 3,
+                YearMonth = new IntervalYearMonth(0, 1),
+                DaySecond = new IntervalDaySecond(0, TimeSpan.Zero),
+                Span6 = new TimeSpan(1, 23, 59, 59) + TimeSpan.FromTicks(9999999)
+            };
+
+            var gateway = new TableGateway<OracleIntervalEntity, int>(context);
+            await gateway.CreateAsync(row, context);
+            var actual = await gateway.RetrieveOneAsync(row.Id, context);
+
+            Assert.Equal(new TimeSpan(1, 23, 59, 59) + TimeSpan.FromTicks(9999990), actual!.Span6);
+        });
+    }
 }
 
 [Table("interval_roundtrip")]

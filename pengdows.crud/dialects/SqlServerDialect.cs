@@ -180,6 +180,23 @@ internal class SqlServerDialect : SqlDialect
     // UnresolvedColumnReader decodes as a HierarchyId (confirmed live on SQL Server 2025, SqlClient
     // 6.0.2). geometry/geography read the same way and SqlServerSpatialFormat decodes them (TYPE-002).
     // TYPE-015: VECTOR binds from "[...]" text; SqlClient rejects a float[] parameter.
+    // DRY-028, found live: DATETIME (1/300 s) and SMALLDATETIME (minutes) round the digits they can't
+    // hold, so one tick before midnight was stored as the next day; DATETIME2/TIME/DATETIMEOFFSET with
+    // a scale below 7 round too. SqlClient reports the type and scale, and the value is truncated to it.
+    internal override bool DeclaredTypeIncludesScale => true;
+
+    internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
+        (!forRead && IsTemporalColumn(column)) || base.NeedsDeclaredType(column, forRead);
+
+    internal override decimal? TemporalUnitsPerMinute(IColumnInfo column) =>
+        SplitDeclaredType(DeclaredTypeOf(column)) switch
+        {
+            ("smalldatetime", _) => 1,
+            ("datetime", _) => 18000,
+            ("datetime2" or "time" or "datetimeoffset", var scale) => UnitsPerMinuteForScale(scale),
+            _ => null
+        };
+
     internal override bool BindsVectorsAsText => true;
 
     internal override bool ReadsUnresolvedColumns => true;

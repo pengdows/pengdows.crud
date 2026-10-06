@@ -58,6 +58,16 @@ public sealed class FakeDbDataSource : DbDataSource
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Number of <see cref="ClearPool"/> calls. Mirrors ODP.NET's OracleDataSource.ClearPool, which an
+    /// Oracle context calls on the data sources it created when it is disposed: each OracleDataSource
+    /// owns its own pool, which outlives the data source otherwise.
+    /// </summary>
+    public int ClearPoolCount { get; private set; }
+
+    /// <summary>Emulates OracleDataSource.ClearPool.</summary>
+    public void ClearPool() => ClearPoolCount++;
+
     protected override DbConnection CreateDbConnection()
     {
         var connection = _factory.CreateConnection();

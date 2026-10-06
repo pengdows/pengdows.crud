@@ -266,6 +266,8 @@ public class AuditFieldRestoreOnFailureTests
         var persisted = new AuditedItem { Id = 1, Name = "persisted" };
         var unpersisted = new AuditedItem { Id = 2, Name = "unpersisted" };
 
+        // SQL Server learns the temporal columns' declared types first (DRY-028), on its own connection.
+        factory.Connections.Add(new fakeDbConnection());
         factory.Connections.Add(new fakeDbConnection());
         var failingConnection = new fakeDbConnection();
         failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));
@@ -339,6 +341,8 @@ public class AuditFieldRestoreOnFailureTests
         var persisted = new AuditedPkItem { Key = 1, Name = "persisted" };
         var unpersisted = new AuditedPkItem { Key = 2, Name = "unpersisted" };
 
+        // SQL Server learns the temporal columns' declared types first (DRY-028), on its own connection.
+        factory.Connections.Add(new fakeDbConnection());
         factory.Connections.Add(new fakeDbConnection());
         var failingConnection = new fakeDbConnection();
         failingConnection.SetNonQueryExecuteException(new InvalidOperationException("second container failed"));

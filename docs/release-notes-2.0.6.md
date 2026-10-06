@@ -196,6 +196,19 @@ every CLR type and every database, whether the value round-trips and why not whe
   the UTC instant (DRY-026).
 - **Oracle NULL intervals bind.** A NULL `IntervalDaySecond`, `IntervalYearMonth` or `TimeSpan`
   declared `DbType.Object` failed with ORA-50028; it now binds typed (DRY-027).
+- **Fractional seconds are truncated, never rounded, on SQL Server, Oracle and Sybase ASE.** SQL
+  Server `DATETIME`/`SMALLDATETIME` (and `DATETIME2`/`TIME`/`DATETIMEOFFSET` below scale 7), Oracle
+  `DATE`/`TIMESTAMP(n)`/`INTERVAL DAY TO SECOND(n)` and Sybase `SMALLDATETIME` round the digits they
+  can't hold, so a value one tick before midnight was stored as the next day. The gateways now learn
+  each temporal column's declared type and scale once per table (one zero-row query, on the first
+  async operation) and truncate the value before binding it (DRY-028). fakeDb's `fakeDbColumn` gains
+  `NumericPrecision`/`NumericScale`, and `fakeDbDataReader.GetSchemaTable()` reports declared columns.
+- **Oracle: a disposed context no longer keeps server sessions open.** Each ODP.NET
+  `OracleDataSource` owns its own pool, and disposing it leaves that pool's idle connections open
+  until the process exits, so every `DatabaseContext` created and disposed (a tenant registry
+  dropping a tenant, a context per job) kept up to two Oracle sessions. A context now clears the
+  pools of the data sources it created when it is disposed; one you pass in is left alone
+  (HARN-016).
 - **Streams and readers bind as declared.** A `Stream` property declared `DbType.Binary` or a
   `TextReader` declared `DbType.String`/`AnsiString` made the gateway fail to build its templates
   ("CLR type 'MemoryStream' is not compatible with DbType.Binary"); only `DbType.Object` worked. Any

@@ -887,9 +887,35 @@ public class fakeDbDataReader : DbDataReader
         return (string)GetValue(i);
     }
 
+    /// <summary>
+    /// The declared <see cref="Columns"/> as a provider's schema table (ColumnName, ColumnOrdinal,
+    /// DataType, DataTypeName, NumericPrecision, NumericScale, AllowDBNull); null without them.
+    /// </summary>
     public override DataTable? GetSchemaTable()
     {
-        return null;
+        if (Columns == null)
+        {
+            return null;
+        }
+
+        var table = new DataTable("SchemaTable");
+        table.Columns.Add("ColumnName", typeof(string));
+        table.Columns.Add("ColumnOrdinal", typeof(int));
+        table.Columns.Add("DataType", typeof(Type));
+        table.Columns.Add("DataTypeName", typeof(string));
+        table.Columns.Add("NumericPrecision", typeof(short));
+        table.Columns.Add("NumericScale", typeof(short));
+        table.Columns.Add("AllowDBNull", typeof(bool));
+        for (var i = 0; i < Columns.Count; i++)
+        {
+            var column = Columns[i];
+            table.Rows.Add(column.Name, i, column.FieldType, column.DataTypeName,
+                column.NumericPrecision is { } precision ? (short)precision : DBNull.Value,
+                column.NumericScale is { } scale ? (short)scale : DBNull.Value,
+                true);
+        }
+
+        return table;
     }
 
     // Remaining members can throw or return defaults

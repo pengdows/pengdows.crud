@@ -522,6 +522,50 @@ internal class OracleDialect : SqlDialect
                type == typeof(types.valueobjects.IntervalYearMonth) || type == typeof(TimeSpan);
     }
 
+    // HARN-016, confirmed live (ODP.NET 23): every OracleDataSource owns a private pool, even for an
+    // identical connection string, and disposing it leaves the pool's idle connections open until the
+    // process exits, so each disposed context kept up to two server sessions. OracleDataSource.
+    // ClearPool() closes them and no other data source's (live: 10 contexts, +0 sessions); a connection
+    // still checked out keeps working and is closed when it is disposed.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, System.Reflection.MethodInfo?> ClearPoolMethods = new();
+
+    internal override void ClearOwnedDataSourcePool(System.Data.Common.DbDataSource dataSource)
+    {
+        var clearPool = ClearPoolMethods.GetOrAdd(dataSource.GetType(),
+            static type => type.GetMethod("ClearPool", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.Public,
+                Type.EmptyTypes));
+        clearPool?.Invoke(dataSource, null);
+    }
+
+    // DRY-028, found live: Oracle rounds the fractional digits a TIMESTAMP(n) or INTERVAL DAY TO SECOND(n)
+    // can't hold (one tick before midnight was stored as the next day), and DATE keeps whole seconds.
+    // ODP.NET reports the scale in its schema table, and the value is truncated to it.
+    internal override bool DeclaredTypeIncludesScale => true;
+
+    internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
+        (!forRead && IsTemporalColumn(column)) || base.NeedsDeclaredType(column, forRead);
+
+    internal override decimal? TemporalUnitsPerMinute(IColumnInfo column) =>
+        SplitDeclaredType(DeclaredTypeOf(column)) switch
+        {
+            ("date", _) => 60,
+            ("timestamp" or "timestampltz" or "timestamptz" or "intervalds", var scale) => UnitsPerMinuteForScale(scale),
+            _ => null
+        };
+
+    // An IntervalDaySecond is bound as Oracle's interval literal (six fractional digits); a column
+    // declared with fewer gets only its own, cut, not rounded.
+    public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        base.MarkColumnParameter(parameter, column);
+        if (parameter.Value is string literal && TemporalUnitsPerMinute(column) != null &&
+            SplitDeclaredType(DeclaredTypeOf(column)).Scale is { } digits && literal.IndexOf('.') is var dot and > 0 &&
+            literal.Length > dot + 1 + digits)
+        {
+            parameter.Value = digits == 0 ? literal[..dot] : literal[..(dot + 1 + digits)];
+        }
+    }
+
     internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
         IsSpatial(column)
             ? $"CASE WHEN {columnReference} IS NULL THEN NULL ELSE 'SRID=' || " +

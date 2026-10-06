@@ -483,7 +483,88 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// a dialect adds (Sybase ASE time columns, TYPE-022).
     /// </summary>
     internal virtual bool MarksColumnParameter(IColumnInfo column) =>
-        column.IsJsonType || column.IsEnum || NullParameterDbType(column) != null;
+        column.IsJsonType || column.IsEnum || NullParameterDbType(column) != null ||
+        TemporalUnitsPerMinute(column) != null;
+
+    /// <summary>
+    /// Releases the connections pooled by a data source the context created, just before the context
+    /// disposes it. Default: nothing, since a provider's pool is shared by connection string and
+    /// outlives any one context by design. A provider whose data source owns a private pool that
+    /// disposal leaves open overrides it (Oracle, HARN-016).
+    /// </summary>
+    internal virtual void ClearOwnedDataSourcePool(System.Data.Common.DbDataSource dataSource)
+    {
+    }
+
+    /// <summary>
+    /// True when the declared types this dialect learns (<see cref="DeclaredTypeOf"/>) carry the
+    /// column's scale from the provider's schema table, as "name(scale)": SqlClient and ODP.NET report a
+    /// temporal column's fractional digits there (DRY-028).
+    /// </summary>
+    internal virtual bool DeclaredTypeIncludesScale => false;
+
+    /// <summary>
+    /// DRY-028: how many units a minute holds in this column, once its declared type is known, when it
+    /// holds less than .NET's ticks (60 x 10^scale, 18,000 for SQL Server DATETIME's 1/300 s, 1 for
+    /// SMALLDATETIME); null when the column holds every tick or isn't temporal. Per minute so each is a
+    /// whole number. A value is truncated to it before it is bound (<see cref="MarkColumnParameter"/>):
+    /// a database that rounds the digits it can't hold could carry one tick before midnight into the
+    /// next day.
+    /// </summary>
+    internal virtual decimal? TemporalUnitsPerMinute(IColumnInfo column) => null;
+
+    /// <summary>A column whose property holds a date, time or duration .NET keeps to the tick.</summary>
+    private protected static bool IsTemporalColumn(IColumnInfo column)
+    {
+        var type = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        return type == typeof(DateTime) || type == typeof(DateTimeOffset) || type == typeof(TimeSpan) ||
+               type == typeof(TimeOnly) || type == typeof(types.valueobjects.IntervalDaySecond);
+    }
+
+    /// <summary>A declared type learned with its scale ("datetime2(3)"), split; the name in lower case.</summary>
+    private protected static (string Name, int? Scale) SplitDeclaredType(string? declared)
+    {
+        if (string.IsNullOrEmpty(declared))
+        {
+            return (string.Empty, null);
+        }
+
+        var open = declared.LastIndexOf('(');
+        if (open > 0 && declared[^1] == ')' &&
+            int.TryParse(declared.AsSpan(open + 1, declared.Length - open - 2), NumberStyles.None,
+                CultureInfo.InvariantCulture, out var scale))
+        {
+            return (declared[..open].Trim().ToLowerInvariant(), scale);
+        }
+
+        return (declared.Trim().ToLowerInvariant(), null);
+    }
+
+    /// <summary>60 x 10^scale units a minute for a scale below seven fractional digits; else null.</summary>
+    private protected static decimal? UnitsPerMinuteForScale(int? scale) =>
+        scale is >= 0 and < 7 ? 60 * (decimal)Math.Pow(10, scale.Value) : null;
+
+    /// <summary>
+    /// <paramref name="value"/> truncated (toward zero, never rounded) to whole units of
+    /// 1/<paramref name="unitsPerMinute"/> minute; null when it isn't a value this applies to.
+    /// </summary>
+    internal static object? TruncateTemporal(object? value, decimal unitsPerMinute)
+    {
+        long Truncate(long ticks)
+        {
+            var units = decimal.Truncate(ticks * unitsPerMinute / TimeSpan.TicksPerMinute);
+            return (long)decimal.Truncate(units * TimeSpan.TicksPerMinute / unitsPerMinute);
+        }
+
+        return value switch
+        {
+            DateTime dt => new DateTime(Truncate(dt.Ticks), dt.Kind),
+            DateTimeOffset dto => new DateTimeOffset(Truncate(dto.Ticks), dto.Offset),
+            TimeSpan ts => TimeSpan.FromTicks(Truncate(ts.Ticks)),
+            TimeOnly t => new TimeOnly(Truncate(t.Ticks)),
+            _ => null
+        };
+    }
 
     /// <summary>
     /// Runs on a command after its parameters are bound and before it executes, on its own connection
@@ -697,6 +778,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
             NullParameterDbType(column) is { } nullType)
         {
             parameter.DbType = nullType;
+        }
+
+        // DRY-028: truncated to what the column holds, so the database has nothing to round.
+        if (TemporalUnitsPerMinute(column) is { } unitsPerMinute &&
+            TruncateTemporal(parameter.Value, unitsPerMinute) is { } truncated)
+        {
+            parameter.Value = truncated;
         }
     }
 

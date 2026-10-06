@@ -145,6 +145,15 @@ internal class SybaseAseDialect : SqlDialect
             ? string.Concat("CONVERT(BIGTIME, ", parameterMarker, ")")
             : base.RenderColumnArgument(parameterMarker, column);
 
+    // DRY-028, found live: SMALLDATETIME rounds to the minute, so one tick before midnight was stored
+    // as the next day; the value is truncated to the minute. AseClient reports BIGDATETIME as
+    // "datetime" too, so DATETIME (1/300 s) can't be told from it and is left alone.
+    internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
+        (!forRead && column.DbType == DbType.DateTime && IsTemporalColumn(column)) || base.NeedsDeclaredType(column, forRead);
+
+    internal override decimal? TemporalUnitsPerMinute(IColumnInfo column) =>
+        SplitDeclaredType(DeclaredTypeOf(column)).Name == "smalldatetime" ? 1 : null;
+
     internal override bool MarksColumnParameter(IColumnInfo column) =>
         column.DbType == DbType.Time || base.MarksColumnParameter(column);
 

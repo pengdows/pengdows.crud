@@ -44,4 +44,38 @@ public class FakeDbDeclaredColumnsTests
         Assert.Equal("BLOB", reader.GetDataTypeName(1));
         Assert.Equal(new byte[] { 1 }, reader.GetValue(1));
     }
+
+    // A real provider's schema table carries a temporal column's scale (SqlClient, ODP.NET), which the
+    // gateways read to truncate values to it (DRY-028).
+    [Fact]
+    public void GetSchemaTable_ReportsTheDeclaredColumns_WithPrecisionAndScale()
+    {
+        var reader = new fakeDbDataReader(Array.Empty<Dictionary<string, object>>())
+        {
+            Columns = new[]
+            {
+                new fakeDbColumn("id", typeof(int), "INTEGER"),
+                new fakeDbColumn("at", typeof(DateTime), "datetime2") { NumericScale = 3 },
+                new fakeDbColumn("span", typeof(TimeSpan), "IntervalDS") { NumericPrecision = 9, NumericScale = 6 }
+            }
+        };
+
+        var table = reader.GetSchemaTable();
+
+        Assert.NotNull(table);
+        Assert.Equal(3, table!.Rows.Count);
+        Assert.Equal("at", table.Rows[1]["ColumnName"]);
+        Assert.Equal(1, table.Rows[1]["ColumnOrdinal"]);
+        Assert.Equal(typeof(DateTime), table.Rows[1]["DataType"]);
+        Assert.Equal("datetime2", table.Rows[1]["DataTypeName"]);
+        Assert.Equal((short)3, table.Rows[1]["NumericScale"]);
+        Assert.Equal(DBNull.Value, table.Rows[0]["NumericScale"]);
+        Assert.Equal((short)9, table.Rows[2]["NumericPrecision"]);
+    }
+
+    [Fact]
+    public void GetSchemaTable_WithoutDeclaredColumns_IsNull()
+    {
+        Assert.Null(new fakeDbDataReader(Array.Empty<Dictionary<string, object>>()).GetSchemaTable());
+    }
 }

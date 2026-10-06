@@ -18,6 +18,7 @@
 
 using System.Collections.Concurrent;
 using System.Data;
+using System.Globalization;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
@@ -551,6 +552,8 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             sc.Query.Append(" FROM ").Append(table).Append(" WHERE 1 = 0");
             await using var reader = await sc.ExecuteReaderAsync(ExecutionType.Read, CommandType.Text, cancellationToken)
                 .ConfigureAwait(false);
+            // With its scale where the dialect reads one (DRY-028): "datetime2(3)".
+            var schema = dialect.DeclaredTypeIncludesScale ? SchemaTableOf(reader) : null;
             // By name: the result's columns are the ones selected, but matching names doesn't depend on it.
             for (var i = 0; i < reader.FieldCount; i++)
             {
@@ -559,7 +562,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
                 var declared = column == null ? null : reader.GetDataTypeName(i);
                 if (!string.IsNullOrEmpty(declared))
                 {
-                    found.Add((column!, declared));
+                    found.Add((column!, ScaleOf(schema, i) is { } scale ? $"{declared}({scale})" : declared));
                 }
             }
         }
@@ -570,6 +573,32 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
         }
 
         return found;
+    }
+
+    // A provider whose schema table fails for this result just reports no scales.
+    private static DataTable? SchemaTableOf(IDataReader reader)
+    {
+        try
+        {
+            return reader.GetSchemaTable();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
+
+    private static int? ScaleOf(DataTable? schema, int ordinal)
+    {
+        if (schema == null || ordinal >= schema.Rows.Count || !schema.Columns.Contains("NumericScale"))
+        {
+            return null;
+        }
+
+        var value = schema.Rows[ordinal]["NumericScale"];
+        return value is DBNull or null ? null : Convert.ToInt32(value, CultureInfo.InvariantCulture) is var scale and >= 0
+            ? scale
+            : null;
     }
 
     /// <summary>
