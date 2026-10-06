@@ -578,12 +578,12 @@
     i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
     i5 = Time TimeSpan:01:02:03
     i6 = Time TimeSpan:01:02:03
-  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (?, ?, ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V INT PATH '$')) ORDER BY O), ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V DOUBLE PATH '$')) ORDER BY O), ?, ?, ?)
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (?, ?, ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V INT PATH '$')) ORDER BY O), ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V DOUBLE PATH '$')) ORDER BY O), ST_GeomFromEWKB(?), ?, ?)
     i0 = Int32 Int32:0
     i1 = String "["a"]"
     i2 = String "[1,2]"
     i3 = String "[1.5]"
-    i4 = Binary 0x0101000000000000000000F03F0000000000000040
+    i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
     i5 = AnsiString Inet:10.0.0.1
     i6 = AnsiString "{}"
 == InterBase

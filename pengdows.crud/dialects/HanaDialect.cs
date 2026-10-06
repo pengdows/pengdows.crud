@@ -220,13 +220,23 @@ internal sealed class HanaDialect : SqlDialect
     private static string? ArrayElementSqlType(IColumnInfo column) =>
         column.IsJsonType ? null : ArrayElementSqlType(column.PropertyInfo.PropertyType);
 
+    private static bool IsSpatial(IColumnInfo column) =>
+        typeof(types.valueobjects.SpatialValue).IsAssignableFrom(
+            Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType);
+
+    // DRY-023, confirmed live: plain WKB carries no SRID, so an ST_GEOMETRY(4326) column refused
+    // every write ("The geometry's SRID (0) does not match the column's SRID (4326)") and reads came
+    // back with SRID 0. The converter sends EWKB, always SRID-flagged (ST_GeomFromEWKB refuses it
+    // otherwise, even for SRID 0, and passes NULL through), and reads select ST_AsEWKB().
     public override bool RendersColumnArgument(IColumnInfo column) =>
-        ArrayElementSqlType(column) != null || base.RendersColumnArgument(column);
+        IsSpatial(column) || ArrayElementSqlType(column) != null || base.RendersColumnArgument(column);
 
     public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
-        ArrayElementSqlType(column) is { } elementType
-            ? string.Concat(ArrayPrefix, parameterMarker, ", '$[*]' COLUMNS (O FOR ORDINALITY, V ", elementType, " PATH '$')", ArraySuffix)
-            : base.RenderColumnArgument(parameterMarker, column);
+        IsSpatial(column)
+            ? string.Concat("ST_GeomFromEWKB(", parameterMarker, ")")
+            : ArrayElementSqlType(column) is { } elementType
+                ? string.Concat(ArrayPrefix, parameterMarker, ", '$[*]' COLUMNS (O FOR ORDINALITY, V ", elementType, " PATH '$')", ArraySuffix)
+                : base.RenderColumnArgument(parameterMarker, column);
 
     internal override bool MarksColumnParameter(IColumnInfo column) =>
         ArrayElementSqlType(column) != null || base.MarksColumnParameter(column);
@@ -283,9 +293,11 @@ internal sealed class HanaDialect : SqlDialect
         return default;
     }
     internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
-        column.DbType is DbType.DateTime or DbType.DateTime2
-            ? $"TO_VARCHAR({columnReference}, 'YYYY-MM-DD HH24:MI:SS.FF7') AS {wrappedName}"
-            : columnReference;
+        IsSpatial(column)
+            ? $"{columnReference}.ST_AsEWKB() AS {wrappedName}"
+            : column.DbType is DbType.DateTime or DbType.DateTime2
+                ? $"TO_VARCHAR({columnReference}, 'YYYY-MM-DD HH24:MI:SS.FF7') AS {wrappedName}"
+                : columnReference;
 
     /// <summary>
     /// HANA rejects the base "USING (VALUES (...)) AS s (col1, col2, ...)" row-constructor MERGE
@@ -300,6 +312,8 @@ internal sealed class HanaDialect : SqlDialect
 
     private protected override string MergeSourceValue(string placeholder, IColumnInfo column)
     {
+        // Spatial columns too: bound bytes go into ST_GEOMETRY/ST_POINT from a plain INSERT but not
+        // from this source ("The geometry data is corrupt", HANA-001); the constructor works.
         if (RendersColumnArgument(column))
         {
             return RenderColumnArgument(placeholder, column);
@@ -311,15 +325,6 @@ internal sealed class HanaDialect : SqlDialect
             // fails into VARBINARY/BINARY; CAST(? AS BLOB) round-trips into VARBINARY, BINARY and
             // BLOB, with no VARBINARY length cap.
             return string.Concat("CAST(", placeholder, " AS BLOB)");
-        }
-
-        if (typeof(types.valueobjects.SpatialValue).IsAssignableFrom(
-                Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType))
-        {
-            // CONFIRMED live (HANA-001): the spatial converter's WKB bytes go into ST_GEOMETRY/
-            // ST_POINT from a plain INSERT but not from this source ("The geometry data is
-            // corrupt"); ST_GeomFromWKB(?) works for MERGE insert and update.
-            return string.Concat("ST_GeomFromWKB(", placeholder, ")");
         }
 
         return placeholder;
@@ -463,8 +468,9 @@ internal sealed class HanaDialect : SqlDialect
     internal static DatabaseTraits CreateSapHanaTraits() =>
         new(SupportedDatabase.SapHana, new HanaExceptionTranslator())
         {
-            // ST_GEOMETRY takes WKB as VARBINARY and refuses WKT text (TYPE-002).
-            SpatialFormat = SpatialWireFormat.PlainWkb,
+            // ST_GEOMETRY takes WKB as VARBINARY and refuses WKT text (TYPE-002); EWKB keeps the SRID
+            // (DRY-023), built by ST_GeomFromEWKB(?) (RenderColumnArgument).
+            SpatialFormat = SpatialWireFormat.SridFlaggedExtendedWkb,
             RegisterTypeMappings = registry =>
             {
                 var binarySpatial = new ProviderTypeMapping

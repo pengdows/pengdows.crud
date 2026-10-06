@@ -44,8 +44,11 @@ internal enum SpatialWireFormat
     /// <summary>EWKT, else EWKB as hex, else GeoJSON text.</summary>
     ExtendedTextOrHex,
 
-    /// <summary>Plain WKB as VARBINARY (WKT is encoded to WKB).</summary>
-    PlainWkb,
+    /// <summary>
+    /// EWKB as VARBINARY whose SRID flag is set even for SRID 0 (WKT is encoded to WKB); the dialect
+    /// builds the value with a constructor that requires the flag (ST_GeomFromEWKB).
+    /// </summary>
+    SridFlaggedExtendedWkb,
 
     /// <summary>EWKT text, always with its SRID (the dialect builds the native object from it).</summary>
     ExtendedWellKnownText

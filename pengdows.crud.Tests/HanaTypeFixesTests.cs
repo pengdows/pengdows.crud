@@ -53,8 +53,12 @@ public sealed class HanaTypeFixesTests
         Assert.Equal(-0.5m, row.Maybe);
     }
 
-    // ST_GEOMETRY takes WKB as VARBINARY (WKT text is refused: "invalid hexadecimal format") and
-    // reads back as VARBINARY WKB; the value objects weren't mapped, so templates failed to build.
+    // ST_GEOMETRY takes WKB as VARBINARY (WKT text is refused: "invalid hexadecimal format"); the
+    // value objects weren't mapped, so templates failed to build. DRY-023, confirmed live: plain WKB
+    // carries no SRID, so an ST_GEOMETRY(4326) column refused every write ("The geometry's SRID (0)
+    // does not match the column's SRID (4326)") and every read came back with SRID 0. Values are sent
+    // as EWKB that always carries its SRID, even 0 (ST_GeomFromEWKB refuses EWKB without the flag),
+    // through ST_GeomFromEWKB(?), and read with ST_AsEWKB().
     [Table("hana_spatial")]
     public sealed class SpatialRow
     {
@@ -66,20 +70,60 @@ public sealed class HanaTypeFixesTests
     private static DatabaseContext SapHanaContext() =>
         new("Server=x;EmulatedProduct=SapHana", new fakeDbFactory(SupportedDatabase.SapHana));
 
+    private const string PointWkb = "0101000000000000000000F03F0000000000000040";
+
     [Fact]
-    public void BuildCreate_Spatial_BindsWkb()
+    public void BuildCreate_Spatial_BindsEwkbThatAlwaysCarriesTheSrid()
     {
         var sc = new TableGateway<SpatialRow, int>(SapHanaContext()).BuildCreate(new SpatialRow
         {
             Id = 1,
-            Geom = Geometry.FromWellKnownText("POLYGON((0 0, 4 0, 4 4, 0 0))", 0),
-            Geog = Geography.FromWellKnownBinary(pengdows.crud.types.converters.WellKnownTextEncoder.Encode("POINT(1 2)"), 4326)
+            Geom = Geometry.FromWellKnownText("POINT(1 2)", 0),
+            Geog = Geography.FromWellKnownBinary(Convert.FromHexString(PointWkb), 4326)
         });
 
-        Assert.Equal(pengdows.crud.types.converters.WellKnownTextEncoder.Encode("POLYGON((0 0, 4 0, 4 4, 0 0))"),
-            Assert.IsType<byte[]>(sc.GetParameterValue("i1")));
-        Assert.Equal(pengdows.crud.types.converters.WellKnownTextEncoder.Encode("POINT(1 2)"),
-            Assert.IsType<byte[]>(sc.GetParameterValue("i2")));
+        Assert.Equal("010100002000000000000000000000F03F0000000000000040",
+            Convert.ToHexString(Assert.IsType<byte[]>(sc.GetParameterValue("i1"))));
+        Assert.Equal("0101000020E6100000000000000000F03F0000000000000040",
+            Convert.ToHexString(Assert.IsType<byte[]>(sc.GetParameterValue("i2"))));
+        Assert.Contains("ST_GeomFromEWKB(", sc.Query.ToString());
+    }
+
+    // A value built from EWKB already flagged is sent with its own SRID, not flagged twice.
+    [Fact]
+    public void BuildCreate_SpatialFromEwkb_IsNotFlaggedTwice()
+    {
+        var sc = new TableGateway<SpatialRow, int>(SapHanaContext()).BuildCreate(new SpatialRow
+        {
+            Id = 1,
+            Geom = Geometry.FromWellKnownBinary(Convert.FromHexString("0101000020E6100000000000000000F03F0000000000000040"), 4326)
+        });
+
+        Assert.Equal("0101000020E6100000000000000000F03F0000000000000040",
+            Convert.ToHexString(Assert.IsType<byte[]>(sc.GetParameterValue("i1"))));
+    }
+
+    [Fact]
+    public async Task EveryWritePath_Spatial_ReadsTheParameterThroughStGeomFromEwkb()
+    {
+        var gateway = new TableGateway<SpatialRow, int>(SapHanaContext());
+        var row = new SpatialRow { Id = 1, Geom = Geometry.FromWellKnownText("POINT(1 2)", 4326) };
+
+        Assert.Contains("ST_GeomFromEWKB(", (await gateway.BuildUpdateAsync(row, loadOriginal: false)).Query.ToString());
+        var upsert = gateway.BuildUpsert(row).Query.ToString();
+        Assert.Contains("ST_GeomFromEWKB(", upsert);
+        Assert.DoesNotContain("ST_GeomFromWKB(", upsert);
+        Assert.All(gateway.BuildBatchCreate(new[] { row, new SpatialRow { Id = 2 } }),
+            sc => Assert.Contains("ST_GeomFromEWKB(", sc.Query.ToString()));
+    }
+
+    [Fact]
+    public void BuildBaseRetrieve_Spatial_SelectsEwkb()
+    {
+        var sql = new TableGateway<SpatialRow, int>(SapHanaContext()).BuildBaseRetrieve("a").Query.ToString();
+
+        Assert.Contains("\"a\".\"geom\".ST_AsEWKB() AS \"geom\"", sql);
+        Assert.Contains("\"a\".\"geog\".ST_AsEWKB() AS \"geog\"", sql);
     }
 
     [Fact]

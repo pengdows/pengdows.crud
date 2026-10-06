@@ -1161,8 +1161,8 @@
   double[]: String "[0.5,2]"
   JsonDocument: AnsiString JsonDocument:{"a":1}
   JsonElement: AnsiString JsonElement:[1,2]
-  Geometry: Binary 0x0101000000000000000000F03F0000000000000040
-  Geography: Binary 0x0101000000000000000000F03F0000000000000040
+  Geometry: Binary 0x0101000020E6100000000000000000F03F0000000000000040
+  Geography: Binary 0x0101000020E6100000000000000000F03F0000000000000040
   Inet: AnsiString Inet:192.168.0.1/24
   Cidr: AnsiString Cidr:10.0.0.0/8
   MacAddress: AnsiString MacAddress:08:00:2B:01:02:03

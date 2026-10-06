@@ -60,7 +60,7 @@ its trailing zeros, is the data (every dialect sends it without them).
 | `JsonValue` | `DbType.Object` | every database |  |
 | `HStore` | `DbType.Object` | every database |  |
 | `HierarchyId` | `DbType.Object` | every database |  |
-| `Geometry` | `DbType.Object` | all but 4 | SqlServer: bound as SRID-prefixed WKB the statement builds the value from (STGeomFromWKB); read from the stored encoding, verified live<br>Snowflake: bound as EWKB hex the statement builds the value from; read in the session's output format, verified live<br>SingleStore: written as WKT, which carries no SRID: a Geometry reads back with SRID 0 (GEOGRAPHY is always 4326)<br>SapHana: WKB carries no SRID: the column's spatial reference applies on write, and a Geometry reads back with SRID 0 |
+| `Geometry` | `DbType.Object` | all but 3 | SqlServer: bound as SRID-prefixed WKB the statement builds the value from (STGeomFromWKB); read from the stored encoding, verified live<br>Snowflake: bound as EWKB hex the statement builds the value from; read in the session's output format, verified live<br>SingleStore: written as WKT, which carries no SRID: a Geometry reads back with SRID 0 (GEOGRAPHY is always 4326) |
 | `Geography` | `DbType.Object` | all but 2 | SqlServer: bound as SRID-prefixed WKB the statement builds the value from (STGeomFromWKB); read from the stored encoding, verified live<br>Snowflake: bound as EWKB hex the statement builds the value from; read in the session's output format, verified live |
 | `Inet` | `DbType.Object` | every database |  |
 | `Cidr` | `DbType.Object` | every database |  |

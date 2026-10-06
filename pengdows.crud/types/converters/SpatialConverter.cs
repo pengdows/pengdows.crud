@@ -84,7 +84,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             // Plain WKT, a value built from WKB decoded to it.
             SpatialWireFormat.WellKnownText => ExtendedWellKnownText.WellKnownTextOf(value),
             SpatialWireFormat.ExtendedTextOrHex => CreateSnowflakeSpatial(value),
-            SpatialWireFormat.PlainWkb => CreateWkb(value, "SAP HANA"),
+            SpatialWireFormat.SridFlaggedExtendedWkb => CreateSridFlaggedWkb(value, "SAP HANA"),
             // EWKT text, always with its SRID: OracleDialect builds SDO_GEOMETRY from it (TYPE-021).
             SpatialWireFormat.ExtendedWellKnownText => ExtendedWellKnownText.From(value),
             _ => ExtractDefaultSpatial(value)
@@ -198,9 +198,17 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             "Create it with FromWellKnownText or FromWellKnownBinary.");
     }
 
-    internal static byte[] AddSridToWkb(ReadOnlySpan<byte> wkb, int srid)
+    // The value's own SRID, flagged even when 0 (DRY-023); WKB already carrying one is re-flagged
+    // with the value's, never flagged twice.
+    private static byte[] CreateSridFlaggedWkb(SpatialValue value, string database)
     {
-        if (srid == 0 || wkb.Length < 5)
+        GeometryConverter.ExtractSridFromEwkb(CreateWkb(value, database), out _, out var wkb);
+        return AddSridToWkb(wkb, value.Srid, flagSridZero: true);
+    }
+
+    internal static byte[] AddSridToWkb(ReadOnlySpan<byte> wkb, int srid, bool flagSridZero = false)
+    {
+        if ((srid == 0 && !flagSridZero) || wkb.Length < 5)
         {
             return wkb.ToArray();
         }

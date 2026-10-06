@@ -92,6 +92,10 @@
   to 6 on write and read. `DbType.DateTime`/`DateTime2` parameters are now sent as 7-digit text, also
   in your own SQL (`SECONDDATE` and `DATE` store the same value as before), and gateway reads select
   `TO_VARCHAR(col, '... FF7')` (TYPE-022).
+- SAP HANA spatial values keep their SRID. 2.0.5 sent plain WKB, which has none: a column declared
+  with a spatial reference (`ST_GEOMETRY(4326)`) refused every upsert and update ("Spatial value is
+  incompatible with column"), and every `Geometry`/`Geography` read back with SRID 0. Values are now
+  written as EWKB through `ST_GeomFromEWKB(?)` and gateway reads select `col.ST_AsEWKB()` (DRY-023).
 - A negative DuckDB `INTERVAL` read into a `TimeSpan` works. DuckDB.NET 1.5.6 throws for every
   negative interval; the value is now read from its stored parts. An interval with months fails with
   `DataMappingException` instead of reading as zero months (TYPE-022).

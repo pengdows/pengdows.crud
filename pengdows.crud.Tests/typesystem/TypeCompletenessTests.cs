@@ -142,8 +142,6 @@ public class TypeCompletenessTests
         [("Geography", "SqlServer")] = SqlServerSpatial,
         [("Geometry", "Snowflake")] = SnowflakeSpatial,
         [("Geography", "Snowflake")] = SnowflakeSpatial,
-        [("Geometry", "SapHana")] = "WKB carries no SRID: the column's spatial reference applies on write, and a Geometry " +
-                                    "reads back with SRID 0",
         [("Geometry", "SingleStore")] = "written as WKT, which carries no SRID: a Geometry reads back with SRID 0 " +
                                         "(GEOGRAPHY is always 4326)"
     };

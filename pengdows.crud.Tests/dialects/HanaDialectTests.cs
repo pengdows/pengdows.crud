@@ -128,17 +128,17 @@ public class HanaDialectTests
         Assert.Equal("USING (SELECT ? AS \"id\", CAST(? AS BLOB) AS \"payload\" FROM DUMMY) s", source);
     }
 
-    // HANA-001, confirmed live 2026-10-04: the spatial converter binds WKB bytes, which an
-    // ST_GEOMETRY/ST_POINT column takes from a plain INSERT but not from the MERGE source ("The
-    // geometry data is corrupt", even for a new row); ST_GeomFromWKB(?) works for insert and update.
+    // HANA-001, confirmed live 2026-10-04: bound spatial bytes go into ST_GEOMETRY/ST_POINT from a
+    // plain INSERT but not from the MERGE source ("The geometry data is corrupt", even for a new
+    // row); a constructor works for insert and update. DRY-023: EWKB, so the SRID survives.
     [Fact]
-    public void RenderMergeSource_SpatialColumn_ReadsTheWkbThroughStGeomFromWkb()
+    public void RenderMergeSource_SpatialColumn_ReadsTheEwkbThroughStGeomFromEwkb()
     {
         var columns = new TypeMapRegistry().GetTableInfo<SpatialMergeEntity>().OrderedColumns;
 
         var source = CreateDialect().RenderMergeSource(new[] { columns[0], columns[1] }, new[] { "i0", "i1" });
 
-        Assert.Equal("USING (SELECT ? AS \"id\", ST_GeomFromWKB(?) AS \"shape\" FROM DUMMY) s", source);
+        Assert.Equal("USING (SELECT ? AS \"id\", ST_GeomFromEWKB(?) AS \"shape\" FROM DUMMY) s", source);
     }
 
     [pengdows.crud.attributes.Table("spatial_merge")]

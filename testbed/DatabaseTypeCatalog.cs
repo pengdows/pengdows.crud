@@ -1539,6 +1539,12 @@ public static class DatabaseTypeCatalog
             Declaration: "ST_GEOMETRY", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object, Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POLYGON((0 0, 4 0, 4 4, 0 0))", 0), Comparable: false),
         new("ST_POINT", ColumnTypeCategory.Spatial,
             Declaration: "ST_POINT", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object, Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POINT(1.5 -2.25)", 0), Comparable: false),
+        // DRY-023: a column with a spatial reference refuses an SRID-0 value ("The geometry's SRID (0)
+        // does not match the column's SRID (4326)"), so the SRID has to travel with the value both ways.
+        new("ST_GEOMETRY(4326)", ColumnTypeCategory.Spatial,
+            Declaration: "ST_GEOMETRY(4326)", ClrType: typeof(pengdows.crud.types.valueobjects.Geometry), DbType: System.Data.DbType.Object, Sample: pengdows.crud.types.valueobjects.Geometry.FromWellKnownText("POINT(-87.6298 41.8781)", 4326), Comparable: false),
+        new("ST_GEOMETRY(4326) (Geography)", ColumnTypeCategory.Spatial,
+            Declaration: "ST_GEOMETRY(4326)", ClrType: typeof(pengdows.crud.types.valueobjects.Geography), DbType: System.Data.DbType.Object, Sample: pengdows.crud.types.valueobjects.Geography.FromWellKnownText("POINT(-87.6298 41.8781)", 4326), Comparable: false),
         new("REAL_VECTOR(n)", ColumnTypeCategory.Vector, MinVersion: "HANA Cloud / newer HANA 2.0 revisions",
             Notes: "Not in HANA Express 2.0 (\"incorrect syntax near REAL_VECTOR\", confirmed live); HANA Cloud only, not run here."),
         new("HALF_VECTOR(n)", ColumnTypeCategory.Vector, MinVersion: "HANA Cloud / newer HANA 2.0 revisions"),
