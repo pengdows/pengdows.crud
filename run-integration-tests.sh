@@ -216,7 +216,10 @@ if (( ${#failed[@]} > 0 )); then
 fi
 
 # testbed is multi-targeted (net8.0;net10.0); run the matrix on each. Override with
-# TESTBED_FRAMEWORKS="net10.0" to run just one.
+# TESTBED_FRAMEWORKS="net10.0" to run just one. It runs the databases INTEGRATION_ONLY names (the
+# testbed takes the same names), so INTEGRATION_ONLY=Oracle is an Oracle-only run end to end;
+# TESTBED_ONLY overrides that for the matrix alone.
 for tfm in ${TESTBED_FRAMEWORKS:-net8.0 net10.0}; do
-  dotnet run -c Release -f "${tfm}" --project "${root}/testbed"
+  TESTBED_ONLY="${TESTBED_ONLY:-${INTEGRATION_ONLY:-}}" \
+    dotnet run -c Release -f "${tfm}" --project "${root}/testbed"
 done
