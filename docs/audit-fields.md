@@ -96,6 +96,9 @@ need to carry an original creation timestamp/author forward.
 
 ## Timestamps are always UTC
 
+UTC is a correctness choice: an audit trail has to order and compare events across servers and
+daylight-saving changes, which local time can't do. See [utc-and-time.md](utc-and-time.md).
+
 `ResolveAuditTimestamp` (`BaseTableGateway.Audit.cs`) throws `InvalidOperationException` if
 `IAuditValues.TimestampOffset` is non-null but its `Offset` isn't exactly `TimeSpan.Zero` — a
 resolver cannot supply a local-time-with-offset value. If `TimestampOffset` is null, `UtcNow` is

@@ -225,6 +225,7 @@ public int Version { get; set; }
 
 - Entities with `[CreatedBy]` or `[LastUpdatedBy]` REQUIRE `IAuditValueResolver`.
 - Without resolver + user audit fields = `InvalidOperationException` at runtime.
+- Audit timestamps are always UTC. UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`).
 - The resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset all supported.
 
 ## Multi-Tenancy

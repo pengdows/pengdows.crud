@@ -200,7 +200,7 @@ gateway SQL builders (`TableGateway.Sql.cs`/`.Batch.cs`), independent of the gen
   type — anything else throws `SqlGenerationException` at registration.
 - **`[CreatedOn]`/`[LastUpdatedOn]` need no resolver** — they use `DateTime.UtcNow` (or
   `DateTimeOffset`/`TimestampOffset`, all UTC) directly. Property type must be `DateTime` or
-  `DateTimeOffset` (nullable allowed) — anything else throws `SqlGenerationException`.
+  `DateTimeOffset` (nullable allowed) — anything else throws `SqlGenerationException`. Why UTC: [utc-and-time.md](utc-and-time.md).
 - **`AuditCreationPolicy`** (a settable property on every `ITableGateway`/`IPrimaryKeyTableGateway`,
   default `PreserveExplicitValues`) controls whether a caller-supplied `CreatedBy`/`CreatedOn` on
   the entity survives `CreateAsync` instead of being overwritten by the resolver — see CLAUDE.md's

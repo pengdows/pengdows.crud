@@ -70,7 +70,7 @@ For every supported database, verify at minimum:
 
 - Primitive numerics, including signed/unsigned and wide integer values.
 - Decimal precision, scale, rounding, overflow, `NaN`, and infinity behavior where applicable.
-- `DateOnly`, `TimeOnly`, `DateTime`, `DateTimeOffset`, timezone, precision, and UTC semantics.
+- `DateOnly`, `TimeOnly`, `DateTime`, `DateTimeOffset`, timezone, precision, and UTC semantics (why UTC: [utc-and-time.md](utc-and-time.md)).
 - `Guid` text and binary representations, including byte order.
 - Boolean, character, string, binary, stream, and large-object values.
 - Null and `DBNull` behavior for reads, writes, nullable properties, and non-nullable properties.

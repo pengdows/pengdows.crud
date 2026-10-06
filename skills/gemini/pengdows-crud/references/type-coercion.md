@@ -77,6 +77,9 @@ pengdows.crud normalizes types across database providers:
 
 ## DateTime Handling
 
+UTC is a correctness choice, not a convention: a timestamp's truth is its instant, and UTC keeps it
+even on databases that store bare wall-clock values with no zone (`docs/utc-and-time.md`).
+
 - All timestamps are normalized to **UTC**
 - Database-specific timezone handling is abstracted away
 - Audit timestamps (`[CreatedOn]`, `[LastUpdatedOn]`) are always UTC

@@ -319,6 +319,7 @@ This is intentional design — it allows "last modified" queries without checkin
 - Without resolver + user audit fields = `InvalidOperationException` at runtime
 - Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
 - The audit resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset are all supported.
+- UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`)
 
 ## Multi-Tenancy
 
