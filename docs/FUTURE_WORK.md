@@ -780,6 +780,11 @@ reference the incoming row in a multi-row upsert.
 
 #### 2. DuckDB.NET (DuckDB.NET.Data 1.5.6): negative INTERVAL can't be read as TimeSpan
 
+**Fixed upstream, not yet released (2026-10-06):** we submitted the fix ourselves as Giorgi/DuckDB.NET#359
+(merged, develop 136c4eb), plus #360 (merged, c13a8f4): a `TimeSpan` parameter with no inferred type is
+bound as an INTERVAL instead of its `ToString()` text, and `DbType.Time` sends one as a time. pengdows'
+read-from-parts workaround stays for DuckDB.NET 1.5.6 and earlier.
+
 ```csharp
 cmd.CommandText = "SELECT INTERVAL '-90 minutes'";
 reader.GetValue(0);  // ArgumentOutOfRangeException: "...total microseconds is larger than 9223372036854775807"
