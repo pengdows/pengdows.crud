@@ -21,7 +21,7 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         _host = builder.Build();
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task All_supported_providers_complete_successfully()
     {
         var orchestrator = _orchestrator ?? throw new InvalidOperationException("Test host not initialized");
@@ -38,6 +38,11 @@ public sealed class IntegrationMatrixTests : IAsyncLifetime
         // re-exec'd with a corrected environment. Informix is covered by `dotnet run --project
         // testbed` instead, which sets LD_LIBRARY_PATH itself before any P/Invoke.
         exclude.Add("Informix");
+
+        // run-integration-tests.sh runs one database per process (HARN-014): a run of Informix
+        // alone leaves this matrix nothing to run, which the testbed covers.
+        Skip.If(orchestrator.GetTestConfigurations(only, exclude).Count == 0,
+            "Nothing for the matrix in this run: Informix is run by the testbed (dotnet run --project testbed).");
 
         var results = await orchestrator.RunAllTestsAsync(only, exclude);
         Assert.NotEmpty(results);
