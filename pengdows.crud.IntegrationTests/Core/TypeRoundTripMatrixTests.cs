@@ -70,6 +70,28 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
                 {
                     failures.Add($"{entry.Declaration ?? entry.CanonicalName}: {failure}");
                 }
+
+                // A DateTimeOffset written to a column with no offset stores its UTC instant: drivers
+                // given the DateTimeOffset itself stored its local wall time, two hours off for +02:00.
+                // An Unspecified DateTime is UTC on every path: Npgsql refused one for timestamptz.
+                foreach (var (label, variant) in new[]
+                         {
+                             ("DateTimeOffset +02:00", AsOffsetValue(entry)),
+                             ("DateTime Kind=Unspecified", AsUnspecifiedValue(entry))
+                         })
+                {
+                    if (variant == null)
+                    {
+                        continue;
+                    }
+
+                    await using var variantContext = await CreateAdditionalContextAsync(provider);
+                    var variantFailure = await RoundTripAsync(provider, variantContext, variant);
+                    if (variantFailure != null)
+                    {
+                        failures.Add($"{entry.Declaration ?? entry.CanonicalName} ({label}): {variantFailure}");
+                    }
+                }
             }
 
             Output.WriteLine($"{provider}: {entries.Count - failures.Count}/{entries.Count} types round-tripped");
@@ -83,7 +105,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         });
     }
 
-    private async Task<string?> RoundTripAsync(SupportedDatabase provider, IDatabaseContext context,
+    private static async Task<string?> DeclareAsync(SupportedDatabase provider, IDatabaseContext context,
         ColumnTypeDescriptor entry)
     {
         try
@@ -100,6 +122,33 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         catch (Exception ex)
         {
             return "declare: " + Describe(ex);
+        }
+
+        return null;
+    }
+
+    private static ColumnTypeDescriptor? AsUnspecifiedValue(ColumnTypeDescriptor entry) =>
+        entry is { Sample: DateTime { Kind: DateTimeKind.Utc } sample }
+            ? entry with { Sample = DateTime.SpecifyKind(sample, DateTimeKind.Unspecified) }
+            : null;
+
+    private static ColumnTypeDescriptor? AsOffsetValue(ColumnTypeDescriptor entry) =>
+        entry is { ClrType: var clr, DbType: DbType.DateTime or DbType.DateTime2, Sample: DateTime sample } &&
+        clr == typeof(DateTime)
+            ? entry with
+            {
+                ClrType = typeof(DateTimeOffset),
+                Sample = new DateTimeOffset(DateTime.SpecifyKind(sample, DateTimeKind.Utc)).ToOffset(TimeSpan.FromHours(2))
+            }
+            : null;
+
+    private async Task<string?> RoundTripAsync(SupportedDatabase provider, IDatabaseContext context,
+        ColumnTypeDescriptor entry)
+    {
+        var declare = await DeclareAsync(provider, context, entry);
+        if (declare != null)
+        {
+            return declare;
         }
 
         var rowType = TypeRoundTripRows.ByDbType[entry.DbType!.Value].MakeGenericType(entry.ClrType!);

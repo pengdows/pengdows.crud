@@ -184,6 +184,18 @@ every CLR type and every database, whether the value round-trips and why not whe
   local offset; other databases passed text verbatim. A `DateTime` (Unspecified is UTC) or timestamp
   text declared `DbType.DateTimeOffset` now binds exactly as the `DateTimeOffset` of the same instant,
   and no value is bound as NULL. InterBase also remaps a NULL `DateTimeOffset` (DRY-021).
+- **A `DateTimeOffset` written to a column with no offset stores its UTC instant.** On SQL Server,
+  Firebird, Db2, DuckDB, FlatFile, Sybase ASE, Informix, InterBase and Access, a `DateTimeOffset`
+  declared `DbType.DateTime`/`DateTime2` was handed to the driver as-is, which stored its local wall
+  time: `13:45+02:00` was stored as `13:45` and read back two hours off. It is now bound as its UTC
+  `DateTime` on every database, as PostgreSQL and MySQL already did. Rows already written this way
+  hold the wall time and aren't corrected by upgrading (DRY-025).
+- **PostgreSQL-family `DateTime` kinds.** On PostgreSQL, CockroachDB, YugabyteDB and Spanner a
+  `DateTime` with `Kind=Unspecified` declared `DbType.DateTime` (`timestamptz`) was refused by
+  Npgsql, and a `Kind=Local` one declared `DateTime2` was sent as its local wall time. Both now go as
+  the UTC instant (DRY-026).
+- **Oracle NULL intervals bind.** A NULL `IntervalDaySecond`, `IntervalYearMonth` or `TimeSpan`
+  declared `DbType.Object` failed with ORA-50028; it now binds typed (DRY-027).
 - **Streams and readers bind as declared.** A `Stream` property declared `DbType.Binary` or a
   `TextReader` declared `DbType.String`/`AnsiString` made the gateway fail to build its templates
   ("CLR type 'MemoryStream' is not compatible with DbType.Binary"); only `DbType.Object` worked. Any

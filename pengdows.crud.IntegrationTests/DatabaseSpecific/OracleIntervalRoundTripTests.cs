@@ -19,11 +19,14 @@ public sealed class OracleIntervalRoundTripTests : DatabaseTestBase
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
+        await DropTableIfExistsAsync(context, "interval_roundtrip");
         await using var table = context.CreateSqlContainer("""
             CREATE TABLE "interval_roundtrip" (
                 "id" NUMBER(10) PRIMARY KEY,
                 "year_month" INTERVAL YEAR(4) TO MONTH NOT NULL,
-                "day_second" INTERVAL DAY(9) TO SECOND(6) NOT NULL
+                "day_second" INTERVAL DAY(9) TO SECOND(6) NOT NULL,
+                "day_second7" INTERVAL DAY(9) TO SECOND(7) NULL,
+                "span6" INTERVAL DAY(9) TO SECOND(6) NULL
             )
             """);
         await table.ExecuteNonQueryAsync();
@@ -50,6 +53,34 @@ public sealed class OracleIntervalRoundTripTests : DatabaseTestBase
             Assert.Equal(expected.DaySecond, actual.DaySecond);
         });
     }
+
+    // Oracle rounds fractional seconds a column can't hold (confirmed live: .9999999 into SECOND(6)
+    // became the next second), so an IntervalDaySecond is sent with six digits, Oracle's default
+    // precision: truncated, never rounded. A null one binds typed (it failed with ORA-50028).
+    [SkippableFact]
+    public async Task DaySecond_IsTruncatedNeverRounded_AndNullBinds()
+    {
+        await RunTestAgainstProviderAsync(SupportedDatabase.Oracle, async context =>
+        {
+            var row = new OracleIntervalEntity
+            {
+                Id = 2,
+                YearMonth = new IntervalYearMonth(0, 1),
+                DaySecond = new IntervalDaySecond(1, new TimeSpan(2, 3, 4) + TimeSpan.FromTicks(9999999)),
+                DaySecond7 = null,
+                Span6 = null
+            };
+
+            var gateway = new TableGateway<OracleIntervalEntity, int>(context);
+            await gateway.CreateAsync(row, context);
+            var actual = await gateway.RetrieveOneAsync(row.Id, context);
+
+            Assert.NotNull(actual);
+            Assert.Null(actual!.DaySecond7);
+            Assert.Null(actual.Span6);
+            Assert.Equal(new IntervalDaySecond(1, new TimeSpan(2, 3, 4) + TimeSpan.FromTicks(9999990)), actual.DaySecond);
+        });
+    }
 }
 
 [Table("interval_roundtrip")]
@@ -58,4 +89,6 @@ internal sealed class OracleIntervalEntity
     [Id][Column("id", DbType.Int32)] public int Id { get; set; }
     [Column("year_month", DbType.Object)] public IntervalYearMonth YearMonth { get; set; }
     [Column("day_second", DbType.Object)] public IntervalDaySecond DaySecond { get; set; }
+    [Column("day_second7", DbType.Object)] public IntervalDaySecond? DaySecond7 { get; set; }
+    [Column("span6", DbType.Object)] public TimeSpan? Span6 { get; set; }
 }

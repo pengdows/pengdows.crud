@@ -504,9 +504,23 @@ internal class OracleDialect : SqlDialect
               $"FROM (SELECT TO_CLOB({parameterMarker}) x FROM DUAL))"
             : base.RenderColumnArgument(parameterMarker, column);
 
-    // A NULL geometry binds as text like a value does; ODP.NET refuses an untyped NULL (ORA-50028).
+    // A NULL geometry binds as text like a value does; ODP.NET refuses an untyped NULL (ORA-50028),
+    // which a NULL interval or TimeSpan declared DbType.Object was too (found live 2026-10-06).
     internal override DbType? NullParameterDbType(IColumnInfo column) =>
-        IsSpatial(column) ? DbType.String : base.NullParameterDbType(column);
+        IsSpatial(column) || IsInterval(column) ? DbType.String : base.NullParameterDbType(column);
+
+    // Declared DbType.Object only: a NULL declared DbType.Time already binds as INTERVAL DAY TO SECOND.
+    private static bool IsInterval(IColumnInfo column)
+    {
+        if (column.DbType != DbType.Object)
+        {
+            return false;
+        }
+
+        var type = Nullable.GetUnderlyingType(column.PropertyInfo.PropertyType) ?? column.PropertyInfo.PropertyType;
+        return type == typeof(types.valueobjects.IntervalDaySecond) ||
+               type == typeof(types.valueobjects.IntervalYearMonth) || type == typeof(TimeSpan);
+    }
 
     internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
         IsSpatial(column)

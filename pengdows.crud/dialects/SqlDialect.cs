@@ -2154,6 +2154,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return CreateDbParameter(name, type, instant);
         }
 
+        // A DateTimeOffset declared DateTime/DateTime2 (a column with no offset) is its UTC wall time:
+        // drivers given the DateTimeOffset itself store its local wall time, so 13:45+02:00 was stored
+        // as 13:45 and read back two hours off (SQL Server, Firebird, Db2, DuckDB, ...; confirmed live).
+        if (type is DbType.DateTime or DbType.DateTime2 && value is DateTimeOffset offsetValue)
+        {
+            return CreateDbParameter(name, type, offsetValue.UtcDateTime);
+        }
+
         // RowVersion is an opaque 8-byte version token: bind its raw bytes (re-dispatched
         // virtually so per-dialect byte[] handling still applies), the same DbType.Binary
         // payload every provider already accepts for a byte[] [Version] column.

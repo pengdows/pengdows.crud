@@ -34,6 +34,28 @@ public sealed class NullProviderTypedColumnBindingTests
         [Column("m", DbType.Object)] public Geometry? M { get; set; }
     }
 
+    [Table("t")]
+    public sealed class WithIntervals
+    {
+        [Id(true)] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("ds", DbType.Object)] public IntervalDaySecond? Ds { get; set; }
+        [Column("ym", DbType.Object)] public IntervalYearMonth? Ym { get; set; }
+        [Column("ts", DbType.Object)] public System.TimeSpan? Ts { get; set; }
+    }
+
+    // Found live 2026-10-06: a NULL interval (or a TimeSpan declared DbType.Object) on Oracle was bound
+    // untyped, and ODP.NET refused it ("ORA-50028: Invalid parameter binding").
+    [Fact]
+    public void NullIntervals_OnOracle_AreNotBoundUntyped()
+    {
+        using var context = Context(SupportedDatabase.Oracle);
+        using var sc = new TableGateway<WithIntervals, int>(context).BuildCreate(new WithIntervals { Id = 1 });
+
+        var nulls = Parameters(sc).Where(p => p.Value is null or System.DBNull).ToList();
+        Assert.Equal(3, nulls.Count);
+        Assert.All(nulls, p => Assert.NotEqual(DbType.Object, p.DbType));
+    }
+
     private static List<DbParameter> Parameters(ISqlContainer sc) =>
         ((IDictionary<string, DbParameter>)typeof(SqlContainer)
             .GetField("_parameters", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!

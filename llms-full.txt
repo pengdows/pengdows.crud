@@ -6512,8 +6512,19 @@ A `DateTimeOffset` carries two things: an instant, and the offset it was written
 - **The original offset is kept only where the column type can hold one.** SQL Server's
   `DATETIMEOFFSET` does. PostgreSQL's `timestamptz` does not, despite its name: it stores the UTC
   instant and displays it in the session's zone. Oracle (`TIMESTAMP WITH TIME ZONE`) and Snowflake
-  (`TIMESTAMP_TZ`) could, but pengdows sends them the UTC instant today. Once a value is in a column
-  without an offset, the offset is gone and nothing can recover it.
+  (`TIMESTAMP_TZ`) could, but are sent the UTC instant: a parameter can't tell which column it is
+  going to, and a value sent with its offset into a plain `TIMESTAMP` column stores its local wall
+  time there (confirmed live on Oracle), so the instant is the only safe thing to send. Once a value
+  is in a column without an offset, the offset is gone and nothing can recover it.
+
+**Declare the column you have.** Declare `DbType.DateTimeOffset` only on a column that holds an
+offset or an instant (`DATETIMEOFFSET`, `timestamptz`, `TIMESTAMP WITH TIME ZONE`, ...). For a
+`DateTimeOffset` property on a plain timestamp column, declare `DbType.DateTime2` (or `DateTime`):
+the value is then stored as its UTC wall time on every database. SQL Server takes the declaration at
+its word: a `DateTimeOffset` declared `DbType.DateTimeOffset` but stored in a `DATETIME2` column keeps
+its local wall time, so `13:45+02:00` lands as `13:45`. Before 2.0.6, a `DateTimeOffset` declared
+`DateTime`/`DateTime2` was stored that way too on SQL Server, Firebird, Db2, DuckDB, FlatFile,
+Sybase ASE, Informix, InterBase and Access; rows written then hold the wall time.
 
 The same applies to a `DateTime` or timestamp text bound as `DbType.DateTimeOffset`: it is stored as
 the `DateTimeOffset` of its instant would be, never as NULL and never with the server's local offset.
@@ -6539,8 +6550,12 @@ The instant stays UTC either way: that's the part every query, index and compari
 When a column holds fewer fractional digits than .NET's seven, the extra digits are dropped, not
 rounded. Rounding up can move a value across a second, a day or a year boundary (23:59:59.9999999
 rounded to `TIME(0)` becomes 24:00:00, which isn't a valid time). MySQL 8.0.8+ sessions set
-`TIME_TRUNCATE_FRACTIONAL` for this, as MariaDB, PostgreSQL, Firebird and SQL Server already behave.
-TiDB (and MySQL before 8.0.8) can't and rounds: send values at the column's precision there.
+`TIME_TRUNCATE_FRACTIONAL` for this; MariaDB, PostgreSQL, Firebird, Db2, DuckDB, Informix and
+SQL Server's `DATETIME2`/`TIME` truncate on their own (checked live with a value one tick before
+midnight). Still rounding today: SQL Server `DATETIME`/`SMALLDATETIME`, Sybase ASE `SMALLDATETIME`,
+Oracle `TIMESTAMP WITH LOCAL TIME ZONE` and a `TimeSpan` into an Oracle `INTERVAL DAY TO SECOND(6)`
+(DRY-028); TiDB (and MySQL before 8.0.8) can't truncate either. Send values at the column's
+precision there.
 
 ## Source: `docs/testing-with-fakedb.md`
 # Testing with `pengdows.crud.fakeDb`

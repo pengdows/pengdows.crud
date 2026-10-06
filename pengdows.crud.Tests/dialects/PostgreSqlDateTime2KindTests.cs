@@ -41,6 +41,33 @@ public class PostgreSqlDateTime2KindTests
         Assert.Equal(DateTimeKind.Utc, Assert.IsType<DateTime>(parameter.Value).Kind);
     }
 
+    // Found by the live type matrix 2026-10-06: an Unspecified DateTime (UTC, docs/utc-and-time.md)
+    // declared DbType.DateTime was refused by Npgsql ("Cannot write DateTime with Kind=Unspecified to
+    // PostgreSQL type 'timestamp with time zone'") on PostgreSQL, CockroachDB, YugabyteDB and Spanner.
+    // It goes as Kind=Utc; a Local one as its UTC instant, on both DbTypes.
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.Spanner)]
+    public void CreateDbParameter_DateTimeUnspecifiedOrLocal_SendsTheUtcInstant(SupportedDatabase product)
+    {
+        var dialect = Dialect(product);
+        var unspecified = DateTime.SpecifyKind(Utc, DateTimeKind.Unspecified);
+        var local = Utc.ToLocalTime();
+
+        foreach (var value in new[] { unspecified, local })
+        {
+            var timestamptz = Assert.IsType<DateTime>(dialect.CreateDbParameter("p", DbType.DateTime, value).Value);
+            Assert.Equal(DateTimeKind.Utc, timestamptz.Kind);
+            Assert.Equal(Utc.Ticks, timestamptz.Ticks);
+
+            var timestamp = Assert.IsType<DateTime>(dialect.CreateDbParameter("p", DbType.DateTime2, value).Value);
+            Assert.Equal(DateTimeKind.Unspecified, timestamp.Kind);
+            Assert.Equal(Utc.Ticks, timestamp.Ticks);
+        }
+    }
+
     private static ISqlDialect Dialect(SupportedDatabase product)
     {
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", new fakeDbFactory(product));

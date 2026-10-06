@@ -110,12 +110,20 @@ internal class PostgreSqlDialect : SqlDialect
     // 'bigint'" (confirmed live). Retype it as Array | element.
     // Npgsql maps DbType.DateTime2 to timestamp without time zone and refuses a DateTime with
     // Kind=Utc for it. pengdows stores UTC wall time there, so the same instant goes out with
-    // Kind=Unspecified (TYPE-002). DbType.DateTime is timestamptz in Npgsql and keeps Kind=Utc.
+    // Kind=Unspecified (TYPE-002). DbType.DateTime is timestamptz in Npgsql, which refuses anything but
+    // Kind=Utc: an Unspecified DateTime (UTC) failed there (found by the live type matrix 2026-10-06).
+    // Both go out as the UTC instant; a Local one is converted.
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        if (type == DbType.DateTime2 && value is DateTime { Kind: DateTimeKind.Utc } utc)
+        if (type == DbType.DateTime2 && value is DateTime { Kind: not DateTimeKind.Unspecified } timestamp)
         {
-            return base.CreateDbParameter(name, type, DateTime.SpecifyKind(utc, DateTimeKind.Unspecified));
+            return base.CreateDbParameter(name, type,
+                DateTime.SpecifyKind(TypeCoercionHelper.NormalizeDateTime(timestamp), DateTimeKind.Unspecified));
+        }
+
+        if (type == DbType.DateTime && value is DateTime { Kind: not DateTimeKind.Utc } timestamptz)
+        {
+            return base.CreateDbParameter(name, type, TypeCoercionHelper.NormalizeDateTime(timestamptz));
         }
 
         // TYPE-002: a DateTimeOffset declared DbType.Time is a time with an offset (timetz), sent with

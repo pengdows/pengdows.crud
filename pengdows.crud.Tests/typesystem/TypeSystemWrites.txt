@@ -27,6 +27,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567/Unspecified
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -83,6 +85,8 @@
   DateTime Utc as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   DateTime Unspecified as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   text as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -139,6 +143,8 @@
   DateTime Utc as DateTimeOffset: Object DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   DateTime Unspecified as DateTimeOffset: Object DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   text as DateTimeOffset: Object DateTimeOffset:2026-10-05T11:45:30.1234567+00:00
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Object TimeSpan:13:45:30.1234567
   TimeSpan as Time: Object TimeSpan:13:45:30.1234567
@@ -195,6 +201,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -251,6 +259,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567/Unspecified
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -307,6 +317,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -363,6 +375,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -419,6 +433,8 @@
   DateTime Utc as DateTimeOffset: String "2026-10-05T13:45:30.1234567Z"
   DateTime Unspecified as DateTimeOffset: String "2026-10-05T13:45:30.1234567Z"
   text as DateTimeOffset: String "2026-10-05T11:45:30.1234567Z"
+  DateTimeOffset as DateTime: String "2026-10-05T11:45:30.1234567Z"
+  DateTimeOffset as DateTime2: String "2026-10-05T11:45:30.1234567Z"
   DateOnly: String "2026-10-05T00:00:00.0000000Z"
   TimeOnly: String "13:45:30.1234567"
   TimeSpan as Time: String "13:45:30.1234567"
@@ -475,6 +491,8 @@
   DateTime Utc as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   DateTime Unspecified as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   text as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -531,6 +549,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567/Unspecified
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -587,6 +607,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -643,6 +665,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time DateTime:1970-01-01T13:45:30.1234567/Unspecified
   TimeSpan as Time: Time DateTime:1970-01-01T13:45:30.1234567/Unspecified
@@ -699,6 +723,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -755,6 +781,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567/Unspecified
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -811,6 +839,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -867,6 +897,8 @@
   DateTime Utc as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   DateTime Unspecified as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   text as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateOnly:2026-10-05
   TimeOnly: Time TimeOnly:13:45:30.1234567
   TimeSpan as Time: Time TimeOnly:13:45:30.1234567
@@ -923,6 +955,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: String "13:45:30.123456"
   TimeSpan as Time: String "13:45:30.123456"
@@ -979,6 +1013,8 @@
   DateTime Utc as DateTimeOffset: String "2026-10-05 13:45:30.123456"
   DateTime Unspecified as DateTimeOffset: String "2026-10-05 13:45:30.123456"
   text as DateTimeOffset: String "2026-10-05 11:45:30.123456"
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: String "2026-10-05 11:45:30.123456"
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -1035,6 +1071,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567/Unspecified
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: String "13:45:30.1234567"
   TimeSpan as Time: String "13:45:30.1234567"
@@ -1091,6 +1129,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -1147,6 +1187,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime: String "2026-10-05 11:45:30.1234567"
+  DateTimeOffset as DateTime2: String "2026-10-05 11:45:30.1234567"
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -1203,6 +1245,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567
@@ -1259,6 +1303,8 @@
   DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
+  DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: DateTime DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567

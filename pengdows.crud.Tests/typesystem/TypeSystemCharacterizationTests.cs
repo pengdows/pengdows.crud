@@ -68,6 +68,8 @@ public class TypeSystemCharacterizationTests
         yield return ("DateTime Utc as DateTimeOffset", DbType.DateTimeOffset, new DateTime(2026, 10, 5, 13, 45, 30, DateTimeKind.Utc).AddTicks(1234567));
         yield return ("DateTime Unspecified as DateTimeOffset", DbType.DateTimeOffset, new DateTime(2026, 10, 5, 13, 45, 30).AddTicks(1234567));
         yield return ("text as DateTimeOffset", DbType.DateTimeOffset, "2026-10-05T13:45:30.1234567+02:00");
+        yield return ("DateTimeOffset as DateTime", DbType.DateTime, new DateTimeOffset(2026, 10, 5, 13, 45, 30, TimeSpan.FromHours(2)).AddTicks(1234567));
+        yield return ("DateTimeOffset as DateTime2", DbType.DateTime2, new DateTimeOffset(2026, 10, 5, 13, 45, 30, TimeSpan.FromHours(2)).AddTicks(1234567));
         yield return ("DateOnly", DbType.Date, new DateOnly(2026, 10, 5));
         yield return ("TimeOnly", DbType.Time, new TimeOnly(13, 45, 30).Add(TimeSpan.FromTicks(1234567)));
         yield return ("TimeSpan as Time", DbType.Time, new TimeSpan(0, 13, 45, 30).Add(TimeSpan.FromTicks(1234567)));
@@ -520,6 +522,32 @@ public class TypeSystemCharacterizationTests
                 if (actual != expected)
                 {
                     drifted.Add($"{product}: {value} bound {actual}, its instant {expected}");
+                }
+            }
+        }
+
+        Assert.True(drifted.Count == 0, string.Join(Environment.NewLine, drifted));
+    }
+
+    // A DateTimeOffset declared DateTime/DateTime2 (a column with no offset) binds as the UTC DateTime
+    // of its instant, on every database. SQL Server was sent the DateTimeOffset itself, and SqlClient
+    // stores a DateTimeOffset's local wall time in DATETIME2: 13:45+02:00 stored as 13:45, read back as
+    // 13:45 UTC, two hours off (confirmed live).
+    [Fact]
+    public void Writes_DateTimeOffsetDeclaredDateTime_BindsItsUtcInstant()
+    {
+        var value = new DateTimeOffset(2026, 10, 5, 13, 45, 30, TimeSpan.FromHours(2)).AddTicks(1234567);
+        var drifted = new List<string>();
+        foreach (var product in Products())
+        {
+            var dialect = (SqlDialect)SqlDialectFactory.CreateDialectForType(product, FactoryFor(product), NullLogger.Instance);
+            foreach (var type in new[] { DbType.DateTime, DbType.DateTime2 })
+            {
+                var expected = Outcome(() => ShowParameter(dialect.CreateDbParameter("p", type, value.UtcDateTime)));
+                var actual = Outcome(() => ShowParameter(dialect.CreateDbParameter("p", type, value)));
+                if (actual != expected)
+                {
+                    drifted.Add($"{product} {type}: bound {actual}, its UTC instant {expected}");
                 }
             }
         }
