@@ -162,7 +162,8 @@ public class InsertReturningTests : DatabaseTestBase
                 SupportedDatabase.MySql or SupportedDatabase.TiDb
                     or SupportedDatabase.Snowflake or SupportedDatabase.FlatFile or SupportedDatabase.SingleStore
                     or SupportedDatabase.Informix or SupportedDatabase.SybaseASE
-                    or SupportedDatabase.SapHana or SupportedDatabase.InterBase => false,
+                    or SupportedDatabase.SapHana or SupportedDatabase.InterBase
+                    or SupportedDatabase.Access => false,
                 _ => null
             };
 
@@ -270,6 +271,13 @@ CREATE COLUMN TABLE {table} (
 CREATE TABLE {table} (
     {context.WrapObjectName("id")} NUMERIC(18, 0) NOT NULL PRIMARY KEY,
     {context.WrapObjectName("name")} VARCHAR(255) NOT NULL
+)",
+            // Access: COUNTER is the AutoNumber column; the id comes back through SELECT @@IDENTITY
+            // (GeneratedKeyPlan.SessionScopedFunction), there is no RETURNING.
+            SupportedDatabase.Access => $@"
+CREATE TABLE {table} (
+    {context.WrapObjectName("id")} COUNTER NOT NULL PRIMARY KEY,
+    {context.WrapObjectName("name")} TEXT(255) NOT NULL
 )",
             _ => throw new NotSupportedException($"Provider {provider} is not supported by this test")
         };

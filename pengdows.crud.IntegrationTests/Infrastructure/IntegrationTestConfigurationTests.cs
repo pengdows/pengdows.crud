@@ -49,6 +49,29 @@ public class IntegrationTestConfigurationTests
         Assert.Equal(includeAccess, providers.Contains(SupportedDatabase.Access));
     }
 
+    // A test that starts its own engine (an embedded database, a Docker container) asks this before it
+    // does, so INTEGRATION_ONLY keeps every other database from being touched.
+    [Fact]
+    public void IsEnabled_FollowsIntegrationOnly()
+    {
+        var original = Environment.GetEnvironmentVariable("INTEGRATION_ONLY");
+        try
+        {
+            Environment.SetEnvironmentVariable("INTEGRATION_ONLY", "Sqlite");
+            Assert.True(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite));
+            Assert.False(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.DuckDB));
+            Assert.False(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Firebird));
+
+            Environment.SetEnvironmentVariable("INTEGRATION_ONLY", null);
+            Assert.True(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.DuckDB));
+            Assert.True(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Firebird));
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("INTEGRATION_ONLY", original);
+        }
+    }
+
     // Access is on exactly when the OS is Windows (ACE OLE DB + ADOX); no env var involved.
     [Theory]
     [InlineData(null)]

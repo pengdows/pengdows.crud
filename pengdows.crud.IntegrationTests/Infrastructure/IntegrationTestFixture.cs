@@ -40,6 +40,13 @@ internal static class IntegrationTestConfiguration
                 ShouldIncludeAccess),
             Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
 
+    /// <summary>
+    /// True when <paramref name="database"/> is in this run's enabled providers (INTEGRATION_ONLY and the
+    /// opt-ins applied). A test that starts its own engine - an embedded database or a Docker container -
+    /// skips on this so a filtered run touches nothing else.
+    /// </summary>
+    public static bool IsEnabled(SupportedDatabase database) => EnabledProviders.Contains(database);
+
     public static bool ShouldIncludeSnowflake =>
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_SNOWFLAKE"), "true",
             StringComparison.OrdinalIgnoreCase);

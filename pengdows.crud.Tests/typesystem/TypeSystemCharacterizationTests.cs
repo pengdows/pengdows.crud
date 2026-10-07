@@ -454,8 +454,10 @@ public class TypeSystemCharacterizationTests
         }
 
         Assert.True(File.Exists(path), $"{name} is missing; run with PIN_TYPES=1 to create it.");
-        var expected = File.ReadAllText(path).ReplaceLineEndings("\n");
-        var lines = actual.ReplaceLineEndings("\n").Split('\n');
+        // Normalized for the platform: git may check the file out as CRLF on Windows, and a culture-formatted
+        // time (FbZonedDateTime) puts a narrow no-break space (U+202F) before AM/PM on newer ICU data only.
+        var expected = Normalize(File.ReadAllText(path));
+        var lines = Normalize(actual).Split('\n');
         var pinned = expected.Split('\n');
         for (var i = 0; i < Math.Max(lines.Length, pinned.Length); i++)
         {
@@ -464,6 +466,8 @@ public class TypeSystemCharacterizationTests
             Assert.True(a == e, $"{name} line {i + 1} changed:\n  pinned: {e}\n  now:    {a}");
         }
     }
+
+    private static string Normalize(string text) => text.ReplaceLineEndings("\n").Replace('\u202f', ' ');
 
     // A value is never bound as NULL: a dialect that remapped a DbType it can't bind sent anything but
     // the one CLR type it expected as DBNull (a DateTime declared DateTimeOffset on Db2, Informix and

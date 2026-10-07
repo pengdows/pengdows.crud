@@ -83,6 +83,15 @@ public class TransientErrorTests : DatabaseTestBase
                 DuckDB.NET.Data.DuckDBClientFactory.Instance);
         }
 
+        // Access is an embedded file too (ACE OLE DB, Windows only): a database file in a directory
+        // that doesn't exist.
+        if (provider == SupportedDatabase.Access && OperatingSystem.IsWindows())
+        {
+            return new DatabaseContext(
+                @"Provider=Microsoft.ACE.OLEDB.16.0;Data Source=C:\nonexistent_dir_pengdows_probe\db.accdb;",
+                System.Data.OleDb.OleDbFactory.Instance);
+        }
+
 #if PENGDOWS_FLATFILE
         // pengdows.flatfile is embedded too: a directory-mode path that doesn't exist.
         if (provider == SupportedDatabase.FlatFile)

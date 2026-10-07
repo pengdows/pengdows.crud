@@ -582,6 +582,37 @@ public abstract class DatabaseTestBase : IAsyncLifetime
                || message.Contains("invalid table name");
     }
 
+    /// <summary>
+    /// Creates (replacing any leftover) a one-row table and returns its wrapped name, for Access, which
+    /// has no dual table: a SELECT with no FROM is a syntax error and an untyped parameter in a
+    /// select list crashes the engine, so tests that probe an expression need a table to select from.
+    /// </summary>
+    protected static async Task<string> CreateSingleRowTableAsync(IDatabaseContext context)
+    {
+        var table = context.WrapObjectName("dual_one");
+        var column = context.WrapObjectName("x");
+        await using (var drop = context.CreateSqlContainer($"DROP TABLE {table}"))
+        {
+            try
+            {
+                await drop.ExecuteNonQueryAsync();
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // no leftover table
+            }
+        }
+
+        await using (var create = context.CreateSqlContainer($"CREATE TABLE {table} ({column} LONG)"))
+        {
+            await create.ExecuteNonQueryAsync();
+        }
+
+        await using var seed = context.CreateSqlContainer($"INSERT INTO {table} ({column}) VALUES (1)");
+        await seed.ExecuteNonQueryAsync();
+        return table;
+    }
+
     private static string BuildExclusionReason(SupportedDatabase provider)
     {
         var integrationOnly = Environment.GetEnvironmentVariable("INTEGRATION_ONLY");

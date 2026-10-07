@@ -1,3 +1,4 @@
+using pengdows.crud.enums;
 using System.Data;
 using pengdows.crud.attributes;
 using pengdows.crud.IntegrationTests.Infrastructure;
@@ -24,9 +25,11 @@ public sealed class SqliteValueDependentHydrationTests : SqliteTestBase
         await ExecuteSqlAsync("INSERT INTO value_dependent_decimal (id, amount) VALUES (1, 1), (2, 1.5), (3, '2.75')");
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DecimalAffinityValues_HydrateToDeclaredDecimalType()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite), "Sqlite is not enabled for this test run.");
+
         var gateway = new TableGateway<SqliteValueDependentDecimal, long>(Context);
 
         var integerProviderType = await GetProviderFieldTypeAsync(1);

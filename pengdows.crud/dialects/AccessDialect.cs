@@ -326,6 +326,61 @@ internal sealed class AccessDialect : SqlDialect
     // column as either DbType.Decimal or DbType.Currency — neither has the DbType.DateTime-style
     // OleDbType-mapping problem found elsewhere in this file.
 
+    // CONFIRMED live: a Mode=Read connection refuses a write ("Operation must use an updateable query."),
+    // which AccessExceptionTranslator maps to ReadOnlyViolationException.
+    internal override bool EnforcesReadOnlyTransactions => true;
+
+    // A long is bound as a Double when one holds it exactly (|v| <= 2^53) and as a Decimal beyond
+    // that (see CreateDbParameter). The gateway clones a template and reassigns the value with
+    // SetParameterValue, so the representation - and the parameter's DbType - must follow the new
+    // value, not the one the template was created with.
+    private const long ExactDoubleLimit = 1L << 53;
+
+    private static bool FitsExactDouble(long value) => value is >= -ExactDoubleLimit and <= ExactDoubleLimit;
+
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        return value is long l && dbType is DbType.Double or DbType.Decimal
+            ? FitsExactDouble(l) ? (double)l : (decimal)l
+            : base.PrepareParameterValue(value, dbType);
+    }
+
+    // CONFIRMED live: a DATETIME holds 0100-01-01 to 9999-12-31 and a time of day is [0, 24h). Access
+    // silently stored DateOnly.MinValue as 1899-12-30 and wrapped a TimeSpan of 24h to 00:00:00 - a
+    // wrong value, never an error - so a value outside those ranges is refused here (TYPE-008).
+    private static readonly DateTime s_accessMinDate = new(100, 1, 1);
+    private static readonly DateOnly s_accessMinDay = new(100, 1, 1);
+
+    internal override void ValidateCommandParameters(DbCommand command)
+    {
+        foreach (DbParameter parameter in command.Parameters)
+        {
+            RefuseValuesOutsideAccessRanges(parameter.Value);
+        }
+    }
+
+    private static void RefuseValuesOutsideAccessRanges(object? value)
+    {
+        switch (value)
+        {
+            case DateOnly day when day < s_accessMinDay:
+                throw new ArgumentOutOfRangeException(nameof(value), day,
+                    "Access DATETIME cannot hold a date before 0100-01-01.");
+            case DateTime dateTime when dateTime < s_accessMinDate:
+                throw new ArgumentOutOfRangeException(nameof(value), dateTime,
+                    "Access DATETIME cannot hold a date before 0100-01-01.");
+            case DateTimeOffset offset when offset.UtcDateTime < s_accessMinDate:
+                throw new ArgumentOutOfRangeException(nameof(value), offset,
+                    "Access DATETIME cannot hold a date before 0100-01-01.");
+            case TimeSpan span when span < TimeSpan.Zero || span >= TimeSpan.FromDays(1):
+                throw new ArgumentOutOfRangeException(nameof(value), span,
+                    "An Access time of day is from 00:00:00 up to, not including, 24:00:00.");
+        }
+    }
+
+    internal override DbType? DbTypeForReassignedValue(object? newValue, object? preparedValue) =>
+        newValue is long ? preparedValue is double ? DbType.Double : DbType.Decimal : null;
+
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         // CONFIRMED live (testbed type matrix): System.Data.OleDb has no DbType.DateTimeOffset
@@ -347,7 +402,6 @@ internal sealed class AccessDialect : SqlDialect
         // such a value cannot match through a parameter). Null is remapped too.
         if (type == DbType.Int64)
         {
-            const long ExactDoubleLimit = 1L << 53;
             if (value is null || value is DBNull)
             {
                 return base.CreateDbParameter<object?>(name, DbType.Double, DBNull.Value);
@@ -357,7 +411,7 @@ internal sealed class AccessDialect : SqlDialect
             // the base, which rejects it. It was bound as NULL unless it was a long (REV-053).
             if (AsInt64(value) is { } l)
             {
-                return l is >= -ExactDoubleLimit and <= ExactDoubleLimit
+                return FitsExactDouble(l)
                     ? base.CreateDbParameter<object?>(name, DbType.Double, (double)l)
                     : base.CreateDbParameter<object?>(name, DbType.Decimal, (decimal)l);
             }

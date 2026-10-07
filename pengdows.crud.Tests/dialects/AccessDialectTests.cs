@@ -3,6 +3,7 @@
 using System;
 using System.Data;
 using System.Data.Common;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -354,6 +355,91 @@ public class AccessDialectTests
         Assert.Equal(Convert.ToDouble(value, System.Globalization.CultureInfo.InvariantCulture), param.Value);
     }
 
+    // CONFIRMED live: RetrieveOneAsync(id) clones a template and calls SetParameterValue, so a
+    // parameter created for a small long must be re-typed when it is reassigned a large one (and
+    // back) - otherwise a large id is squeezed through a Double and never matches.
+    [Theory]
+    [InlineData(5L, long.MaxValue, DbType.Decimal)]
+    [InlineData(639269691493655499L, 7L, DbType.Double)]
+    [InlineData(5L, 9007199254740993L, DbType.Decimal)]
+    [InlineData(long.MaxValue, 9007199254740992L, DbType.Double)]
+    public void SetParameterValue_RetypesAnInt64ParameterToMatchTheNewValue(long initial, long reassigned,
+        DbType expectedType)
+    {
+        using var context = CreateContext();
+        using var container = context.CreateSqlContainer("SELECT 1 WHERE 1 = ");
+        var parameter = container.AddParameterWithValue("p0", DbType.Int64, initial);
+
+        container.SetParameterValue("p0", reassigned);
+
+        Assert.Equal(expectedType, parameter.DbType);
+        Assert.Equal(expectedType == DbType.Double ? (object)(double)reassigned : (decimal)reassigned,
+            parameter.Value);
+    }
+
+    // CONFIRMED live: a DATETIME holds 0100-01-01 to 9999-12-31 and a time of day is [0, 24h). Access
+    // silently stored DateOnly.MinValue as 1899-12-30 and wrapped a TimeSpan of 24h to 00:00:00 -
+    // a wrong value, never an error. The value is refused when the command is built to run (TYPE-008).
+    // A parameter CREATED at default(DateTime) is a template placeholder and is never executed, so
+    // creating one must not throw.
+    private static async Task AssertExecutionRefusedAsync(DbType type, object bad)
+    {
+        await using var context = CreateContext();
+        await using var container = context.CreateSqlContainer("INSERT INTO t (v) VALUES (");
+        var parameter = container.AddParameterWithValue("p0", type, bad);
+        container.Query.Append(container.MakeParameterName(parameter)).Append(')');
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => await container.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
+    public async Task DateOnly_BelowAccessMinimum_IsRefusedWhenExecuted()
+    {
+        await AssertExecutionRefusedAsync(DbType.Date, DateOnly.MinValue);
+        await AssertExecutionRefusedAsync(DbType.Date, new DateOnly(99, 12, 31));
+    }
+
+    [Fact]
+    public async Task DateTime_BelowAccessMinimum_IsRefusedWhenExecuted()
+    {
+        await AssertExecutionRefusedAsync(DbType.DateTime, DateTime.MinValue);
+        await AssertExecutionRefusedAsync(DbType.DateTimeOffset, DateTimeOffset.MinValue);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData(24)]
+    [InlineData(25)]
+    public async Task TimeSpan_OutsideATimeOfDay_IsRefusedWhenExecuted(int hours)
+    {
+        await AssertExecutionRefusedAsync(DbType.Time, TimeSpan.FromHours(hours));
+    }
+
+    [Fact]
+    public async Task ValuesInsideAccessRanges_AreExecuted()
+    {
+        await using var context = CreateContext();
+        await using var container = context.CreateSqlContainer("INSERT INTO t (a, b, c, d) VALUES (");
+        var a = container.AddParameterWithValue("a", DbType.Date, new DateOnly(100, 1, 1));
+        var b = container.AddParameterWithValue("b", DbType.Date, DateOnly.MaxValue);
+        var c = container.AddParameterWithValue("c", DbType.Time, new TimeSpan(23, 59, 59));
+        var d = container.AddParameterWithValue("d", DbType.DateTime, new DateTime(100, 1, 1));
+        container.Query.Append(container.MakeParameterName(a)).Append(", ").Append(container.MakeParameterName(b))
+            .Append(", ").Append(container.MakeParameterName(c)).Append(", ").Append(container.MakeParameterName(d))
+            .Append(')');
+
+        await container.ExecuteNonQueryAsync();
+    }
+
+    [Fact]
+    public void TemplatePlaceholders_AtTheTypeDefaults_AreAccepted()
+    {
+        var d = CreateDialect();
+        d.CreateDbParameter("p", DbType.Date, DateOnly.MinValue);
+        d.CreateDbParameter("p", DbType.DateTime, DateTime.MinValue);
+        d.CreateDbParameter("p", DbType.DateTimeOffset, DateTimeOffset.MinValue);
+        d.CreateDbParameter("p", DbType.Time, TimeSpan.Zero);
+    }
     [Fact]
     public void NullInt64_IsBoundAsANullDouble()
     {
@@ -361,6 +447,15 @@ public class AccessDialectTests
         Assert.Equal(DbType.Double, param.DbType);
         Assert.Equal(DBNull.Value, param.Value);
     }
+    // CONFIRMED live: a write sent through a read-intent transaction fails with "Operation must use an
+    // updateable query." (a Mode=Read connection), which AccessExceptionTranslator maps to
+    // ReadOnlyViolationException - so the dialect does enforce read-only transactions.
+    [Fact]
+    public void EnforcesReadOnlyTransactions_IsTrue()
+    {
+        Assert.True(CreateDialect().EnforcesReadOnlyTransactions);
+    }
+
     // CONFIRMED live: "Mode=Read" is a real, recognized OLE DB/Jet property that genuinely
     // enforces read-only at the driver level.
     [Fact]

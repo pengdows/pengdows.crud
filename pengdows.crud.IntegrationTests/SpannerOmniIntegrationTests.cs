@@ -2,6 +2,8 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using DotNet.Testcontainers.Networks;
 using Npgsql;
+using pengdows.crud.enums;
+using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit;
 
 namespace pengdows.crud.IntegrationTests;
@@ -19,6 +21,12 @@ public sealed class SpannerOmniIntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        if (!IntegrationTestConfiguration.EnabledProviders.Contains(SupportedDatabase.Spanner))
+        {
+            // Skipped in the Fact body; nothing to start (INTEGRATION_ONLY / not enabled).
+            return;
+        }
+
         _network = new NetworkBuilder().WithName($"pengdows-spanner-{Guid.NewGuid():N}").Build();
         await _network.CreateAsync();
         _omni = new ContainerBuilder().WithImage(OmniImage).WithNetwork(_network)
@@ -125,9 +133,12 @@ public sealed class SpannerOmniIntegrationTests : IAsyncLifetime
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task PostgreSqlCrud_WorksAgainstSpannerOmni()
     {
+        Skip.IfNot(IntegrationTestConfiguration.EnabledProviders.Contains(SupportedDatabase.Spanner),
+            "Spanner is not enabled for this test run.");
+
         await using var connection = new NpgsqlConnection(_connectionString);
         await connection.OpenAsync();
         await using (var create = connection.CreateCommand())

@@ -1,3 +1,4 @@
+using pengdows.crud.IntegrationTests.Infrastructure;
 using DuckDB.NET.Data;
 using Microsoft.Data.Sqlite;
 using pengdows.crud.configuration;
@@ -25,9 +26,11 @@ public class ReadOnlyViolationTests
 {
     // ── SQLite ────────────────────────────────────────────────────────────────
 
-    [Fact]
+    [SkippableFact]
     public async Task Sqlite_InsertOnReadOnlyConnection_Throws_ReadOnlyViolationException()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite), "Sqlite is not enabled for this test run.");
+
         var dbPath = Path.Combine(Path.GetTempPath(), $"pengdows_ro_test_{Guid.NewGuid():N}.sqlite");
         try
         {
@@ -64,9 +67,11 @@ public class ReadOnlyViolationTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Sqlite_UpdateOnReadOnlyConnection_Throws_ReadOnlyViolationException()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite), "Sqlite is not enabled for this test run.");
+
         var dbPath = Path.Combine(Path.GetTempPath(), $"pengdows_ro_test_{Guid.NewGuid():N}.sqlite");
         try
         {
@@ -102,9 +107,11 @@ public class ReadOnlyViolationTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task Sqlite_ReadOnReadOnlyConnection_Succeeds()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite), "Sqlite is not enabled for this test run.");
+
         var dbPath = Path.Combine(Path.GetTempPath(), $"pengdows_ro_test_{Guid.NewGuid():N}.sqlite");
         try
         {
@@ -142,9 +149,11 @@ public class ReadOnlyViolationTests
 
     // ── DuckDB ────────────────────────────────────────────────────────────────
 
-    [Fact]
+    [SkippableFact]
     public async Task DuckDb_InsertOnReadOnlyConnection_Throws_ReadOnlyViolationException()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.DuckDB), "DuckDB is not enabled for this test run.");
+
         var dbPath = Path.Combine(Path.GetTempPath(), $"pengdows_ro_test_{Guid.NewGuid():N}.duckdb");
         try
         {
@@ -182,9 +191,11 @@ public class ReadOnlyViolationTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DuckDb_ReadOnReadOnlyConnection_Succeeds()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.DuckDB), "DuckDB is not enabled for this test run.");
+
         var dbPath = Path.Combine(Path.GetTempPath(), $"pengdows_ro_test_{Guid.NewGuid():N}.duckdb");
         try
         {

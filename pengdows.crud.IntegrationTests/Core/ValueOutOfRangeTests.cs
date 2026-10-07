@@ -36,6 +36,9 @@ public class ValueOutOfRangeTests : DatabaseTestBase
         // InterBase's exact numerics stop at 18 digits, below decimal's range; a double holds 9e28
         // and the read must still overflow loudly (HARN-011).
         SupportedDatabase.InterBase => "DOUBLE PRECISION",
+        // Access's DECIMAL stops at 28 digits ("Invalid precision for decimal data type"), below decimal's
+        // range; a DOUBLE holds 9e28 and the read must still overflow loudly.
+        SupportedDatabase.Access => "DOUBLE",
         _ => "DECIMAL(38,0)"
     };
 

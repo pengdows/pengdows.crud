@@ -88,6 +88,7 @@ public class IsolationResolverCharacterizationTests
             File.WriteAllText(PinnedPath(), actual);
         }
 
-        Assert.Equal(File.ReadAllText(PinnedPath()), actual);
+        // Compared with line endings normalized: git may check the pinned file out as CRLF on Windows.
+        Assert.Equal(File.ReadAllText(PinnedPath()).ReplaceLineEndings("\n"), actual.ReplaceLineEndings("\n"));
     }
 }

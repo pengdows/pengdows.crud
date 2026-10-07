@@ -5,15 +5,22 @@ namespace pengdows.crud.IntegrationTests.Infrastructure;
 public class NativeClientEnvironmentTests
 {
     private const string BaseDirectory = "/work/bin/Release/net10.0/";
-    private const string NativeLib = "/work/bin/Release/net10.0/native/lib";
-    private const string NativeRoot = "/work/bin/Release/net10.0/native";
 
-    private static string? Check(SupportedDatabase provider, string? ldLibraryPath, string? informixDir = NativeRoot,
+    // Built the way the implementation builds them: Path.Combine uses the OS separator, so a literal
+    // "/work/.../native/lib" never matches on Windows.
+    private static readonly string NativeLib = NativeClientEnvironment.InformixNativeLibDirectory(BaseDirectory);
+    private static readonly string NativeRoot = NativeClientEnvironment.InformixNativeRoot(BaseDirectory);
+
+    // Marks "use the default"; NativeRoot is no longer a compile-time constant, so it can't be a default value.
+    private const string DefaultInformixDir = "\0default";
+
+    private static string? Check(SupportedDatabase provider, string? ldLibraryPath,
+        string? informixDir = DefaultInformixDir,
         string? sqlHosts = "/tmp/pengdows-informix-sqlhosts") =>
         NativeClientEnvironment.GetMissingEnvironmentError(provider, BaseDirectory, name => name switch
         {
             "LD_LIBRARY_PATH" => ldLibraryPath,
-            "INFORMIXDIR" => informixDir,
+            "INFORMIXDIR" => informixDir == DefaultInformixDir ? NativeRoot : informixDir,
             "INFORMIXSQLHOSTS" => sqlHosts,
             _ => null
         });
@@ -59,7 +66,8 @@ public class NativeClientEnvironmentTests
     [Fact]
     public void Informix_WithEverythingExported_ReportsNothing()
     {
-        Assert.Null(Check(SupportedDatabase.Informix, "/usr/lib:" + NativeLib));
+        // The path-list separator is ':' on Linux but ';' on Windows.
+        Assert.Null(Check(SupportedDatabase.Informix, "/usr/lib" + Path.PathSeparator + NativeLib));
     }
 
     [Theory]

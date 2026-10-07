@@ -142,12 +142,22 @@ public class ParameterBindingTests : DatabaseTestBase
                 // CAST for type context.
                 SupportedDatabase.Spanner =>
                     $"SELECT CAST({pInt} AS INTEGER), CAST({pLong} AS BIGINT), CAST({pDecimal} AS NUMERIC), CAST({pBool} AS BOOLEAN), {pString}",
+                // Access needs a FROM clause (it has no dual table) and a conversion function around
+                // each "?" for type context - an untyped "?" in a select list crashes the ACE engine
+                // outright (it killed the test host). A long is read through CDbl: CLng is 32-bit.
+                SupportedDatabase.Access =>
+                    $"SELECT CLng({pInt}), CDbl({pLong}), CDbl({pDecimal}), CBool({pBool}), CStr({pString}) FROM {context.WrapObjectName("dual_one")}",
                 _ => $"SELECT {pInt}, {pLong}, {pDecimal}, {pBool}, {pString}"
             };
 
             if (provider == SupportedDatabase.Oracle)
             {
                 sql += " FROM DUAL";
+            }
+
+            if (provider == SupportedDatabase.Access)
+            {
+                await CreateSingleRowTableAsync(context);
             }
 
             await using var container = context.CreateSqlContainer(sql);

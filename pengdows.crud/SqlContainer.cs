@@ -733,6 +733,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         }
 
         AddParametersToCommand(dbCommand);
+        if (_dialect is SqlDialect validatingDialect)
+        {
+            validatingDialect.ValidateCommandParameters(dbCommand);
+        }
 
         return dbCommand;
     }
@@ -1944,6 +1948,10 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         cmd.CommandText = cmdText;
         // Bind parameters consistently with CreateCommand
         AddParametersToCommand(cmd);
+        if (_dialect is SqlDialect validatingExecDialect)
+        {
+            validatingExecDialect.ValidateCommandParameters(cmd);
+        }
 
         if (ArrayBindRowCount.HasValue && _dialect is SqlDialect arrayBindDialect)
         {

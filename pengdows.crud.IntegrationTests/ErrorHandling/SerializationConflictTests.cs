@@ -1,3 +1,4 @@
+using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Collections.Concurrent;
 using System.Data;
 using DuckDB.NET.Data;
@@ -60,9 +61,11 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 [Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public class SerializationConflictTests
 {
-    [Fact]
+    [SkippableFact]
     public async Task DuckDb_ConcurrentConflictingWrite_ClassifiesAsSerializationConflictException()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.DuckDB), "DuckDB is not enabled for this test run.");
+
         var path = Path.Combine(Path.GetTempPath(), $"pengdows_serialization_probe_{Guid.NewGuid():N}.db");
         var factory = DuckDBClientFactory.Instance;
 
@@ -141,9 +144,11 @@ public class SerializationConflictTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task DuckDb_ConcurrentSameRowUpdates_UnderSingleWriterMode_AllSucceedWithZeroConflicts()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.DuckDB), "DuckDB is not enabled for this test run.");
+
         // Companion to DuckDb_ConcurrentConflictingWrite_ClassifiesAsSerializationConflictException
         // above (which proves DuckDB's own conflict gets correctly classified via two raw
         // connections) — this proves the other half: pengdows.crud's SingleWriter mode (the
@@ -214,6 +219,8 @@ public class SerializationConflictTests
     [SkippableFact]
     public async Task Firebird_ConcurrentConflictingWrite_ClassifiesAsSerializationConflictException()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Firebird), "Firebird is not enabled for this test run.");
+
         var containerName = $"pengdows_fb_serialization_probe_{Guid.NewGuid():N}";
         var hostPort = GetFreeTcpPort();
 

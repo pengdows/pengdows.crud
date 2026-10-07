@@ -3640,6 +3640,16 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual DbType? DbTypeForReassignedValue(object? newValue, object? preparedValue) => null;
 
+    /// <summary>
+    /// Called with a command whose parameters are all set, just before it is executed. A dialect throws
+    /// here for a value its database would silently store as a different one (a date below the column
+    /// type's range, a time of day past 24h) so it fails loudly instead (TYPE-008). Runs at execution,
+    /// not at parameter creation, because a template's placeholder parameters sit at a type's default.
+    /// </summary>
+    internal virtual void ValidateCommandParameters(DbCommand command)
+    {
+    }
+
     public virtual object? PrepareParameterValue(object? value, DbType dbType)
     {
         if (value is Guid guid)

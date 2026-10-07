@@ -2,6 +2,8 @@ using System.Data.Common;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using pengdows.crud.enums;
+using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit;
 
 namespace pengdows.crud.IntegrationTests.ErrorHandling;
@@ -41,9 +43,13 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 [Collection(pengdows.crud.IntegrationTests.Infrastructure.StandaloneContainerCollection.Name)]
 public class CommandTimeoutTests
 {
-    [Fact]
+    [SkippableFact]
     public async Task Postgres_SlowQuery_ShortCommandTimeout_ThrowsCommandTimeoutException()
     {
+        // Starts its own Docker container, so it must honor INTEGRATION_ONLY / opt-ins like every other test.
+        Skip.IfNot(IntegrationTestConfiguration.EnabledProviders.Contains(SupportedDatabase.PostgreSql),
+            "PostgreSQL is not enabled for this test run.");
+
         await using var container = await StandaloneContainer.StartAsync(
             "postgres:latest", 5432,
             new[] { "-e", "POSTGRES_PASSWORD=mysecretpassword" });
@@ -71,9 +77,12 @@ public class CommandTimeoutTests
         Assert.IsType<pengdows.crud.exceptions.CommandTimeoutException>(translated);
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SqlServer_SlowQuery_ShortCommandTimeout_ThrowsCommandTimeoutException()
     {
+        Skip.IfNot(IntegrationTestConfiguration.EnabledProviders.Contains(SupportedDatabase.SqlServer),
+            "SQL Server is not enabled for this test run.");
+
         await using var container = await StandaloneContainer.StartAsync(
             "mcr.microsoft.com/mssql/server:latest", 1433,
             new[] { "-e", "ACCEPT_EULA=Y", "-e", "MSSQL_SA_PASSWORD=yourStrong(!)Password" });

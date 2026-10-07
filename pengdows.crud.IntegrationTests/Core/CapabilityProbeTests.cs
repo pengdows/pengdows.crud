@@ -131,7 +131,11 @@ public class CapabilityProbeTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
-            var subquery = $"(SELECT 1 AS v{GetDummyFromClause(provider)})";
+            // Access has no dual table: select from a one-row table instead.
+            var dummyFrom = provider == SupportedDatabase.Access
+                ? $" FROM {await CreateSingleRowTableAsync(context)}"
+                : GetDummyFromClause(provider);
+            var subquery = $"(SELECT 1 AS v{dummyFrom})";
             await using var sc = context.CreateSqlContainer();
             sc.Query.Append(
                 $"SELECT a.v FROM ({subquery} a INNER JOIN {subquery} b ON a.v = b.v) " +

@@ -34,9 +34,11 @@ public class SqliteModeIsolationTests
         _output = output;
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SingleConnectionMode_OrdinaryCommand_BlocksUntilOpenTransactionDisposed()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite), "Sqlite is not enabled for this test run.");
+
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:",
@@ -98,9 +100,11 @@ public class SqliteModeIsolationTests
     /// If the ordinary command's row also vanished, it was actually inside the transaction the
     /// whole time despite never being issued through the ITransactionContext.
     /// </summary>
-    [Fact]
+    [SkippableFact]
     public async Task SingleConnectionMode_OrdinaryCommand_SurvivesTransactionRollback()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite), "Sqlite is not enabled for this test run.");
+
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:",
@@ -174,9 +178,11 @@ public class SqliteModeIsolationTests
     /// the outcome is deterministic — the ordinary command is guaranteed to find the gate already
     /// held and wait the full configured timeout.
     /// </summary>
-    [Fact]
+    [SkippableFact]
     public async Task SingleConnectionMode_OrdinaryCommand_ThrowsModeContentionException_WhenGateWaitExceedsTimeout()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite), "Sqlite is not enabled for this test run.");
+
         var cfg = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=:memory:",
@@ -226,9 +232,11 @@ public class SqliteModeIsolationTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SingleWriterMode_ConcurrentWriteTransaction_SerializesBehindTheFirst()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.Sqlite), "Sqlite is not enabled for this test run.");
+
         var dbFilePath = Path.Combine(Path.GetTempPath(), $"pengdows.singlewriter.probe.{Guid.NewGuid():N}.sqlite");
         try
         {

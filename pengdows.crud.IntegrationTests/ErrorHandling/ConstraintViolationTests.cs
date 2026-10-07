@@ -834,11 +834,11 @@ public class ConstraintViolationTests : DatabaseTestBase
                     CONSTRAINT fk_test_related FOREIGN KEY ({0}test_table_id{1}) REFERENCES {0}test_table{1}({0}id{1})
                 )", qp, qs),
             // Access: COUNTER is the AutoNumber column; no CREATE TABLE IF NOT EXISTS (the shared
-            // reset drops test_related first). test_table_id is LONG to match test_table's id.
+            // reset drops test_related first). test_table_id is DECIMAL(19,0) to match test_table's id.
             SupportedDatabase.Access => string.Format(@"
                 CREATE TABLE {0}test_related{1} (
                     {0}id{1} COUNTER NOT NULL PRIMARY KEY,
-                    {0}test_table_id{1} LONG NOT NULL,
+                    {0}test_table_id{1} DECIMAL(19,0) NOT NULL,
                     {0}name{1} TEXT(255) NOT NULL,
                     CONSTRAINT fk_test_related FOREIGN KEY ({0}test_table_id{1}) REFERENCES {0}test_table{1}({0}id{1})
                 )", qp, qs),

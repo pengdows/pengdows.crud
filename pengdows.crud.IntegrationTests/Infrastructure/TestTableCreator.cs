@@ -326,6 +326,25 @@ public class TestTableCreator
                     {guidCol} BINARY(16) NOT NULL,
                     {binCol} VARBINARY(256) NOT NULL
                 )",
+            // Access (Jet/ACE): a 64-bit key/long is DECIMAL(19,0), not the native Large Number BIGINT - an
+            // equality filter on a BIGINT above 2^53 never matches through a parameter, but a DECIMAL(19,0)
+            // column matches exactly. YESNO is the
+            // boolean, DATETIME holds the UTC instant (no offset), GUID the native Guid, LONGBINARY
+            // the binary. No CREATE TABLE IF NOT EXISTS (the shared reset drops the table first).
+            SupportedDatabase.Access => $@"
+                CREATE TABLE {table} (
+                    {idCol} DECIMAL(19,0) NOT NULL PRIMARY KEY,
+                    {textCol} TEXT(255) NOT NULL,
+                    {unicodeCol} TEXT(255) NOT NULL,
+                    {nullCol} TEXT(255),
+                    {intCol} LONG NOT NULL,
+                    {longCol} DECIMAL(19,0) NOT NULL,
+                    {decimalCol} DECIMAL(18,8) NOT NULL,
+                    {boolCol} YESNO NOT NULL,
+                    {dtoCol} DATETIME NOT NULL,
+                    {guidCol} GUID NOT NULL,
+                    {binCol} LONGBINARY NOT NULL
+                )",
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -436,6 +455,13 @@ public class TestTableCreator
                     {selectCol} VARCHAR(255) NULL,
                     {fromCol} VARCHAR(255) NULL,
                     {userCol} VARCHAR(255) NULL
+                )",
+            SupportedDatabase.Access => $@"
+                CREATE TABLE {table} (
+                    {idCol} DECIMAL(19,0) NOT NULL PRIMARY KEY,
+                    {selectCol} TEXT(255),
+                    {fromCol} TEXT(255),
+                    {userCol} TEXT(255)
                 )",
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
@@ -548,6 +574,12 @@ public class TestTableCreator
                     {0}name{1} VARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) DEFAULT 0.00 NOT NULL
                 )", qp, qs, table),
+            SupportedDatabase.Access => string.Format(@"
+                CREATE TABLE {2} (
+                    {0}id{1} DECIMAL(19,0) NOT NULL PRIMARY KEY,
+                    {0}name{1} TEXT(255) NOT NULL,
+                    {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0
+                )", qp, qs, table),
             _ => throw new NotSupportedException($"Database {_context.Product} not supported")
         };
 
@@ -555,7 +587,8 @@ public class TestTableCreator
         await container.ExecuteNonQueryAsync();
     }
 
-    // Access (Jet/ACE) DDL: LONG is the 32-bit integer, YESNO the boolean, MEMO the unbounded text,
+    // Access (Jet/ACE) DDL: LONG is the 32-bit integer (so the 64-bit id is DECIMAL(19,0), which also matches
+    // exactly in a WHERE), YESNO the boolean, MEMO the unbounded text,
     // no CREATE TABLE IF NOT EXISTS (the shared reset drops the table first), and "value" is a
     // reserved word so every column name is wrapped.
     private string CreateAccessTableSql()
@@ -564,7 +597,7 @@ public class TestTableCreator
         var w = (string name) => _context.WrapObjectName(name);
         return $@"
         CREATE TABLE {table} (
-            {w("id")} LONG NOT NULL PRIMARY KEY,
+            {w("id")} DECIMAL(19,0) NOT NULL PRIMARY KEY,
             {w("name")} TEXT(255) NOT NULL,
             {w("value")} LONG NOT NULL,
             {w("description")} MEMO,

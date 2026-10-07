@@ -67,8 +67,9 @@ public class DbModeTests : DatabaseTestBase
             // others to Standard
             var expectedMode = provider switch
             {
-                SupportedDatabase.Sqlite or SupportedDatabase.DuckDB or SupportedDatabase.FlatFile =>
-                    DbMode.SingleWriter,
+                // Access (Jet/ACE) is embedded and file-based, so Best coerces it to SingleWriter too.
+                SupportedDatabase.Sqlite or SupportedDatabase.DuckDB or SupportedDatabase.FlatFile
+                    or SupportedDatabase.Access => DbMode.SingleWriter,
                 SupportedDatabase.Firebird or SupportedDatabase.Db2 => DbMode.PreventDatabaseUnload,
                 _ => DbMode.Standard
             };
@@ -212,7 +213,8 @@ public class DbModeTests : DatabaseTestBase
 
             // Assert - Verify data was read correctly
             Assert.True(await reader.ReadAsync());
-            var readId = reader.GetInt64(0);
+            // Convert: a 64-bit key column may be a DECIMAL (Access), which GetInt64 rejects.
+            var readId = Convert.ToInt64(reader.GetValue(0));
             Assert.Equal(entity.Id, readId);
         });
     }
