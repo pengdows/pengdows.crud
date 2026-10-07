@@ -104,4 +104,18 @@ public class CreateWithReturningTemplateTests
 
         Assert.True(create.IsCommandTextRendered);
     }
+
+    // PERF-031: the retrieve and delete templates (by id, by two ids, delete by id) were never rendered
+    // either, so RetrieveOneAsync, RetrieveAsync and DeleteAsync rendered the SQL text on every call.
+    // They are rendered once when built.
+    [Theory]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.Informix)]
+    public void BuildDelete_SharesTheRenderedTemplateText(SupportedDatabase db)
+    {
+        using var delete = (SqlContainer)Gateway(db).BuildDelete(1);
+
+        Assert.True(delete.IsCommandTextRendered);
+    }
 }

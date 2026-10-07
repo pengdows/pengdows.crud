@@ -442,6 +442,11 @@ public partial class TableGateway<TEntity, TRowID>
 
             // Delete by ID - build directly to avoid circular dependency with BuildDelete fast path
             templates.DeleteByIdTemplate = BuildDeleteDirect(CreateTemplateRowId(), context);
+
+            // Rendered once here, so every clone shares the text (PERF-019, PERF-031).
+            ((SqlContainer)templates.GetByIdTemplate).RenderTemplateText();
+            ((SqlContainer)templates.GetByIdsTemplate).RenderTemplateText();
+            ((SqlContainer)templates.DeleteByIdTemplate).RenderTemplateText();
         }
 
         // BaseRetrieve - build directly to avoid circular dependency with BuildBaseRetrieve fast path

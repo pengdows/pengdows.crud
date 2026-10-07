@@ -2528,6 +2528,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         clone.HasWhereAppended = HasWhereAppended;
 
         // Clone all parameters with the same names and types but allow value updates
+        clone._parameters.EnsureCapacity(_parameters.Count); // PERF-031: exactly as many entries
         foreach (var kvp in _parameters)
         {
             clone.AddParameter(CloneParameter(kvp.Value, clone._dialect));

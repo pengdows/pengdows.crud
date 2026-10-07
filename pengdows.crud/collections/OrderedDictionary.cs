@@ -44,6 +44,10 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 {
     private const int DefaultCapacity = 16;
     private const int SmallCapacity = 8;
+
+    // PERF-031: most containers hold one to four parameters; small mode starts here and doubles to
+    // SmallCapacity before hashing. A requested capacity within small mode is allocated exactly.
+    private const int InitialSmallCapacity = 4;
     private const double TrimThreshold = 0.9;
 
     private struct Entry
@@ -91,7 +95,7 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 
         if (capacity <= SmallCapacity)
         {
-            _entries = new Entry[Math.Max(capacity, SmallCapacity)];
+            _entries = new Entry[capacity];
             return;
         }
 
@@ -308,7 +312,7 @@ internal sealed class OrderedDictionary<TKey, TValue> :
 
         if (!IsHashMode && capacity <= SmallCapacity)
         {
-            var newEntries = new Entry[Math.Max(capacity, SmallCapacity)];
+            var newEntries = new Entry[capacity];
             Array.Copy(_entries, 0, newEntries, 0, _count);
             _entries = newEntries;
             return;
@@ -425,7 +429,7 @@ internal sealed class OrderedDictionary<TKey, TValue> :
         ArgumentNullException.ThrowIfNull(key);
 
         if (_entries.Length == 0)
-            _entries = new Entry[SmallCapacity];
+            _entries = new Entry[InitialSmallCapacity];
 
         var comparer = _comparer;
         var hashCode = (uint)comparer.GetHashCode(key);
@@ -456,6 +460,19 @@ internal sealed class OrderedDictionary<TKey, TValue> :
                 ne.Key = key;
                 ne.Value = value;
                 ne.Next = 0;
+
+                _version = unchecked(_version + 1);
+                return true;
+            }
+
+            if (_entries.Length < SmallCapacity)
+            {
+                Array.Resize(ref _entries, Math.Min(SmallCapacity, _entries.Length * 2));
+                ref var ge = ref _entries[_count++];
+                ge.HashCode = hashCode;
+                ge.Key = key;
+                ge.Value = value;
+                ge.Next = 0;
 
                 _version = unchecked(_version + 1);
                 return true;

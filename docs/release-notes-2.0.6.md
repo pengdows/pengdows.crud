@@ -153,6 +153,11 @@
   hands it to the fallback only when the id doesn't come back, so the fallback still runs on the
   INSERT's connection. That path now allocates exactly what the INSERT itself does; the id and
   `[Version]` write-backs use a compiled setter instead of reflection (DEC-014, PERF-016).
+- Less per-operation overhead: the cached retrieve-by-id and delete-by-id statements render their
+  SQL once instead of on every call, a container's parameter list sizes itself to the statement
+  instead of reserving room for eight, and each context makes its SQL container logger once
+  instead of per container. On in-memory SQLite, `RetrieveOneAsync` went from 26.5 to 25.5 µs and
+  3,711 to 3,391 bytes; creates and updates allocate 120 bytes less (PERF-031).
 
 ## Every read path converts the same way
 
