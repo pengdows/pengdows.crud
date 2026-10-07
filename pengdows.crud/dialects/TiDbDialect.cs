@@ -59,10 +59,18 @@ internal class TiDbDialect : MySqlDialect
     // CONFIRMED live (v8.5.7, MySqlConnector 2.4.0/2.6.2, MySql.Data 9.4.0; WRT-009, REV-083): VALUES(col)
     // returns a BIT(64) value byte-reversed whether it is bound as ulong, long or byte[], in single- and
     // multi-row upserts; BIGINT, BIGINT UNSIGNED, BIT(8/16/32), a plain INSERT and "col = @param" are
-    // correct, and TiDB has no row alias. Only the DbType is known here, so every column that could be
-    // BIT(64) takes the safe path (DEC-012). Never undo the reversal: that would corrupt data once TiDB
-    // fixes it.
+    // correct, and TiDB has no row alias. A column that could be BIT(64) takes the safe path (DEC-012)
+    // unless the gateways have learned it is declared as something else (PERF-029: a batch upsert is
+    // then one statement again); any BIT stays safe, since the driver doesn't name the width. Never undo
+    // the reversal: that would corrupt data once TiDB fixes it. Key columns are never in the update list.
+    internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
+        (!forRead && CouldBeBit64(column) && !column.IsId && !column.IsPrimaryKey) ||
+        base.NeedsDeclaredType(column, forRead);
+
     internal override bool UpsertIncomingValueUnreliable(IColumnInfo column) =>
+        CouldBeBit64(column) && (DeclaredTypeOf(column) is not { } declared || SplitDeclaredType(declared).Name == "bit");
+
+    private static bool CouldBeBit64(IColumnInfo column) =>
         column.DbType is DbType.UInt64 or DbType.Int64 or DbType.Binary;
 
     // TiDB does not enforce FK constraints by default (compatibility mode).

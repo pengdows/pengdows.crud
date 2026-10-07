@@ -1,5 +1,9 @@
+using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Linq;
+using System.Threading.Tasks;
+using pengdows.crud.configuration;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -156,5 +160,115 @@ public class TiDbBit64UpsertTests
 
         Assert.Equal(2, batch.Count);
         Assert.All(batch, sc => Assert.DoesNotContain("VALUES(\"n\")", sc.Query.ToString()));
+    }
+
+    // PERF-029: the async gateways learn each long/ulong/byte[] column's declared type once per table
+    // (TYPE-020's probe), so only a column that is BIT (or whose type couldn't be learned) keeps the
+    // one-statement-per-row batch upsert.
+    private static (DatabaseContext Context, fakeDbFactory Factory) Probed(IReadOnlyList<fakeDbColumn>? declared)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.TiDb);
+        var context = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=TiDb",
+            DbMode = DbMode.Standard
+        }, factory);
+        // No declared types: what a failed probe (logged and ignored) leaves behind.
+        var probe = new fakeDbConnection { EmulatedProduct = SupportedDatabase.TiDb };
+        probe.EnqueueReaderResult(new fakeDbDataReader(Array.Empty<Dictionary<string, object>>())
+            { Columns = declared ?? Array.Empty<fakeDbColumn>() });
+
+        factory.Connections.Add(probe);
+        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.TiDb });
+        return (context, factory);
+    }
+
+    private static int UpsertStatements(fakeDbFactory factory) =>
+        factory.CreatedConnections.SelectMany(c => c.ExecutedNonQueryCommands)
+            .Count(c => c.CommandText.Contains("ON DUPLICATE KEY UPDATE", StringComparison.Ordinal));
+
+    private static readonly WideRow[] TwoWideRows =
+    {
+        new WideRow { Id = 1, N = 1, Raw = new byte[] { 1 }, Name = "a" },
+        new WideRow { Id = 2, N = 2, Raw = new byte[] { 2 }, Name = "b" }
+    };
+
+    [Fact]
+    public async Task BatchUpsertAsync_LongAndBinaryColumnsLearnedNotBit_RunsOneStatement()
+    {
+        var (context, factory) = Probed(new[]
+        {
+            new fakeDbColumn("n", typeof(long), "BIGINT"),
+            new fakeDbColumn("raw", typeof(byte[]), "VARBINARY")
+        });
+        await using var _ = context;
+
+        await new TableGateway<WideRow, int>(context).BatchUpsertAsync(TwoWideRows);
+
+        Assert.Equal(1, UpsertStatements(factory));
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_ALongColumnLearnedAsBit_RunsOneStatementPerRow()
+    {
+        var (context, factory) = Probed(new[]
+        {
+            new fakeDbColumn("n", typeof(ulong), "BIT"),
+            new fakeDbColumn("raw", typeof(byte[]), "VARBINARY")
+        });
+        await using var _ = context;
+
+        await new TableGateway<WideRow, int>(context).BatchUpsertAsync(TwoWideRows);
+
+        Assert.Equal(2, UpsertStatements(factory));
+    }
+
+    [Fact]
+    public async Task BatchUpsertAsync_DeclaredTypesUnreadable_RunsOneStatementPerRow()
+    {
+        var (context, factory) = Probed(null);
+        await using var _ = context;
+
+        await new TableGateway<WideRow, int>(context).BatchUpsertAsync(TwoWideRows);
+
+        Assert.Equal(2, UpsertStatements(factory));
+    }
+
+    [Fact]
+    public async Task UpsertAsync_LongColumnLearnedNotBit_UsesTheIncomingRow()
+    {
+        var (context, factory) = Probed(new[]
+        {
+            new fakeDbColumn("n", typeof(long), "BIGINT"),
+            new fakeDbColumn("raw", typeof(byte[]), "VARBINARY")
+        });
+        await using var _ = context;
+
+        await new TableGateway<WideRow, int>(context).UpsertAsync(TwoWideRows[0]);
+
+        var sql = factory.CreatedConnections.SelectMany(c => c.ExecutedNonQueryCommands)
+            .Single(c => c.CommandText.Contains("ON DUPLICATE KEY UPDATE", StringComparison.Ordinal)).CommandText;
+        Assert.Contains("\"n\" = VALUES(\"n\")", sql);
+        Assert.Contains("\"raw\" = VALUES(\"raw\")", sql);
+    }
+
+    [Table("long_key")]
+    public class LongKeyRow
+    {
+        [Id] [Column("id", DbType.Int64)] public long Id { get; set; }
+        [Column("name", DbType.String)] public string Name { get; set; } = "";
+    }
+
+    // Key columns are never in the update list, so a long key alone costs no probe.
+    [Fact]
+    public async Task UpsertAsync_OnlyALongKey_DoesNotProbeDeclaredTypes()
+    {
+        var (context, factory) = Probed(Array.Empty<fakeDbColumn>());
+        await using var _ = context;
+
+        await new TableGateway<LongKeyRow, long>(context).UpsertAsync(new LongKeyRow { Id = 1, Name = "a" });
+
+        Assert.DoesNotContain(factory.CreatedConnections.SelectMany(c => c.ExecutedReaderTexts),
+            text => text.Contains("WHERE 1 = 0", StringComparison.Ordinal));
     }
 }

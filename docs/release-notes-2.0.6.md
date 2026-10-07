@@ -285,7 +285,9 @@ every CLR type and every database, whether the value round-trips and why not whe
 - Upserts of `UInt64`, `Int64` and `Binary` columns no longer go through `VALUES(col)`, which TiDB
   returns byte-reversed for a `BIT(64)` column however it is bound: a single-row upsert sets the
   column from its own parameter, and a batch upsert of an entity with such a non-key column runs one
-  statement per row (DEC-012, REV-083).
+  statement per row (DEC-012, REV-083). The async gateways learn those columns' declared types once
+  per table, so only a `BIT` column (or one whose type can't be read) takes that path; `BIGINT` and
+  `VARBINARY` columns keep the single multi-row statement (PERF-029).
 
 ## pengdows.crud.fakeDb
 

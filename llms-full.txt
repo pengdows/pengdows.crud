@@ -5013,12 +5013,19 @@ is stale, the same as single-entity `UpdateAsync`:
 ### TiDB: `UInt64`, `Int64` and `Binary` columns
 
 TiDB's `VALUES(col)` in `ON DUPLICATE KEY UPDATE` returns a `BIT(64)` value byte-reversed (a TiDB
-defect, confirmed on v8.5.7), whether the value is bound as `ulong`, `long` or `byte[]`. pengdows sees
-a column's `DbType`, not its declared type, so on TiDB every `UInt64`, `Int64` and `Binary` column in
-the update list is upserted safely: a single-row upsert sets it from its own bound parameter (no extra
-cost), and a batch upsert of an entity with such a column runs one statement per row (TiDB has no row
-alias, so a multi-row statement can only use `VALUES()`). Key columns aren't in the update list, so a
-`long` `[Id]` or `[PrimaryKey]` alone doesn't trigger it. Other entities keep the multi-row statement.
+defect, confirmed on v8.5.7), whether the value is bound as `ulong`, `long` or `byte[]`. So a
+`UInt64`, `Int64` or `Binary` column in the update list is upserted safely unless pengdows knows it
+isn't `BIT`: a single-row upsert sets it from its own bound parameter (no extra cost), and a batch
+upsert of an entity with such a column runs one statement per row (TiDB has no row alias, so a
+multi-row statement can only use `VALUES()`).
+
+The async gateway methods learn those columns' declared types once per table and context (a
+zero-row `SELECT`), so a `BIGINT`, `BIGINT UNSIGNED` or `VARBINARY`/`BLOB` column keeps the
+multi-row statement; only a column declared `BIT` (any width: the driver doesn't report it) or one
+whose type couldn't be read takes the per-row path. The `Build*` methods never query, so
+`BuildBatchUpsert` called before any async gateway operation on that context runs per row for every
+such column. Key columns aren't in the update list, so a `long` `[Id]` or `[PrimaryKey]` alone
+doesn't trigger any of this.
 
 ### Batch upsert and `[Version]` conflicts
 
