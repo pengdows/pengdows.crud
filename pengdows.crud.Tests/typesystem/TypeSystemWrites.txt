@@ -138,11 +138,11 @@
   DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified DateTime2: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
-  DateTimeOffset: Object DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateTimeOffset: Object DateTimeOffset:2026-10-05T11:45:30.1234567+00:00
   null DateTimeOffset: DateTimeOffset DBNull
   DateTime Utc as DateTimeOffset: Object DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
   DateTime Unspecified as DateTimeOffset: Object DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
-  text as DateTimeOffset: Object DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  text as DateTimeOffset: Object DateTimeOffset:2026-10-05T11:45:30.1234567+00:00
   DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateTimeOffset as DateTime2: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
@@ -660,11 +660,11 @@
   DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
   DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
-  DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   null DateTimeOffset: DateTimeOffset DBNull
-  DateTime Utc as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
-  DateTime Unspecified as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
-  text as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+  DateTime Utc as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
+  text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified

@@ -484,6 +484,8 @@ public partial class TableGateway<TEntity, TRowID>
             {
                 var rowValue = column.MakeParameterValueFromField(chunk[row]);
                 var rowShell = dialect.CreateDbParameter($"{name}_row{row}", column.DbType, rowValue);
+                // Each row is marked for its column like row 0 (DRY-028 truncation, DRY-029 UTC instant).
+                dialect.MarkColumnParameter(rowShell, column);
                 values[row] = rowShell.Value ?? DBNull.Value;
             }
 

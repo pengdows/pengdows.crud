@@ -189,18 +189,18 @@ public sealed class OracleFirebirdTypeFixesTests
         Assert.Equal(new DateTimeOffset(1, 1, 1, 18, 45, 30, TimeSpan.Zero), value);
     }
 
-    // TIMESTAMP WITH TIME ZONE keeps the offset, so a DateTimeOffset is sent with it (it was sent at
-    // UTC and read back at +00:00). Confirmed live on Oracle 23ai with ODP.NET 23.26 and 3.21.
+    // A parameter with no column is sent as its UTC instant, which every column type stores correctly;
+    // the gateways send the offset to a TIMESTAMP WITH TIME ZONE column (OffsetlessColumnBindingTests).
     private static readonly DateTimeOffset Zoned = new DateTimeOffset(2026, 10, 1, 13, 45, 30, TimeSpan.FromHours(-5)).AddTicks(1234567);
 
     [Fact]
-    public void Oracle_DateTimeOffset_KeepsItsOffset()
+    public void Oracle_DateTimeOffset_BareParameterIsItsUtcInstant()
     {
         var parameter = Oracle().CreateDbParameter("p", DbType.DateTimeOffset, Zoned);
 
         var bound = Assert.IsType<DateTimeOffset>(parameter.Value);
         Assert.Equal(Zoned, bound);
-        Assert.Equal(Zoned.Offset, bound.Offset);
+        Assert.Equal(TimeSpan.Zero, bound.Offset);
     }
 
     [Table("tz_rows")]

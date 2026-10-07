@@ -108,6 +108,9 @@ public class TypeCompletenessTests
     }
 
     private const string OffsetLost = "keeps the instant, not the offset: reads back at +00:00";
+    private const string GatewaySendsOffset = "a parameter with no column is its UTC instant (reads back at +00:00); " +
+                                              "the gateways send the offset to a ";
+    private const string GatewaySendsOffsetTail = " column they have learned keeps it, verified live (DRY-029)";
     private const string Microseconds = "holds microseconds: the 7th fraction digit is truncated, never rounded";
     private const string NoNullElements = "an Informix collection can't hold a NULL element: the write is refused";
     private const string HanaArray = "bound as JSON text the statement builds the ARRAY from (JSON_TABLE); read from the " +
@@ -121,6 +124,8 @@ public class TypeCompletenessTests
     private static readonly Dictionary<(string Label, string Database), string> Known = new()
     {
         [("DateTimeOffset", "*")] = "no offset-aware type, or one that " + OffsetLost,
+        [("DateTimeOffset", "Oracle")] = GatewaySendsOffset + "TIMESTAMP WITH TIME ZONE" + GatewaySendsOffsetTail,
+        [("DateTimeOffset", "Snowflake")] = GatewaySendsOffset + "TIMESTAMP_TZ" + GatewaySendsOffsetTail,
         [("DateTimeOffset", "SybaseASE")] = "BIGDATETIME text " + Microseconds + "; " + OffsetLost,
         [("DateTime", "SybaseASE")] = "BIGDATETIME " + Microseconds,
         [("TimeOnly", "SingleStore")] = "TIME(6) " + Microseconds,

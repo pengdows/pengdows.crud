@@ -246,8 +246,8 @@ plain .NET type (verified live, TYPE-005).
 | SAP HANA `BINTEXT` | `string` | The driver reads it back as text. |
 | Snowflake `VARIANT` / `OBJECT` / `ARRAY` | `JsonValue` (or a `[Json]` property) | Snowflake.Data can't bind them, so the JSON is sent as text and written as `PARSE_JSON(:p)`. Snowflake refuses that inside `INSERT ... VALUES`, so inserts, batch inserts, the MERGE upsert source and batch updates of such an entity take their values from a `SELECT` (`UNION ALL` for several rows). |
 | Snowflake `GEOGRAPHY` / `GEOMETRY` | `Geography` / `Geometry` | Written as EWKT text (or EWKB hex / GeoJSON for a value without WKT); the session returns them as EWKT, so the SRID reads back. |
-| Snowflake `TIMESTAMP_LTZ` / `TIMESTAMP_TZ` | `DateTimeOffset` | Written as `TIMESTAMP_TZ` with the value's offset, which `TIMESTAMP_TZ` keeps (`TIMESTAMP_LTZ` stores the instant). Snowflake.Data reports them as `DateTime`, whose getter gives local wall time (LTZ) or throws (TZ); the exact `DateTimeOffset` value is read instead. |
-| Oracle `TIMESTAMP WITH TIME ZONE` | `DateTimeOffset` | Written with the value's offset, which the column keeps. ODP.NET 23 reads it as a `DateTimeOffset`; ODP.NET 21 (3.21) reports it as `DateTime` and returns only its wall time from `GetValue`, so the gateway, `DataReaderMapper` and `ExecuteScalar*<DateTimeOffset>` read it with the reader's `GetDateTimeOffset` (DRY-029, live on both). |
+| Snowflake `TIMESTAMP_LTZ` / `TIMESTAMP_TZ` | `DateTimeOffset` | A gateway writes a `TIMESTAMP_TZ` column as ISO 8601 text with the value's offset, which it keeps; other columns and your own parameters get the UTC instant (Snowflake.Data's own `DateTimeOffset` bind is typed `TIMESTAMP_TZ`, which Snowflake refuses into an `LTZ` or `NTZ` column; live). Snowflake.Data reports them as `DateTime`, whose getter gives local wall time (LTZ) or throws (TZ); the exact `DateTimeOffset` value is read instead. |
+| Oracle `TIMESTAMP WITH TIME ZONE` | `DateTimeOffset` | A gateway writes it with the value's offset, which the column keeps (other columns and your own parameters get the UTC instant). ODP.NET 23 reads it as a `DateTimeOffset`; ODP.NET 21 (3.21) reports it as `DateTime` and returns only its wall time from `GetValue`, so the gateway, `DataReaderMapper` and `ExecuteScalar*<DateTimeOffset>` read it with the reader's `GetDateTimeOffset` (DRY-029, live on both). |
 | Timestamp text (SQLite `TEXT`, FlatFile, any string column) | `DateTime` / `DateTimeOffset` | Text with an offset keeps its instant; text without one is read as UTC, like an unspecified `DateTime` everywhere else (2.0.5 read it as the host's local time, so the same row differed between machines). |
 | Snowflake `VECTOR(FLOAT, n)` / `VECTOR(INT, n)` | `float[]` / `double[]` (FLOAT), `int[]` (INT) | Snowflake.Data can't bind a vector and Snowflake takes one only as `PARSE_JSON(:p)::VECTOR(FLOAT, n)` with its exact dimension. The driver doesn't report the dimension, so the gateways write that cast with `n` set to each value's length when the command runs; a value of another length fails with Snowflake's dimension error. A null vector is written as `NULL`. Reads come back as JSON array text and fill the array. In your own SQL, an array parameter is sent as JSON text; write the same cast (TYPE-020, live). |
 | SQL Server `sql_variant` | `object` | The stored value's own type. |
@@ -275,7 +275,10 @@ reads into an enum property; 2.0.5 failed to build the mapper (COR-013).
 
 A few columns can only be written correctly if pengdows knows the column's declared database type,
 which the entity doesn't say: a `string` property bound to a PostgreSQL user-defined `ENUM` column,
-an Informix `BLOB`/`CLOB`/`TEXT`/`BYTE`/`BSON` column, an Informix `DATETIME HOUR TO FRACTION(n)` column.
+an Informix `BLOB`/`CLOB`/`TEXT`/`BYTE`/`BSON` column, an Informix `DATETIME HOUR TO FRACTION(n)` column,
+a temporal column's scale on SQL Server and Oracle (fractional seconds are truncated to it, DRY-028),
+and whether an Oracle or Snowflake column declared `DbType.DateTimeOffset` keeps an offset (one that
+does gets the value with it, DRY-029).
 For those dialects, the first async operation through a gateway on a context learns the types of the
 columns that matter, once per table, with one zero-row query of those columns:
 

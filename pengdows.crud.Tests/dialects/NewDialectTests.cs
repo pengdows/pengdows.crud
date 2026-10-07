@@ -150,7 +150,7 @@ public class NewDialectTests
     }
 
     [Fact]
-    public void SnowflakeDialect_PrepareParameterValue_DateTimeOffsetKeepsItsOffset()
+    public void SnowflakeDialect_PrepareParameterValue_NormalizesDateTimeOffsetToUtcDateTime()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Snowflake);
         var dialect = new SnowflakeDialect(factory, NullLogger<SnowflakeDialect>.Instance);
@@ -158,18 +158,7 @@ public class NewDialectTests
 
         var prepared = dialect.PrepareParameterValue(value, DbType.DateTimeOffset);
 
-        Assert.Equal(value.Offset, Assert.IsType<DateTimeOffset>(prepared).Offset);
-    }
-
-    [Fact]
-    public void SnowflakeDialect_PrepareParameterValue_DateTimeOffsetForDateTimeIsItsUtcInstant()
-    {
-        var factory = new fakeDbFactory(SupportedDatabase.Snowflake);
-        var dialect = new SnowflakeDialect(factory, NullLogger<SnowflakeDialect>.Instance);
-        var value = new DateTimeOffset(2026, 2, 21, 14, 30, 45, 123, TimeSpan.FromHours(-5));
-
-        var prepared = dialect.PrepareParameterValue(value, DbType.DateTime);
-
-        Assert.Equal(value.UtcDateTime, Assert.IsType<DateTime>(prepared));
+        var preparedDateTime = Assert.IsType<DateTime>(prepared);
+        Assert.Equal(value.UtcDateTime, preparedDateTime);
     }
 }

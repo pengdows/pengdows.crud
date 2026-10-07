@@ -545,6 +545,12 @@ internal class OracleDialect : SqlDialect
     internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
         (!forRead && IsTemporalColumn(column)) || base.NeedsDeclaredType(column, forRead);
 
+    // DRY-029: TIMESTAMP WITH TIME ZONE keeps the offset (WITH LOCAL TIME ZONE only the instant), and the
+    // write probe above already learns every temporal column's declared type.
+    internal override bool SendsOffsetToOffsetColumns => true;
+
+    internal override bool DeclaredTypeKeepsOffset(string declaredName) => declaredName == "timestamptz";
+
     internal override decimal? TemporalUnitsPerMinute(IColumnInfo column) =>
         SplitDeclaredType(DeclaredTypeOf(column)) switch
         {
@@ -779,14 +785,21 @@ internal class OracleDialect : SqlDialect
             ConfigureParameter = (param, value) => SetOracleIntervalDaySecond(param)
         });
 
-        // DateTimeOffset uses TIMESTAMP WITH TIME ZONE (OracleDbType.TimeStampTZ), which keeps the
-        // offset, so the value is sent as given (confirmed live, ODP.NET 23.26 and 3.21). A column with
-        // no offset is declared DateTime and gets the UTC instant before this mapping is reached.
+        // DateTimeOffset uses TIMESTAMP WITH TIME ZONE (OracleDbType.TimeStampTZ), sent as its UTC instant:
+        // with its offset, a plain TIMESTAMP or DATE column would store the local wall time (confirmed
+        // live). The gateways send the offset to a TIMESTAMP WITH TIME ZONE column (DRY-029).
         registry.RegisterMapping<DateTimeOffset>(SupportedDatabase.Oracle, new ProviderTypeMapping
         {
             DbType = DbType.Object,
             ConfigureParameter = (param, value) =>
-                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.TimeStampTZ)
+            {
+                if (value is DateTimeOffset dto)
+                {
+                    OffsetParameterValues.Remember(param, dto);
+                    param.Value = dto.ToUniversalTime();
+                }
+                AdvancedTypeRegistry.SetEnumProperty(param, OracleNames.DbTypeProperty, OracleNames.TimeStampTZ);
+            }
         });
 
         // BLOB / CLOB

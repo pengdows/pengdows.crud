@@ -89,8 +89,8 @@ even on databases that store bare wall-clock values with no zone (`docs/utc-and-
   as the `DateTimeOffset` of the same instant; a database with no offset-aware type stores the UTC
   instant and reads it back at +00:00. No value is ever bound as NULL
 - A `DateTimeOffset` keeps its offset where the column holds one: SQL Server `DATETIMEOFFSET`, Oracle
-  `TIMESTAMP WITH TIME ZONE`, Snowflake `TIMESTAMP_TZ` (DRY-029). Declared `DbType.DateTimeOffset` it is
-  sent with the offset; declare a plain timestamp column `DbType.DateTime` to store the UTC instant
+  `TIMESTAMP WITH TIME ZONE`, Snowflake `TIMESTAMP_TZ` (DRY-029). On Oracle/Snowflake the gateways send the
+  offset only to a column whose declared type (learned once) keeps it; a bare parameter is its UTC instant
 - Text with only a time of day (`"13:45:30"`) is not a timestamp and fails into a date type
 - A temporal value or `Guid` read into a `string` property is its invariant canonical text (ISO 8601,
   `TimeSpan` `"c"`, `Guid` `"D"`)
@@ -152,8 +152,8 @@ No value object or converter is needed for these (verified live, TYPE-005; see `
   `BLOB`/`CLOB` and MERGE `BYTE`/`TEXT` staged in temp table `pengdows_lob_stage`; WRT-006/TYPE-020); known gaps: `BOOLEAN` in user `WHERE`
   (compare with `'t'`/`'f'`) and a `TimeSpan` parameter in user SQL (driver truncates to seconds; TYPE-022). ASE `BIGDATETIME`/`BIGTIME` round-trip to the microsecond through the gateways (`DateTime2`/`DateTimeOffset` bound as text, `CONVERT(BIGTIME, ...)` writes, `CONVERT(VARCHAR, col, 140/137)` reads); in your own SQL compare a `BIGTIME` with `CONVERT(BIGTIME, {P}p)` (TYPE-022).
 - Snowflake: `VARIANT`/`OBJECT`/`ARRAY` written as `PARSE_JSON(:p)`, with inserts/MERGE source/batch update values from a
-  `SELECT` (Snowflake refuses it in `VALUES`); spatial as EWKT both ways; a `DateTimeOffset` is written as
-  `TIMESTAMP_TZ` with its offset and `TIMESTAMP_LTZ`/`TZ` read as the exact `DateTimeOffset`. `VECTOR` ↔ `float[]`/`double[]`/`int[]` as `PARSE_JSON(:p)::VECTOR(FLOAT|INT, n)`, `n` set from each value's
+  `SELECT` (Snowflake refuses it in `VALUES`); spatial as EWKT both ways; a `DateTimeOffset` goes to a
+  `TIMESTAMP_TZ` column as ISO 8601 text with its offset (elsewhere its UTC instant) and `TIMESTAMP_LTZ`/`TZ` read as the exact `DateTimeOffset`. `VECTOR` ↔ `float[]`/`double[]`/`int[]` as `PARSE_JSON(:p)::VECTOR(FLOAT|INT, n)`, `n` set from each value's
   length at execution (the driver reports no dimension), read from JSON text (TYPE-020).
 - SAP HANA: `HanaDecimal` read with `GetDecimal`; decimals sent without trailing zeros (the driver silently cut
   digits otherwise); spatial as WKB; `TIMESTAMP` keeps 7 digits (`DateTime` bound as text, gateway reads via `TO_VARCHAR(..., 'FF7')`; TYPE-022); `BINTEXT` as text;

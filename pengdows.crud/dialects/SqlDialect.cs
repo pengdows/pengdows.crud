@@ -484,7 +484,26 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool MarksColumnParameter(IColumnInfo column) =>
         column.IsJsonType || column.IsEnum || NullParameterDbType(column) != null ||
-        TemporalUnitsPerMinute(column) != null;
+        TemporalUnitsPerMinute(column) != null ||
+        (SendsOffsetToOffsetColumns && column.DbType == DbType.DateTimeOffset);
+
+    /// <summary>
+    /// DRY-029: true when the dialect sends a DateTimeOffset parameter as its UTC instant (any column
+    /// type stores that correctly) while some of its column types keep an offset: the type mapping notes
+    /// the value (<see cref="OffsetParameterValues"/>), and the gateways re-bind it with its offset
+    /// (<see cref="BindWithOffset"/>) for a column whose learned declared type keeps one
+    /// (<see cref="DeclaredTypeKeepsOffset"/>). Oracle, Snowflake.
+    /// </summary>
+    internal virtual bool SendsOffsetToOffsetColumns => false;
+
+    /// <summary>True when a learned declared type (lower case, without its scale) keeps an offset.</summary>
+    internal virtual bool DeclaredTypeKeepsOffset(string declaredName) => false;
+
+    /// <summary>Binds <paramref name="value"/> with its offset, for a column that keeps one.</summary>
+    private protected virtual void BindWithOffset(DbParameter parameter, DateTimeOffset value)
+    {
+        parameter.Value = value;
+    }
 
     /// <summary>
     /// Releases the connections pooled by a data source the context created, just before the context
@@ -778,6 +797,15 @@ internal abstract class SqlDialect : IInternalSqlDialect
             NullParameterDbType(column) is { } nullType)
         {
             parameter.DbType = nullType;
+        }
+
+        // DRY-029: a column that keeps an offset gets the value with it (a parameter is its UTC instant,
+        // which a column with no offset needs).
+        if (SendsOffsetToOffsetColumns && column.DbType == DbType.DateTimeOffset &&
+            DeclaredTypeOf(column) is { } declared && DeclaredTypeKeepsOffset(SplitDeclaredType(declared).Name) &&
+            OffsetParameterValues.TryGet(parameter, out var original))
+        {
+            BindWithOffset(parameter, original);
         }
 
         // DRY-028: truncated to what the column holds, so the database has nothing to round.

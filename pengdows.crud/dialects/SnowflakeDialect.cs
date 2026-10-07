@@ -145,6 +145,25 @@ internal class SnowflakeDialect : SqlDialect
     internal override bool MarksColumnParameter(IColumnInfo column) =>
         VectorElementType(column) != null || base.MarksColumnParameter(column);
 
+    // DRY-029: TIMESTAMP_TZ keeps the offset, so the gateways learn which columns are TIMESTAMP_TZ
+    // (Snowflake.Data reports TIMESTAMP_NTZ, TIMESTAMP_LTZ, TIMESTAMP_TZ, confirmed live) and send those
+    // the value with it.
+    internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
+        (!forRead && column.DbType == DbType.DateTimeOffset) || base.NeedsDeclaredType(column, forRead);
+
+    internal override bool SendsOffsetToOffsetColumns => true;
+
+    internal override bool DeclaredTypeKeepsOffset(string declaredName) => declaredName == "timestamp_tz";
+
+    // ISO 8601 text with the offset: Snowflake.Data's own DateTimeOffset bind is typed TIMESTAMP_TZ, which
+    // Snowflake refuses into an LTZ or NTZ column ("Expression type does not match column data type");
+    // text converts into all three, in VALUES, INSERT ... SELECT, MERGE, UPDATE and WHERE (confirmed live).
+    private protected override void BindWithOffset(DbParameter parameter, DateTimeOffset value)
+    {
+        parameter.DbType = DbType.String;
+        parameter.Value = OffsetText(value);
+    }
+
     public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
     {
         base.MarkColumnParameter(parameter, column);
@@ -407,11 +426,15 @@ internal class SnowflakeDialect : SqlDialect
         return SqlStandardLevel.Sql2016;
     }
 
+    // ISO 8601 with seven fraction digits and the offset ("2026-10-01T13:45:30.1234567-05:00").
+    private static string OffsetText(DateTimeOffset value) =>
+        value.ToString("O", System.Globalization.CultureInfo.InvariantCulture);
+
     public override object? PrepareParameterValue(object? value, DbType dbType)
     {
-        if (value is DateTimeOffset dto && dbType != DbType.DateTimeOffset)
+        if (value is DateTimeOffset dto)
         {
-            // A column with no offset (TIMESTAMP_NTZ) stores the UTC instant.
+            // Snowflake TIMESTAMP_NTZ does not store offsets; normalize to UTC instant.
             return dto.UtcDateTime;
         }
 
@@ -585,13 +608,20 @@ internal class SnowflakeDialect : SqlDialect
             ConfigureParameter = (param, value) => { param.DbType = DbType.Binary; }
         });
 
-        // DateTimeOffset binds as TIMESTAMP_TZ with its offset (Snowflake.Data's SFDataConverter does this
-        // for DbType.DateTimeOffset), which TIMESTAMP_TZ keeps and TIMESTAMP_LTZ stores as the instant. A
-        // column with no offset is declared DateTime and gets the UTC instant before this mapping.
+        // TIMESTAMP_NTZ for DateTimeOffset (store UTC DateTime), which NTZ, LTZ and TZ columns all take;
+        // the gateways send the offset to a TIMESTAMP_TZ column (DRY-029).
         registry.RegisterMapping<DateTimeOffset>(SupportedDatabase.Snowflake, new ProviderTypeMapping
         {
-            DbType = DbType.DateTimeOffset,
-            ConfigureParameter = (param, value) => { param.DbType = DbType.DateTimeOffset; }
+            DbType = DbType.DateTime,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.DateTime;
+                if (value is DateTimeOffset dto)
+                {
+                    OffsetParameterValues.Remember(param, dto);
+                    param.Value = dto.UtcDateTime;
+                }
+            }
         });
 
         // Guid: handled by GuidFormat (GuidStorageFormat.String), not a type mapping.

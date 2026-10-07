@@ -205,7 +205,7 @@ public class AdvancedTypeRegistryTests
     }
 
     [Fact]
-    public void DefaultMappings_ShouldBindSnowflakeDateTimeOffsetWithItsOffset()
+    public void DefaultMappings_ShouldMapSnowflakeDateTimeOffsetToUtcDateTime()
     {
         var registry = AdvancedTypeRegistry.Shared;
         var mapping = registry.GetMapping(typeof(DateTimeOffset), SupportedDatabase.Snowflake);
@@ -218,10 +218,10 @@ public class AdvancedTypeRegistryTests
         var success =
             registry.TryConfigureParameter(parameter, typeof(DateTimeOffset), dto, SupportedDatabase.Snowflake);
 
-        // Snowflake.Data binds DbType.DateTimeOffset as TIMESTAMP_TZ, which keeps the offset.
         Assert.True(success);
-        Assert.Equal(DbType.DateTimeOffset, parameter.DbType);
-        Assert.Equal(dto.Offset, Assert.IsType<DateTimeOffset>(parameter.Value).Offset);
+        Assert.Equal(DbType.DateTime, parameter.DbType);
+        Assert.IsType<DateTime>(parameter.Value);
+        Assert.Equal(dto.UtcDateTime, (DateTime)parameter.Value);
     }
 
     [Fact]

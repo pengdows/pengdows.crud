@@ -192,14 +192,15 @@ every CLR type and every database, whether the value round-trips and why not whe
   hold the wall time and aren't corrected by upgrading (DRY-025).
 - **Oracle and Snowflake keep a `DateTimeOffset`'s offset.** A `DateTimeOffset` declared
   `DbType.DateTimeOffset` was sent as its UTC instant, so Oracle `TIMESTAMP WITH TIME ZONE` and
-  Snowflake `TIMESTAMP_TZ` columns read it back at `+00:00`. It is now sent with its offset, which
-  those columns keep (`TIMESTAMP WITH LOCAL TIME ZONE` and `TIMESTAMP_LTZ` store the instant). With
-  ODP.NET 21 (3.21), whose `GetValue` returns only the wall time of a `TIMESTAMP WITH TIME ZONE`, the
-  gateway, `DataReaderMapper` and `ExecuteScalar*<DateTimeOffset>` read it with the driver's
-  `GetDateTimeOffset`. **Behavior change:** a `DateTimeOffset` declared `DbType.DateTimeOffset` but
-  stored in a column with no offset (Oracle `TIMESTAMP`/`DATE`, Snowflake `TIMESTAMP_NTZ`) now keeps
-  its local wall time there, as on SQL Server; declare such a column `DbType.DateTime` to store the
-  UTC instant (DRY-029).
+  Snowflake `TIMESTAMP_TZ` columns read it back at `+00:00`. The gateways now learn each such column's
+  declared type (the one-time probe) and send the value with its offset to a column that keeps one;
+  every other column, and every parameter in your own SQL, still gets the UTC instant, so nothing that
+  worked before changes. Snowflake gets ISO 8601 text with the offset there (Snowflake refuses its
+  driver's `TIMESTAMP_TZ`-typed bind into `TIMESTAMP_LTZ` and `TIMESTAMP_NTZ` columns). With ODP.NET 21
+  (3.21), whose `GetValue` returns only the wall time of a `TIMESTAMP WITH TIME ZONE`, the gateway,
+  `DataReaderMapper` and `ExecuteScalar*<DateTimeOffset>` read it with the driver's `GetDateTimeOffset`.
+  An Oracle batch insert (array binding) also truncated only its first row's fractional seconds to the
+  column (DRY-028); every row is now prepared alike (DRY-029).
 - **PostgreSQL-family `DateTime` kinds.** On PostgreSQL, CockroachDB, YugabyteDB and Spanner a
   `DateTime` with `Kind=Unspecified` declared `DbType.DateTime` (`timestamptz`) was refused by
   Npgsql, and a `Kind=Local` one declared `DateTime2` was sent as its local wall time. Both now go as
