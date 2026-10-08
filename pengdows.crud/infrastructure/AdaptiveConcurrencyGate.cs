@@ -246,14 +246,13 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         }
     }
 
-    [Conditional("DEBUG")]
     private void AssertInvariantUnderLock()
     {
         var valid = _waiters.Count == 0 || _active >= _effectiveLimit;
         Debug.Assert(valid, "A live waiter must not remain while capacity is available.");
         if (!valid)
         {
-            throw new InvalidOperationException(
+            Environment.FailFast(
                 "Adaptive concurrency gate invariant violated: a live waiter remains while capacity is available.");
         }
     }
