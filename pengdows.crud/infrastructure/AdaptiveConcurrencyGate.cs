@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace pengdows.crud.infrastructure;
 
 /// <summary>
@@ -77,12 +79,14 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             if (_active < _effectiveLimit && _waiters.Count == 0)
             {
                 _active++;
+                AssertInvariantUnderLock();
                 return ValueTask.FromResult(new Lease(this));
             }
 
             var waiter = new Waiter(this, cancellationToken);
             waiter.Node = _waiters.AddLast(waiter);
             waiter.RegisterCancellation();
+            AssertInvariantUnderLock();
             return new ValueTask<Lease>(waiter.Completion.Task);
         }
     }
@@ -105,6 +109,7 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
 
             if (limit == _effectiveLimit)
             {
+                AssertInvariantUnderLock();
                 return limit;
             }
 
@@ -114,6 +119,8 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             {
                 released = PromoteWaitersUnderLock();
             }
+
+            AssertInvariantUnderLock();
         }
 
         CompleteWaiters(released);
@@ -158,6 +165,7 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
 
             _active--;
             released = PromoteWaitersUnderLock();
+            AssertInvariantUnderLock();
         }
 
         CompleteWaiters(released);
@@ -177,6 +185,8 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
                 _waiters.Remove(waiter.Node);
                 waiter.Node = null;
             }
+
+            AssertInvariantUnderLock();
         }
 
         waiter.Completion.TrySetCanceled(waiter.CancellationToken);
@@ -220,6 +230,8 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
                     (canceled ??= new List<Waiter>()).Add(waiter);
                 }
             }
+
+            AssertInvariantUnderLock();
         }
 
         if (canceled == null)
@@ -232,6 +244,13 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             waiter.UnregisterCancellation();
             waiter.Completion.TrySetException(new ObjectDisposedException(nameof(AdaptiveConcurrencyGate)));
         }
+    }
+
+    [Conditional("DEBUG")]
+    private void AssertInvariantUnderLock()
+    {
+        Debug.Assert(_waiters.Count == 0 || _active >= _effectiveLimit,
+            "A live waiter must not remain while capacity is available.");
     }
 
     internal sealed class Lease : IDisposable, IAsyncDisposable

@@ -180,12 +180,24 @@ public sealed class AdaptiveConcurrencyGateTests
     public async Task ConcurrentAcquireCancelAndResize_LeavesNoLeasesOrWaiters()
     {
         using var gate = new AdaptiveConcurrencyGate(8);
+        Assert.Equal(1, gate.SetLimit(1));
+        await using var heldForCancellation = await gate.AcquireAsync();
+        using var forcedCancellation = new CancellationTokenSource();
+        var forcedWaiter = gate.AcquireAsync(forcedCancellation.Token).AsTask();
+        await WaitUntilAsync(() => gate.QueueCount >= 1);
+        forcedCancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await forcedWaiter);
+        await heldForCancellation.DisposeAsync();
+        Assert.Equal(8, gate.SetLimit(8));
+
         var acquired = 0;
-        var canceled = 0;
+        var canceled = 1;
+        var highWaterMark = 0;
+        var workersDone = 0;
         const int workerCount = 32;
         const int iterations = 100;
 
-        var workers = Enumerable.Range(0, workerCount).Select(worker => Task.Run(async () =>
+        var workerTasks = Enumerable.Range(0, workerCount).Select(worker => Task.Run(async () =>
         {
             for (var iteration = 0; iteration < iterations; iteration++)
             {
@@ -199,28 +211,50 @@ public sealed class AdaptiveConcurrencyGateTests
                 {
                     await using var lease = await gate.AcquireAsync(cancellation.Token);
                     Interlocked.Increment(ref acquired);
+                    var current = gate.ActiveCount;
+                    UpdateHighWaterMark(ref highWaterMark, current);
                     await Task.Yield();
+                    await Task.Delay(2);
                 }
                 catch (OperationCanceledException)
                 {
                     Interlocked.Increment(ref canceled);
                 }
             }
-        }));
+        })).ToArray();
+        var workers = Task.WhenAll(workerTasks);
 
         var controller = Task.Run(async () =>
         {
-            for (var iteration = 0; iteration < workerCount * 4; iteration++)
+            var iteration = 0;
+            while (Volatile.Read(ref workersDone) == 0)
             {
                 gate.SetLimit(iteration % 8 + 1);
+                iteration++;
                 await Task.Yield();
             }
         });
 
-        await Task.WhenAll(workers.Append(controller));
+        await workers;
+        Interlocked.Exchange(ref workersDone, 1);
+        await controller;
 
-        Assert.Equal(workerCount * iterations, acquired + canceled);
+        Assert.Equal(workerCount * iterations + 1, acquired + canceled);
+        Assert.True(canceled > 0);
+        Assert.InRange(highWaterMark, 1, gate.ConfiguredMaximum);
         Assert.Equal(0, gate.ActiveCount);
         Assert.Equal(0, gate.QueueCount);
+    }
+
+    private static void UpdateHighWaterMark(ref int highWaterMark, int current)
+    {
+        while (true)
+        {
+            var observed = Volatile.Read(ref highWaterMark);
+            if (current <= observed || Interlocked.CompareExchange(ref highWaterMark, current, observed) == observed)
+            {
+                return;
+            }
+        }
     }
 }
