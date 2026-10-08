@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.infrastructure;
@@ -144,5 +145,82 @@ public sealed class AdaptiveConcurrencyGateTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => gate.SetLimit(0));
         Assert.Throws<ArgumentOutOfRangeException>(() => gate.SetLimit(3));
+    }
+
+    [Fact]
+    public async Task AcquireAsync_DoesNotBargeAheadOfAnExistingWaiter()
+    {
+        using var gate = new AdaptiveConcurrencyGate(3);
+        await using var held = await gate.AcquireAsync();
+        Assert.Equal(1, gate.SetLimit(1));
+
+        var first = gate.AcquireAsync().AsTask();
+        var second = gate.AcquireAsync().AsTask();
+        await WaitUntilAsync(() => gate.QueueCount == 2);
+
+        Assert.Equal(2, gate.SetLimit(2));
+        await using var firstLease = await first;
+
+        // One waiter remains queued. A new caller must join behind it rather than use
+        // any transient capacity created by a future change to the grant path.
+        var third = gate.AcquireAsync().AsTask();
+        await WaitUntilAsync(() => gate.QueueCount == 2);
+        Assert.False(third.IsCompleted);
+
+        await held.DisposeAsync();
+        await using var secondLease = await second;
+        Assert.False(third.IsCompleted);
+
+        await firstLease.DisposeAsync();
+        await using var thirdLease = await third;
+        Assert.Equal(2, gate.ActiveCount);
+    }
+
+    [Fact]
+    public async Task ConcurrentAcquireCancelAndResize_LeavesNoLeasesOrWaiters()
+    {
+        using var gate = new AdaptiveConcurrencyGate(8);
+        var acquired = 0;
+        var canceled = 0;
+        const int workerCount = 32;
+        const int iterations = 100;
+
+        var workers = Enumerable.Range(0, workerCount).Select(worker => Task.Run(async () =>
+        {
+            for (var iteration = 0; iteration < iterations; iteration++)
+            {
+                using var cancellation = new CancellationTokenSource();
+                if ((worker + iteration) % 3 == 0)
+                {
+                    cancellation.CancelAfter((worker + iteration) % 3 + 1);
+                }
+
+                try
+                {
+                    await using var lease = await gate.AcquireAsync(cancellation.Token);
+                    Interlocked.Increment(ref acquired);
+                    await Task.Yield();
+                }
+                catch (OperationCanceledException)
+                {
+                    Interlocked.Increment(ref canceled);
+                }
+            }
+        }));
+
+        var controller = Task.Run(async () =>
+        {
+            for (var iteration = 0; iteration < workerCount * 4; iteration++)
+            {
+                gate.SetLimit(iteration % 8 + 1);
+                await Task.Yield();
+            }
+        });
+
+        await Task.WhenAll(workers.Append(controller));
+
+        Assert.Equal(workerCount * iterations, acquired + canceled);
+        Assert.Equal(0, gate.ActiveCount);
+        Assert.Equal(0, gate.QueueCount);
     }
 }

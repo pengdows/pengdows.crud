@@ -130,6 +130,8 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             var waiter = node.Value;
             _waiters.RemoveFirst();
             waiter.Node = null;
+            // Defensive only: cancellation unlinks waiters while holding the same lock, so a
+            // queued waiter should normally always transition from state 0 to state 2 here.
             if (!waiter.TryMarkGranted())
             {
                 waiter.UnregisterCancellation();
