@@ -26,13 +26,15 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
     private readonly object _sync = new();
     private readonly int _configuredMaximum;
     private readonly int _maxQueueDepth;
-    private readonly HashSet<long> _activeLeaseTokens = new();
+    private int[] _freeLeaseSlots = Array.Empty<int>();
+    private int[] _leaseStates = Array.Empty<int>();
+    private int _freeLeaseSlotCount;
+    private int _leaseSlotCount;
     private Waiter? _waiterHead;
     private Waiter? _waiterTail;
     private int _queueCount;
     private int _effectiveLimit;
     private int _active;
-    private long _nextLeaseToken;
     private bool _disposed;
 
     internal AdaptiveConcurrencyGate(int configuredMaximum, int? maxQueueDepth = null)
@@ -287,16 +289,20 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         return released;
     }
 
-    private void Release(long leaseToken)
+    private void Release(int leaseSlot, int leaseGeneration)
     {
         Waiter? released;
 
         lock (_sync)
         {
-            if (!_activeLeaseTokens.Remove(leaseToken))
+            if (leaseSlot < 0 || leaseSlot >= _leaseSlotCount ||
+                _leaseStates[leaseSlot] != leaseGeneration)
             {
                 return;
             }
+
+            _leaseStates[leaseSlot] = -leaseGeneration;
+            _freeLeaseSlots[_freeLeaseSlotCount++] = leaseSlot;
 
             _active--;
             released = PromoteWaitersUnderLock();
@@ -308,18 +314,35 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
 
     private Lease CreateLeaseUnderLock()
     {
-        do
+        if (_freeLeaseSlotCount == 0)
         {
-            _nextLeaseToken++;
-            if (_nextLeaseToken == 0)
+            var newSlotCount = _leaseSlotCount == 0
+                ? Math.Min(_configuredMaximum, 4)
+                : _leaseSlotCount > _configuredMaximum / 2
+                    ? _configuredMaximum
+                    : _leaseSlotCount * 2;
+            var oldSlotCount = _leaseSlotCount;
+            Array.Resize(ref _freeLeaseSlots, newSlotCount);
+            Array.Resize(ref _leaseStates, newSlotCount);
+            for (var slot = oldSlotCount; slot < newSlotCount; slot++)
             {
-                _nextLeaseToken++;
+                _freeLeaseSlots[_freeLeaseSlotCount++] = slot;
             }
-        }
-        while (!_activeLeaseTokens.Add(_nextLeaseToken));
 
+            _leaseSlotCount = newSlotCount;
+        }
+
+        var leaseSlot = _freeLeaseSlots[--_freeLeaseSlotCount];
+        var previousState = _leaseStates[leaseSlot];
+        var leaseGeneration = previousState < 0 ? -previousState + 1 : previousState + 1;
+        if (leaseGeneration <= 0)
+        {
+            leaseGeneration = 1;
+        }
+
+        _leaseStates[leaseSlot] = leaseGeneration;
         _active++;
-        return new Lease(this, _nextLeaseToken);
+        return new Lease(this, leaseSlot, leaseGeneration);
     }
 
     private bool Cancel(Waiter waiter)
@@ -495,17 +518,19 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
     internal readonly struct Lease : IDisposable, IAsyncDisposable
     {
         private readonly AdaptiveConcurrencyGate _gate;
-        private readonly long _leaseToken;
+        private readonly int _leaseSlot;
+        private readonly int _leaseGeneration;
 
-        internal Lease(AdaptiveConcurrencyGate gate, long leaseToken)
+        internal Lease(AdaptiveConcurrencyGate gate, int leaseSlot, int leaseGeneration)
         {
             _gate = gate;
-            _leaseToken = leaseToken;
+            _leaseSlot = leaseSlot;
+            _leaseGeneration = leaseGeneration;
         }
 
         public void Dispose()
         {
-            _gate.Release(_leaseToken);
+            _gate.Release(_leaseSlot, _leaseGeneration);
         }
 
         public ValueTask DisposeAsync()
