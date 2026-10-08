@@ -84,4 +84,16 @@ public class InformixIfxExceptionShapeTests
         Assert.Equal(expectedKind, info.ConstraintKind);
         Assert.Equal(nativeError, info.ProviderErrorCode);
     }
+
+    [Fact]
+    public void Translate_MapsSessionLimitFromTheErrorsCollectionToTooManyConnections()
+    {
+        var raw = new IfxExceptionShape(-25571, "Cannot create a user thread.");
+
+        var result = new InformixExceptionTranslator().Translate(Dialect(), raw, DbOperationKind.Query);
+
+        var tooMany = Assert.IsType<TooManyConnectionsException>(result);
+        Assert.True(tooMany.IsTransient);
+        Assert.Equal(-25571, tooMany.ErrorCode);
+    }
 }
