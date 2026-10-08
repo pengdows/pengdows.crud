@@ -249,8 +249,13 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
     [Conditional("DEBUG")]
     private void AssertInvariantUnderLock()
     {
-        Debug.Assert(_waiters.Count == 0 || _active >= _effectiveLimit,
-            "A live waiter must not remain while capacity is available.");
+        var valid = _waiters.Count == 0 || _active >= _effectiveLimit;
+        Debug.Assert(valid, "A live waiter must not remain while capacity is available.");
+        if (!valid)
+        {
+            throw new InvalidOperationException(
+                "Adaptive concurrency gate invariant violated: a live waiter remains while capacity is available.");
+        }
     }
 
     internal sealed class Lease : IDisposable, IAsyncDisposable
