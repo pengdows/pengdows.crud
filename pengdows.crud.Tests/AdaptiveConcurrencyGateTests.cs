@@ -9,7 +9,7 @@ namespace pengdows.crud.Tests;
 
 public sealed class AdaptiveConcurrencyGateTests
 {
-    private static async Task WaitUntilAsync(Func<bool> condition, int expected = 1)
+    private static async Task WaitUntilAsync(Func<bool> condition)
     {
         var deadline = DateTime.UtcNow.AddSeconds(5);
         while (!condition() && DateTime.UtcNow < deadline)
@@ -17,7 +17,7 @@ public sealed class AdaptiveConcurrencyGateTests
             await Task.Delay(10);
         }
 
-        Assert.True(condition(), $"Condition was not met; expected {expected}.");
+        Assert.True(condition(), "Condition was not met.");
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class AdaptiveConcurrencyGateTests
 
         var first = gate.AcquireAsync().AsTask();
         var second = gate.AcquireAsync().AsTask();
-        await WaitUntilAsync(() => gate.QueueCount >= 2, expected: 2);
+        await WaitUntilAsync(() => gate.QueueCount >= 2);
 
         Assert.Equal(2, gate.SetLimit(2));
         await using var firstLease = await first;
@@ -145,6 +145,91 @@ public sealed class AdaptiveConcurrencyGateTests
 
         Assert.Throws<ArgumentOutOfRangeException>(() => gate.SetLimit(0));
         Assert.Throws<ArgumentOutOfRangeException>(() => gate.SetLimit(3));
+    }
+
+    [Fact]
+    public async Task QueueDepthLimit_RejectsAdditionalWaiters()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1, maxQueueDepth: 1);
+        await using var held = await gate.AcquireAsync();
+        using var cancellation = new CancellationTokenSource();
+        var waiting = gate.AcquireAsync(cancellation.Token).AsTask();
+        await WaitUntilAsync(() => gate.QueueCount == 1);
+
+        await Assert.ThrowsAsync<ConcurrencyGateSaturatedException>(
+            async () => await gate.AcquireAsync().AsTask());
+
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await waiting);
+    }
+
+    [Fact]
+    public async Task AcquireAsync_WithTimeout_RemovesTimedOutWaiter()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1, maxQueueDepth: 4);
+        await using var held = await gate.AcquireAsync();
+
+        await Assert.ThrowsAsync<TimeoutException>(
+            async () => await gate.AcquireAsync(TimeSpan.FromMilliseconds(10)).AsTask());
+
+        Assert.Equal(0, gate.QueueCount);
+    }
+
+    [Fact]
+    public async Task Acquire_WithTimeout_UsesTheSameFifoGate()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1, maxQueueDepth: 4);
+        using var held = gate.Acquire();
+        var waiting = Task.Run(() => gate.Acquire(TimeSpan.FromSeconds(5)));
+
+        await WaitUntilAsync(() => gate.QueueCount == 1);
+        held.Dispose();
+
+        using var granted = await waiting;
+        Assert.Equal(0, gate.QueueCount);
+    }
+
+    [Fact]
+    public async Task AcquireAsync_WithTimeout_DoesNotTranslateCallerCancellationToTimeout()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1);
+        await using var held = await gate.AcquireAsync();
+        using var cancellation = new CancellationTokenSource();
+        var waiting = gate.AcquireAsync(TimeSpan.FromSeconds(5), cancellation.Token).AsTask();
+
+        await WaitUntilAsync(() => gate.QueueCount == 1);
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await waiting);
+    }
+
+    [Fact]
+    public async Task Acquire_WithCancellation_UnblocksSynchronously()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1);
+        using var held = gate.Acquire();
+        using var cancellation = new CancellationTokenSource();
+        var waiting = Task.Run(() => gate.Acquire(cancellationToken: cancellation.Token));
+
+        await WaitUntilAsync(() => gate.QueueCount == 1);
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await waiting);
+        Assert.Equal(0, gate.QueueCount);
+    }
+
+    [Fact]
+    public async Task Snapshot_ReadsAllCountersTogether()
+    {
+        using var gate = new AdaptiveConcurrencyGate(2, maxQueueDepth: 4);
+        await using var first = await gate.AcquireAsync();
+        var snapshot = gate.GetSnapshot();
+
+        Assert.Equal(2, snapshot.ConfiguredMaximum);
+        Assert.Equal(2, snapshot.EffectiveLimit);
+        Assert.Equal(1, snapshot.ActiveCount);
+        Assert.Equal(0, snapshot.QueueCount);
+        Assert.Equal(4, snapshot.MaxQueueDepth);
     }
 
     [Fact]
