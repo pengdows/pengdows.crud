@@ -233,6 +233,28 @@ public sealed class AdaptiveConcurrencyGateTests
     }
 
     [Fact]
+    public void Lease_IsAValueTypeToKeepFastPathAllocationFree()
+    {
+        Assert.True(typeof(AdaptiveConcurrencyGate.Lease).IsValueType);
+    }
+
+    [Fact]
+    public async Task CopiedLease_DisposesOnlyItsOwnGeneration()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1);
+        var first = await gate.AcquireAsync();
+        var staleCopy = first;
+        first.Dispose();
+
+        var second = await gate.AcquireAsync();
+        staleCopy.Dispose();
+        Assert.Equal(1, gate.ActiveCount);
+
+        second.Dispose();
+        Assert.Equal(0, gate.ActiveCount);
+    }
+
+    [Fact]
     public async Task AcquireAsync_DoesNotBargeAheadOfAnExistingWaiter()
     {
         using var gate = new AdaptiveConcurrencyGate(3);

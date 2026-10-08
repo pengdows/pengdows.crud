@@ -26,11 +26,13 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
     private readonly object _sync = new();
     private readonly int _configuredMaximum;
     private readonly int _maxQueueDepth;
+    private readonly HashSet<long> _activeLeaseTokens = new();
     private Waiter? _waiterHead;
     private Waiter? _waiterTail;
     private int _queueCount;
     private int _effectiveLimit;
     private int _active;
+    private long _nextLeaseToken;
     private bool _disposed;
 
     internal AdaptiveConcurrencyGate(int configuredMaximum, int? maxQueueDepth = null)
@@ -117,9 +119,9 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
 
             if (_active < _effectiveLimit && _queueCount == 0)
             {
-                _active++;
+                var lease = CreateLeaseUnderLock();
                 AssertInvariantUnderLock();
-                return ValueTask.FromResult(new Lease(this));
+                return ValueTask.FromResult(lease);
             }
 
             if (_queueCount >= _maxQueueDepth)
@@ -152,9 +154,9 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             ThrowIfDisposedUnderLock();
             if (_active < _effectiveLimit && _queueCount == 0)
             {
-                _active++;
+                var lease = CreateLeaseUnderLock();
                 AssertInvariantUnderLock();
-                return new Lease(this);
+                return lease;
             }
 
             if (_queueCount >= _maxQueueDepth)
@@ -268,7 +270,7 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
                 continue;
             }
 
-            _active++;
+            waiter.GrantedLease = CreateLeaseUnderLock();
             waiter.GrantNext = null;
             if (releasedTail == null)
             {
@@ -285,15 +287,15 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         return released;
     }
 
-    private void Release()
+    private void Release(long leaseToken)
     {
         Waiter? released;
 
         lock (_sync)
         {
-            if (_active <= 0)
+            if (!_activeLeaseTokens.Remove(leaseToken))
             {
-                throw new InvalidOperationException("The adaptive concurrency gate was released without an active lease.");
+                return;
             }
 
             _active--;
@@ -302,6 +304,22 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         }
 
         CompleteWaiters(released);
+    }
+
+    private Lease CreateLeaseUnderLock()
+    {
+        do
+        {
+            _nextLeaseToken++;
+            if (_nextLeaseToken == 0)
+            {
+                _nextLeaseToken++;
+            }
+        }
+        while (!_activeLeaseTokens.Add(_nextLeaseToken));
+
+        _active++;
+        return new Lease(this, _nextLeaseToken);
     }
 
     private bool Cancel(Waiter waiter)
@@ -474,22 +492,20 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         }
     }
 
-    internal sealed class Lease : IDisposable, IAsyncDisposable
+    internal readonly struct Lease : IDisposable, IAsyncDisposable
     {
         private readonly AdaptiveConcurrencyGate _gate;
-        private int _released;
+        private readonly long _leaseToken;
 
-        internal Lease(AdaptiveConcurrencyGate gate)
+        internal Lease(AdaptiveConcurrencyGate gate, long leaseToken)
         {
             _gate = gate;
+            _leaseToken = leaseToken;
         }
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _released, 1) == 0)
-            {
-                _gate.Release();
-            }
+            _gate.Release(_leaseToken);
         }
 
         public ValueTask DisposeAsync()
@@ -532,7 +548,7 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         internal CancellationToken CancellationToken { get; }
         internal TaskCompletionSource<Lease>? Completion { get; }
         internal ManualResetEventSlim? Signal { get; }
-        internal Lease? GrantedLease { get; private set; }
+        internal Lease GrantedLease { get; set; }
         internal Waiter? Previous { get; set; }
         internal Waiter? Next { get; set; }
         internal Waiter? GrantNext { get; set; }
@@ -567,12 +583,11 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         {
             if (_synchronous)
             {
-                GrantedLease = new Lease(_gate);
                 Signal!.Set();
                 return;
             }
 
-            Completion!.TrySetResult(new Lease(_gate));
+            Completion!.TrySetResult(GrantedLease);
         }
 
         internal Lease TakeSynchronousResult()
@@ -581,7 +596,7 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             {
                 if (Volatile.Read(ref _state) == 2)
                 {
-                    return GrantedLease!;
+                    return GrantedLease;
                 }
 
                 if (_failure == WaiterFailure.Timeout)
