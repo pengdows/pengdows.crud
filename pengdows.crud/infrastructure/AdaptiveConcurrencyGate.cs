@@ -8,7 +8,7 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
 {
     private readonly object _sync = new();
     private readonly int _configuredMaximum;
-    private readonly Queue<Waiter> _waiters = new();
+    private readonly LinkedList<Waiter> _waiters = new();
     private int _effectiveLimit;
     private int _active;
     private bool _disposed;
@@ -54,18 +54,25 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         {
             lock (_sync)
             {
-                return _waiters.Count(waiter => waiter.IsQueued);
+                return _waiters.Count;
             }
         }
     }
 
     internal ValueTask<Lease> AcquireAsync(CancellationToken cancellationToken = default)
     {
-        cancellationToken.ThrowIfCancellationRequested();
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return new ValueTask<Lease>(Task.FromCanceled<Lease>(cancellationToken));
+        }
 
         lock (_sync)
         {
-            ThrowIfDisposed();
+            if (_disposed)
+            {
+                return new ValueTask<Lease>(Task.FromException<Lease>(
+                    new ObjectDisposedException(nameof(AdaptiveConcurrencyGate))));
+            }
 
             if (_active < _effectiveLimit && _waiters.Count == 0)
             {
@@ -74,47 +81,43 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             }
 
             var waiter = new Waiter(this, cancellationToken);
-            _waiters.Enqueue(waiter);
+            waiter.Node = _waiters.AddLast(waiter);
             waiter.RegisterCancellation();
             return new ValueTask<Lease>(waiter.Completion.Task);
         }
     }
 
-    internal bool LowerLimit(int limit)
+    internal int SetLimit(int limit)
     {
-        lock (_sync)
+        if (limit < 1 || limit > _configuredMaximum)
         {
-            ThrowIfDisposed();
-
-            if (limit < 1 || limit >= _effectiveLimit || limit > _configuredMaximum)
-            {
-                return false;
-            }
-
-            _effectiveLimit = limit;
-            return true;
+            throw new ArgumentOutOfRangeException(nameof(limit), limit,
+                $"The effective limit must be between 1 and {_configuredMaximum}.");
         }
-    }
 
-    internal bool RaiseLimit(int limit)
-    {
         List<Waiter>? released = null;
-
         lock (_sync)
         {
-            ThrowIfDisposed();
-
-            if (limit <= _effectiveLimit || limit > _configuredMaximum)
+            if (_disposed)
             {
-                return false;
+                return _effectiveLimit;
             }
 
+            if (limit == _effectiveLimit)
+            {
+                return limit;
+            }
+
+            var wasRaised = limit > _effectiveLimit;
             _effectiveLimit = limit;
-            released = PromoteWaitersUnderLock();
+            if (wasRaised)
+            {
+                released = PromoteWaitersUnderLock();
+            }
         }
 
         CompleteWaiters(released);
-        return true;
+        return limit;
     }
 
     private List<Waiter>? PromoteWaitersUnderLock()
@@ -123,7 +126,10 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
 
         while (_active < _effectiveLimit && _waiters.Count > 0)
         {
-            var waiter = _waiters.Dequeue();
+            var node = _waiters.First!;
+            var waiter = node.Value;
+            _waiters.RemoveFirst();
+            waiter.Node = null;
             if (!waiter.TryMarkGranted())
             {
                 waiter.UnregisterCancellation();
@@ -164,8 +170,11 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
                 return;
             }
 
-            // Queue removal is intentionally deferred. The queue is normally short and lazy
-            // removal keeps cancellation from changing FIFO ordering or requiring a linked list.
+            if (waiter.Node != null)
+            {
+                _waiters.Remove(waiter.Node);
+                waiter.Node = null;
+            }
         }
 
         waiter.Completion.TrySetCanceled(waiter.CancellationToken);
@@ -186,14 +195,6 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         }
     }
 
-    private void ThrowIfDisposed()
-    {
-        if (_disposed)
-        {
-            throw new ObjectDisposedException(nameof(AdaptiveConcurrencyGate));
-        }
-    }
-
     public void Dispose()
     {
         List<Waiter>? canceled = null;
@@ -206,11 +207,16 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             }
 
             _disposed = true;
-            while (_waiters.Count > 0)
+            while (_waiters.First != null)
             {
-                var waiter = _waiters.Dequeue();
-                waiter.TryMarkCanceled();
-                (canceled ??= new List<Waiter>()).Add(waiter);
+                var node = _waiters.First;
+                var waiter = node!.Value;
+                _waiters.RemoveFirst();
+                waiter.Node = null;
+                if (waiter.TryMarkCanceled())
+                {
+                    (canceled ??= new List<Waiter>()).Add(waiter);
+                }
             }
         }
 
@@ -255,6 +261,7 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
     {
         private readonly AdaptiveConcurrencyGate _gate;
         private CancellationTokenRegistration _registration;
+        internal LinkedListNode<Waiter>? Node;
         private int _state;
 
         internal Waiter(AdaptiveConcurrencyGate gate, CancellationToken cancellationToken)
@@ -267,7 +274,6 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         internal AdaptiveConcurrencyGate Gate => _gate;
         internal CancellationToken CancellationToken { get; }
         internal TaskCompletionSource<Lease> Completion { get; }
-        internal bool IsQueued => Volatile.Read(ref _state) == 0;
         internal void RegisterCancellation()
         {
             if (CancellationToken.CanBeCanceled)

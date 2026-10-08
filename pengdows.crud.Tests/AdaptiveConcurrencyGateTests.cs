@@ -26,7 +26,7 @@ public sealed class AdaptiveConcurrencyGateTests
         await using var first = await gate.AcquireAsync();
         await using var second = await gate.AcquireAsync();
 
-        Assert.True(gate.LowerLimit(1));
+        Assert.Equal(1, gate.SetLimit(1));
         Assert.Equal(1, gate.EffectiveLimit);
         Assert.Equal(2, gate.ActiveCount);
 
@@ -46,14 +46,14 @@ public sealed class AdaptiveConcurrencyGateTests
     public async Task RaiseLimit_WakesOnlyCapacityMadeAvailable()
     {
         using var gate = new AdaptiveConcurrencyGate(3);
-        Assert.True(gate.LowerLimit(1));
+        Assert.Equal(1, gate.SetLimit(1));
         await using var held = await gate.AcquireAsync();
 
         var first = gate.AcquireAsync().AsTask();
         var second = gate.AcquireAsync().AsTask();
         await WaitUntilAsync(() => gate.QueueCount >= 2, expected: 2);
 
-        Assert.True(gate.RaiseLimit(2));
+        Assert.Equal(2, gate.SetLimit(2));
         await using var firstLease = await first;
         Assert.False(second.IsCompleted);
 
@@ -68,7 +68,7 @@ public sealed class AdaptiveConcurrencyGateTests
         using var gate = new AdaptiveConcurrencyGate(2);
         await using var lease = await gate.AcquireAsync();
 
-        Assert.False(gate.RaiseLimit(3));
+        Assert.Throws<ArgumentOutOfRangeException>(() => gate.SetLimit(3));
         Assert.Equal(2, gate.EffectiveLimit);
 
         await lease.DisposeAsync();
@@ -93,5 +93,56 @@ public sealed class AdaptiveConcurrencyGateTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await waiting);
         Assert.Equal(0, gate.QueueCount);
+    }
+
+    [Fact]
+    public async Task CanceledWaiter_DoesNotBlockTheNextWaiter()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1);
+        await using var held = await gate.AcquireAsync();
+        using var cancellation = new CancellationTokenSource();
+
+        var canceled = gate.AcquireAsync(cancellation.Token).AsTask();
+        await WaitUntilAsync(() => gate.QueueCount >= 1);
+        cancellation.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await canceled);
+
+        await held.DisposeAsync();
+        await using var next = await gate.AcquireAsync();
+        Assert.Equal(1, gate.ActiveCount);
+    }
+
+    [Fact]
+    public async Task Dispose_WithPendingWaiter_CompletesWaiterWithObjectDisposedException()
+    {
+        var gate = new AdaptiveConcurrencyGate(1);
+        await using var held = await gate.AcquireAsync();
+        var waiting = gate.AcquireAsync().AsTask();
+        await WaitUntilAsync(() => gate.QueueCount >= 1);
+
+        gate.Dispose();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(async () => await waiting);
+    }
+
+    [Fact]
+    public async Task AcquireAsync_WithPreCanceledToken_ReturnsCanceledOperation()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        var operation = gate.AcquireAsync(cancellation.Token).AsTask();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await operation);
+    }
+
+    [Fact]
+    public void SetLimit_RejectsValuesOutsideConfiguredRange()
+    {
+        using var gate = new AdaptiveConcurrencyGate(2);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => gate.SetLimit(0));
+        Assert.Throws<ArgumentOutOfRangeException>(() => gate.SetLimit(3));
     }
 }
