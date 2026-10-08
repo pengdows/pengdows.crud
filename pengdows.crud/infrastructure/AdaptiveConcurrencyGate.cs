@@ -26,10 +26,12 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
     private readonly object _sync = new();
     private readonly int _configuredMaximum;
     private readonly int _maxQueueDepth;
+    private readonly bool _singleLeaseSlot;
     private int[] _freeLeaseSlots = Array.Empty<int>();
     private int[] _leaseStates = Array.Empty<int>();
     private int _freeLeaseSlotCount;
     private int _leaseSlotCount;
+    private int _singleLeaseState;
     private Waiter? _waiterHead;
     private Waiter? _waiterTail;
     private int _queueCount;
@@ -45,6 +47,7 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
         }
 
         _configuredMaximum = configuredMaximum;
+        _singleLeaseSlot = configuredMaximum == 1;
         _maxQueueDepth = maxQueueDepth ?? Math.Max(configuredMaximum * 8, 32);
         if (_maxQueueDepth < 0)
         {
@@ -295,14 +298,24 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
 
         lock (_sync)
         {
-            if (leaseSlot < 0 || leaseSlot >= _leaseSlotCount ||
-                _leaseStates[leaseSlot] != leaseGeneration)
+            if (leaseSlot == -1)
+            {
+                if (!_singleLeaseSlot || _singleLeaseState != leaseGeneration)
+                {
+                    return;
+                }
+
+                _singleLeaseState = -leaseGeneration;
+            }
+            else if (leaseSlot >= _leaseSlotCount || _leaseStates[leaseSlot] != leaseGeneration)
             {
                 return;
             }
-
-            _leaseStates[leaseSlot] = -leaseGeneration;
-            _freeLeaseSlots[_freeLeaseSlotCount++] = leaseSlot;
+            else
+            {
+                _leaseStates[leaseSlot] = -leaseGeneration;
+                _freeLeaseSlots[_freeLeaseSlotCount++] = leaseSlot;
+            }
 
             _active--;
             released = PromoteWaitersUnderLock();
@@ -314,6 +327,21 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
 
     private Lease CreateLeaseUnderLock()
     {
+        if (_singleLeaseSlot)
+        {
+            var singleGeneration = _singleLeaseState < 0
+                ? -_singleLeaseState + 1
+                : _singleLeaseState + 1;
+            if (singleGeneration <= 0)
+            {
+                singleGeneration = 1;
+            }
+
+            _singleLeaseState = singleGeneration;
+            _active++;
+            return new Lease(this, -1, singleGeneration);
+        }
+
         if (_freeLeaseSlotCount == 0)
         {
             var newSlotCount = _leaseSlotCount == 0
