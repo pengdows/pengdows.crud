@@ -9,7 +9,7 @@
 #   tier1  no DB: hydration, equal-footing SQLite, Dapper apples-to-apples, guid, broken-mapping
 #   tier2  embedded concurrency: SQLite write contention/concurrency, pool protection, DuckDB
 #   tier3  Docker/Testcontainers: PostgreSQL + SQL Server equal-footing and hydration
-# Env: BASE_REF (origin/main) NEW_REF (HEAD) JOB (unset; --job ADDS to class-defined jobs, use only for smoke tests) WORK (/tmp/crud-bench-ab) BASE_NAME (main) NEW_NAME (3.0)
+# Env: BASE_EXCLUDE (unset; harness files, relative to benchmarks/CrudBenchmarks, removed from the baseline arm only because they use APIs the baseline lacks) FRAMEWORK (unset; e.g. net10.0 — required when the harness multi-targets) BASE_REF (origin/main) NEW_REF (HEAD) JOB (unset; --job ADDS to class-defined jobs, use only for smoke tests) WORK (/tmp/crud-bench-ab) BASE_NAME (main) NEW_NAME (3.0)
 # Arms alternate order each round (A B, then B A, ...) to expose position bias.
 set -euo pipefail
 
@@ -19,6 +19,8 @@ BASE_REF="${BASE_REF:-origin/main}"
 NEW_REF="${NEW_REF:-HEAD}"
 BASE_NAME="${BASE_NAME:-main}"
 NEW_NAME="${NEW_NAME:-3.0}"
+FRAMEWORK="${FRAMEWORK:-}"
+BASE_EXCLUDE="${BASE_EXCLUDE:-}"
 JOB="${JOB:-}"   # empty = use each class's own [SimpleJob] config (the intended methodology)
 WORK="${WORK:-/tmp/crud-bench-ab}"
 
@@ -50,11 +52,12 @@ prepare_arm() { # name ref baseline(0/1)
   (cd "$harness" && tar --exclude=bin --exclude=obj --exclude=BenchmarkDotNet.Artifacts --exclude=results -cf - .) \
     | (cd "$wt/benchmarks/CrudBenchmarks" && tar -xf -)
   if [ "$baseline" = 1 ]; then
+    for f in $BASE_EXCLUDE; do rm -f "$wt/benchmarks/CrudBenchmarks/$f"; done
     sed -i 's|<Nullable>enable</Nullable>|<Nullable>enable</Nullable>\n        <DefineConstants>$(DefineConstants);BASELINE_2X</DefineConstants>|' \
       "$wt/benchmarks/CrudBenchmarks/CrudBenchmarks.csproj"
   fi
   echo "building arm $name @ $(git -C "$wt" rev-parse --short HEAD)"
-  dotnet build "$wt/benchmarks/CrudBenchmarks/CrudBenchmarks.csproj" -c Release -v q -nologo >"$WORK/build-$name.log" 2>&1 \
+  dotnet build "$wt/benchmarks/CrudBenchmarks/CrudBenchmarks.csproj" -c Release ${FRAMEWORK:+-f "$FRAMEWORK"} -v q -nologo >"$WORK/build-$name.log" 2>&1 \
     || { tail -20 "$WORK/build-$name.log"; echo "BUILD FAILED for $name" >&2; exit 1; }
 }
 
@@ -66,7 +69,8 @@ run_arm() { # name round
   # inside the arm's harness dir and collect its artifacts afterwards.
   rm -rf "$proj/BenchmarkDotNet.Artifacts"
   local jobargs=(); [ -n "$JOB" ] && jobargs=(--job "$JOB")
-  (cd "$proj" && dotnet run -c Release --no-build -- \
+  local fwargs=(); [ -n "$FRAMEWORK" ] && fwargs=(-f "$FRAMEWORK")
+  (cd "$proj" && dotnet run -c Release "${fwargs[@]}" --no-build -- \
       --filter "${filters[@]}" "${jobargs[@]}" --exporters json) >"$dir/console.log" 2>&1 \
     || echo "WARN: $name round $round exited non-zero (see $dir/console.log)" >&2
   [ -d "$proj/BenchmarkDotNet.Artifacts" ] && mv "$proj/BenchmarkDotNet.Artifacts" "$dir/BenchmarkDotNet.Artifacts"

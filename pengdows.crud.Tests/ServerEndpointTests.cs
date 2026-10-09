@@ -11,10 +11,18 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public sealed class ServerEndpointTests
 {
-    private static string? Key(string connectionString, int? defaultPort = null) =>
+    private static string? TryKey(string connectionString, int? defaultPort = null) =>
         ServerEndpoint.TryGetKey(new DbConnectionStringBuilder { ConnectionString = connectionString }, defaultPort, out var key)
             ? key
             : null;
+
+    // A comparison of two missing keys would pass vacuously, so every positive case needs a real key.
+    private static string Key(string connectionString, int? defaultPort = null)
+    {
+        var key = TryKey(connectionString, defaultPort);
+        Assert.False(string.IsNullOrEmpty(key), $"No endpoint key for: {connectionString}");
+        return key!;
+    }
 
     [Fact]
     public void SameHostAndPort_DifferingOnlyInApplicationNameAndPoolSettings_ShareAKey()
@@ -22,7 +30,6 @@ public sealed class ServerEndpointTests
         var writer = Key("Host=db1;Port=5432;Database=a;Username=u;Password=p;Application Name=app-rw;Maximum Pool Size=20");
         var reader = Key("Host=db1;Port=5432;Database=a;Username=u;Password=p;Application Name=app;Maximum Pool Size=10");
 
-        Assert.NotNull(writer);
         Assert.Equal(writer, reader);
     }
 
@@ -74,6 +81,67 @@ public sealed class ServerEndpointTests
     [Fact]
     public void NoEndpointInTheString_HasNoKey()
     {
-        Assert.Null(Key("Database=a;Username=u"));
+        Assert.Null(TryKey("Database=a;Username=u"));
+    }
+
+    [Theory]
+    [InlineData("Host= ;Database=a")]
+    [InlineData("Server=;Database=a")]
+    [InlineData("Data Source=   ;Database=a")]
+    public void ABlankHost_HasNoKey(string connectionString)
+    {
+        Assert.Null(TryKey(connectionString));
+    }
+
+    [Fact]
+    public void BracketedIpv6WithAColonPort_IsReadAsHostAndPort()
+    {
+        Assert.Equal(Key("Server=localhost,1433"), Key("Data Source=[::1]:1433"));
+        Assert.Equal(Key("Host=[2001:db8::1];Port=5432"), Key("Data Source=[2001:db8::1]:5432"));
+    }
+
+    [Fact]
+    public void BracketedIpv6WithACommaPort_IsReadAsHostAndPort()
+    {
+        Assert.Equal(Key("Host=[2001:db8::1];Port=1433"), Key("Server=[2001:db8::1],1433"));
+    }
+
+    [Fact]
+    public void BracketedIpv6OnDifferentPorts_AreDifferentServers()
+    {
+        Assert.NotEqual(Key("Data Source=[2001:db8::1]:5432"), Key("Data Source=[2001:db8::1]:5433"));
+    }
+
+    [Fact]
+    public void BareIpv6WithoutBrackets_IsNotMisreadAsHostAndPort()
+    {
+        Assert.NotEqual(Key("Data Source=2001:db8::1"), Key("Data Source=2001:db8::2"));
+    }
+
+    [Fact]
+    public void AnExplicitPortKey_WinsOverAPortEmbeddedInTheHost()
+    {
+        Assert.Equal(Key("Host=db1;Port=1444"), Key("Data Source=db1,1433;Port=1444"));
+    }
+
+    [Theory]
+    [InlineData("Data Source=np:db1,1433")]
+    [InlineData("Data Source=lpc:db1,1433")]
+    [InlineData("Data Source=TCP:db1,1433")]
+    public void ProtocolPrefixes_AreIgnored(string connectionString)
+    {
+        Assert.Equal(Key("Server=db1,1433"), Key(connectionString));
+    }
+
+    [Fact]
+    public void ACommaSeparatedHostList_IsNotSplitIntoHostAndPort()
+    {
+        Assert.NotEqual(Key("Host=db1,db2"), Key("Host=db1"));
+    }
+
+    [Fact]
+    public void AnOmittedPortOnOneSide_IsDifferentFromAPortOnTheOther_WhenNoDefaultPortIsKnown()
+    {
+        Assert.NotEqual(Key("Host=db1"), Key("Host=db1;Port=5432"));
     }
 }

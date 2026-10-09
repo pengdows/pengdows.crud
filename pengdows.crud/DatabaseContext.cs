@@ -213,6 +213,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int? _probedWriterConnectionLimit;
     private int? _probedReaderConnectionLimit;
     private int _resourceConnectionHeadroom;
+    private int _headroomUnknownWarned;
     private const string DefaultApplicationName = "pengdows.crud";
     private const string ReadOnlyApplicationNameSuffix = "-ro";
     private const string WriteApplicationNameSuffix = "-rw";

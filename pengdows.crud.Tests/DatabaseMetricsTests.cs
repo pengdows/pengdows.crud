@@ -71,6 +71,22 @@ public class DatabaseMetricsTests
     }
 
     [Fact]
+    public void ConnectionDurations_RecordedInFractionsOfAMillisecond_AreAveragedWithoutRoundingToWholeMilliseconds()
+    {
+        var collector = new MetricsCollector(MetricsOptions.Default);
+
+        for (var i = 0; i < 20; i++)
+        {
+            collector.RecordConnectionOpenDuration(0.25d);
+            collector.RecordConnectionCloseDuration(0.5d);
+        }
+
+        var snapshot = collector.CreateSnapshot();
+        Assert.Equal(0.25d, snapshot.AvgConnectionOpenMs, 6);
+        Assert.Equal(0.5d, snapshot.AvgConnectionCloseMs, 6);
+    }
+
+    [Fact]
     public async Task ExecuteNonQueryAsync_UpdatesMetricsOnSuccess()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);

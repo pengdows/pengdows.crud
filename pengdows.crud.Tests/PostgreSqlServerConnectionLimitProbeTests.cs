@@ -149,4 +149,46 @@ public sealed class PostgreSqlServerConnectionLimitProbeTests
 
         Assert.Null(await dialect.ProbeServerConnectionLimitAsync(tracked, useAsync: true));
     }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-1")]
+    [InlineData("2147483648")]
+    [InlineData("abc")]
+    [InlineData("")]
+    public async Task ANonPositiveOrUnparseableMaxConnections_IsUnknown(string maxConnections)
+    {
+        var limit = await ProbeAsync(c =>
+        {
+            c.ScalarResultsByCommand["SHOW max_connections"] = maxConnections;
+            c.ScalarResultsByCommand["SHOW superuser_reserved_connections"] = "3";
+        });
+
+        Assert.Null(limit);
+    }
+
+    [Fact]
+    public async Task ANegativeReserve_IsIgnored_NotAddedToTheLimit()
+    {
+        var limit = await ProbeAsync(c =>
+        {
+            c.ScalarResultsByCommand["SHOW max_connections"] = "25";
+            c.ScalarResultsByCommand["SHOW superuser_reserved_connections"] = "-5";
+            c.ScalarResultsByCommand["SHOW reserved_connections"] = "-2";
+        });
+
+        Assert.Equal(25, limit);
+    }
+
+    [Fact]
+    public async Task ValuesWithSurroundingWhitespace_AreStillRead()
+    {
+        var limit = await ProbeAsync(c =>
+        {
+            c.ScalarResultsByCommand["SHOW max_connections"] = " 25 ";
+            c.ScalarResultsByCommand["SHOW superuser_reserved_connections"] = " 3 ";
+        });
+
+        Assert.Equal(22, limit);
+    }
 }

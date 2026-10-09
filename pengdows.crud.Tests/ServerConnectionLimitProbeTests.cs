@@ -161,4 +161,54 @@ public sealed class ServerConnectionLimitProbeTests
             c.ScalarResultsByCommand["SHOW superuser_reserved_connections"] = "3";
         }));
     }
+
+    // ── edge values every engine's probe must treat as "unknown" or ignore, never as a limit ──
+
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(-1L)]
+    [InlineData("n/a")]
+    public async Task MySql_ANonPositiveOrUnparseableMaxConnections_IsUnknown(object maxConnections)
+    {
+        var limit = await Probe(MySql(), c =>
+        {
+            c.ScalarResultsByCommand[MaxConnections] = maxConnections;
+            c.ScalarResultsByCommand[MaxUserConnections] = 0L;
+        });
+
+        Assert.Null(limit);
+    }
+
+    [Theory]
+    [InlineData(151L)]
+    [InlineData(500L)]
+    [InlineData(-3L)]
+    public async Task MySql_APerUserLimitAtOrAboveMaxConnectionsOrNegative_IsIgnored(object perUser)
+    {
+        var limit = await Probe(MySql(), c =>
+        {
+            c.ScalarResultsByCommand[MaxConnections] = 151L;
+            c.ScalarResultsByCommand[MaxUserConnections] = perUser;
+        });
+
+        Assert.Equal(151, limit);
+    }
+
+    [Theory]
+    [InlineData(-1)]
+    [InlineData("n/a")]
+    public async Task SqlServer_ANegativeOrUnparseableValue_IsUnknown(object value)
+    {
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger.Instance);
+
+        Assert.Null(await Probe(dialect, c => c.ScalarResultsByCommand[SqlServerUserConnections] = value));
+    }
+
+    [Fact]
+    public async Task SqlServer_TheEnginesMaximumOf32767_IsAnOrdinaryLimit()
+    {
+        var dialect = new SqlServerDialect(new fakeDbFactory(SupportedDatabase.SqlServer), NullLogger.Instance);
+
+        Assert.Equal(32767, await Probe(dialect, c => c.ScalarResultsByCommand[SqlServerUserConnections] = 32767));
+    }
 }

@@ -1,24 +1,17 @@
-// =============================================================================
-// FILE: ServerEndpoint.cs
-// PURPOSE: Decides whether two connection strings reach the same server.
-//
-// AI SUMMARY:
-// - Builds a normalized key (host[\instance]:port) from the endpoint a connection string names.
-//   The database name, credentials, application name and pool settings are NOT part of the key:
-//   a server's connection limit is server-wide, and the reader and writer variants of one
-//   context already differ in application name and pool settings.
-// - A read replica has a different host, so it gets a different key and never shares a budget
-//   with its primary.
-// - Loopback spellings (localhost, 127.0.0.1, ::1, ., (local)) normalize to "localhost".
-// - An omitted port equals the dialect's default port when one is supplied.
-// - "Data Source" may be a file for embedded engines; callers must only use this for dialects
-//   that talk to a server.
-// =============================================================================
-
 using System.Data.Common;
 
 namespace pengdows.crud.@internal;
 
+/// <summary>Decides whether two connection strings reach the same server.</summary>
+/// <remarks>
+/// The key is host[\instance]:port. The database name, credentials, application name and pool
+/// settings are not part of it: a server's connection limit is server-wide, and the reader and
+/// writer variants of one context already differ in application name and pool settings.
+/// A read replica has a different host, so it never shares a budget with its primary.
+/// Loopback spellings (localhost, 127.0.0.1, ::1, ., (local)) normalize to "localhost", and an omitted
+/// port equals the dialect's default port when one is supplied.
+/// "Data Source" may be a file for embedded engines; use this only for dialects that talk to a server.
+/// </remarks>
 internal static class ServerEndpoint
 {
     private static readonly string[] HostKeys =

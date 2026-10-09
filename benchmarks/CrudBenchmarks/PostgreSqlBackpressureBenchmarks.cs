@@ -228,8 +228,10 @@ public class PostgreSqlBackpressureBenchmarks : IAsyncDisposable
         GC.Collect();
         var baselineMemory = GC.GetTotalMemory(true);
 
-        int peakThreads = 0, peakServerConnections = 0;
-        long peakPending = 0, peakMemory = 0;
+        int peakThreads = 0;
+        int peakServerConnections = 0;
+        long peakPending = 0;
+        long peakMemory = 0;
         using var sampling = new CancellationTokenSource();
         var sampler = Task.Run(async () =>
         {

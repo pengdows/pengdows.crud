@@ -3372,7 +3372,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         {
             return await ProbeServerConnectionLimitCoreAsync(connection, useAsync).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             Logger.LogDebug(ex, "Could not read the server's connection limit; treating it as unknown.");
             return null;

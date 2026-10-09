@@ -1136,8 +1136,7 @@ public partial class DatabaseContext
             holdTurnstile: true,
             ownsTurnstile: turnstile != null, // Writers hold turnstile until slot released
             maxQueueDepth: _maxQueuedWrites ?? UnboundedQueueDepth,
-            sharedConcurrencyGate: sharedServerGate,
-            ownsSharedConcurrencyGate: sharedServerGate != null);
+            sharedConcurrencyGate: sharedServerGate);
 
         _readerGovernor = CreateGovernor(
             PoolLabel.Reader,
@@ -1151,6 +1150,9 @@ public partial class DatabaseContext
             ownsTurnstile: false, // Readers touch-and-release turnstile
             maxQueueDepth: _maxQueuedReads ?? UnboundedQueueDepth,
             sharedConcurrencyGate: sharedServerGate);
+
+        // Each governor now holds its own reference; drop the creator's.
+        sharedServerGate?.Dispose();
 
         // PreventDatabaseUnload: every sentinel holds one permit from its own pool's governor, and
         // a dedicated reader pool gets its own sentinel so it cannot unload independently.
@@ -1514,8 +1516,8 @@ public partial class DatabaseContext
         }
         else
         {
-            _logger.LogDebug(
-                "Server connection limit for the {Role} on {Product} is unknown (no probe, unlimited, or unreadable); its pool size is unchanged.",
+            _logger.LogWarning(
+                "Server connection limit for the {Role} on {Product} is unknown (no probe, unlimited, or unreadable) although clamping to it was requested; its pool size is unchanged.",
                 role, _dialect!.DatabaseType);
         }
     }
@@ -1578,9 +1580,9 @@ public partial class DatabaseContext
             using var tracked = new TrackedConnection(connection);
             return await _dialect.ProbeServerConnectionLimitAsync(tracked, useAsync).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            _logger.LogDebug(ex, "Could not probe the read server's connection limit; its pool size is unchanged.");
+            _logger.LogWarning(ex, "Could not probe the read server's connection limit; its pool size is unchanged.");
             return null;
         }
         finally
@@ -1607,7 +1609,8 @@ public partial class DatabaseContext
             providerDefault: resolved,
             headroom: _resourceConnectionHeadroom);
 
-        if (_resourceConnectionHeadroom > 0 && !result.HeadroomApplied)
+        if (_resourceConnectionHeadroom > 0 && !result.HeadroomApplied
+            && Interlocked.Exchange(ref _headroomUnknownWarned, 1) == 0)
         {
             _logger.LogWarning(
                 "ResourceConnectionHeadroom={Headroom} was configured but the server's connection limit is unknown, so no headroom could be reserved.",
@@ -1980,8 +1983,7 @@ public partial class DatabaseContext
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
         int? maxQueueDepth = null,
-        PoolGovernorConcurrencyGate? sharedConcurrencyGate = null,
-        bool ownsSharedConcurrencyGate = false)
+        PoolGovernorConcurrencyGate? sharedConcurrencyGate = null)
     {
         if (disabled || !maxSlots.HasValue)
         {
@@ -2008,8 +2010,7 @@ public partial class DatabaseContext
             holdTurnstile: holdTurnstile,
             ownsTurnstile: ownsTurnstile,
             maxQueueDepth: maxQueueDepth,
-            sharedConcurrencyGate: sharedConcurrencyGate,
-            ownsSharedConcurrencyGate: ownsSharedConcurrencyGate);
+            sharedConcurrencyGate: sharedConcurrencyGate);
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)

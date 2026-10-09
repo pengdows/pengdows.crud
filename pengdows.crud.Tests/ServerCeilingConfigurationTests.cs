@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using pengdows.crud.configuration;
 using pengdows.crud.tenant;
 using Xunit;
@@ -42,11 +41,13 @@ public sealed class ServerCeilingConfigurationTests
             ResourceConnectionHeadroom = 5
         };
 
-        var clone = (DatabaseContextConfiguration)typeof(TenantConnectionResolver)
-            .GetMethod("CloneConfiguration", BindingFlags.NonPublic | BindingFlags.Static)!
-            .Invoke(null, new object[] { source })!;
+        var resolver = new TenantConnectionResolver();
+        resolver.Register("tenant-a", source);
 
-        Assert.True(clone.ClampPoolsToServerConnectionLimit);
-        Assert.Equal(5, clone.ResourceConnectionHeadroom);
+        var resolved = resolver.GetDatabaseContextConfiguration("tenant-a");
+
+        Assert.NotSame(source, resolved);
+        Assert.True(resolved.ClampPoolsToServerConnectionLimit);
+        Assert.Equal(5, resolved.ResourceConnectionHeadroom);
     }
 }

@@ -84,7 +84,8 @@ internal static class BackpressureStats
             .SelectMany(r => new[] { (At: r.StartMs, Delta: 1), (At: r.EndMs, Delta: -1) })
             .OrderBy(e => e.At).ThenBy(e => e.Delta);
 
-        int current = 0, peak = 0;
+        int current = 0;
+        int peak = 0;
         foreach (var e in events)
         {
             current += e.Delta;
@@ -138,7 +139,8 @@ internal static class OpenLoopLoad
             }));
         }
 
-        int launched = 0, probesLaunched = 0;
+        int launched = 0;
+        int probesLaunched = 0;
         while (clock.Elapsed.TotalSeconds < durationSeconds)
         {
             var elapsed = clock.Elapsed.TotalSeconds;

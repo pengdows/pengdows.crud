@@ -24,29 +24,20 @@ public class ServerConnectionLimitLiveProbeTests
 
     public ServerConnectionLimitLiveProbeTests(ITestOutputHelper output) => _output = output;
 
-    [SkippableTheory]
+    [Theory]
     [InlineData("postgres:15-alpine")]
     [InlineData("postgres:17-alpine")]
     public async Task ClampOn_SizesEveryRoleToWhatTheRealServerAllows(string image)
     {
-        IContainer container;
-        try
-        {
-            container = new ContainerBuilder()
-                .WithImage(image)
-                .WithEnvironment("POSTGRES_PASSWORD", Password)
-                .WithEnvironment("POSTGRES_DB", "probe")
-                .WithPortBinding(0, 5432)
-                .WithCommand("-c", $"max_connections={ServerMaxConnections}")
-                .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
-                .Build();
-            await container.StartAsync();
-        }
-        catch (Exception ex)
-        {
-            Skip.If(true, $"Docker/PostgreSQL unavailable: {ex.Message}");
-            return;
-        }
+        var container = new ContainerBuilder()
+            .WithImage(image)
+            .WithEnvironment("POSTGRES_PASSWORD", Password)
+            .WithEnvironment("POSTGRES_DB", "probe")
+            .WithPortBinding(0, 5432)
+            .WithCommand("-c", $"max_connections={ServerMaxConnections}")
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
+            .Build();
+        await container.StartAsync();
 
         try
         {

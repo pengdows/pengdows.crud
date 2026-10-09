@@ -33,24 +33,15 @@ public class ServerConnectionCeilingIntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
-        try
-        {
-            _container = new ContainerBuilder()
-                .WithImage("postgres:15-alpine")
-                .WithEnvironment("POSTGRES_PASSWORD", Password)
-                .WithEnvironment("POSTGRES_DB", "ceiling")
-                .WithPortBinding(0, 5432)
-                .WithCommand("-c", $"max_connections={ServerMaxConnections}")
-                .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
-                .Build();
-            await _container.StartAsync();
-        }
-        catch (Exception ex)
-        {
-            _output.WriteLine($"Docker/PostgreSQL unavailable: {ex.Message}");
-            _container = null;
-            return;
-        }
+        _container = new ContainerBuilder()
+            .WithImage("postgres:15-alpine")
+            .WithEnvironment("POSTGRES_PASSWORD", Password)
+            .WithEnvironment("POSTGRES_DB", "ceiling")
+            .WithPortBinding(0, 5432)
+            .WithCommand("-c", $"max_connections={ServerMaxConnections}")
+            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
+            .Build();
+        await _container.StartAsync();
 
         var port = _container.GetMappedPublicPort(5432);
         _connectionString = $"Host=localhost;Port={port};Database=ceiling;Username=postgres;Password={Password}";
@@ -83,11 +74,9 @@ public class ServerConnectionCeilingIntegrationTests : IAsyncLifetime
         }
     }
 
-    [SkippableFact]
+    [Fact]
     public async Task ReadBurstThenWriteBurst_NeverExceedsTheServersConnectionCeiling()
     {
-        Skip.If(_container == null, "Docker/PostgreSQL container is not available.");
-
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = _connectionString,

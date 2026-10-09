@@ -176,7 +176,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             await using var conn = new SqlConnection(_connStr);
             await conn.OpenAsync();
             var item = await conn.QueryFirstOrDefaultAsync<GovItem>(QuerySql);
-            if (item == null) MarkInvalid(ScenarioUncontrolled, FrameworkDapper, "Query returned null");
+            if (item == null)
+            {
+                MarkInvalid(ScenarioUncontrolled, FrameworkDapper, "Query returned null");
+            }
         }, ex => MarkInvalid(ScenarioUncontrolled, FrameworkDapper, $"Exception: {ex.GetType().Name}"));
     }
 
@@ -189,7 +192,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             Interlocked.Increment(ref _attempted);
             await using var conn = await _stormGate.OpenAsync();
             var item = await conn.QueryFirstOrDefaultAsync<GovItem>(QuerySql);
-            if (item == null) MarkInvalid(ScenarioGoverned, FrameworkStormGate, "Query returned null");
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkStormGate, "Query returned null");
+            }
         }, ex => MarkInvalid(ScenarioGoverned, FrameworkStormGate, $"Exception: {ex.GetType().Name}"));
     }
 
@@ -202,7 +208,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             Interlocked.Increment(ref _attempted);
             await using var ctx = new GovEfDbContext(_efOptions);
             var item = await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync();
-            if (item == null) MarkInvalid(ScenarioUncontrolled, FrameworkEntityFramework, "Query returned null");
+            if (item == null)
+            {
+                MarkInvalid(ScenarioUncontrolled, FrameworkEntityFramework, "Query returned null");
+            }
         }, ex => MarkInvalid(ScenarioUncontrolled, FrameworkEntityFramework, $"Exception: {ex.GetType().Name}"));
     }
 
@@ -217,7 +226,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             var options = new DbContextOptionsBuilder<GovEfDbContext>().UseSqlServer(conn).Options;
             await using var ctx = new GovEfDbContext(options);
             var item = await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync();
-            if (item == null) MarkInvalid(ScenarioGovernedEf, FrameworkStormGate, "Query returned null");
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGovernedEf, FrameworkStormGate, "Query returned null");
+            }
         }, ex => MarkInvalid(ScenarioGovernedEf, FrameworkStormGate, $"Exception: {ex.GetType().Name}"));
     }
 
@@ -231,7 +243,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             Interlocked.Increment(ref _attempted);
             await using var sc = _pengdowsGateway.BuildRetrieve(new[] { 1 });
             var item = await _pengdowsGateway.LoadSingleAsync(sc);
-            if (item == null) MarkInvalid(ScenarioGoverned, FrameworkPengdows, "Query returned null");
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkPengdows, "Query returned null");
+            }
         }, ex => MarkInvalid(ScenarioGoverned, FrameworkPengdows, $"Exception: {ex.GetType().Name}"));
     }
 
@@ -244,7 +259,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             Interlocked.Increment(ref _attempted);
             await using var sc = _pengdowsClampedGateway.BuildRetrieve(new[] { 1 });
             var item = await _pengdowsClampedGateway.LoadSingleAsync(sc);
-            if (item == null) MarkInvalid(ScenarioGoverned, FrameworkPengdowsClamped, "Query returned null");
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkPengdowsClamped, "Query returned null");
+            }
         }, ex => MarkInvalid(ScenarioGoverned, FrameworkPengdowsClamped, $"Exception: {ex.GetType().Name}"));
     }
 
@@ -257,7 +275,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             Interlocked.Increment(ref _attempted);
             await using var sc = _pengdowsHeadroomGateway.BuildRetrieve(new[] { 1 });
             var item = await _pengdowsHeadroomGateway.LoadSingleAsync(sc);
-            if (item == null) MarkInvalid(ScenarioGoverned, FrameworkPengdowsClampedHeadroom, "Query returned null");
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkPengdowsClampedHeadroom, "Query returned null");
+            }
         }, ex => MarkInvalid(ScenarioGoverned, FrameworkPengdowsClampedHeadroom, $"Exception: {ex.GetType().Name}"));
     }
 

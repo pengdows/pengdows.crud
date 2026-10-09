@@ -1,9 +1,10 @@
 using System;
-using System.Reflection;
+using System.Collections.Generic;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
-using pengdows.crud.infrastructure;
+using pengdows.crud.wrappers;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -105,21 +106,31 @@ public sealed class ServerCeilingWiringTests
             c.ClampPoolsToServerConnectionLimit = true;
             c.MaxConcurrentReads = 20;
             c.MaxConcurrentWrites = 20;
+            c.PoolAcquireTimeout = TimeSpan.FromMilliseconds(300);
         });
+        var held = new List<ITrackedConnection>();
 
-        var reader = (PoolGovernor)typeof(DatabaseContext)
-            .GetField("_readerGovernor", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(context)!;
-        var writer = (PoolGovernor)typeof(DatabaseContext)
-            .GetField("_writerGovernor", BindingFlags.Instance | BindingFlags.NonPublic)!
-            .GetValue(context)!;
-        var sharedField = typeof(PoolGovernor).GetField("_sharedConcurrencyGate",
-            BindingFlags.Instance | BindingFlags.NonPublic);
+        try
+        {
+            // The server allows 22; each role's own pool would admit 20, so 22 in use is the shared ceiling.
+            for (var i = 0; i < 20; i++)
+            {
+                held.Add(context.GetConnection(ExecutionType.Write));
+            }
 
-        Assert.NotNull(sharedField);
-        var shared = sharedField!.GetValue(reader);
-        Assert.NotNull(shared);
-        Assert.Same(shared, sharedField.GetValue(writer));
+            held.Add(context.GetConnection(ExecutionType.Read));
+            held.Add(context.GetConnection(ExecutionType.Read));
+
+            Assert.Throws<PoolSaturatedException>(() => context.GetConnection(ExecutionType.Read));
+            Assert.Throws<PoolSaturatedException>(() => context.GetConnection(ExecutionType.Write));
+        }
+        finally
+        {
+            foreach (var connection in held)
+            {
+                connection.Dispose();
+            }
+        }
     }
 
     [Fact]
@@ -206,6 +217,76 @@ public sealed class ServerCeilingWiringTests
             replicaConnectionString: "Host=db1;Database=d;Username=u;Password=p;Application Name=ro");
 
         Assert.Equal((22, 22), Slots(context));
+    }
+
+    [Fact]
+    public void TheSharedBudgetIsSplitAcrossTheProviderPools_AndStampedOnEachRolesConnectionString()
+    {
+        using var context = Create(c =>
+        {
+            c.ClampPoolsToServerConnectionLimit = true;
+            c.MaxConcurrentReads = 20;
+            c.MaxConcurrentWrites = 20;
+        });
+
+        // The server allows 22 and the roles ask for 40, so the provider pools split the 22 (11 + 11)
+        // while each governor still admits up to its own slot count.
+        using var write = context.GetConnection(ExecutionType.Write);
+        using var read = context.GetConnection(ExecutionType.Read);
+
+        Assert.Contains("Maximum Pool Size=11", write.ConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Maximum Pool Size=11", read.ConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void AReplicaProbeConnection_IsDisposedOnceTheLimitHasBeenRead()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+        var primary = new fakeDbConnection();
+        primary.ScalarResultsByCommand["SHOW max_connections"] = "25";
+        primary.ScalarResultsByCommand["SHOW reserved_connections"] = "0";
+        primary.ScalarResultsByCommand["SHOW superuser_reserved_connections"] = "3";
+        factory.Connections.Add(primary);
+
+        var replica = new fakeDbConnection();
+        replica.ScalarResultsByCommand["SHOW max_connections"] = "100";
+        replica.ScalarResultsByCommand["SHOW reserved_connections"] = "0";
+        replica.ScalarResultsByCommand["SHOW superuser_reserved_connections"] = "3";
+        factory.Connections.Add(replica);
+
+        using var context = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = ConnectionString,
+            ReadOnlyConnectionString = "Host=replica;Database=d;Username=u;Password=p",
+            DbMode = DbMode.Standard,
+            EnableMetrics = true,
+            ClampPoolsToServerConnectionLimit = true
+        }, factory);
+
+        Assert.Equal((97, 22), Slots(context));
+        Assert.True(replica.DisposeCount >= 1, "The replica probe connection was left open.");
+    }
+
+    [Fact]
+    public void AReadConnectionStringThatSpellsOutTheDialectsDefaultPort_IsStillTheSameServer()
+    {
+        // PostgreSQL's default port is 5432: "Host=db1" and "Host=db1;Port=5432" are one server, so the
+        // reader must not be probed as a replica and handed the 999 that fake replica would report.
+        using var context = CreateWithReplica(
+            primaryMax: "25", replicaMax: "999",
+            replicaConnectionString: "Host=db1;Port=5432;Database=d;Username=u;Password=p;Application Name=ro");
+
+        Assert.Equal((22, 22), Slots(context));
+    }
+
+    [Fact]
+    public void AReadConnectionStringOnTheSameHostButADifferentPort_IsAReplica()
+    {
+        using var context = CreateWithReplica(
+            primaryMax: "25", replicaMax: "100",
+            replicaConnectionString: "Host=db1;Port=5433;Database=d;Username=u;Password=p");
+
+        Assert.Equal((97, 22), Slots(context));
     }
 
     [Fact]

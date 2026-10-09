@@ -55,6 +55,7 @@ internal sealed class PoolGovernor : IDisposable
     private readonly SemaphoreSlim? _semaphore;
     private readonly PoolGovernorConcurrencyGate? _concurrencyGate;
     private readonly PoolGovernorConcurrencyGate? _sharedConcurrencyGate;
+    private int _sharedGateReleased;
     private readonly TimeSpan _acquireTimeout;
     private readonly long _acquireTimeoutStopwatchTicks;
     private readonly int _maxSlots;
@@ -63,7 +64,6 @@ internal sealed class PoolGovernor : IDisposable
     private readonly bool _forbidden;
     private readonly bool _trackMetrics;
     private readonly bool _ownsSemaphore;
-    private readonly bool _ownsSharedConcurrencyGate;
     private readonly bool _ownsTurnstile;
     // Made by WaitForDrainAsync only while it waits, and completed by the release that drops _inUse
     // to zero. Acquire and release touch it with no lock and no allocation (PERF-024): a waiter
@@ -112,8 +112,7 @@ internal sealed class PoolGovernor : IDisposable
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
         int? maxQueueDepth = null,
-        PoolGovernorConcurrencyGate? sharedConcurrencyGate = null,
-        bool ownsSharedConcurrencyGate = false)
+        PoolGovernorConcurrencyGate? sharedConcurrencyGate = null)
     {
         _label = label;
         _poolKeyHash = poolKeyHash;
@@ -127,7 +126,7 @@ internal sealed class PoolGovernor : IDisposable
         _holdTurnstile = holdTurnstile;
         _ownsTurnstile = ownsTurnstile;
         _sharedConcurrencyGate = sharedConcurrencyGate;
-        _ownsSharedConcurrencyGate = ownsSharedConcurrencyGate;
+        _sharedConcurrencyGate?.AddOwner();
 
         if (disabled)
         {
@@ -1180,7 +1179,7 @@ internal sealed class PoolGovernor : IDisposable
 
         _concurrencyGate?.Dispose();
 
-        if (_ownsSharedConcurrencyGate)
+        if (Interlocked.Exchange(ref _sharedGateReleased, 1) == 0)
         {
             _sharedConcurrencyGate?.Dispose();
         }

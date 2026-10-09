@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using System.Collections.Concurrent;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks.Sources;
@@ -22,8 +21,8 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
     private int _active;
     private int _available;
     private int _queueCount;
+    private int _owners = 1;
     private int _disposedFlag;
-    private bool _disposed;
 
     internal PoolGovernorConcurrencyGate(int configuredMaximum, int? maxQueueDepth = null)
     {
@@ -56,7 +55,7 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
     internal int AvailableCount
     {
         get => _singleSlot
-            ? Volatile.Read(ref _active) == 0 ? 1 : 0
+            ? (Volatile.Read(ref _active) == 0 ? 1 : 0)
             : Math.Max(Volatile.Read(ref _available), 0);
     }
 
@@ -154,7 +153,7 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         List<Waiter>? released = null;
         lock (_sync)
         {
-            if (_disposed)
+            if (Volatile.Read(ref _disposedFlag) != 0)
             {
                 return _effectiveLimit;
             }
@@ -202,14 +201,27 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         Complete(handedOff ?? promoted, released);
     }
 
+    /// <summary>
+    /// Registers one more owner. The gate starts with one owner (its creator) and is disposed when
+    /// every owner has called <see cref="Dispose"/>.
+    /// </summary>
+    internal void AddOwner() => Interlocked.Increment(ref _owners);
+
     public void Dispose()
     {
+        if (Interlocked.Decrement(ref _owners) > 0)
+        {
+            return;
+        }
+
+        if (Interlocked.Exchange(ref _disposedFlag, 1) != 0)
+        {
+            return;
+        }
+
         List<Waiter> pending;
-        Interlocked.Exchange(ref _disposedFlag, 1);
         lock (_sync)
         {
-            if (_disposed) return;
-            _disposed = true;
             pending = new List<Waiter>(_queueCount);
             while (_waiterHead != null)
             {
@@ -306,7 +318,11 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
     {
         lock (_sync)
         {
-            if (!waiter.TryCancel()) return false;
+            if (!waiter.TryCancel())
+            {
+                return false;
+            }
+
             if (waiter.IsQueued)
             {
                 RemoveWaiterUnderLock(waiter);
@@ -328,7 +344,11 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             handedOff.SetResult(0);
         }
 
-        if (released == null) return;
+        if (released == null)
+        {
+            return;
+        }
+
         foreach (var waiter in released)
         {
             waiter.TryCancelRegistration();
@@ -357,7 +377,10 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
 
     private void ThrowIfDisposedUnderLock()
     {
-        if (_disposed) throw new ObjectDisposedException(nameof(PoolGovernorConcurrencyGate));
+        if (Volatile.Read(ref _disposedFlag) != 0)
+        {
+            throw new ObjectDisposedException(nameof(PoolGovernorConcurrencyGate));
+        }
     }
 
     private bool TryAcquireFast(out int permit)
@@ -473,7 +496,10 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
 
     private static void ValidateTimeout(TimeSpan timeout)
     {
-        if (timeout < Timeout.InfiniteTimeSpan) throw new ArgumentOutOfRangeException(nameof(timeout));
+        if (timeout < Timeout.InfiniteTimeSpan)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout));
+        }
     }
 
     private sealed class Waiter : IValueTaskSource<int>
