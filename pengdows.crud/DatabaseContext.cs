@@ -198,8 +198,21 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int? _maxQueuedReads;
     private int? _configuredReadPoolSize;
     private int? _configuredWritePoolSize;
+    // Governor capacities remain the caller/server-clamped role limits even when the provider
+    // pool strings are split to enforce one physical server budget.
+    private int? _effectiveReadGovernorMax;
+    private int? _effectiveWriteGovernorMax;
     private bool _explicitReadOnlyConnectionString;
     private bool _readOnlyConnectionStringTargetsSameDatabase;
+
+    // Server-ceiling clamp (opt-in): the server's own connection limit as probed during
+    // initialization (null when unread or unreadable), and the configured headroom to leave free.
+    private bool _clampPoolsToServerLimit;
+    // One limit per role: the reader's server can differ from the writer's (a read replica), and a role
+    // whose server's limit is unknown is left unclamped, never given the other server's number.
+    private int? _probedWriterConnectionLimit;
+    private int? _probedReaderConnectionLimit;
+    private int _resourceConnectionHeadroom;
     private const string DefaultApplicationName = "pengdows.crud";
     private const string ReadOnlyApplicationNameSuffix = "-ro";
     private const string WriteApplicationNameSuffix = "-rw";

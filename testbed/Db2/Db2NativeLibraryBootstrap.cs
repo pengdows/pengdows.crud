@@ -44,18 +44,27 @@ internal static class Db2NativeLibraryBootstrap
             : $"{clidriverLib}{Path.PathSeparator}{clidriverIcc}{Path.PathSeparator}{existing}";
         Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", combined);
 
-        NativeLibrary.SetDllImportResolver(typeof(DB2Factory).Assembly, (libraryName, _, _) =>
+        try
         {
-            if (libraryName == "libdb2.so")
+            NativeLibrary.SetDllImportResolver(typeof(DB2Factory).Assembly, (libraryName, _, _) =>
             {
-                var fullPath = Path.Combine(clidriverLib, "libdb2.so");
-                if (File.Exists(fullPath) && NativeLibrary.TryLoad(fullPath, out var handle))
+                if (libraryName == "libdb2.so")
                 {
-                    return handle;
+                    var fullPath = Path.Combine(clidriverLib, "libdb2.so");
+                    if (File.Exists(fullPath) && NativeLibrary.TryLoad(fullPath, out var handle))
+                    {
+                        return handle;
+                    }
                 }
-            }
 
-            return IntPtr.Zero; // fall through to default resolution
-        });
+                return IntPtr.Zero; // fall through to default resolution
+            });
+        }
+        catch (InvalidOperationException)
+        {
+            // A vstest host may already have registered the resolver from the integration-test
+            // assembly's module initializer. NativeLibrary permits only one resolver per assembly;
+            // the existing resolver is sufficient for this shared provider assembly.
+        }
     }
 }

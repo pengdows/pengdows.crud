@@ -44,6 +44,23 @@ public sealed class AdaptiveConcurrencyGateTests
     }
 
     [Fact]
+    public async Task CompactSlotPath_AdmitsAndReleasesWithoutRetainingLeaseObject()
+    {
+        using var gate = new AdaptiveConcurrencyGate(1);
+
+        var slot = gate.AcquireSlot();
+        Assert.Equal(1, gate.ActiveCount);
+
+        gate.ReleaseSlot(slot);
+        Assert.Equal(0, gate.ActiveCount);
+
+        var asyncSlot = await gate.AcquireSlotAsync();
+        Assert.Equal(1, gate.ActiveCount);
+        gate.ReleaseSlot(asyncSlot);
+        Assert.Equal(0, gate.ActiveCount);
+    }
+
+    [Fact]
     public async Task RaiseLimit_WakesOnlyCapacityMadeAvailable()
     {
         using var gate = new AdaptiveConcurrencyGate(3);

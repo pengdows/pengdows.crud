@@ -55,7 +55,7 @@ public sealed class DataReaderMapperPlanLookupAllocationTests
         return total / 50;
     }
 
-    [Fact]
+    [ReleaseBuildFact]
     public async Task CachedPlanCall_AllocatesOnlyTheRowsAndTheLookupKey()
     {
         var mapper = await AllocationMeasurement.LowestAsync(() => MeasureAsync(async r =>

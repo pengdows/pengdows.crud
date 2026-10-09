@@ -27,8 +27,9 @@ namespace CrudBenchmarks;
 /// same standard practice as fault injection / fuzzing: use a cheap oracle to force a failure
 /// mode that is real but expensive to reproduce naturally.
 ///
-/// `BusyTimeoutMs = 10` (below) is a deliberately narrow stress parameter, not a recommended
-/// setting and not a value tuned to produce a chosen answer — it exists to compress hours of
+/// `BusyTimeoutMs` is a [Params] axis: 10 is a deliberately narrow stress setting, not a
+/// recommended one and not a value tuned to produce a chosen answer, and 5000 is a sane one;
+/// read both rows together — it exists to compress hours of
 /// realistic contention into a benchmark run's duration. Treat any specific failure-rate
 /// percentage this benchmark reports as a property of THIS lock, THIS timeout, THIS core
 /// count — not a fixed property of Dapper or EF Core. What generalizes across runs and
@@ -55,22 +56,32 @@ namespace CrudBenchmarks;
 public class SQLiteWriteContentionBenchmarks : IDisposable
 {
     private const string FrameworkPengdows = "Pengdows";
+    private const string FrameworkPengdowsDefaults = "PengdowsDefaults";
     private const string FrameworkDapper = "Dapper";
     private const string FrameworkEntityFramework = "EntityFramework";
     private const string ScenarioWriteStorm = "WriteStorm";
 
     private const int WriteStormConcurrency = 100;
     private const int WriteStormWritesPerTransaction = 50;
-    // A 2026-08-27 paired run also captured this at 5000ms (a "sane" busy_timeout) to
-    // pre-answer "just raise the timeout": see
-    // benchmarks/CrudBenchmarks/results/sqlite-write-contention-run-2026-08-13.md. That run
-    // temporarily hardcoded this to 5000 and reverted; it is not permanently parameterized via
-    // [Params] here yet — a real gap, tracked in that doc, not silently left unmentioned.
-    private const int BusyTimeoutMs = 10;
+    // busy_timeout is the variable the whole comparison turns on: at 10 ms Dapper/EF lose most
+    // transactions, at 5,000 ms they mostly complete but pay ~4x latency (see
+    // benchmarks/CrudBenchmarks/results/sqlite-write-contention-run-2026-08-13.md, which produced
+    // the second row by hand-editing a const). Both settings now come from one run.
+    [Params(10, 5000)]
+    public int BusyTimeoutMs { get; set; }
 
-    private static string BusyTimeoutSql => $"PRAGMA busy_timeout={BusyTimeoutMs};";
+    // Microsoft.Data.Sqlite's own busy-retry loop is bounded by CommandTimeout, independently of the
+    // busy_timeout PRAGMA, so the two must scale together or raising one tests nothing.
+    internal static int CommandTimeoutSecondsFor(int busyTimeoutMs) => Math.Max(1, (busyTimeoutMs / 1000) + 1);
+
+    // Must equal the text BenchmarkDotNet puts between '[' and ']' in the case's display info:
+    // CorrectnessColumn derives its lookup key from there.
+    internal static string ParameterKeyFor(int busyTimeoutMs) => $"BusyTimeoutMs={busyTimeoutMs}";
+
+    private string BusyTimeoutSql => $"PRAGMA busy_timeout={BusyTimeoutMs};";
 
     private DatabaseContext _pengdowsContext = null!;
+    private DatabaseContext _pengdowsDefaultsContext = null!;
     private string _connectionString = null!;
     private DbContextOptions<EfContentionContext> _efOptions = null!;
     private SqliteConnection _sentinelConnection = null!;
@@ -132,7 +143,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
             // (Thread.Sleep(150) between attempts) is bounded by CommandTimeout, independently
             // of the busy_timeout PRAGMA — raising the PRAGMA alone without raising this would
             // not actually give the driver more retry patience.
-            DefaultTimeout = Math.Max(1, (BusyTimeoutMs / 1000) + 1)
+            DefaultTimeout = CommandTimeoutSecondsFor(BusyTimeoutMs)
         };
         _connectionString = builder.ToString();
 
@@ -177,6 +188,20 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
 
         _pengdowsContext = new DatabaseContext(config, SqliteFactory.Instance, null, typeMap);
 
+        // The same library with NONE of this benchmark's overrides: default PoolAcquireTimeout (5 s)
+        // and the default write-queue cap (32 for SingleWriter's one slot). A 100-writer storm
+        // exceeds that cap by design (admission control fails fast instead of queueing without
+        // bound), so this arm records what a user who changed nothing actually gets.
+        _pengdowsDefaultsContext = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = _connectionString,
+                DbMode = DbMode.Standard,
+                ReadWriteMode = ReadWriteMode.ReadWrite,
+                EnableMetrics = true
+            },
+            SqliteFactory.Instance, null, typeMap);
+
         _efOptions = new DbContextOptionsBuilder<EfContentionContext>()
             .UseSqlite(_connectionString)
             .Options;
@@ -212,6 +237,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
         // Write per-transaction latency sidecar
         WriteLatencySidecar();
 
+        _pengdowsDefaultsContext?.Dispose();
         _pengdowsContext?.Dispose();
         _sentinelConnection?.Dispose();
     }
@@ -284,7 +310,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
             .Sum(kvp => kvp.Value);
 
         var sb = new StringBuilder();
-        sb.AppendLine($"# SQLiteWriteContentionBenchmarks — {framework} Transaction Latency");
+        sb.AppendLine($"# SQLiteWriteContentionBenchmarks — {framework} Transaction Latency (busy_timeout={BusyTimeoutMs} ms)");
         sb.AppendLine();
         sb.AppendLine("No framework in this benchmark retries a failed transaction — a caught");
         sb.AppendLine("exception aborts that transaction's 50 writes permanently, it is not");
@@ -315,7 +341,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
             var dir = Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
                 ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
             Directory.CreateDirectory(dir);
-            var path = Path.Combine(dir, $"{nameof(SQLiteWriteContentionBenchmarks)}-{framework}-tx-latency.md");
+            var path = Path.Combine(dir, $"{nameof(SQLiteWriteContentionBenchmarks)}-{framework}-busy{BusyTimeoutMs}-tx-latency.md");
             File.WriteAllText(path, sb.ToString());
             Console.WriteLine($"[SQLiteWriteContentionBenchmarks] Wrote {path}");
         }
@@ -352,47 +378,59 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
     [Benchmark]
     public async Task WriteStorm_Pengdows()
     {
-        await RunWriteStorm(WriteStormConcurrency, async i =>
+        await RunWriteStorm(WriteStormConcurrency,
+            i => RunPengdowsTransactionAsync(_pengdowsContext, FrameworkPengdows, i));
+    }
+
+    // Same workload on a context with none of this benchmark's overrides — see the setup comment.
+    [Benchmark]
+    [CorrectnessIdentity(FrameworkPengdowsDefaults, ScenarioWriteStorm)]
+    public async Task WriteStorm_PengdowsDefaults()
+    {
+        await RunWriteStorm(WriteStormConcurrency,
+            i => RunPengdowsTransactionAsync(_pengdowsDefaultsContext, FrameworkPengdowsDefaults, i));
+    }
+
+    private async Task RunPengdowsTransactionAsync(DatabaseContext context, string framework, int i)
+    {
+        MarkAttempted(framework);
+        var sw = Stopwatch.StartNew();
+        try
         {
-            MarkAttempted(FrameworkPengdows);
-            var sw = Stopwatch.StartNew();
-            try
+            await using var tx = context.BeginTransaction();
+            await using (var setup = tx.CreateSqlContainer())
             {
-                await using var tx = _pengdowsContext.BeginTransaction();
-                await using (var setup = tx.CreateSqlContainer())
-                {
-                    await ApplyBusyTimeoutAsync(setup);
-                }
-
-                for (var j = 0; j < WriteStormWritesPerTransaction; j++)
-                {
-                    await using var container = tx.CreateSqlContainer();
-                    container.Query.Append("UPDATE stress_test SET value = ");
-                    container.Query.Append(container.MakeParameterName("value"));
-                    container.Query.Append(" WHERE id = ");
-                    container.Query.Append(container.MakeParameterName("id"));
-                    container.AddParameterWithValue("value", DbType.Int32, (i * 1000) + j);
-                    container.AddParameterWithValue("id", DbType.Int32, (j % 100) + 1);
-                    var affected = await container.ExecuteNonQueryAsync();
-                    if (affected != 1)
-                    {
-                        MarkInvalid(ScenarioWriteStorm, FrameworkPengdows,
-                            $"Expected 1 row affected, got {affected}");
-                    }
-                }
-
-                tx.Commit();
-                sw.Stop();
-                _successTicks.Add(sw.ElapsedTicks);
-                MarkCommitted(FrameworkPengdows);
+                await ApplyBusyTimeoutAsync(setup);
             }
-            catch (Exception ex)
+
+            for (var j = 0; j < WriteStormWritesPerTransaction; j++)
             {
-                sw.Stop();
-                _failedTicks.Add(sw.ElapsedTicks);
-                MarkInvalid(ScenarioWriteStorm, FrameworkPengdows, $"Exception: {ex.GetType().Name}");
+                await using var container = tx.CreateSqlContainer();
+                container.Query.Append("UPDATE stress_test SET value = ");
+                container.Query.Append(container.MakeParameterName("value"));
+                container.Query.Append(" WHERE id = ");
+                container.Query.Append(container.MakeParameterName("id"));
+                container.AddParameterWithValue("value", DbType.Int32, (i * 1000) + j);
+                container.AddParameterWithValue("id", DbType.Int32, (j % 100) + 1);
+                var affected = await container.ExecuteNonQueryAsync();
+                if (affected != 1)
+                {
+                    MarkInvalid(ScenarioWriteStorm, framework,
+                        $"Expected 1 row affected, got {affected}");
+                }
             }
-        });
+
+            tx.Commit();
+            sw.Stop();
+            _successTicks.Add(sw.ElapsedTicks);
+            MarkCommitted(framework);
+        }
+        catch (Exception ex)
+        {
+            sw.Stop();
+            _failedTicks.Add(sw.ElapsedTicks);
+            MarkInvalid(ScenarioWriteStorm, framework, $"Exception: {ex.GetType().Name}");
+        }
     }
 
     // ============================================================================
@@ -495,12 +533,12 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
 
     private void MarkInvalid(string scenario, string framework, string reason, string? parameterKey = null)
     {
-        var normalizedParameterKey = string.IsNullOrWhiteSpace(parameterKey) ? "*" : parameterKey.Trim();
+        var normalizedParameterKey = string.IsNullOrWhiteSpace(parameterKey) ? ParameterKeyFor(BusyTimeoutMs) : parameterKey.Trim();
         var key = new CorrectnessIssueKey(normalizedParameterKey, scenario, framework, reason);
         _correctnessIssues.AddOrUpdate(key, 1, static (_, count) => count + 1);
     }
 
-    private static async Task ApplyBusyTimeoutAsync(ISqlContainer container)
+    private async Task ApplyBusyTimeoutAsync(ISqlContainer container)
     {
         container.Query.Clear();
         container.Query.Append(BusyTimeoutSql);
@@ -508,7 +546,7 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
         container.Query.Clear();
     }
 
-    private static async Task ApplyBusyTimeoutAsync(System.Data.Common.DbConnection connection)
+    private async Task ApplyBusyTimeoutAsync(System.Data.Common.DbConnection connection)
     {
         await using var command = connection.CreateCommand();
         command.CommandText = BusyTimeoutSql;

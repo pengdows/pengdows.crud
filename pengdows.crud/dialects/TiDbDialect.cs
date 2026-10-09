@@ -11,6 +11,7 @@
 
 using System.Data;
 using System.Data.Common;
+using pengdows.crud.wrappers;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions.translators;
@@ -34,6 +35,11 @@ internal class TiDbDialect : MySqlDialect
         : base(factory, logger, SupportedDatabase.TiDb)
     {
     }
+
+    // Not a single server with a fixed connection limit this probe could read: report "unknown"
+    // rather than inherit a probe that does not apply.
+    internal override Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
+        => Task.FromResult<int?>(null);
 
     public override SupportedDatabase DatabaseType => SupportedDatabase.TiDb;
 

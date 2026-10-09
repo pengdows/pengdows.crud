@@ -28,7 +28,7 @@ public class PoolGovernorReleaseOrderingTests
     private static readonly BindingFlags NonPublicInstance = BindingFlags.Instance | BindingFlags.NonPublic;
 
     [Fact]
-    public void ReleaseToken_ReleasesSemaphore_BeforeDecrementingInUse()
+    public void ReleaseToken_ReleasesAdmissionBeforeDecrementingInUse()
     {
         using var governor = new PoolGovernor(PoolLabel.Reader, "order-check", 1, TimeSpan.FromSeconds(5));
         var slot = governor.Acquire();
@@ -79,11 +79,11 @@ public class PoolGovernorReleaseOrderingTests
         using var governor = new PoolGovernor(PoolLabel.Reader, "toctou", 1, TimeSpan.FromSeconds(5));
 
         // Simulate the TOCTOU: a caller already passed ThrowIfClosed() and successfully acquired
-        // the semaphore permit (Wait(0,...) returned true), and Close() ran in the narrow window
-        // before OnAcquired's own bookkeeping executed.
-        var semaphoreField = typeof(PoolGovernor).GetField("_semaphore", NonPublicInstance);
-        var semaphore = (SemaphoreSlim)semaphoreField!.GetValue(governor)!;
-        semaphore.Wait();
+        // the admission permit, and Close() ran in the narrow window before OnAcquired's own
+        // bookkeeping executed.
+        var gateField = typeof(PoolGovernor).GetField("_concurrencyGate", NonPublicInstance);
+        var gate = (PoolGovernorConcurrencyGate)gateField!.GetValue(governor)!;
+        gate.Acquire();
 
         governor.Close();
 

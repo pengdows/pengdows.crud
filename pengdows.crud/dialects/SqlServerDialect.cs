@@ -483,6 +483,20 @@ internal class SqlServerDialect : SqlDialect
         return "SELECT SCOPE_IDENTITY()";
     }
 
+    // sys.configurations "user connections": 0 means unlimited (the engine allows up to 32,767), which
+    // is "unknown" for clamping. The Dedicated Admin Connection is a separate listener and does not
+    // count against it, so nothing is subtracted for an admin reserve.
+    internal override async Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
+    {
+        var limit = await ExecuteScalarQueryAsync(
+                connection,
+                "SELECT CAST(value_in_use AS int) FROM sys.configurations WHERE name = 'user connections'",
+                ParseConnectionCount, useAsync)
+            .ConfigureAwait(false);
+
+        return limit is > 0 ? limit : null;
+    }
+
     public override string GetVersionQuery()
     {
         return "SELECT @@VERSION";

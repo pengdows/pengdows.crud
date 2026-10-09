@@ -10,6 +10,7 @@ using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using FirebirdSql.Data.Types;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
 using pengdows.crud.dialects;
@@ -262,6 +263,8 @@ public class TypeSystemCharacterizationTests
         DateTimeOffset dto => "DateTimeOffset:" + dto.ToString("o", CultureInfo.InvariantCulture),
         TimeOnly time => "TimeOnly:" + time.ToString("HH:mm:ss.fffffff", CultureInfo.InvariantCulture),
         DateOnly date => "DateOnly:" + date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+        FbZonedDateTime zoned => "FbZonedDateTime:" +
+            zoned.DateTime.ToString("o", CultureInfo.InvariantCulture) + "/" + zoned.TimeZone,
         JsonDocument doc => "JsonDocument:" + doc.RootElement.GetRawText(),
         JsonElement el => "JsonElement:" + el.GetRawText(),
         SpatialValue sv => sv.GetType().Name + ":srid=" + sv.Srid + ":wkb=" + Convert.ToHexString(sv.WellKnownBinary.Span),
@@ -304,6 +307,15 @@ public class TypeSystemCharacterizationTests
         }
 
         return text.ToString();
+    }
+
+    [Fact]
+    public void Show_FbZonedDateTime_UsesStableInvariantRepresentation()
+    {
+        var value = new FbZonedDateTime(
+            DateTime.SpecifyKind(new DateTime(2026, 10, 5, 6, 2, 3), DateTimeKind.Utc), "UTC");
+
+        Assert.Equal("FbZonedDateTime:2026-10-05T06:02:03.0000000Z/UTC", Show(value));
     }
 
     private static fakeDbFactory FactoryFor(SupportedDatabase product)

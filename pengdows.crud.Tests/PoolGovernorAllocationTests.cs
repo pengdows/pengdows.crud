@@ -15,7 +15,7 @@ namespace pengdows.crud.Tests;
 [Collection("AllocationSerial")]
 public class PoolGovernorAllocationTests
 {
-    [Fact]
+    [ReleaseBuildFact]
     public async Task UncontendedAcquireAndRelease_AllocatesOnlyTheSlotToken()
     {
         using var governor = new PoolGovernor(PoolLabel.Writer, "alloc", 1, TimeSpan.FromSeconds(5));

@@ -1,10 +1,11 @@
 using pengdows.crud.enums;
 // =============================================================================
 // FILE: PoolGovernor.cs
-// PURPOSE: Semaphore-based pool governor limiting concurrent connection usage.
+// PURPOSE: Pool governor limiting concurrent connection usage.
 //
 // AI SUMMARY:
-// - Controls maximum concurrent connections via SemaphoreSlim.
+// - Controls maximum concurrent connections via PoolGovernorConcurrencyGate, retaining the
+//   SemaphoreSlim path only for explicitly shared admission controls used by legacy callers.
 // - Thread-safe: all counters use Interlocked operations.
 // - Key methods:
 //   * Acquire(ct): Sync slot acquisition with timeout
@@ -52,6 +53,8 @@ internal sealed class PoolGovernor : IDisposable
     private readonly PoolLabel _label;
     private readonly string _poolKeyHash;
     private readonly SemaphoreSlim? _semaphore;
+    private readonly PoolGovernorConcurrencyGate? _concurrencyGate;
+    private readonly PoolGovernorConcurrencyGate? _sharedConcurrencyGate;
     private readonly TimeSpan _acquireTimeout;
     private readonly long _acquireTimeoutStopwatchTicks;
     private readonly int _maxSlots;
@@ -60,6 +63,7 @@ internal sealed class PoolGovernor : IDisposable
     private readonly bool _forbidden;
     private readonly bool _trackMetrics;
     private readonly bool _ownsSemaphore;
+    private readonly bool _ownsSharedConcurrencyGate;
     private readonly bool _ownsTurnstile;
     // Made by WaitForDrainAsync only while it waits, and completed by the release that drops _inUse
     // to zero. Acquire and release touch it with no lock and no allocation (PERF-024): a waiter
@@ -107,7 +111,9 @@ internal sealed class PoolGovernor : IDisposable
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
-        int? maxQueueDepth = null)
+        int? maxQueueDepth = null,
+        PoolGovernorConcurrencyGate? sharedConcurrencyGate = null,
+        bool ownsSharedConcurrencyGate = false)
     {
         _label = label;
         _poolKeyHash = poolKeyHash;
@@ -120,12 +126,15 @@ internal sealed class PoolGovernor : IDisposable
             : SharedTurnstileStates.GetValue(turnstile, static _ => new TurnstileState());
         _holdTurnstile = holdTurnstile;
         _ownsTurnstile = ownsTurnstile;
+        _sharedConcurrencyGate = sharedConcurrencyGate;
+        _ownsSharedConcurrencyGate = ownsSharedConcurrencyGate;
 
         if (disabled)
         {
             _disabled = true;
             _maxSlots = 0;
             _semaphore = null;
+            _concurrencyGate = null;
             _ownsSemaphore = false;
             return;
         }
@@ -135,6 +144,7 @@ internal sealed class PoolGovernor : IDisposable
             _forbidden = true;
             _maxSlots = 0;
             _semaphore = null;
+            _concurrencyGate = null;
             _ownsSemaphore = false;
             return;
         }
@@ -159,11 +169,16 @@ internal sealed class PoolGovernor : IDisposable
             // SemaphoreSlim does not expose its max count. Telemetry will use maxSlots
             // as the reported capacity - caller must ensure consistency.
             _semaphore = sharedSemaphore;
+            _concurrencyGate = null;
             _ownsSemaphore = false;
         }
         else
         {
-            _semaphore = new SemaphoreSlim(maxSlots, maxSlots);
+            _semaphore = null;
+            // PoolGovernor owns queue-depth admission and metrics. The gate's queue is therefore
+            // deliberately unbounded here so callers receive PoolSaturatedException with the
+            // governor snapshot rather than the gate's internal exception.
+            _concurrencyGate = new PoolGovernorConcurrencyGate(maxSlots, int.MaxValue);
             _ownsSemaphore = true;
         }
     }
@@ -198,7 +213,7 @@ internal sealed class PoolGovernor : IDisposable
     /// verify <see cref="ReleaseToken"/>'s release ordering (permits must become available before
     /// <c>_inUse</c> reflects the release, not after).
     /// </summary>
-    internal int AvailablePermits => _semaphore?.CurrentCount ?? 0;
+    internal int AvailablePermits => _concurrencyGate?.AvailableCount ?? _semaphore?.CurrentCount ?? 0;
 
     /// <summary>
     /// Test-only hook invoked immediately before <see cref="ReleaseToken"/> decrements
@@ -233,7 +248,6 @@ internal sealed class PoolGovernor : IDisposable
 
     // Every acquire's preconditions (DRY-017: four copies): throws when the governor is closed,
     // forbidden or not initialized; false when it is disabled, where every acquire succeeds with no slot.
-    [System.Diagnostics.CodeAnalysis.MemberNotNullWhen(true, nameof(_semaphore))]
     private bool Gates()
     {
         ThrowIfClosed();
@@ -247,12 +261,154 @@ internal sealed class PoolGovernor : IDisposable
             return false;
         }
 
-        if (_semaphore == null)
+        if (_semaphore == null && _concurrencyGate == null)
         {
             throw new InvalidOperationException(NotInitializedMessage);
         }
 
         return true;
+    }
+
+    private bool TryAcquireAdmission(CancellationToken cancellationToken)
+    {
+        if (_concurrencyGate != null)
+        {
+            if (!_concurrencyGate.TryAcquire(out _, cancellationToken))
+            {
+                return false;
+            }
+
+            if (_sharedConcurrencyGate == null
+                || _sharedConcurrencyGate.TryAcquire(out _, cancellationToken))
+            {
+                return true;
+            }
+
+            _concurrencyGate.Release(0);
+            return false;
+        }
+
+        return _semaphore!.Wait(0, cancellationToken);
+    }
+
+    private static TimeSpan RemainingTimeout(TimeSpan timeout, long startedTimestamp)
+    {
+        if (timeout == Timeout.InfiniteTimeSpan)
+        {
+            return timeout;
+        }
+
+        var remaining = timeout - Stopwatch.GetElapsedTime(startedTimestamp);
+        return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
+    }
+
+    private bool AcquireAdmission(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        if (_concurrencyGate != null)
+        {
+            var roleAcquired = false;
+            var started = Stopwatch.GetTimestamp();
+            try
+            {
+                _concurrencyGate.Acquire(timeout, cancellationToken);
+                roleAcquired = true;
+                if (_sharedConcurrencyGate != null)
+                {
+                    _sharedConcurrencyGate.Acquire(RemainingTimeout(timeout, started), cancellationToken);
+                }
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                if (roleAcquired)
+                {
+                    _concurrencyGate.Release(0);
+                }
+                return false;
+            }
+            catch
+            {
+                if (roleAcquired)
+                {
+                    _concurrencyGate.Release(0);
+                }
+                throw;
+            }
+        }
+
+        return _semaphore!.Wait(timeout, cancellationToken);
+    }
+
+    private ValueTask<bool> AcquireAdmissionAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        if (_concurrencyGate != null)
+        {
+            // PoolGovernor uses a zero-time probe before entering its own queued slow path.
+            // Keep that probe entirely synchronous: routing it through the timed gate overload
+            // creates a linked timeout CTS even when the caller is not waiting.
+            if (timeout == TimeSpan.Zero)
+            {
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    return new ValueTask<bool>(Task.FromCanceled<bool>(cancellationToken));
+                }
+
+                return ValueTask.FromResult(TryAcquireAdmission(cancellationToken));
+            }
+
+            return AcquireGateAdmissionAsync(timeout, cancellationToken);
+        }
+
+        return WaitSemaphoreAsync(timeout, cancellationToken);
+    }
+
+    private async ValueTask<bool> AcquireGateAdmissionAsync(TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        var roleAcquired = false;
+        var started = Stopwatch.GetTimestamp();
+        try
+        {
+            await _concurrencyGate!.AcquireAsync(timeout, cancellationToken).ConfigureAwait(false);
+            roleAcquired = true;
+            if (_sharedConcurrencyGate != null)
+            {
+                await _sharedConcurrencyGate.AcquireAsync(RemainingTimeout(timeout, started), cancellationToken)
+                    .ConfigureAwait(false);
+            }
+            return true;
+        }
+        catch (TimeoutException)
+        {
+            if (roleAcquired)
+            {
+                _concurrencyGate!.Release(0);
+            }
+            return false;
+        }
+        catch
+        {
+            if (roleAcquired)
+            {
+                _concurrencyGate!.Release(0);
+            }
+            throw;
+        }
+    }
+
+    private async ValueTask<bool> WaitSemaphoreAsync(TimeSpan timeout, CancellationToken cancellationToken)
+        => await _semaphore!.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+
+    private void ReleaseAdmission()
+    {
+        if (_concurrencyGate != null)
+        {
+            _sharedConcurrencyGate?.Release(0);
+            _concurrencyGate.Release(0);
+        }
+        else
+        {
+            _semaphore!.Release();
+        }
     }
 
     public PoolSlot Acquire(CancellationToken cancellationToken = default)
@@ -279,7 +435,7 @@ internal sealed class PoolGovernor : IDisposable
                     turnstileAcquired = false;
                 }
 
-                if (_semaphore.Wait(0, cancellationToken))
+                if (TryAcquireAdmission(cancellationToken))
                 {
                     var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
                     var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
@@ -287,7 +443,7 @@ internal sealed class PoolGovernor : IDisposable
                     return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
                 }
             }
-            else if (!useTurnstileGate && _semaphore.Wait(0, cancellationToken))
+            else if (!useTurnstileGate && TryAcquireAdmission(cancellationToken))
             {
                 var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
@@ -354,7 +510,7 @@ internal sealed class PoolGovernor : IDisposable
                 }
             }
 
-            if (_semaphore.Wait(0, cancellationToken))
+            if (TryAcquireAdmission(cancellationToken))
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
@@ -387,7 +543,7 @@ internal sealed class PoolGovernor : IDisposable
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
-                    var acquired = _semaphore.Wait(semRemaining, cancellationToken);
+                    var acquired = AcquireAdmission(semRemaining, cancellationToken);
                     if (!acquired)
                     {
                         Interlocked.Increment(ref _totalSlotTimeouts);
@@ -460,7 +616,7 @@ internal sealed class PoolGovernor : IDisposable
                 }
             }
 
-            if (_semaphore.Wait(0, cancellationToken))
+            if (TryAcquireAdmission(cancellationToken))
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
@@ -518,7 +674,7 @@ internal sealed class PoolGovernor : IDisposable
                     turnstileAcquired = false;
                 }
 
-                if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+                if (await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
                 {
                     var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
                     var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
@@ -526,7 +682,7 @@ internal sealed class PoolGovernor : IDisposable
                     return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
                 }
             }
-            else if (!useTurnstileGate && await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            else if (!useTurnstileGate && await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
             {
                 var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
@@ -595,7 +751,7 @@ internal sealed class PoolGovernor : IDisposable
 
             // Use WaitAsync even for zero-timeout to maintain consistent async behavior
             // (Wait(0, ct) can throw OperationCanceledException synchronously)
-            if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            if (await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
@@ -628,7 +784,7 @@ internal sealed class PoolGovernor : IDisposable
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
-                    var acquired = await _semaphore.WaitAsync(semRemaining, cancellationToken).ConfigureAwait(false);
+                    var acquired = await AcquireAdmissionAsync(semRemaining, cancellationToken).ConfigureAwait(false);
                     if (!acquired)
                     {
                         Interlocked.Increment(ref _totalSlotTimeouts);
@@ -699,7 +855,7 @@ internal sealed class PoolGovernor : IDisposable
                 }
             }
 
-            if (await _semaphore.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            if (await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
@@ -901,7 +1057,7 @@ internal sealed class PoolGovernor : IDisposable
             // local writerTurnstileInterestRegistered to false immediately before calling
             // OnAcquired, making the caller's own UnregisterWriterTurnstileInterest a no-op by the
             // time this throws.
-            _semaphore?.Release();
+            ReleaseAdmission();
             if (releaseWriterTurnstileInterestOnRelease && _turnstileState != null)
             {
                 Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
@@ -927,7 +1083,7 @@ internal sealed class PoolGovernor : IDisposable
         // concurrent WaitForDrainAsync could observe zero and let a caller dispose the semaphore/
         // turnstile while this method is still about to call Release() on them, throwing
         // ObjectDisposedException on this thread.
-        _semaphore?.Release();
+        ReleaseAdmission();
 
         // Writers release turnstile when slot is released
         if (_holdTurnstile && _turnstile != null)
@@ -1017,9 +1173,16 @@ internal sealed class PoolGovernor : IDisposable
     {
         Close();
 
-        if (_ownsSemaphore)
+        if (_ownsSemaphore && _concurrencyGate == null)
         {
             _semaphore?.Dispose();
+        }
+
+        _concurrencyGate?.Dispose();
+
+        if (_ownsSharedConcurrencyGate)
+        {
+            _sharedConcurrencyGate?.Dispose();
         }
 
         if (_ownsTurnstile)

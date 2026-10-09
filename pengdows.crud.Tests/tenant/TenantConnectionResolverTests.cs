@@ -483,7 +483,9 @@ public class TenantConnectionResolverTests
             SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed,
             MaxQueuedWrites = 3,
             MaxQueuedReads = 4,
-            EnforceUniqueConnectionString = true
+            EnforceUniqueConnectionString = true,
+            ClampPoolsToServerConnectionLimit = true,
+            ResourceConnectionHeadroom = 5
         };
 
         var resolver = new TenantConnectionResolver();

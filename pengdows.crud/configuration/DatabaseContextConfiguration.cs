@@ -192,4 +192,26 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
 
     /// <inheritdoc/>
     public bool EnforceUniqueConnectionString { get; set; }
+
+    /// <inheritdoc/>
+    public bool ClampPoolsToServerConnectionLimit { get; set; }
+
+    private int _resourceConnectionHeadroom;
+
+    /// <inheritdoc/>
+    public int ResourceConnectionHeadroom
+    {
+        get => _resourceConnectionHeadroom;
+        set
+        {
+            if (value < 0)
+            {
+                throw new ArgumentOutOfRangeException(
+                    nameof(ResourceConnectionHeadroom), value,
+                    $"ResourceConnectionHeadroom must be >= 0 (got {value}).");
+            }
+
+            _resourceConnectionHeadroom = value;
+        }
+    }
 }

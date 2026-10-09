@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Data;
 using System.Diagnostics;
 using System.Text;
 using BenchmarkDotNet.Attributes;
@@ -7,6 +8,10 @@ using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using pengdows.crud;
+using pengdows.crud.attributes;
+using pengdows.crud.configuration;
+using pengdows.crud.enums;
 using pengdows.stormgate;
 
 namespace CrudBenchmarks;
@@ -18,9 +23,15 @@ namespace CrudBenchmarks;
 /// server's max_connections limit — and how StormGate prevents the crash.
 ///
 /// The postgres container is started with max_connections=25.
-/// All benchmarks run 200 operations at 100-way parallelism — 4× the server limit,
-/// repeated across (WarmupCount=1 + IterationCount=3) × InvocationCount=5 = 20
-/// invocations per method, for 4,000 attempted operations per method per run.
+/// All benchmarks run StormOperationsPerRun operations at StormParallelism-way parallelism (40× the
+/// server limit as of 2026-10-08; it was 200 operations at 100-way, 4×, in the runs quoted below),
+/// repeated across (WarmupCount=1 + IterationCount=3) × InvocationCount=5 = 20 invocations per
+/// method.
+///
+/// NOTE (2026-10-08): the measurements in this comment were taken when every client's Npgsql
+/// pool max was the default 100. Since then all clients share a connection string with pool
+/// is back to the default (100) and the server limit is 25, so "Npgsql pool (max 100)" below describes that earlier run,
+/// not the current configuration; re-measure before quoting any figure here.
 ///
 /// Without a connection governor, Dapper and EF Core fail for TWO DIFFERENT REASONS —
 /// confirmed against the raw correctness-fragment JSON on 2026-08-27, not assumed:
@@ -41,6 +52,11 @@ namespace CrudBenchmarks;
 ///   - The remaining 80 concurrent tasks wait in the semaphore queue.
 ///   - Measured: 0/4,000 failures for Dapper_StormGate.
 ///
+/// Pengdows_Governed runs the same load through a DatabaseContext/TableGateway on the shared
+/// default pool (no explicit ceiling; pengdows.crud sizes its PoolGovernor from the connection
+/// string or config, and here it gets neither), with no StormGate. Added 2026-10-08; no measured result is recorded here, so
+/// read the correctness fragments from the run instead of trusting this comment.
+///
 /// The headline number is the failure count going to zero (1,950 → 0, 2,158 → 0), not a
 /// derived "Nx faster" ratio — Dapper_Uncontrolled's raw mean latency is inflated by the
 /// cost of throwing/catching a PostgresException on roughly half of all attempts, so a
@@ -54,13 +70,48 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private const string FrameworkDapper = "Dapper";
     private const string FrameworkStormGate = "StormGate";
     private const string FrameworkEntityFramework = "EntityFramework";
+    private const string FrameworkPengdows = "Pengdows";
+    private const string FrameworkPengdowsClamped = "PengdowsClamped";
+    private const string FrameworkPengdowsClampedPatient = "PengdowsClampedPatient";
     private const string ScenarioUncontrolled = "Uncontrolled";
     private const string ScenarioGoverned = "Governed";
     private const string ScenarioGovernedEf = "GovernedEf";
-    private const int PgMaxConnections = 25;   // deliberately low — below default Npgsql pool max
+    internal const int ServerMaxConnections = 25;   // server limit
+    private const int PgMaxConnections = ServerMaxConnections;
+    internal static readonly TimeSpan StormGateAcquireTimeout = TimeSpan.FromSeconds(30);
+    internal static readonly TimeSpan PatientPoolAcquireTimeout = StormGateAcquireTimeout;
     private const int StormGatePermits = 20;   // well under server limit; tasks queue, not crash
-    private const int Parallelism = 100;       // 4× the server limit — enough to saturate it
-    private const int OperationsPerRun = 200;
+    internal const int StormParallelism = 1000;     // 40x the server limit
+    private const int Parallelism = StormParallelism;
+    internal const int StormOperationsPerRun = 5000;
+
+    // Calls that hold the connection for real work. 0 keeps every earlier instant-query row comparable;
+    // SlowWorkMilliseconds is a spike of slow calls. 1,500 callers x 300 ms through ~20 concurrent
+    // connections drains in ~22 s: past Npgsql's default 15 s pool timeout, so a pool that merely
+    // queues fails its tail, and a gate that waits long enough does not.
+    internal const int SlowWorkMilliseconds = 300;
+    private const int SlowOperationsPerRun = 1500;
+
+    [Params(0, SlowWorkMilliseconds)]
+    public int WorkMilliseconds { get; set; }
+
+    internal static int OperationsFor(int workMilliseconds) =>
+        workMilliseconds == 0 ? StormOperationsPerRun : SlowOperationsPerRun;
+
+    // Must equal the text BenchmarkDotNet puts between '[' and ']' in the case's display info:
+    // CorrectnessColumn derives its lookup key from there.
+    internal static string ParameterKeyFor(int workMilliseconds) => $"WorkMilliseconds={workMilliseconds}";
+
+    private int OperationsPerRun => OperationsFor(WorkMilliseconds);
+
+    // Holds the connection for the work duration inside the one query, so every arm (raw SQL, EF and
+    // the gateway alike) keeps its lease for the same time.
+    internal static string QuerySqlFor(int workMilliseconds) =>
+        workMilliseconds == 0
+            ? "SELECT id, val FROM gov_items WHERE id = 1"
+            : "SELECT id, val FROM gov_items, LATERAL (SELECT pg_sleep(" +
+              (workMilliseconds / 1000.0).ToString(System.Globalization.CultureInfo.InvariantCulture) +
+              ")) AS work WHERE id = 1";
 
     private static readonly string PgPassword = GeneratePassword();
 
@@ -73,14 +124,21 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private IContainer? _container;
     private string _connStr = string.Empty;
 
-    private NpgsqlDataSource _dapperDataSource = null!;  // pool max 100 — exceeds server limit
+    private NpgsqlDataSource _dapperDataSource = null!;  // default pool (100) — above the server limit
     private StormGate _stormGate = null!;                // 20 permits — stays under server limit
     private DbContextOptions<GovEfDbContext> _efOptions = null!;
+    private DatabaseContext _pengdowsContext = null!;    // PoolGovernor only — NO StormGate
+    private TableGateway<GovPgEntity, int> _pengdowsGateway = null!;
+    private DatabaseContext _pengdowsClampedContext = null!;   // same, with ClampPoolsToServerConnectionLimit on
+    private TableGateway<GovPgEntity, int> _pengdowsClampedGateway = null!;
+    private DatabaseContext _pengdowsPatientContext = null!;   // clamp on, and StormGate's 30 s wait for a slot
+    private TableGateway<GovPgEntity, int> _pengdowsPatientGateway = null!;
 
     private string _querySql = null!;
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
     private readonly ConcurrentBag<long> _stormGateLatencyTicks = new();
     private readonly ConcurrentBag<long> _efStormGateLatencyTicks = new();
+    private readonly ConcurrentBag<long> _pengdowsLatencyTicks = new();
 
     // Total attempted operations across every invocation/iteration in THIS process (one
     // process per [Benchmark] method). Written into the correctness fragment's metadata so
@@ -97,9 +155,9 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             .WithEnvironment("POSTGRES_PASSWORD", PgPassword)
             .WithEnvironment("POSTGRES_DB", "gov_test")
             .WithPortBinding(0, 5432)
-            // Key to the demo: max_connections well below the default Npgsql pool size (100).
-            // Unprotected clients will try to open 100 physical connections; postgres rejects
-            // anything beyond 25.  StormGate's permit count keeps opens at 20 — safe.
+            // Key to the demo: max_connections=25, with 1,000-way application concurrency.
+            // No client's pool is capped: each runs on the Npgsql default (100), above the server's
+            // 25. StormGate's 20 permits are the only admission control among the arms.
             .WithCommand("-c", $"max_connections={PgMaxConnections}")
             .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(5432))
             .Build();
@@ -107,7 +165,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await _container.StartAsync();
 
         var port = _container.GetMappedPublicPort(5432);
-        _connStr = $"Host=localhost;Port={port};Database=gov_test;Username=postgres;Password={PgPassword}";
+        _connStr = BuildClientConnectionString(
+            $"Host=localhost;Port={port};Database=gov_test;Username=postgres;Password={PgPassword}");
 
         // Create the shared data source first so seeding uses the same pool as benchmarks.
         _dapperDataSource = NpgsqlDataSource.Create(_connStr);
@@ -115,13 +174,47 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await WaitForReadyAsync();
         await SeedAsync();
 
-        _stormGate = new StormGate(_dapperDataSource, StormGatePermits, TimeSpan.FromSeconds(30));
+        _stormGate = new StormGate(_dapperDataSource, StormGatePermits, StormGateAcquireTimeout);
 
         _efOptions = new DbContextOptionsBuilder<GovEfDbContext>()
             .UseNpgsql(_connStr)
             .Options;
 
-        _querySql = "SELECT id, val FROM gov_items WHERE id = 1";
+        // Every client (Dapper, EF, pengdows.crud) shares _connStr with no pool ceiling set, so
+        // pengdows.crud's PoolGovernor is sized from the dialect default (100), above the server's
+        // 25, and it is NOT wrapped in StormGate. (Result of that configuration: see the
+        // correctness fragments from the run; on 2026-10-08 it was 2,121 / 5,200 failures.)
+        var typeMap = new TypeMapRegistry();
+        typeMap.Register<GovPgEntity>();
+        _pengdowsContext = new DatabaseContext(_connStr, NpgsqlFactory.Instance, typeMap);
+        _pengdowsGateway = new TableGateway<GovPgEntity, int>(_pengdowsContext);
+
+        // Identical connection string and load; the only difference is the opt-in clamp, which reads
+        // the server's real limit (25, less the superuser reserve) and sizes the pools to it.
+        _pengdowsClampedContext = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = _connStr,
+                ProviderName = "Npgsql",
+                DbMode = DbMode.Standard,
+                ClampPoolsToServerConnectionLimit = true
+            },
+            NpgsqlFactory.Instance, null, typeMap);
+        _pengdowsClampedGateway = new TableGateway<GovPgEntity, int>(_pengdowsClampedContext);
+
+        _pengdowsPatientContext = new DatabaseContext(
+            new DatabaseContextConfiguration
+            {
+                ConnectionString = _connStr,
+                ProviderName = "Npgsql",
+                DbMode = DbMode.Standard,
+                ClampPoolsToServerConnectionLimit = true,
+                PoolAcquireTimeout = PatientPoolAcquireTimeout
+            },
+            NpgsqlFactory.Instance, null, typeMap);
+        _pengdowsPatientGateway = new TableGateway<GovPgEntity, int>(_pengdowsPatientContext);
+
+        _querySql = QuerySqlFor(WorkMilliseconds);
 
         Console.WriteLine($"[GOV] postgres max_connections={PgMaxConnections}, " +
                           $"StormGate permits={StormGatePermits}, " +
@@ -129,9 +222,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     }
 
     // ── Uncontrolled Dapper ───────────────────────────────────────────────────
-    // Npgsql pool max = 100, postgres max_connections = 25.
-    // Pool attempts to open 100 physical connections → postgres rejects at 26.
-    // Expected result: NA (exception storm from 53300 "too many clients already").
+    // Npgsql pool max = default (100), above postgres max_connections = 25. Nothing queues in front of the pool.
+    // Result: see the correctness fragments from the run, not this comment.
 
     [Benchmark]
     [CorrectnessIdentity(FrameworkDapper, ScenarioUncontrolled)]
@@ -174,9 +266,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     }
 
     // ── Uncontrolled EF Core ──────────────────────────────────────────────────
-    // Same pool behaviour as uncontrolled Dapper — EF Core's internal NpgsqlDataSource
-    // pool defaults to max 100 connections.  Postgres still hard-caps at 25.
-    // Expected result: NA (same 53300 crash).
+    // Same default pool as uncontrolled Dapper (100) on EF Core's own Npgsql pool.
+    // Result: see the correctness fragments from the run, not this comment.
 
     [Benchmark]
     [CorrectnessIdentity(FrameworkEntityFramework, ScenarioUncontrolled)]
@@ -186,7 +277,9 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         {
             Interlocked.Increment(ref _attempted);
             await using var ctx = new GovEfDbContext(_efOptions);
-            var item = await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync();
+            var item = WorkMilliseconds == 0
+                ? await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync()
+                : await ctx.GovItems.FromSqlRaw(_querySql).AsNoTracking().FirstOrDefaultAsync();
             if (item == null)
             {
                 MarkInvalid(ScenarioUncontrolled, FrameworkEntityFramework, "Query returned null");
@@ -213,7 +306,9 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
                 .UseNpgsql(conn)
                 .Options;
             await using var ctx = new GovEfDbContext(options);
-            var item = await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync();
+            var item = WorkMilliseconds == 0
+                ? await ctx.GovItems.AsNoTracking().FirstOrDefaultAsync()
+                : await ctx.GovItems.FromSqlRaw(_querySql).AsNoTracking().FirstOrDefaultAsync();
             stopwatch.Stop();
             _efStormGateLatencyTicks.Add(stopwatch.ElapsedTicks);
             if (item == null)
@@ -222,6 +317,74 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             }
         }, ex => MarkInvalid(ScenarioGovernedEf, FrameworkStormGate, $"Exception: {ex.GetType().Name}"));
     }
+
+    // ── pengdows.crud (own PoolGovernor, no StormGate) ────────────────────────
+    // Same load as the other arms; default pool, like the uncontrolled arms. The question this arm
+    // answers: does pengdows.crud's built-in governance keep the failure count at zero where
+    // ungoverned Dapper/EF hit 53300 / pool timeouts, without an external gate?
+
+    [Benchmark]
+    [CorrectnessIdentity(FrameworkPengdows, ScenarioGoverned)]
+    public async Task Pengdows_Governed()
+    {
+        await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
+        {
+            Interlocked.Increment(ref _attempted);
+            var stopwatch = Stopwatch.StartNew();
+            await using var sc = WorkMilliseconds == 0
+                ? _pengdowsGateway.BuildRetrieve(new[] { 1 })
+                : _pengdowsContext.CreateSqlContainer(_querySql);
+            var item = await _pengdowsGateway.LoadSingleAsync(sc);
+            stopwatch.Stop();
+            _pengdowsLatencyTicks.Add(stopwatch.ElapsedTicks);
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkPengdows, "Query returned null");
+            }
+        }, ex => MarkInvalid(ScenarioGoverned, FrameworkPengdows, $"Exception: {ex.GetType().Name}"));
+    }
+
+    // No explicit pool ceiling for any client: every one runs on the provider default (Npgsql 100)
+    // against a server capped at PgMaxConnections. Kept as one seam so the arms cannot diverge.
+    // pengdows.crud with ClampPoolsToServerConnectionLimit on: same string, same load, no StormGate.
+    [Benchmark]
+    [CorrectnessIdentity(FrameworkPengdowsClamped, ScenarioGoverned)]
+    public async Task Pengdows_Clamped()
+    {
+        await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
+        {
+            Interlocked.Increment(ref _attempted);
+            await using var sc = WorkMilliseconds == 0
+                ? _pengdowsClampedGateway.BuildRetrieve(new[] { 1 })
+                : _pengdowsClampedContext.CreateSqlContainer(_querySql);
+            var item = await _pengdowsClampedGateway.LoadSingleAsync(sc);
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkPengdowsClamped, "Query returned null");
+            }
+        }, ex => MarkInvalid(ScenarioGoverned, FrameworkPengdowsClamped, $"Exception: {ex.GetType().Name}"));
+    }
+
+    // The clamped arm with the same wait-for-a-slot budget StormGate is given.
+    [Benchmark]
+    [CorrectnessIdentity(FrameworkPengdowsClampedPatient, ScenarioGoverned)]
+    public async Task Pengdows_ClampedPatient()
+    {
+        await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
+        {
+            Interlocked.Increment(ref _attempted);
+            await using var sc = WorkMilliseconds == 0
+                ? _pengdowsPatientGateway.BuildRetrieve(new[] { 1 })
+                : _pengdowsPatientContext.CreateSqlContainer(_querySql);
+            var item = await _pengdowsPatientGateway.LoadSingleAsync(sc);
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkPengdowsClampedPatient, "Query returned null");
+            }
+        }, ex => MarkInvalid(ScenarioGoverned, FrameworkPengdowsClampedPatient, $"Exception: {ex.GetType().Name}"));
+    }
+
+    internal static string BuildClientConnectionString(string connectionString) => connectionString;
 
     // ── Setup helpers ─────────────────────────────────────────────────────────
 
@@ -275,6 +438,9 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         Console.WriteLine($"[GOV] process {Environment.ProcessId} attempted {Interlocked.Read(ref _attempted)} operations");
         WriteLatencySidecar();
 
+        _pengdowsPatientContext?.Dispose();
+        _pengdowsClampedContext?.Dispose();
+        _pengdowsContext?.Dispose();
         _stormGate.Dispose();
         await _dapperDataSource.DisposeAsync();
 
@@ -289,7 +455,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
 
     private void MarkInvalid(string scenario, string framework, string reason)
     {
-        var key = new CorrectnessIssueKey("*", scenario, framework, reason);
+        var key = new CorrectnessIssueKey(ParameterKeyFor(WorkMilliseconds), scenario, framework, reason);
         _correctnessIssues.AddOrUpdate(key, 1, static (_, current) => current + 1);
     }
 
@@ -357,6 +523,18 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         sb.AppendLine($"| P99 | {TicksToMs(Percentile(efStormGateTicks, 99)):F3} ms |");
         sb.AppendLine($"| Max | {(efStormGateTicks.Length == 0 ? 0 : TicksToMs(efStormGateTicks[^1])):F3} ms |");
 
+        var pengdowsTicks = _pengdowsLatencyTicks.ToArray();
+        Array.Sort(pengdowsTicks);
+        sb.AppendLine();
+        sb.AppendLine("## Pengdows_Governed latency (this process, if it ran here)");
+        sb.AppendLine();
+        sb.AppendLine("| Metric | Value |");
+        sb.AppendLine("|--------|-------|");
+        sb.AppendLine($"| P50 | {TicksToMs(Percentile(pengdowsTicks, 50)):F3} ms |");
+        sb.AppendLine($"| P95 | {TicksToMs(Percentile(pengdowsTicks, 95)):F3} ms |");
+        sb.AppendLine($"| P99 | {TicksToMs(Percentile(pengdowsTicks, 99)):F3} ms |");
+        sb.AppendLine($"| Max | {(pengdowsTicks.Length == 0 ? 0 : TicksToMs(pengdowsTicks[^1])):F3} ms |");
+
         try
         {
             // Same durability fix as BenchmarkMetricsWriter/BenchmarkCorrectnessArtifacts: the
@@ -402,6 +580,17 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
                 e.Property(x => x.Val).HasColumnName("val");
             });
         }
+    }
+
+    [Table("gov_items")]
+    public class GovPgEntity
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("val", DbType.Int32)]
+        public int Val { get; set; }
     }
 
     private class GovEfItem

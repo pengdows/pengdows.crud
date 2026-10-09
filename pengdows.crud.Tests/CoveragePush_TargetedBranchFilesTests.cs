@@ -38,7 +38,9 @@ public sealed class CoveragePush_TargetedBranchFilesTests
             null,
             false,
             false,
-            null
+            null,
+            null,
+            false
         }));
         var disabledSnapshot = disabled.GetSnapshot();
         Assert.True(disabledSnapshot.Disabled);
@@ -55,7 +57,9 @@ public sealed class CoveragePush_TargetedBranchFilesTests
             null,
             false,
             false,
-            null
+            null,
+            null,
+            false
         }));
         var forbiddenSnapshot = forbidden.GetSnapshot();
         Assert.False(forbiddenSnapshot.Disabled);
@@ -72,7 +76,9 @@ public sealed class CoveragePush_TargetedBranchFilesTests
             null,
             false,
             false,
-            null
+            null,
+            null,
+            false
         }));
         var enabledSnapshot = enabled.GetSnapshot();
         Assert.False(enabledSnapshot.Disabled);

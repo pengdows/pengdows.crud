@@ -79,4 +79,29 @@ public class PoolGovernorQueueCapConfigurationTests
         // PoolGovernor's internal default formula.
         Assert.True(writerGovernor.MaxQueueDepth >= 32);
     }
+
+    [Fact]
+    public async System.Threading.Tasks.Task DatabaseContext_UsesTheAdaptiveConcurrencyGateForAdmission()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Standard,
+            MaxQueuedWrites = 7
+        };
+
+        await using var context = new DatabaseContext(config, factory);
+        var writerGovernor = GetGovernor(context, "_writerGovernor");
+
+        var gateField = typeof(PoolGovernor).GetField("_concurrencyGate",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(gateField);
+        Assert.NotNull(gateField!.GetValue(writerGovernor));
+
+        var semaphoreField = typeof(PoolGovernor).GetField("_semaphore",
+            BindingFlags.Instance | BindingFlags.NonPublic);
+        Assert.NotNull(semaphoreField);
+        Assert.Null(semaphoreField!.GetValue(writerGovernor));
+    }
 }

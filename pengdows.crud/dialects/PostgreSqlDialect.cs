@@ -1035,6 +1035,46 @@ internal class PostgreSqlDialect : SqlDialect
 
     // Connection pooling properties for PostgreSQL (Npgsql)
     // SupportsExternalPooling, PoolingSettingName, DefaultMaxPoolSize inherited from base (true, "Pooling", 100)
+
+    // The limit an ordinary role can actually use:
+    //   max_connections - reserved_connections (PostgreSQL 16+) - superuser_reserved_connections.
+    // A reserve that cannot be read falls back to its documented default rather than to 0, so a
+    // failed safety probe never becomes permission to over-admit: superuser_reserved_connections
+    // defaults to 3, and reserved_connections (absent before PostgreSQL 16) defaults to 0.
+    // Both fallbacks are inferred, not observed.
+    private const int DefaultSuperuserReservedConnections = 3;
+    private const int DefaultReservedConnections = 0;
+
+    internal override async Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
+    {
+        var max = await ExecuteScalarQueryAsync(connection, "SHOW max_connections", ParseConnectionCount, useAsync)
+            .ConfigureAwait(false);
+        if (max is not > 0)
+        {
+            return null;
+        }
+
+        var reserved = await ExecuteScalarQueryAsync(
+                connection, "SHOW reserved_connections", ParseConnectionCount, useAsync,
+                onError: static _ => null)
+            .ConfigureAwait(false);
+
+        var superuserReserved = await ExecuteScalarQueryAsync(
+                connection, "SHOW superuser_reserved_connections", ParseConnectionCount, useAsync,
+                onError: static _ => null)
+            .ConfigureAwait(false);
+
+        if (reserved is null || superuserReserved is null)
+        {
+            Logger.LogDebug(
+                "PostgreSQL reserve setting(s) unreadable; assuming documented defaults (reserved_connections={Reserved}, superuser_reserved_connections={Superuser}).",
+                reserved ?? DefaultReservedConnections, superuserReserved ?? DefaultSuperuserReservedConnections);
+        }
+
+        var total = Math.Max(0, reserved ?? DefaultReservedConnections)
+                    + Math.Max(0, superuserReserved ?? DefaultSuperuserReservedConnections);
+        return Math.Max(1, max.Value - total);
+    }
     public override string? MinPoolSizeSettingName => "Minimum Pool Size";
     public override string? MaxPoolSizeSettingName => "Maximum Pool Size";
     public override string? ApplicationNameSettingName => "Application Name";

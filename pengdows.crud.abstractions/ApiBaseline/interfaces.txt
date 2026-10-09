@@ -352,6 +352,7 @@ property pengdows.crud.ITransactionContext::TransactionId : System.Guid { get; }
 property pengdows.crud.ITransactionContext::WasCommitted : bool { get; }
 property pengdows.crud.ITransactionContext::WasRolledBack : bool { get; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ApplicationName : string { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::ClampPoolsToServerConnectionLimit : bool { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ConnectionString : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::DbMode : pengdows.crud.enums.DbMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::EnableMetrics : bool { get; set; }
@@ -369,6 +370,7 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::ProviderName
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadOnlyConnectionString : string { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadWriteMode : pengdows.crud.enums.ReadWriteMode { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReaderPlanCacheSize : System.Nullable`1<int> { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::ResourceConnectionHeadroom : int { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::SessionInitializationFailureMode : System.Nullable`1<pengdows.crud.enums.SessionInitializationFailureMode> { get; set; }
 property pengdows.crud.connection.IConnectionLocalState::PrepareDisabled : bool { get; }
 property pengdows.crud.connection.IConnectionLocalState::SessionSettingsApplied : bool { get; }

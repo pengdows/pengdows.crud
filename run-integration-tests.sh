@@ -23,6 +23,30 @@ has_library() {
   return 1
 }
 
+db2_compat_runtime_dir=""
+cleanup_db2_compat_runtime() {
+  if [[ -n "${db2_compat_runtime_dir}" && -d "${db2_compat_runtime_dir}" &&
+        "${db2_compat_runtime_dir}" == */pengdows-db2.* ]]; then
+    rm -rf -- "${db2_compat_runtime_dir}"
+  fi
+}
+
+# The IBM driver package is linked against the libxml2.so.2 / ICU 72 ABI. Provision those
+# compatibility libraries into a temporary directory when the host no longer carries them;
+# never install or relink system libraries just to run integration tests.
+if ! has_library libxml2.so.2 || ! has_library libicuuc.so.72 || ! has_library libicudata.so.72; then
+  db2_env="$(mktemp)"
+  GITHUB_ENV="${db2_env}" bash "${root}/scripts/install-db2-compat-libs.sh"
+  set -a
+  # shellcheck disable=SC1090
+  source "${db2_env}"
+  set +a
+  rm -f "${db2_env}"
+  db2_compat_runtime_dir="${DB2_COMPAT_RUNTIME_DIR:-}"
+  export LD_LIBRARY_PATH="${DB2_COMPAT_LIB_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+  trap cleanup_db2_compat_runtime EXIT
+fi
+
 preflight() {
   local fatal=0
   echo "== integration preflight =="
@@ -33,11 +57,11 @@ preflight() {
     echo "  PROBLEM Docker is not reachable: every container-backed database would fail"
     fatal=1
   fi
-  if has_library libxml2.so.2; then
-    echo "  ok      Db2: libxml2.so.2 resolves"
+  if has_library libxml2.so.2 && has_library libicuuc.so.72 && has_library libicudata.so.72; then
+    echo "  ok      Db2: legacy libxml2/ICU dependencies resolve"
   else
-    echo "  WARN    Db2: libxml2.so.2 not found; Db2 tests will fail to load the native client" \
-         "(put a compatibility copy in PENGDOWS_EXTRA_LIB_DIRS)"
+    echo "  WARN    Db2: legacy libxml2/ICU dependencies are not fully resolved; Db2 tests will fail" \
+         "(the runner normally provisions them; use PENGDOWS_EXTRA_LIB_DIRS for a local copy)"
   fi
   local tfm informix_lib
   for tfm in ${INTEGRATION_FRAMEWORKS:-net8.0 net10.0}; do
@@ -118,6 +142,7 @@ if [[ -z "${FIREBIRD_EMBEDDED_CLIENT_LIBRARY:-}" ]]; then
           "${firebird_runtime_dir}" == */pengdows-firebird.* ]]; then
       rm -rf -- "${firebird_runtime_dir}"
     fi
+    cleanup_db2_compat_runtime
   }
   trap cleanup_firebird_runtime EXIT
 fi
@@ -127,7 +152,8 @@ fi
 # GLS locale and message files) and INFORMIXSQLHOSTS through native getenv(), which never sees
 # values a .NET process sets for itself. The testbed re-executes itself with all three; vstest's
 # testhost cannot, so export them here. The native tree is identical for both target frameworks.
-# Db2 needs nothing here: its bootstrap loads libdb2.so by absolute path.
+# Db2's bootstrap loads libdb2.so by absolute path; the compatibility directory, when needed,
+# was added above so the driver's legacy transitive dependencies can be resolved by glibc.
 for tfm in net8.0 net10.0; do
   informix_lib="${root}/pengdows.crud.IntegrationTests/bin/Release/${tfm}/native/lib"
   LD_LIBRARY_PATH="${informix_lib}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"

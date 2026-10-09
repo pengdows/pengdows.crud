@@ -9,8 +9,9 @@ namespace pengdows.crud.IntegrationTests.Infrastructure;
 /// GLS/message files) and <c>INFORMIXSQLHOSTS</c> through native getenv(), which never sees
 /// <c>Environment.SetEnvironmentVariable</c> on Unix. The testbed re-executes itself with all three
 /// (<c>InformixNativeLibraryBootstrap</c>); vstest's testhost cannot, so they must be exported before
-/// <c>dotnet test</c> starts (<c>run-integration-tests.sh</c> does). Db2's driver needs nothing: its
-/// bootstrap loads <c>libdb2.so</c> by absolute path.
+/// <c>dotnet test</c> starts (<c>run-integration-tests.sh</c> does). Db2's bootstrap loads
+/// <c>libdb2.so</c> by absolute path, while the integration runner provisions the legacy libxml2/ICU
+/// compatibility ABI that the packaged IBM driver requires when the host does not provide it.
 /// </summary>
 internal static class NativeClientEnvironment
 {

@@ -125,7 +125,6 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             if (_active < _effectiveLimit && _queueCount == 0)
             {
                 var lease = CreateLeaseUnderLock();
-                AssertInvariantUnderLock();
                 return ValueTask.FromResult(lease);
             }
 
@@ -141,6 +140,62 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             AssertInvariantUnderLock();
             return new ValueTask<Lease>(waiter.Completion!.Task);
         }
+    }
+
+    // PoolGovernor owns exactly-once release through PoolSlotToken, so it only needs the slot
+    // identity. Avoid carrying the gate reference and generation through every pool token.
+    internal int AcquireSlot(CancellationToken cancellationToken = default)
+    {
+        return Acquire(cancellationToken).LeaseSlot;
+    }
+
+    internal ValueTask<int> AcquireSlotAsync(CancellationToken cancellationToken = default)
+    {
+        var acquisition = AcquireAsync(cancellationToken);
+        if (acquisition.IsCompletedSuccessfully)
+        {
+            return ValueTask.FromResult(acquisition.Result.LeaseSlot);
+        }
+
+        return AwaitSlotAsync(acquisition);
+    }
+
+    private static async ValueTask<int> AwaitSlotAsync(ValueTask<Lease> acquisition)
+    {
+        return (await acquisition.ConfigureAwait(false)).LeaseSlot;
+    }
+
+    internal void ReleaseSlot(int leaseSlot)
+    {
+        Waiter? released;
+
+        lock (_sync)
+        {
+            if (leaseSlot == -1)
+            {
+                if (!_singleLeaseSlot || _singleLeaseState <= 0)
+                {
+                    return;
+                }
+
+                _singleLeaseState = -_singleLeaseState;
+            }
+            else if (leaseSlot < 0 || leaseSlot >= _leaseSlotCount || _leaseStates[leaseSlot] <= 0)
+            {
+                return;
+            }
+            else
+            {
+                _leaseStates[leaseSlot] = -_leaseStates[leaseSlot];
+                _freeLeaseSlots[_freeLeaseSlotCount++] = leaseSlot;
+            }
+
+            _active--;
+            released = PromoteWaitersUnderLock();
+            AssertInvariantUnderLock();
+        }
+
+        CompleteWaiters(released);
     }
 
     internal Lease Acquire(CancellationToken cancellationToken = default)
@@ -160,7 +215,6 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             if (_active < _effectiveLimit && _queueCount == 0)
             {
                 var lease = CreateLeaseUnderLock();
-                AssertInvariantUnderLock();
                 return lease;
             }
 
@@ -555,6 +609,8 @@ internal sealed class AdaptiveConcurrencyGate : IDisposable
             _leaseSlot = leaseSlot;
             _leaseGeneration = leaseGeneration;
         }
+
+        internal int LeaseSlot => _leaseSlot;
 
         public void Dispose()
         {

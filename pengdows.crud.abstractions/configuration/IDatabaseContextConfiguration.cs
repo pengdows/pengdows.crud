@@ -270,4 +270,45 @@ public interface IDatabaseContextConfiguration
             }
         }
     }
+
+    /// <summary>
+    /// When true, the context reads the database server's own connection limit while initializing and
+    /// never sizes a pool above it (the smallest of: the requested size or the provider default, the
+    /// server's configured limit, and the most this kind of server can allow). Off by default on the
+    /// 2.0.x line because it can silently shrink a pool that exceeds the server's limit; a clamp is
+    /// logged. Engines whose limit cannot be read are left unchanged.
+    /// </summary>
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    bool ClampPoolsToServerConnectionLimit
+    {
+        get => false;
+        set
+        {
+            if (value)
+            {
+                throw new NotSupportedException(
+                    $"{GetType().Name} does not support setting {nameof(ClampPoolsToServerConnectionLimit)}.");
+            }
+        }
+    }
+
+    /// <summary>
+    /// Server connection slots to leave free for other clients (monitoring, administrators, other
+    /// applications) when <see cref="ClampPoolsToServerConnectionLimit"/> is on. Taken off the server's
+    /// usable limit, not off a pool size that already fits. Defaults to 0: no reservation the application
+    /// did not ask for. A value that consumes the whole server limit is rejected when the context starts.
+    /// </summary>
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    int ResourceConnectionHeadroom
+    {
+        get => 0;
+        set
+        {
+            if (value != 0)
+            {
+                throw new NotSupportedException(
+                    $"{GetType().Name} does not support setting {nameof(ResourceConnectionHeadroom)}.");
+            }
+        }
+    }
 }

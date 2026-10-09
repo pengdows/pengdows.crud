@@ -3361,6 +3361,32 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return result ?? string.Empty;
     }
 
+    /// <summary>
+    /// How many connections this server is configured to let an ordinary client hold, or null when
+    /// that is unknown: the dialect has no probe, the server reports no limit, or the query failed
+    /// (for example for lack of privileges). Never throws — startup must not depend on the answer.
+    /// </summary>
+    internal async Task<int?> ProbeServerConnectionLimitAsync(ITrackedConnection connection, bool useAsync)
+    {
+        try
+        {
+            return await ProbeServerConnectionLimitCoreAsync(connection, useAsync).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Could not read the server's connection limit; treating it as unknown.");
+            return null;
+        }
+    }
+
+    /// <summary>Parses a server-reported connection count; null when it is not a number.</summary>
+    protected static int? ParseConnectionCount(object? value) =>
+        int.TryParse(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture), out var n) ? n : null;
+
+    /// <summary>Dialects with a readable server connection limit override this; the default is "unknown".</summary>
+    internal virtual Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
+        => Task.FromResult<int?>(null);
+
     public Task<string?> GetProductNameAsync(ITrackedConnection connection)
         => GetProductNameCoreAsync(connection, true);
 

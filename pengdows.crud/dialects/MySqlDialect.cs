@@ -341,6 +341,26 @@ internal class MySqlDialect : SqlDialect
     /// </summary>
     public override string GetCompoundInsertIdSuffix() => "; SELECT LAST_INSERT_ID()";
 
+    // The limit an ordinary client can use: max_connections, or the per-user limit when that is lower.
+    // MySQL permits one more connection than max_connections for CONNECTION_ADMIN/SUPER accounts, so
+    // nothing is subtracted for an admin reserve.
+    internal override async Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
+    {
+        var max = await ExecuteScalarQueryAsync(connection, "SELECT @@max_connections", ParseConnectionCount, useAsync)
+            .ConfigureAwait(false);
+        if (max is not > 0)
+        {
+            return null;
+        }
+
+        var perUser = await ExecuteScalarQueryAsync(
+                connection, "SELECT @@max_user_connections", ParseConnectionCount, useAsync,
+                onError: static _ => null)
+            .ConfigureAwait(false);
+
+        return perUser is > 0 && perUser.Value < max.Value ? perUser : max;
+    }
+
     public override string GetVersionQuery()
     {
         return "SELECT VERSION()";

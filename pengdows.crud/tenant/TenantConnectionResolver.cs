@@ -168,7 +168,9 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             SessionInitializationFailureMode = source.SessionInitializationFailureMode,
             MaxQueuedWrites = source.MaxQueuedWrites,
             MaxQueuedReads = source.MaxQueuedReads,
-            EnforceUniqueConnectionString = source.EnforceUniqueConnectionString
+            EnforceUniqueConnectionString = source.EnforceUniqueConnectionString,
+            ClampPoolsToServerConnectionLimit = source.ClampPoolsToServerConnectionLimit,
+            ResourceConnectionHeadroom = source.ResourceConnectionHeadroom
         };
     }
 
