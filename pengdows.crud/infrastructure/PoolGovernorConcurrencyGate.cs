@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.ExceptionServices;
 using System.Threading.Tasks.Sources;
 
@@ -78,24 +79,24 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             return 0;
         }
 
+        if (!waiter.WaitForCompletion(timeout))
+        {
+            // Timed out. If the cancellation wins it completes the waiter with the TimeoutException itself; if a
+            // grant, a dispose or a cancel got there first, that completion is already on its way.
+            Cancel(waiter, WaiterFailure.Timeout);
+            waiter.WaitForCompletion(Timeout.InfiniteTimeSpan);
+        }
+
+        // Disposing the registration waits out a cancellation callback that is still running, so none can fire at
+        // this waiter once it is reused for the next wait.
+        waiter.TryCancelRegistration();
         try
         {
-            if (!waiter.TaskCompletion!.Task.Wait(timeout))
-            {
-                if (Cancel(waiter, WaiterFailure.Timeout))
-                {
-                    throw new TimeoutException("The pool governor acquisition timed out.");
-                }
-
-                waiter.TaskCompletion.Task.GetAwaiter().GetResult();
-            }
-
-            return waiter.TaskCompletion.Task.GetAwaiter().GetResult();
+            return waiter.TakeSyncResult();
         }
-        catch (AggregateException ex) when (ex.InnerException is OperationCanceledException or ObjectDisposedException)
+        finally
         {
-            ExceptionDispatchInfo.Capture(ex.InnerException).Throw();
-            throw;
+            ReturnSyncWaiter(waiter);
         }
     }
 
@@ -254,7 +255,7 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
 
             var waiter = asyncWaiter
                 ? RentAsyncWaiter(cancellationToken)
-                : new Waiter(this, cancellationToken, asyncWaiter: false);
+                : RentSyncWaiter(cancellationToken);
             EnqueueWaiterUnderLock(waiter);
             Interlocked.Increment(ref _queueCount);
             waiter.RegisterCancellation();
@@ -341,6 +342,30 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             waiter.TryCancelRegistration();
             waiter.SetResult(0);
         }
+    }
+
+    // A thread blocks on one gate at a time, so one cached waiter per thread is all a blocking caller needs, and a
+    // blocked wait allocates nothing.
+    [ThreadStatic]
+    private static Waiter? t_syncWaiter;
+
+    private Waiter RentSyncWaiter(CancellationToken cancellationToken)
+    {
+        var waiter = t_syncWaiter;
+        if (waiter == null)
+        {
+            return new Waiter(this, cancellationToken, asyncWaiter: false);
+        }
+
+        t_syncWaiter = null;
+        waiter.Initialize(this, cancellationToken);
+        return waiter;
+    }
+
+    private static void ReturnSyncWaiter(Waiter waiter)
+    {
+        waiter.ReleaseForCache();
+        t_syncWaiter = waiter;
     }
 
     private Waiter RentAsyncWaiter(CancellationToken cancellationToken)
@@ -498,6 +523,14 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         private PoolGovernorConcurrencyGate _gate;
         private CancellationToken _cancellationToken;
 
+        // A blocking waiter completes through these instead of a Task: a flag, a result and a lock to park on.
+        // The completer sets them under the lock, so a parked thread cannot miss the wake-up.
+        private const int SyncSpinIterations = 12;
+        private readonly object? _syncLock;
+        private int _syncDone;
+        private int _syncResult;
+        private Exception? _syncException;
+
         internal Waiter(PoolGovernorConcurrencyGate gate, CancellationToken cancellationToken, bool asyncWaiter)
         {
             _gate = gate;
@@ -508,12 +541,11 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             }
             else
             {
-                TaskCompletion = new TaskCompletionSource<int>(TaskCreationOptions.RunContinuationsAsynchronously);
+                _syncLock = new object();
             }
         }
 
         internal CancellationToken CancellationToken => _cancellationToken;
-        internal TaskCompletionSource<int>? TaskCompletion { get; private set; }
         internal Waiter? Previous;
         internal Waiter? Next;
         internal bool IsQueued => Previous != null || Next != null || _gate._waiterHead == this;
@@ -522,9 +554,9 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
 
         internal void SetResult(int result)
         {
-            if (TaskCompletion != null)
+            if (_syncLock != null)
             {
-                TaskCompletion.TrySetResult(result);
+                CompleteSync(result, null);
             }
             else
             {
@@ -534,9 +566,9 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
 
         internal void SetException(Exception exception)
         {
-            if (TaskCompletion != null)
+            if (_syncLock != null)
             {
-                TaskCompletion.TrySetException(exception);
+                CompleteSync(0, exception);
             }
             else
             {
@@ -552,6 +584,104 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             _registration = default;
             Previous = null;
             Next = null;
+            _syncDone = 0;
+            _syncResult = 0;
+            _syncException = null;
+        }
+
+        // A cached waiter holds nothing from its last wait: not the gate, not the token.
+        internal void ReleaseForCache()
+        {
+            _gate = null!;
+            _cancellationToken = default;
+            _registration = default;
+            Previous = null;
+            Next = null;
+        }
+
+        private void CompleteSync(int result, Exception? exception)
+        {
+            lock (_syncLock!)
+            {
+                if (Volatile.Read(ref _syncDone) != 0)
+                {
+                    return;
+                }
+
+                _syncResult = result;
+                _syncException = exception;
+                Volatile.Write(ref _syncDone, 1);
+                Monitor.Pulse(_syncLock);
+            }
+        }
+
+        // Spins briefly, because a handoff is usually only microseconds away and a parked thread costs a kernel
+        // wake-up to resume, then parks. Returns false only if the timeout elapsed first.
+        internal bool WaitForCompletion(TimeSpan timeout)
+        {
+            if (Volatile.Read(ref _syncDone) != 0)
+            {
+                return true;
+            }
+
+            if (Environment.ProcessorCount > 1)
+            {
+                var spinner = new SpinWait();
+                for (var i = 0; i < SyncSpinIterations; i++)
+                {
+                    spinner.SpinOnce(sleep1Threshold: -1);
+                    if (Volatile.Read(ref _syncDone) != 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            lock (_syncLock!)
+            {
+                if (timeout == Timeout.InfiniteTimeSpan)
+                {
+                    while (Volatile.Read(ref _syncDone) == 0)
+                    {
+                        Monitor.Wait(_syncLock);
+                    }
+
+                    return true;
+                }
+
+                var end = Stopwatch.GetTimestamp() + (timeout.Ticks * Stopwatch.Frequency / TimeSpan.TicksPerSecond);
+                while (Volatile.Read(ref _syncDone) == 0)
+                {
+                    var remaining = end - Stopwatch.GetTimestamp();
+                    if (remaining <= 0)
+                    {
+                        return false;
+                    }
+
+                    var milliseconds = (remaining * 1000 + Stopwatch.Frequency - 1) / Stopwatch.Frequency;
+                    Monitor.Wait(_syncLock, (int)Math.Min(milliseconds, int.MaxValue));
+                }
+
+                return true;
+            }
+        }
+
+        // Takes the lock once so a completer still inside it has finished before this waiter can be reused, then
+        // returns the result, or throws what the completer recorded with its original stack.
+        internal int TakeSyncResult()
+        {
+            lock (_syncLock!)
+            {
+            }
+
+            var exception = _syncException;
+            var result = _syncResult;
+            if (exception != null)
+            {
+                ExceptionDispatchInfo.Capture(exception).Throw();
+            }
+
+            return result;
         }
 
         internal void ResetForReuse()
