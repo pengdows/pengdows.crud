@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.@internal;
@@ -65,7 +66,7 @@ public class TrackedWrapperClockReadTests
     }
 
     [Fact]
-    public void AReaderWithACollector_ReadsTheClockForItsLeaseAndItsFirstRowOnly_AndStillReportsBoth()
+    public void AReaderWithACollector_ReadsTheClockForItsLeaseItsFirstRowAndItsEnd_AndStillReportsBoth()
     {
         var clock = new CountingClock();
         var collector = new MetricsCollector(MetricsOptions.Default);
@@ -78,10 +79,37 @@ public class TrackedWrapperClockReadTests
 
         reader.Dispose();
 
-        Assert.Equal(2, clock.Reads); // the lease start, and the first row; the second row reads nothing
+        // The lease start, the first row, and the moment the lease ended; the second row reads nothing.
+        Assert.Equal(3, clock.Reads);
         var snapshot = collector.CreateSnapshot();
         Assert.True(snapshot.AvgReaderTimeToFirstRowMs >= 10, $"first row {snapshot.AvgReaderTimeToFirstRowMs} ms");
         Assert.True(snapshot.AvgReaderLeaseMs >= 10, $"lease {snapshot.AvgReaderLeaseMs} ms");
+    }
+
+    // Same frequency as the Stopwatch but an origin of its own, as any injected clock would have.
+    private sealed class OffsetClock : TimeProvider
+    {
+        public override long GetTimestamp() => Stopwatch.GetTimestamp() + 7_000_000_000_000_000L;
+    }
+
+    [Fact]
+    public void AReaderTimedByAClockWithAnotherOrigin_StillReportsSaneDurations()
+    {
+        var collector = new MetricsCollector(MetricsOptions.Default);
+        var reader = new TrackedReader(TwoRows(), new TrackedConnection(new fakeDbConnection()), new NoopDisposable(),
+            false, metricsCollector: collector, timeProvider: new OffsetClock());
+
+        Thread.Sleep(20);
+        while (reader.Read())
+        {
+        }
+
+        reader.Dispose();
+
+        // Every reading comes from the injected clock; mixing in the Stopwatch's own origin makes these nonsense.
+        var snapshot = collector.CreateSnapshot();
+        Assert.InRange(snapshot.AvgReaderLeaseMs, 10, 5_000);
+        Assert.InRange(snapshot.AvgReaderTimeToFirstRowMs, 10, 5_000);
     }
 
     [Fact]

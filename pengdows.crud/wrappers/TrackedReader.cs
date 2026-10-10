@@ -842,7 +842,8 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
             _metricsCollector.RecordRowsRead(_rowsRead);
         }
 
-        _metricsCollector.RecordReaderDurations(_leaseStartTimestamp, Volatile.Read(ref _firstRowTimestamp));
+        _metricsCollector.RecordReaderDurations(_leaseStartTimestamp, Volatile.Read(ref _firstRowTimestamp),
+            _timeProvider.GetTimestamp());
 
         var affected = _reader.RecordsAffected;
         if (affected > 0)

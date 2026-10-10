@@ -240,10 +240,10 @@ internal sealed class MetricsCollector
         NotifyUpdated();
     }
 
-    internal void RecordReaderDurations(long leaseStartTimestamp, long firstRowTimestamp)
+    // All three timestamps must come from one clock; the reader supplies the moment the lease ended so that they do.
+    internal void RecordReaderDurations(long leaseStartTimestamp, long firstRowTimestamp, long completedTimestamp)
     {
-        _parent?.RecordReaderDurations(leaseStartTimestamp, firstRowTimestamp);
-        var completedTimestamp = Stopwatch.GetTimestamp();
+        _parent?.RecordReaderDurations(leaseStartTimestamp, firstRowTimestamp, completedTimestamp);
         var leaseMs = ToMilliseconds(completedTimestamp - leaseStartTimestamp);
         if (leaseMs <= 0d)
         {

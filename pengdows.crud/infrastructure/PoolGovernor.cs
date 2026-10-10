@@ -4,8 +4,7 @@ using pengdows.crud.enums;
 // PURPOSE: Pool governor limiting concurrent connection usage.
 //
 // AI SUMMARY:
-// - Controls maximum concurrent connections via PoolGovernorConcurrencyGate, retaining the
-//   SemaphoreSlim path only for explicitly shared admission controls used by legacy callers.
+// - Controls maximum concurrent connections via PoolGovernorConcurrencyGate, the only admission primitive.
 // - Thread-safe: all counters use Interlocked operations.
 // - Key methods:
 //   * Acquire(ct): Sync slot acquisition with timeout
@@ -786,8 +785,13 @@ internal sealed class PoolGovernor : IDisposable
         return TimeSpan.FromSeconds((double)remainingTicks / Stopwatch.Frequency);
     }
 
+    // Far beyond any real timeout, and small enough that adding it to the current timestamp cannot overflow.
+    private const long MaxTimeoutStopwatchTicks = long.MaxValue / 4;
+
+    // Capped so that TimeSpan.MaxValue ("wait as long as it takes") is a long wait and not a cast that overflows,
+    // which on some runtimes is a one-tick budget that expires at once.
     private static long ConvertTimeoutToStopwatchTicks(TimeSpan timeout) =>
-        Math.Max(1L, (long)(timeout.TotalSeconds * Stopwatch.Frequency));
+        Math.Max(1L, (long)Math.Min(timeout.TotalSeconds * Stopwatch.Frequency, MaxTimeoutStopwatchTicks));
 
     private bool ShouldUseTurnstileGate(bool writerTurnstileInterestRegistered)
     {

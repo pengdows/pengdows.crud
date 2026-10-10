@@ -67,6 +67,48 @@ public class PoolGovernorCancelledTokenContractTests
         }
     }
 
+    // A writer registers its interest on the shared turnstile while it tries; readers queue behind the turnstile only
+    // while that interest is registered. A failed attempt that kept its interest would send every later reader
+    // through the turnstile for good, so after each kind of failure a reader must still bypass a held turnstile.
+    [Fact]
+    public async Task AFailedWriterAttempt_LeavesNoWriterInterestBehind()
+    {
+        using var turnstile = new SemaphoreSlim(1, 1);
+        using var cancellation = new CancellationTokenSource();
+        using var writer = new PoolGovernor(PoolLabel.Writer, "interest-writer", 1, Timeout,
+            turnstile: turnstile, holdTurnstile: true, timeProvider: new CancellingClock(cancellation));
+        using var reader = new PoolGovernor(PoolLabel.Reader, "interest-reader", 1, TimeSpan.FromSeconds(2),
+            turnstile: turnstile, holdTurnstile: false);
+
+        using var alreadyCancelled = new CancellationTokenSource();
+        alreadyCancelled.Cancel();
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await writer.AcquireAsync(alreadyCancelled.Token));
+        Assert.Throws<OperationCanceledException>(() => writer.Acquire(alreadyCancelled.Token));
+        AssertTheReaderBypassesAHeldTurnstile(turnstile, reader);
+
+        // Cancelled while the attempt was queued behind a held slot: the clock cancels on its first reading.
+        var held = writer.Acquire();
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await writer.AcquireAsync(cancellation.Token));
+        held.Dispose();
+        AssertTheReaderBypassesAHeldTurnstile(turnstile, reader);
+    }
+
+    private static void AssertTheReaderBypassesAHeldTurnstile(SemaphoreSlim turnstile, PoolGovernor reader)
+    {
+        Assert.True(turnstile.Wait(0), "The turnstile was left held.");
+        try
+        {
+            var watch = Stopwatch.StartNew();
+            reader.Acquire().Dispose();
+            Assert.True(watch.Elapsed < TimeSpan.FromSeconds(1),
+                "The reader queued behind the turnstile: a failed writer attempt left its interest registered.");
+        }
+        finally
+        {
+            turnstile.Release();
+        }
+    }
+
     [Fact]
     public async Task AsyncAcquire_CancelledBetweenTheImmediateAndTheQueuedProbe_StillThrowsTaskCanceledException()
     {

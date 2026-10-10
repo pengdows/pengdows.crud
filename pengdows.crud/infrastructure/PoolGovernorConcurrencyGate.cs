@@ -59,6 +59,8 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             : Math.Max(Volatile.Read(ref _available), 0);
     }
 
+    private const long MaxTimerMilliseconds = 4_294_967_294;
+
     internal int RecycledWaiterCount => Volatile.Read(ref _recycledWaiters);
     private int _recycledWaiters;
 
@@ -88,19 +90,16 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
                 Cancel(waiter, WaiterFailure.Timeout);
                 waiter.WaitForCompletion(Timeout.InfiniteTimeSpan);
             }
+
+            // Disposing the registration waits out a cancellation callback that is still running, so none can fire at
+            // this waiter once it is reused for the next wait.
+            waiter.TryCancelRegistration();
+            return waiter.TakeSyncResult();
         }
         catch (ThreadInterruptedException)
         {
             AbandonInterruptedWait(waiter);
             throw;
-        }
-
-        // Disposing the registration waits out a cancellation callback that is still running, so none can fire at
-        // this waiter once it is reused for the next wait.
-        waiter.TryCancelRegistration();
-        try
-        {
-            return waiter.TakeSyncResult();
         }
         finally
         {
@@ -134,7 +133,10 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
     internal async ValueTask<int> AcquireAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
     {
         ValidateTimeout(timeout);
-        if (timeout == Timeout.InfiniteTimeSpan)
+
+        // CancelAfter cannot hold more than about 49.7 days, and nobody waits that long for a connection, so a
+        // longer timeout is treated as none rather than thrown out of the timer.
+        if (timeout == Timeout.InfiniteTimeSpan || timeout.TotalMilliseconds > MaxTimerMilliseconds)
         {
             return await AcquireAsync(cancellationToken).ConfigureAwait(false);
         }
@@ -182,7 +184,11 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         return limit;
     }
 
-    internal void Release(int permit)
+    internal void Release(int permit) => Complete(ReleaseUnderLock(), null);
+
+    // Gives the permit back under the lock and returns the waiter, if any, that it went to. Interrupts are only
+    // raised where this blocks, entering the lock, before anything has changed.
+    private Waiter? ReleaseUnderLock()
     {
         Waiter? handedOff = null;
         Waiter? promoted = null;
@@ -190,7 +196,7 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         {
             if (Volatile.Read(ref _active) == 0)
             {
-                return;
+                return null;
             }
 
             if (_singleSlot)
@@ -205,7 +211,7 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             }
         }
 
-        Complete(handedOff ?? promoted, null);
+        return handedOff ?? promoted;
     }
 
     public void Dispose()
@@ -312,35 +318,85 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
 
     // A blocked thread was interrupted. Its waiter must leave the queue, or a later grant would go to a caller that is
     // gone and that permit would be lost for good; if a grant got there first, the permit goes back to the gate.
+    //
+    // Every step that can block (the gate's lock, a wait for a completion in flight, a registration disposing) can be
+    // interrupted again, and the interrupt being handled is the one that gets rethrown, so each step is retried until
+    // it has run: a second interrupt must not strand the waiter in the queue or keep a permit that was granted.
+    // Each step is safe to run again, because an interrupt is only raised where a step blocks, before its effect.
     private void AbandonInterruptedWait(Waiter waiter)
     {
+        var deferral = new InterruptDeferral();
         TestOnlyBeforeInterruptedWaitIsAbandoned?.Invoke();
-        Cancel(waiter, WaiterFailure.Canceled);
-        waiter.WaitForCompletion(Timeout.InfiniteTimeSpan);
-        waiter.TryCancelRegistration();
+        if (deferral.Run(() => TryClaimForCancel(waiter)))
+        {
+            deferral.Run(() => FinishCancel(waiter, WaiterFailure.Canceled));
+        }
+
+        deferral.Run(() => waiter.WaitForCompletion(Timeout.InfiniteTimeSpan));
+        deferral.Run(waiter.TryCancelRegistration);
+        GiveBackAGrant(waiter, deferral);
+    }
+
+    private void GiveBackAGrant(Waiter waiter, InterruptDeferral deferral)
+    {
         try
         {
-            Release(waiter.TakeSyncResult());
+            deferral.Run(waiter.TakeSyncResult);
         }
         catch (OperationCanceledException)
         {
-            // The cancellation above won: nothing was granted.
+            return; // the cancellation won: nothing was granted
         }
         catch (TimeoutException)
         {
-            // The wait had already timed out: nothing was granted.
+            return; // the wait had already timed out: nothing was granted
         }
         catch (ObjectDisposedException)
         {
-            // The gate was disposed: there is nothing to give back to.
+            return; // the gate was disposed: there is nothing to give back to
         }
-        finally
+
+        TestOnlyBeforeAGrantIsGivenBack?.Invoke();
+        var next = deferral.Run(ReleaseUnderLock);
+        deferral.Run(() => Complete(next, null));
+    }
+
+    private sealed class InterruptDeferral
+    {
+        internal T Run<T>(Func<T> step)
         {
-            ReturnSyncWaiter(waiter);
+            while (true)
+            {
+                try
+                {
+                    return step();
+                }
+                catch (ThreadInterruptedException)
+                {
+                    // Interrupted again while leaving: finish leaving first.
+                }
+            }
         }
+
+        internal void Run(Action step) => Run(() =>
+        {
+            step();
+            return 0;
+        });
     }
 
     private bool Cancel(Waiter waiter, WaiterFailure failure)
+    {
+        if (!TryClaimForCancel(waiter))
+        {
+            return false;
+        }
+
+        FinishCancel(waiter, failure);
+        return true;
+    }
+
+    private bool TryClaimForCancel(Waiter waiter)
     {
         lock (_sync)
         {
@@ -353,14 +409,18 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             {
                 RemoveWaiterUnderLock(waiter);
             }
-        }
 
+            return true;
+        }
+    }
+
+    private void FinishCancel(Waiter waiter, WaiterFailure failure)
+    {
         waiter.TryCancelRegistration();
         waiter.SetException(failure == WaiterFailure.Timeout
             ? new TimeoutException("The pool governor acquisition timed out.")
             : new OperationCanceledException(waiter.CancellationToken));
         TestOnlyAfterCancelCompleted?.Invoke();
-        return true;
     }
 
     /// <summary>
@@ -374,6 +434,15 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
     /// exactly that window. Never set outside tests.
     /// </summary>
     internal Action? TestOnlyBeforeInterruptedWaitIsAbandoned { get; set; }
+
+    /// <summary>
+    /// Test-only hook invoked on an interrupted thread that has found a permit granted to it, just before it gives the
+    /// permit back. Never set outside tests.
+    /// </summary>
+    internal Action? TestOnlyBeforeAGrantIsGivenBack { get; set; }
+
+    /// <summary>The gate's lock, so a test can hold it and make a thread that needs it block. Never used outside tests.</summary>
+    internal object TestOnlySyncRoot => _sync;
 
     private static void Complete(Waiter? handedOff, List<Waiter>? released)
     {

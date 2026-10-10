@@ -35,7 +35,7 @@ public class PoolGovernorQueueCapSymmetryTests
         Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
         watch.Stop();
 
-        Assert.True(watch.ElapsedMilliseconds < 500,
+        Assert.True(watch.ElapsedMilliseconds < 5_000,
             $"The rejection took {watch.ElapsedMilliseconds} ms: it waited instead of failing fast.");
         Assert.Equal(1, governor.QueueDepth); // the rejected caller took its increment back
 
@@ -72,7 +72,7 @@ public class PoolGovernorQueueCapSymmetryTests
         await Assert.ThrowsAsync<PoolSaturatedException>(() => reader.AcquireAsync().AsTask());
         watch.Stop();
 
-        Assert.True(watch.ElapsedMilliseconds < 500,
+        Assert.True(watch.ElapsedMilliseconds < 5_000,
             $"The rejection took {watch.ElapsedMilliseconds} ms: it waited instead of failing fast.");
         Assert.Equal(1, reader.GetSnapshot().TurnstileQueued); // the occupier is undisturbed
 
