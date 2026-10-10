@@ -960,12 +960,7 @@ adding one back is a minor release): `SupportsPaging` (the public `AppendPaging`
 | API-009 | The 99 public classes and types of `pengdows.crud` shipped in 2.0.5 | Not yet audited: which could be internal. |
 | API-010 | `ITrackedReader : IDataReader, IDataRecord` (shipped in 2.0.5, returned by `ExecuteReaderAsync`) | Decision for 3.0, not a defect: being an `IDataReader` lets the governed lease feed `DataTable.Load` and the mappers, but it also puts the whole `IDataReader` surface (`Close`, `NextResult`, `GetSchemaTable`, ...) on a lease. Options: keep and document; or replace the inheritance with a curated reader abstraction. Breaking either way. |
 
-**Guards.** Now: `PublicSurfaceGuardTests` (the pull-backs above, a ratchet on raw ADO.NET *outputs* that allows exactly the three `DataSource` properties, and a ratchet on raw ADO.NET *inheritance* that allows exactly `ITrackedReader`). Planned:
-API-GUARD-1 `Microsoft.CodeAnalysis.PublicApiAnalyzers` on the three shipped projects, `PublicAPI.Shipped.txt`
-seeded from 2.0.5 and `PublicAPI.Unshipped.txt` holding only approved additions with a reason, so an undeclared
-public or protected member fails the build; API-GUARD-2 package validation against the last shipped version
-(`EnablePackageValidation`, baseline 2.0.5, then 2.0.6); API-GUARD-3 an analyzer rule in `pengdows.crud.analyzers`
-that rejects a raw ADO.NET type in a public output. The rules are in REVIEW_POLICY.md 4D and the PR template.
+**Guards.** All in the build as of 2026-10-10. `PublicSurfaceGuardTests` pins the pull-backs above, ratchets raw ADO.NET *outputs* (allows exactly the three `DataSource` properties) and raw ADO.NET *inheritance* (allows exactly `ITrackedReader`). API-GUARD-1 `Microsoft.CodeAnalysis.PublicApiAnalyzers` runs on the three shipped projects (`Directory.Build.props`); `PublicAPI.Shipped.txt` was seeded from the v2.0.5 tag and `PublicAPI.Unshipped.txt` holds what 2.0.6 added (92 abstractions, 68 core, 189 fakeDb members, plus two fakeDb overrides whose parameter names changed from `_` to `behavior`/`cancellationToken` when they started honouring them; both are `*REMOVED*`/re-added, binary compatible). An undeclared public or protected member fails the build (verified by adding a stray public type). RS0026/RS0027/RS0041 are off: they judge designs that already shipped. API-GUARD-2 package validation was already on (`EnablePackageValidation`, baseline 2.0.5; bump to 2.0.6 after release together with moving Unshipped into Shipped); `dotnet pack` is clean for all three. API-GUARD-3, an analyzer rule for raw ADO.NET outputs, was dropped: the guard tests plus RS0016 cover it without a second mechanism. The rules are in REVIEW_POLICY.md 4D and the PR template.
 
 ---
 

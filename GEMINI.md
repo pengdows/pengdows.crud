@@ -340,6 +340,7 @@ The project CI enforces a minimum of **83% line coverage**. However, for all new
 All public APIs must be exposed via interfaces in `pengdows.crud.abstractions`. Implementation details should remain internal to `pengdows.crud` whenever possible, and new public constructors should be introduced only for clear SDK-use scenarios.
 
 Expose only what needs exposing: public is permanent (adding costs a minor version, removing a major), so every new public or protected member needs a consumer that cannot do without it and a recorded reason. Raw ADO.NET objects (`DbConnection`, `DbCommand`, `DbDataReader`, `DbTransaction`, `DbDataSource`) never appear in public outputs and no public type inherits one; the sanctioned form is a governed lease wrapper such as `ITrackedReader`. fakeDb may grow freely, but provider-shaped test doubles stay `internal`. See REVIEW_POLICY.md §4D.
+- **Every public or protected member is declared** in the project's `PublicAPI.Shipped.txt` (the 2.0.5 surface) or `PublicAPI.Unshipped.txt` (additions since, each with a reason). An undeclared one fails the build (RS0016); adding a line there is a deliberate, reviewed act.
 
 ## Building and Testing
 

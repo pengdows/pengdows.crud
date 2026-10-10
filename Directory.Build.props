@@ -43,4 +43,21 @@
         <EnablePackageValidation>true</EnablePackageValidation>
         <PackageValidationBaselineVersion>2.0.5</PackageValidationBaselineVersion>
     </PropertyGroup>
+
+    <!--
+      Public-API guard: every public or protected member of the three shipped packages must be listed in
+      PublicAPI.Shipped.txt (seeded from 2.0.5) or PublicAPI.Unshipped.txt (added since, each with a reason in
+      docs/FUTURE_WORK.md). A new public member fails the build (RS0016) until it is declared, so public API
+      cannot grow by accident. See REVIEW_POLICY.md 4D.
+    -->
+    <ItemGroup Condition="'$(MSBuildProjectName)' == 'pengdows.crud' Or '$(MSBuildProjectName)' == 'pengdows.crud.abstractions' Or '$(MSBuildProjectName)' == 'pengdows.crud.fakeDb'">
+        <!-- RS0026/RS0027 (overload shape) and RS0041 (oblivious nullability) judge designs that already
+             shipped; the guard is for what is declared (RS0016/RS0017), not for those. -->
+        <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="3.3.4" PrivateAssets="all"/>
+        <AdditionalFiles Include="$(MSBuildProjectDirectory)/PublicAPI.Shipped.txt"/>
+        <AdditionalFiles Include="$(MSBuildProjectDirectory)/PublicAPI.Unshipped.txt"/>
+    </ItemGroup>
+    <PropertyGroup Condition="'$(MSBuildProjectName)' == 'pengdows.crud' Or '$(MSBuildProjectName)' == 'pengdows.crud.abstractions' Or '$(MSBuildProjectName)' == 'pengdows.crud.fakeDb'">
+        <NoWarn>$(NoWarn);RS0026;RS0027;RS0041</NoWarn>
+    </PropertyGroup>
 </Project>

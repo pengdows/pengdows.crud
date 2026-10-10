@@ -1,0 +1,93 @@
+#nullable enable
+pengdows.crud.IDataSourceInformation.ParsedVersion.get -> System.Version?
+pengdows.crud.IDatabaseContextFactory.CreateAsync(pengdows.crud.configuration.IDatabaseContextConfiguration! configuration, System.Data.Common.DbProviderFactory! factory, Microsoft.Extensions.Logging.ILoggerFactory! loggerFactory, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.IDatabaseContext!>!
+pengdows.crud.IPrimaryKeyTableGateway<TEntity>.AuditCreationPolicy.get -> pengdows.crud.enums.AuditCreationPolicy
+pengdows.crud.IPrimaryKeyTableGateway<TEntity>.AuditCreationPolicy.init -> void
+pengdows.crud.IPrimaryKeyTableGateway<TEntity>.ColumnName(string! propertyName) -> string!
+pengdows.crud.ITableGateway<TEntity, TRowID>.AuditCreationPolicy.get -> pengdows.crud.enums.AuditCreationPolicy
+pengdows.crud.ITableGateway<TEntity, TRowID>.AuditCreationPolicy.init -> void
+pengdows.crud.ITableGateway<TEntity, TRowID>.ColumnName(string! propertyName) -> string!
+pengdows.crud.ITransactionContext.ReleaseSavepointAsync(string! name) -> System.Threading.Tasks.ValueTask
+pengdows.crud.ITransactionContext.ReleaseSavepointAsync(string! name, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask
+pengdows.crud.configuration.IDatabaseContextConfiguration.ClampPoolsToServerConnectionLimit.get -> bool
+pengdows.crud.configuration.IDatabaseContextConfiguration.ClampPoolsToServerConnectionLimit.set -> void
+pengdows.crud.configuration.IDatabaseContextConfiguration.EnforceUniqueConnectionString.get -> bool
+pengdows.crud.configuration.IDatabaseContextConfiguration.EnforceUniqueConnectionString.set -> void
+pengdows.crud.configuration.IDatabaseContextConfiguration.MaxQueuedReads.get -> int?
+pengdows.crud.configuration.IDatabaseContextConfiguration.MaxQueuedReads.set -> void
+pengdows.crud.configuration.IDatabaseContextConfiguration.MaxQueuedWrites.get -> int?
+pengdows.crud.configuration.IDatabaseContextConfiguration.MaxQueuedWrites.set -> void
+pengdows.crud.configuration.IDatabaseContextConfiguration.ResourceConnectionHeadroom.get -> int
+pengdows.crud.configuration.IDatabaseContextConfiguration.ResourceConnectionHeadroom.set -> void
+pengdows.crud.configuration.IDatabaseContextConfiguration.SessionInitializationFailureMode.get -> pengdows.crud.enums.SessionInitializationFailureMode?
+pengdows.crud.configuration.IDatabaseContextConfiguration.SessionInitializationFailureMode.set -> void
+pengdows.crud.dialects.ISqlDialect.PreservesTrailingWhitespace.get -> bool
+pengdows.crud.dialects.ISqlDialect.RequiresMergeStatementTerminator.get -> bool
+pengdows.crud.dialects.ISqlDialect.SavepointCapabilities.get -> pengdows.crud.enums.SavepointCapabilities
+pengdows.crud.enums.AuditCreationPolicy
+pengdows.crud.enums.AuditCreationPolicy.Authoritative = 1 -> pengdows.crud.enums.AuditCreationPolicy
+pengdows.crud.enums.AuditCreationPolicy.PreserveExplicitValues = 0 -> pengdows.crud.enums.AuditCreationPolicy
+pengdows.crud.enums.DbErrorCategory.AmbiguousResult = 6 -> pengdows.crud.enums.DbErrorCategory
+pengdows.crud.enums.DbMode.PreventDatabaseUnload = 1 -> pengdows.crud.enums.DbMode
+pengdows.crud.enums.ProcWrappingStyle.Informix = 6 -> pengdows.crud.enums.ProcWrappingStyle
+pengdows.crud.enums.SavepointCapabilities
+pengdows.crud.enums.SavepointCapabilities.Create = 1 -> pengdows.crud.enums.SavepointCapabilities
+pengdows.crud.enums.SavepointCapabilities.None = 0 -> pengdows.crud.enums.SavepointCapabilities
+pengdows.crud.enums.SavepointCapabilities.Release = 4 -> pengdows.crud.enums.SavepointCapabilities
+pengdows.crud.enums.SavepointCapabilities.Rollback = 2 -> pengdows.crud.enums.SavepointCapabilities
+pengdows.crud.enums.SessionInitializationFailureMode
+pengdows.crud.enums.SessionInitializationFailureMode.BestEffort = 0 -> pengdows.crud.enums.SessionInitializationFailureMode
+pengdows.crud.enums.SessionInitializationFailureMode.FailClosed = 1 -> pengdows.crud.enums.SessionInitializationFailureMode
+pengdows.crud.enums.SupportedDatabase.Access = 4194304 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.enums.SupportedDatabase.Db2 = 16384 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.enums.SupportedDatabase.FlatFile = 32768 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.enums.SupportedDatabase.Informix = 524288 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.enums.SupportedDatabase.InterBase = 2097152 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.enums.SupportedDatabase.SapHana = 1048576 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.enums.SupportedDatabase.SingleStore = 65536 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.enums.SupportedDatabase.Spanner = 262144 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.enums.SupportedDatabase.SybaseASE = 131072 -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.exceptions.IReadOnlyViolation
+pengdows.crud.metrics.DatabaseMetrics.AvgReaderConsumptionMs.get -> double
+pengdows.crud.metrics.DatabaseMetrics.AvgReaderConsumptionMs.init -> void
+pengdows.crud.metrics.DatabaseMetrics.AvgReaderLeaseMs.get -> double
+pengdows.crud.metrics.DatabaseMetrics.AvgReaderLeaseMs.init -> void
+pengdows.crud.metrics.DatabaseMetrics.AvgReaderTimeToFirstRowMs.get -> double
+pengdows.crud.metrics.DatabaseMetrics.AvgReaderTimeToFirstRowMs.init -> void
+pengdows.crud.metrics.DatabaseMetrics.CommandPercentilesAvailable.get -> bool
+pengdows.crud.metrics.DatabaseMetrics.CommandPercentilesAvailable.init -> void
+pengdows.crud.metrics.DatabaseMetrics.ModeTimeouts.get -> long
+pengdows.crud.metrics.DatabaseMetrics.ModeTimeouts.init -> void
+pengdows.crud.metrics.DatabaseMetrics.ModeWaits.get -> long
+pengdows.crud.metrics.DatabaseMetrics.ModeWaits.init -> void
+pengdows.crud.metrics.DatabaseMetrics.ReadPoolTimeouts.get -> long
+pengdows.crud.metrics.DatabaseMetrics.ReadPoolTimeouts.init -> void
+pengdows.crud.metrics.DatabaseMetrics.ReadPoolWaits.get -> long
+pengdows.crud.metrics.DatabaseMetrics.ReadPoolWaits.init -> void
+pengdows.crud.metrics.DatabaseMetrics.ReadRequests.get -> long
+pengdows.crud.metrics.DatabaseMetrics.ReadRequests.init -> void
+pengdows.crud.metrics.DatabaseMetrics.TransactionPercentilesAvailable.get -> bool
+pengdows.crud.metrics.DatabaseMetrics.TransactionPercentilesAvailable.init -> void
+pengdows.crud.metrics.DatabaseMetrics.WritePoolTimeouts.get -> long
+pengdows.crud.metrics.DatabaseMetrics.WritePoolTimeouts.init -> void
+pengdows.crud.metrics.DatabaseMetrics.WritePoolWaits.get -> long
+pengdows.crud.metrics.DatabaseMetrics.WritePoolWaits.init -> void
+pengdows.crud.metrics.DatabaseMetrics.WriteRequests.get -> long
+pengdows.crud.metrics.DatabaseMetrics.WriteRequests.init -> void
+pengdows.crud.metrics.DatabaseRoleMetrics.AvgReaderConsumptionMs.get -> double
+pengdows.crud.metrics.DatabaseRoleMetrics.AvgReaderConsumptionMs.init -> void
+pengdows.crud.metrics.DatabaseRoleMetrics.AvgReaderLeaseMs.get -> double
+pengdows.crud.metrics.DatabaseRoleMetrics.AvgReaderLeaseMs.init -> void
+pengdows.crud.metrics.DatabaseRoleMetrics.AvgReaderTimeToFirstRowMs.get -> double
+pengdows.crud.metrics.DatabaseRoleMetrics.AvgReaderTimeToFirstRowMs.init -> void
+pengdows.crud.metrics.DatabaseRoleMetrics.CommandPercentilesAvailable.get -> bool
+pengdows.crud.metrics.DatabaseRoleMetrics.CommandPercentilesAvailable.init -> void
+pengdows.crud.metrics.DatabaseRoleMetrics.TransactionPercentilesAvailable.get -> bool
+pengdows.crud.metrics.DatabaseRoleMetrics.TransactionPercentilesAvailable.init -> void
+pengdows.crud.metrics.PoolStatisticsSnapshot.TotalWaits.get -> long
+pengdows.crud.metrics.PoolStatisticsSnapshot.TotalWaits.init -> void
+pengdows.crud.tenant.ITenantContextLease
+pengdows.crud.tenant.ITenantContextLease.Context.get -> pengdows.crud.IDatabaseContext!
+pengdows.crud.tenant.ITenantContextRegistry.AcquireLease(string! tenant) -> pengdows.crud.tenant.ITenantContextLease!
+pengdows.crud.tenant.ITenantContextRegistry.AcquireLeaseAsync(string! tenant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.tenant.ITenantContextLease!>!
+pengdows.crud.tenant.ITenantContextRegistry.GetContextAsync(string! tenant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.IDatabaseContext!>!

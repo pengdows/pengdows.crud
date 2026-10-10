@@ -1,0 +1,69 @@
+#nullable enable
+override pengdows.crud.DatabaseContext.ValidateCanCreateContainer() -> void
+override pengdows.crud.types.valueobjects.HierarchyId.Equals(object? obj) -> bool
+override pengdows.crud.types.valueobjects.HierarchyId.GetHashCode() -> int
+override pengdows.crud.types.valueobjects.HierarchyId.ToString() -> string!
+pengdows.crud.BaseTableGateway<TEntity>.AuditCreationPolicy.get -> pengdows.crud.enums.AuditCreationPolicy
+pengdows.crud.BaseTableGateway<TEntity>.AuditCreationPolicy.init -> void
+pengdows.crud.BaseTableGateway<TEntity>.ColumnName(string! propertyName) -> string!
+pengdows.crud.DataReaderMapper
+pengdows.crud.DatabaseContextColumnNameExtensions
+pengdows.crud.TransactionContext.ReleaseSavepointAsync(string! name) -> System.Threading.Tasks.ValueTask
+pengdows.crud.TransactionContext.ReleaseSavepointAsync(string! name, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask
+pengdows.crud.configuration.DatabaseContextConfiguration.ClampPoolsToServerConnectionLimit.get -> bool
+pengdows.crud.configuration.DatabaseContextConfiguration.ClampPoolsToServerConnectionLimit.set -> void
+pengdows.crud.configuration.DatabaseContextConfiguration.EnforceUniqueConnectionString.get -> bool
+pengdows.crud.configuration.DatabaseContextConfiguration.EnforceUniqueConnectionString.set -> void
+pengdows.crud.configuration.DatabaseContextConfiguration.MaxQueuedReads.get -> int?
+pengdows.crud.configuration.DatabaseContextConfiguration.MaxQueuedReads.set -> void
+pengdows.crud.configuration.DatabaseContextConfiguration.MaxQueuedWrites.get -> int?
+pengdows.crud.configuration.DatabaseContextConfiguration.MaxQueuedWrites.set -> void
+pengdows.crud.configuration.DatabaseContextConfiguration.ResourceConnectionHeadroom.get -> int
+pengdows.crud.configuration.DatabaseContextConfiguration.ResourceConnectionHeadroom.set -> void
+pengdows.crud.configuration.DatabaseContextConfiguration.SessionInitializationFailureMode.get -> pengdows.crud.enums.SessionInitializationFailureMode?
+pengdows.crud.configuration.DatabaseContextConfiguration.SessionInitializationFailureMode.set -> void
+pengdows.crud.configuration.DbProviderLoaderServiceCollectionExtensions
+pengdows.crud.exceptions.AmbiguousResultException
+pengdows.crud.exceptions.AmbiguousResultException.AmbiguousResultException(string! message, pengdows.crud.enums.SupportedDatabase database, System.Exception? innerException = null, string? sqlState = null, int? errorCode = null, string? constraintName = null, bool? isTransient = false) -> void
+pengdows.crud.exceptions.FileLockContentionException
+pengdows.crud.exceptions.FileLockContentionException.FileLockContentionException(string! message, pengdows.crud.enums.SupportedDatabase database, System.Exception? innerException = null, string? sqlState = null, int? errorCode = null) -> void
+pengdows.crud.exceptions.ReadOnlyAccessException
+pengdows.crud.exceptions.ReadOnlyAccessException.ReadOnlyAccessException(string! message) -> void
+pengdows.crud.exceptions.ReadOnlyContextException
+pengdows.crud.exceptions.ReadOnlyContextException.ReadOnlyContextException(string! message) -> void
+pengdows.crud.exceptions.TooManyConnectionsException
+pengdows.crud.exceptions.TooManyConnectionsException.TooManyConnectionsException(string! message, pengdows.crud.enums.SupportedDatabase database, System.Exception? innerException = null, string? sqlState = null, int? errorCode = null) -> void
+pengdows.crud.tenant.MultiTenantOptions.MaxTenantCount.get -> int?
+pengdows.crud.tenant.MultiTenantOptions.MaxTenantCount.set -> void
+pengdows.crud.tenant.TenantContextRegistry.AcquireLease(string! tenant) -> pengdows.crud.tenant.ITenantContextLease!
+pengdows.crud.tenant.TenantContextRegistry.AcquireLeaseAsync(string! tenant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.tenant.ITenantContextLease!>!
+pengdows.crud.tenant.TenantContextRegistry.GetContextAsync(string! tenant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.IDatabaseContext!>!
+pengdows.crud.types.valueobjects.HierarchyId
+pengdows.crud.types.valueobjects.HierarchyId.CompareTo(pengdows.crud.types.valueobjects.HierarchyId other) -> int
+pengdows.crud.types.valueobjects.HierarchyId.Equals(pengdows.crud.types.valueobjects.HierarchyId other) -> bool
+pengdows.crud.types.valueobjects.HierarchyId.GetAncestor(int n) -> pengdows.crud.types.valueobjects.HierarchyId
+pengdows.crud.types.valueobjects.HierarchyId.HierarchyId() -> void
+pengdows.crud.types.valueobjects.HierarchyId.IsDescendantOf(pengdows.crud.types.valueobjects.HierarchyId parent) -> bool
+pengdows.crud.types.valueobjects.HierarchyId.Level.get -> int
+pengdows.crud.types.valueobjects.HierarchyId.ToSqlServerBytes() -> byte[]!
+pengdows.crud.types.valueobjects.Range<T>.IsEmptyRange.get -> bool
+static pengdows.crud.DataReaderMapper.LoadAsync<T>(pengdows.crud.wrappers.ITrackedReader! reader, pengdows.crud.IMapperOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.List<T!>!>
+static pengdows.crud.DataReaderMapper.LoadObjectsFromDataReaderAsync<T>(pengdows.crud.wrappers.ITrackedReader! reader, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.ValueTask<System.Collections.Generic.List<T!>!>
+static pengdows.crud.DataReaderMapper.StreamAsync<T>(pengdows.crud.wrappers.ITrackedReader! reader, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<T!>!
+static pengdows.crud.DataReaderMapper.StreamAsync<T>(pengdows.crud.wrappers.ITrackedReader! reader, pengdows.crud.IMapperOptions! options, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Collections.Generic.IAsyncEnumerable<T!>!
+static pengdows.crud.DatabaseContext.CreateAsync(pengdows.crud.configuration.IDatabaseContextConfiguration! configuration, System.Data.Common.DbProviderFactory! factory, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.DatabaseContext!>!
+static pengdows.crud.DatabaseContext.CreateAsync(string! connectionString, System.Data.Common.DbProviderFactory! factory, string? readOnlyConnectionString = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.DatabaseContext!>!
+static pengdows.crud.DatabaseContext.CreateAsync(string! connectionString, string! providerFactory, pengdows.crud.enums.DbMode mode = pengdows.crud.enums.DbMode.Best, pengdows.crud.enums.ReadWriteMode readWriteMode = pengdows.crud.enums.ReadWriteMode.ReadWrite, Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory = null, string? readOnlyConnectionString = null, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.DatabaseContext!>!
+static pengdows.crud.DatabaseContextColumnNameExtensions.ColumnName<TEntity>(this pengdows.crud.IDatabaseContext! context, string! propertyName) -> string!
+static pengdows.crud.configuration.DbProviderLoaderServiceCollectionExtensions.AddDbProviderLoading(this Microsoft.Extensions.DependencyInjection.IServiceCollection! services, Microsoft.Extensions.Configuration.IConfiguration! configuration, Microsoft.Extensions.Logging.ILogger<pengdows.crud.configuration.DbProviderLoader!>? logger = null) -> Microsoft.Extensions.DependencyInjection.IServiceCollection!
+static pengdows.crud.types.valueobjects.HierarchyId.FromSqlServerBytes(System.ReadOnlySpan<byte> bytes) -> pengdows.crud.types.valueobjects.HierarchyId
+static pengdows.crud.types.valueobjects.HierarchyId.Parse(string! text) -> pengdows.crud.types.valueobjects.HierarchyId
+static pengdows.crud.types.valueobjects.HierarchyId.Root.get -> pengdows.crud.types.valueobjects.HierarchyId
+static pengdows.crud.types.valueobjects.HierarchyId.TryParse(string? text, out pengdows.crud.types.valueobjects.HierarchyId result) -> bool
+static pengdows.crud.types.valueobjects.HierarchyId.operator !=(pengdows.crud.types.valueobjects.HierarchyId left, pengdows.crud.types.valueobjects.HierarchyId right) -> bool
+static pengdows.crud.types.valueobjects.HierarchyId.operator <(pengdows.crud.types.valueobjects.HierarchyId left, pengdows.crud.types.valueobjects.HierarchyId right) -> bool
+static pengdows.crud.types.valueobjects.HierarchyId.operator <=(pengdows.crud.types.valueobjects.HierarchyId left, pengdows.crud.types.valueobjects.HierarchyId right) -> bool
+static pengdows.crud.types.valueobjects.HierarchyId.operator ==(pengdows.crud.types.valueobjects.HierarchyId left, pengdows.crud.types.valueobjects.HierarchyId right) -> bool
+static pengdows.crud.types.valueobjects.HierarchyId.operator >(pengdows.crud.types.valueobjects.HierarchyId left, pengdows.crud.types.valueobjects.HierarchyId right) -> bool
+static pengdows.crud.types.valueobjects.HierarchyId.operator >=(pengdows.crud.types.valueobjects.HierarchyId left, pengdows.crud.types.valueobjects.HierarchyId right) -> bool
+static readonly pengdows.crud.DataReaderMapper.Instance -> pengdows.crud.IDataReaderMapper!

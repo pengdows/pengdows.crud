@@ -231,6 +231,7 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 - **Expose only what needs exposing.** Public is permanent: adding API later costs a minor version, removing it costs a major one. A new public or protected member needs a consumer that cannot do without it and a recorded reason (REVIEW_POLICY.md §4D).
 - **Raw ADO.NET objects (`DbConnection`, `DbCommand`, `DbDataReader`, `DbTransaction`, `DbDataSource`) never appear in public outputs, and no public type inherits one.** Pool governance depends on callers never holding one. The sanctioned form is a governed wrapper that holds the lease and releases it on disposal (today only `ITrackedReader`, an `IDataReader` lease); `PublicSurfaceGuardTests` lists the exceptions.
 - fakeDb may grow freely to mock more, but provider-shaped test doubles (parameter classes, provider enums) stay `internal`.
+- **Every public or protected member is declared** in the project's `PublicAPI.Shipped.txt` (the 2.0.5 surface) or `PublicAPI.Unshipped.txt` (additions since, each with a reason). An undeclared one fails the build (RS0016); adding a line there is a deliberate, reviewed act.
 - Prefer factory/DI creation where possible. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate/documented.
 
 ## CRITICAL: Pseudo Key (Row ID) vs Primary Key (Business Key)

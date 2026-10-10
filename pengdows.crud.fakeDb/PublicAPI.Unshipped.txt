@@ -1,0 +1,192 @@
+#nullable enable
+*REMOVED*override pengdows.crud.fakeDb.fakeDbCommand.ExecuteDbDataReader(System.Data.CommandBehavior _) -> System.Data.Common.DbDataReader!
+*REMOVED*override pengdows.crud.fakeDb.fakeDbDataReader.ReadAsync(System.Threading.CancellationToken _) -> System.Threading.Tasks.Task<bool>!
+override pengdows.crud.fakeDb.fakeDbCommand.ExecuteDbDataReader(System.Data.CommandBehavior behavior) -> System.Data.Common.DbDataReader!
+override pengdows.crud.fakeDb.fakeDbConnection.OnStateChange(System.Data.StateChangeEventArgs! stateChange) -> void
+override pengdows.crud.fakeDb.fakeDbConnection.StateChange -> System.Data.StateChangeEventHandler?
+override pengdows.crud.fakeDb.fakeDbConnectionStringBuilder.ContainsKey(string! keyword) -> bool
+override pengdows.crud.fakeDb.fakeDbDataReader.GetFieldValue<T>(int ordinal) -> T
+override pengdows.crud.fakeDb.fakeDbDataReader.GetProviderSpecificFieldType(int ordinal) -> System.Type!
+override pengdows.crud.fakeDb.fakeDbDataReader.GetProviderSpecificValue(int ordinal) -> object!
+override pengdows.crud.fakeDb.fakeDbDataReader.ReadAsync(System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.Task<bool>!
+override pengdows.crud.fakeDb.fakeDbFactory.CreateDataSource(string! connectionString) -> System.Data.Common.DbDataSource!
+override pengdows.crud.fakeDb.fakeDbTransaction.CommitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override pengdows.crud.fakeDb.fakeDbTransaction.Dispose(bool disposing) -> void
+override pengdows.crud.fakeDb.fakeDbTransaction.RollbackAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+pengdows.crud.fakeDb.CapturedCommand
+pengdows.crud.fakeDb.CapturedCommand.CapturedCommand(string! CommandText, System.Collections.Generic.IReadOnlyList<pengdows.crud.fakeDb.CapturedParameter!>! Parameters) -> void
+pengdows.crud.fakeDb.CapturedCommand.CommandText.get -> string!
+pengdows.crud.fakeDb.CapturedCommand.CommandText.init -> void
+pengdows.crud.fakeDb.CapturedCommand.Parameters.get -> System.Collections.Generic.IReadOnlyList<pengdows.crud.fakeDb.CapturedParameter!>!
+pengdows.crud.fakeDb.CapturedCommand.Parameters.init -> void
+pengdows.crud.fakeDb.CapturedParameter
+pengdows.crud.fakeDb.CapturedParameter.CapturedParameter(string! Name, object? Value) -> void
+pengdows.crud.fakeDb.CapturedParameter.DbType.get -> System.Data.DbType
+pengdows.crud.fakeDb.CapturedParameter.DbType.init -> void
+pengdows.crud.fakeDb.CapturedParameter.Name.get -> string!
+pengdows.crud.fakeDb.CapturedParameter.Name.init -> void
+pengdows.crud.fakeDb.CapturedParameter.ProviderType.get -> string?
+pengdows.crud.fakeDb.CapturedParameter.ProviderType.init -> void
+pengdows.crud.fakeDb.CapturedParameter.Value.get -> object?
+pengdows.crud.fakeDb.CapturedParameter.Value.init -> void
+pengdows.crud.fakeDb.FakeDataStore.StrictMode.get -> bool
+pengdows.crud.fakeDb.FakeDataStore.StrictMode.set -> void
+pengdows.crud.fakeDb.FakeDbDataSource.ClearPool() -> void
+pengdows.crud.fakeDb.FakeDbDataSource.ClearPoolCount.get -> int
+pengdows.crud.fakeDb.FakeDbDataSource.ReloadTypes() -> void
+pengdows.crud.fakeDb.FakeDbDataSource.ReloadTypesAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+pengdows.crud.fakeDb.FakeDbDataSource.ReloadTypesCount.get -> int
+pengdows.crud.fakeDb.FakeDbDataSource.ThrowOnDispose.get -> System.Exception?
+pengdows.crud.fakeDb.FakeDbDataSource.ThrowOnDispose.set -> void
+pengdows.crud.fakeDb.FakeDbDataSource.WasDisposed.get -> bool
+pengdows.crud.fakeDb.fakeDbColumn
+pengdows.crud.fakeDb.fakeDbColumn.DataTypeName.get -> string!
+pengdows.crud.fakeDb.fakeDbColumn.DataTypeName.init -> void
+pengdows.crud.fakeDb.fakeDbColumn.FieldType.get -> System.Type!
+pengdows.crud.fakeDb.fakeDbColumn.FieldType.init -> void
+pengdows.crud.fakeDb.fakeDbColumn.Name.get -> string!
+pengdows.crud.fakeDb.fakeDbColumn.Name.init -> void
+pengdows.crud.fakeDb.fakeDbColumn.NumericPrecision.get -> int?
+pengdows.crud.fakeDb.fakeDbColumn.NumericPrecision.init -> void
+pengdows.crud.fakeDb.fakeDbColumn.NumericScale.get -> int?
+pengdows.crud.fakeDb.fakeDbColumn.NumericScale.init -> void
+pengdows.crud.fakeDb.fakeDbColumn.fakeDbColumn(string! Name, System.Type! FieldType, string! DataTypeName) -> void
+pengdows.crud.fakeDb.fakeDbCommand.AsyncExecuteCount.get -> int
+pengdows.crud.fakeDb.fakeDbCommand.BlockSynchronousExecution.get -> bool
+pengdows.crud.fakeDb.fakeDbCommand.BlockSynchronousExecution.set -> void
+pengdows.crud.fakeDb.fakeDbCommand.InitialLONGFetchSize.get -> int
+pengdows.crud.fakeDb.fakeDbCommand.InitialLONGFetchSize.set -> void
+pengdows.crud.fakeDb.fakeDbCommand.PrepareCount.get -> int
+pengdows.crud.fakeDb.fakeDbCommand.SyncExecuteCount.get -> int
+pengdows.crud.fakeDb.fakeDbConnection.BlockSynchronousCommandExecution.get -> bool
+pengdows.crud.fakeDb.fakeDbConnection.BlockSynchronousCommandExecution.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.CommandFactory.get -> System.Func<pengdows.crud.fakeDb.fakeDbConnection!, pengdows.crud.fakeDb.fakeDbCommand!>?
+pengdows.crud.fakeDb.fakeDbConnection.CommandFactory.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.ConnectionStringHistory.get -> System.Collections.Generic.List<string!>!
+pengdows.crud.fakeDb.fakeDbConnection.EnqueueReaderResult(System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string!, object?>!>! rows, System.Exception! recordsAffectedException) -> void
+pengdows.crud.fakeDb.fakeDbConnection.EnqueueReaderResult(System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string!, object?>!>! rows, int cancelAfterRowCount, System.Threading.CancellationTokenSource! cancellationTokenSource) -> void
+pengdows.crud.fakeDb.fakeDbConnection.EnqueueReaderResult(System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string!, object?>!>! rows, int failAfterRowCount, System.Exception! exception) -> void
+pengdows.crud.fakeDb.fakeDbConnection.EnqueueReaderResult(System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string!, object?>!>! rows, int recordsAffected) -> void
+pengdows.crud.fakeDb.fakeDbConnection.EnqueueReaderResult(pengdows.crud.fakeDb.fakeDbDataReader! reader) -> void
+pengdows.crud.fakeDb.fakeDbConnection.EnqueueTransientNonQueryFailures(params System.Exception![]! exceptions) -> void
+pengdows.crud.fakeDb.fakeDbConnection.ExecuteGateEntered.get -> System.Threading.Tasks.Task!
+pengdows.crud.fakeDb.fakeDbConnection.LastTransaction.get -> pengdows.crud.fakeDb.fakeDbTransaction?
+pengdows.crud.fakeDb.fakeDbConnection.RaiseStateChangeEvents.get -> bool
+pengdows.crud.fakeDb.fakeDbConnection.RaiseStateChangeEvents.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.ScalarResolver.get -> System.Func<string!, object?>?
+pengdows.crud.fakeDb.fakeDbConnection.ScalarResolver.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.SchemaTable.get -> System.Data.DataTable?
+pengdows.crud.fakeDb.fakeDbConnection.SchemaTable.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.SetAsyncOnlyScalarFailure(string! commandText, System.Exception! exception) -> void
+pengdows.crud.fakeDb.fakeDbConnection.SetExecuteGate() -> System.Threading.Tasks.TaskCompletionSource<bool>!
+pengdows.crud.fakeDb.fakeDbConnection.SetOpenGate() -> System.Threading.Tasks.TaskCompletionSource<bool>!
+pengdows.crud.fakeDb.fakeDbConnection.SetTransactionDisposeException(System.Exception! exception) -> void
+pengdows.crud.fakeDb.fakeDbConnection.StateChangeSubscriberCount.get -> int
+pengdows.crud.fakeDb.fakeDbConnection.ThrowOnStateChangeAccessAfterDispose.get -> bool
+pengdows.crud.fakeDb.fakeDbConnection.ThrowOnStateChangeAccessAfterDispose.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.BinaryReportedAsStringColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.BinaryReportedAsStringColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.CancelAfterReadCount.get -> int?
+pengdows.crud.fakeDb.fakeDbDataReader.CancelAfterReadCount.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.CancelSource.get -> System.Threading.CancellationTokenSource?
+pengdows.crud.fakeDb.fakeDbDataReader.CancelSource.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.ColumnReadExceptions.get -> System.Collections.Generic.IDictionary<string!, System.Exception!>?
+pengdows.crud.fakeDb.fakeDbDataReader.ColumnReadExceptions.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.Columns.get -> System.Collections.Generic.IReadOnlyList<pengdows.crud.fakeDb.fakeDbColumn!>?
+pengdows.crud.fakeDb.fakeDbDataReader.Columns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.DateTimeOffsetReportedAsDateTimeColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.DateTimeOffsetReportedAsDateTimeColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.DoubleBeyondDecimalColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.DoubleBeyondDecimalColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.EnforceSequentialAccess.get -> bool
+pengdows.crud.fakeDb.fakeDbDataReader.EnforceSequentialAccess.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.FailAfterReadCount.get -> int?
+pengdows.crud.fakeDb.fakeDbDataReader.FailAfterReadCount.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.FailException.get -> System.Exception?
+pengdows.crud.fakeDb.fakeDbDataReader.FailException.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.GetDateTimeOffset(int i) -> System.DateTimeOffset
+pengdows.crud.fakeDb.fakeDbDataReader.GetInt64RejectedColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.GetInt64RejectedColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.GetValueExceptionCount.get -> int
+pengdows.crud.fakeDb.fakeDbDataReader.HandlerlessColumns.get -> System.Collections.Generic.IDictionary<string!, string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.HandlerlessColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.Int64TextColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.Int64TextColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.IsDBNullCallCount.get -> int
+pengdows.crud.fakeDb.fakeDbDataReader.MaxBytesPerGetBytesCall.get -> int
+pengdows.crud.fakeDb.fakeDbDataReader.MaxBytesPerGetBytesCall.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.NullableElementArrayColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.NullableElementArrayColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.OffsetDroppedByGetValueColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.OffsetDroppedByGetValueColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.OutOfRangeReturnsNullColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.OutOfRangeReturnsNullColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.ProviderDecimalColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.ProviderDecimalColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.RecordsAffectedException.get -> System.Exception?
+pengdows.crud.fakeDb.fakeDbDataReader.RecordsAffectedException.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.RecordsAffectedOverride.get -> int
+pengdows.crud.fakeDb.fakeDbDataReader.RecordsAffectedOverride.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.ReportedFieldTypes.get -> System.Collections.Generic.IDictionary<string!, System.Type!>?
+pengdows.crud.fakeDb.fakeDbDataReader.ReportedFieldTypes.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.ThrowsReadingPastEnd.get -> bool
+pengdows.crud.fakeDb.fakeDbDataReader.ThrowsReadingPastEnd.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.UnknownTypeColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.UnknownTypeColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.UnloadableUdtColumns.get -> System.Collections.Generic.IDictionary<string!, string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.UnloadableUdtColumns.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.UnresolvedFieldTypeColumns.get -> System.Collections.Generic.ISet<string!>?
+pengdows.crud.fakeDb.fakeDbDataReader.UnresolvedFieldTypeColumns.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.CommandFactory.get -> System.Func<pengdows.crud.fakeDb.fakeDbConnection!, pengdows.crud.fakeDb.fakeDbCommand!>?
+pengdows.crud.fakeDb.fakeDbFactory.CommandFactory.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.CreatedDataSources.get -> System.Collections.Generic.IReadOnlyList<pengdows.crud.fakeDb.FakeDbDataSource!>!
+pengdows.crud.fakeDb.fakeDbFactory.EmulatesInformixParameterMetadata.get -> bool
+pengdows.crud.fakeDb.fakeDbFactory.EmulatesInformixParameterMetadata.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.EmulatesInterBaseParameterMetadata.get -> bool
+pengdows.crud.fakeDb.fakeDbFactory.EmulatesInterBaseParameterMetadata.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.EmulatesNpgsqlParameterMetadata.get -> bool
+pengdows.crud.fakeDb.fakeDbFactory.EmulatesNpgsqlParameterMetadata.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.EmulatesOracleParameterMetadata.get -> bool
+pengdows.crud.fakeDb.fakeDbFactory.EmulatesOracleParameterMetadata.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.RaiseConnectionStateChangeEvents.get -> bool
+pengdows.crud.fakeDb.fakeDbFactory.RaiseConnectionStateChangeEvents.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.ReturnNullConnection.get -> bool
+pengdows.crud.fakeDb.fakeDbFactory.ReturnNullConnection.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.ServerVersion.get -> string?
+pengdows.crud.fakeDb.fakeDbFactory.ServerVersion.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.SetFailOnOpenForConnectionString(string! connectionString, System.Exception! exception) -> void
+pengdows.crud.fakeDb.fakeDbFactory.SetOpenGateForConnectionString(string! connectionString) -> System.Threading.Tasks.TaskCompletionSource<bool>!
+pengdows.crud.fakeDb.fakeDbFactory.SupportsNativeDataSource.get -> bool
+pengdows.crud.fakeDb.fakeDbFactory.SupportsNativeDataSource.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.ThrowOnCreateConnection.get -> System.Exception?
+pengdows.crud.fakeDb.fakeDbFactory.ThrowOnCreateConnection.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.ThrowOnDataSourceDispose.get -> System.Exception?
+pengdows.crud.fakeDb.fakeDbFactory.ThrowOnDataSourceDispose.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.ThrowOnStateChangeAccessAfterDispose.get -> bool
+pengdows.crud.fakeDb.fakeDbFactory.ThrowOnStateChangeAccessAfterDispose.set -> void
+pengdows.crud.fakeDb.fakeDbInterval
+pengdows.crud.fakeDb.fakeDbInterval.Days.get -> int
+pengdows.crud.fakeDb.fakeDbInterval.Micros.get -> ulong
+pengdows.crud.fakeDb.fakeDbInterval.Months.get -> int
+pengdows.crud.fakeDb.fakeDbInterval.ToDriverTimeSpan() -> System.TimeSpan
+pengdows.crud.fakeDb.fakeDbInterval.fakeDbInterval() -> void
+pengdows.crud.fakeDb.fakeDbInterval.fakeDbInterval(int months, int days, ulong micros) -> void
+pengdows.crud.fakeDb.fakeDbTransaction.CommitAsyncCallCount.get -> int
+pengdows.crud.fakeDb.fakeDbTransaction.CommitCallCount.get -> int
+pengdows.crud.fakeDb.fakeDbTransaction.CommitGate.get -> System.Threading.ManualResetEventSlim?
+pengdows.crud.fakeDb.fakeDbTransaction.CommitGate.set -> void
+pengdows.crud.fakeDb.fakeDbTransaction.CommitStarted.get -> System.Threading.ManualResetEventSlim?
+pengdows.crud.fakeDb.fakeDbTransaction.CommitStarted.set -> void
+pengdows.crud.fakeDb.fakeDbTransaction.DisposeCallCount.get -> int
+pengdows.crud.fakeDb.fakeDbTransaction.DisposeException.get -> System.Exception?
+pengdows.crud.fakeDb.fakeDbTransaction.DisposeException.set -> void
+pengdows.crud.fakeDb.fakeDbTransaction.RollbackAsyncCallCount.get -> int
+pengdows.crud.fakeDb.fakeDbTransaction.RollbackCallCount.get -> int
+pengdows.crud.fakeDb.fakeDbTransaction.RollbackGate.get -> System.Threading.ManualResetEventSlim?
+pengdows.crud.fakeDb.fakeDbTransaction.RollbackGate.set -> void
+pengdows.crud.fakeDb.fakeDbTransaction.RollbackStarted.get -> System.Threading.ManualResetEventSlim?
+pengdows.crud.fakeDb.fakeDbTransaction.RollbackStarted.set -> void
+readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedNonQueryCommands -> System.Collections.Generic.List<pengdows.crud.fakeDb.CapturedCommand!>!
+readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedReaderBehaviors -> System.Collections.Generic.List<System.Data.CommandBehavior>!
+readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedReaderCommands -> System.Collections.Generic.List<pengdows.crud.fakeDb.CapturedCommand!>!
+readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedScalarTexts -> System.Collections.Generic.List<string!>!
