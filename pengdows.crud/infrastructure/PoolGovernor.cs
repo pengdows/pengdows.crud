@@ -281,6 +281,10 @@ internal sealed class PoolGovernor : IDisposable
 
     private void ReleaseAdmission() => _concurrencyGate!.Release(0);
 
+    // The blocking and asynchronous acquires differ only in how they wait. The uncontended fast path is the same
+    // synchronous code in both, because a zero-timeout probe never blocks; the slow path is one method that either
+    // blocks or awaits according to isAsync. In blocking mode it never yields, so it has finished by the time it
+    // returns and nothing waits on a continuation.
     public PoolSlot Acquire(CancellationToken cancellationToken = default)
     {
         if (!Gates())
@@ -290,37 +294,85 @@ internal sealed class PoolGovernor : IDisposable
 
         var turnstileAcquired = false;
         var writerTurnstileInterestRegistered = false;
+        bool useTurnstileGate;
         try
         {
-            RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-            var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
-
-            // Fast path: no deadline arithmetic for immediate gate/slot success.
-            if (useTurnstileGate && _turnstile != null && _turnstile.Wait(0, cancellationToken))
+            if (TryAcquireImmediate(cancellationToken, ref turnstileAcquired, ref writerTurnstileInterestRegistered,
+                    out useTurnstileGate, out var immediate))
             {
-                turnstileAcquired = true;
-                if (!_holdTurnstile)
-                {
-                    _turnstile.Release();
-                    turnstileAcquired = false;
-                }
-
-                if (TryAcquireAdmission(cancellationToken))
-                {
-                    var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
-                    var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-                    writerTurnstileInterestRegistered = false;
-                    return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
-                }
+                return immediate;
             }
-            else if (!useTurnstileGate && TryAcquireAdmission(cancellationToken))
+        }
+        catch
+        {
+            AbandonAcquire(turnstileAcquired, ref writerTurnstileInterestRegistered);
+            throw;
+        }
+
+        var pending = AcquireSlowAsync(false, useTurnstileGate, turnstileAcquired,
+            writerTurnstileInterestRegistered, cancellationToken);
+        Debug.Assert(pending.IsCompleted, "A blocking acquire must finish without yielding.");
+        return pending.GetAwaiter().GetResult();
+    }
+
+    // Takes a free slot (and, when one is in play, the turnstile) without waiting. A cancelled token makes the
+    // zero-timeout waits throw OperationCanceledException synchronously, so the caller cleans up on failure.
+    private bool TryAcquireImmediate(CancellationToken cancellationToken, ref bool turnstileAcquired,
+        ref bool writerTurnstileInterestRegistered, out bool useTurnstileGate, out PoolSlot slot)
+    {
+        RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+        useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
+
+        // Fast path: no deadline arithmetic for immediate gate/slot success.
+        var admitted = false;
+        if (useTurnstileGate && _turnstile != null && _turnstile.Wait(0, cancellationToken))
+        {
+            turnstileAcquired = true;
+            if (!_holdTurnstile)
             {
-                var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
-                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-                writerTurnstileInterestRegistered = false;
-                return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
+                _turnstile.Release();
+                turnstileAcquired = false;
             }
 
+            admitted = TryAcquireAdmission(cancellationToken);
+        }
+        else if (!useTurnstileGate)
+        {
+            admitted = TryAcquireAdmission(cancellationToken);
+        }
+
+        if (!admitted)
+        {
+            slot = default;
+            return false;
+        }
+
+        var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+        var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
+        writerTurnstileInterestRegistered = false;
+        slot = OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
+        return true;
+    }
+
+    // On failure, release the turnstile if we're still holding it (writers only) and give back the writer
+    // interest. Do NOT record wait/hold metrics here — failure duration is not slot hold time.
+    private void AbandonAcquire(bool turnstileAcquired, ref bool writerTurnstileInterestRegistered)
+    {
+        if (turnstileAcquired && _turnstile != null)
+        {
+            _turnstile.Release();
+        }
+
+        UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+    }
+
+    // The queued, deadline-bounded path shared by Acquire (isAsync: false, blocks the calling thread and so
+    // completes before it returns) and AcquireAsync (isAsync: true, awaits).
+    private async ValueTask<PoolSlot> AcquireSlowAsync(bool isAsync, bool useTurnstileGate, bool turnstileAcquired,
+        bool writerTurnstileInterestRegistered, CancellationToken cancellationToken)
+    {
+        try
+        {
             // Slow path: timed waits with a single deadline budget across gates.
             Interlocked.Increment(ref _totalWaits);
             var waitStart = Stopwatch.GetTimestamp();
@@ -355,7 +407,9 @@ internal sealed class PoolGovernor : IDisposable
                 {
                     var turnstileRemaining = GetRemainingTimeout(deadlineTicks);
                     if (turnstileRemaining == TimeSpan.Zero
-                        || !_turnstile.Wait(turnstileRemaining, cancellationToken))
+                        || !(isAsync
+                            ? await _turnstile.WaitAsync(turnstileRemaining, cancellationToken).ConfigureAwait(false)
+                            : _turnstile.Wait(turnstileRemaining, cancellationToken)))
                     {
                         Interlocked.Increment(ref _totalTurnstileTimeouts);
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
@@ -413,7 +467,9 @@ internal sealed class PoolGovernor : IDisposable
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
-                    var acquired = AcquireAdmission(semRemaining, cancellationToken);
+                    var acquired = isAsync
+                        ? await AcquireAdmissionAsync(semRemaining, cancellationToken).ConfigureAwait(false)
+                        : AcquireAdmission(semRemaining, cancellationToken);
                     if (!acquired)
                     {
                         Interlocked.Increment(ref _totalSlotTimeouts);
@@ -441,14 +497,7 @@ internal sealed class PoolGovernor : IDisposable
         }
         catch
         {
-            // On failure, release turnstile if we're still holding it (writers only).
-            // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
-            if (turnstileAcquired && _turnstile != null)
-            {
-                _turnstile.Release();
-            }
-
-            UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
+            AbandonAcquire(turnstileAcquired, ref writerTurnstileInterestRegistered);
             throw;
         }
     }
@@ -528,170 +577,32 @@ internal sealed class PoolGovernor : IDisposable
 
         var turnstileAcquired = false;
         var writerTurnstileInterestRegistered = false;
+        bool useTurnstileGate;
         try
         {
-            RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-            var useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
-
-            // Fast path: no deadline arithmetic for immediate gate/slot success.
-            if (useTurnstileGate && _turnstile != null
-                && await _turnstile.WaitAsync(0, cancellationToken).ConfigureAwait(false))
+            if (TryAcquireImmediate(cancellationToken, ref turnstileAcquired, ref writerTurnstileInterestRegistered,
+                    out useTurnstileGate, out var immediate))
             {
-                turnstileAcquired = true;
-                if (!_holdTurnstile)
-                {
-                    _turnstile.Release();
-                    turnstileAcquired = false;
-                }
-
-                if (await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
-                {
-                    var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
-                    var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-                    writerTurnstileInterestRegistered = false;
-                    return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
-                }
-            }
-            else if (!useTurnstileGate && await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
-            {
-                var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
-                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-                writerTurnstileInterestRegistered = false;
-                return OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
-            }
-
-            // Slow path: timed waits with a single deadline budget across gates.
-            Interlocked.Increment(ref _totalWaits);
-            var waitStart = Stopwatch.GetTimestamp();
-            var deadlineTicks = waitStart + _acquireTimeoutStopwatchTicks;
-
-            // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
-            // Writers hold the turnstile for their entire slot lifetime.
-            // Readers only gate here when writers are active/waiting; otherwise they bypass.
-            // NOTE: readers already queued on the semaphore when the writer grabs the turnstile
-            // are not displaced — only NEW reader attempts are gated.
-            if (useTurnstileGate && _turnstile != null && !turnstileAcquired)
-            {
-                // Queue-depth admission control: unconditional (decoupled from _trackMetrics)
-                // so a caller storm on the turnstile is bounded even when metrics tracking is
-                // disabled. Mirrors the semaphore-side check below — without this, a stalled
-                // writer holding/awaiting the turnstile let every new reader queue up and wait
-                // out the full acquire timeout with no fast-fail circuit breaker at all.
-                var turnstileQueueDepth = Interlocked.Increment(ref _turnstileQueueDepth);
-                if (turnstileQueueDepth > _maxQueueDepth)
-                {
-                    Interlocked.Decrement(ref _turnstileQueueDepth);
-                    throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-                }
-
-                var tQueued = _trackMetrics ? Interlocked.Increment(ref _turnstileQueued) : 0;
-                if (_trackMetrics)
-                {
-                    UpdatePeak(ref _peakTurnstileQueued, tQueued);
-                }
-
-                try
-                {
-                    var turnstileRemaining = GetRemainingTimeout(deadlineTicks);
-                    if (turnstileRemaining == TimeSpan.Zero
-                        || !await _turnstile.WaitAsync(turnstileRemaining, cancellationToken).ConfigureAwait(false))
-                    {
-                        Interlocked.Increment(ref _totalTurnstileTimeouts);
-                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-                    }
-                }
-                finally
-                {
-                    if (_trackMetrics)
-                    {
-                        Interlocked.Decrement(ref _turnstileQueued);
-                    }
-                    Interlocked.Decrement(ref _turnstileQueueDepth);
-                }
-
-                turnstileAcquired = true;
-
-                // Readers touch-and-release; writers hold until slot released
-                if (!_holdTurnstile)
-                {
-                    _turnstile.Release();
-                    turnstileAcquired = false;
-                }
-            }
-
-            // Use WaitAsync even for zero-timeout to maintain consistent async behavior
-            // (Wait(0, ct) can throw OperationCanceledException synchronously)
-            if (await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
-            {
-                var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-                writerTurnstileInterestRegistered = false;
-                return OnAcquired(waitStart, releaseWriterInterestOnRelease);
-            }
-
-            // Queue-depth admission control: unconditional (decoupled from _trackMetrics)
-            // so a caller storm is bounded even when metrics tracking is disabled.
-            var queueDepth = Interlocked.Increment(ref _queueDepth);
-            if (queueDepth > _maxQueueDepth)
-            {
-                Interlocked.Decrement(ref _queueDepth);
-                throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-            }
-
-            var queued = _trackMetrics ? Interlocked.Increment(ref _queued) : 0;
-            if (_trackMetrics)
-            {
-                UpdatePeak(ref _peakQueued, queued);
-            }
-
-            try
-            {
-                try
-                {
-                    var semRemaining = GetRemainingTimeout(deadlineTicks);
-                    if (semRemaining == TimeSpan.Zero)
-                    {
-                        Interlocked.Increment(ref _totalSlotTimeouts);
-                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-                    }
-
-                    var acquired = await AcquireAdmissionAsync(semRemaining, cancellationToken).ConfigureAwait(false);
-                    if (!acquired)
-                    {
-                        Interlocked.Increment(ref _totalSlotTimeouts);
-                        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
-                    }
-
-                    var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-                    writerTurnstileInterestRegistered = false;
-                    return OnAcquired(waitStart, releaseWriterInterestOnRelease);
-                }
-                catch (OperationCanceledException)
-                {
-                    Interlocked.Increment(ref _totalCanceledWaits);
-                    throw;
-                }
-            }
-            finally
-            {
-                if (_trackMetrics)
-                {
-                    Interlocked.Decrement(ref _queued);
-                }
-                Interlocked.Decrement(ref _queueDepth);
+                return immediate;
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // On failure, release turnstile if we're still holding it (writers only).
-            // Do NOT record wait/hold metrics here — failure duration is not slot hold time.
-            if (turnstileAcquired && _turnstile != null)
+            AbandonAcquire(turnstileAcquired, ref writerTurnstileInterestRegistered);
+
+            // The shared synchronous fast path throws a plain OperationCanceledException for a cancelled token;
+            // the asynchronous acquire has always reported it as a cancelled task (TaskCanceledException).
+            if (ex is OperationCanceledException and not TaskCanceledException
+                && cancellationToken.IsCancellationRequested)
             {
-                _turnstile.Release();
+                return await ValueTask.FromCanceled<PoolSlot>(cancellationToken).ConfigureAwait(false);
             }
 
-            UnregisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
             throw;
         }
+
+        return await AcquireSlowAsync(true, useTurnstileGate, turnstileAcquired,
+            writerTurnstileInterestRegistered, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)
