@@ -2,6 +2,7 @@ using System.Data;
 using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
@@ -208,4 +209,90 @@ internal interface IInternalSqlDialect : ISqlDialect
     /// docs/FUTURE_WORK.md for why parameter-baking caches aren't safely fingerprintable yet).
     /// </summary>
     string CacheFingerprint { get; }
+
+    /// <summary>
+    /// True for a real client-server RDBMS with full write concurrency (the default for every
+    /// engine); false only for embedded, single-writer engines (SQLite, DuckDB, Access), the
+    /// FlatFile provider, and the unrecognized-database fallback. This is the single source of truth for that distinction —
+    /// callers that need it (mode-mismatch diagnostics, mode coercion) should consult this property
+    /// instead of maintaining their own SupportedDatabase switch.
+    /// </summary>
+    bool IsClientServerDatabase => true;
+
+    /// <summary>
+    /// True only for embedded, single-writer engines (SQLite, DuckDB, Access). Deliberately narrower than
+    /// <c>!IsClientServerDatabase</c>, which is also false for the unrecognized-database fallback —
+    /// diagnostics that are specifically about embedded single-writer behavior (e.g. file-based
+    /// lock-contention warnings) should consult this instead, so they don't fire for an unknown
+    /// database that merely isn't confirmed client-server either.
+    /// </summary>
+    bool IsEmbeddedSingleWriterEngine => false;
+
+    /// <summary>
+    /// Classifies whether <paramref name="connectionString"/> targets an in-memory database
+    /// instance for this engine, and if so, whether it is isolated (private to one connection) or
+    /// shared across connections. Every engine except SQLite/DuckDB has no in-memory concept and
+    /// always returns <see cref="InMemoryKind.None"/>. Single source of truth — callers should
+    /// consult this instead of parsing the connection string themselves.
+    /// </summary>
+    InMemoryKind DetectInMemoryKind(string? connectionString) => InMemoryKind.None;
+
+    /// <summary>
+    /// Resolves the actual <see cref="DbMode"/> a connection should use, given what the caller
+    /// requested (including <see cref="DbMode.Best"/>) and this engine's real mode constraints —
+    /// this is the single source of truth for both "what does Best mean here" and "which explicit
+    /// modes are unsafe here", so <c>DatabaseContext</c> owns no per-database coercion rules of its
+    /// own. The returned reason is a human-readable string for diagnostic logging; it is only
+    /// examined by the caller when the resolved mode differs from what was requested.
+    /// </summary>
+    /// <param name="requested">The mode the caller asked for, or <see cref="DbMode.Best"/>.</param>
+    /// <param name="connectionString">The connection string, for engines whose decision depends on
+    /// in-memory detection (see <see cref="DetectInMemoryKind"/>).</param>
+    /// <param name="isLocalDb">True when topology detection identified this as SQL Server LocalDB.</param>
+    (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString, bool isLocalDb)
+    {
+        if (requested == DbMode.Best)
+        {
+            var reason = IsClientServerDatabase
+                ? "Full server: Best selects Standard"
+                : "Unknown provider: Best defaults to Standard";
+            return (DbMode.Standard, reason);
+        }
+
+        return (requested, string.Empty);
+    }
+
+    /// <summary>
+    /// Whether the dialect requires, allows, or forbids parenthesizing a nested join
+    /// expression in a FROM clause (e.g. <c>A JOIN (B JOIN C ON ...) ON ...</c>).
+    /// Most ANSI SQL databases treat this as optional; some (e.g. MS Access/Jet)
+    /// require it once three or more tables are joined; a small few reject it outright.
+    /// </summary>
+    JoinParenthesization JoinParenthesization => JoinParenthesization.Optional;
+
+    /// <summary>
+    /// Gets the SQL statement to explicitly release a savepoint with the given name. Only called
+    /// when <see cref="SavepointCapabilities"/> includes <see cref="pengdows.crud.enums.SavepointCapabilities.Release"/> —
+    /// dialects without release support (SQL Server, Sybase, Oracle) never need to implement this.
+    /// </summary>
+    /// <param name="name">The savepoint name.</param>
+    /// <returns>The SQL statement (e.g., "RELEASE SAVEPOINT name").</returns>
+    string GetReleaseSavepointSql(string name) => $"RELEASE SAVEPOINT {WrapObjectName(name)}";
+
+    /// <summary>
+    /// Whether the provider accepts ';'-separated multiple statements sent as a single batch
+    /// (e.g. building a return-value capture as "DECLARE @x INT; EXEC @x = proc; SELECT @x;").
+    /// Default true. Sybase ASE: false — rejects a ';' between statements in a batch entirely
+    /// ("Incorrect syntax near ';'"), so multi-statement batches must be newline-separated with
+    /// no terminator at all instead.
+    /// </summary>
+    bool SupportsSemicolonStatementSeparator => true;
+
+    /// <summary>
+    /// True when <see cref="AppendPaging"/> can page a query on this dialect, by whatever syntax it
+    /// uses: <see cref="SupportsOffsetFetch"/>, <see cref="SupportsLimitOffset"/>, or a native form
+    /// such as Informix's <c>SELECT SKIP n FIRST m</c>. False when the engine has no way to skip
+    /// rows (e.g. Sybase ASE, where <see cref="AppendPaging"/> throws).
+    /// </summary>
+    bool SupportsPaging => SupportsOffsetFetch || SupportsLimitOffset;
 }

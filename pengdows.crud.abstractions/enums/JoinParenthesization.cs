@@ -4,7 +4,7 @@ namespace pengdows.crud.enums;
 /// Defines whether a dialect requires, allows, or forbids parenthesizing a nested join
 /// expression in a FROM clause (e.g. <c>A JOIN (B JOIN C ON ...) ON ...</c>).
 /// </summary>
-public enum JoinParenthesization
+internal enum JoinParenthesization
 {
     /// <summary>
     /// Parenthesizing a nested join is syntactically valid but not required.

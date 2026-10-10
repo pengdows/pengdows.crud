@@ -220,10 +220,8 @@ method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Co
 method pengdows.crud.dialects.ISqlDialect::BuildBatchInsertSql(string, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder, System.Func`3<int, int, object>) -> void
 method pengdows.crud.dialects.ISqlDialect::BuildBatchUpdateSql(string, System.Collections.Generic.IReadOnlyList`1<string>, System.Collections.Generic.IReadOnlyList`1<string>, int, pengdows.crud.ISqlQueryBuilder, System.Func`3<int, int, object>) -> void
 method pengdows.crud.dialects.ISqlDialect::ClassifyException(System.Exception) -> pengdows.crud.enums.DbErrorCategory
-method pengdows.crud.dialects.ISqlDialect::CoerceConnectionMode(pengdows.crud.enums.DbMode, string, bool) -> System.ValueTuple`2<pengdows.crud.enums.DbMode, string>
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.dialects.ISqlDialect::CreateDbParameter<T>(string, System.Data.DbType, T) -> System.Data.Common.DbParameter
-method pengdows.crud.dialects.ISqlDialect::DetectInMemoryKind(string) -> pengdows.crud.enums.InMemoryKind
 method pengdows.crud.dialects.ISqlDialect::GenerateParameterName() -> string
 method pengdows.crud.dialects.ISqlDialect::GenerateRandomName(int, int) -> string
 method pengdows.crud.dialects.ISqlDialect::GetCompatibilityWarning() -> string
@@ -234,7 +232,6 @@ method pengdows.crud.dialects.ISqlDialect::GetGeneratedKeyPlan() -> pengdows.cru
 method pengdows.crud.dialects.ISqlDialect::GetLastInsertedIdFromCommand(System.Data.Common.DbCommand) -> object
 method pengdows.crud.dialects.ISqlDialect::GetLastInsertedIdQuery() -> string
 method pengdows.crud.dialects.ISqlDialect::GetNaturalKeyLookupQuery(string, string, System.Collections.Generic.IReadOnlyList`1<string>, System.Collections.Generic.IReadOnlyList`1<string>) -> string
-method pengdows.crud.dialects.ISqlDialect::GetReleaseSavepointSql(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetRollbackToSavepointSql(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetSavepointSql(string) -> string
 method pengdows.crud.dialects.ISqlDialect::GetSequenceNextValQuery(string) -> string
@@ -387,12 +384,9 @@ property pengdows.crud.dialects.ISqlDialect::EnforcesConstraints : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::EnforcesForeignKeyConstraints : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::HasBasicCompatibility : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::InsertReturningClauseBeforeValues : bool { get; }
-property pengdows.crud.dialects.ISqlDialect::IsClientServerDatabase : bool { get; }
-property pengdows.crud.dialects.ISqlDialect::IsEmbeddedSingleWriterEngine : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::IsFallbackDialect : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::IsInitialized : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::IsPrepareExhausted : bool { get; }
-property pengdows.crud.dialects.ISqlDialect::JoinParenthesization : pengdows.crud.enums.JoinParenthesization { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxOutputParameters : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxParameterLimit : int { get; }
 property pengdows.crud.dialects.ISqlDialect::MaxPoolSizeSettingName : string { get; }
@@ -437,14 +431,12 @@ property pengdows.crud.dialects.ISqlDialect::SupportsOffsetFetch : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOnConflictWhere : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOnDuplicateKey : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsOuterJoins : bool { get; }
-property pengdows.crud.dialects.ISqlDialect::SupportsPaging : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsPropertyGraphQueries : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsReadOnlyTransactions : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRegularExpressions : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRepeatedNamedParameters : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsRowPatternMatching : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSavepoints : bool { get; }
-property pengdows.crud.dialects.ISqlDialect::SupportsSemicolonStatementSeparator : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSetValuedParameters : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSqlJsonConstructors : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsSubqueries : bool { get; }

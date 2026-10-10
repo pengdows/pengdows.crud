@@ -5,7 +5,7 @@ namespace pengdows.crud.fakeDb;
 /// <see cref="fakeDbFactory.EmulatesOracleParameterMetadata"/> is set. Dialects find the property
 /// by name, so tests can see what a dialect stamps on an ODP.NET parameter.
 /// </summary>
-public class fakeDbOracleParameter : fakeDbParameter
+internal class fakeDbOracleParameter : fakeDbParameter
 {
     /// <summary>Mirrors <c>OracleParameter.OracleDbType</c>.</summary>
     public fakeOracleDbType OracleDbType { get; set; }
@@ -15,7 +15,7 @@ public class fakeDbOracleParameter : fakeDbParameter
 /// The <c>Oracle.ManagedDataAccess.Client.OracleDbType</c> members pengdows.crud dialects set, by
 /// name (dialects parse the name; the numeric values are not ODP.NET's).
 /// </summary>
-public enum fakeOracleDbType
+internal enum fakeOracleDbType
 {
     Unset = 0,
     BinaryDouble,

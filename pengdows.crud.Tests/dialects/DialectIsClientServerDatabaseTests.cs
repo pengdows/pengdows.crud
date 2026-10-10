@@ -47,7 +47,7 @@ public class DialectIsClientServerDatabaseTests
     public void ClientServerDialects_ReportIsClientServerDatabase_True(SupportedDatabase db)
     {
         var dialect = SqlDialectFactory.CreateDialectForType(db, new fakeDbFactory(db), NullLogger.Instance);
-        Assert.True(dialect.IsClientServerDatabase);
+        Assert.True(dialect.IsClientServerDatabase());
     }
 
     [Theory]
@@ -55,6 +55,6 @@ public class DialectIsClientServerDatabaseTests
     public void EmbeddedOrUnknownDialects_ReportIsClientServerDatabase_False(SupportedDatabase db)
     {
         var dialect = SqlDialectFactory.CreateDialectForType(db, new fakeDbFactory(db), NullLogger.Instance);
-        Assert.False(dialect.IsClientServerDatabase);
+        Assert.False(dialect.IsClientServerDatabase());
     }
 }

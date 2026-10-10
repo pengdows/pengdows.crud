@@ -28,9 +28,9 @@ public sealed class DuckDbInMemoryDetectionTests
     [InlineData("Data Source=:memory:?cache=shared", InMemoryKind.Shared)]
     [InlineData("DataSource=analytics.duckdb", InMemoryKind.None)]
     [InlineData("Data Source=analytics.duckdb", InMemoryKind.None)]
-    public void DetectInMemoryKind_RecognizesEveryDataSourceSpelling(string connectionString, InMemoryKind expected)
+    public void DetectInMemoryKind_RecognizesEveryDataSourceSpelling(string connectionString, object expected)
     {
-        Assert.Equal(expected, CreateDialect().DetectInMemoryKind(connectionString));
+        Assert.Equal((InMemoryKind)expected, CreateDialect().DetectInMemoryKind(connectionString));
     }
 
     [Theory]

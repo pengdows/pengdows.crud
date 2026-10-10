@@ -4,7 +4,7 @@ namespace pengdows.crud.enums;
 /// Classifies whether a connection string targets an in-memory database instance, and if so,
 /// whether that instance is private to one connection or shared across connections in the process.
 /// </summary>
-public enum InMemoryKind
+internal enum InMemoryKind
 {
     /// <summary>Not an in-memory database (a real file or a client-server connection).</summary>
     None,

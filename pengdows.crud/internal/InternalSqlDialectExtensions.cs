@@ -3,6 +3,7 @@ using System.Data.Common;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.dialects;
+using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 
@@ -261,6 +262,94 @@ internal static class InternalSqlDialectExtensions
     internal static bool QualifiesColumnReferences(this ISqlDialect dialect)
     {
         return dialect is IInternalSqlDialect internalDialect && internalDialect.QualifiesColumnReferences;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.IsClientServerDatabase"/>; true for a dialect that isn't an
+    /// internal one (e.g. a test double), as for every engine that doesn't say otherwise.
+    /// </summary>
+    internal static bool IsClientServerDatabase(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.IsClientServerDatabase;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.IsEmbeddedSingleWriterEngine"/>; false for a dialect that isn't
+    /// an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool IsEmbeddedSingleWriterEngine(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect && internalDialect.IsEmbeddedSingleWriterEngine;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.DetectInMemoryKind"/>; <see cref="InMemoryKind.None"/> for a
+    /// dialect that isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static InMemoryKind DetectInMemoryKind(this ISqlDialect dialect, string? connectionString)
+    {
+        return dialect is IInternalSqlDialect internalDialect
+            ? internalDialect.DetectInMemoryKind(connectionString)
+            : InMemoryKind.None;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.CoerceConnectionMode"/>; for a dialect that isn't an internal
+    /// one (e.g. a test double) Best selects Standard and an explicit mode is honored.
+    /// </summary>
+    internal static (DbMode Mode, string Reason) CoerceConnectionMode(this ISqlDialect dialect, DbMode requested,
+        string? connectionString, bool isLocalDb)
+    {
+        if (dialect is IInternalSqlDialect internalDialect)
+        {
+            return internalDialect.CoerceConnectionMode(requested, connectionString, isLocalDb);
+        }
+
+        return requested == DbMode.Best
+            ? (DbMode.Standard, "Full server: Best selects Standard")
+            : (requested, string.Empty);
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.JoinParenthesization"/>; optional for a dialect that isn't an
+    /// internal one (e.g. a test double).
+    /// </summary>
+    internal static enums.JoinParenthesization JoinParenthesization(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect
+            ? internalDialect.JoinParenthesization
+            : enums.JoinParenthesization.Optional;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.GetReleaseSavepointSql"/>; ANSI <c>RELEASE SAVEPOINT</c> for a
+    /// dialect that isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static string GetReleaseSavepointSql(this ISqlDialect dialect, string name)
+    {
+        return dialect is IInternalSqlDialect internalDialect
+            ? internalDialect.GetReleaseSavepointSql(name)
+            : $"RELEASE SAVEPOINT {dialect.WrapObjectName(name)}";
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.SupportsSemicolonStatementSeparator"/>; true for a dialect that
+    /// isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool SupportsSemicolonStatementSeparator(this ISqlDialect dialect)
+    {
+        return dialect is not IInternalSqlDialect internalDialect || internalDialect.SupportsSemicolonStatementSeparator;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.SupportsPaging"/>; offset/fetch or limit/offset for a dialect
+    /// that isn't an internal one (e.g. a test double).
+    /// </summary>
+    internal static bool SupportsPaging(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect
+            ? internalDialect.SupportsPaging
+            : dialect.SupportsOffsetFetch || dialect.SupportsLimitOffset;
     }
 
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)

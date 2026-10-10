@@ -5,7 +5,7 @@ namespace pengdows.crud.fakeDb;
 /// <see cref="fakeDbFactory.EmulatesInformixParameterMetadata"/> is set. Dialects find the property
 /// by name, so tests can see what a dialect stamps on an <c>IfxParameter</c>.
 /// </summary>
-public class fakeDbInformixParameter : fakeDbParameter
+internal class fakeDbInformixParameter : fakeDbParameter
 {
     /// <summary>Mirrors <c>IfxParameter.IfxType</c>.</summary>
     public fakeIfxType IfxType { get; set; }
@@ -15,7 +15,7 @@ public class fakeDbInformixParameter : fakeDbParameter
 /// The <c>Informix.Net.Core.IfxType</c> members pengdows.crud dialects set, by name (dialects parse the
 /// name; the numeric values are not the driver's).
 /// </summary>
-public enum fakeIfxType
+internal enum fakeIfxType
 {
     Unset = 0,
     Text,

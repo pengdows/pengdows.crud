@@ -183,7 +183,7 @@ public abstract partial class BaseTableGateway<TEntity>
     /// write that never persisted. Pair <see cref="SnapshotAuditFields"/> with
     /// <see cref="RestoreAuditFields"/> around Execute to undo that.
     /// </summary>
-    protected readonly struct AuditFieldSnapshot
+    internal readonly struct AuditFieldSnapshot
     {
         private readonly bool _hasSnapshot;
 
@@ -222,7 +222,7 @@ public abstract partial class BaseTableGateway<TEntity>
         }
     }
 
-    protected AuditFieldSnapshot SnapshotAuditFields(TEntity obj)
+    internal AuditFieldSnapshot SnapshotAuditFields(TEntity obj)
     {
         if (obj == null || !_hasAuditColumns)
         {
@@ -241,7 +241,7 @@ public abstract partial class BaseTableGateway<TEntity>
     /// catch block (or before manually raising an error after a 0-rows-affected result) when the
     /// SQL built with the mutated values never executed successfully.
     /// </summary>
-    protected void RestoreAuditFields(TEntity obj, in AuditFieldSnapshot snapshot)
+    internal void RestoreAuditFields(TEntity obj, in AuditFieldSnapshot snapshot)
     {
         if (obj == null || !snapshot.HasSnapshot)
         {
@@ -260,7 +260,7 @@ public abstract partial class BaseTableGateway<TEntity>
     /// that fails without throwing (e.g. ExecuteNonQueryAsync affecting 0 rows) still gets its
     /// audit fields restored.
     /// </summary>
-    protected bool RestoreAuditFieldsIfFailed(bool succeeded, TEntity obj, in AuditFieldSnapshot snapshot)
+    internal bool RestoreAuditFieldsIfFailed(bool succeeded, TEntity obj, in AuditFieldSnapshot snapshot)
     {
         if (!succeeded)
         {

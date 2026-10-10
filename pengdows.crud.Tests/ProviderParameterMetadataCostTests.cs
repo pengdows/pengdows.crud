@@ -101,14 +101,14 @@ public sealed class ProviderParameterMetadataCostTests
     [Theory]
     [InlineData(DbType.Double, fakeOracleDbType.BinaryDouble)]
     [InlineData(DbType.Single, fakeOracleDbType.BinaryFloat)]
-    public void OracleFloatingPointParameter_StampsBinaryType_AllocatingNothingExtra(DbType type, fakeOracleDbType expected)
+    public void OracleFloatingPointParameter_StampsBinaryType_AllocatingNothingExtra(DbType type, object expected)
     {
         var dialect = Dialect(SupportedDatabase.Oracle, f => f.EmulatesOracleParameterMetadata = true);
         object value = type == DbType.Double ? 1.5 : 1.5f;
 
         var parameter = (fakeDbOracleParameter)dialect.CreateDbParameter("p", type, value);
 
-        Assert.Equal(expected, parameter.OracleDbType);
+        Assert.Equal((fakeOracleDbType)expected, parameter.OracleDbType);
         var floatingBytes = Allocated(() => dialect.CreateDbParameter("p", type, value));
         var intBytes = Allocated(() => dialect.CreateDbParameter("p", DbType.Int32, (object)42));
         Assert.True(floatingBytes <= intBytes, $"{type} {floatingBytes} B, int {intBytes} B");

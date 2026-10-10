@@ -27,7 +27,7 @@ public class DialectIsEmbeddedSingleWriterEngineTests
     [InlineData(SupportedDatabase.DuckDB)]
     public void EmbeddedEngines_ReportTrue(SupportedDatabase db)
     {
-        Assert.True(CreateDialect(db).IsEmbeddedSingleWriterEngine);
+        Assert.True(CreateDialect(db).IsEmbeddedSingleWriterEngine());
     }
 
     public static IEnumerable<object[]> NonEmbeddedDatabases()
@@ -43,6 +43,6 @@ public class DialectIsEmbeddedSingleWriterEngineTests
     [MemberData(nameof(NonEmbeddedDatabases))]
     public void EverythingElse_IncludingUnknown_ReportsFalse(SupportedDatabase db)
     {
-        Assert.False(CreateDialect(db).IsEmbeddedSingleWriterEngine);
+        Assert.False(CreateDialect(db).IsEmbeddedSingleWriterEngine());
     }
 }

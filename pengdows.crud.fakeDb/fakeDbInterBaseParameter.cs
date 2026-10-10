@@ -9,7 +9,7 @@ namespace pengdows.crud.fakeDb;
 /// has no array mapping) unless <see cref="IBDbType"/> was set to <see cref="fakeIBDbType.Array"/>
 /// first (confirmed live, InterBase 15).
 /// </summary>
-public class fakeDbInterBaseParameter : fakeDbParameter
+internal class fakeDbInterBaseParameter : fakeDbParameter
 {
     /// <summary>Mirrors <c>IBParameter.IBDbType</c>.</summary>
     public fakeIBDbType IBDbType { get; set; }
@@ -31,7 +31,7 @@ public class fakeDbInterBaseParameter : fakeDbParameter
 }
 
 /// <summary>The <c>IBDbType</c> members pengdows.crud dialects set, by name.</summary>
-public enum fakeIBDbType
+internal enum fakeIBDbType
 {
     VarChar = 0,
     Array

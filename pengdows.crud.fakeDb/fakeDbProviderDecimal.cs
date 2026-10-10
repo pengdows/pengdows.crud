@@ -7,7 +7,7 @@ namespace pengdows.crud.fakeDb;
 /// <see cref="fakeDbDataReader.ProviderDecimalColumns"/>, as Sap.Data.Hana.Net's HanaDecimal is:
 /// <see cref="IConvertible"/>, with <see cref="ToDecimal()"/>, but not a <see cref="decimal"/>.
 /// </summary>
-public sealed class fakeDbProviderDecimal : IConvertible
+internal sealed class fakeDbProviderDecimal : IConvertible
 {
     private readonly decimal _value;
 

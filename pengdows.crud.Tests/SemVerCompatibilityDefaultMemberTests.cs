@@ -20,14 +20,7 @@ public class SemVerCompatibilityDefaultMemberTests
 {
     public static TheoryData<Type, string> MembersAddedAfter205 => new()
     {
-        { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.IsClientServerDatabase) },
-        { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.IsEmbeddedSingleWriterEngine) },
-        { typeof(ISqlDialect), nameof(ISqlDialect.DetectInMemoryKind) },
-        { typeof(ISqlDialect), nameof(ISqlDialect.CoerceConnectionMode) },
         { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.SavepointCapabilities) },
-        { typeof(ISqlDialect), nameof(ISqlDialect.GetReleaseSavepointSql) },
-        { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.SupportsSemicolonStatementSeparator) },
-        { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.SupportsPaging) },
         { typeof(ISqlDialect), "get_" + nameof(ISqlDialect.PreservesTrailingWhitespace) },
         { typeof(IDatabaseContextConfiguration), "get_" + nameof(IDatabaseContextConfiguration.SessionInitializationFailureMode) },
         { typeof(IDatabaseContextConfiguration), "set_" + nameof(IDatabaseContextConfiguration.SessionInitializationFailureMode) },
@@ -62,15 +55,15 @@ public class SemVerCompatibilityDefaultMemberTests
     }
 
     [Fact]
-    public void ISqlDialect_Defaults_MatchSqlDialectBase()
+    public void ADialectThatIsNotAnInternalOne_FallsBackToTheAnsiDefaults()
     {
         var dialect = new Mock<ISqlDialect> { CallBase = true };
         dialect.Setup(d => d.WrapObjectName(It.IsAny<string>())).Returns<string>(n => "\"" + n + "\"");
 
-        Assert.True(dialect.Object.IsClientServerDatabase);
-        Assert.False(dialect.Object.IsEmbeddedSingleWriterEngine);
+        Assert.True(dialect.Object.IsClientServerDatabase());
+        Assert.False(dialect.Object.IsEmbeddedSingleWriterEngine());
         Assert.Equal(InMemoryKind.None, dialect.Object.DetectInMemoryKind("Data Source=:memory:"));
-        Assert.True(dialect.Object.SupportsSemicolonStatementSeparator);
+        Assert.True(dialect.Object.SupportsSemicolonStatementSeparator());
         Assert.True(dialect.Object.PreservesTrailingWhitespace);
         Assert.Equal("RELEASE SAVEPOINT \"sp1\"", dialect.Object.GetReleaseSavepointSql("sp1"));
     }
@@ -79,18 +72,18 @@ public class SemVerCompatibilityDefaultMemberTests
     [InlineData(true, false, true)]
     [InlineData(false, true, true)]
     [InlineData(false, false, false)]
-    public void ISqlDialect_SupportsPaging_Default_FollowsPagingSyntaxFlags(bool offsetFetch, bool limitOffset,
+    public void ADialectThatIsNotAnInternalOne_SupportsPaging_FollowsThePagingSyntaxFlags(bool offsetFetch, bool limitOffset,
         bool expected)
     {
         var dialect = new Mock<ISqlDialect> { CallBase = true };
         dialect.SetupGet(d => d.SupportsOffsetFetch).Returns(offsetFetch);
         dialect.SetupGet(d => d.SupportsLimitOffset).Returns(limitOffset);
 
-        Assert.Equal(expected, dialect.Object.SupportsPaging);
+        Assert.Equal(expected, dialect.Object.SupportsPaging());
     }
 
     [Fact]
-    public void ISqlDialect_CoerceConnectionMode_Default_ResolvesBestToStandardAndHonorsExplicit()
+    public void ADialectThatIsNotAnInternalOne_ResolvesBestToStandardAndHonorsAnExplicitMode()
     {
         var dialect = new Mock<ISqlDialect> { CallBase = true };
 

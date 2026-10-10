@@ -23,20 +23,20 @@ public class DialectDetectInMemoryKindTests
     [InlineData("Data Source=:memory:", InMemoryKind.Isolated)]
     [InlineData("Data Source=file:memdb1?mode=memory&cache=shared", InMemoryKind.Shared)]
     [InlineData("Data Source=file.db", InMemoryKind.None)]
-    public void Sqlite_DetectsInMemoryKind(string connectionString, InMemoryKind expected)
+    public void Sqlite_DetectsInMemoryKind(string connectionString, object expected)
     {
         var dialect = CreateDialect(SupportedDatabase.Sqlite);
-        Assert.Equal(expected, dialect.DetectInMemoryKind(connectionString));
+        Assert.Equal((InMemoryKind)expected, dialect.DetectInMemoryKind(connectionString));
     }
 
     [Theory]
     [InlineData("Data Source=:memory:", InMemoryKind.Isolated)]
     [InlineData("Data Source=:memory:;cache=shared", InMemoryKind.Shared)]
     [InlineData("Data Source=file.duckdb", InMemoryKind.None)]
-    public void DuckDb_DetectsInMemoryKind(string connectionString, InMemoryKind expected)
+    public void DuckDb_DetectsInMemoryKind(string connectionString, object expected)
     {
         var dialect = CreateDialect(SupportedDatabase.DuckDB);
-        Assert.Equal(expected, dialect.DetectInMemoryKind(connectionString));
+        Assert.Equal((InMemoryKind)expected, dialect.DetectInMemoryKind(connectionString));
     }
 
     [Theory]

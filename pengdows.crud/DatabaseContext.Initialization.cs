@@ -655,7 +655,7 @@ public partial class DatabaseContext
     /// <param name="loggerFactory">Optional logger factory.</param>
     /// <param name="cancellationToken">Cancels initialization.</param>
     /// <returns>The initialized context.</returns>
-    public static Task<DatabaseContext> CreateAsync(
+    internal static Task<DatabaseContext> CreateAsync(
         IDatabaseContextConfiguration configuration,
         DbDataSource dataSource,
         DbProviderFactory factory,
@@ -2537,7 +2537,7 @@ public partial class DatabaseContext
         var dialect = SqlDialectFactory.CreateDialectForType(product, _factory, _logger);
 
         // Pattern 1: Client-server database with overly restrictive mode
-        if (dialect.IsClientServerDatabase)
+        if (dialect.IsClientServerDatabase())
         {
             if (resolved == DbMode.SingleConnection)
             {
@@ -2570,7 +2570,7 @@ public partial class DatabaseContext
         // (DescribeStandardModeRisk) instead of silently trusting that documentation. Deliberately
         // checks IsEmbeddedSingleWriterEngine rather than !IsClientServerDatabase — the latter is
         // also true for the Unknown-database fallback, which should not get this wording.
-        if (dialect.IsEmbeddedSingleWriterEngine &&
+        if (dialect.IsEmbeddedSingleWriterEngine() &&
             resolved == DbMode.Standard &&
             dialect.DetectInMemoryKind(_connectionString) == InMemoryKind.None)
         {
@@ -2605,7 +2605,7 @@ public partial class DatabaseContext
     {
         // Delegates to the dialect's own ISqlDialect.IsClientServerDatabase instead of
         // maintaining a second SupportedDatabase switch here.
-        return SqlDialectFactory.CreateDialectForType(product, _factory, _logger).IsClientServerDatabase;
+        return SqlDialectFactory.CreateDialectForType(product, _factory, _logger).IsClientServerDatabase();
     }
 
     private InMemoryKind DetectInMemoryKind(SupportedDatabase product, string? connectionString)
