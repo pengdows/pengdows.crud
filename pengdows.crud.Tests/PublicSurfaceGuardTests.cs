@@ -146,6 +146,37 @@ public class PublicSurfaceGuardTests
             found.ToArray());
     }
 
+    // A public type that inherits a System.Data connection, command, reader or transaction type hands every caller
+    // that type's whole surface. ITrackedReader (2.0.5) is the one governed wrapper that does so on purpose: it is a
+    // lease that holds the connection lock until disposed and the provider's own reader never leaves the library, and
+    // being an IDataReader is what lets it feed DataTable.Load and the mappers. Nothing else may; a second such type
+    // needs a recorded reason (REVIEW_POLICY.md 4D) and an entry here.
+    [Fact]
+    public void NoPublicTypeInheritsARawAdoNetType_ExceptTheGovernedReaderLease()
+    {
+        var rawBases = new HashSet<Type>(RawAdoNet) { typeof(IDataRecord) };
+        var found = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var type in new[] { Core, Abstractions }.SelectMany(a => a.GetTypes()).Where(IsReachableFromOutside))
+        {
+            var inheritsRaw = type.GetInterfaces().Any(rawBases.Contains) ||
+                              Ancestors(type).Any(rawBases.Contains);
+            if (inheritsRaw)
+            {
+                found.Add(type.FullName!);
+            }
+        }
+
+        Assert.Equal(new[] { "pengdows.crud.wrappers.ITrackedReader" }, found.ToArray());
+    }
+
+    private static IEnumerable<Type> Ancestors(Type type)
+    {
+        for (var baseType = type.BaseType; baseType != null; baseType = baseType.BaseType)
+        {
+            yield return baseType;
+        }
+    }
+
     private static bool IsReachableFromOutside(Type type) =>
         type.IsVisible || (type.IsNested && (type.IsNestedFamily || type.IsNestedFamORAssem));
 

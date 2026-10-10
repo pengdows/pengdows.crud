@@ -229,7 +229,7 @@ dotnet pack pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj -c Release
 - `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, `ISqlDialect` etc. are the official surface area.
 - Hide implementation details as `internal` by default.
 - **Expose only what needs exposing.** Public is permanent: adding API later costs a minor version, removing it costs a major one. A new public or protected member needs a consumer that cannot do without it and a recorded reason (REVIEW_POLICY.md §4D).
-- **Raw ADO.NET objects (`DbConnection`, `DbCommand`, `DbDataReader`, `DbTransaction`, `DbDataSource`) never appear in public outputs.** Pool governance depends on callers never holding one.
+- **Raw ADO.NET objects (`DbConnection`, `DbCommand`, `DbDataReader`, `DbTransaction`, `DbDataSource`) never appear in public outputs, and no public type inherits one.** Pool governance depends on callers never holding one. The sanctioned form is a governed wrapper that holds the lease and releases it on disposal (today only `ITrackedReader`, an `IDataReader` lease); `PublicSurfaceGuardTests` lists the exceptions.
 - fakeDb may grow freely to mock more, but provider-shaped test doubles (parameter classes, provider enums) stay `internal`.
 - Prefer factory/DI creation where possible. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate/documented.
 

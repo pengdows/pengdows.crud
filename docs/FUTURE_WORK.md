@@ -880,6 +880,7 @@ acquire path, no clock reads when metrics are off) and the public-surface audit 
 | CR5-006 | P1 | The stale-registration guard in the cached sync waiter had no test (a mutation survived). | Test-only hook holds a cancellation callback in flight; the mutation is now caught. |
 | CR5-007 | P1 | Two methods took five parameters (policy 5B). | The per-attempt flags are one small struct; costs 1-5% (0.3-2.3 ns) on the uncontended acquire. |
 | CR5-008 | P2 | The metrics collector read the Stopwatch while the reader's timestamps came from the injected clock. | The reader supplies all three timestamps; `MetricsClock` refuses a clock at another frequency. |
+| CR5-010 | P0 as rated by the separate review pass; P1 by the author | `ITrackedReader` publicly inherits `System.Data.IDataReader` (and `IDataRecord`) and is what `ISqlContainer.ExecuteReaderAsync` returns, so a System.Data reader interface is reachable; the new guard checked member outputs only, not base types, and could not see it. | The guard gap is fixed: `NoPublicTypeInheritsARawAdoNetType_ExceptTheGovernedReaderLease` inspects interfaces and base types and allows exactly `ITrackedReader` (mutation-checked: emptying the allowlist fails on it). The policy now says what "raw" means (the provider's own object, or a public type inheriting one) and names the sanctioned form, a governed lease wrapper. Not a leak of the provider's reader: the type documents lease semantics (holds the connection lock until disposed) and the raw reader never leaves the library. Whether it should keep inheriting `IDataReader` is API-010. |
 | CR5-009 | P2 | Test adequacy: long-timeout tests passed vacuously if the thread started late; timing bounds could flake; a failed writer attempt leaving its writer interest behind was unobserved. | Tests wait for the waiter to be queued; bounds compare against the timeout, then dropped in favour of the timeout counters; new writer-interest test (mutation-checked). |
 
 Also from the separate review pass: a real-PostgreSQL integration test that queues a read with a 60-day
@@ -948,8 +949,9 @@ adding one back is a minor release): `SupportsPaging` (the public `AppendPaging`
 | API-007 | `IIsolationResolver.GetSupportedLevels`, `ResolveWithDetail` | Undocumented, unused outside the core. |
 | API-008 | `ISqlDialect.ParameterMarkerAt` | Undocumented plumbing. |
 | API-009 | The 99 public classes and types of `pengdows.crud` shipped in 2.0.5 | Not yet audited: which could be internal. |
+| API-010 | `ITrackedReader : IDataReader, IDataRecord` (shipped in 2.0.5, returned by `ExecuteReaderAsync`) | Decision for 3.0, not a defect: being an `IDataReader` lets the governed lease feed `DataTable.Load` and the mappers, but it also puts the whole `IDataReader` surface (`Close`, `NextResult`, `GetSchemaTable`, ...) on a lease. Options: keep and document; or replace the inheritance with a curated reader abstraction. Breaking either way. |
 
-**Guards.** Now: `PublicSurfaceGuardTests` (the pull-backs above and the raw-ADO.NET ratchet). Planned:
+**Guards.** Now: `PublicSurfaceGuardTests` (the pull-backs above, a ratchet on raw ADO.NET *outputs* that allows exactly the three `DataSource` properties, and a ratchet on raw ADO.NET *inheritance* that allows exactly `ITrackedReader`). Planned:
 API-GUARD-1 `Microsoft.CodeAnalysis.PublicApiAnalyzers` on the three shipped projects, `PublicAPI.Shipped.txt`
 seeded from 2.0.5 and `PublicAPI.Unshipped.txt` holding only approved additions with a reason, so an undeclared
 public or protected member fails the build; API-GUARD-2 package validation against the last shipped version
