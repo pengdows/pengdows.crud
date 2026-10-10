@@ -892,6 +892,15 @@ frameworks, 5,861 passed each) with one failure everywhere, **`Db2NativeLibraryB
 way, it passes when run alone, and no commit in this range touches it or the Db2 bootstrap. Open: fix it (it
 interacts with another test in the same process).
 
+Integration re-run on the final code, after the public-surface pull-back (`d479482b`): 17 databases on each
+framework, 5,861 and 5,860 passed, the same counts as before the pull-back; the pre-existing Db2 bootstrap failure on
+every database, plus one `ServerConnectionLimitLiveProbeMySqlSqlServerTests.SqlServer_ClampOn_AnUnlimitedServerLeavesThePoolsAtTheProviderDefault`
+failure per framework, both with the same `Docker.DotNet.DockerApiException: ... container ... is not running` raised
+while the test execs inside the SQL Server container it started. That is infrastructure, not pooling: the whole live-probe
+class passes alone, 5 of 5 on net8.0 and net10.0 (also twice earlier), and it failed in 3 of the 4 full matrix runs
+with this identical signature, so the container is dying under the matrix's parallel load. Open (test
+infrastructure, DEC-011): run the live-probe tests in their own phase, or give that container its own memory limit.
+
 Performance (uncontended acquire + release, one slot): blocking 66.3 -> 21.8 ns, async 77.2 -> 29.5 ns, same 48 B;
 with the writer turnstile 86.9 -> 44.9 ns and 93.4 -> 51.9 ns. A 32-thread blocking storm on a 2-8 slot PostgreSQL
 pool is within -4% to +6% of 2.0.5 and allocates about 36% less. Against SemaphoreSlim the strict-FIFO gate is
