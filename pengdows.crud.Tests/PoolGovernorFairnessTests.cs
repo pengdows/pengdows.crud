@@ -27,7 +27,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: turnstile,
             holdTurnstile: true); // Writer holds turnstile
 
@@ -37,7 +36,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 10,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: turnstile,
             holdTurnstile: false); // Readers touch-and-release
 
@@ -65,7 +63,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 5,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: turnstile,
             holdTurnstile: false);
 
@@ -98,7 +95,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(10),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: turnstile,
             holdTurnstile: true);
 
@@ -108,7 +104,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 5,
             acquireTimeout: TimeSpan.FromSeconds(10),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: turnstile,
             holdTurnstile: false);
 
@@ -180,7 +175,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: turnstile,
             holdTurnstile: true);
 
@@ -190,7 +184,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 5,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: turnstile,
             holdTurnstile: false);
 
@@ -228,7 +221,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 2,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: null,
             holdTurnstile: true);
 
@@ -255,7 +247,6 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(5),
             disabled: false,
-            sharedSemaphore: null,
             turnstile: turnstile,
             holdTurnstile: true);
 
@@ -273,7 +264,6 @@ public sealed class PoolGovernorFairnessTests
         // Arrange: Writer governor with 2 slots but we'll exhaust the semaphore
         // separately to test turnstile cleanup on semaphore timeout
         var turnstile = new SemaphoreSlim(1, 1);
-        var sharedSemaphore = new SemaphoreSlim(1, 1);
 
         var governor = new PoolGovernor(
             PoolLabel.Writer,
@@ -281,30 +271,25 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 1,
             acquireTimeout: TimeSpan.FromMilliseconds(50),
             disabled: false,
-            sharedSemaphore: sharedSemaphore,
             turnstile: turnstile,
             holdTurnstile: true);
 
-        // Exhaust the semaphore externally (simulate another consumer)
-        sharedSemaphore.Wait();
+        // Fill the slot, leaving the turnstile free: the next acquire passes the turnstile and waits on the slot
+        using var held = PoolGovernorSlotExhaustion.Hold(governor, turnstile);
 
-        // Act: Acquire should get turnstile but timeout on semaphore
+        // Act: Acquire should get the turnstile but time out on the slot
         await Assert.ThrowsAsync<pengdows.crud.exceptions.PoolSaturatedException>(() => governor.AcquireAsync().AsTask());
 
         // Verify turnstile was released by checking we can acquire it
-        Assert.True(turnstile.Wait(0), "Turnstile should have been released after semaphore timeout");
+        Assert.True(turnstile.Wait(0), "Turnstile should have been released after the slot timeout");
         turnstile.Release();
-
-        // Cleanup
-        sharedSemaphore.Release();
     }
 
     [Fact]
     public async Task Cancellation_ReleasesTurnstile()
     {
-        // Arrange: Governor where we'll cancel during semaphore wait
+        // Arrange: Governor where we'll cancel during the slot wait
         var turnstile = new SemaphoreSlim(1, 1);
-        var sharedSemaphore = new SemaphoreSlim(1, 1);
 
         var governor = new PoolGovernor(
             PoolLabel.Writer,
@@ -312,12 +297,11 @@ public sealed class PoolGovernorFairnessTests
             maxSlots: 1,
             acquireTimeout: TimeSpan.FromSeconds(30),
             disabled: false,
-            sharedSemaphore: sharedSemaphore,
             turnstile: turnstile,
             holdTurnstile: true);
 
-        // Exhaust the semaphore externally
-        sharedSemaphore.Wait();
+        // Fill the slot, leaving the turnstile free: the next acquire passes the turnstile and waits on the slot
+        using var held = PoolGovernorSlotExhaustion.Hold(governor, turnstile);
 
         // Act: Start acquire and cancel it
         using var cts = new CancellationTokenSource();
@@ -332,8 +316,5 @@ public sealed class PoolGovernorFairnessTests
         // Verify turnstile was released
         Assert.True(turnstile.Wait(0), "Turnstile should have been released after cancellation");
         turnstile.Release();
-
-        // Cleanup
-        sharedSemaphore.Release();
     }
 }

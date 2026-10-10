@@ -220,74 +220,78 @@ public sealed class PoolGovernorTurnstileTests
     public void Acquire_SlotSaturated_HoldMetricsNotContaminated()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var exhaustedSem = new SemaphoreSlim(0, 1);
 
         using var writer = new PoolGovernor(PoolLabel.Writer, "m-fail", 1,
             TimeSpan.FromMilliseconds(20),
             trackMetrics: true,
-            sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(writer, turnstile);
+        var baseline = writer.GetSnapshot();
 
         Assert.Throws<PoolSaturatedException>(() => writer.Acquire());
 
-        Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
-        Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
+        Assert.Equal(baseline.TotalHoldTicks, writer.GetSnapshot().TotalHoldTicks);
+        Assert.Equal(baseline.TotalWaitTicks, writer.GetSnapshot().TotalWaitTicks);
     }
 
     [Fact]
     public async Task AcquireAsync_SlotSaturated_HoldMetricsNotContaminated()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var exhaustedSem = new SemaphoreSlim(0, 1);
 
         using var writer = new PoolGovernor(PoolLabel.Writer, "m-fail-a", 1,
             TimeSpan.FromMilliseconds(20),
             trackMetrics: true,
-            sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(writer, turnstile);
+        var baseline = writer.GetSnapshot();
 
         await Assert.ThrowsAsync<PoolSaturatedException>(() => writer.AcquireAsync().AsTask());
 
-        Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
-        Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
+        Assert.Equal(baseline.TotalHoldTicks, writer.GetSnapshot().TotalHoldTicks);
+        Assert.Equal(baseline.TotalWaitTicks, writer.GetSnapshot().TotalWaitTicks);
     }
 
     [Fact]
     public void TryAcquire_SlotMiss_HoldMetricsNotContaminated()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var exhaustedSem = new SemaphoreSlim(0, 1);
 
         using var writer = new PoolGovernor(PoolLabel.Writer, "m-try-fail", 1,
             TimeSpan.FromMilliseconds(10),
             trackMetrics: true,
-            sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(writer, turnstile);
+        var baseline = writer.GetSnapshot();
 
         var success = writer.TryAcquire(out _);
 
         Assert.False(success);
-        Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
-        Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
+        Assert.Equal(baseline.TotalHoldTicks, writer.GetSnapshot().TotalHoldTicks);
+        Assert.Equal(baseline.TotalWaitTicks, writer.GetSnapshot().TotalWaitTicks);
     }
 
     [Fact]
     public async Task TryAcquireAsync_SlotMiss_HoldMetricsNotContaminated()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var exhaustedSem = new SemaphoreSlim(0, 1);
 
         using var writer = new PoolGovernor(PoolLabel.Writer, "m-trya-fail", 1,
             TimeSpan.FromMilliseconds(10),
             trackMetrics: true,
-            sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(writer, turnstile);
+        var baseline = writer.GetSnapshot();
 
         var (success, _) = await writer.TryAcquireAsync();
 
         Assert.False(success);
-        Assert.Equal(0, writer.GetSnapshot().TotalHoldTicks);
-        Assert.Equal(0, writer.GetSnapshot().TotalWaitTicks);
+        Assert.Equal(baseline.TotalHoldTicks, writer.GetSnapshot().TotalHoldTicks);
+        Assert.Equal(baseline.TotalWaitTicks, writer.GetSnapshot().TotalWaitTicks);
     }
 
     // ── Turnstile released on slot-acquisition failure ────────────────────
@@ -298,12 +302,12 @@ public sealed class PoolGovernorTurnstileTests
     public void Acquire_SlotSaturated_WriterReleasesTurnstileOnFailure()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var exhaustedSem = new SemaphoreSlim(0, 1); // zero available
 
         using var writer = new PoolGovernor(PoolLabel.Writer, "fail-ts", 1,
             TimeSpan.FromMilliseconds(20),
-            sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(writer, turnstile);
 
         Assert.Throws<PoolSaturatedException>(() => writer.Acquire());
 
@@ -315,12 +319,12 @@ public sealed class PoolGovernorTurnstileTests
     public async Task AcquireAsync_SlotSaturated_WriterReleasesTurnstileOnFailure()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var exhaustedSem = new SemaphoreSlim(0, 1);
 
         using var writer = new PoolGovernor(PoolLabel.Writer, "fail-ts-a", 1,
             TimeSpan.FromMilliseconds(20),
-            sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(writer, turnstile);
 
         await Assert.ThrowsAsync<PoolSaturatedException>(() => writer.AcquireAsync().AsTask());
 
@@ -331,12 +335,12 @@ public sealed class PoolGovernorTurnstileTests
     public void TryAcquire_SlotSaturated_WriterReleasesTurnstileOnFallthrough()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var exhaustedSem = new SemaphoreSlim(0, 1);
 
         using var writer = new PoolGovernor(PoolLabel.Writer, "try-fail-ts", 1,
             TimeSpan.FromMilliseconds(10),
-            sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(writer, turnstile);
 
         var success = writer.TryAcquire(out var slot);
 
@@ -348,12 +352,12 @@ public sealed class PoolGovernorTurnstileTests
     public async Task TryAcquireAsync_SlotSaturated_WriterReleasesTurnstileOnFallthrough()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var exhaustedSem = new SemaphoreSlim(0, 1);
 
         using var writer = new PoolGovernor(PoolLabel.Writer, "trya-fail-ts", 1,
             TimeSpan.FromMilliseconds(10),
-            sharedSemaphore: exhaustedSem,
             turnstile: turnstile, holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(writer, turnstile);
 
         var result = await writer.TryAcquireAsync();
 

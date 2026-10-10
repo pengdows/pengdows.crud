@@ -13,15 +13,12 @@ using pengdows.crud.enums;
 //   * Release(): Returns permit to pool (called by PoolSlot)
 //   * GetSnapshot(): Returns current pool statistics
 // - Throws PoolSaturatedException when timeout expires waiting for slot, or immediately when
-//   the wait queue (semaphore or turnstile) is already at MaxQueueDepth.
+//   the wait queue (slot gate or turnstile) is already at MaxQueueDepth.
 // - Tracks: inUse, peakInUse, queued, totalAcquired, totalSlotTimeouts, totalTurnstileTimeouts.
-//   * TotalTimeouts in snapshot = semaphore (slot) acquisition timeouts.
+//   * TotalTimeouts in snapshot = slot acquisition timeouts.
 //   * TotalTurnstileTimeouts in snapshot = turnstile acquisition timeouts.
 // - Can be disabled (returns default slots without blocking).
-// - Shared semaphore support:
-//   * OwnsSemaphore: true if governor created its own semaphore
-//   * When using shared semaphore, caller must ensure maxSlots matches actual capacity
-//   * Telemetry uses maxSlots as reported capacity (not verified at runtime)
+// - Slot admission goes through PoolGovernorConcurrencyGate, the only admission primitive.
 // - Turnstile fairness support (optional):
 //   * Reduces writer starvation risk under sustained reader pressure.
 //   * Writers (holdTurnstile=true): hold turnstile for the duration of their slot.
@@ -52,7 +49,6 @@ internal sealed class PoolGovernor : IDisposable
 
     private readonly PoolLabel _label;
     private readonly string _poolKeyHash;
-    private readonly SemaphoreSlim? _semaphore;
     private readonly PoolGovernorConcurrencyGate? _concurrencyGate;
     private readonly TimeSpan _acquireTimeout;
     private readonly long _acquireTimeoutStopwatchTicks;
@@ -61,7 +57,6 @@ internal sealed class PoolGovernor : IDisposable
     private readonly bool _disabled;
     private readonly bool _forbidden;
     private readonly bool _trackMetrics;
-    private readonly bool _ownsSemaphore;
     private readonly bool _ownsTurnstile;
     // Made by WaitForDrainAsync only while it waits, and completed by the release that drops _inUse
     // to zero. Acquire and release touch it with no lock and no allocation (PERF-024): a waiter
@@ -105,7 +100,6 @@ internal sealed class PoolGovernor : IDisposable
         bool disabled = false,
         bool forbidden = false,
         bool trackMetrics = false,
-        SemaphoreSlim? sharedSemaphore = null,
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
@@ -127,9 +121,7 @@ internal sealed class PoolGovernor : IDisposable
         {
             _disabled = true;
             _maxSlots = 0;
-            _semaphore = null;
             _concurrencyGate = null;
-            _ownsSemaphore = false;
             return;
         }
 
@@ -137,9 +129,7 @@ internal sealed class PoolGovernor : IDisposable
         {
             _forbidden = true;
             _maxSlots = 0;
-            _semaphore = null;
             _concurrencyGate = null;
-            _ownsSemaphore = false;
             return;
         }
 
@@ -156,32 +146,11 @@ internal sealed class PoolGovernor : IDisposable
         _maxSlots = maxSlots;
         _maxQueueDepth = maxQueueDepth ?? Math.Max(maxSlots * QueueDepthMultiplier, MinQueueDepth);
 
-        if (sharedSemaphore != null)
-        {
-            // Shared semaphore: caller is responsible for ensuring maxSlots matches
-            // the semaphore's actual capacity. We cannot verify this at runtime since
-            // SemaphoreSlim does not expose its max count. Telemetry will use maxSlots
-            // as the reported capacity - caller must ensure consistency.
-            _semaphore = sharedSemaphore;
-            _concurrencyGate = null;
-            _ownsSemaphore = false;
-        }
-        else
-        {
-            _semaphore = null;
-            // PoolGovernor owns queue-depth admission and metrics. The gate's queue is therefore
-            // deliberately unbounded here so callers receive PoolSaturatedException with the
-            // governor snapshot rather than the gate's internal exception.
-            _concurrencyGate = new PoolGovernorConcurrencyGate(maxSlots, int.MaxValue);
-            _ownsSemaphore = true;
-        }
+        // PoolGovernor owns queue-depth admission and metrics. The gate's queue is therefore
+        // deliberately unbounded here so callers receive PoolSaturatedException with the
+        // governor snapshot rather than the gate's internal exception.
+        _concurrencyGate = new PoolGovernorConcurrencyGate(maxSlots, int.MaxValue);
     }
-
-    /// <summary>
-    /// Whether this governor owns its semaphore (vs using a shared one).
-    /// When false, telemetry maxSlots may not reflect actual semaphore capacity.
-    /// </summary>
-    internal bool OwnsSemaphore => _ownsSemaphore;
 
     /// <summary>
     /// Whether this governor is forbidden (MaxPoolSize=0).
@@ -207,7 +176,7 @@ internal sealed class PoolGovernor : IDisposable
     /// verify <see cref="ReleaseToken"/>'s release ordering (permits must become available before
     /// <c>_inUse</c> reflects the release, not after).
     /// </summary>
-    internal int AvailablePermits => _concurrencyGate?.AvailableCount ?? _semaphore?.CurrentCount ?? 0;
+    internal int AvailablePermits => _concurrencyGate?.AvailableCount ?? 0;
 
     /// <summary>
     /// Test-only hook invoked immediately before <see cref="ReleaseToken"/> decrements
@@ -255,7 +224,7 @@ internal sealed class PoolGovernor : IDisposable
             return false;
         }
 
-        if (_semaphore == null && _concurrencyGate == null)
+        if (_concurrencyGate == null)
         {
             throw new InvalidOperationException(NotInitializedMessage);
         }
@@ -264,54 +233,37 @@ internal sealed class PoolGovernor : IDisposable
     }
 
     private bool TryAcquireAdmission(CancellationToken cancellationToken)
-    {
-        if (_concurrencyGate != null)
-        {
-            return _concurrencyGate.TryAcquire(out _, cancellationToken);
-        }
-
-        return _semaphore!.Wait(0, cancellationToken);
-    }
+        => _concurrencyGate!.TryAcquire(out _, cancellationToken);
 
     private bool AcquireAdmission(TimeSpan timeout, CancellationToken cancellationToken)
     {
-        if (_concurrencyGate != null)
+        try
         {
-            try
-            {
-                _concurrencyGate.Acquire(timeout, cancellationToken);
-                return true;
-            }
-            catch (TimeoutException)
-            {
-                return false;
-            }
+            _concurrencyGate!.Acquire(timeout, cancellationToken);
+            return true;
         }
-
-        return _semaphore!.Wait(timeout, cancellationToken);
+        catch (TimeoutException)
+        {
+            return false;
+        }
     }
 
     private ValueTask<bool> AcquireAdmissionAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
-        if (_concurrencyGate != null)
+        // PoolGovernor uses a zero-time probe before entering its own queued slow path.
+        // Keep that probe entirely synchronous: routing it through the timed gate overload
+        // creates a linked timeout CTS even when the caller is not waiting.
+        if (timeout == TimeSpan.Zero)
         {
-            // PoolGovernor uses a zero-time probe before entering its own queued slow path.
-            // Keep that probe entirely synchronous: routing it through the timed gate overload
-            // creates a linked timeout CTS even when the caller is not waiting.
-            if (timeout == TimeSpan.Zero)
+            if (cancellationToken.IsCancellationRequested)
             {
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    return new ValueTask<bool>(Task.FromCanceled<bool>(cancellationToken));
-                }
-
-                return ValueTask.FromResult(TryAcquireAdmission(cancellationToken));
+                return new ValueTask<bool>(Task.FromCanceled<bool>(cancellationToken));
             }
 
-            return AcquireGateAdmissionAsync(timeout, cancellationToken);
+            return ValueTask.FromResult(TryAcquireAdmission(cancellationToken));
         }
 
-        return WaitSemaphoreAsync(timeout, cancellationToken);
+        return AcquireGateAdmissionAsync(timeout, cancellationToken);
     }
 
     private async ValueTask<bool> AcquireGateAdmissionAsync(TimeSpan timeout, CancellationToken cancellationToken)
@@ -327,20 +279,7 @@ internal sealed class PoolGovernor : IDisposable
         }
     }
 
-    private async ValueTask<bool> WaitSemaphoreAsync(TimeSpan timeout, CancellationToken cancellationToken)
-        => await _semaphore!.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
-
-    private void ReleaseAdmission()
-    {
-        if (_concurrencyGate != null)
-        {
-            _concurrencyGate.Release(0);
-        }
-        else
-        {
-            _semaphore!.Release();
-        }
-    }
+    private void ReleaseAdmission() => _concurrencyGate!.Release(0);
 
     public PoolSlot Acquire(CancellationToken cancellationToken = default)
     {
@@ -1103,11 +1042,6 @@ internal sealed class PoolGovernor : IDisposable
     public void Dispose()
     {
         Close();
-
-        if (_ownsSemaphore && _concurrencyGate == null)
-        {
-            _semaphore?.Dispose();
-        }
 
         _concurrencyGate?.Dispose();
 

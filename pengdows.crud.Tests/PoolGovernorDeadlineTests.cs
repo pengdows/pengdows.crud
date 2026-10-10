@@ -47,13 +47,13 @@ public sealed class PoolGovernorDeadlineTests
         const int headroomMs = 500;   // generous for parallel-scheduler noise
 
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var sem = new SemaphoreSlim(0, 1); // zero capacity — always fails
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "deadline-async", 1,
             TimeSpan.FromMilliseconds(timeoutMs),
-            sharedSemaphore: sem,
             turnstile: turnstile,
             holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(gov, turnstile);
 
         await turnstile.WaitAsync(); // hold it externally
         using var releaser = StartDelayedReleaseThread(turnstile, turnstileHoldMs);
@@ -80,13 +80,13 @@ public sealed class PoolGovernorDeadlineTests
         const int headroomMs = 500;
 
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var sem = new SemaphoreSlim(0, 1);
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "deadline-sync", 1,
             TimeSpan.FromMilliseconds(timeoutMs),
-            sharedSemaphore: sem,
             turnstile: turnstile,
             holdTurnstile: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(gov, turnstile);
 
         turnstile.Wait(); // hold it externally
         using var releaser = StartDelayedReleaseThread(turnstile, turnstileHoldMs);
@@ -116,15 +116,15 @@ public sealed class PoolGovernorDeadlineTests
     public async Task AcquireAsync_SemaphoreExhausted_TurnstileFree_CountedAsSlotTimeout()
     {
         using var turnstile = new SemaphoreSlim(1, 1); // free — governor passes instantly
-        using var sem = new SemaphoreSlim(0, 1); // exhausted — always fails
 
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "slot-to-a", 1,
             TimeSpan.FromMilliseconds(50),
-            sharedSemaphore: sem,
             turnstile: turnstile,
             holdTurnstile: true,
             trackMetrics: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(gov, turnstile);
 
         await Assert.ThrowsAsync<PoolSaturatedException>(() => gov.AcquireAsync().AsTask());
 
@@ -136,15 +136,15 @@ public sealed class PoolGovernorDeadlineTests
     public void Acquire_SemaphoreExhausted_TurnstileFree_CountedAsSlotTimeout()
     {
         using var turnstile = new SemaphoreSlim(1, 1);
-        using var sem = new SemaphoreSlim(0, 1);
 
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "slot-to-s", 1,
             TimeSpan.FromMilliseconds(50),
-            sharedSemaphore: sem,
             turnstile: turnstile,
             holdTurnstile: true,
             trackMetrics: true);
+
+        using var held = PoolGovernorSlotExhaustion.Hold(gov, turnstile);
 
         Assert.Throws<PoolSaturatedException>(() => gov.Acquire());
 
@@ -195,14 +195,12 @@ public sealed class PoolGovernorDeadlineTests
         const int headroomMs = 300;
 
         using var turnstile = new SemaphoreSlim(1, 1);
-        // Semaphore has capacity — if we reach it we would succeed.
-        // We want to prove we do NOT reach it after the deadline expires.
-        using var sem = new SemaphoreSlim(1, 1);
+        // The slot is free — if the governor reached it, it would succeed.
+        // We want to prove it does NOT reach it after the deadline expires.
 
         using var gov = new PoolGovernor(
             PoolLabel.Writer, "budget-zero", 1,
             TimeSpan.FromMilliseconds(timeoutMs),
-            sharedSemaphore: sem,
             turnstile: turnstile,
             holdTurnstile: true,
             trackMetrics: true);

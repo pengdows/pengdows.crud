@@ -50,6 +50,12 @@ A caller-supplied `Min Pool Size` is clamped to `[0, Max Pool Size]`. In `Preven
 
 A write size of `0` promotes the context to `ReadOnly` with a warning, as described above: it is equivalent to explicitly selecting a read-only context, with the writer governor forbidden and the reader pool enabled.
 
+### How a governor admits callers
+
+Every governor admits callers through one primitive, `PoolGovernorConcurrencyGate`. A caller that finds a free slot takes it without locking. A caller that does not joins a queue and is handed a slot in arrival order: admission is strictly first-in, first-out, so a caller already waiting is never overtaken by a newer one. A blocking (synchronous) wait allocates nothing once warm, and spins briefly before it parks the thread; an asynchronous wait awaits without holding a thread.
+
+Strict FIFO has a price, and it is worth knowing where it shows. Handing a slot to a parked thread costs that thread's wake-up, so a tight loop that acquires, holds for almost no time and releases again is slower than a primitive that lets the releasing thread take its own slot back. Measured against `SemaphoreSlim` (16 blocking callers, no time between acquisitions): on one slot the gate is far slower at a zero-length hold and 1.8× slower at 5 µs; on 1 to 8 slots it is 1.1 to 1.5× slower at 10 to 50 µs, 1.07 to 1.10× at 100 µs, and level from about 10 ms or at 64 slots and up. A database round trip is not that short: against PostgreSQL, 32 threads queuing for 2 or 8 slots through blocking `BeginTransaction` ran within -4% to +6% of 2.0.5, and allocated about 36% less. Asynchronous waits, and the maximum pool size (512 slots), matched or beat `SemaphoreSlim` at every hold measured. Only a workload that holds a slot for a few microseconds, with callers queuing behind it on a small pool, pays the difference.
+
 ## Server connection ceiling (opt-in)
 
 Setting `ClampPoolsToServerConnectionLimit = true` (default `false` on the 2.0.x line, because it can silently shrink an oversized pool) makes the context read the database server's own connection limit while it initializes and never size a pool above it. Each role gets the smaller of the size it asked for (or the provider default of 100 when it asked for nothing) and the server's limit. A clamp is logged as a warning, and so is an unreadable limit when clamping was requested, so a silent no-op cannot hide.

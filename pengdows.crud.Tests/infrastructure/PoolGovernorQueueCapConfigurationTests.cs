@@ -98,10 +98,5 @@ public class PoolGovernorQueueCapConfigurationTests
             BindingFlags.Instance | BindingFlags.NonPublic);
         Assert.NotNull(gateField);
         Assert.NotNull(gateField!.GetValue(writerGovernor));
-
-        var semaphoreField = typeof(PoolGovernor).GetField("_semaphore",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-        Assert.NotNull(semaphoreField);
-        Assert.Null(semaphoreField!.GetValue(writerGovernor));
     }
 }

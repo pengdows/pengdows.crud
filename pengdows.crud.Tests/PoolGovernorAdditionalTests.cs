@@ -66,23 +66,6 @@ public class PoolGovernorAdditionalTests
     }
 
     [Fact]
-    public void Acquire_WithSharedSemaphore_UsesSharedCapacity()
-    {
-        using var shared = new SemaphoreSlim(1, 1);
-        var governor = new PoolGovernor(PoolLabel.Reader, "shared", 1, TimeSpan.FromMilliseconds(20),
-            sharedSemaphore: shared);
-
-        Assert.False(governor.OwnsSemaphore);
-
-        using var slot = governor.Acquire();
-        var snapshot = governor.GetSnapshot();
-        Assert.Equal(1, snapshot.MaxSlots);
-        Assert.Equal(1, snapshot.InUse);
-
-        Assert.Throws<PoolSaturatedException>(() => governor.Acquire());
-    }
-
-    [Fact]
     public void Slot_DisposeTwice_DoesNotOverRelease()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "double-release", 1, TimeSpan.FromMilliseconds(20));
