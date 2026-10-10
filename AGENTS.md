@@ -76,6 +76,7 @@ dotnet pack <project>.csproj -c Release
 - Program to interfaces whenever possible; concrete types should primarily exist to satisfy the interface contracts, and consumers should depend on the abstractions located under `pengdows.crud.abstractions`.
 - Expose `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, etc., as the official surface area for `pengdows.crud` and keep implementation types internal unless there is a compelling reason to document them directly.
 - Hide implementation details as `internal` by default. Prefer factory/DI creation. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate and documented.
+- Expose only what needs exposing: public is permanent (adding costs a minor version, removing a major), so every new public or protected member needs a consumer that cannot do without it and a recorded reason. Raw ADO.NET objects (`DbConnection`, `DbCommand`, `DbDataReader`, `DbTransaction`, `DbDataSource`) never appear in public outputs. fakeDb may grow freely, but provider-shaped test doubles stay `internal`. See REVIEW_POLICY.md §4D.
 
 ## Interface-first Mandate
 

@@ -860,6 +860,104 @@ update branch writes the SERIAL); upsert steps now skip generated columns too.
 | WRT-010 | FlatFile: NULL CHAR/VARCHAR reads back as spaces/empty string | **Upstream (pengdows.flatfile)** (2026-10-03): confirmed with the provider alone (0.2.1-preview.2): a delimited table with no NullToken writes NULL and '' as the same empty field and reads it back non-null. Recorded in pengdows.flatfile/ROADMAP.md (Priority 0); nothing to fix in pengdows.crud |
 | WRT-011 | Null write of provider-typed columns: SQL Server VECTOR (sent as sql_variant), Oracle VECTOR (ORA-50028), Snowflake GEOGRAPHY/GEOMETRY ("No corresponding Snowflake type for type Object") | **Fixed** (2026-10-03): `MarkColumnParameter` gives a NULL bound as DbType.Object the DbType a value of the column binds with (`SqlDialect.NullParameterDbType`: vectors on text-binding dialects, Snowflake spatial); the compiled binders apply it, decided at compile time. `NullProviderTypedColumnBindingTests`; live SQL Server 34/34, Oracle 35/35, Snowflake 22/22 |
 
+## Code review of the 2026-10-10 changes (`1914dad0..HEAD`, fifth pass) and slimming the public interface
+
+Reviewed against [REVIEW_POLICY.md](../REVIEW_POLICY.md) by the author, two independent read-only reviewer
+agents (the second one verified the first one's fixes and hunted afresh) and a separate review pass on
+another model; the policy's mechanical hard-ban checks were run over every added production line. Scope: the
+concurrency-gate and pool-governor work (allocation-free blocking waits, one admission primitive, one shared
+acquire path, no clock reads when metrics are off) and the public-surface audit below.
+
+### Findings and what was done (all test-first, each mutation-checked)
+
+| ID | Sev | Finding | Fix |
+|---|---|---|---|
+| CR5-001 | P0 | The blocking waiter's deadline was `Ticks * Stopwatch.Frequency` in a `long`: it overflows above 15.4 minutes where the frequency is 1 GHz (Linux, macOS), so a blocking `Acquire` with `PoolAcquireTimeout` of 16 minutes or more threw `PoolSaturatedException` at once. | Deadline computed in floating point and capped. Tests at 16 min, 30 min, 1 h, 24 h, 25 days and `TimeSpan.MaxValue`. |
+| CR5-002 | P1 | `PoolGovernor`'s own deadline had the same defect class: `PoolAcquireTimeout = TimeSpan.MaxValue` ("wait as long as it takes"; the config only validates > 0) was a one-tick budget on .NET 8. The gate-level tests had called the gate directly and never reached it. | Conversion capped; governor-level tests (red on net8.0). |
+| CR5-003 | P1 | The gate's async wait armed `CancelAfter` for any timeout, which throws above about 49.7 days. | A timeout past what a timer can hold is treated as none (documented in `connection-pooling.md`). |
+| CR5-004 | P1 | An interrupted blocked thread left its waiter queued, so a later grant went to a caller that was gone and the permit was lost. A second interrupt while leaving could do the same. | The waiter leaves the queue, a raced grant is given back, and every blocking step of the leaving sequence is retried; deterministic tests hold the gate's lock to force each case. |
+| CR5-005 | P1 | A token cancelled between the immediate and the queued probe made `AcquireAsync` throw `OperationCanceledException` instead of `TaskCanceledException`. | Cancellation-aware probe restored in async mode; test uses the `TimeProvider` seam to cancel in exactly that window. |
+| CR5-006 | P1 | The stale-registration guard in the cached sync waiter had no test (a mutation survived). | Test-only hook holds a cancellation callback in flight; the mutation is now caught. |
+| CR5-007 | P1 | Two methods took five parameters (policy 5B). | The per-attempt flags are one small struct; costs 1-5% (0.3-2.3 ns) on the uncontended acquire. |
+| CR5-008 | P2 | The metrics collector read the Stopwatch while the reader's timestamps came from the injected clock. | The reader supplies all three timestamps; `MetricsClock` refuses a clock at another frequency. |
+| CR5-009 | P2 | Test adequacy: long-timeout tests passed vacuously if the thread started late; timing bounds could flake; a failed writer attempt leaving its writer interest behind was unobserved. | Tests wait for the waiter to be queued; bounds compare against the timeout, then dropped in favour of the timeout counters; new writer-interest test (mutation-checked). |
+
+Also from the separate review pass: a real-PostgreSQL integration test that queues a read with a 60-day
+`PoolAcquireTimeout` (it fails when the async timer clamp is removed), and an independent benchmark note.
+
+Evidence: 11,284 unit tests on net8.0 and net10.0; full integration matrix on `306f6957` (17 databases, both
+frameworks, 5,861 passed each) with one failure everywhere, **`Db2NativeLibraryBootstrapTests.TheModuleInitializerRegistersOnce_AndRegisteringAgainChangesNothing`**
+("expected 1, got 2"). That test is **pre-existing**: the identical single-database run at `1914dad0` fails the same
+way, it passes when run alone, and no commit in this range touches it or the Db2 bootstrap. Open: fix it (it
+interacts with another test in the same process).
+
+Performance (uncontended acquire + release, one slot): blocking 66.3 -> 21.8 ns, async 77.2 -> 29.5 ns, same 48 B;
+with the writer turnstile 86.9 -> 44.9 ns and 93.4 -> 51.9 ns. A 32-thread blocking storm on a 2-8 slot PostgreSQL
+pool is within -4% to +6% of 2.0.5 and allocates about 36% less. Against SemaphoreSlim the strict-FIFO gate is
+1.1-1.5x slower at 10-50 us holds on 1-8 slots and level at realistic database holds (docs/connection-pooling.md).
+
+Residual risk: an interrupt landing in the post-wait steps of a normal (non-abandoned) acquire is covered by
+structure, not by a test of its own; not run on Windows.
+
+### Slimming the public interface (principle: expose only what needs exposing)
+
+Public is permanent: adding API later costs a minor version, removing it costs a major, so the default is closed
+(REVIEW_POLICY.md 4D). Raw ADO.NET objects never appear in public outputs.
+
+**Method.** (1) ApiCompat (`dotnet tool install Microsoft.DotNet.ApiCompat.Tool`) of the 2.0.5 packages against the
+build, net8.0 and net10.0, with `--enable-rule-cannot-change-parameter-name`. (2) A reflection dump of every exported
+type and its public/protected members for the three shipped assemblies, diffed against 2.0.5. (3) For every member of
+every public interface, a count of where it is used (consumer docs, external projects, the core, its tests).
+
+**Semver.** 2.0.6 is compatible with 2.0.5: nothing removed, no signature changed, no abstract member added to a
+shipped interface (all 28 additions to existing interfaces have default implementations), no enum renumbered. The
+only ApiCompat items are two fakeDb overrides whose parameters were named `_` in 2.0.5 and now carry the base-class
+names (`ExecuteDbDataReader(behavior)`, `ReadAsync(cancellationToken)`); decision pending: keep with a suppression,
+or revert.
+
+**What 2.0.6 adds, after the pull-back:** `pengdows.crud` 9 types (`DataReaderMapper`,
+`DatabaseContextColumnNameExtensions`, `DbProviderLoaderServiceCollectionExtensions`, five exceptions,
+`HierarchyId`); `pengdows.crud.abstractions` 5 types (`AuditCreationPolicy`, `SavepointCapabilities`,
+`SessionInitializationFailureMode`, `IReadOnlyViolation`, `ITenantContextLease`) and default members on existing
+interfaces; `pengdows.crud.fakeDb` 4 types (`CapturedCommand`, `CapturedParameter`, `fakeDbColumn`, `fakeDbInterval`).
+
+**Pulled back before 2.0.6 ships** (unreleased, so no semver cost; pinned by `PublicSurfaceGuardTests`):
+
+| Item | Why it was public | Now |
+|---|---|---|
+| fakeDb `fakeDbNpgsqlParameter`, `fakeDbOracleParameter`, `fakeDbInformixParameter`, `fakeDbInterBaseParameter`, the four `fake*DbType` enums, `fakeDbProviderDecimal` | So the library's reflection-based provider code (it sets `NpgsqlDbType` and similar by property name) has a target of the right shape. The enums only because a public property needs a public type. | `internal`; tests reach them through `InternalsVisibleTo`; `CapturedParameter` reports the provider type by name. fakeDb stays free to grow, but provider-shaped doubles are internal. |
+| `BaseTableGateway<T>.AuditFieldSnapshot` and the protected `SnapshotAuditFields`, `RestoreAuditFields`, `RestoreAuditFieldsIfFailed` | Side effect of the audit-restore bug fix: new protected API for every subclass. | `internal`. |
+| `DatabaseContext.CreateAsync(config, DbDataSource, ...)` | Mirror of the constructor that takes a data source; a data source is exactly the object that lets a caller bypass the governor. | `internal` (the shipped constructor stays). |
+| `ISqlDialect.IsEmbeddedSingleWriterEngine`, `DetectInMemoryKind`, `GetReleaseSavepointSql`, `CoerceConnectionMode`, `IsClientServerDatabase`, `SupportsPaging`, `SupportsSemicolonStatementSeparator`, `JoinParenthesization`, and the enums `InMemoryKind` and `JoinParenthesization` | Plumbing between the context and its internal dialects; not documented for consumers. | Moved to `IInternalSqlDialect` (existing precedent); reached through extension methods in `InternalSqlDialectExtensions` with the old defaults as the fallback for a non-internal dialect. API baseline regenerated (464 -> 456). |
+
+Kept public on purpose: `RequiresMergeStatementTerminator`, because `docs/capability-discovery.md` tells consumers
+to branch on it when writing custom MERGE SQL. **To reconsider** (a SQL-first consumer could plausibly want them, and
+adding one back is a minor release): `SupportsPaging` (the public `AppendPaging` throws without paging),
+`SupportsSemicolonStatementSeparator` and `JoinParenthesization` (custom batch and join SQL).
+
+**3.0 backlog: shipped in 2.0.5, cannot be removed without a major version.**
+
+| ID | Item | Why |
+|---|---|---|
+| API-001 | `IDatabaseContext.DataSource` (also on `DatabaseContext` and `TransactionContext`) | Hands out the raw `DbDataSource`: `context.DataSource.CreateConnection()` bypasses the governor, the pools and lifecycle tracking. The only raw ADO.NET outputs in the public surface; `PublicSurfaceGuardTests` allows exactly these three and fails on any new one. |
+| API-002 | `ConnectionLocalState.ComputeShapeHash(DbCommand)` | Public static helper on a public class; internal use only. |
+| API-003 | `IEphemeralSecureString.Reveal`, `WithRevealed`, `WithRevealedAsync` | A public interface that hands out the plaintext secret; used only inside the core. |
+| API-004 | `IConnectionLocalState.MarkSessionSettingsApplied` | Plumbing. |
+| API-005 | `IDataSourceInformation.DefaultPrepareStatements`, `IsUsingFallbackDialect` | Undocumented, unused outside the core. |
+| API-006 | `IDatabaseProductInfo.ProductName`, `ProductVersion` | Undocumented; only tests use them. Review before deciding. |
+| API-007 | `IIsolationResolver.GetSupportedLevels`, `ResolveWithDetail` | Undocumented, unused outside the core. |
+| API-008 | `ISqlDialect.ParameterMarkerAt` | Undocumented plumbing. |
+| API-009 | The 99 public classes and types of `pengdows.crud` shipped in 2.0.5 | Not yet audited: which could be internal. |
+
+**Guards.** Now: `PublicSurfaceGuardTests` (the pull-backs above and the raw-ADO.NET ratchet). Planned:
+API-GUARD-1 `Microsoft.CodeAnalysis.PublicApiAnalyzers` on the three shipped projects, `PublicAPI.Shipped.txt`
+seeded from 2.0.5 and `PublicAPI.Unshipped.txt` holding only approved additions with a reason, so an undeclared
+public or protected member fails the build; API-GUARD-2 package validation against the last shipped version
+(`EnablePackageValidation`, baseline 2.0.5, then 2.0.6); API-GUARD-3 an analyzer rule in `pengdows.crud.analyzers`
+that rejects a raw ADO.NET type in a public output. The rules are in REVIEW_POLICY.md 4D and the PR template.
+
+---
+
 ## GEN-001 design: same-connection generated-key retrieval (proposed 2026-09-28, implemented 2026-09-29)
 
 **Problem.** Informix (`DBINFO`), SAP HANA (`CURRENT_IDENTITY_VALUE()`) and Access (`@@IDENTITY`)

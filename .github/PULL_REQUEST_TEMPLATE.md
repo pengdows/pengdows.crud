@@ -15,6 +15,7 @@
 - [ ] **No `else` after `return/throw`**.
 - [ ] **Hot paths use `ValueTask`** (minimize allocations).
 - [ ] **Public APIs are in `.abstractions`**.
+- [ ] **Nothing new is public unless it needs to be**: every new public/protected member is listed in `PublicAPI.Unshipped.txt` with a reason, and no raw `DbConnection`/`DbCommand`/`DbDataReader`/`DbTransaction`/`DbDataSource` appears in a public output.
 - [ ] **13 DBs verified**: changes tested/verified against all supported providers.
 - [ ] **TDD First**: Tests included to reproduce fix or verify feature.
 

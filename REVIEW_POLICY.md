@@ -85,9 +85,14 @@ Block if any of these occur:
 ### D. API contract safety (interface-first)
 
 * Public API surface must remain stable unless explicitly intended.
+* **Expose only what needs exposing.** A public or protected type or member needs a consumer that cannot do without it and a documented reason; everything else is `internal` or `private`. Adding API later costs a minor version, removing it costs a major one, so the default is closed.
+* **Raw ADO.NET objects never leave the library.** `DbConnection`, `DbCommand`, `DbDataReader`, `DbTransaction`, `DbDataSource` and their `System.Data` interfaces must not be returned, exposed as a property, field or event, or otherwise reachable from public API. Pool governance (no leaked connections, readers or transactions) depends on callers never holding one. Accepting one as an *input* is allowed only where unavoidable and needs a recorded reason.
+* **Every new public or protected member is declared.** It appears in its project's `PublicAPI.Unshipped.txt` with a one-line reason; an undeclared addition is a blocker. This includes `pengdows.crud.fakeDb`: fakeDb may grow freely to mock more, but a public type there needs a documented purpose, and provider-shaped test doubles (parameter classes, provider enums) are `internal`.
+* A member added to a shipped public interface must have a default implementation; no new abstract member on a shipped interface.
 * All public APIs live in `pengdows.crud.abstractions`.
 * Concrete types must not cross module or service boundaries where an interface exists.
 * Changes to interfaces require baseline verification updates.
+* Compatibility with the last shipped version is checked with ApiCompat before release; anything it reports needs an explicit, recorded decision.
 
 ### E. Resource lifetime violations
 
@@ -298,4 +303,5 @@ Compliance with this policy is enforced via:
 2. **Copilot Instructions (`.github/copilot-instructions.md`)**: Configures GitHub Copilot Code Review to use this policy as its primary system prompt for PR analysis.
 3. **CI Checks (`.github/workflows/deploy.yml`)**: Automated `grep` checks in the build pipeline to catch P0 violations like `TransactionScope` usage before merge.
 4. **Manual Peer Review**: All PRs require approval from a maintainer who verifies adherence to this policy and project-specific invariants.
+5. **Public-API guards (planned; see the "Public API exposure audit" section of `docs/FUTURE_WORK.md`)**: PublicApiAnalyzers (an undeclared public or protected member fails the build), package validation against the last shipped version (ApiCompat), and an analyzer rule for raw ADO.NET types in public outputs. Until they land, reviewers enforce §4D by hand, using the surface-diff method recorded in that section.
 

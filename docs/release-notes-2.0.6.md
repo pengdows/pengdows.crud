@@ -50,6 +50,12 @@
   so implementations compiled against 2.0.5 still load. Because the clamp can shrink a pool that exceeded
   the server's limit, it is opt-in on 2.0.x. See [connection-pooling.md](connection-pooling.md).
 
+- `services.AddDbProviderLoading(configuration)` (`pengdows.crud.configuration`) loads the
+  `DatabaseProviders` section of an `IConfiguration` (by assembly path, assembly name, or the legacy
+  `DbProviderFactories` registry) and registers each `DbProviderFactory` as a keyed singleton, so a host can
+  wire providers in one call instead of constructing a `DbProviderLoader` by hand. It adds a static class and
+  no member on any existing type.
+
 ## Writes that now work
 
 - A C# enum stored by name in a PostgreSQL-family user-defined `ENUM` column now works in a MERGE
