@@ -64,14 +64,15 @@ public class AsyncConnectionAcquisitionIntegrationTests : DatabaseTestBase
     /// -- IDatabaseContext.ConnectionString itself is deliberately password-redacted for safe
     /// logging/display and is not usable to actually connect.
     /// </summary>
-    private DatabaseContext CreateSmallPoolContext()
+    private DatabaseContext CreateSmallPoolContext(int poolSize = PoolSize, TimeSpan? poolAcquireTimeout = null)
     {
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = Fixture.GetRawConnectionString(SupportedDatabase.PostgreSql),
             ProviderName = "Npgsql",
-            MaxConcurrentReads = PoolSize,
-            EnableMetrics = true
+            MaxConcurrentReads = poolSize,
+            EnableMetrics = true,
+            PoolAcquireTimeout = poolAcquireTimeout ?? TimeSpan.FromSeconds(10)
         };
 
         return new DatabaseContext(config, NpgsqlFactory.Instance);
@@ -123,5 +124,39 @@ public class AsyncConnectionAcquisitionIntegrationTests : DatabaseTestBase
 
             Assert.Equal(0, finalSnapshot.TotalSlotTimeouts);
         });
+    }
+
+    [SkippableFact]
+    public async Task QueuedRealRead_WithLongTimeout_WaitsForReleasedConnectionAndLeavesNoQueue()
+    {
+        await RunTestAgainstProviderAsync(SupportedDatabase.PostgreSql, async _ =>
+        {
+            using var context = CreateSmallPoolContext(poolSize: 1, poolAcquireTimeout: TimeSpan.FromDays(60));
+            await using var held = await context.BeginTransactionAsync(executionType: ExecutionType.Read);
+
+            var pending = context.BeginTransactionAsync(executionType: ExecutionType.Read).AsTask();
+            await WaitUntilAsync(
+                () => context.GetPoolStatisticsSnapshot(PoolLabel.Reader).Queued >= 1,
+                TimeSpan.FromSeconds(10));
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+            Assert.False(pending.IsCompleted, "A 60-day pool timeout expired while the real connection was held.");
+
+            await held.DisposeAsync();
+            await using var released = await pending.WaitAsync(TimeSpan.FromSeconds(10));
+
+            Assert.Equal(0, context.GetPoolStatisticsSnapshot(PoolLabel.Reader).Queued);
+        });
+    }
+
+    private static async Task WaitUntilAsync(Func<bool> condition, TimeSpan timeout)
+    {
+        var deadline = Stopwatch.GetTimestamp() +
+                       (long)(timeout.TotalSeconds * Stopwatch.Frequency);
+        while (!condition())
+        {
+            Assert.True(Stopwatch.GetTimestamp() < deadline, "The expected real pool waiter was never observed.");
+            await Task.Delay(TimeSpan.FromMilliseconds(10));
+        }
     }
 }
