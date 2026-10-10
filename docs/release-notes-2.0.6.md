@@ -142,6 +142,11 @@
   pooled open). 2.0.5 rounded them down to 0 ms and left them out, so the averages counted only
   slow opens (COR-010).
 
+- A pool's `TotalWaitTicks` and `AverageWaitMs` count only time actually spent waiting for a slot. An
+  acquire that finds a slot free now records a wait of exactly 0; 2.0.5 recorded the few hundred
+  nanoseconds between two clock reads, so an uncontended pool showed a small non-zero average wait and
+  now shows 0. A pool whose callers did queue (`TotalWaits` above 0) reports its waits as before.
+
 ## How commands run
 
 - SQLite and DuckDB commands are no longer prepared by default (`CommandPrepareMode.Auto`): both
