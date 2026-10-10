@@ -120,6 +120,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     // The one StateChange handler this wrapper subscribes (see OnConnectionStateChange).
     private readonly StateChangeEventHandler _stateHandler;
     private long _openTimestamp;
+    private readonly TimeProvider _timeProvider;
     // TEST-014: a connection that breaks (Open -> Broken) already has its close counted by the
     // Broken case below. DisposeConnectionSync/DisposeConnectionAsyncCore's own "not already
     // Closed" guard treats Broken as still needing a close, so disposal calls the underlying
@@ -250,9 +251,11 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         string? namePrefix = null,
         Func<ITrackedConnection, CancellationToken, Task>? onFirstOpenAsync = null,
         TimeSpan? sharedDisposeTimeout = null,
-        Action<Exception>? onOpenFailed = null
+        Action<Exception>? onOpenFailed = null,
+        TimeProvider? timeProvider = null
     )
     {
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _onOpenFailed = onOpenFailed;
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
         _onStateChange = onStateChange;
@@ -334,7 +337,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             case ConnectionState.Open:
                 {
                     _metricsCollector.ConnectionOpened();
-                    Interlocked.Exchange(ref _openTimestamp, Stopwatch.GetTimestamp());
+                    Interlocked.Exchange(ref _openTimestamp, _timeProvider.GetTimestamp());
                     Interlocked.Exchange(ref _closeAlreadyCountedForThisOpen, 0);
                     break;
                 }
@@ -352,7 +355,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
                     var openedAt = Interlocked.Exchange(ref _openTimestamp, 0);
                     var duration = openedAt == 0
                         ? 0d
-                        : MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - openedAt);
+                        : MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - openedAt);
                     _metricsCollector.ConnectionClosed(duration);
                     break;
                 }
@@ -406,7 +409,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         if (shouldTime)
         {
             OpenTimingHook?.Invoke();
-            startedAt = Stopwatch.GetTimestamp();
+            startedAt = _timeProvider.GetTimestamp();
         }
 
         ResetDriverReportedStateChange();
@@ -422,7 +425,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         {
             if (shouldTime)
             {
-                var elapsedMs = MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - startedAt);
+                var elapsedMs = MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - startedAt);
                 if (debugEnabled)
                 {
                     _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", elapsedMs);
@@ -543,7 +546,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         if (shouldTime)
         {
             OpenTimingHook?.Invoke();
-            startedAt = Stopwatch.GetTimestamp();
+            startedAt = _timeProvider.GetTimestamp();
         }
 
         ResetDriverReportedStateChange();
@@ -559,7 +562,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         {
             if (shouldTime)
             {
-                var elapsedMs = MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - startedAt);
+                var elapsedMs = MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - startedAt);
                 if (debugEnabled)
                 {
                     _logger.LogDebug("Connection opened in {ElapsedMilliseconds} ms", elapsedMs);
@@ -846,7 +849,8 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             return;
         }
 
-        var startedAt = Stopwatch.GetTimestamp();
+        // Only the metrics collector consumes the close duration, so nothing is timed without one.
+        var startedAt = _metricsCollector != null ? _timeProvider.GetTimestamp() : 0;
         ResetDriverReportedStateChange();
         try
         {
@@ -855,7 +859,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         finally
         {
             _metricsCollector?.RecordConnectionCloseDuration(
-                MetricsCollector.ToMilliseconds(Stopwatch.GetTimestamp() - startedAt));
+                MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - startedAt));
         }
 
         ReportTransitionIfDriverDidNot(ConnectionState.Open, ConnectionState.Closed);

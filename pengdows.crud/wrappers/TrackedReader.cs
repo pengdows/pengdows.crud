@@ -48,7 +48,8 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     private readonly MetricsCollector? _metricsCollector;
     private readonly IReaderLifetimeListener? _lifetimeListener;
     private long _rowsRead;
-    private readonly long _leaseStartTimestamp = Stopwatch.GetTimestamp();
+    private readonly TimeProvider _timeProvider;
+    private readonly long _leaseStartTimestamp;
     private long _firstRowTimestamp;
     private int _metricsRecorded;
 
@@ -145,8 +146,13 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         bool reportsOutOfRangeDecimalAsNull = false,
         Func<Exception, bool>? isUnreadableStoredValue = null,
         SqlDialect? unresolvedColumnDialect = null,
-        TypeCoercionOptions? coercionOptions = null)
+        TypeCoercionOptions? coercionOptions = null,
+        TimeProvider? timeProvider = null)
     {
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        // The lease start and the first-row time only feed the metrics collector, and reading the clock costs
+        // about as much as the rest of constructing a reader, so nothing is read when there is no collector.
+        _leaseStartTimestamp = metricsCollector != null ? _timeProvider.GetTimestamp() : 0;
         _coercionOptions = coercionOptions ?? TypeCoercionOptions.Default;
         _unresolvedColumnDialect = unresolvedColumnDialect;
         _readsResolvedColumnsByDataTypeName = unresolvedColumnDialect is { ReadsResolvedColumnsByDataTypeName: true };
@@ -696,9 +702,9 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     // 24 ns/row (PERF-009).
     private void RecordRow()
     {
-        if (_firstRowTimestamp == 0)
+        if (_metricsCollector != null && _firstRowTimestamp == 0)
         {
-            _firstRowTimestamp = Stopwatch.GetTimestamp();
+            _firstRowTimestamp = _timeProvider.GetTimestamp();
         }
 
         _rowsRead++;

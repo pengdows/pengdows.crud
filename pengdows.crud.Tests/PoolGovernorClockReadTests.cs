@@ -16,19 +16,6 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public class PoolGovernorClockReadTests
 {
-    private sealed class CountingClock : TimeProvider
-    {
-        private int _reads;
-
-        internal int Reads => Volatile.Read(ref _reads);
-
-        public override long GetTimestamp()
-        {
-            Interlocked.Increment(ref _reads);
-            return Stopwatch.GetTimestamp();
-        }
-    }
-
     public static TheoryData<bool, bool, string> Cases()
     {
         var data = new TheoryData<bool, bool, string>();
