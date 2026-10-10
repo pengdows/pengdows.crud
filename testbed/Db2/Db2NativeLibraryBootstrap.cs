@@ -45,11 +45,17 @@ internal static class Db2NativeLibraryBootstrap
         var clidriverLib = Path.Combine(baseDir, "clidriver", "lib");
         var clidriverIcc = Path.Combine(clidriverLib, "icc");
 
+        // Every assembly that compiles this file has its own copy of the guard above, so the environment is the
+        // only state they share: add a directory only when no copy has added it already.
         var existing = Environment.GetEnvironmentVariable("LD_LIBRARY_PATH");
-        var combined = string.IsNullOrEmpty(existing)
-            ? $"{clidriverLib}{Path.PathSeparator}{clidriverIcc}"
-            : $"{clidriverLib}{Path.PathSeparator}{clidriverIcc}{Path.PathSeparator}{existing}";
-        Environment.SetEnvironmentVariable("LD_LIBRARY_PATH", combined);
+        var present = (existing ?? string.Empty).Split(Path.PathSeparator);
+        var additions = new[] { clidriverLib, clidriverIcc }.Where(dir => !present.Contains(dir)).ToList();
+        if (additions.Count > 0)
+        {
+            var added = string.Join(Path.PathSeparator, additions);
+            Environment.SetEnvironmentVariable("LD_LIBRARY_PATH",
+                string.IsNullOrEmpty(existing) ? added : $"{added}{Path.PathSeparator}{existing}");
+        }
 
         try
         {

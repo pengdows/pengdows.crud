@@ -42,4 +42,20 @@ public class Db2NativeLibraryBootstrapTests
 
         Assert.Equal(expectedOccurrences, OccurrencesOnLdLibraryPath(ClidriverLib));
     }
+
+    // The testbed assembly carries its own copy of the bootstrap (this project compiles the same file), and a Db2
+    // container started from it registers independently of this assembly's copy. Two copies must not stack the
+    // clidriver directory on LD_LIBRARY_PATH twice.
+    [Fact]
+    public void TheTestbedsOwnCopyOfTheBootstrap_DoesNotAddTheDirectoryAgain()
+    {
+        var expectedOccurrences = OperatingSystem.IsLinux() ? 1 : 0;
+        var other = typeof(Db2TestContainer).Assembly.GetType("testbed.Db2.Db2NativeLibraryBootstrap", throwOnError: true)!;
+        Assert.NotSame(typeof(Db2NativeLibraryBootstrap), other);
+
+        Db2NativeLibraryBootstrap.Register();
+        other.GetMethod("Register")!.Invoke(null, null);
+
+        Assert.Equal(expectedOccurrences, OccurrencesOnLdLibraryPath(ClidriverLib));
+    }
 }
