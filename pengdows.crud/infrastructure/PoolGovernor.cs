@@ -108,7 +108,7 @@ internal sealed class PoolGovernor : IDisposable
         TimeProvider? timeProvider = null)
     {
         _label = label;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = MetricsClock.Resolve(timeProvider);
         _poolKeyHash = poolKeyHash;
         _acquireTimeout = acquireTimeout;
         _acquireTimeoutStopwatchTicks = ConvertTimeoutToStopwatchTicks(acquireTimeout);
@@ -284,6 +284,15 @@ internal sealed class PoolGovernor : IDisposable
 
     private void ReleaseAdmission() => _concurrencyGate!.Release(0);
 
+    // What one acquire attempt has taken so far, so a failure anywhere can give it back: the turnstile, and the writer
+    // interest registered on the shared turnstile state.
+    private struct AcquireProgress
+    {
+        internal bool TurnstileAcquired;
+        internal bool WriterInterestRegistered;
+        internal bool UseTurnstileGate;
+    }
+
     // The blocking and asynchronous acquires differ only in how they wait. The uncontended fast path is the same
     // synchronous code in both, because a zero-timeout probe never blocks; the slow path is one method that either
     // blocks or awaits according to isAsync. In blocking mode it never yields, so it has finished by the time it
@@ -295,51 +304,47 @@ internal sealed class PoolGovernor : IDisposable
             return default;
         }
 
-        var turnstileAcquired = false;
-        var writerTurnstileInterestRegistered = false;
-        bool useTurnstileGate;
+        var progress = new AcquireProgress();
         try
         {
-            if (TryAcquireImmediate(cancellationToken, ref turnstileAcquired, ref writerTurnstileInterestRegistered,
-                    out useTurnstileGate, out var immediate))
+            if (TryAcquireImmediate(cancellationToken, ref progress, out var immediate))
             {
                 return immediate;
             }
         }
         catch
         {
-            AbandonAcquire(turnstileAcquired, ref writerTurnstileInterestRegistered);
+            AbandonAcquire(progress.TurnstileAcquired, ref progress.WriterInterestRegistered);
             throw;
         }
 
-        var pending = AcquireSlowAsync(false, useTurnstileGate, turnstileAcquired,
-            writerTurnstileInterestRegistered, cancellationToken);
+        var pending = AcquireSlowAsync(false, progress, cancellationToken);
         Debug.Assert(pending.IsCompleted, "A blocking acquire must finish without yielding.");
         return pending.GetAwaiter().GetResult();
     }
 
     // Takes a free slot (and, when one is in play, the turnstile) without waiting. A cancelled token makes the
     // zero-timeout waits throw OperationCanceledException synchronously, so the caller cleans up on failure.
-    private bool TryAcquireImmediate(CancellationToken cancellationToken, ref bool turnstileAcquired,
-        ref bool writerTurnstileInterestRegistered, out bool useTurnstileGate, out PoolSlot slot)
+    private bool TryAcquireImmediate(CancellationToken cancellationToken, ref AcquireProgress progress,
+        out PoolSlot slot)
     {
-        RegisterWriterTurnstileInterest(ref writerTurnstileInterestRegistered);
-        useTurnstileGate = ShouldUseTurnstileGate(writerTurnstileInterestRegistered);
+        RegisterWriterTurnstileInterest(ref progress.WriterInterestRegistered);
+        progress.UseTurnstileGate = ShouldUseTurnstileGate(progress.WriterInterestRegistered);
 
         // Fast path: no deadline arithmetic for immediate gate/slot success.
         var admitted = false;
-        if (useTurnstileGate && _turnstile != null && _turnstile.Wait(0, cancellationToken))
+        if (progress.UseTurnstileGate && _turnstile != null && _turnstile.Wait(0, cancellationToken))
         {
-            turnstileAcquired = true;
+            progress.TurnstileAcquired = true;
             if (!_holdTurnstile)
             {
                 _turnstile.Release();
-                turnstileAcquired = false;
+                progress.TurnstileAcquired = false;
             }
 
             admitted = TryAcquireAdmission(cancellationToken);
         }
-        else if (!useTurnstileGate)
+        else if (!progress.UseTurnstileGate)
         {
             admitted = TryAcquireAdmission(cancellationToken);
         }
@@ -351,8 +356,8 @@ internal sealed class PoolGovernor : IDisposable
         }
 
         var immediateWaitStart = _trackMetrics ? _timeProvider.GetTimestamp() : 0;
-        var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
-        writerTurnstileInterestRegistered = false;
+        var releaseWriterInterestOnRelease = _holdTurnstile && progress.WriterInterestRegistered;
+        progress.WriterInterestRegistered = false;
         slot = OnAcquired(immediateWaitStart, immediateWaitStart, releaseWriterInterestOnRelease);
         return true;
     }
@@ -371,9 +376,12 @@ internal sealed class PoolGovernor : IDisposable
 
     // The queued, deadline-bounded path shared by Acquire (isAsync: false, blocks the calling thread and so
     // completes before it returns) and AcquireAsync (isAsync: true, awaits).
-    private async ValueTask<PoolSlot> AcquireSlowAsync(bool isAsync, bool useTurnstileGate, bool turnstileAcquired,
-        bool writerTurnstileInterestRegistered, CancellationToken cancellationToken)
+    private async ValueTask<PoolSlot> AcquireSlowAsync(bool isAsync, AcquireProgress progress,
+        CancellationToken cancellationToken)
     {
+        var useTurnstileGate = progress.UseTurnstileGate;
+        var turnstileAcquired = progress.TurnstileAcquired;
+        var writerTurnstileInterestRegistered = progress.WriterInterestRegistered;
         try
         {
             // Slow path: timed waits with a single deadline budget across gates.
@@ -437,7 +445,12 @@ internal sealed class PoolGovernor : IDisposable
                 }
             }
 
-            if (TryAcquireAdmission(cancellationToken))
+            // A cancelled token is reported as a cancelled task when awaiting and as a plain
+            // OperationCanceledException when blocking, as each acquire always has.
+            var admitted = isAsync
+                ? await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false)
+                : TryAcquireAdmission(cancellationToken);
+            if (admitted)
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
@@ -578,20 +591,17 @@ internal sealed class PoolGovernor : IDisposable
             return default;
         }
 
-        var turnstileAcquired = false;
-        var writerTurnstileInterestRegistered = false;
-        bool useTurnstileGate;
+        var progress = new AcquireProgress();
         try
         {
-            if (TryAcquireImmediate(cancellationToken, ref turnstileAcquired, ref writerTurnstileInterestRegistered,
-                    out useTurnstileGate, out var immediate))
+            if (TryAcquireImmediate(cancellationToken, ref progress, out var immediate))
             {
                 return immediate;
             }
         }
         catch (Exception ex)
         {
-            AbandonAcquire(turnstileAcquired, ref writerTurnstileInterestRegistered);
+            AbandonAcquire(progress.TurnstileAcquired, ref progress.WriterInterestRegistered);
 
             // The shared synchronous fast path throws a plain OperationCanceledException for a cancelled token;
             // the asynchronous acquire has always reported it as a cancelled task (TaskCanceledException).
@@ -604,8 +614,7 @@ internal sealed class PoolGovernor : IDisposable
             throw;
         }
 
-        return await AcquireSlowAsync(true, useTurnstileGate, turnstileAcquired,
-            writerTurnstileInterestRegistered, cancellationToken).ConfigureAwait(false);
+        return await AcquireSlowAsync(true, progress, cancellationToken).ConfigureAwait(false);
     }
 
     public async ValueTask<(bool Success, PoolSlot Permit)> TryAcquireAsync(CancellationToken cancellationToken = default)

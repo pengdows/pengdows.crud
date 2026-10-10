@@ -149,7 +149,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         TypeCoercionOptions? coercionOptions = null,
         TimeProvider? timeProvider = null)
     {
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = MetricsClock.Resolve(timeProvider);
         // The lease start and the first-row time only feed the metrics collector, and reading the clock costs
         // about as much as the rest of constructing a reader, so nothing is read when there is no collector.
         _leaseStartTimestamp = metricsCollector != null ? _timeProvider.GetTimestamp() : 0;

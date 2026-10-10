@@ -79,12 +79,20 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             return 0;
         }
 
-        if (!waiter.WaitForCompletion(timeout))
+        try
         {
-            // Timed out. If the cancellation wins it completes the waiter with the TimeoutException itself; if a
-            // grant, a dispose or a cancel got there first, that completion is already on its way.
-            Cancel(waiter, WaiterFailure.Timeout);
-            waiter.WaitForCompletion(Timeout.InfiniteTimeSpan);
+            if (!waiter.WaitForCompletion(timeout))
+            {
+                // Timed out. If the cancellation wins it completes the waiter with the TimeoutException itself; if a
+                // grant, a dispose or a cancel got there first, that completion is already on its way.
+                Cancel(waiter, WaiterFailure.Timeout);
+                waiter.WaitForCompletion(Timeout.InfiniteTimeSpan);
+            }
+        }
+        catch (ThreadInterruptedException)
+        {
+            AbandonInterruptedWait(waiter);
+            throw;
         }
 
         // Disposing the registration waits out a cancellation callback that is still running, so none can fire at
@@ -302,6 +310,36 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         return null;
     }
 
+    // A blocked thread was interrupted. Its waiter must leave the queue, or a later grant would go to a caller that is
+    // gone and that permit would be lost for good; if a grant got there first, the permit goes back to the gate.
+    private void AbandonInterruptedWait(Waiter waiter)
+    {
+        TestOnlyBeforeInterruptedWaitIsAbandoned?.Invoke();
+        Cancel(waiter, WaiterFailure.Canceled);
+        waiter.WaitForCompletion(Timeout.InfiniteTimeSpan);
+        waiter.TryCancelRegistration();
+        try
+        {
+            Release(waiter.TakeSyncResult());
+        }
+        catch (OperationCanceledException)
+        {
+            // The cancellation above won: nothing was granted.
+        }
+        catch (TimeoutException)
+        {
+            // The wait had already timed out: nothing was granted.
+        }
+        catch (ObjectDisposedException)
+        {
+            // The gate was disposed: there is nothing to give back to.
+        }
+        finally
+        {
+            ReturnSyncWaiter(waiter);
+        }
+    }
+
     private bool Cancel(Waiter waiter, WaiterFailure failure)
     {
         lock (_sync)
@@ -321,8 +359,21 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         waiter.SetException(failure == WaiterFailure.Timeout
             ? new TimeoutException("The pool governor acquisition timed out.")
             : new OperationCanceledException(waiter.CancellationToken));
+        TestOnlyAfterCancelCompleted?.Invoke();
         return true;
     }
+
+    /// <summary>
+    /// Test-only hook invoked after a cancellation or timeout has completed its waiter and while the cancelling
+    /// thread is still running, which lets a test hold a cancellation callback in flight. Never set outside tests.
+    /// </summary>
+    internal Action? TestOnlyAfterCancelCompleted { get; set; }
+
+    /// <summary>
+    /// Test-only hook invoked on an interrupted thread before it gives up its wait, which lets a test land a grant in
+    /// exactly that window. Never set outside tests.
+    /// </summary>
+    internal Action? TestOnlyBeforeInterruptedWaitIsAbandoned { get; set; }
 
     private static void Complete(Waiter? handedOff, List<Waiter>? released)
     {
@@ -617,6 +668,14 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
 
         // Spins briefly, because a handoff is usually only microseconds away and a parked thread costs a kernel
         // wake-up to resume, then parks. Returns false only if the timeout elapsed first.
+        // Far beyond any real timeout, and small enough that adding it to the current timestamp cannot overflow.
+        private const long MaxDeadlineTicks = long.MaxValue / 4;
+
+        // Computed in floating point and capped: Ticks * Frequency in a long overflows above 15 minutes where the
+        // frequency is 1 GHz, and the deadline then reads as already passed.
+        private static long DeadlineTicks(TimeSpan timeout) =>
+            (long)Math.Min(timeout.TotalSeconds * Stopwatch.Frequency, MaxDeadlineTicks);
+
         internal bool WaitForCompletion(TimeSpan timeout)
         {
             if (Volatile.Read(ref _syncDone) != 0)
@@ -649,7 +708,7 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
                     return true;
                 }
 
-                var end = Stopwatch.GetTimestamp() + (timeout.Ticks * Stopwatch.Frequency / TimeSpan.TicksPerSecond);
+                var end = Stopwatch.GetTimestamp() + DeadlineTicks(timeout);
                 while (Volatile.Read(ref _syncDone) == 0)
                 {
                     var remaining = end - Stopwatch.GetTimestamp();
@@ -658,7 +717,7 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
                         return false;
                     }
 
-                    var milliseconds = (remaining * 1000 + Stopwatch.Frequency - 1) / Stopwatch.Frequency;
+                    var milliseconds = Math.Ceiling(remaining * 1000d / Stopwatch.Frequency);
                     Monitor.Wait(_syncLock, (int)Math.Min(milliseconds, int.MaxValue));
                 }
 

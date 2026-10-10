@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
@@ -44,6 +45,56 @@ public class PoolGovernorCancelledTokenContractTests
         Assert.Throws<OperationCanceledException>(() => rig.Governor.Acquire(cancelled.Token));
 
         rig.AssertNothingLeftBehind();
+    }
+
+    // The slow path reads the clock first thing after the immediate probe has found no slot free, so a clock that
+    // cancels the token on its first reading lands the cancellation exactly between the two probes.
+    private sealed class CancellingClock : TimeProvider
+    {
+        private readonly CancellationTokenSource _source;
+        private int _fired;
+
+        internal CancellingClock(CancellationTokenSource source) => _source = source;
+
+        public override long GetTimestamp()
+        {
+            if (Interlocked.Exchange(ref _fired, 1) == 0)
+            {
+                _source.Cancel();
+            }
+
+            return Stopwatch.GetTimestamp();
+        }
+    }
+
+    [Fact]
+    public async Task AsyncAcquire_CancelledBetweenTheImmediateAndTheQueuedProbe_StillThrowsTaskCanceledException()
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var governor = new PoolGovernor(PoolLabel.Reader, "cancel-window", 1, Timeout,
+            timeProvider: new CancellingClock(cancellation));
+        var held = governor.Acquire();
+
+        await Assert.ThrowsAsync<TaskCanceledException>(async () => await governor.AcquireAsync(cancellation.Token));
+
+        Assert.Equal(0, governor.QueueDepth);
+        held.Dispose();
+        Assert.Equal(1, governor.AvailablePermits);
+    }
+
+    [Fact]
+    public void BlockingAcquire_CancelledBetweenTheImmediateAndTheQueuedProbe_ThrowsOperationCanceledException()
+    {
+        using var cancellation = new CancellationTokenSource();
+        using var governor = new PoolGovernor(PoolLabel.Reader, "cancel-window-sync", 1, Timeout,
+            timeProvider: new CancellingClock(cancellation));
+        var held = governor.Acquire();
+
+        Assert.Throws<OperationCanceledException>(() => governor.Acquire(cancellation.Token));
+
+        Assert.Equal(0, governor.QueueDepth);
+        held.Dispose();
+        Assert.Equal(1, governor.AvailablePermits);
     }
 
     private sealed class Rig : IDisposable

@@ -255,7 +255,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         TimeProvider? timeProvider = null
     )
     {
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = MetricsClock.Resolve(timeProvider);
         _onOpenFailed = onOpenFailed;
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
         _onStateChange = onStateChange;
