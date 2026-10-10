@@ -17,8 +17,9 @@ namespace CrudBenchmarks;
 /// <summary>
 /// SQL Server counterpart of <see cref="PostgreSqlConnectionGovernanceBenchmarks"/>: the same arms
 /// (Dapper and EF Core ungoverned, both behind StormGate, pengdows.crud on its own PoolGovernor at its
-/// defaults, and pengdows.crud with the opt-in server-ceiling clamp), the same 1,000-way storm, no
-/// client given an explicit pool ceiling (all on the SqlClient default, 100).
+/// an explicit ceiling, and pengdows.crud with the opt-in server-ceiling clamp), the same 1,000-way storm.
+/// Dapper and EF are left on the SqlClient default pool (100); every pengdows.crud arm gets an explicit
+/// ceiling of <see cref="PengdowsCeiling"/> per role, for now.
 /// SQL Server's default is 32,767 user connections, so against a stock server nothing can fail and the
 /// clamp has nothing to read ("user connections" = 0 means unlimited). The server is therefore capped
 /// to <see cref="ServerMaxConnections"/> the way SQL Server requires: sp_configure, then a restart.
@@ -43,7 +44,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
     private const int StormGatePermits = 20;
     private const string FrameworkPengdowsClamped = "PengdowsClamped";
     private const string FrameworkPengdowsClampedHeadroom = "PengdowsClampedHeadroom";
-    private const int Headroom = 2;
+    internal const int Headroom = 2;
+    // Every pengdows.crud arm runs with an explicit pool ceiling of this many connections per role, for now.
+    // Dapper and EF stay on the provider default (100): they are what is being compared against.
+    internal const int PengdowsCeiling = 20;
 
     // Below the default pool (100), like Postgres's 25, so ungoverned clients can overrun it.
     internal const int ServerMaxConnections = 25;
@@ -63,8 +67,22 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
     private long _attempted;
 
-    // No explicit pool ceiling for any client: every one runs on the SqlClient default (100).
+    // Dapper and EF run on the SqlClient default (100); the pengdows.crud arms get an explicit ceiling.
     internal static string BuildClientConnectionString(string connectionString) => connectionString;
+
+    // The configuration of every pengdows.crud arm: the same connection string and an explicit ceiling per
+    // role; the arms differ only in the opt-in clamp and in the headroom left for other clients.
+    internal static DatabaseContextConfiguration PengdowsConfiguration(
+        string connectionString, bool clamp = false, int headroom = 0) => new()
+    {
+        ConnectionString = connectionString,
+        ProviderName = "Microsoft.Data.SqlClient",
+        DbMode = DbMode.Standard,
+        MaxConcurrentReads = PengdowsCeiling,
+        MaxConcurrentWrites = PengdowsCeiling,
+        ClampPoolsToServerConnectionLimit = clamp,
+        ResourceConnectionHeadroom = headroom
+    };
 
     [GlobalSetup]
     public async Task GlobalSetup()
@@ -132,37 +150,24 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
 
         var typeMap = new TypeMapRegistry();
         typeMap.Register<GovSqlEntity>();
-        _pengdowsContext = new DatabaseContext(_connStr, SqlClientFactory.Instance, typeMap);
+        _pengdowsContext = new DatabaseContext(PengdowsConfiguration(_connStr), SqlClientFactory.Instance, null, typeMap);
         _pengdowsGateway = new TableGateway<GovSqlEntity, int>(_pengdowsContext);
 
         // Identical connection string and load; the only difference is the opt-in clamp, which reads
         // the server's real limit (user connections) and sizes the pools to it.
         _pengdowsClampedContext = new DatabaseContext(
-            new DatabaseContextConfiguration
-            {
-                ConnectionString = _connStr,
-                ProviderName = "Microsoft.Data.SqlClient",
-                DbMode = DbMode.Standard,
-                ClampPoolsToServerConnectionLimit = true
-            },
+            PengdowsConfiguration(_connStr, clamp: true),
             SqlClientFactory.Instance, null, typeMap);
         _pengdowsClampedGateway = new TableGateway<GovSqlEntity, int>(_pengdowsClampedContext);
 
         // SQL Server has no admin reserve to leave slots free, so the same clamp with a configured
         // headroom shows whether leaving a couple of slots for the context's own idle connections helps.
         _pengdowsHeadroomContext = new DatabaseContext(
-            new DatabaseContextConfiguration
-            {
-                ConnectionString = _connStr,
-                ProviderName = "Microsoft.Data.SqlClient",
-                DbMode = DbMode.Standard,
-                ClampPoolsToServerConnectionLimit = true,
-                ResourceConnectionHeadroom = Headroom
-            },
+            PengdowsConfiguration(_connStr, clamp: true, headroom: Headroom),
             SqlClientFactory.Instance, null, typeMap);
         _pengdowsHeadroomGateway = new TableGateway<GovSqlEntity, int>(_pengdowsHeadroomContext);
 
-        Console.WriteLine($"[GOV-SQLSERVER] server user connections={ServerMaxConnections}, pool max=default, StormGate permits={StormGatePermits}, " +
+        Console.WriteLine($"[GOV-SQLSERVER] server user connections={ServerMaxConnections}, pool max=default (pengdows arms: {PengdowsCeiling} per role), StormGate permits={StormGatePermits}, " +
                           $"parallelism={StormParallelism}, operations={StormOperationsPerRun}");
     }
 

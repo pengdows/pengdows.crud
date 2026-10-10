@@ -40,8 +40,8 @@ public class PostgreSqlBackpressureShapeTests
     {
         Assert.Equal(TimeSpan.FromSeconds(5), PostgreSqlBackpressureBenchmarks.AcquireTimeout);
         // The pool-only "tuned" arm sets Npgsql's Timeout (seconds) to the same budget.
-        Assert.Equal(PostgreSqlBackpressureBenchmarks.AcquireTimeout.TotalSeconds,
-            PostgreSqlBackpressureBenchmarks.TunedPoolTimeoutSeconds);
+        Assert.Equal(PostgreSqlBackpressureBenchmarks.TunedPoolTimeoutSeconds,
+            PostgreSqlBackpressureBenchmarks.AcquireTimeout.TotalSeconds);
     }
 
     [Fact]

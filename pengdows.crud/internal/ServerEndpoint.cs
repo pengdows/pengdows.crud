@@ -52,7 +52,12 @@ internal static class ServerEndpoint
             raw = StripProtocolPrefix(raw);
 
             var comma = raw.LastIndexOf(',');
-            if (comma > 0 && int.TryParse(raw[(comma + 1)..].Trim(), out var commaPort))
+            if (TrySplitBracketedHost(raw, out var bracketedHost, out var bracketedPort))
+            {
+                port = bracketedPort;
+                raw = bracketedHost;
+            }
+            else if (comma > 0 && int.TryParse(raw[(comma + 1)..].Trim(), out var commaPort))
             {
                 port = commaPort;
                 raw = raw[..comma].Trim();
@@ -90,6 +95,38 @@ internal static class ServerEndpoint
         port ??= defaultPort;
 
         key = $"{host}{(instance is null ? string.Empty : "\\" + instance)}:{port?.ToString() ?? string.Empty}";
+        return true;
+    }
+
+    // "[2001:db8::1]:5432" and "[2001:db8::1],1433": the colons inside the brackets belong to the
+    // address, so the port is whatever follows the closing bracket.
+    private static bool TrySplitBracketedHost(string value, out string host, out int port)
+    {
+        host = string.Empty;
+        port = 0;
+        if (!value.StartsWith('['))
+        {
+            return false;
+        }
+
+        var close = value.IndexOf(']');
+        if (close < 0)
+        {
+            return false;
+        }
+
+        var rest = value[(close + 1)..].Trim();
+        if (rest.Length < 2 || (rest[0] != ':' && rest[0] != ','))
+        {
+            return false;
+        }
+
+        if (!int.TryParse(rest[1..].Trim(), out port))
+        {
+            return false;
+        }
+
+        host = value[..(close + 1)];
         return true;
     }
 

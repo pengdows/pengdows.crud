@@ -81,7 +81,7 @@ public class PoolGovernorQueueCapConfigurationTests
     }
 
     [Fact]
-    public async System.Threading.Tasks.Task DatabaseContext_UsesTheAdaptiveConcurrencyGateForAdmission()
+    public async System.Threading.Tasks.Task DatabaseContext_AdmitsThroughTheConcurrencyGate_NotASemaphore()
     {
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration

@@ -37,6 +37,7 @@ public sealed class ServerCeilingConfigurationTests
         var source = new DatabaseContextConfiguration
         {
             ConnectionString = "Host=db1",
+            ProviderName = "Npgsql",
             ClampPoolsToServerConnectionLimit = true,
             ResourceConnectionHeadroom = 5
         };

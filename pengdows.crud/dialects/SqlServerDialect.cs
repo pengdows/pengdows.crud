@@ -486,6 +486,8 @@ internal class SqlServerDialect : SqlDialect
     // sys.configurations "user connections": 0 means unlimited (the engine allows up to 32,767), which
     // is "unknown" for clamping. The Dedicated Admin Connection is a separate listener and does not
     // count against it, so nothing is subtracted for an admin reserve.
+    internal override int? DefaultServerPort => 1433;
+
     internal override async Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         var limit = await ExecuteScalarQueryAsync(

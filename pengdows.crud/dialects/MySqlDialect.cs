@@ -344,6 +344,8 @@ internal class MySqlDialect : SqlDialect
     // The limit an ordinary client can use: max_connections, or the per-user limit when that is lower.
     // MySQL permits one more connection than max_connections for CONNECTION_ADMIN/SUPER accounts, so
     // nothing is subtracted for an admin reserve.
+    internal override int? DefaultServerPort => 3306;
+
     internal override async Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         var max = await ExecuteScalarQueryAsync(connection, "SELECT @@max_connections", ParseConnectionCount, useAsync)

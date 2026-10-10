@@ -4,8 +4,7 @@ internal enum ConnectionCeilingLimit
 {
     Requested,
     ProviderDefault,
-    ServerConfigured,
-    DialectAbsolute
+    ServerConfigured
 }
 
 internal readonly record struct ConnectionCeilingResult(
@@ -13,8 +12,8 @@ internal readonly record struct ConnectionCeilingResult(
     ConnectionCeilingLimit Limiter,
     bool HeadroomApplied = false)
 {
-    /// <summary>True when the server or the dialect, not the caller or the default, set the value.</summary>
-    public bool WasClamped => Limiter is ConnectionCeilingLimit.ServerConfigured or ConnectionCeilingLimit.DialectAbsolute;
+    /// <summary>True when the server, not the caller or the default, set the value.</summary>
+    public bool WasClamped => Limiter == ConnectionCeilingLimit.ServerConfigured;
 }
 
 /// <summary>The one rule for how many connections a context may use against a server.</summary>
@@ -36,13 +35,11 @@ internal static class ConnectionCeiling
 {
     /// <param name="requested">The caller's pool size; null (or non-positive) when nothing was requested.</param>
     /// <param name="serverConfigured">The server's own configured connection limit, when it could be read.</param>
-    /// <param name="dialectAbsolute">The most this kind of server can ever allow.</param>
     /// <param name="providerDefault">The provider's default pool size, used only when nothing was requested.</param>
     /// <param name="headroom">Server slots to leave free for other clients; 0 reserves nothing.</param>
     public static ConnectionCeilingResult Resolve(
         int? requested,
         int? serverConfigured,
-        int? dialectAbsolute,
         int providerDefault,
         int headroom = 0)
     {
@@ -75,12 +72,6 @@ internal static class ConnectionCeiling
         {
             value = serverUsable.Value;
             limiter = ConnectionCeilingLimit.ServerConfigured;
-        }
-
-        if (dialectAbsolute is > 0 && dialectAbsolute.Value < value)
-        {
-            value = dialectAbsolute.Value;
-            limiter = ConnectionCeilingLimit.DialectAbsolute;
         }
 
         return new ConnectionCeilingResult(value, limiter, headroomApplied);

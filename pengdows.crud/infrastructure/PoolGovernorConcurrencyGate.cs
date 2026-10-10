@@ -21,7 +21,6 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
     private int _active;
     private int _available;
     private int _queueCount;
-    private int _owners = 1;
     private int _disposedFlag;
 
     internal PoolGovernorConcurrencyGate(int configuredMaximum, int? maxQueueDepth = null)
@@ -143,6 +142,8 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         }
     }
 
+    // The hook for automatic pool resizing: the effective limit can move between 1 and the configured
+    // maximum while leases are outstanding. Lowering never revokes a lease; raising admits queued waiters.
     internal int SetLimit(int limit)
     {
         if (limit < 1 || limit > _configuredMaximum)
@@ -176,7 +177,6 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
     {
         Waiter? handedOff = null;
         Waiter? promoted = null;
-        List<Waiter>? released;
         lock (_sync)
         {
             if (Volatile.Read(ref _active) == 0)
@@ -187,33 +187,20 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
             if (_singleSlot)
             {
                 handedOff = HandoffSingleSlotUnderLock();
-                released = null;
             }
             else
             {
                 Interlocked.Decrement(ref _active);
                 Interlocked.Increment(ref _available);
                 promoted = _queueCount == 0 ? null : PromoteOneUnderLock();
-                released = null;
             }
         }
 
-        Complete(handedOff ?? promoted, released);
+        Complete(handedOff ?? promoted, null);
     }
-
-    /// <summary>
-    /// Registers one more owner. The gate starts with one owner (its creator) and is disposed when
-    /// every owner has called <see cref="Dispose"/>.
-    /// </summary>
-    internal void AddOwner() => Interlocked.Increment(ref _owners);
 
     public void Dispose()
     {
-        if (Interlocked.Decrement(ref _owners) > 0)
-        {
-            return;
-        }
-
         if (Interlocked.Exchange(ref _disposedFlag, 1) != 0)
         {
             return;

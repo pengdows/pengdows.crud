@@ -225,6 +225,9 @@ await conn.DisposeAsync();  // Returns to provider pool
 |----------|------------------|-------------------|-----|
 | SQLite | `Data Source=:memory:` (isolated) | `SingleConnection` | **REQUIRED** - Each `:memory:` = separate database |
 | SQLite | File-based (`mydb.db`) | `SingleWriter` | **OPTIMAL** - Prevents lock contention, WAL allows many readers + one writer |
+| DuckDB | File-based | `SingleWriter` | **OPTIMAL** - Disjoint-row writers proceed, but concurrent same-row writers conflict; one admitted writer does not. An explicit `Standard` is honored with a warning |
+| Microsoft Access | Any | `SingleWriter` | **OPTIMAL** - Concurrent writers fail with "currently locked"; an explicit `Standard` is honored with a warning |
+| pengdows.flatfile | `path`/`file` | `SingleWriter` | **REQUIRED** - Concurrent writers queue inside `Open()` and time out; `Standard` is not honored |
 | PostgreSQL | Any | `Standard` | **OPTIMAL** - Full server, high concurrency, provider pooling |
 | SQL Server | LocalDB | `PreventDatabaseUnload` | **DEFAULT** (Best) - Prevents instance unload; explicit `Standard` honored with a performance warning |
 | Firebird | Any | `PreventDatabaseUnload` | **DEFAULT** (Best) - Keeps a sentinel per pool so `LINGER=0` doesn't discard the page cache; every explicit mode honored |
@@ -232,6 +235,7 @@ await conn.DisposeAsync();  // Returns to provider pool
 **Coercion** (forced mode change):
 - SQLite `:memory:` + Standard → **Coerced to SingleConnection** (correctness)
 - SQLite file + Standard → **Coerced to SingleWriter** (safety, prevents SQLITE_BUSY)
+- pengdows.flatfile + Standard/PreventDatabaseUnload → **Coerced to SingleWriter**; DuckDB file and Microsoft Access + `Best` or PreventDatabaseUnload → `SingleWriter`, but an explicit `Standard` is **honored with a warning** for both (their vendors document concurrent connections; concurrent writers were still observed to fail: same-row conflicts on DuckDB, "currently locked" on Access)
 - Firebird (embedded or client-server) → **Not coerced**; `Best` selects `PreventDatabaseUnload` and every explicit mode is honored
 - Whenever `Best` would select `PreventDatabaseUnload` (e.g. LocalDB, Firebird), it uses `Standard` instead if the configured max pool size is under 2: the sentinel needs a second pooled connection, and `Best` must not override a caller's explicit one-connection pool (`CoerceMode`, DatabaseContext.Initialization.cs:1879-1891)
 
@@ -506,7 +510,7 @@ behavior, not as a capability contract for new code.
 - Per-operation connections for both reads and writes
 - Governor: writable connections capped at 1 concurrent writer; read-only connections allow 0 writers
 - Writer-starvation-prevention turnstile enabled
-- Ideal for file-based SQLite/DuckDB when writes must serialize
+- Ideal for the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) when writes must serialize
 
 **SingleConnection mode** (`SingleConnectionStrategy`):
 - One persistent connection for **all** operations
@@ -962,7 +966,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 **Actual selection**:
 - PostgreSQL/MySQL/Oracle → Standard (full concurrency)
 - SQLite `:memory:` → SingleConnection (required for correctness)
-- SQLite file → SingleWriter (optimal for WAL)
+- SQLite file, DuckDB file, Microsoft Access and pengdows.flatfile → SingleWriter (writes serialize; reads stay concurrent)
 - SQL Server LocalDB → PreventDatabaseUnload (prevents unload)
 - Firebird → PreventDatabaseUnload (keeps the page cache warm under `LINGER=0`)
 

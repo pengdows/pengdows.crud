@@ -36,6 +36,8 @@ internal class TiDbDialect : MySqlDialect
     {
     }
 
+    internal override int? DefaultServerPort => 4000;
+
     // Not a single server with a fixed connection limit this probe could read: report "unknown"
     // rather than inherit a probe that does not apply.
     internal override Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)

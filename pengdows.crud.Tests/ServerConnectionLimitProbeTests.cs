@@ -211,4 +211,21 @@ public sealed class ServerConnectionLimitProbeTests
 
         Assert.Equal(32767, await Probe(dialect, c => c.ScalarResultsByCommand[SqlServerUserConnections] = 32767));
     }
+
+    [Theory]
+    [InlineData(MaxConnections)]
+    [InlineData(MaxUserConnections)]
+    public async Task MySql_ACancellationWhileReadingEitherSetting_PropagatesInsteadOfBecomingUnknown(string cancelledQuery)
+    {
+        var connection = new fakeDbConnection
+        {
+            ScalarResolver = command => command == cancelledQuery
+                ? throw new OperationCanceledException()
+                : command == MaxConnections ? 151L : 0L
+        };
+        using var tracked = new TrackedConnection(connection);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            MySql().ProbeServerConnectionLimitAsync(tracked, useAsync: true));
+    }
 }

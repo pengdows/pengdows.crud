@@ -204,6 +204,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int? _effectiveWriteGovernorMax;
     private bool _explicitReadOnlyConnectionString;
     private bool _readOnlyConnectionStringTargetsSameDatabase;
+    private bool _readerSharesWriterServer = true;
 
     // Server-ceiling clamp (opt-in): the server's own connection limit as probed during
     // initialization (null when unread or unreadable), and the configured headroom to leave free.

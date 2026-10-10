@@ -34,7 +34,7 @@ admission control, and dialect behavior itself — the developer never writes co
 knows or cares which `DbMode` (`Standard`, `PreventDatabaseUnload`, `SingleWriter`, `SingleConnection`,
 `Best`) is active for a given database. Point the same context at SQL Server or at SQLite
 and it detects the product and coerces to the correct mode automatically (full servers →
-`Standard`; SQL Server LocalDB → `PreventDatabaseUnload`; file-based SQLite/DuckDB → `SingleWriter`;
+`Standard`; SQL Server LocalDB → `PreventDatabaseUnload`; file-based SQLite/DuckDB/Access/pengdows.flatfile → `SingleWriter`;
 `:memory:` SQLite/DuckDB → `SingleConnection`; Firebird, server or embedded → `Standard`), and every downstream gateway call behaves
 identically regardless of which mode is active underneath it. Application code never
 branches on database type to get this.
@@ -119,6 +119,12 @@ database-agnostic policy decoupled from connection identity — is in
   the weakest stronger supported level or throws; a profile that can't be met throws
   `TransactionModeNotSupportedException`), savepoints, disposal, locking, and connection sharing
   inside a transaction. Transactions are operation-scoped, never stored as fields.
+- [`docs/connection-pooling.md`](docs/connection-pooling.md) — the pool governors and provider
+  pooling, `MaxConcurrentReads`/`MaxConcurrentWrites`, the writer-preference turnstile and its limits,
+  the duplicate-connection-string check (`EnforceUniqueConnectionString`), the exact priority order that
+  decides a pool's size (configuration, then the connection string, then the dialect default), and the opt-in server
+  connection ceiling (`ClampPoolsToServerConnectionLimit`, `ResourceConnectionHeadroom`): how each
+  engine's limit is read and how reads and writes share it.
 - [`docs/connection/ownership-and-shutdown.md`](docs/connection/ownership-and-shutdown.md) —
   precisely what the context/transaction/reader/gateway/sentinel/registry each own, `PoolGovernor`'s
   close/drain/dispose lifecycle, `DatabaseContext`'s exact shutdown sequence, and which operations

@@ -1110,21 +1110,6 @@ public partial class DatabaseContext
             turnstile = new SemaphoreSlim(1, 1);
         }
 
-        // The provider has separate reader and writer pools, but the server has one connection
-        // ceiling.  Independent role governors can therefore each stay below the ceiling while
-        // their sum exhausts it.  When both roles target this server and the ceiling was probed,
-        // enforce one shared physical-connection budget in addition to the per-role budgets.
-        PoolGovernorConcurrencyGate? sharedServerGate = null;
-        if (_clampPoolsToServerLimit && sharesTurnstile
-            && writerLabelMax > 0 && readerLabelMax > 0
-            && _probedWriterConnectionLimit is > 0)
-        {
-            var serverBudget = _probedWriterConnectionLimit.Value - _resourceConnectionHeadroom;
-            var requestedBudget = (long)writerLabelMax.Value + readerLabelMax.Value;
-            var sharedLimit = (int)Math.Min(Math.Max(serverBudget, 1), requestedBudget);
-            sharedServerGate = new PoolGovernorConcurrencyGate(sharedLimit, int.MaxValue);
-        }
-
         _writerGovernor = CreateGovernor(
             PoolLabel.Writer,
             writerKey,
@@ -1135,8 +1120,7 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: true,
             ownsTurnstile: turnstile != null, // Writers hold turnstile until slot released
-            maxQueueDepth: _maxQueuedWrites ?? UnboundedQueueDepth,
-            sharedConcurrencyGate: sharedServerGate);
+            maxQueueDepth: _maxQueuedWrites ?? UnboundedQueueDepth);
 
         _readerGovernor = CreateGovernor(
             PoolLabel.Reader,
@@ -1148,11 +1132,7 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: false,
             ownsTurnstile: false, // Readers touch-and-release turnstile
-            maxQueueDepth: _maxQueuedReads ?? UnboundedQueueDepth,
-            sharedConcurrencyGate: sharedServerGate);
-
-        // Each governor now holds its own reference; drop the creator's.
-        sharedServerGate?.Dispose();
+            maxQueueDepth: _maxQueuedReads ?? UnboundedQueueDepth);
 
         // PreventDatabaseUnload: every sentinel holds one permit from its own pool's governor, and
         // a dedicated reader pool gets its own sentinel so it cannot unload independently.
@@ -1252,20 +1232,29 @@ public partial class DatabaseContext
         _effectiveReadGovernorMax = null;
         _effectiveWriteGovernorMax = null;
         if (_clampPoolsToServerLimit &&
-            (!_explicitReadOnlyConnectionString || _readOnlyConnectionStringTargetsSameDatabase) &&
+            _readerSharesWriterServer &&
             _isWriteConnection &&
             _probedWriterConnectionLimit is > 0)
         {
-            var candidateReaderMax = ResolveEffectiveMaxPoolSize(
-                _configuredReadPoolSize, _readerConnectionString, "reader");
+            // A pool configured to 0 (MaxConcurrentReads/MaxConcurrentWrites) stays forbidden; resolving it as an
+            // ordinary size would silently allow it. A 0 in a connection string is not a forbid: it counts as
+            // unset, with the clamp on or off.
+            var candidateReaderMax = _configuredReadPoolSize == 0
+                ? 0
+                : ResolveEffectiveMaxPoolSize(_configuredReadPoolSize, _readerConnectionString, "reader");
             var candidateWriterMax = ConnectionMode == DbMode.SingleWriter
                 ? 1
-                : ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString, "writer");
-            _effectiveReadGovernorMax = candidateReaderMax;
-            _effectiveWriteGovernorMax = candidateWriterMax;
+                : _configuredWritePoolSize == 0
+                    ? 0
+                    : ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString, "writer");
             (sharedReaderPoolMax, sharedWriterPoolMax) = SplitSharedProviderPoolBudget(
                 candidateReaderMax, candidateWriterMax,
                 Math.Max(1, _probedWriterConnectionLimit.Value - _resourceConnectionHeadroom));
+
+            // A provider pool's Maximum Pool Size caps its connections, in use or idle, so each governor
+            // must admit no more callers than its pool can serve: size it to the pool's share.
+            _effectiveReadGovernorMax = sharedReaderPoolMax;
+            _effectiveWriteGovernorMax = sharedWriterPoolMax;
         }
 
         // 2. Finalize reader connection string: apply MaxPoolSize + provider-specific
@@ -1273,7 +1262,7 @@ public partial class DatabaseContext
         if (_dialect != null &&
             !string.Equals(_readerConnectionString, _connectionString, StringComparison.OrdinalIgnoreCase))
         {
-            var readMaxPoolSize = sharedReaderPoolMax ?? ResolveEffectiveMaxPoolSize(
+            var readMaxPoolSize = sharedReaderPoolMax is > 0 ? sharedReaderPoolMax.Value : ResolveEffectiveMaxPoolSize(
                 _configuredReadPoolSize, _readerConnectionString, "reader");
             var readerBuilder = GetFactoryConnectionStringBuilder(_readerConnectionString);
             _readerConnectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
@@ -1323,7 +1312,7 @@ public partial class DatabaseContext
             // (differentiated via ApplicationName suffix or a dialect-specific pool-discriminator setting).
             // Stamp the resolved write size so the governor and the provider pool agree.
             // Configuration wins over connection-string, which wins over the dialect default.
-            var writeMax = sharedWriterPoolMax ?? ResolveEffectiveMaxPoolSize(
+            var writeMax = sharedWriterPoolMax is > 0 ? sharedWriterPoolMax.Value : ResolveEffectiveMaxPoolSize(
                 _configuredWritePoolSize, _connectionString, "writer");
             _connectionString = ConnectionPoolingConfiguration.ApplyMaxPoolSize(
                 _connectionString, writeMax, _dialect?.MaxPoolSizeSettingName,
@@ -1462,22 +1451,28 @@ public partial class DatabaseContext
         _resourceConnectionHeadroom = configuration.ResourceConnectionHeadroom;
         _probedWriterConnectionLimit = null;
         _probedReaderConnectionLimit = null;
+        _readerSharesWriterServer = true;
 
-        if (!_clampPoolsToServerLimit || _dialect == null || detectionConnection == null)
+        if (!_clampPoolsToServerLimit || _dialect == null)
         {
             return;
         }
 
-        // The detection connection reaches the primary: that is the writer's server.
-        _probedWriterConnectionLimit = await _dialect
-            .ProbeServerConnectionLimitAsync(detectionConnection, useAsync)
-            .ConfigureAwait(false);
+        // Decided from the endpoint the strings name, not from string equality: a read string that differs
+        // only in user, application name or pool settings is still the same server.
+        _readerSharesWriterServer = !ReaderTargetsADifferentServer(configuration);
+
+        // The detection connection reaches the primary: that is the writer's server. Modes that hand it to a
+        // sentinel or a pinned slot leave none to use, so probe on a short-lived connection of our own.
+        _probedWriterConnectionLimit = detectionConnection != null
+            ? await _dialect.ProbeServerConnectionLimitAsync(detectionConnection, useAsync).ConfigureAwait(false)
+            : await ProbeSeparateServerAsync(configuration.ConnectionString, useAsync).ConfigureAwait(false);
 
         // The reader shares the writer's server unless it was given a connection string for a
         // different one (a read replica). A different server has its own limit: probe it on its own
         // short-lived connection, and if that fails leave the reader unclamped rather than lend it the
         // primary's number.
-        if (ReaderTargetsADifferentServer(configuration))
+        if (!_readerSharesWriterServer)
         {
             _probedReaderConnectionLimit = await ProbeSeparateServerAsync(configuration.ReadOnlyConnectionString, useAsync)
                 .ConfigureAwait(false);
@@ -1500,7 +1495,7 @@ public partial class DatabaseContext
         }
 
         LogProbedLimit("writer", _probedWriterConnectionLimit);
-        if (ReaderTargetsADifferentServer(configuration))
+        if (!_readerSharesWriterServer)
         {
             LogProbedLimit("reader (separate server)", _probedReaderConnectionLimit);
         }
@@ -1540,8 +1535,8 @@ public partial class DatabaseContext
         {
             var writerBuilder = new DbConnectionStringBuilder { ConnectionString = configuration.ConnectionString };
             var readerBuilder = new DbConnectionStringBuilder { ConnectionString = readerString };
-            return !(ServerEndpoint.TryGetKey(writerBuilder, null, out var writerKey) &&
-                     ServerEndpoint.TryGetKey(readerBuilder, null, out var readerKey) &&
+            return !(ServerEndpoint.TryGetKey(writerBuilder, _dialect!.DefaultServerPort, out var writerKey) &&
+                     ServerEndpoint.TryGetKey(readerBuilder, _dialect!.DefaultServerPort, out var readerKey) &&
                      string.Equals(writerKey, readerKey, StringComparison.Ordinal));
         }
         catch (ArgumentException)
@@ -1605,7 +1600,6 @@ public partial class DatabaseContext
             serverConfigured: string.Equals(poolLabel, "reader", StringComparison.Ordinal)
                 ? _probedReaderConnectionLimit
                 : _probedWriterConnectionLimit,
-            dialectAbsolute: null,
             providerDefault: resolved,
             headroom: _resourceConnectionHeadroom);
 
@@ -1982,8 +1976,7 @@ public partial class DatabaseContext
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
-        int? maxQueueDepth = null,
-        PoolGovernorConcurrencyGate? sharedConcurrencyGate = null)
+        int? maxQueueDepth = null)
     {
         if (disabled || !maxSlots.HasValue)
         {
@@ -2009,8 +2002,7 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: holdTurnstile,
             ownsTurnstile: ownsTurnstile,
-            maxQueueDepth: maxQueueDepth,
-            sharedConcurrencyGate: sharedConcurrencyGate);
+            maxQueueDepth: maxQueueDepth);
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)

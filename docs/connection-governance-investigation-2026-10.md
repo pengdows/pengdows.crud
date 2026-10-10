@@ -463,3 +463,41 @@ for arm in "$@"; do
   grep -aE '^\| (Dapper|EF|Pengdows)_' "run-$cls-$arm.log" | awk '!seen[$0]++'
 done
 ```
+
+---
+
+## 9. Corrections after the formal review (2026-10-10)
+
+A static review of the whole change set found that the design in Sections 6 and 7 had a flaw, and several of
+its statements no longer hold. What changed, and why:
+
+- **Governors are sized to the provider pool they feed.** A provider pool's `Maximum Pool Size` caps its
+  connections whether they are in use or idle. The clamp split the server's budget across the reader and
+  writer pools (for example 11 and 11 against 22 usable connections) but left each governor at its full,
+  un-split size, so a governor admitted callers its pool could not serve; the extra callers waited inside
+  the provider for its own timeout and then failed, instead of waiting under `PoolAcquireTimeout`. Each
+  governor is now sized to its pool's share, and the two shares together fit the server.
+- **The shared server gate is gone.** With governors sized to their pools the two roles cannot together hold
+  more connections than the server allows, so a second, shared admission layer could never bind. Removing it
+  also removed its reference counting and the second timeout that it needed. Section 6's "agreed, not built"
+  item 1 (a total governor) is therefore not needed for same-server pools.
+- **The dialect absolute was removed.** Nothing supplied one, so the ceiling is the smaller of what the caller
+  asked for and what the server allows. Section 6's first row and Section 7.1's `ConnectionCeiling` row
+  describe the earlier three-way minimum.
+- **"Same server" is decided from the endpoint** (`ServerEndpoint`), not from string equality, for the shared
+  budget as well as for the probe: a read string that differs only in user or application name is the same
+  server and shares the budget. Each dialect that can probe reports its default port (`DefaultServerPort`), so
+  `Host=db1` and `Host=db1;Port=5432` are one server.
+- **A forbidden pool stays forbidden** under the clamp (a size of 0 is no longer turned into the provider
+  default), and **a minimum pool size is kept within the clamped maximum**.
+- **The probe runs in every mode.** `PreventDatabaseUnload` and `SingleConnection` hand the detection
+  connection to a sentinel or a pinned slot, which left the probe with nothing to use and no log line; it now
+  opens a short-lived probe connection of its own.
+- **A cancellation is never swallowed** while reading a server setting.
+- **Tests:** the acceptance test in Section 7.2 that was intentionally red,
+  `ServerConnectionCeilingIntegrationTests`, passes against a real PostgreSQL, alongside live probe tests for
+  PostgreSQL 15 and 17, MySQL (with and without a per-user limit) and SQL Server.
+
+Still open, deliberately: probing a replica opens a connection that startup then opens again to validate
+(opt-in feature, rare topology), and a process-wide budget across several contexts on one server remains the
+item in Section 6 that is not built.

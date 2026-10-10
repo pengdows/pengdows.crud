@@ -32,6 +32,12 @@
         <ProjectReference Include="..\testbed\testbed.csproj"/>
     </ItemGroup>
 
+    <!-- One Db2 native-library bootstrap, shared with the testbed: dotnet test never runs testbed's Program.cs,
+         so the file's module initializer registers the resolver when this assembly loads. -->
+    <ItemGroup>
+        <Compile Include="..\testbed\Db2\Db2NativeLibraryBootstrap.cs" Link="Infrastructure\Db2NativeLibraryBootstrap.cs"/>
+    </ItemGroup>
+
     <!-- pengdows.flatfile (NuGet) arrives through testbed; PENGDOWS_FLATFILE gates the
          FlatFile-specific test code, as in testbed/testbed.csproj. -->
     <PropertyGroup>

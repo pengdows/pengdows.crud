@@ -55,7 +55,7 @@ public sealed class DataReaderMapperPlanLookupAllocationTests
         return total / 50;
     }
 
-    [ReleaseBuildFact]
+    [Fact]
     public async Task CachedPlanCall_AllocatesOnlyTheRowsAndTheLookupKey()
     {
         var mapper = await AllocationMeasurement.LowestAsync(() => MeasureAsync(async r =>
@@ -72,6 +72,7 @@ public sealed class DataReaderMapperPlanLookupAllocationTests
         // The cache key's column names and types: a string[3] and a Type[3].
         var lookupKey = 2 * (IntPtr.Size * 3 + 24L);
         _output.WriteLine($"mapper {mapper} B, by hand {byHand} B, key arrays {lookupKey} B");
-        Assert.True(mapper <= byHand + lookupKey, $"mapper {mapper} B, by hand {byHand} B + key {lookupKey} B");
+        var budget = byHand + OptimizedBuild.Budget(lookupKey, debugExtraBytes: 512);
+        Assert.True(mapper <= budget, $"mapper {mapper} B, budget {budget} B (by hand {byHand} B + key {lookupKey} B)");
     }
 }

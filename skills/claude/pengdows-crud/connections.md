@@ -47,12 +47,28 @@ public enum DbMode
 ### SingleWriter
 
 - Uses the Standard lifecycle but enforces `MaxConcurrentWrites = 1` with a writer-preference gate, keeping readers ephemeral while writers serialize.
-- Ideal for file-based SQLite and shared in-memory databases where writes must serialize without pinning a dedicated connection.
+- Ideal for the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and shared in-memory databases where writes must serialize without pinning a dedicated connection. It is a write-admission policy, not a SQLite workaround.
 
 ### SingleConnection
 
 - All work — reads and writes — is funneled through a single pinned connection
 - Used automatically for in-memory SQLite (see Connection Pooling)
+
+## Pool Size Priority
+
+- Each pool (reads, writes) is sized on its own from the first source that applies: `MaxConcurrentReads`/`MaxConcurrentWrites` > the pool-size setting in that pool's connection string (`Max Pool Size`, `MaxPoolSize`, `Maximum Pool Size`; reads use `ReadOnlyConnectionString` when supplied) > the dialect's default (100). A disagreement is resolved in favour of configuration, with a warning
+- The winning size is used for both the governor and the provider's own pool (it is written into the connection string), so they always agree
+- Then, in order: the absolute ceiling of 512; mode rules (`SingleWriter` = exactly one writer; `PreventDatabaseUnload` raises a pool below 2 to 2); the optional server ceiling
+- `MaxConcurrentReads = 0` / `MaxConcurrentWrites = 0` forbids a pool (a write size of 0 makes the context read-only); a `0` in a connection string is treated as unset; a negative size throws
+- SQLite and DuckDB run in-process, have no provider pool and ignore a connection-string pool size
+
+## Server Connection Ceiling (opt-in)
+
+- `ClampPoolsToServerConnectionLimit = true` (default `false`) reads the server's own connection limit while the context initializes and never sizes a pool above it; `ResourceConnectionHeadroom` (default `0`) leaves that many server connections free for other clients
+- Supported for PostgreSQL/YugabyteDB (`max_connections` minus the reserved connections), MySQL/MariaDB (`@@max_connections`, or a lower per-user limit) and SQL Server (`user connections`; `0` = unlimited = unknown); other engines are left unchanged
+- Reader and writer provider pools are separate and hold connections open, so when both target one server and together ask for more than it allows, its limit is divided between them in proportion to what each asked for; each role's governor and provider pool are sized to its share
+- A read replica on another host is probed and budgeted on its own; a pool sized `0` stays forbidden
+- The budget belongs to one `DatabaseContext` — keep one context per connection string (see `EnforceUniqueConnectionString`)
 
 ## Constructor Overloads
 

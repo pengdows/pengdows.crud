@@ -53,11 +53,11 @@ public sealed class ConnectionGovernanceThesisTests
         await using var providerLease = await AcquireProviderAsync(providerPool);
         await using var governorLease = await governor.AcquireAsync();
 
-        var providerWaiter = AcquireProviderAsync(providerPool);
+        var providerWaiter = AcquireProviderAsync(providerPool, PatientProviderTimeout);
         var governorWaiter = governor.AcquireAsync().AsTask();
         await WaitUntilAsync(() => governor.QueueDepth == 1);
 
-        var providerExcessWaiter = AcquireProviderAsync(providerPool);
+        var providerExcessWaiter = AcquireProviderAsync(providerPool, PatientProviderTimeout);
         var governorExcessWaiter = governor.AcquireAsync().AsTask();
 
         var saturated = await Assert.ThrowsAsync<PoolSaturatedException>(async () => await governorExcessWaiter);
@@ -139,9 +139,15 @@ public sealed class ConnectionGovernanceThesisTests
         Assert.Equal(1, peakWrites);
     }
 
-    private static async Task<ProviderLease> AcquireProviderAsync(SemaphoreSlim providerPool)
+    // The provider's own wait budget. The default is short so a test of the timeout itself is quick; a waiter
+    // that has to outlast other awaits in its test is given a long budget, because a loaded host can take
+    // longer than 100 ms to get between two of them.
+    private static readonly TimeSpan ProviderTimeout = TimeSpan.FromMilliseconds(100);
+    private static readonly TimeSpan PatientProviderTimeout = TimeSpan.FromSeconds(10);
+
+    private static async Task<ProviderLease> AcquireProviderAsync(SemaphoreSlim providerPool, TimeSpan? timeout = null)
     {
-        if (!await providerPool.WaitAsync(TimeSpan.FromMilliseconds(100)))
+        if (!await providerPool.WaitAsync(timeout ?? ProviderTimeout))
         {
             throw new TimeoutException("The provider pool wait timed out.");
         }

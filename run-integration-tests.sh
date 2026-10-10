@@ -31,33 +31,48 @@ cleanup_db2_compat_runtime() {
   fi
 }
 
+# Db2 is in scope for a full run and for INTEGRATION_ONLY lists that name it.
+db2_in_scope() {
+  [[ -z "${INTEGRATION_ONLY:-}" ]] && return 0
+  [[ ",${INTEGRATION_ONLY// /}," == *,Db2,* ]]
+}
+
 # The IBM driver package is linked against the libxml2.so.2 / ICU 72 ABI. Provision those
 # compatibility libraries into a temporary directory when the host no longer carries them;
-# never install or relink system libraries just to run integration tests.
-if ! has_library libxml2.so.2 || ! has_library libicuuc.so.72 || ! has_library libicudata.so.72; then
+# never install or relink system libraries just to run integration tests. This only matters
+# when Db2 will run, and a failed download must not stop the databases that do not need it.
+if db2_in_scope &&
+   { ! has_library libxml2.so.2 || ! has_library libicuuc.so.72 || ! has_library libicudata.so.72; }; then
   db2_env="$(mktemp)"
-  GITHUB_ENV="${db2_env}" bash "${root}/scripts/install-db2-compat-libs.sh"
-  set -a
-  # shellcheck disable=SC1090
-  source "${db2_env}"
-  set +a
+  if GITHUB_ENV="${db2_env}" bash "${DB2_COMPAT_INSTALLER:-${root}/scripts/install-db2-compat-libs.sh}"; then
+    set -a
+    # shellcheck disable=SC1090
+    source "${db2_env}"
+    set +a
+    db2_compat_runtime_dir="${DB2_COMPAT_RUNTIME_DIR:-}"
+    # Appended, so the host's own libraries win and the compatibility copies only fill the gaps.
+    export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${DB2_COMPAT_LIB_DIR}"
+    trap cleanup_db2_compat_runtime EXIT
+  else
+    echo "  WARN    Db2: could not provision the libxml2/ICU compatibility libraries; Db2 tests will fail" >&2
+  fi
   rm -f "${db2_env}"
-  db2_compat_runtime_dir="${DB2_COMPAT_RUNTIME_DIR:-}"
-  export LD_LIBRARY_PATH="${DB2_COMPAT_LIB_DIR}${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
-  trap cleanup_db2_compat_runtime EXIT
 fi
 
 preflight() {
   local fatal=0
   echo "== integration preflight =="
   echo "INTEGRATION_ONLY: ${INTEGRATION_ONLY:-<all always-on databases>}"
+  echo "LD_LIBRARY_PATH: ${LD_LIBRARY_PATH:-<unset>}"
   if docker info >/dev/null 2>&1; then
     echo "  ok      Docker is reachable"
   else
     echo "  PROBLEM Docker is not reachable: every container-backed database would fail"
     fatal=1
   fi
-  if has_library libxml2.so.2 && has_library libicuuc.so.72 && has_library libicudata.so.72; then
+  if ! db2_in_scope; then
+    echo "  skip    Db2 (not in INTEGRATION_ONLY)"
+  elif has_library libxml2.so.2 && has_library libicuuc.so.72 && has_library libicudata.so.72; then
     echo "  ok      Db2: legacy libxml2/ICU dependencies resolve"
   else
     echo "  WARN    Db2: legacy libxml2/ICU dependencies are not fully resolved; Db2 tests will fail" \

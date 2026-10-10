@@ -52,9 +52,8 @@ namespace CrudBenchmarks;
 ///   - The remaining 80 concurrent tasks wait in the semaphore queue.
 ///   - Measured: 0/4,000 failures for Dapper_StormGate.
 ///
-/// Pengdows_Governed runs the same load through a DatabaseContext/TableGateway on the shared
-/// default pool (no explicit ceiling; pengdows.crud sizes its PoolGovernor from the connection
-/// string or config, and here it gets neither), with no StormGate. Added 2026-10-08; no measured result is recorded here, so
+/// Pengdows_Governed runs the same load through a DatabaseContext/TableGateway with an explicit
+/// ceiling of <see cref="PengdowsCeiling"/> per role (for now), with no StormGate. Added 2026-10-08; no measured result is recorded here, so
 /// read the correctness fragments from the run instead of trusting this comment.
 ///
 /// The headline number is the failure count going to zero (1,950 → 0, 2,158 → 0), not a
@@ -77,6 +76,9 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private const string ScenarioGoverned = "Governed";
     private const string ScenarioGovernedEf = "GovernedEf";
     internal const int ServerMaxConnections = 25;   // server limit
+    // Every pengdows.crud arm runs with an explicit pool ceiling of this many connections per role, for now.
+    // Dapper and EF stay on the provider default (100): they are what is being compared against.
+    internal const int PengdowsCeiling = 20;
     private const int PgMaxConnections = ServerMaxConnections;
     internal static readonly TimeSpan StormGateAcquireTimeout = TimeSpan.FromSeconds(30);
     internal static readonly TimeSpan PatientPoolAcquireTimeout = StormGateAcquireTimeout;
@@ -147,6 +149,28 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     // see benchmarks/CrudBenchmarks/results — and shouldn't be needed again).
     private long _attempted;
 
+    // The configuration of every pengdows.crud arm: the same connection string and an explicit ceiling per
+    // role; the arms differ only in the opt-in clamp and in how long a caller may wait for a slot.
+    internal static DatabaseContextConfiguration PengdowsConfiguration(
+        string connectionString, bool clamp = false, TimeSpan? poolAcquireTimeout = null)
+    {
+        var configuration = new DatabaseContextConfiguration
+        {
+            ConnectionString = connectionString,
+            ProviderName = "Npgsql",
+            DbMode = DbMode.Standard,
+            MaxConcurrentReads = PengdowsCeiling,
+            MaxConcurrentWrites = PengdowsCeiling,
+            ClampPoolsToServerConnectionLimit = clamp
+        };
+        if (poolAcquireTimeout.HasValue)
+        {
+            configuration.PoolAcquireTimeout = poolAcquireTimeout.Value;
+        }
+
+        return configuration;
+    }
+
     [GlobalSetup]
     public async Task GlobalSetup()
     {
@@ -180,37 +204,24 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             .UseNpgsql(_connStr)
             .Options;
 
-        // Every client (Dapper, EF, pengdows.crud) shares _connStr with no pool ceiling set, so
-        // pengdows.crud's PoolGovernor is sized from the dialect default (100), above the server's
-        // 25, and it is NOT wrapped in StormGate. (Result of that configuration: see the
-        // correctness fragments from the run; on 2026-10-08 it was 2,121 / 5,200 failures.)
+        // Every client shares _connStr. Dapper and EF run on the provider default pool (100), above the
+        // server's 25. pengdows.crud runs with an explicit ceiling of 20 per role, for now (until the
+        // governor resizes itself), and is NOT wrapped in StormGate. (Result with no ceiling at all:
+        // see the correctness fragments from the 2026-10-08 run, 2,121 / 5,200 failures.)
         var typeMap = new TypeMapRegistry();
         typeMap.Register<GovPgEntity>();
-        _pengdowsContext = new DatabaseContext(_connStr, NpgsqlFactory.Instance, typeMap);
+        _pengdowsContext = new DatabaseContext(PengdowsConfiguration(_connStr), NpgsqlFactory.Instance, null, typeMap);
         _pengdowsGateway = new TableGateway<GovPgEntity, int>(_pengdowsContext);
 
         // Identical connection string and load; the only difference is the opt-in clamp, which reads
         // the server's real limit (25, less the superuser reserve) and sizes the pools to it.
         _pengdowsClampedContext = new DatabaseContext(
-            new DatabaseContextConfiguration
-            {
-                ConnectionString = _connStr,
-                ProviderName = "Npgsql",
-                DbMode = DbMode.Standard,
-                ClampPoolsToServerConnectionLimit = true
-            },
+            PengdowsConfiguration(_connStr, clamp: true),
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsClampedGateway = new TableGateway<GovPgEntity, int>(_pengdowsClampedContext);
 
         _pengdowsPatientContext = new DatabaseContext(
-            new DatabaseContextConfiguration
-            {
-                ConnectionString = _connStr,
-                ProviderName = "Npgsql",
-                DbMode = DbMode.Standard,
-                ClampPoolsToServerConnectionLimit = true,
-                PoolAcquireTimeout = PatientPoolAcquireTimeout
-            },
+            PengdowsConfiguration(_connStr, clamp: true, poolAcquireTimeout: PatientPoolAcquireTimeout),
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsPatientGateway = new TableGateway<GovPgEntity, int>(_pengdowsPatientContext);
 
@@ -344,8 +355,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         }, ex => MarkInvalid(ScenarioGoverned, FrameworkPengdows, $"Exception: {ex.GetType().Name}"));
     }
 
-    // No explicit pool ceiling for any client: every one runs on the provider default (Npgsql 100)
-    // against a server capped at PgMaxConnections. Kept as one seam so the arms cannot diverge.
+    // Dapper and EF run on the provider default (Npgsql 100) against a server capped at PgMaxConnections;
+    // the pengdows.crud arms get an explicit ceiling. Kept as one seam so the arms cannot diverge.
     // pengdows.crud with ClampPoolsToServerConnectionLimit on: same string, same load, no StormGate.
     [Benchmark]
     [CorrectnessIdentity(FrameworkPengdowsClamped, ScenarioGoverned)]

@@ -15,7 +15,7 @@ namespace pengdows.crud.Tests;
 [Collection("AllocationSerial")]
 public class PoolGovernorAllocationTests
 {
-    [ReleaseBuildFact]
+    [Fact]
     public async Task UncontendedAcquireAndRelease_AllocatesOnlyTheSlotToken()
     {
         using var governor = new PoolGovernor(PoolLabel.Writer, "alloc", 1, TimeSpan.FromSeconds(5));
@@ -40,7 +40,8 @@ public class PoolGovernorAllocationTests
             least = Math.Min(least, (GC.GetAllocatedBytesForCurrentThread() - before) / 1000);
         }
 
-        Assert.True(least <= 48, $"{least} B per acquire and release; the slot token is 48 B or less");
+        var budget = OptimizedBuild.Budget(releaseBytes: 48, debugExtraBytes: 256);
+        Assert.True(least <= budget, $"{least} B per acquire and release; the budget is {budget} B (the slot token is 48 B)");
     }
 
     // The lock-free handshake: a release racing a waiter that is publishing its signal must still

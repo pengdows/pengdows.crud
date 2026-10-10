@@ -191,4 +191,31 @@ public sealed class PostgreSqlServerConnectionLimitProbeTests
 
         Assert.Equal(22, limit);
     }
+
+    // OperationCanceledException is never swallowed or wrapped: a probe that is cancelled must not
+    // quietly turn into "unknown" or into the documented reserve defaults.
+    [Theory]
+    [InlineData("SHOW max_connections")]
+    [InlineData("SHOW reserved_connections")]
+    [InlineData("SHOW superuser_reserved_connections")]
+    public async Task ACancellationWhileReadingAnySetting_PropagatesInsteadOfBecomingUnknown(string cancelledQuery)
+    {
+        var dialect = new PostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
+        var connection = new fakeDbConnection
+        {
+            ScalarResolver = command => command == cancelledQuery
+                ? throw new OperationCanceledException()
+                : command switch
+                {
+                    "SHOW max_connections" => "25",
+                    "SHOW reserved_connections" => "0",
+                    "SHOW superuser_reserved_connections" => "3",
+                    _ => throw new InvalidOperationException($"unrecognized configuration parameter: {command}")
+                }
+        };
+        using var tracked = new TrackedConnection(connection);
+
+        await Assert.ThrowsAsync<OperationCanceledException>(() =>
+            dialect.ProbeServerConnectionLimitAsync(tracked, useAsync: true));
+    }
 }

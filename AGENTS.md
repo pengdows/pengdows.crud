@@ -324,7 +324,7 @@ This is intentional design — it allows "last modified" queries without checkin
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
 | `PreventDatabaseUnload` | 1 | Sentinel connection keeps the database loaded (SQL Server LocalDB); `KeepAlive` is an `[Obsolete]` alias |
-| `SingleWriter` | 2 | File-based SQLite/DuckDB/Access — serializes writes via turnstile governor |
+| `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
 

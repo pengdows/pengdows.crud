@@ -40,7 +40,7 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
   - Non-transactional → ephemeral read-only connections that use the read-only preamble.
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
   - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
-- Used for: SQLite/DuckDB file-based and shared caches where writers must serialize without pinning a connection.
+- Used for: the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and SQLite shared caches, where writers must serialize without pinning a connection. `SingleWriter` is a general write-admission policy, not a SQLite workaround: any engine whose safe topology needs one writer at a time gets it.
 
 ### Best
 
@@ -64,7 +64,7 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
 
 - SingleWriter (default for Best)
 - SingleConnection (allowed alternative)
-- Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log
+- Standard/PreventDatabaseUnload → coerced to SingleWriter with a Warning log, except that DuckDB honors an explicit `Standard` (it documents concurrent connections) and logs a risk warning instead; see `connection/connection-modes.md`
 
 ### LocalDb: coerced to PreventDatabaseUnload.
 
@@ -118,7 +118,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Explicit Standard on embedded → coerced (never throw):
   - SQLite/DuckDB `:memory:` → SingleConnection
   - Firebird embedded → SingleConnection
-  - SQLite/DuckDB file-based, FlatFile → SingleWriter
+  - SQLite file-based, FlatFile → SingleWriter
+  - DuckDB file-based, Access: `Best`/PreventDatabaseUnload → SingleWriter; an explicit `Standard` is honored with a risk warning
 - Unknown product with Best → Standard.
 
 ## 8. Metrics & Limits

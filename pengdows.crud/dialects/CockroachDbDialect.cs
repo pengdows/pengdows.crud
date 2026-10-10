@@ -41,6 +41,8 @@ internal class CockroachDbDialect : PostgreSqlDialect
     {
     }
 
+    internal override int? DefaultServerPort => 26257;
+
     // Not a single server with a fixed connection limit this probe could read: report "unknown"
     // rather than inherit a probe that does not apply.
     internal override Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)

@@ -54,11 +54,13 @@ public sealed class ServerCeilingWiringTests
     }
 
     [Fact]
-    public void WhenOn_AndNothingRequested_EachRoleIsSizedToTheServersUsableLimit()
+    public void WhenOn_AndNothingRequested_TheServersUsableLimitIsSplitBetweenTheRoles()
     {
         using var context = Create(c => c.ClampPoolsToServerConnectionLimit = true);
 
-        Assert.Equal((22, 22), Slots(context));
+        // Each role asks for the provider default (100) against 22 usable connections: the two pools
+        // together may hold 22, so each governor is sized to its pool's half.
+        Assert.Equal((11, 11), Slots(context));
     }
 
     [Fact]
@@ -70,11 +72,24 @@ public sealed class ServerCeilingWiringTests
             c.ResourceConnectionHeadroom = 2;
         });
 
-        Assert.Equal((20, 20), Slots(context));
+        Assert.Equal((10, 10), Slots(context));
     }
 
     [Fact]
-    public void AnExplicitRequestBelowTheLimit_IsKept_PerRole()
+    public void ExplicitRequestsThatTogetherFitTheLimit_AreKeptPerRole()
+    {
+        using var context = Create(c =>
+        {
+            c.ClampPoolsToServerConnectionLimit = true;
+            c.MaxConcurrentReads = 5;
+            c.MaxConcurrentWrites = 10;
+        });
+
+        Assert.Equal((5, 10), Slots(context));
+    }
+
+    [Fact]
+    public void AnExplicitReadRequestBesideADefaultWritePool_IsSharedOutProportionally()
     {
         using var context = Create(c =>
         {
@@ -82,7 +97,8 @@ public sealed class ServerCeilingWiringTests
             c.MaxConcurrentReads = 10;
         });
 
-        Assert.Equal((10, 22), Slots(context));
+        // 10 reads against the writer's default (itself clamped to 22): 32 asked of 22, so 10/32 and 22/32.
+        Assert.Equal((6, 16), Slots(context));
     }
 
     [Fact]
@@ -95,11 +111,11 @@ public sealed class ServerCeilingWiringTests
             c.MaxConcurrentWrites = 50;
         });
 
-        Assert.Equal((22, 22), Slots(context));
+        Assert.Equal((11, 11), Slots(context));
     }
 
     [Fact]
-    public void SameServerPools_ShareOneServerWideAdmissionGate()
+    public void TheTwoRolesTogether_CannotHoldMoreConnectionsThanTheServerAllows()
     {
         using var context = Create(c =>
         {
@@ -112,14 +128,13 @@ public sealed class ServerCeilingWiringTests
 
         try
         {
-            // The server allows 22; each role's own pool would admit 20, so 22 in use is the shared ceiling.
-            for (var i = 0; i < 20; i++)
+            // The server allows 22; the two role pools split it, 11 each, and every extra caller waits
+            // under PoolAcquireTimeout instead of reaching a server that would refuse it.
+            for (var i = 0; i < 11; i++)
             {
                 held.Add(context.GetConnection(ExecutionType.Write));
+                held.Add(context.GetConnection(ExecutionType.Read));
             }
-
-            held.Add(context.GetConnection(ExecutionType.Read));
-            held.Add(context.GetConnection(ExecutionType.Read));
 
             Assert.Throws<PoolSaturatedException>(() => context.GetConnection(ExecutionType.Read));
             Assert.Throws<PoolSaturatedException>(() => context.GetConnection(ExecutionType.Write));
@@ -216,7 +231,7 @@ public sealed class ServerCeilingWiringTests
             primaryMax: "25", replicaMax: "999",
             replicaConnectionString: "Host=db1;Database=d;Username=u;Password=p;Application Name=ro");
 
-        Assert.Equal((22, 22), Slots(context));
+        Assert.Equal((11, 11), Slots(context));
     }
 
     [Fact]
@@ -276,7 +291,7 @@ public sealed class ServerCeilingWiringTests
             primaryMax: "25", replicaMax: "999",
             replicaConnectionString: "Host=db1;Port=5432;Database=d;Username=u;Password=p;Application Name=ro");
 
-        Assert.Equal((22, 22), Slots(context));
+        Assert.Equal((11, 11), Slots(context));
     }
 
     [Fact]

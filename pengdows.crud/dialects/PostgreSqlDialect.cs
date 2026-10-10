@@ -1045,6 +1045,8 @@ internal class PostgreSqlDialect : SqlDialect
     private const int DefaultSuperuserReservedConnections = 3;
     private const int DefaultReservedConnections = 0;
 
+    internal override int? DefaultServerPort => 5432;
+
     internal override async Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
     {
         var max = await ExecuteScalarQueryAsync(connection, "SHOW max_connections", ParseConnectionCount, useAsync)

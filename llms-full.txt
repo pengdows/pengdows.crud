@@ -469,7 +469,7 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
 | `PreventDatabaseUnload` | 1 | Embedded DBs needing sentinel connection |
-| `SingleWriter` | 2 | File-based SQLite/DuckDB — serializes writes via turnstile governor |
+| `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
 
@@ -767,7 +767,7 @@ MySQL/PostgreSQL suites.
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload (explicit `Standard` always honored)
+8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload (explicit `Standard` always honored)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `Context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations
@@ -2634,7 +2634,7 @@ behavior, not as a capability contract for new code.
 - Per-operation connections for both reads and writes
 - Governor: writable connections capped at 1 concurrent writer; read-only connections allow 0 writers
 - Writer-starvation-prevention turnstile enabled
-- Ideal for file-based SQLite/DuckDB when writes must serialize
+- Ideal for the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) when writes must serialize
 
 **SingleConnection mode** (`SingleConnectionStrategy`):
 - One persistent connection for **all** operations
@@ -3575,9 +3575,9 @@ The mode retains one sentinel connection per enabled pool: the connection opened
   - Non-transactional → ephemeral read-only connections that use the read-only preamble.
   - Read-only transactions → ephemeral read-only connections (reader concurrency pauses while writers wait).
   - Write transactions → serialize through the write permit while retaining the connection for the transaction's duration.
-- Used for: SQLite/DuckDB file-based and shared caches where writers must serialize without pinning a connection.
+- Used for: the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and SQLite shared caches, where writers must serialize without pinning a connection. `SingleWriter` is a general write-admission policy, not a SQLite workaround: any engine whose safe topology needs one writer at a time gets it.
 - **The turnstile is held for the writer's entire transaction, not just the moment of acquiring the write permit** — a deliberate tradeoff, not an oversight. It exists specifically to prevent writer starvation: without it, a steady stream of readers could keep a waiting writer permanently queued behind them under `PoolGovernor`'s otherwise reader/writer-symmetric admission. Holding it for the whole transaction span means new readers gate behind an in-flight writer (readers already queued when the writer grabbed the turnstile are not displaced — see `PoolGovernor`'s own remarks), trading a bounded amount of reader latency for a hard guarantee that writers make progress.
-- **Production default for file-based SQLite/DuckDB** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine handles concurrent *disjoint-row* writes, but concurrent writers targeting the *same* row/resource can fail with a write-write conflict (surfaced as `SerializationConflictException`) — so SingleWriter there is both a deterministic policy choice for the disjoint case AND a fix for the same-resource case, not purely a policy preference (see `docs/positioning/product-thesis.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
+- **Production default for the file-based embedded engines (SQLite, DuckDB, Access, pengdows.flatfile)** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine handles concurrent *disjoint-row* writes, but concurrent writers targeting the *same* row/resource can fail with a write-write conflict (surfaced as `SerializationConflictException`) — so SingleWriter there is both a deterministic policy choice for the disjoint case AND a fix for the same-resource case, not purely a policy preference (see `docs/positioning/product-thesis.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
 - **The write permit is not the connection.** `PoolGovernor`'s capacity-1 semaphore for writers is enforced via `PoolSlot`/`PoolSlotToken` (`pengdows.crud/infrastructure/PoolSlot.cs`), which holds no reference to any `DbConnection`/`DbCommand` at all — releasing a slot back to the governor is pure counter bookkeeping, independent of whether the connection used during that slot's lifetime succeeded or died. A pinned-writer design (GRDB's `DatabasePool`, Peewee's `SqliteQueueDatabase`) makes the one long-lived writer connection itself part of the concurrency mechanism, so a poisoned or severed connection requires rebuilding the writer object to recover. Here, a bad connection is simply discarded and the next admitted write acquires a fresh ephemeral one — concurrency policy is decoupled from connection identity. See `docs/positioning/product-thesis.md`'s expanded treatment of this distinction.
 
 ### Best
@@ -7374,6 +7374,8 @@ Build/Load/convenience API surface:
   `PoolSaturatedException` instead of waiting out `PoolAcquireTimeout` (`0` disables queueing for
   that role; `null`, the default, sets no cap on 2.0.x, as in 2.0.5, so a waiting caller is bounded
   only by `PoolAcquireTimeout`).
+- **Pool size priority** — each pool (reads, writes) is sized on its own from the first source that applies: `MaxConcurrentReads`/`MaxConcurrentWrites` (on `DatabaseContextConfiguration`), then the pool-size setting in that pool's connection string (`Max Pool Size`, `MaxPoolSize`, `Maximum Pool Size`), then the dialect's default (100). The winner is used for both the governor and the provider pool, then the absolute ceiling of 512, the mode rules (`SingleWriter` = one writer; `PreventDatabaseUnload` raises a pool below 2 to 2) and the optional server ceiling apply. `0` in configuration forbids a pool; `0` in a connection string counts as unset. See [`connection-pooling.md`](./connection-pooling.md).
+- **`ClampPoolsToServerConnectionLimit`** and **`ResourceConnectionHeadroom`** (on `DatabaseContextConfiguration`, off/`0` by default, 2.0.6) read the database server's own connection limit while the context initializes and size each role's pool so the reader and writer pools together never exceed it, leaving optional headroom for other clients — supported for PostgreSQL/YugabyteDB, MySQL/MariaDB and SQL Server; see [`connection-pooling.md`](./connection-pooling.md).
 - **`EnforceUniqueConnectionString`** (on `DatabaseContextConfiguration`, default `false`, 2.0.6)
   turns the always-on duplicate-connection-string warning into an `InvalidOperationException` at
   construction — see [`connection-pooling.md`](./connection-pooling.md).
@@ -9805,7 +9807,7 @@ This is intentional design — it allows "last modified" queries without checkin
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
 | `PreventDatabaseUnload` | 1 | Sentinel connection keeps the database loaded (SQL Server LocalDB); `KeepAlive` is an `[Obsolete]` alias |
-| `SingleWriter` | 2 | File-based SQLite/DuckDB/Access — serializes writes via turnstile governor |
+| `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
 
@@ -10005,7 +10007,7 @@ The framework provides intelligent, adaptive connection strategies to ensure opt
 - **`SingleConnection` Mode:** A dedicated mode for handling thread-safe access to a single, persistent connection, designed specifically for ephemeral `:memory:` databases, which is invaluable for testing.
 - **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string:
     - `:memory:` SQLite/DuckDB → `SingleConnection`
-    - File-based SQLite/DuckDB (and shared-cache in-memory SQLite) and Microsoft Access → `SingleWriter`
+    - File-based SQLite/DuckDB/pengdows.flatfile (and shared-cache in-memory SQLite) and Microsoft Access → `SingleWriter`
     - SQL Server LocalDB and Firebird → `PreventDatabaseUnload` (a sentinel per pool; an explicit `Standard` is always honored; `KeepAlive` is an `[Obsolete]` alias)
     - Everything else → `Standard`
 - **`ModeLockTimeout`:** Configurable timeout (`TimeSpan?`) for internal mode locks and transaction completion locks; `null` means wait indefinitely.
@@ -10266,7 +10268,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB = SingleWriter, LocalDB = PreventDatabaseUnload; unsafe explicit modes are coerced (e.g., SQLite/DuckDB `Standard` → `SingleWriter`)
+8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB = SingleWriter, LocalDB = PreventDatabaseUnload; unsafe explicit modes are coerced (e.g., SQLite `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations

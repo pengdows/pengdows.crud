@@ -44,10 +44,12 @@ public class ConnectionGovernanceBenchmarkShapeTests
             m => Assert.NotNull(m.GetCustomAttribute<CorrectnessIdentityAttribute>()));
     }
 
-    // No client gets an explicit pool ceiling: Dapper, EF Core and pengdows.crud all run on the
-    // provider default (Npgsql 100), against a server capped at 25. Capping every pool at 20 on
-    // 2026-10-08 made every arm pass (0 failures), which is a configuration the storm is meant to
-    // test the absence of. StormGate still carries its own 20 permits.
+    // The shared client connection string carries no pool ceiling: Dapper and EF Core run on the provider
+    // default (Npgsql 100), against a server capped at 25. The pengdows.crud arms get an explicit ceiling
+    // of 20 per role through their configuration instead (PengdowsArmCeilingTests), for now. Capping
+    // every pool at 20 on 2026-10-08 made every arm pass (0 failures), which is a configuration the
+    // storm is meant to test the absence of, so the competing arms stay uncapped. StormGate still
+    // carries its own 20 permits.
     [Fact]
     public void ClientConnectionString_SetsNoExplicitPoolCeiling()
     {

@@ -62,45 +62,51 @@ public interface IDatabaseContextConfiguration
     IMetricsOptions MetricsOptions { get; set; }
 
     /// <summary>
-    /// Maximum number of concurrent write operations admitted by the connection governor.
+    /// Maximum number of concurrent write operations admitted by the connection governor, and the size of
+    /// the provider's write pool.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>This is NOT the ADO.NET <c>Max Pool Size</c>.</b> It controls how many concurrent
-    /// write operations the library's admission governor allows at once. ADO.NET pooling is
-    /// configured separately via the connection string (e.g., <c>Max Pool Size=N</c>).
+    /// The write pool's size is the first of these that applies: this property; then the pool-size setting
+    /// in the write pool's connection string (<c>Max Pool Size</c> and the provider's other spellings);
+    /// then the dialect's default (100 for engines that have a provider pool). It is decided for
+    /// separately for the read pool and the write pool.
     /// </para>
     /// <para>
-    /// When <c>null</c> (the default), the governor defaults to the ADO.NET <c>Max Pool Size</c>
-    /// parsed from the connection string using the dialect's pool-size key, or the dialect's
-    /// built-in default if that key is absent.
+    /// The size that wins is used for both the library's admission governor and the provider's own pool: it
+    /// is written into the write pool's connection string, so the two always agree. When this property
+    /// and the connection string disagree, this property wins and a warning names both values.
     /// </para>
     /// <para>
-    /// Setting this lower than the ADO.NET pool size limits library-level concurrency.
-    /// Setting it higher has no additional effect — ADO.NET becomes the bottleneck.
-    /// For predictable behavior, align this value with your ADO.NET <c>Max Pool Size</c>.
+    /// The absolute ceiling of 512, the mode rules (<c>SingleWriter</c> has exactly one writer;
+    /// <c>PreventDatabaseUnload</c> raises a pool below 2 to 2) and, when opted into, the server's connection
+    /// limit are applied to the size that won. <c>0</c> forbids the write pool; a <c>0</c> in a connection
+    /// string is treated as unset. See docs/connection-pooling.md for the full order.
     /// </para>
     /// </remarks>
     int? MaxConcurrentWrites { get; set; }
 
     /// <summary>
-    /// Maximum number of concurrent read operations admitted by the connection governor.
+    /// Maximum number of concurrent read operations admitted by the connection governor, and the size of
+    /// the provider's read pool.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// <b>This is NOT the ADO.NET <c>Max Pool Size</c>.</b> It controls how many concurrent
-    /// read operations the library's admission governor allows at once. ADO.NET pooling is
-    /// configured separately via the connection string (e.g., <c>Max Pool Size=N</c>).
+    /// The read pool's size is the first of these that applies: this property; then the pool-size setting
+    /// in the read pool's connection string (<c>Max Pool Size</c> and the provider's other spellings);
+    /// then the dialect's default (100 for engines that have a provider pool). It is decided for
+    /// separately for the read pool and the write pool.
     /// </para>
     /// <para>
-    /// When <c>null</c> (the default), the governor defaults to the ADO.NET <c>Max Pool Size</c>
-    /// parsed from the connection string using the dialect's pool-size key, or the dialect's
-    /// built-in default if that key is absent.
+    /// The size that wins is used for both the library's admission governor and the provider's own pool: it
+    /// is written into the read pool's connection string, so the two always agree. When this property
+    /// and the connection string disagree, this property wins and a warning names both values.
     /// </para>
     /// <para>
-    /// Setting this lower than the ADO.NET pool size limits library-level concurrency.
-    /// Setting it higher has no additional effect — ADO.NET becomes the bottleneck.
-    /// For predictable behavior, align this value with your ADO.NET <c>Max Pool Size</c>.
+    /// The absolute ceiling of 512, the mode rules (<c>SingleWriter</c> has exactly one writer;
+    /// <c>PreventDatabaseUnload</c> raises a pool below 2 to 2) and, when opted into, the server's connection
+    /// limit are applied to the size that won. <c>0</c> forbids the read pool; a <c>0</c> in a connection
+    /// string is treated as unset. See docs/connection-pooling.md for the full order.
     /// </para>
     /// </remarks>
     int? MaxConcurrentReads { get; set; }
@@ -273,10 +279,14 @@ public interface IDatabaseContextConfiguration
 
     /// <summary>
     /// When true, the context reads the database server's own connection limit while initializing and
-    /// never sizes a pool above it (the smallest of: the requested size or the provider default, the
-    /// server's configured limit, and the most this kind of server can allow). Off by default on the
-    /// 2.0.x line because it can silently shrink a pool that exceeds the server's limit; a clamp is
-    /// logged. Engines whose limit cannot be read are left unchanged.
+    /// never sizes a pool above it: each role gets the smaller of the size it asked for (or the provider
+    /// default) and the server's configured limit. Reads and writes use separate provider pools that hold
+    /// their connections open, so when both roles target one server and together ask for more than it
+    /// allows, the limit is divided between them in proportion to what each asked for. Each role's
+    /// governor and provider pool are then sized to its share, so the two pools together never exceed the
+    /// server. A role whose size is 0 stays forbidden. Off by default on the 2.0.x line because it can
+    /// silently shrink a pool that exceeds the server's limit; a clamp is logged. Engines whose limit
+    /// cannot be read are left unchanged.
     /// </summary>
     // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
     bool ClampPoolsToServerConnectionLimit

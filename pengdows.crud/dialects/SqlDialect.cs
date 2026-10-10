@@ -318,10 +318,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <para>
     /// <paramref name="allowStandard"/> lets a dialect opt an explicit <see cref="DbMode.Standard"/>
     /// request out of the Standard-unsafe coercion below and have it honored instead (Best still
-    /// resolves to SingleWriter either way) — Access opts in, since it is documented by its own
-    /// vendor as supporting concurrent connections/writers, and a caller who has read that
-    /// documentation should be able to choose it deliberately. SQLite/DuckDB leave this false and
-    /// stay hard-coerced. See each opting-in dialect's <see cref="DescribeStandardModeRisk"/>
+    /// resolves to SingleWriter either way) — Access and DuckDB opt in, since each is documented by its
+    /// own vendor as supporting concurrent connections/writers, and a caller who has read that
+    /// documentation should be able to choose it deliberately. SQLite and pengdows.flatfile leave this
+    /// false and stay hard-coerced. See each opting-in dialect's <see cref="DescribeStandardModeRisk"/>
     /// override for the evidence <c>DatabaseContext.WarnOnModeMismatch</c> surfaces when this
     /// happens.
     /// </para>
@@ -359,9 +359,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// Risk description surfaced by <c>DatabaseContext.WarnOnModeMismatch</c> (Pattern 2) when an
     /// embedded single-writer engine is actually running with an explicitly-honored
     /// <see cref="DbMode.Standard"/> — only reachable for a dialect that opts into
-    /// <c>allowStandard</c> on <see cref="CoerceEmbeddedSingleWriterMode"/>; SQLite/DuckDB never
-    /// reach this, since they stay hard-coerced. Generic fallback text; override with
-    /// engine-specific evidence (see <c>AccessDialect</c>).
+    /// <c>allowStandard</c> on <see cref="CoerceEmbeddedSingleWriterMode"/> (Access and DuckDB); SQLite
+    /// and pengdows.flatfile never reach this, since they stay hard-coerced. Generic fallback text;
+    /// override with engine-specific evidence (see <c>AccessDialect</c> and <c>DuckDbDialect</c>).
     /// </summary>
     internal virtual string DescribeStandardModeRisk() =>
         "This engine documents support for concurrent connections, but pengdows.crud has not " +
@@ -1820,7 +1820,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             var result = await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
             return converter(result);
         }
-        catch (Exception ex) when (onError != null)
+        catch (Exception ex) when (onError != null && ex is not OperationCanceledException)
         {
             return onError(ex);
         }
@@ -3382,6 +3382,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <summary>Parses a server-reported connection count; null when it is not a number.</summary>
     protected static int? ParseConnectionCount(object? value) =>
         int.TryParse(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture), out var n) ? n : null;
+
+    /// <summary>
+    /// The TCP port a server of this kind listens on when a connection string names none; null when the
+    /// dialect has no fixed default. Lets "Host=db1" and "Host=db1;Port=5432" be recognised as one server.
+    /// </summary>
+    internal virtual int? DefaultServerPort => null;
 
     /// <summary>Dialects with a readable server connection limit override this; the default is "unknown".</summary>
     internal virtual Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)

@@ -46,7 +46,7 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 ### SingleWriter
 * Identical to Standard (no pinned connections); governor profile: writable connections capped at 1 concurrent writer, read-only connections allow 0 writers; writer-starvation-prevention turnstile enabled.
 * A writer-preference turnstile pauses new readers when a writer is queued, guaranteeing fairness for SQLite/DuckDB workloads.
-* Triggered automatically for file-based SQLite/DuckDB and shared in-memory pools so writers serialize safely without blocking the entire process (see Connection Pooling).
+* Triggered automatically for the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and shared in-memory pools so writers serialize safely without blocking the entire process (see Connection Pooling).
 
 ### SingleConnection
 * All work — reads and writes — is funneled through a single pinned connection.
@@ -69,7 +69,7 @@ The SingleConnection pin relies on a `RealAsyncLocker` backed by a `SemaphoreSli
 
 ## Pool governors & acquisition windows
 
-The context installs read and write `PoolGovernor` instances in every mode except `SingleConnection`, gating access to each database provider’s connection pool. Each governor issues `PoolSlot` tokens with a default `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`) before opening a connection. Each PreventDatabaseUnload sentinel (one per enabled pool) grabs a slot from its own pool during initialization so the pool accounts for the pinned connection; a sentinel repaired after breaking swaps its slot rather than leaking it. SingleWriter mode enforces `MaxConcurrentWrites = 1`, `MaxConcurrentReads = N`, and, when configured, a writer-preference turnstile so readers stop entering while a writer waits. If a governor cannot deliver a slot within the timeout, a `PoolSaturatedException` is raised along with statistics for the queue depth and slot usage so you can scale the pool or reduce concurrency. Override `MaxConcurrentReads`/`MaxConcurrentWrites` (legacy `ReadPoolSize`/`WritePoolSize`) to clamp the governors to your desired limits.
+The context installs read and write `PoolGovernor` instances in every mode except `SingleConnection`, gating access to each database provider’s connection pool. Each governor issues `PoolSlot` tokens with a default `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`) before opening a connection. Each PreventDatabaseUnload sentinel (one per enabled pool) grabs a slot from its own pool during initialization so the pool accounts for the pinned connection; a sentinel repaired after breaking swaps its slot rather than leaking it. SingleWriter mode enforces `MaxConcurrentWrites = 1`, `MaxConcurrentReads = N`, and, when configured, a writer-preference turnstile so readers stop entering while a writer waits. If a governor cannot deliver a slot within the timeout, a `PoolSaturatedException` is raised along with statistics for the queue depth and slot usage so you can scale the pool or reduce concurrency. Governors are sized automatically from the connection string's pool-size setting (or the dialect's default); override `MaxConcurrentReads`/`MaxConcurrentWrites` (legacy `ReadPoolSize`/`WritePoolSize`) to set a different limit. Configuration wins over the connection string, and the winning size is used for both the governor and the provider pool; see [`connection-pooling.md`](./connection-pooling.md) for the full priority order.
 
 ## Benefits
 

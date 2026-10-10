@@ -54,8 +54,6 @@ internal sealed class PoolGovernor : IDisposable
     private readonly string _poolKeyHash;
     private readonly SemaphoreSlim? _semaphore;
     private readonly PoolGovernorConcurrencyGate? _concurrencyGate;
-    private readonly PoolGovernorConcurrencyGate? _sharedConcurrencyGate;
-    private int _sharedGateReleased;
     private readonly TimeSpan _acquireTimeout;
     private readonly long _acquireTimeoutStopwatchTicks;
     private readonly int _maxSlots;
@@ -111,8 +109,7 @@ internal sealed class PoolGovernor : IDisposable
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
-        int? maxQueueDepth = null,
-        PoolGovernorConcurrencyGate? sharedConcurrencyGate = null)
+        int? maxQueueDepth = null)
     {
         _label = label;
         _poolKeyHash = poolKeyHash;
@@ -125,8 +122,6 @@ internal sealed class PoolGovernor : IDisposable
             : SharedTurnstileStates.GetValue(turnstile, static _ => new TurnstileState());
         _holdTurnstile = holdTurnstile;
         _ownsTurnstile = ownsTurnstile;
-        _sharedConcurrencyGate = sharedConcurrencyGate;
-        _sharedConcurrencyGate?.AddOwner();
 
         if (disabled)
         {
@@ -272,66 +267,24 @@ internal sealed class PoolGovernor : IDisposable
     {
         if (_concurrencyGate != null)
         {
-            if (!_concurrencyGate.TryAcquire(out _, cancellationToken))
-            {
-                return false;
-            }
-
-            if (_sharedConcurrencyGate == null
-                || _sharedConcurrencyGate.TryAcquire(out _, cancellationToken))
-            {
-                return true;
-            }
-
-            _concurrencyGate.Release(0);
-            return false;
+            return _concurrencyGate.TryAcquire(out _, cancellationToken);
         }
 
         return _semaphore!.Wait(0, cancellationToken);
-    }
-
-    private static TimeSpan RemainingTimeout(TimeSpan timeout, long startedTimestamp)
-    {
-        if (timeout == Timeout.InfiniteTimeSpan)
-        {
-            return timeout;
-        }
-
-        var remaining = timeout - Stopwatch.GetElapsedTime(startedTimestamp);
-        return remaining > TimeSpan.Zero ? remaining : TimeSpan.Zero;
     }
 
     private bool AcquireAdmission(TimeSpan timeout, CancellationToken cancellationToken)
     {
         if (_concurrencyGate != null)
         {
-            var roleAcquired = false;
-            var started = Stopwatch.GetTimestamp();
             try
             {
                 _concurrencyGate.Acquire(timeout, cancellationToken);
-                roleAcquired = true;
-                if (_sharedConcurrencyGate != null)
-                {
-                    _sharedConcurrencyGate.Acquire(RemainingTimeout(timeout, started), cancellationToken);
-                }
                 return true;
             }
             catch (TimeoutException)
             {
-                if (roleAcquired)
-                {
-                    _concurrencyGate.Release(0);
-                }
                 return false;
-            }
-            catch
-            {
-                if (roleAcquired)
-                {
-                    _concurrencyGate.Release(0);
-                }
-                throw;
             }
         }
 
@@ -363,34 +316,14 @@ internal sealed class PoolGovernor : IDisposable
 
     private async ValueTask<bool> AcquireGateAdmissionAsync(TimeSpan timeout, CancellationToken cancellationToken)
     {
-        var roleAcquired = false;
-        var started = Stopwatch.GetTimestamp();
         try
         {
             await _concurrencyGate!.AcquireAsync(timeout, cancellationToken).ConfigureAwait(false);
-            roleAcquired = true;
-            if (_sharedConcurrencyGate != null)
-            {
-                await _sharedConcurrencyGate.AcquireAsync(RemainingTimeout(timeout, started), cancellationToken)
-                    .ConfigureAwait(false);
-            }
             return true;
         }
         catch (TimeoutException)
         {
-            if (roleAcquired)
-            {
-                _concurrencyGate!.Release(0);
-            }
             return false;
-        }
-        catch
-        {
-            if (roleAcquired)
-            {
-                _concurrencyGate!.Release(0);
-            }
-            throw;
         }
     }
 
@@ -401,7 +334,6 @@ internal sealed class PoolGovernor : IDisposable
     {
         if (_concurrencyGate != null)
         {
-            _sharedConcurrencyGate?.Release(0);
             _concurrencyGate.Release(0);
         }
         else
@@ -1179,10 +1111,6 @@ internal sealed class PoolGovernor : IDisposable
 
         _concurrencyGate?.Dispose();
 
-        if (Interlocked.Exchange(ref _sharedGateReleased, 1) == 0)
-        {
-            _sharedConcurrencyGate?.Dispose();
-        }
 
         if (_ownsTurnstile)
         {

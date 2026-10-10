@@ -97,10 +97,14 @@ internal sealed class SpannerDialect : PostgreSqlDialect
         return base.PrepareParameterValue(value, dbType);
     }
 
+    // Spanner is reached through a gateway with no fixed port.
+    internal override int? DefaultServerPort => null;
+
     // Not a single server with a fixed connection limit this probe could read: report "unknown"
     // rather than inherit a probe that does not apply.
     internal override Task<int?> ProbeServerConnectionLimitCoreAsync(ITrackedConnection connection, bool useAsync)
         => Task.FromResult<int?>(null);
+
     public override bool SupportsMerge => false;
 
     // CONFIRMED live (Spanner Omni + PGAdapter): a quoted identifier containing a space is rejected

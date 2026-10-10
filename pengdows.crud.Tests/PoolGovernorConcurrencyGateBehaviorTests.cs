@@ -67,7 +67,7 @@ public sealed class PoolGovernorConcurrencyGateBehaviorTests
     // ── queue cap ──
 
     [Fact]
-    public void QueueCap_RejectsAnAsyncWaiterBeyondTheCap()
+    public async Task QueueCap_RejectsAnAsyncWaiterBeyondTheCap()
     {
         using var gate = new PoolGovernorConcurrencyGate(1, maxQueueDepth: 1);
         var held = gate.Acquire();
@@ -77,7 +77,7 @@ public sealed class PoolGovernorConcurrencyGateBehaviorTests
         Assert.Equal(1, gate.QueueCount);
 
         gate.Release(held);
-        Assert.True(queued.Wait(HardTimeout));
+        await queued.WaitAsync(HardTimeout);
     }
 
     [Fact]

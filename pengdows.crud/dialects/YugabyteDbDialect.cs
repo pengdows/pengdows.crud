@@ -24,6 +24,8 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class YugabyteDbDialect : PostgreSqlDialect
 {
+    internal override int? DefaultServerPort => 5433;
+
     internal YugabyteDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger, SupportedDatabase.YugabyteDb)
     {

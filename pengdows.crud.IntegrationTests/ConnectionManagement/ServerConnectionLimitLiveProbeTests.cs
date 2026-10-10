@@ -27,7 +27,7 @@ public class ServerConnectionLimitLiveProbeTests
     [Theory]
     [InlineData("postgres:15-alpine")]
     [InlineData("postgres:17-alpine")]
-    public async Task ClampOn_SizesEveryRoleToWhatTheRealServerAllows(string image)
+    public async Task ClampOn_SharesWhatTheRealServerAllowsBetweenTheRoles(string image)
     {
         var container = new ContainerBuilder()
             .WithImage(image)
@@ -72,8 +72,12 @@ public class ServerConnectionLimitLiveProbeTests
             var writer = context.GetPoolStatisticsSnapshot(PoolLabel.Writer).MaxSlots;
             _output.WriteLine($"{image}: server max_connections={ServerMaxConnections}, reader slots={reader}, writer slots={writer}");
 
-            Assert.Equal(ServerMaxConnections - SuperuserReserved, reader);
-            Assert.Equal(ServerMaxConnections - SuperuserReserved, writer);
+            // Reads and writes use separate provider pools that hold connections open, so the server's usable
+            // limit is shared between them: together the two pools fit it, and each gets its half.
+            var usable = ServerMaxConnections - SuperuserReserved;
+            Assert.Equal(usable, reader + writer);
+            Assert.Equal(usable / 2, reader);
+            Assert.Equal(usable - usable / 2, writer);
         }
         finally
         {

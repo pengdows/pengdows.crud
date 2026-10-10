@@ -42,6 +42,14 @@
   instead of a hard-coded `"o.customer_id"`. Both interface members have default implementations, so
   implementations compiled against 2.0.5 still load. See [entity-mapping.md](entity-mapping.md).
 
+- `ClampPoolsToServerConnectionLimit` and `ResourceConnectionHeadroom` on `DatabaseContextConfiguration`
+  (off and `0` by default) read the database server's own connection limit while a context initializes and
+  size each role's pool so the reader and writer pools together never exceed it, leaving optional headroom
+  for other clients. They are supported for PostgreSQL and YugabyteDB, MySQL and MariaDB, and SQL Server;
+  other engines are left unchanged. Both are default interface members on `IDatabaseContextConfiguration`,
+  so implementations compiled against 2.0.5 still load. Because the clamp can shrink a pool that exceeded
+  the server's limit, it is opt-in on 2.0.x. See [connection-pooling.md](connection-pooling.md).
+
 ## Writes that now work
 
 - A C# enum stored by name in a PostgreSQL-family user-defined `ENUM` column now works in a MERGE

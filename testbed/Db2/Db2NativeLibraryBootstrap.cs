@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using IBM.Data.Db2;
 
@@ -9,14 +10,20 @@ namespace testbed.Db2;
 /// <c>DbProviderFactoryFinder</c> — since simply reading <c>DB2Factory.Instance</c> can trigger
 /// the driver's own native initialization. Call <see cref="Register"/> as the very first
 /// statement in Program.cs, before <c>DbProviderFactoryFinder.FindAllFactories()</c> runs.
+/// The integration-test project compiles this same file: <c>dotnet test</c> loads it in a separate host
+/// that never runs <c>Program.cs</c>, so the module initializer registers the resolver at assembly load.
 /// </summary>
 internal static class Db2NativeLibraryBootstrap
 {
     private static bool _registered;
 
+    [ModuleInitializer]
+    internal static void InitializeAtAssemblyLoad() => Register();
+
     public static void Register()
     {
-        if (_registered)
+        // libdb2.so and its clidriver tree are the Linux driver; other platforms use their own.
+        if (_registered || !OperatingSystem.IsLinux())
         {
             return;
         }
