@@ -57,6 +57,7 @@ internal sealed class PoolGovernor : IDisposable
     private readonly bool _disabled;
     private readonly bool _forbidden;
     private readonly bool _trackMetrics;
+    private readonly TimeProvider _timeProvider;
     private readonly bool _ownsTurnstile;
     // Made by WaitForDrainAsync only while it waits, and completed by the release that drops _inUse
     // to zero. Acquire and release touch it with no lock and no allocation (PERF-024): a waiter
@@ -103,9 +104,11 @@ internal sealed class PoolGovernor : IDisposable
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
-        int? maxQueueDepth = null)
+        int? maxQueueDepth = null,
+        TimeProvider? timeProvider = null)
     {
         _label = label;
+        _timeProvider = timeProvider ?? TimeProvider.System;
         _poolKeyHash = poolKeyHash;
         _acquireTimeout = acquireTimeout;
         _acquireTimeoutStopwatchTicks = ConvertTimeoutToStopwatchTicks(acquireTimeout);
@@ -347,10 +350,10 @@ internal sealed class PoolGovernor : IDisposable
             return false;
         }
 
-        var immediateWaitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+        var immediateWaitStart = _trackMetrics ? _timeProvider.GetTimestamp() : 0;
         var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
         writerTurnstileInterestRegistered = false;
-        slot = OnAcquired(immediateWaitStart, releaseWriterInterestOnRelease);
+        slot = OnAcquired(immediateWaitStart, immediateWaitStart, releaseWriterInterestOnRelease);
         return true;
     }
 
@@ -375,7 +378,7 @@ internal sealed class PoolGovernor : IDisposable
         {
             // Slow path: timed waits with a single deadline budget across gates.
             Interlocked.Increment(ref _totalWaits);
-            var waitStart = Stopwatch.GetTimestamp();
+            var waitStart = _timeProvider.GetTimestamp();
             var deadlineTicks = waitStart + _acquireTimeoutStopwatchTicks;
 
             // Turnstile fairness: acquire turnstile first to reduce writer starvation risk.
@@ -438,7 +441,7 @@ internal sealed class PoolGovernor : IDisposable
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
-                return OnAcquired(waitStart, releaseWriterInterestOnRelease);
+                return OnAcquired(waitStart, _trackMetrics ? _timeProvider.GetTimestamp() : 0, releaseWriterInterestOnRelease);
             }
 
             // Queue-depth admission control: unconditional (decoupled from _trackMetrics)
@@ -478,7 +481,7 @@ internal sealed class PoolGovernor : IDisposable
 
                     var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                     writerTurnstileInterestRegistered = false;
-                    return OnAcquired(waitStart, releaseWriterInterestOnRelease);
+                    return OnAcquired(waitStart, _trackMetrics ? _timeProvider.GetTimestamp() : 0, releaseWriterInterestOnRelease);
                 }
                 catch (OperationCanceledException)
                 {
@@ -510,7 +513,7 @@ internal sealed class PoolGovernor : IDisposable
             return true;
         }
 
-        var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+        var waitStart = _trackMetrics ? _timeProvider.GetTimestamp() : 0;
         var turnstileAcquired = false;
         var writerTurnstileInterestRegistered = false;
         try
@@ -539,7 +542,7 @@ internal sealed class PoolGovernor : IDisposable
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
-                slot = OnAcquired(waitStart, releaseWriterInterestOnRelease);
+                slot = OnAcquired(waitStart, waitStart, releaseWriterInterestOnRelease);
                 return true;
             }
 
@@ -612,7 +615,7 @@ internal sealed class PoolGovernor : IDisposable
             return (true, default);
         }
 
-        var waitStart = _trackMetrics ? Stopwatch.GetTimestamp() : 0;
+        var waitStart = _trackMetrics ? _timeProvider.GetTimestamp() : 0;
         var turnstileAcquired = false;
         var writerTurnstileInterestRegistered = false;
         try
@@ -640,7 +643,7 @@ internal sealed class PoolGovernor : IDisposable
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
-                return (true, OnAcquired(waitStart, releaseWriterInterestOnRelease));
+                return (true, OnAcquired(waitStart, waitStart, releaseWriterInterestOnRelease));
             }
 
             // Slot miss — release turnstile without recording hold metrics.
@@ -738,12 +741,14 @@ internal sealed class PoolGovernor : IDisposable
         }
     }
 
-    private void RecordWaitAndHold(long waitStart, long acquiredAt, long releasedAt)
+    private void RecordWaitAndHold(long waitStart, long acquiredAt)
     {
         if (!_trackMetrics)
         {
             return;
         }
+
+        var releasedAt = _timeProvider.GetTimestamp();
         var waitTicks = acquiredAt - waitStart;
         var holdTicks = releasedAt - acquiredAt;
 
@@ -762,9 +767,9 @@ internal sealed class PoolGovernor : IDisposable
     /// Returns the time remaining before the acquisition deadline expires.
     /// Never returns negative — returns <see cref="TimeSpan.Zero"/> once the deadline has passed.
     /// </summary>
-    private static TimeSpan GetRemainingTimeout(long deadlineTicks)
+    private TimeSpan GetRemainingTimeout(long deadlineTicks)
     {
-        var remainingTicks = deadlineTicks - Stopwatch.GetTimestamp();
+        var remainingTicks = deadlineTicks - _timeProvider.GetTimestamp();
         if (remainingTicks <= 0)
         {
             return TimeSpan.Zero;
@@ -818,7 +823,9 @@ internal sealed class PoolGovernor : IDisposable
         writerTurnstileInterestRegistered = false;
     }
 
-    private PoolSlot OnAcquired(long waitStart, bool releaseWriterTurnstileInterestOnRelease)
+    // waitStart and acquiredAt only feed the wait and hold metrics, so they are 0 when metrics are off. When nothing
+    // waited they are the same reading: the wait started at the moment of acquisition.
+    private PoolSlot OnAcquired(long waitStart, long acquiredAt, bool releaseWriterTurnstileInterestOnRelease)
     {
         if (IsClosed)
         {
@@ -850,12 +857,12 @@ internal sealed class PoolGovernor : IDisposable
         var inUse = Interlocked.Increment(ref _inUse);
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
-        return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart, releaseWriterTurnstileInterestOnRelease));
+        return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart, acquiredAt, releaseWriterTurnstileInterestOnRelease));
     }
 
-    internal void ReleaseToken(long waitStart, long acquiredAt, long releasedAt, bool releaseWriterTurnstileInterest)
+    internal void ReleaseToken(long waitStart, long acquiredAt, bool releaseWriterTurnstileInterest)
     {
-        RecordWaitAndHold(waitStart, acquiredAt, releasedAt);
+        RecordWaitAndHold(waitStart, acquiredAt);
 
         // Release semaphore and turnstile BEFORE decrementing _inUse (and before signaling
         // drain-waiters below). _inUse dropping to zero is the signal callers rely on — both
