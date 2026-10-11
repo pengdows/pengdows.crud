@@ -27,16 +27,19 @@ public class ReaderDelegateAllocationTests
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         await using var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
 
-        async Task<(object? Translator, object? Unreadable)> Open()
+        async Task<(object? Profile, object? Translator, object? Unreadable)> Open()
         {
             await using var sc = context.CreateSqlContainer("SELECT 1");
             await using var reader = await sc.ExecuteReaderAsync();
-            return (Field(reader, "_readFailureTranslator"), Field(reader, "_isUnreadableStoredValue"));
+            var profile = (ReaderDialectProfile)Field(reader, "_profile")!;
+            return (profile, profile.ReadFailureTranslator, profile.IsUnreadableStoredValue);
         }
 
         var first = await Open();
         var second = await Open();
 
+        // Every reader of the dialect holds the same profile, so one reference and no per-reader delegates.
+        Assert.Same(first.Profile, second.Profile);
         Assert.NotNull(first.Translator);
         Assert.NotNull(first.Unreadable);
         Assert.Same(first.Translator, second.Translator);

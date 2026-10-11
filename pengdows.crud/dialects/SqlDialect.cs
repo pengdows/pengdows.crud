@@ -412,6 +412,29 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal Func<Exception, bool> UnreadableStoredValuePredicate =>
         _unreadableStoredValuePredicate ??= IsUnreadableStoredValue;
 
+    private wrappers.ReaderDialectProfile? _queryReaderProfile;
+    private wrappers.ReaderDialectProfile? _otherReaderProfile;
+
+    /// <summary>
+    /// What a tracked reader takes from this dialect for <paramref name="kind"/>, made once: every reader of the dialect holds
+    /// the same object.
+    /// </summary>
+    internal wrappers.ReaderDialectProfile GetReaderProfile(DbOperationKind kind,
+        Func<SqlDialect, DbOperationKind, Func<Exception, Exception?>> createReadFailureTranslator)
+    {
+        if (kind == DbOperationKind.Query)
+        {
+            return _queryReaderProfile ??= NewReaderProfile(kind, createReadFailureTranslator);
+        }
+
+        return _otherReaderProfile ??= NewReaderProfile(kind, createReadFailureTranslator);
+    }
+
+    private wrappers.ReaderDialectProfile NewReaderProfile(DbOperationKind kind,
+        Func<SqlDialect, DbOperationKind, Func<Exception, Exception?>> createReadFailureTranslator) =>
+        new(GetReadFailureTranslator(kind, createReadFailureTranslator), UnreadableStoredValuePredicate,
+            ReadsUnresolvedColumns ? this : null, TypeCoercionOptions.For(this));
+
     /// <summary>The read-failure translator for <paramref name="kind"/>, made by <paramref name="create"/> once.</summary>
     internal Func<Exception, Exception?> GetReadFailureTranslator(DbOperationKind kind,
         Func<SqlDialect, DbOperationKind, Func<Exception, Exception?>> create)

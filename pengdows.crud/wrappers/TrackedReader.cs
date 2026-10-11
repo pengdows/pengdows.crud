@@ -53,9 +53,9 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     private long _firstRowTimestamp;
     private int _metricsRecorded;
 
-    // Translates a provider exception raised while fetching a row into the typed DatabaseException
-    // hierarchy (null when it isn't a provider exception), like failures while executing the command.
-    private readonly Func<Exception, Exception?>? _readFailureTranslator;
+    // What the reader takes from its dialect (read-failure translator, unreadable-value predicate, unresolved-column dialect,
+    // coercion options), shared by every reader of the dialect: one reference here instead of four.
+    private readonly ReaderDialectProfile _profile;
 
     // SqlDialect.ReadsInt64ThroughGetValue: Informix.Net.Core's GetInt64 rejects BIGSERIAL.
     private readonly bool _readsInt64ThroughGetValue;
@@ -69,27 +69,20 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     /// </summary>
     internal bool IsSequentialAccess { get; init; }
 
-    // SqlDialect.IsUnreadableStoredValue: a provider exception meaning the stored value has no .NET
-    // representation (TYPE-005).
-    private readonly Func<Exception, bool>? _isUnreadableStoredValue;
-
-    // SqlDialect.ReadsUnresolvedColumns: the dialect reads some columns the provider reports no
-    // field type for (TYPE-016). Per ordinal, the Type it reads them as or NotUnresolved; resolved
-    // once, since a tracked reader never moves to another result set.
-    private readonly SqlDialect? _unresolvedColumnDialect;
+    // The profile's UnresolvedColumnDialect (SqlDialect.ReadsUnresolvedColumns, TYPE-016): per ordinal, the Type the dialect reads
+    // a column the provider reports no field type for as, or NotUnresolved; resolved once, since a tracked reader never moves
+    // to another result set.
 
     // SqlDialect.ReadsResolvedColumnsByDataTypeName, read once: only then can a column the provider
     // reports a type for be one the dialect reads itself, so typed reads test this flag alone.
     private readonly bool _readsResolvedColumnsByDataTypeName;
 
-    // The dialect's coercion options: DataReaderMapper resolves provider-specific coercions with them.
-    private readonly TypeCoercionOptions _coercionOptions;
     private object?[]? _unresolvedColumnTypes;
     private static readonly object NotUnresolved = new();
 
     private Type? UnresolvedColumnType(int i)
     {
-        if (_unresolvedColumnDialect is null)
+        if (_profile.UnresolvedColumnDialect is null)
         {
             return null;
         }
@@ -98,8 +91,8 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         var entry = cache[i];
         if (entry is null)
         {
-            entry = (_unresolvedColumnDialect.ReadsResolvedColumnsByDataTypeName || ProviderFieldTypeIsUnknown(i)
-                ? _unresolvedColumnDialect.GetUnresolvedColumnType(_reader.GetDataTypeName(i))
+            entry = (_profile.UnresolvedColumnDialect.ReadsResolvedColumnsByDataTypeName || ProviderFieldTypeIsUnknown(i)
+                ? _profile.UnresolvedColumnDialect.GetUnresolvedColumnType(_reader.GetDataTypeName(i))
                 : null) ?? NotUnresolved;
             cache[i] = entry;
         }
@@ -122,7 +115,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
     }
 
     private DataMappingException? UnreadableValue(int i, Exception exception) =>
-        _isUnreadableStoredValue?.Invoke(exception) == true
+        _profile.IsUnreadableStoredValue?.Invoke(exception) == true
             ? new DataMappingException(
                 $"Could not read column '{_reader.GetName(i)}': the stored value has no .NET representation ({exception.Message})",
                 SupportedDatabase.Unknown, exception)
@@ -148,17 +141,36 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         SqlDialect? unresolvedColumnDialect = null,
         TypeCoercionOptions? coercionOptions = null,
         TimeProvider? timeProvider = null)
+        : this(reader, connection, connectionLocker, shouldCloseConnection,
+            new ReaderDialectProfile(readFailureTranslator, isUnreadableStoredValue, unresolvedColumnDialect,
+                coercionOptions ?? TypeCoercionOptions.Default),
+            command, metricsCollector, lifetimeListener, contextLocker, singleConnectionTransactionGate,
+            readsInt64ThroughGetValue, reportsOutOfRangeDecimalAsNull, timeProvider)
+    {
+    }
+
+    internal TrackedReader(
+        DbDataReader reader,
+        ITrackedConnection connection,
+        IAsyncDisposable connectionLocker,
+        bool shouldCloseConnection,
+        ReaderDialectProfile profile,
+        DbCommand? command = null,
+        MetricsCollector? metricsCollector = null,
+        IReaderLifetimeListener? lifetimeListener = null,
+        IAsyncDisposable? contextLocker = null,
+        IAsyncDisposable? singleConnectionTransactionGate = null,
+        bool readsInt64ThroughGetValue = false,
+        bool reportsOutOfRangeDecimalAsNull = false,
+        TimeProvider? timeProvider = null)
     {
         _timeProvider = MetricsClock.Resolve(timeProvider);
         // The lease start and the first-row time only feed the metrics collector, and reading the clock costs
         // about as much as the rest of constructing a reader, so nothing is read when there is no collector.
         _leaseStartTimestamp = metricsCollector != null ? _timeProvider.GetTimestamp() : 0;
-        _coercionOptions = coercionOptions ?? TypeCoercionOptions.Default;
-        _unresolvedColumnDialect = unresolvedColumnDialect;
-        _readsResolvedColumnsByDataTypeName = unresolvedColumnDialect is { ReadsResolvedColumnsByDataTypeName: true };
-        _isUnreadableStoredValue = isUnreadableStoredValue;
+        _profile = profile;
+        _readsResolvedColumnsByDataTypeName = profile.UnresolvedColumnDialect is { ReadsResolvedColumnsByDataTypeName: true };
         _reportsOutOfRangeDecimalAsNull = reportsOutOfRangeDecimalAsNull;
-        _readFailureTranslator = readFailureTranslator;
         _readsInt64ThroughGetValue = readsInt64ThroughGetValue;
         _reader = reader;
         _connection = connection;
@@ -177,12 +189,12 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     object IInternalTrackedReader.ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type) =>
         record.IsDBNull(ordinal) ? DBNull.Value
-        : _unresolvedColumnDialect is { } dialect ? dialect.ReadUnresolvedColumn(record, ordinal, type)
+        : _profile.UnresolvedColumnDialect is { } dialect ? dialect.ReadUnresolvedColumn(record, ordinal, type)
         : UnresolvedColumnReader.Read(record, ordinal, type);
-    TypeCoercionOptions IInternalTrackedReader.CoercionOptions => _coercionOptions;
+    TypeCoercionOptions IInternalTrackedReader.CoercionOptions => _profile.CoercionOptions;
 
     Func<IDataRecord, int, Type, object> IInternalTrackedReader.UnresolvedColumnReadDelegate =>
-        _unresolvedColumnDialect?.UnresolvedColumnReadDelegate ?? SqlDialect.DefaultUnresolvedColumnReader;
+        _profile.UnresolvedColumnDialect?.UnresolvedColumnReadDelegate ?? SqlDialect.DefaultUnresolvedColumnReader;
 
     protected override void DisposeManaged()
     {
@@ -437,7 +449,7 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
         {
             return _reader.IsDBNull(i)
                 ? DBNull.Value
-                : _unresolvedColumnDialect!.ReadUnresolvedColumn(_reader, i, unresolvedType);
+                : _profile.UnresolvedColumnDialect!.ReadUnresolvedColumn(_reader, i, unresolvedType);
         }
 
         try
@@ -722,12 +734,12 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
                 SupportedDatabase.Unknown, exception);
         }
 
-        if (_readFailureTranslator == null || exception is OperationCanceledException)
+        if (_profile.ReadFailureTranslator == null || exception is OperationCanceledException)
         {
             return null;
         }
 
-        return _readFailureTranslator(exception);
+        return _profile.ReadFailureTranslator(exception);
     }
 
     public DateTime GetDateTime(int i)

@@ -1722,24 +1722,23 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             var dr = await cmd.ExecuteReaderAsync(behavior, cancellationToken).ConfigureAwait(false);
             metrics?.CommandSucceeded(startTimestamp, 0);
             Interlocked.Increment(ref _activeReaders);
+            var readerProfile = _dialect is SqlDialect profileDialect
+                ? profileDialect.GetReaderProfile(operationKind, CreateReadFailureTranslatorFor)
+                : new ReaderDialectProfile(CreateReadFailureTranslator(_dialect, operationKind), null, null,
+                    DefaultCoercionOptions);
             var trackedReader = new TrackedReader(
                 dr,
                 conn,
                 connectionLocker,
                 closesConnectionAfterRead,
+                readerProfile,
                 cmd,
                 metrics,
                 this,
                 contextLocker,
                 singleConnectionTxGate == NoOpAsyncLocker.Instance ? null : singleConnectionTxGate,
-                _dialect is SqlDialect translatingDialect
-                    ? translatingDialect.GetReadFailureTranslator(operationKind, CreateReadFailureTranslatorFor)
-                    : CreateReadFailureTranslator(_dialect, operationKind),
                 _dialect is SqlDialect { ReadsInt64ThroughGetValue: true },
-                _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true },
-                _dialect is SqlDialect unreadableDialect ? unreadableDialect.UnreadableStoredValuePredicate : null,
-                _dialect is SqlDialect { ReadsUnresolvedColumns: true } unresolvedDialect ? unresolvedDialect : null,
-                DefaultCoercionOptions)
+                _dialect is SqlDialect { ReportsOutOfRangeDecimalAsNull: true })
             {
                 IsSequentialAccess = sequentialAccess
             };
