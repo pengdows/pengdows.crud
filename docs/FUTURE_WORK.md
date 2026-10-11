@@ -1284,15 +1284,31 @@ is a property of the provider's pool, verified per provider by the integration c
 **Two pools, one server budget.** A `DatabaseContext` has two governors, reader and writer (`_readerGovernor`,
 `_writerGovernor`), each in front of its own provider pool, and in `Standard` mode they usually share one server's
 connection limit (`_readerSharesWriterServer`). A refusal on one pool is therefore news about the *sum*, so the
-shrink is a context-level decision, not a per-governor one:
-- `TrackedConnection`'s retry delegate calls back into `DatabaseContext` with the refused role.
-- When the roles share a server, the budget is `opened_reader + opened_writer` (snapshots) and the new limits are
-  `SplitSharedProviderPoolBudget(currentReaderLimit, currentWriterLimit, budget)`, the same proportional split the
-  startup clamp already uses (both roles keep at least 1; `SingleWriter` keeps the writer at 1). The limits only
-  go down in this step. When a replica is a separate server (`_readerSharesWriterServer` false), only the refused
-  role's own opened count is the budget.
-- Recovery raises the combined budget by one and splits it the same way.
-- The refused caller retries inside its own role's governor, as in the rest of this design.
+shrink is a context-level decision, not a per-governor one. The adaptive state is one number plus a window, and the
+limits are a pure function of it:
+- **State:** `budget` (the combined number of connections the context allows itself) and the recovery window
+  timestamp. Starts at the configured total (`configuredReader + configuredWriter`).
+- **Limits are derived from the configured maxima, never from the current limits:** `limits = Resolve(configuredReader,
+  configuredWriter, budget)`. This matters because `SplitSharedProviderPoolBudget(requestedR, requestedW, limit)`
+  returns its inputs unchanged whenever their sum already fits, so feeding it the current (shrunken) limits could
+  never produce a larger pair: recovery from 5/5 with a budget of 11 would return 5/5. Given the configured maxima as
+  the requests, the split is monotonic in the budget: a bigger budget gives a bigger or equal pair, and
+  the pair never exceeds the configured maxima.
+- **`Resolve` keeps forbidden pools forbidden.** A role configured to 0 (`MaxConcurrentReads/Writes = 0`) stays 0;
+  the other role gets `min(configured, budget)`, because the splitter returns a pair with a 0 in it untouched
+  and would ignore the budget. When both roles are nonzero it is `SplitSharedProviderPoolBudget` (both keep at least
+  1; `SingleWriter` keeps the writer at 1).
+- **On a refusal:** `budget = min(budget, opened_reader + opened_writer)` (snapshots; when a replica is a separate
+  server, only the refused role's own opened count against its own role's configured maximum), floor at the number
+  of nonzero roles, then apply `Resolve` to both governors.
+- **Recovery:** `budget = min(configuredTotal, budget + 1)` after a window with no refusal, then `Resolve`. The
+  refused caller retries inside its own role's governor, as in the rest of this design.
+- **One serialization point.** The two governors' gate locks cannot make the pair atomic, and concurrent callbacks
+  would otherwise read different opened-count snapshots and interleave a refusal with a recovery. All adaptive
+  state (the opened-count snapshot, the budget, both `SetLimit` calls and the window) is guarded by a single lock on
+  the context. Lock order is always context adaptive lock, then a gate's lock (`SetLimit`); gate code never calls
+  back into the context, so the order cannot invert. Refusals are rare. Recovery is evaluated on successful opens
+  and reads one volatile (`budget < configuredTotal`) before taking the lock, so the steady state never takes it.
 
 **Two pools break one assumption.** "A retry can succeed" below relies on idle connections in the *same* provider
 pool. A refused writer will not find idle reader connections: they belong to another pool, stay open on the server,
@@ -1301,7 +1317,9 @@ string at construction and cannot be lowered live, so adaptation cannot stop the
 connections. The levers are (a) the provider's own idle pruning (Npgsql `Connection Idle Lifetime` and
 `Connection Pruning Interval`, `Minimum Pool Size`), which needs no code and is the first thing to recommend, and
 (b) an optional dialect hook, in the pattern of `ClearOwnedDataSourcePool` (found by reflection, no compile-time
-dependency on any provider), to clear the *other* role's pool while it holds no leases. Clearing is all-or-nothing
+dependency on any provider), to clear the *other* role's pool, only while that role holds no leases (its governor's
+in-use count is 0, checked under the adaptive lock). A clear that throws is best effort: it is caught and logged at
+debug, like `ClearPoolBestEffort`, and the retry carries on. Clearing is all-or-nothing
 for that pool and causes a reconnect burst, so (b) is a follow-up added only if the storm test (the last test step below)
 shows a refused caller cannot converge without it.
 
@@ -1360,9 +1378,13 @@ costs one connect attempt.
 2. Gate: with permits over the limit, a release below the limit does not promote a waiter until active drops
    below the limit; order of the waiting callers is unchanged by a shrink (an existing-behavior test that pins
    what this design relies on).
-3. Two pools: a reader burst leaves idle reader connections, then a writer open is refused: the shrink uses the
-   combined opened count and splits it with `SplitSharedProviderPoolBudget`, both limits stay at least 1, a
-   separate-server replica shrinks only its own role, and recovery raises the combined budget one step at a time.
+3. Two pools, written before the implementation: (a) a pair shrunk to 5/5 recovers to the right proportional pair
+   after one recovery step (a configured 10/10 with budget 11 gives 6/5 or the correct split, never 5/5), and never
+   exceeds the configured maxima; (b) a concurrent reader refusal and writer recovery: a recovery cannot overwrite
+   a newer shrink, and the pair always equals `Resolve(configured, budget)` for one budget; (c) a role configured
+   to 0 stays 0 through shrink and recovery and the other role follows the budget; (d) a reader burst leaves idle
+   reader connections, then a writer open is refused: the shrink uses the combined opened count, both nonzero
+   limits stay at least 1, and a separate-server replica shrinks only its own role.
 4. `TrackedConnection` and governor with fakeDb: a raw refusal is translated before the decision, and the raw
    exception the failure-recording callback sees is unchanged; a refusal keeps the permit, shrinks the limit to
    the *opened* count (several concurrent opens and refusals give one consistent value), retries, and succeeds
