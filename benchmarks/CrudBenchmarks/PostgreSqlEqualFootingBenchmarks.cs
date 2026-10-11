@@ -93,7 +93,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
             .WithEnvironment("POSTGRES_PASSWORD", "bench")
             .WithEnvironment("POSTGRES_USER", "bench")
             .WithEnvironment("POSTGRES_DB", "benchmark")
-            .WithPortBinding(5432, true)
+            .WithPortBinding(BenchmarkHostPort.ReserveBelowEphemeralRange(), 5432) // below the ephemeral range: see BenchmarkHostPort
             .Build();
 
         await _container.StartAsync();

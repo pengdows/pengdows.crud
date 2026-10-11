@@ -178,7 +178,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             .WithImage("postgres:15-alpine")
             .WithEnvironment("POSTGRES_PASSWORD", PgPassword)
             .WithEnvironment("POSTGRES_DB", "gov_test")
-            .WithPortBinding(0, 5432)
+            .WithPortBinding(BenchmarkHostPort.ReserveBelowEphemeralRange(), 5432) // below the ephemeral range: see BenchmarkHostPort
             // Key to the demo: max_connections=25, with 1,000-way application concurrency.
             // No client's pool is capped: each runs on the Npgsql default (100), above the server's
             // 25. StormGate's 20 permits are the only admission control among the arms.
