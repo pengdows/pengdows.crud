@@ -1281,6 +1281,30 @@ to create a physical connection, and that does not count against the server's li
 succeeds as soon as something is released, which is the "wait until a successful open" the design relies on. That
 is a property of the provider's pool, verified per provider by the integration cases below, not assumed.
 
+**Two pools, one server budget.** A `DatabaseContext` has two governors, reader and writer (`_readerGovernor`,
+`_writerGovernor`), each in front of its own provider pool, and in `Standard` mode they usually share one server's
+connection limit (`_readerSharesWriterServer`). A refusal on one pool is therefore news about the *sum*, so the
+shrink is a context-level decision, not a per-governor one:
+- `TrackedConnection`'s retry delegate calls back into `DatabaseContext` with the refused role.
+- When the roles share a server, the budget is `opened_reader + opened_writer` (snapshots) and the new limits are
+  `SplitSharedProviderPoolBudget(currentReaderLimit, currentWriterLimit, budget)`, the same proportional split the
+  startup clamp already uses (both roles keep at least 1; `SingleWriter` keeps the writer at 1). The limits only
+  go down in this step. When a replica is a separate server (`_readerSharesWriterServer` false), only the refused
+  role's own opened count is the budget.
+- Recovery raises the combined budget by one and splits it the same way.
+- The refused caller retries inside its own role's governor, as in the rest of this design.
+
+**Two pools break one assumption.** "A retry can succeed" below relies on idle connections in the *same* provider
+pool. A refused writer will not find idle reader connections: they belong to another pool, stay open on the server,
+and count against the limit (the 4.5 gap). The provider pools' `Maximum Pool Size` is fixed in the connection
+string at construction and cannot be lowered live, so adaptation cannot stop the other pool holding idle
+connections. The levers are (a) the provider's own idle pruning (Npgsql `Connection Idle Lifetime` and
+`Connection Pruning Interval`, `Minimum Pool Size`), which needs no code and is the first thing to recommend, and
+(b) an optional dialect hook, in the pattern of `ClearOwnedDataSourcePool` (found by reflection, no compile-time
+dependency on any provider), to clear the *other* role's pool while it holds no leases. Clearing is all-or-nothing
+for that pool and causes a reconnect burst, so (b) is a follow-up added only if the storm test (the last test step below)
+shows a refused caller cannot converge without it.
+
 **Replacing, not re-opening.** A provider's `DbConnection` is not guaranteed usable after a failed `Open` (it may
 be left closed, broken, or half-initialised), so the retry builds a new one. Today `TrackedConnection._connection`
 is `readonly` (37 uses) with no way to build another, so the work includes: `_connection` becomes replaceable; the
@@ -1323,7 +1347,8 @@ costs one connect attempt.
   most the permit count) and all are ahead of the normal queue anyway.
 - Refused callers keep their permits while retrying, so effective admission is a little lower than the shrunk
   limit says; they are the callers hitting the server limit, so that is accurate rather than a flaw.
-- The retry's success depends on the provider pool reusing idle connections (see above).
+- The retry's success depends on the provider pool reusing idle connections, which holds within one pool only
+  (see "Two pools break one assumption").
 - Every resize is logged and counted.
 
 **Test-first sequence.**
@@ -1335,7 +1360,10 @@ costs one connect attempt.
 2. Gate: with permits over the limit, a release below the limit does not promote a waiter until active drops
    below the limit; order of the waiting callers is unchanged by a shrink (an existing-behavior test that pins
    what this design relies on).
-3. `TrackedConnection` and governor with fakeDb: a raw refusal is translated before the decision, and the raw
+3. Two pools: a reader burst leaves idle reader connections, then a writer open is refused: the shrink uses the
+   combined opened count and splits it with `SplitSharedProviderPoolBudget`, both limits stay at least 1, a
+   separate-server replica shrinks only its own role, and recovery raises the combined budget one step at a time.
+4. `TrackedConnection` and governor with fakeDb: a raw refusal is translated before the decision, and the raw
    exception the failure-recording callback sees is unchanged; a refusal keeps the permit, shrinks the limit to
    the *opened* count (several concurrent opens and refusals give one consistent value), retries, and succeeds
    after a release; a spent time budget yields the translated `TooManyConnectionsException`; the same time budget
@@ -1343,7 +1371,7 @@ costs one connect attempt.
    plain `ConnectionException` changes nothing; `MarkOpened` counts a connection whose first-open hook then
    fails; the same through `SqlContainer` and `TransactionContext` creation; recovery raises the limit one step
    per window.
-4. A real PostgreSQL at a low `max_connections` under a storm, comparing peak TIME_WAIT, refusals and throughput
+5. A real PostgreSQL at a low `max_connections` under a storm, comparing peak TIME_WAIT, refusals and throughput
    with and without adaptation (`ServerConnectionCeilingIntegrationTests` is the starting point), plus recovery
    after the storm, and at least one provider whose failed `DbConnection` cannot safely be re-opened, to show the
    replacement is what makes the retry work there, and one whose pool does not reuse an idle connection on open,
