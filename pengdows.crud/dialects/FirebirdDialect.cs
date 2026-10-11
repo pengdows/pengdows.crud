@@ -576,12 +576,17 @@ internal class FirebirdDialect : SqlDialect
         }
 
         // Intercept unsupported types before they reach the provider parameter's set_DbType
+        // The value is boxed, and the base re-entered as an object, only for a value this override converts; every other value
+        // (a Guid, an int, a string) goes on as its own type, unboxed, so the base's type checks stay decided per type.
         var targetType = type;
-        object? targetValue = value;
+        object? targetValue = null;
+        var converted = false;
 
         if (type == DbType.Boolean)
         {
             targetType = DbType.Int16;
+            converted = true;
+            targetValue = value;
             if (value is bool boolValue)
             {
                 targetValue = boolValue ? (short)1 : (short)0;
@@ -596,6 +601,7 @@ internal class FirebirdDialect : SqlDialect
             // zone value", and accepts named zones only, confirmed live).
             targetType = DbType.Object;
             targetValue = zonedTime;
+            converted = true;
         }
         else if (type == DbType.DateTimeOffset)
         {
@@ -613,6 +619,7 @@ internal class FirebirdDialect : SqlDialect
                 zoned = FirebirdZonedDateTimeInterop.CreateUtc(instant, Factory.GetType().Assembly);
             }
 
+            converted = true;
             if (zoned != null)
             {
                 targetType = DbType.Object;
@@ -625,7 +632,9 @@ internal class FirebirdDialect : SqlDialect
             }
         }
 
-        return base.CreateDbParameter<object?>(name, targetType, targetValue);
+        return converted
+            ? base.CreateDbParameter<object?>(name, targetType, targetValue)
+            : base.CreateDbParameter(name, type, value);
     }
 
     // Connection pooling properties for Firebird
