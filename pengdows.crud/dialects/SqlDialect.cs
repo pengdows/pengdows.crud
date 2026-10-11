@@ -2269,6 +2269,27 @@ internal abstract class SqlDialect : IInternalSqlDialect
     [SuppressMessage("Security", "cs/exposure-of-private-information",
         Justification = "This method's purpose is to store user-supplied values in DbParameters. " +
                         "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
+    // Whether a value of type T can be one of the types CreateDbParameter's value-based checks look for, decided once per T
+    // (a generic static initializer): an object, an interface or an open class can hold any of them, so its runtime type
+    // decides; a concrete type can only be itself.
+    private static class ExoticParameterValue<T>
+    {
+        internal static readonly bool Possible = Compute();
+
+        private static bool Compute()
+        {
+            var type = Nullable.GetUnderlyingType(typeof(T)) ?? typeof(T);
+            if (!type.IsValueType && !type.IsSealed)
+            {
+                return true;
+            }
+
+            return type == typeof(RowVersion) || type == typeof(DateOnly) || type == typeof(TimeOnly) ||
+                   type == typeof(char) || type == typeof(float[]) || type == typeof(double[]) ||
+                   type == typeof(HierarchyId) || type == typeof(Int128) || type == typeof(UInt128);
+        }
+    }
+
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         // Re-dispatched virtually, so each dialect's DateTimeOffset handling applies to it.
@@ -2285,16 +2306,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return CreateDbParameter(name, type, offsetValue.UtcDateTime);
         }
 
-        // RowVersion is an opaque 8-byte version token: bind its raw bytes (re-dispatched
-        // virtually so per-dialect byte[] handling still applies), the same DbType.Binary
-        // payload every provider already accepts for a byte[] [Version] column.
-        // default(RowVersion) holds no bytes and binds as NULL.
-        if (value is RowVersion rowVersion)
-        {
-            byte[]? bytes = rowVersion.Equals(default) ? null : rowVersion.ToArray();
-            return CreateDbParameter(name, type, bytes);
-        }
-
         // TYPE-002: a Guid declared Binary is sent as its 16 bytes in the database's Guid byte order
         // (StoresGuidBytesBigEndian), whatever the dialect's own Guid handling.
         // The DbType is tested first: for a generic T that is Guid, `value is Guid` boxes the value, and every Guid parameter
@@ -2304,64 +2315,79 @@ internal abstract class SqlDialect : IInternalSqlDialect
             return CreateDbParameter(name, type, SerializeGuidAsBinary(binaryGuid));
         }
 
-        // TYPE-001: DateOnly/TimeOnly bind exactly as the equivalent midnight DateTime / TimeSpan
-        // (re-dispatched virtually), so every dialect's existing DateTime/TimeSpan handling applies,
-        // unless the dialect's driver takes them natively for a DATE/TIME column.
-        if (value is DateOnly dateOnly &&
-            !(BindsDateOnlyAndTimeOnlyNatively && (type is DbType.Date or DbType.Object)))
+        // The value-based checks below look for a handful of value types. A T that can never be one of them (a string, an int, a
+        // long, a decimal, nearly every parameter) skips all of them: each was a type-handle compare per call.
+        if (ExoticParameterValue<T>.Possible)
         {
-            return CreateDbParameter(name, type, dateOnly.ToDateTime(TimeOnly.MinValue));
-        }
+            // RowVersion is an opaque 8-byte version token: bind its raw bytes (re-dispatched
+            // virtually so per-dialect byte[] handling still applies), the same DbType.Binary
+            // payload every provider already accepts for a byte[] [Version] column.
+            // default(RowVersion) holds no bytes and binds as NULL.
+            if (value is RowVersion rowVersion)
+            {
+                byte[]? bytes = rowVersion.Equals(default) ? null : rowVersion.ToArray();
+                return CreateDbParameter(name, type, bytes);
+            }
 
-        if (value is TimeOnly timeOnly &&
-            !(BindsDateOnlyAndTimeOnlyNatively && (type is DbType.Time or DbType.Object)))
-        {
-            return CreateDbParameter(name, type, timeOnly.ToTimeSpan());
-        }
+            // TYPE-001: DateOnly/TimeOnly bind exactly as the equivalent midnight DateTime / TimeSpan
+            // (re-dispatched virtually), so every dialect's existing DateTime/TimeSpan handling applies,
+            // unless the dialect's driver takes them natively for a DATE/TIME column.
+            if (value is DateOnly dateOnly &&
+                !(BindsDateOnlyAndTimeOnlyNatively && (type is DbType.Date or DbType.Object)))
+            {
+                return CreateDbParameter(name, type, dateOnly.ToDateTime(TimeOnly.MinValue));
+            }
 
-        // TYPE-003: a char bound as a string type is sent as its one-character string; some providers
-        // mishandle a raw System.Char (Microsoft.Data.Sqlite stored '~' as "", confirmed live).
-        if (value is char character &&
-            type is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength)
-        {
-            return CreateDbParameter(name, type, character.ToString());
-        }
+            if (value is TimeOnly timeOnly &&
+                !(BindsDateOnlyAndTimeOnlyNatively && (type is DbType.Time or DbType.Object)))
+            {
+                return CreateDbParameter(name, type, timeOnly.ToTimeSpan());
+            }
 
-        // TYPE-015: a float[]/double[] on a database whose VECTOR binds from text.
-        // The type test comes before the dialect's flag in each check below: the flag is a virtual call, and a parameter
-        // that is not that type (nearly all of them) paid for it on every call.
-        if (value is float[] or double[] && BindsVectorsAsText)
-        {
-            var textType = type is DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength
-                ? type
-                : DbType.String;
-            return CreateDbParameter(name, textType, FormatVectorText(value));
-        }
+            // TYPE-003: a char bound as a string type is sent as its one-character string; some providers
+            // mishandle a raw System.Char (Microsoft.Data.Sqlite stored '~' as "", confirmed live).
+            if (value is char character &&
+                type is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength)
+            {
+                return CreateDbParameter(name, type, character.ToString());
+            }
 
-        // TYPE-016: a HierarchyId is sent as its text form, which SQL Server converts to hierarchyid
-        // implicitly and other databases store as is; declared Binary, it is sent as SQL Server's
-        // stored encoding, which SQL Server also converts implicitly (both confirmed live).
-        if (value is HierarchyId hierarchyId)
-        {
-            return type == DbType.Binary
-                ? CreateDbParameter(name, type, hierarchyId.ToSqlServerBytes())
-                : CreateDbParameter(name, type == DbType.Object ? DbType.String : type, hierarchyId.ToString());
-        }
+            // TYPE-015: a float[]/double[] on a database whose VECTOR binds from text.
+            // The type test comes before the dialect's flag in each check below: the flag is a virtual call, and a parameter
+            // that is not that type (nearly all of them) paid for it on every call.
+            if (value is float[] or double[] && BindsVectorsAsText)
+            {
+                var textType = type is DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength
+                    ? type
+                    : DbType.String;
+                return CreateDbParameter(name, textType, FormatVectorText(value));
+            }
 
-        // TYPE-005: 128-bit integers reach providers as BigInteger, the type DuckDB.NET, FirebirdClient
-        // and Npgsql bind for HUGEINT/INT128/NUMERIC (both rejected a raw Int128, confirmed live).
-        if (value is Int128 int128)
-        {
-            return BindsWideIntegersAsText
-                ? CreateDbParameter(name, DbType.String, int128.ToString(CultureInfo.InvariantCulture))
-                : CreateDbParameter(name, type, (BigInteger)int128);
-        }
+            // TYPE-016: a HierarchyId is sent as its text form, which SQL Server converts to hierarchyid
+            // implicitly and other databases store as is; declared Binary, it is sent as SQL Server's
+            // stored encoding, which SQL Server also converts implicitly (both confirmed live).
+            if (value is HierarchyId hierarchyId)
+            {
+                return type == DbType.Binary
+                    ? CreateDbParameter(name, type, hierarchyId.ToSqlServerBytes())
+                    : CreateDbParameter(name, type == DbType.Object ? DbType.String : type, hierarchyId.ToString());
+            }
 
-        if (value is UInt128 uint128)
-        {
-            return BindsWideIntegersAsText
-                ? CreateDbParameter(name, DbType.String, uint128.ToString(CultureInfo.InvariantCulture))
-                : CreateDbParameter(name, type, (BigInteger)uint128);
+            // TYPE-005: 128-bit integers reach providers as BigInteger, the type DuckDB.NET, FirebirdClient
+            // and Npgsql bind for HUGEINT/INT128/NUMERIC (both rejected a raw Int128, confirmed live).
+            if (value is Int128 int128)
+            {
+                return BindsWideIntegersAsText
+                    ? CreateDbParameter(name, DbType.String, int128.ToString(CultureInfo.InvariantCulture))
+                    : CreateDbParameter(name, type, (BigInteger)int128);
+            }
+
+            if (value is UInt128 uint128)
+            {
+                return BindsWideIntegersAsText
+                    ? CreateDbParameter(name, DbType.String, uint128.ToString(CultureInfo.InvariantCulture))
+                    : CreateDbParameter(name, type, (BigInteger)uint128);
+            }
         }
 
         if (type is DbType.SByte or DbType.UInt16 or DbType.UInt32 or DbType.UInt64 && !BindsSByteAndUnsignedNatively &&
