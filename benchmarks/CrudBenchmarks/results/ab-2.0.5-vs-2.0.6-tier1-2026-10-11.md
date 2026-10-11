@@ -39,6 +39,9 @@ dominates a ~22 us call on SQLite with no network; it is not visible on PostgreS
 
 ## Result 3: two regressions to investigate before 2.0.6 ships
 
+> **Update 2026-10-11:** both were investigated; the Guid regression is fixed (allocation at or below 2.0.5 on every dialect, time within
+> 3 to 18%) and the second is diagnosed (`TrackedReader` grew by about ten fields). See `ab-2.0.5-vs-2.0.6-parameter-regressions-2026-10-11.md`.
+
 1. **`BenchmarkGuidParameters`: all seven cases slower and allocating more, every round.** Time +16% to +41% (for example
    Sqlite_String 51.8 to 66.5 ns, Firebird_Binary 77.6 to 109.8 ns, SqlServer_PassThrough 63.0 to 76.6 ns) and
    allocation +14% to +50% (+32 to +64 B per parameter). Small in absolute terms (13 to 32 ns) but on a hot path, and it
