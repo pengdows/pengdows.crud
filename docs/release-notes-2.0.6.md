@@ -120,6 +120,26 @@
 - A `decimal` column (Oracle `NUMBER`) read into an enum property works; 2.0.5 failed building the
   mapper with `InvalidOperationException` (COR-013).
 
+## Guids in 16-byte binary columns
+
+- A `Guid` property declared `DbType.Binary` (`BINARY(16)`, `RAW(16)`, `BLOB`, ...) is written and read
+  in the database's own Guid byte order through the gateway and `DataReaderMapper`: RFC 4122 order
+  (the order `UUID_TO_BIN()` and every uuid tool print) everywhere except SQL Server, Oracle and
+  Sybase ASE, which use .NET's `ToByteArray()` order. 2.0.5 refused the declaration and always
+  decoded 16 bytes in .NET order.
+- **Behavior change:** on the RFC 4122 databases, bytes your application wrote itself with
+  `guid.ToByteArray()` now read as a different Guid. Rewrite them with
+  `ToByteArray(bigEndian: true)`, or read the column into `byte[]` and call `new Guid(bytes)`. A `Guid`
+  declared `DbType.Guid` is unchanged. See
+  [advanced-types.md](advanced-types.md#guids-in-16-byte-binary-columns).
+- `GuidRoundTripTests` round-trips a recognisable Guid through every database's Guid columns and
+  checks the stored bytes.
+
+## Parameter creation
+
+- Creating a command parameter allocates no more than in 2.0.5 on every dialect: the 2.0.6 per-parameter
+  closure and extra boxing introduced while adding the type checks were removed.
+
 ## Oracle spatial
 
 - `Geometry` and `Geography` properties now work with Oracle `SDO_GEOMETRY` columns through every
