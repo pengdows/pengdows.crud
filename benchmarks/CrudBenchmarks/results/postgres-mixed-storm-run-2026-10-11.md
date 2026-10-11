@@ -2,7 +2,8 @@
 
 > The "Clamped" rows below ran the shared per-server budget of POOL-003 phase 1, on the local branch
 > `pool-003-shared-budget`. 2.0.6 keeps the static division (the `Governed11` rows), which is why phase 1 was withdrawn.
-> On 2.0.6 the `Clamped` arm of this benchmark is that static division, expected to match `Governed11`; not yet re-run.
+> On 2.0.6 (commit `9992c4f9`, same benchmark, net10.0) the `Clamped` arm is that static division and was re-run: **0 failed
+> of 9,000 at both mixes, 20.77 s at 50% reads and 37.03 s at 90%**, identical to `Governed11` (20.77 s and 37.03 s).
 
 `PostgreSqlMixedGovernanceBenchmarks` (new), against `cdf00222` (POOL-003 phase 1), net10.0: PostgreSQL 15 with
 `max_connections=25` (22 usable), 1,000-way concurrency, 1,500 calls per batch that each hold their connection for 300 ms
