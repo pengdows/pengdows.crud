@@ -175,4 +175,17 @@ public class ConnectionGovernanceBenchmarkShapeTests
 
         Assert.NotNull(arm);
     }
+
+    // Writes forbidden and nothing else changed: no clamp, the pool's own 20 slots, the default wait. It isolates what
+    // declaring a context read-only does for a read-only workload (the slow-call failures are acquire timeouts, so
+    // the slot count and the wait decide them, not the declaration).
+    [Fact]
+    public void StormBenchmark_HasAnUnclampedReadOnlyPengdowsArmOnTheDefaultWait()
+    {
+        var arm = BenchmarkMethods()
+            .SingleOrDefault(m => m.GetCustomAttribute<CorrectnessIdentityAttribute>() is
+                { Framework: "PengdowsReadOnly", Scenario: "Governed" });
+
+        Assert.NotNull(arm);
+    }
 }

@@ -21,6 +21,7 @@ overlapping runs (it once showed 148,273 failures out of 130,000 attempts), so i
 | pengdows, ceiling 20, **30 s wait, no clamp** | 0 | 0 | 22.57 s |
 | pengdows, **11 per role by hand, no clamp** (control) | 0 | 29,276 (75.07%) | 10.24 s |
 | pengdows, clamp, **writes forbidden**, 30 s wait | 0 | 0 | 22.58 s |
+| pengdows, **writes forbidden, no clamp**, default 5 s wait (net10.0, own process) | 0 | 21,320 (54.67%) | 10.23 s |
 
 Every pengdows failure is a `PoolSaturatedException` (confirmed from the correctness fragments: 21,320 and 29,276).
 
@@ -31,6 +32,11 @@ Every pengdows failure is a `PoolSaturatedException` (confirmed from the correct
 - The clamp is exactly its split: 11 per role by hand with no clamp fails the same 29,276 calls as the clamp.
 - The split costs a one-sided workload half its capacity (41 s against 22.6 s even with patience), and a context that
   declares it never writes keeps the full reader budget.
+- Declaring the context read-only does not remove the slow-call failures. `Pengdows_ReadOnly` (writes forbidden, 20 reader
+  slots, no clamp, default wait) fails exactly the same 21,320 calls as `Pengdows_Governed`: they are acquire timeouts, so
+  the slot count and the wait decide them. A read-only declaration only matters with the clamp on, where it stops the
+  reader's budget being split (`ClampedReadOnly`, 0 failures at the 30 s wait). Predicted before the run; per-process
+  sidecar: attempted 39,000, failed 21,320.
 - Failure count versus slots is arithmetic: a batch serves `2 x 17 x slots` calls inside two 5 s windows
   (680 with 20 slots, 374 with 11), which reproduces 820 and 1,126 failures per batch exactly.
 

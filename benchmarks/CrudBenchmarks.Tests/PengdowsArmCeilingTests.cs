@@ -103,4 +103,16 @@ public class PengdowsArmCeilingTests
         Assert.Equal(SqlServerConnectionGovernanceBenchmarks.Headroom, headroom.ResourceConnectionHeadroom);
         Assert.Equal("Microsoft.Data.SqlClient", plain.ProviderName);
     }
+
+    [Fact]
+    public void ThePostgreSqlReadOnlyArm_ForbidsWrites_AndChangesNothingElseFromTheGovernedArm()
+    {
+        var readOnly = PostgreSqlConnectionGovernanceBenchmarks.PengdowsConfiguration(Connection, writes: 0);
+        var plain = PostgreSqlConnectionGovernanceBenchmarks.PengdowsConfiguration(Connection);
+
+        Assert.Equal(0, readOnly.MaxConcurrentWrites);
+        Assert.Equal(plain.MaxConcurrentReads, readOnly.MaxConcurrentReads);
+        Assert.False(readOnly.ClampPoolsToServerConnectionLimit);
+        Assert.Equal(plain.PoolAcquireTimeout, readOnly.PoolAcquireTimeout);
+    }
 }
