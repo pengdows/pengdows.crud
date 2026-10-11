@@ -2166,6 +2166,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         return translated;
     }
 
+    // The translated provider failure, or null for an exception that isn't the provider's (or is already
+    // translated). Lets the transaction paths, which open and begin outside a command, surface the same types.
+    internal static DatabaseException? TranslateProviderFailure(ISqlDialect dialect, Exception exception,
+        DbOperationKind operationKind) =>
+        exception is not DatabaseException && LooksLikeProviderException(exception)
+            ? TranslateDatabaseException(dialect, exception, operationKind)
+            : null;
+
     private DatabaseException TranslateDatabaseException(Exception exception, DbOperationKind operationKind)
     {
         return TranslateDatabaseException(_dialect, exception, operationKind);

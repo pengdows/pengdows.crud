@@ -228,10 +228,15 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             OpenConnectionWithOptionalLock(context, connection);
             gate = AcquireSingleConnectionTransactionGate(context);
         }
-        catch
+        catch (Exception ex)
         {
             // The connection holds a pool permit; release it (REV-026).
             context.CloseAndDisposeConnection(connection);
+            if (SqlContainer.TranslateProviderFailure(context.GetDialect(), ex, DbOperationKind.Unknown) is { } refused)
+            {
+                throw refused;
+            }
+
             throw;
         }
 
@@ -251,6 +256,14 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             {
                 // Cancellation is never wrapped.
                 throw;
+            }
+
+            // A refused or lost connection is a connection problem, not a transaction one: it keeps the type a
+            // command's failure would have had (TooManyConnectionsException, ConnectionException).
+            if (SqlContainer.TranslateProviderFailure(context.GetDialect(), ex, DbOperationKind.Unknown)
+                is ConnectionException connectionFailure)
+            {
+                throw connectionFailure;
             }
 
             throw new TransactionException(
@@ -1214,10 +1227,15 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             await OpenConnectionWithOptionalLockAsync(context, connection, cancellationToken).ConfigureAwait(false);
             gate = await AcquireSingleConnectionTransactionGateAsync(context, cancellationToken).ConfigureAwait(false);
         }
-        catch
+        catch (Exception ex)
         {
             // The connection holds a pool permit; release it (REV-026).
             await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
+            if (SqlContainer.TranslateProviderFailure(context.GetDialect(), ex, DbOperationKind.Unknown) is { } refused)
+            {
+                throw refused;
+            }
+
             throw;
         }
 
@@ -1236,6 +1254,14 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
             {
                 // Cancellation is never wrapped.
                 throw;
+            }
+
+            // A refused or lost connection is a connection problem, not a transaction one: it keeps the type a
+            // command's failure would have had (TooManyConnectionsException, ConnectionException).
+            if (SqlContainer.TranslateProviderFailure(context.GetDialect(), ex, DbOperationKind.Unknown)
+                is ConnectionException connectionFailure)
+            {
+                throw connectionFailure;
             }
 
             throw new TransactionException(

@@ -138,6 +138,12 @@
   wrapping the listener's ORA-12516, ORA-12519 or ORA-12520) is now a `TooManyConnectionsException`
   (transient), like ORA-00018/00020; it was a plain `ConnectionException`. Found under load in the full
   integration run.
+- A connect refused at the server's connection limit now surfaces as `TooManyConnectionsException` from
+  `BeginTransaction` / `BeginTransactionAsync` too, as it already did from commands. Opening the transaction's
+  connection used to throw the raw provider exception, and a refused begin was wrapped in a generic
+  `TransactionException`. A failure to begin that is not a connection problem is still a `TransactionException`.
+  Code that caught the raw provider exception around `BeginTransaction`, or `TransactionException` for a refused
+  connect, should catch `TooManyConnectionsException` / `ConnectionException`.
 
 ## Metrics
 
