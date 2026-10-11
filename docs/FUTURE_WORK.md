@@ -1222,33 +1222,57 @@ under `benchmarks/CrudBenchmarks/results/`). The gate can already resize:
 leases are out (lowering never revokes a lease, raising admits queued waiters) and is covered by race tests.
 What is missing is the wiring and the policy.
 
-**Prerequisite (2.0.6, done, in the same change as this note).** A refusal reached the caller as
+**Prerequisite (2.0.6; written and green, not yet committed).** A refusal reached the caller as
 `TooManyConnectionsException` from commands but not from `BeginTransaction`: `TransactionContext` threw the raw
 provider exception from the open step and wrapped a refused begin in a generic `TransactionException`.
-`ConnectionLimitRefusalSurfacingTests` pins every entry point. Adaptation reacts only to that type, so it must
-not start before this.
+The fix (a shared `SqlContainer.TranslateProviderFailure` used by both `TransactionContext` paths) and
+`ConnectionLimitRefusalSurfacingTests` (9 cases, every entry point) pass on net8.0 and net10.0 (11,294 unit
+tests), but they are not in `HEAD` yet: they land in 2.0.6 as their own commit before any adaptive work starts.
+Adaptation reacts only to that type.
 
-**Trigger.** `TooManyConnectionsException` only. A plain `ConnectionException` means an unreachable or dead
+**Trigger.** A provider open failure that the dialect's translator classifies as `TooManyConnectionsException`,
+and nothing else. The hook that sees the failure first is `TrackedConnection`'s open-failed callback, but it is an
+exception filter that receives the *raw* provider exception and cannot await or change state, so the decision is
+taken from the translated type, after the filter, in the retry owner below; the filter only records. A plain `ConnectionException` means an unreachable or dead
 server, which is not a capacity problem and never resizes. SQL Server, SAP HANA and Sybase ASE send nothing
 identifiable at their limit, so adaptation is off for them and POOL-002's up-front value is all they get.
 
+**Retry owner: `TrackedConnection.Open` / `OpenAsync`.** `DatabaseContext` only acquires the governor slot and
+constructs the connection object; the open happens later, in `SqlContainer` (commands) and `TransactionContext`
+(transactions), both through `DatabaseContext.OpenConnection[Async]` into `TrackedConnection`. That is the one
+place every open passes, sync and async, and it owns the `PoolSlot` (`AttachSlot`). The retry therefore lives
+there: on a refusal it swaps the slot in place and re-opens the same underlying connection, so the references held
+by `SqlContainer` and `TransactionContext` stay valid. The slot records the original acquire deadline (and the
+caller's `CancellationToken` is the one already passed to `OpenAsync`); the sync path uses the same deadline with
+the gate's blocking wait.
+
 **On a refusal.**
-1. Shrink the limit to the number of leases that actually opened (in-use count minus the refused caller's own
-   permit), floor 1, via `SetLimit`. The refused caller gives its permit back; available permits come to 0, so
-   nobody else is admitted until a real lease closes.
-2. Requeue the refused caller ahead of every normal waiter. It already waited its turn. The gate gets a second
-   lane, a refused-work list: a second head and tail over the existing intrusive `Waiter` list, with the waiter
+1. Shrink the limit to the number of leases that actually *opened*, floor 1, via `SetLimit`. That is not
+   `_inUse`: the governor increments `_inUse` when the slot is acquired, before the open, so it counts leases in
+   flight, including refused and not-yet-opened ones. The governor therefore keeps a separate `_opened` count,
+   incremented when a connection's first open succeeds (the existing first-open hook) and decremented when its
+   slot is released, both under the gate's lock so concurrent opens and refusals compute one consistent value.
+   Available permits come to 0, so nobody else is admitted until a real lease closes.
+2. Requeue the refused caller ahead of every normal waiter, **atomically with giving the permit back**. A
+   separate release then enqueue would let `Release()` promote a normal waiter in between and break the
+   ordering, so the gate gets one operation, `RefuseAndRequeue`, that under its single lock applies the new
+   limit, returns the permit, enqueues the refused waiter and promotes from the refused lane first. It already
+   waited its turn. The gate gets a second lane, a refused-work list: a second head and tail over the existing intrusive `Waiter` list, with the waiter
    recording its lane so a timeout, cancel or interrupt unlinks it from the right one. `PromoteOneUnderLock`
    drains the refused lane first. One shared `_queueCount` keeps the lock-free fast path ("is anyone queued?")
    unchanged. A `Queue<T>` is not an option: waiters leave from the middle, which would need scans or tombstones.
 3. The retry runs under the caller's original deadline, never a fresh one, with a small retry cap; at the
-   deadline the caller gets `PoolSaturatedException`. The loop lives in the connection-acquire path in
-   `DatabaseContext`; the gate only offers "enqueue into the refused lane".
+   deadline the caller gets `PoolSaturatedException`. The loop is the one in `TrackedConnection` described
+   above; the gate only offers `RefuseAndRequeue`.
 4. `MaxQueueDepth` stays derived from the configured maximum, not the shrunken limit, so callers are not
    rejected that the pool could serve slowly.
 
-**Recovery.** Probe back up one permit at a time after a window with no refusals, towards the configured
-maximum; drop again if a probe is refused. A failed probe costs one connect attempt.
+**Recovery.** There is no timer thread: it is evaluated on successful opens. The window `W` (an internal
+constant, measured with the governor's `TimeProvider`) restarts at every refusal and at every raise. When a
+successful open finds `W` elapsed since the last of those, it raises the limit by one, under the gate's lock,
+towards the configured maximum; being one step per window, only one probe is ever outstanding. Only successful
+opens count: retry attempts and refusals do not extend or shorten the window. A refused probe shrinks again and
+restarts `W`. A failed probe costs one connect attempt.
 
 **Known limits, accepted.**
 - The governor counts leases, not idle connections held by the provider's own pool (the mixed read/write gap in
@@ -1261,10 +1285,14 @@ maximum; drop again if a probe is refused. A failed probe costs one connect atte
 - Every resize is logged and counted.
 
 **Test-first sequence.**
-1. Gate: the refused lane promotes before the normal lane; cancel, timeout and interrupt remove from either
-   lane; the fast path ignores the lane when both are empty.
-2. Governor and context with fakeDb: a refusal shrinks the limit, requeues the caller, and the caller either
-   succeeds or times out; a plain `ConnectionException` changes nothing; recovery raises the limit stepwise.
+1. Gate: the refused lane promotes before the normal lane; `RefuseAndRequeue` never lets a normal waiter be
+   promoted between the release and the requeue (deterministic interleaving with the existing test hooks);
+   cancel, timeout and interrupt remove from either lane; the fast path ignores the lane when both are empty.
+2. `TrackedConnection` and governor with fakeDb: a raw refusal is translated before the decision; a refusal
+   shrinks the limit to the *opened* count (several concurrent opens and refusals give one consistent value),
+   requeues the caller and it either succeeds or times out at its original deadline; a plain
+   `ConnectionException` changes nothing; sync and async deadlines and async cancellation; the same through
+   `SqlContainer` and `TransactionContext` creation; recovery raises the limit one step per window.
 3. A real PostgreSQL at a low `max_connections` under a storm, comparing peak TIME_WAIT, refusals and
    throughput with and without adaptation (`ServerConnectionCeilingIntegrationTests` is the starting point).
 
