@@ -137,4 +137,42 @@ public class ConnectionGovernanceBenchmarkShapeTests
         Assert.Equal(PostgreSqlConnectionGovernanceBenchmarks.StormGateAcquireTimeout,
             PostgreSqlConnectionGovernanceBenchmarks.PatientPoolAcquireTimeout);
     }
+
+    // StormGate is a plain gate: 20 permits and a 30 s wait, no clamp. The nearest pengdows.crud equivalent is the
+    // ceiling-20 arm with the same 30 s wait and the clamp OFF. Without it the table cannot separate the two
+    // settings that differ from StormGate: the wait (Governed has the 5 s default) and the slot count (the clamp
+    // splits the server's budget, so Clamped and ClampedPatient run on fewer than 20).
+    [Fact]
+    public void StormBenchmark_HasAnUnclampedPengdowsArmWithStormGatesAcquireTimeout()
+    {
+        var arm = BenchmarkMethods()
+            .SingleOrDefault(m => m.GetCustomAttribute<CorrectnessIdentityAttribute>() is
+                { Framework: "PengdowsGovernedPatient", Scenario: "Governed" });
+
+        Assert.NotNull(arm);
+    }
+
+    // Control: what the clamp does is divide the server's usable connections between the two roles. Governed with
+    // that share configured by hand (no clamp) must therefore behave exactly like Clamped, which shows the clamp is
+    // nothing more than the split and that the gap to StormGate is the share, not some other cost.
+    [Fact]
+    public void StormBenchmark_HasAnUnclampedPengdowsArmSizedToTheClampsShare()
+    {
+        var arm = BenchmarkMethods()
+            .SingleOrDefault(m => m.GetCustomAttribute<CorrectnessIdentityAttribute>() is
+                { Framework: "PengdowsGoverned11", Scenario: "Governed" });
+
+        Assert.NotNull(arm);
+    }
+
+    // A context that says it never writes gives the whole budget to the reader instead of splitting it.
+    [Fact]
+    public void StormBenchmark_HasAClampedReadOnlyPengdowsArm()
+    {
+        var arm = BenchmarkMethods()
+            .SingleOrDefault(m => m.GetCustomAttribute<CorrectnessIdentityAttribute>() is
+                { Framework: "PengdowsClampedReadOnly", Scenario: "Governed" });
+
+        Assert.NotNull(arm);
+    }
 }
