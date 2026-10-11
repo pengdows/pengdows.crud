@@ -232,7 +232,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         {
             // The connection holds a pool permit; release it (REV-026).
             context.CloseAndDisposeConnection(connection);
-            if (SqlContainer.TranslateProviderFailure(context.GetDialect(), ex, DbOperationKind.Unknown) is { } refused)
+            // Only a connection problem is translated, as when beginning; any other failure keeps its type.
+            if (SqlContainer.TranslateProviderFailure(context.GetDialect(), ex, DbOperationKind.Unknown) is ConnectionException refused)
             {
                 throw refused;
             }
@@ -1231,7 +1232,8 @@ public class TransactionContext : ContextBase, ITransactionContext, IContextIden
         {
             // The connection holds a pool permit; release it (REV-026).
             await context.CloseAndDisposeConnectionAsync(connection).ConfigureAwait(false);
-            if (SqlContainer.TranslateProviderFailure(context.GetDialect(), ex, DbOperationKind.Unknown) is { } refused)
+            // Only a connection problem is translated, as when beginning; any other failure keeps its type.
+            if (SqlContainer.TranslateProviderFailure(context.GetDialect(), ex, DbOperationKind.Unknown) is ConnectionException refused)
             {
                 throw refused;
             }
