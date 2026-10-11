@@ -89,7 +89,7 @@ public class PoolGovernorReleaseOrderingTests
 
         var onAcquiredMethod = typeof(PoolGovernor).GetMethod("OnAcquired", NonPublicInstance);
         var ex = Assert.Throws<TargetInvocationException>(() =>
-            onAcquiredMethod!.Invoke(governor, new object[] { 0L, 0L, false }));
+            onAcquiredMethod!.Invoke(governor, new object[] { 0L, 0L, false, false }));
         Assert.IsType<ObjectDisposedException>(ex.InnerException);
 
         // The permit must have been given back, not silently consumed by a rejected acquire.

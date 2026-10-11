@@ -9,6 +9,8 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+// The per-server connection budget is process-wide and these contexts share a host name, so they run one at a time.
+[Collection("ServerBudgetSerial")]
 public sealed class ServerCeilingLoggingTests
 {
     private const string ConnectionString = "Host=db1;Database=d;Username=u;Password=p";

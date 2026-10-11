@@ -21,6 +21,8 @@ namespace pengdows.crud.Tests;
 /// The size that wins is used for the governor and written into the provider's connection string, so the
 /// two always agree.
 /// </summary>
+// The per-server connection budget is process-wide and these contexts share a host name, so they run one at a time.
+[Collection("ServerBudgetSerial")]
 public sealed class PoolSizeResolutionOrderTests
 {
     private const string Base = "Host=db1;Database=d;Username=u;Password=p";
@@ -220,8 +222,8 @@ public sealed class PoolSizeResolutionOrderTests
 
         Assert.False(context.GetPoolStatisticsSnapshot(PoolLabel.Reader).Forbidden);
         Assert.False(context.GetPoolStatisticsSnapshot(PoolLabel.Writer).Forbidden);
-        Assert.Equal(11, Slots(context, PoolLabel.Reader));
-        Assert.Equal(11, Slots(context, PoolLabel.Writer));
+        Assert.Equal(22, Slots(context, PoolLabel.Reader));
+        Assert.Equal(22, Slots(context, PoolLabel.Writer));
     }
 
     // ── an engine with no provider pool to size ──
@@ -273,10 +275,10 @@ public sealed class PoolSizeResolutionOrderTests
             ClampPoolsToServerConnectionLimit = true
         }, factory);
 
-        // Reads asked for 10 (configuration) and writes for 60 (connection string). Each role is first held
-        // to the server's 22 usable connections on its own, so writes become 22; the two (10 + 22) still
-        // exceed 22 together, so the limit is then shared out in proportion to those sizes.
-        Assert.Equal(6, Slots(context, PoolLabel.Reader));
-        Assert.Equal(16, Slots(context, PoolLabel.Writer));
+        // Reads asked for 10 (configuration) and writes for 60 (connection string). Each role is held to the server's
+        // 22 usable connections on its own, so writes become 22 and reads stay 10; they are not divided in advance,
+        // the per-server budget keeps the connections in use within 22 at run time.
+        Assert.Equal(10, Slots(context, PoolLabel.Reader));
+        Assert.Equal(22, Slots(context, PoolLabel.Writer));
     }
 }

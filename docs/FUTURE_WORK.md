@@ -1343,7 +1343,23 @@ about 34,000 sockets in TIME_WAIT on the host. What it does not prove: that a sl
 arm is read-only, so the failure the clamp prevents (reader and writer together refused by the server) is not yet
 measured; the mixed read/write arm is the missing baseline.
 
-**Per-server ceiling (direction agreed 2026-10-11; not built).** Replaces the static split and the context-level
+**Per-server ceiling, phase 1 BUILT (2026-10-11, in 2.0.6 before release).** The clamp itself is new in 2.0.6, so
+replacing its static division with this budget changes nothing anyone has shipped. Built and covered by 31 new tests
+(`ServerBudgetRegistryTests`, `PoolGovernorServerBudgetTests`, `ServerBudgetContextTests`) plus the rewritten clamp
+tests: `infrastructure/ServerBudget.cs` (process-wide registry keyed by `ServerEndpoint`, smallest usable limit,
+engages only when the registered maxima exceed it, latched), the shared server-permit step in `PoolGovernor` (local
+slot first, then permit under the same deadline; five admission sites; released at `ReleaseToken`), adoption of leases
+already out when a budget engages (`AdoptInFlight`, `AdoptActive` on the gate), registration from `DatabaseContext`
+(`RegisterServerBudget`), and `SplitSharedProviderPoolBudget` no longer used for sizing (its pure tests remain). Each
+role now keeps its configured size, held to the server's limit on its own. Not built: reclaiming the other pool's idle
+connections (the red integration test `ReadBurstThenWriteBurst_NeverExceedsTheServersConnectionCeiling` still fails for
+exactly that reason), floors and hysteresis per role, the per-role opened counters and the adaptive shrink on refusal
+(phase 7), the performance measurement against the acceptance criteria below, and the mixed read/write storm. Known
+approximation: a lease that straddles the moment the budget engages can be missed by the adoption and undercounts by
+one until it returns; it never overcounts. The benchmark arms `Governed11`, `ClampedShare` and the clamped arms were
+written against the dividing design and need re-running before their results are quoted for this one.
+
+**Per-server ceiling design (direction agreed 2026-10-11).** Replaces the static split and the context-level
 budget above for the same-server case.
 - **Each role keeps its configured size**, trimmed individually to what the server can ever give (`ApplyServerCeiling`),
   and is no longer divided between the roles. Governor sizes and provider `Maximum Pool Size` stay as configured.

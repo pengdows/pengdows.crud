@@ -44,8 +44,11 @@
 
 - `ClampPoolsToServerConnectionLimit` and `ResourceConnectionHeadroom` on `DatabaseContextConfiguration`
   (off and `0` by default) read the database server's own connection limit while a context initializes and
-  size each role's pool so the reader and writer pools together never exceed it, leaving optional headroom
-  for other clients. They are supported for PostgreSQL and YugabyteDB, MySQL and MariaDB, and SQL Server;
+  hold each role's pool to it and bound the connections in use: the roles keep the sizes they asked for, and
+  when they (or several contexts on one server) can together exceed the limit they draw on one shared
+  per-server budget, so a read-heavy workload is not left with half of it. The budget engages only when it can
+  bind and adds one volatile read otherwise. Idle connections that a provider pool keeps open are not counted
+  (see `connection-pooling.md`). Optional headroom leaves connections free for other clients. They are supported for PostgreSQL and YugabyteDB, MySQL and MariaDB, and SQL Server;
   other engines are left unchanged. Both are default interface members on `IDatabaseContextConfiguration`,
   so implementations compiled against 2.0.5 still load. Because the clamp can shrink a pool that exceeded
   the server's limit, it is opt-in on 2.0.x. See [connection-pooling.md](connection-pooling.md).

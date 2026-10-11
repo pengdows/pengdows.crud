@@ -15,6 +15,8 @@ namespace pengdows.crud.Tests;
 /// PostgreSQL that allows 25 connections, 3 of them held back for superusers, an ordinary client may
 /// use 22 — not the provider default of 100, which is what failed in the storm tests.
 /// </summary>
+// The per-server connection budget is process-wide and these contexts share a host name, so they run one at a time.
+[Collection("ServerBudgetSerial")]
 public sealed class ServerCeilingWiringTests
 {
     private const string ConnectionString = "Host=db1;Database=d;Username=u;Password=p";
@@ -54,13 +56,13 @@ public sealed class ServerCeilingWiringTests
     }
 
     [Fact]
-    public void WhenOn_AndNothingRequested_TheServersUsableLimitIsSplitBetweenTheRoles()
+    public void WhenOn_AndNothingRequested_EachRoleIsTrimmedToTheServersUsableLimitOnItsOwn()
     {
         using var context = Create(c => c.ClampPoolsToServerConnectionLimit = true);
 
-        // Each role asks for the provider default (100) against 22 usable connections: the two pools
-        // together may hold 22, so each governor is sized to its pool's half.
-        Assert.Equal((11, 11), Slots(context));
+        // Each role asks for the provider default (100) against 22 usable connections: each is held to 22. The two
+        // are not divided in advance (POOL-003): together they draw on one per-server budget of 22 at run time.
+        Assert.Equal((22, 22), Slots(context));
     }
 
     [Fact]
@@ -72,7 +74,7 @@ public sealed class ServerCeilingWiringTests
             c.ResourceConnectionHeadroom = 2;
         });
 
-        Assert.Equal((10, 10), Slots(context));
+        Assert.Equal((20, 20), Slots(context));
     }
 
     [Fact]
@@ -89,7 +91,7 @@ public sealed class ServerCeilingWiringTests
     }
 
     [Fact]
-    public void AnExplicitReadRequestBesideADefaultWritePool_IsSharedOutProportionally()
+    public void AnExplicitReadRequestBesideADefaultWritePool_KeepsEachRolesOwnSize()
     {
         using var context = Create(c =>
         {
@@ -97,8 +99,9 @@ public sealed class ServerCeilingWiringTests
             c.MaxConcurrentReads = 10;
         });
 
-        // 10 reads against the writer's default (itself clamped to 22): 32 asked of 22, so 10/32 and 22/32.
-        Assert.Equal((6, 16), Slots(context));
+        // 10 reads kept as asked; the writer's default of 100 is trimmed to the server's 22. Together they exceed 22,
+        // so the per-server budget engages at run time instead of the sizes being divided up front.
+        Assert.Equal((10, 22), Slots(context));
     }
 
     [Fact]
@@ -111,7 +114,7 @@ public sealed class ServerCeilingWiringTests
             c.MaxConcurrentWrites = 50;
         });
 
-        Assert.Equal((11, 11), Slots(context));
+        Assert.Equal((22, 22), Slots(context));
     }
 
     [Fact]
@@ -128,8 +131,8 @@ public sealed class ServerCeilingWiringTests
 
         try
         {
-            // The server allows 22; the two role pools split it, 11 each, and every extra caller waits
-            // under PoolAcquireTimeout instead of reaching a server that would refuse it.
+            // The server allows 22; the two roles share one budget of 22 whatever the mix (here 11 and 11), and every
+            // extra caller waits under PoolAcquireTimeout instead of reaching a server that would refuse it.
             for (var i = 0; i < 11; i++)
             {
                 held.Add(context.GetConnection(ExecutionType.Write));
@@ -231,11 +234,12 @@ public sealed class ServerCeilingWiringTests
             primaryMax: "25", replicaMax: "999",
             replicaConnectionString: "Host=db1;Database=d;Username=u;Password=p;Application Name=ro");
 
-        Assert.Equal((11, 11), Slots(context));
+        // One server, one limit of 22: each role is held to it on its own, not to the replica's 999.
+        Assert.Equal((22, 22), Slots(context));
     }
 
     [Fact]
-    public void TheSharedBudgetIsSplitAcrossTheProviderPools_AndStampedOnEachRolesConnectionString()
+    public void TheProviderPoolMaximums_AreEachRolesConfiguredSize_AndStampedOnEachRolesConnectionString()
     {
         using var context = Create(c =>
         {
@@ -244,13 +248,13 @@ public sealed class ServerCeilingWiringTests
             c.MaxConcurrentWrites = 20;
         });
 
-        // The server allows 22 and the roles ask for 40, so the provider pools split the 22 (11 + 11)
-        // while each governor still admits up to its own slot count.
+        // The server allows 22 and the roles ask for 20 each: the provider pools keep the sizes asked for, and the
+        // per-server budget (not a division of the pools) keeps the connections in use within 22.
         using var write = context.GetConnection(ExecutionType.Write);
         using var read = context.GetConnection(ExecutionType.Read);
 
-        Assert.Contains("Maximum Pool Size=11", write.ConnectionString, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("Maximum Pool Size=11", read.ConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Maximum Pool Size=20", write.ConnectionString, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Maximum Pool Size=20", read.ConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -291,7 +295,7 @@ public sealed class ServerCeilingWiringTests
             primaryMax: "25", replicaMax: "999",
             replicaConnectionString: "Host=db1;Port=5432;Database=d;Username=u;Password=p;Application Name=ro");
 
-        Assert.Equal((11, 11), Slots(context));
+        Assert.Equal((22, 22), Slots(context));
     }
 
     [Fact]

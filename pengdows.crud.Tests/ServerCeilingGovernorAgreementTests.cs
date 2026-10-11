@@ -11,10 +11,12 @@ namespace pengdows.crud.Tests;
 /// <summary>
 /// A provider pool's Maximum Pool Size is a hard cap on its connections, in use or idle, so a governor
 /// that admits more callers than its pool can serve makes the extra ones wait inside the provider for
-/// the provider's own timeout instead of under PoolAcquireTimeout. When the clamp splits the server's
-/// budget across the two role pools, each governor must therefore be sized to its pool, and the two
-/// pools together must fit the server.
+/// the provider's own timeout instead of under PoolAcquireTimeout. Each governor must therefore be sized
+/// to its pool. The roles keep the sizes they asked for (held to the server's limit on their own) and
+/// share one per-server budget at run time, which bounds the connections in use.
 /// </summary>
+// The per-server connection budget is process-wide and these contexts share a host name, so they run one at a time.
+[Collection("ServerBudgetSerial")]
 public sealed class ServerCeilingGovernorAgreementTests
 {
     private const string ConnectionString = "Host=db1;Database=d;Username=u;Password=p";
@@ -59,7 +61,7 @@ public sealed class ServerCeilingGovernorAgreementTests
     }
 
     [Fact]
-    public void WhenTheBudgetIsSplit_EachGovernorIsSizedToItsProviderPool()
+    public void EachGovernorIsSizedToItsProviderPool()
     {
         using var context = Create(c =>
         {
@@ -81,7 +83,7 @@ public sealed class ServerCeilingGovernorAgreementTests
     [InlineData(30, 10)]
     [InlineData(40, 1)]
     [InlineData(1, 40)]
-    public void TheTwoRolesTogether_NeverAdmitMoreThanTheServersUsableLimit(int reads, int writes)
+    public void EachRole_IsNeverSizedAboveTheServersUsableLimit(int reads, int writes)
     {
         using var context = Create(c =>
         {
@@ -91,28 +93,36 @@ public sealed class ServerCeilingGovernorAgreementTests
 
         var (reader, writer) = Slots(context);
 
-        Assert.InRange(reader + writer, 2, UsableLimit);
+        // Each role keeps what it asked for, trimmed to the server's limit on its own. Together they may exceed it:
+        // the per-server budget bounds the connections in use (see PoolGovernorServerBudgetTests).
+        Assert.InRange(reader, 1, UsableLimit);
+        Assert.InRange(writer, 1, UsableLimit);
+        Assert.Equal(Math.Min(reads, UsableLimit), reader);
+        Assert.Equal(Math.Min(writes, UsableLimit), writer);
     }
 
     [Fact]
-    public void WithNothingRequested_TheTwoRolesTogetherStillFitTheServer()
+    public void WithNothingRequested_EachRoleIsHeldToTheServersLimit()
     {
         using var context = Create(_ => { });
 
         var (reader, writer) = Slots(context);
 
-        Assert.InRange(reader + writer, 2, UsableLimit);
+        Assert.Equal((UsableLimit, UsableLimit), (reader, writer));
     }
 
     [Fact]
-    public void AReadConnectionStringOnTheSameServerButAnotherUser_IsBudgetedWithTheWriter()
+    public void AReadConnectionStringOnTheSameServerButAnotherUser_SharesTheWritersBudget()
     {
         using var context = Create(c =>
             c.ReadOnlyConnectionString = "Host=db1;Database=d;Username=reader;Password=p");
 
         var (reader, writer) = Slots(context);
 
-        Assert.InRange(reader + writer, 2, UsableLimit);
+        Assert.Equal((UsableLimit, UsableLimit), (reader, writer));
+        Assert.True(pengdows.crud.infrastructure.ServerBudgetRegistry.TryGet("db1:5432", out var budget));
+        Assert.Equal(UsableLimit, budget.Limit);
+        Assert.Equal(2, budget.Registrants); // one reader and one writer governor
     }
 
     [Fact]
@@ -149,6 +159,7 @@ public sealed class ServerCeilingGovernorAgreementTests
 
         var (reader, writer) = Slots(context);
 
-        Assert.InRange(reader + writer, 2, UsableLimit);
+        Assert.InRange(reader, 2, UsableLimit);
+        Assert.InRange(writer, 2, UsableLimit);
     }
 }

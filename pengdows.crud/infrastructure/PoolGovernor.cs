@@ -77,6 +77,9 @@ internal sealed class PoolGovernor : IDisposable
     private readonly bool _holdTurnstile;
 
     private long _inUse;
+    private readonly ServerBudgetRegistration? _serverBudget;
+    private long _permittedOutstanding; // leases holding a server permit (only counted while the budget is engaged)
+    private int _adoptedRemaining;      // permits adopted for leases that were already out when the budget engaged
     private long _peakInUse;
     private long _queued;
     private long _peakQueued;
@@ -104,7 +107,8 @@ internal sealed class PoolGovernor : IDisposable
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
         int? maxQueueDepth = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        ServerBudgetRegistration? serverBudget = null)
     {
         _label = label;
         _timeProvider = MetricsClock.Resolve(timeProvider);
@@ -152,6 +156,8 @@ internal sealed class PoolGovernor : IDisposable
         // deliberately unbounded here so callers receive PoolSaturatedException with the
         // governor snapshot rather than the gate's internal exception.
         _concurrencyGate = new PoolGovernorConcurrencyGate(maxSlots, int.MaxValue);
+        _serverBudget = serverBudget;
+        serverBudget?.Budget.Attach(this);
     }
 
     /// <summary>
@@ -354,10 +360,16 @@ internal sealed class PoolGovernor : IDisposable
             return false;
         }
 
+        if (!TryTakeServerPermitNow(out var serverPermit))
+        {
+            slot = default;
+            return false;
+        }
+
         var immediateWaitStart = _trackMetrics ? _timeProvider.GetTimestamp() : 0;
         var releaseWriterInterestOnRelease = _holdTurnstile && progress.WriterInterestRegistered;
         progress.WriterInterestRegistered = false;
-        slot = OnAcquired(immediateWaitStart, immediateWaitStart, releaseWriterInterestOnRelease);
+        slot = OnAcquired(immediateWaitStart, immediateWaitStart, releaseWriterInterestOnRelease, serverPermit);
         return true;
     }
 
@@ -451,9 +463,12 @@ internal sealed class PoolGovernor : IDisposable
                 : TryAcquireAdmission(cancellationToken);
             if (admitted)
             {
+                var serverPermit = isAsync
+                    ? await TakeServerPermitAsync(deadlineTicks, cancellationToken).ConfigureAwait(false)
+                    : TakeServerPermit(deadlineTicks, cancellationToken);
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
-                return OnAcquired(waitStart, _trackMetrics ? _timeProvider.GetTimestamp() : 0, releaseWriterInterestOnRelease);
+                return OnAcquired(waitStart, _trackMetrics ? _timeProvider.GetTimestamp() : 0, releaseWriterInterestOnRelease, serverPermit);
             }
 
             // Queue-depth admission control: unconditional (decoupled from _trackMetrics)
@@ -491,9 +506,12 @@ internal sealed class PoolGovernor : IDisposable
                         throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
                     }
 
+                    var serverPermit = isAsync
+                        ? await TakeServerPermitAsync(deadlineTicks, cancellationToken).ConfigureAwait(false)
+                        : TakeServerPermit(deadlineTicks, cancellationToken);
                     var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                     writerTurnstileInterestRegistered = false;
-                    return OnAcquired(waitStart, _trackMetrics ? _timeProvider.GetTimestamp() : 0, releaseWriterInterestOnRelease);
+                    return OnAcquired(waitStart, _trackMetrics ? _timeProvider.GetTimestamp() : 0, releaseWriterInterestOnRelease, serverPermit);
                 }
                 catch (OperationCanceledException)
                 {
@@ -550,11 +568,11 @@ internal sealed class PoolGovernor : IDisposable
                 }
             }
 
-            if (TryAcquireAdmission(cancellationToken))
+            if (TryAcquireAdmission(cancellationToken) && TryTakeServerPermitNow(out var serverPermit))
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
-                slot = OnAcquired(waitStart, waitStart, releaseWriterInterestOnRelease);
+                slot = OnAcquired(waitStart, waitStart, releaseWriterInterestOnRelease, serverPermit);
                 return true;
             }
 
@@ -647,11 +665,12 @@ internal sealed class PoolGovernor : IDisposable
                 }
             }
 
-            if (await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false))
+            if (await AcquireAdmissionAsync(TimeSpan.Zero, cancellationToken).ConfigureAwait(false) &&
+                TryTakeServerPermitNow(out var serverPermit))
             {
                 var releaseWriterInterestOnRelease = _holdTurnstile && writerTurnstileInterestRegistered;
                 writerTurnstileInterestRegistered = false;
-                return (true, OnAcquired(waitStart, waitStart, releaseWriterInterestOnRelease));
+                return (true, OnAcquired(waitStart, waitStart, releaseWriterInterestOnRelease, serverPermit));
             }
 
             // Slot miss — release turnstile without recording hold metrics.
@@ -838,7 +857,8 @@ internal sealed class PoolGovernor : IDisposable
 
     // waitStart and acquiredAt only feed the wait and hold metrics, so they are 0 when metrics are off. When nothing
     // waited they are the same reading: the wait started at the moment of acquisition.
-    private PoolSlot OnAcquired(long waitStart, long acquiredAt, bool releaseWriterTurnstileInterestOnRelease)
+    private PoolSlot OnAcquired(long waitStart, long acquiredAt, bool releaseWriterTurnstileInterestOnRelease,
+        bool serverPermit = false)
     {
         if (IsClosed)
         {
@@ -859,6 +879,11 @@ internal sealed class PoolGovernor : IDisposable
             // OnAcquired, making the caller's own UnregisterWriterTurnstileInterest a no-op by the
             // time this throws.
             ReleaseAdmission();
+            if (serverPermit)
+            {
+                _serverBudget!.Budget.Release();
+            }
+
             if (releaseWriterTurnstileInterestOnRelease && _turnstileState != null)
             {
                 Interlocked.Decrement(ref _turnstileState.WritersActiveOrWaiting);
@@ -867,13 +892,162 @@ internal sealed class PoolGovernor : IDisposable
             throw new ObjectDisposedException(nameof(PoolGovernor));
         }
 
+        if (serverPermit)
+        {
+            Interlocked.Increment(ref _permittedOutstanding);
+        }
+
         var inUse = Interlocked.Increment(ref _inUse);
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
-        return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart, acquiredAt, releaseWriterTurnstileInterestOnRelease));
+        return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart, acquiredAt, releaseWriterTurnstileInterestOnRelease,
+            serverPermit));
     }
 
-    internal void ReleaseToken(long waitStart, long acquiredAt, bool releaseWriterTurnstileInterest)
+    // ── POOL-003: the shared per-server budget ───────────────────────────────────────────────────────────────────────
+    // A lease takes its local slot first and then, only when the server budget is engaged, a server permit under the
+    // same acquire deadline. Never the other way round: a caller queued locally must not already hold a server permit.
+
+    // After local admission, without waiting. False (local slot already given back) when the budget has no permit.
+    private bool TryTakeServerPermitNow(out bool permitted)
+    {
+        permitted = false;
+        var budget = _serverBudget?.Budget;
+        if (budget is not { Engaged: true })
+        {
+            return true;
+        }
+
+        if (budget.TryAcquire())
+        {
+            permitted = true;
+            return true;
+        }
+
+        ReleaseAdmission();
+        return false;
+    }
+
+    // After local admission on the queued path. Returns whether a permit was taken; on timeout or any failure the local
+    // slot is given back before the exception leaves.
+    private bool TakeServerPermit(long deadlineTicks, CancellationToken cancellationToken)
+    {
+        var budget = _serverBudget?.Budget;
+        if (budget is not { Engaged: true })
+        {
+            return false;
+        }
+
+        try
+        {
+            if (budget.TryAcquire())
+            {
+                return true;
+            }
+
+            var remaining = GetRemainingTimeout(deadlineTicks);
+            if (remaining != TimeSpan.Zero && budget.Acquire(remaining, cancellationToken))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            ReleaseAdmission();
+            throw;
+        }
+
+        ReleaseAdmission();
+        Interlocked.Increment(ref _totalSlotTimeouts);
+        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+    }
+
+    private async ValueTask<bool> TakeServerPermitAsync(long deadlineTicks, CancellationToken cancellationToken)
+    {
+        var budget = _serverBudget?.Budget;
+        if (budget is not { Engaged: true })
+        {
+            return false;
+        }
+
+        try
+        {
+            if (budget.TryAcquire())
+            {
+                return true;
+            }
+
+            var remaining = GetRemainingTimeout(deadlineTicks);
+            if (remaining != TimeSpan.Zero &&
+                await budget.AcquireAsync(remaining, cancellationToken).ConfigureAwait(false))
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            ReleaseAdmission();
+            throw;
+        }
+
+        ReleaseAdmission();
+        Interlocked.Increment(ref _totalSlotTimeouts);
+        throw new PoolSaturatedException(_label, _poolKeyHash, GetSnapshot(), _acquireTimeout);
+    }
+
+    // Returns a lease's server permit. A lease taken before the budget engaged holds none; if it was one of the leases
+    // adopted at engagement, one adopted permit goes back, otherwise nothing does (never a permit it never took).
+    private void ReleaseServerPermit(bool serverPermit)
+    {
+        var budget = _serverBudget?.Budget;
+        if (budget == null)
+        {
+            return;
+        }
+
+        if (serverPermit)
+        {
+            Interlocked.Decrement(ref _permittedOutstanding);
+            budget.Release();
+            return;
+        }
+
+        if (budget.Engaged && TryConsumeAdopted())
+        {
+            budget.Release();
+        }
+    }
+
+    private bool TryConsumeAdopted()
+    {
+        var remaining = Volatile.Read(ref _adoptedRemaining);
+        while (remaining > 0)
+        {
+            var seen = Interlocked.CompareExchange(ref _adoptedRemaining, remaining - 1, remaining);
+            if (seen == remaining)
+            {
+                return true;
+            }
+
+            remaining = seen;
+        }
+
+        return false;
+    }
+
+    // Called by the budget, under its lock, when it engages: how many leases are out without a permit. Counts only; which
+    // lease later returns the adopted permit does not matter. A lease that straddles the engagement can be missed, which
+    // undercounts by one until it returns, never overcounts.
+    internal int AdoptInFlight()
+    {
+        var withoutPermit = (int)Math.Clamp(
+            Interlocked.Read(ref _inUse) - Interlocked.Read(ref _permittedOutstanding), 0L, int.MaxValue);
+        Volatile.Write(ref _adoptedRemaining, withoutPermit);
+        return withoutPermit;
+    }
+
+    internal void ReleaseToken(long waitStart, long acquiredAt, bool releaseWriterTurnstileInterest,
+        bool serverPermit = false)
     {
         RecordWaitAndHold(waitStart, acquiredAt);
 
@@ -885,6 +1059,7 @@ internal sealed class PoolGovernor : IDisposable
         // turnstile while this method is still about to call Release() on them, throwing
         // ObjectDisposedException on this thread.
         ReleaseAdmission();
+        ReleaseServerPermit(serverPermit);
 
         // Writers release turnstile when slot is released
         if (_holdTurnstile && _turnstile != null)
@@ -973,6 +1148,12 @@ internal sealed class PoolGovernor : IDisposable
     public void Dispose()
     {
         Close();
+
+        if (_serverBudget != null)
+        {
+            _serverBudget.Budget.Detach(this);
+            _serverBudget.Dispose();
+        }
 
         _concurrencyGate?.Dispose();
 

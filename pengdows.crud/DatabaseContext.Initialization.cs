@@ -1119,7 +1119,8 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: true,
             ownsTurnstile: turnstile != null, // Writers hold turnstile until slot released
-            maxQueueDepth: _maxQueuedWrites ?? UnboundedQueueDepth);
+            maxQueueDepth: _maxQueuedWrites ?? UnboundedQueueDepth,
+            serverBudget: RegisterServerBudget(PoolLabel.Writer, writerLabelMax, _connectionString));
 
         _readerGovernor = CreateGovernor(
             PoolLabel.Reader,
@@ -1130,7 +1131,9 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: false,
             ownsTurnstile: false, // Readers touch-and-release turnstile
-            maxQueueDepth: _maxQueuedReads ?? UnboundedQueueDepth);
+            maxQueueDepth: _maxQueuedReads ?? UnboundedQueueDepth,
+            serverBudget: RegisterServerBudget(PoolLabel.Reader, readerLabelMax,
+                string.IsNullOrWhiteSpace(_readerConnectionString) ? _connectionString : _readerConnectionString));
 
         // PreventDatabaseUnload: every sentinel holds one permit from its own pool's governor, and
         // a dedicated reader pool gets its own sentinel so it cannot unload independently.
@@ -1245,12 +1248,14 @@ public partial class DatabaseContext
                 : _configuredWritePoolSize == 0
                     ? 0
                     : ResolveEffectiveMaxPoolSize(_configuredWritePoolSize, _connectionString, "writer");
-            (sharedReaderPoolMax, sharedWriterPoolMax) = SplitSharedProviderPoolBudget(
-                candidateReaderMax, candidateWriterMax,
-                Math.Max(1, _probedWriterConnectionLimit.Value - _resourceConnectionHeadroom));
-
-            // A provider pool's Maximum Pool Size caps its connections, in use or idle, so each governor
-            // must admit no more callers than its pool can serve: size it to the pool's share.
+            // POOL-003: each role keeps the size it asked for, already trimmed on its own to what the server can ever
+            // give (ResolveEffectiveMaxPoolSize applies the ceiling). The two roles are no longer divided in advance:
+            // when their sizes together exceed the server they draw on one per-server budget at run time
+            // (ServerBudget, registered with the governors below), so a read-only workload is not left with half.
+            // A provider pool's Maximum Pool Size caps its connections, in use or idle, so each governor is sized to
+            // its pool's maximum and the two agree.
+            sharedReaderPoolMax = candidateReaderMax;
+            sharedWriterPoolMax = candidateWriterMax;
             _effectiveReadGovernorMax = sharedReaderPoolMax;
             _effectiveWriteGovernorMax = sharedWriterPoolMax;
         }
@@ -1973,7 +1978,8 @@ public partial class DatabaseContext
         SemaphoreSlim? turnstile = null,
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
-        int? maxQueueDepth = null)
+        int? maxQueueDepth = null,
+        ServerBudgetRegistration? serverBudget = null)
     {
         if (disabled || !maxSlots.HasValue)
         {
@@ -1998,7 +2004,37 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: holdTurnstile,
             ownsTurnstile: ownsTurnstile,
-            maxQueueDepth: maxQueueDepth);
+            maxQueueDepth: maxQueueDepth,
+            serverBudget: serverBudget);
+    }
+
+    // POOL-003: with the clamp on, a role whose server limit was probed registers its governor's size with the budget
+    // for that server. The key is the endpoint, not the database, so contexts on different databases of one server
+    // share one budget, and a read replica (another endpoint) has its own. Null when there is nothing to guard.
+    private ServerBudgetRegistration? RegisterServerBudget(PoolLabel label, int? governorMax, string connectionString)
+    {
+        if (!_clampPoolsToServerLimit || _dialect == null || governorMax is not > 0)
+        {
+            return null;
+        }
+
+        var limit = label == PoolLabel.Writer ? _probedWriterConnectionLimit : _probedReaderConnectionLimit;
+        if (limit is not > 0)
+        {
+            return null;
+        }
+
+        try
+        {
+            var builder = new DbConnectionStringBuilder { ConnectionString = connectionString };
+            return ServerEndpoint.TryGetKey(builder, _dialect.DefaultServerPort, out var key)
+                ? ServerBudgetRegistry.Register(key, limit.Value - _resourceConnectionHeadroom, governorMax.Value)
+                : null;
+        }
+        catch (ArgumentException)
+        {
+            return null;
+        }
     }
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)

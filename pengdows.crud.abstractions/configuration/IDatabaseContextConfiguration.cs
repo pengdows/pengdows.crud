@@ -280,11 +280,13 @@ public interface IDatabaseContextConfiguration
     /// <summary>
     /// When true, the context reads the database server's own connection limit while initializing and
     /// never sizes a pool above it: each role gets the smaller of the size it asked for (or the provider
-    /// default) and the server's configured limit. Reads and writes use separate provider pools that hold
-    /// their connections open, so when both roles target one server and together ask for more than it
-    /// allows, the limit is divided between them in proportion to what each asked for. Each role's
-    /// governor and provider pool are then sized to its share, so the two pools together never exceed the
-    /// server. A role whose size is 0 stays forbidden. Off by default on the 2.0.x line because it can
+    /// default) and the server's configured limit. The roles are not divided in advance: when they target
+    /// one server and together ask for more than it allows, every context that points at that server (any
+    /// database on it) draws on one shared per-server budget at run time, so the connections in use never
+    /// exceed the server's usable limit and a read-heavy workload can use what the writer is not using.
+    /// A caller beyond the budget waits under the pool's acquire timeout. When the sizes fit the server,
+    /// the budget is never engaged and costs nothing. Idle connections held by a provider pool are not
+    /// counted. A role whose size is 0 stays forbidden. Off by default on the 2.0.x line because it can
     /// silently shrink a pool that exceeds the server's limit; a clamp is logged. Engines whose limit
     /// cannot be read are left unchanged.
     /// </summary>
