@@ -1209,7 +1209,64 @@ are new behavior, so they target 3.0.
 |----|------|--------|--------|
 | POOL-001 | **Pool wait/hold percentiles.** `PoolStatisticsSnapshot.AverageWaitMs`/`AverageHoldMs` are total ticks divided by acquisitions, so 100 waits of 500 ms among 99,900 waits of 0 ms read as a 0.5 ms average. Add p95/p99 for governor acquisition wait and slot hold time, reusing the memoized percentile rings commands and transactions already use (BP-122: recompute every 32nd call). Keep the recording off the governor's lock-free fast path cost-neutral; export through the OTel bridge alongside the existing `pengdows.db.client.pool.*` instruments | 3.0 | Open |
 | POOL-002 | **Server connection-ceiling discovery.** Read the server's connection limit where it is cheap and permitted (PostgreSQL-family `max_connections`, MySQL-family `max_connections`, SQL Server `@@MAX_CONNECTIONS`/`user connections`, Oracle `processes`/`sessions`, Sybase ASE `number of user connections`, ...) through a dialect capability, not a database-type switch. Log a warning when a context's configured reader + writer maximum reaches it, and expose it next to `MaxSlots`. **Do not clamp `MaxSlots` to it:** the ceiling is shared by every client, node and admin session on the server, so no single context can own it. Permission-denied or unsupported lookups report "unknown", never fail construction | 3.0 | Open |
-| POOL-003 | **Adaptive pool limit on refusal.** When a connection open fails with `TooManyConnectionsException`, lower the governor's permitted concurrency to pengdows' own in-use count at that moment (the survey below shows a server-side count is mostly invisible to an app account), then probe back up over time. Needs: a resizable `PoolGovernor` (today its slot count is fixed at construction), a floor so one refusal can't drop the pool to 0, recovery policy (time- or success-based), and metrics/logging for every resize. A per-account refusal (PostgreSQL role limit, MySQL 1226/1203, Oracle ORA-02391) means the observed count really is this account's budget; a server-wide refusal (53300, 1040, ORA-00018/00020, Db2 57030) is shared with every other client, so the lowered limit is only a hint. SQL Server, Sybase ASE and SAP HANA send nothing identifiable at their limit, so they can only use POOL-002's configured value. **Decision pending**: 2.0.x or 3.0 (see "Decisions pending" below) | 3.0 (proposed) | Open (decide) |
+| POOL-003 | **Adaptive pool limit on refusal.** When a connection open fails with `TooManyConnectionsException`, lower the governor's permitted concurrency to pengdows' own in-use count at that moment (the survey below shows a server-side count is mostly invisible to an app account), then probe back up over time. Needs: `PoolGovernor` to drive the gate's existing `SetLimit` (the gate is already resizable and tested; nothing in the library calls it yet), a floor so one refusal can't drop the pool to 0, recovery policy (time- or success-based), and metrics/logging for every resize. Design: "POOL-003 design" below. A per-account refusal (PostgreSQL role limit, MySQL 1226/1203, Oracle ORA-02391) means the observed count really is this account's budget; a server-wide refusal (53300, 1040, ORA-00018/00020, Db2 57030) is shared with every other client, so the lowered limit is only a hint. SQL Server, Sybase ASE and SAP HANA send nothing identifiable at their limit, so they can only use POOL-002's configured value. **Decision pending**: 2.0.x or 3.0 (see "Decisions pending" below) | 3.0 (proposed) | Open (decide) |
+
+### POOL-003 design (agreed 2026-10-11; not built; 3.0)
+
+**Why.** A pool sized above what the server accepts turns a storm into connect churn: the server accepts each
+connect, refuses it ("too many clients", 53300), and the pool retries. Every attempt takes an ephemeral source
+port that stays in TIME_WAIT for 60 s, so the churn exhausts the host's range (measured in
+`PostgreSqlConnectionGovernanceBenchmarks`; a results note with the controlled measurement is still to be written
+under `benchmarks/CrudBenchmarks/results/`). The gate can already resize:
+`PoolGovernorConcurrencyGate.SetLimit(int)` moves the effective limit between 1 and the configured maximum while
+leases are out (lowering never revokes a lease, raising admits queued waiters) and is covered by race tests.
+What is missing is the wiring and the policy.
+
+**Prerequisite (2.0.6, done, in the same change as this note).** A refusal reached the caller as
+`TooManyConnectionsException` from commands but not from `BeginTransaction`: `TransactionContext` threw the raw
+provider exception from the open step and wrapped a refused begin in a generic `TransactionException`.
+`ConnectionLimitRefusalSurfacingTests` pins every entry point. Adaptation reacts only to that type, so it must
+not start before this.
+
+**Trigger.** `TooManyConnectionsException` only. A plain `ConnectionException` means an unreachable or dead
+server, which is not a capacity problem and never resizes. SQL Server, SAP HANA and Sybase ASE send nothing
+identifiable at their limit, so adaptation is off for them and POOL-002's up-front value is all they get.
+
+**On a refusal.**
+1. Shrink the limit to the number of leases that actually opened (in-use count minus the refused caller's own
+   permit), floor 1, via `SetLimit`. The refused caller gives its permit back; available permits come to 0, so
+   nobody else is admitted until a real lease closes.
+2. Requeue the refused caller ahead of every normal waiter. It already waited its turn. The gate gets a second
+   lane, a refused-work list: a second head and tail over the existing intrusive `Waiter` list, with the waiter
+   recording its lane so a timeout, cancel or interrupt unlinks it from the right one. `PromoteOneUnderLock`
+   drains the refused lane first. One shared `_queueCount` keeps the lock-free fast path ("is anyone queued?")
+   unchanged. A `Queue<T>` is not an option: waiters leave from the middle, which would need scans or tombstones.
+3. The retry runs under the caller's original deadline, never a fresh one, with a small retry cap; at the
+   deadline the caller gets `PoolSaturatedException`. The loop lives in the connection-acquire path in
+   `DatabaseContext`; the gate only offers "enqueue into the refused lane".
+4. `MaxQueueDepth` stays derived from the configured maximum, not the shrunken limit, so callers are not
+   rejected that the pool could serve slowly.
+
+**Recovery.** Probe back up one permit at a time after a window with no refusals, towards the configured
+maximum; drop again if a probe is refused. A failed probe costs one connect attempt.
+
+**Known limits, accepted.**
+- The governor counts leases, not idle connections held by the provider's own pool (the mixed read/write gap in
+  `docs/connection-governance-investigation-2026-10.md`, 4.5), so one shrink may not be enough; it converges over
+  a few refusals.
+- A server-wide refusal is shared with every other client, so the lowered limit is a hint, not a fact.
+- Order inside the refused lane is order of refusal, not arrival; refusals return from the network in any order,
+  so two callers can swap. Insert by arrival ticket (a scan over a very short list) if exactness is wanted.
+- Retried callers can hold the normal lane back while the server stays full; the original deadline bounds it.
+- Every resize is logged and counted.
+
+**Test-first sequence.**
+1. Gate: the refused lane promotes before the normal lane; cancel, timeout and interrupt remove from either
+   lane; the fast path ignores the lane when both are empty.
+2. Governor and context with fakeDb: a refusal shrinks the limit, requeues the caller, and the caller either
+   succeeds or times out; a plain `ConnectionException` changes nothing; recovery raises the limit stepwise.
+3. A real PostgreSQL at a low `max_connections` under a storm, comparing peak TIME_WAIT, refusals and
+   throughput with and without adaptation (`ServerConnectionCeilingIntegrationTests` is the starting point).
 
 Why POOL-002 matters (confirmed live, 2026-09-27, ASE 16 Developer Edition, cap 25): when the
 server is out of user connections, ASE writes "There are not enough 'user connections'
