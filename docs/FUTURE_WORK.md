@@ -1241,10 +1241,28 @@ identifiable at their limit, so adaptation is off for them and POOL-002's up-fro
 constructs the connection object; the open happens later, in `SqlContainer` (commands) and `TransactionContext`
 (transactions), both through `DatabaseContext.OpenConnection[Async]` into `TrackedConnection`. That is the one
 place every open passes, sync and async, and it owns the `PoolSlot` (`AttachSlot`). The retry therefore lives
-there: on a refusal it swaps the slot in place and re-opens the same underlying connection, so the references held
-by `SqlContainer` and `TransactionContext` stay valid. The slot records the original acquire deadline (and the
-caller's `CancellationToken` is the one already passed to `OpenAsync`); the sync path uses the same deadline with
-the gate's blocking wait.
+there, and the `TrackedConnection` object the callers hold stays the same throughout.
+
+*A refused provider connection is replaced, never re-opened.* A provider's `DbConnection` is not guaranteed to be
+usable after a failed `Open` (it may be left closed, broken, or half-initialised), so the retry disposes it and
+builds a fresh one. Today `TrackedConnection._connection` is `readonly` (37 uses) with no way to build another,
+so the work includes: `_connection` becomes replaceable; the constructor takes the same creation path
+`DatabaseContext.FactoryCreateConnection` uses (factory, connection string or data source) as a delegate;
+the replacement unsubscribes the `StateChange` handler from the failed connection, disposes it, creates the new
+one and subscribes it, and resets the per-open bookkeeping (`_driverReportedStateChange`). Nothing else holds the
+provider connection at that point: the refusal happens inside `Open`, before a command, transaction or DDL
+transaction (`UnderlyingConnection`) exists on it, and that is asserted by a test. The slot stays attached
+throughout, so ownership of the permit never changes hands outside the gate's operation below.
+
+*The retry deadline.* No deadline exists at the retry owner today: `PoolGovernor.Acquire` spends its timeout
+before it returns the slot, the slot records no start time (reading a clock there would put a clock read back on
+the acquire fast path), and the synchronous `Open()` takes no token. So the deadline is defined here, the same
+for sync and async: **the governor's configured acquire timeout, counted from the first refusal of this open.** It
+is computed only when a refusal happens (zero cost otherwise), is stored on the connection for the rest of that
+open, and bounds the wait in the refused lane (sync: the gate's blocking wait with the remaining time; async:
+`WaitAsync` with the remaining time and the caller's own `CancellationToken`, which a sync open lacks). The
+worst case for one operation is therefore its normal slot wait plus one retry budget; that bound is stated, not
+hidden. At expiry the caller gets `PoolSaturatedException`.
 
 **On a refusal.**
 1. Shrink the limit to the number of leases that actually *opened*, floor 1, via `SetLimit`. That is not
@@ -1253,6 +1271,15 @@ the gate's blocking wait.
    incremented when a connection's first open succeeds (the existing first-open hook) and decremented when its
    slot is released, both under the gate's lock so concurrent opens and refusals compute one consistent value.
    Available permits come to 0, so nobody else is admitted until a real lease closes.
+
+   `_opened` is maintained through an explicit governor API, not by the first-open hook: after the provider's
+   `Open` returns, `TrackedConnection` tells its slot (`MarkOpened`), which increments the governor's `_opened`
+   (an `Interlocked` counter: no lock on the open path), and the slot's release decrements it if it was marked.
+   The count therefore does not wait for the first-open or session-settings hook: if the provider opened but that
+   hook then fails, the physical connection exists and consumes a server connection until it is closed, so it
+   counts as opened. `RefuseAndRequeue` reads `_opened` under the gate's lock; that read is a snapshot, which is
+   all the policy needs (the limit is a hint), and a concurrent open that lands just after it simply counts next
+   time. The limit change itself, the permit release and the requeue are the parts that must be atomic, and are.
 2. Requeue the refused caller ahead of every normal waiter, **atomically with giving the permit back**. A
    separate release then enqueue would let `Release()` promote a normal waiter in between and break the
    ordering, so the gate gets one operation, `RefuseAndRequeue`, that under its single lock applies the new
@@ -1270,6 +1297,8 @@ the gate's blocking wait.
 **Recovery.** There is no timer thread: it is evaluated on successful opens. The window `W` (an internal
 constant, measured with the governor's `TimeProvider`) restarts at every refusal and at every raise. When a
 successful open finds `W` elapsed since the last of those, it raises the limit by one, under the gate's lock,
+(`MarkOpened` reads the clock only while the effective limit is below the configured maximum, so the steady state
+pays nothing),
 towards the configured maximum; being one step per window, only one probe is ever outstanding. Only successful
 opens count: retry attempts and refusals do not extend or shorten the window. A refused probe shrinks again and
 restarts `W`. A failed probe costs one connect attempt.
@@ -1288,13 +1317,21 @@ restarts `W`. A failed probe costs one connect attempt.
 1. Gate: the refused lane promotes before the normal lane; `RefuseAndRequeue` never lets a normal waiter be
    promoted between the release and the requeue (deterministic interleaving with the existing test hooks);
    cancel, timeout and interrupt remove from either lane; the fast path ignores the lane when both are empty.
-2. `TrackedConnection` and governor with fakeDb: a raw refusal is translated before the decision; a refusal
+2. Replacement first, before any adaptive policy: with fakeDb, a connection whose failed `Open` leaves it
+   unusable (the broken mode) is replaced by a fresh provider connection; the caller's `TrackedConnection`
+   reference and its slot are the same objects before and after; the failed connection is disposed and its
+   `StateChange` handler removed; no command, transaction or `UnderlyingConnection` consumer was attached to it.
+3. `TrackedConnection` and governor with fakeDb: a raw refusal is translated before the decision; a refusal
    shrinks the limit to the *opened* count (several concurrent opens and refusals give one consistent value),
    requeues the caller and it either succeeds or times out at its original deadline; a plain
    `ConnectionException` changes nothing; sync and async deadlines and async cancellation; the same through
    `SqlContainer` and `TransactionContext` creation; recovery raises the limit one step per window.
-3. A real PostgreSQL at a low `max_connections` under a storm, comparing peak TIME_WAIT, refusals and
-   throughput with and without adaptation (`ServerConnectionCeilingIntegrationTests` is the starting point).
+   The deadline is the governor timeout from the first refusal: sync and async give the same result at expiry;
+   `MarkOpened` counts a connection whose first-open hook then fails.
+4. A real PostgreSQL at a low `max_connections` under a storm, comparing peak TIME_WAIT, refusals and
+   throughput with and without adaptation (`ServerConnectionCeilingIntegrationTests` is the starting point), plus recovery after the storm, and at least one
+   provider whose failed `DbConnection` cannot safely be re-opened, to show the replacement is what makes the retry
+   work there. MySQL, Oracle and Db2 each need their own refusal-and-recovery integration case.
 
 Why POOL-002 matters (confirmed live, 2026-09-27, ASE 16 Developer Edition, cap 25): when the
 server is out of user connections, ASE writes "There are not enough 'user connections'
