@@ -1398,12 +1398,17 @@ budget above for the same-server case.
   the adaptive shrink (above) drives. A bare `Interlocked.Increment` cannot wait; the increment-and-check form
   (`if (Interlocked.Increment(ref n) <= ceiling) admitted else { Decrement; slow path }`) saves a compare-and-swap
   retry loop only under heavy contention and is a measurement question, not a design one.
-- **Cost, acceptance criteria (nothing measured yet).** The gate's uncontended fast path is one compare-and-swap, about
-  22 ns blocking and 29 ns async, no allocation (`PoolGovernorAcquireBenchmarks`); the server gate adds one more
-  atomic when engaged, and one volatile read when not. Accept only if: the engaged uncontended case adds a few
-  nanoseconds and 0 B; the not-engaged case is unchanged within noise (an arm in `PoolGovernorAcquireBenchmarks`); the
-  contended `SyncPoolStorm` shows no regression; and the mixed read/write storm shows zero server refusals and beats the
-  static split on the read-only arms.
+- **Cost, acceptance criteria, MEASURED 2026-10-11** (`benchmarks/CrudBenchmarks/results/server-budget-acquire-run-2026-10-11.md`).
+  The bar was: engaged uncontended adds a few ns and 0 B; disengaged unchanged within noise; contended storm no
+  regression. Uncontended: disengaged +0.35 ns blocking and +1.4 ns async (the volatile read), engaged +13.4 ns and
+  +13.6 ns (one more gate acquire and release), 48 B in every variant, so 0 B added. **Contended: missed.** Eight threads
+  on independent governors drawing on one engaged budget run at 145.7 ns per operation against 6.4 ns with no budget, about
+  23x, because the gate's release takes a lock every time (`ReleaseUnderLock`) and the shared gate serializes every
+  thread's release. It is the worst case (a tight loop), about 0.15% of a 100 microsecond database call, but it is a
+  regression this change introduced. The fix is a lock-free release when no waiter is queued (decrement active, increment
+  available, re-check the waiter count after publishing and take the lock only to promote one), which also touches every
+  local governor and so needs the gate's race tests and a re-run of `PoolGovernorAcquireBenchmarks`; or the increment-and-check
+  form with the gate only for waiters. Decision pending.
 - **Unsolved: idle connections across the two provider pools.** A permit count bounds connections in use, not idle
   ones, so after a read burst the reader pool can hold idle connections while the writer opens new ones. It needs the
   "Two pools break one assumption" levers below (the provider's idle pruning, or a dialect hook that clears the other
