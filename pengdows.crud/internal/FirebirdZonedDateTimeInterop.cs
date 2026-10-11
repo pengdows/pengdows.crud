@@ -85,6 +85,21 @@ internal static class FirebirdZonedDateTimeInterop
     }
 
     /// <summary>
+    /// <see cref="IsZoned(object?)"/> for a generic value, without boxing it and without comparing type names when the answer is
+    /// fixed by <typeparamref name="T"/>: decided once per T for a value type or sealed class, from the value itself only when T
+    /// is not exact (an object, an interface).
+    /// </summary>
+    internal static bool IsZoned<T>(T value) =>
+        ZonedType<T>.IsExact ? ZonedType<T>.IsZonedType : IsZoned((object?)value);
+
+    private static class ZonedType<T>
+    {
+        internal static readonly bool IsExact = typeof(T).IsValueType || typeof(T).IsSealed;
+
+        internal static readonly bool IsZonedType = typeof(T).FullName is TypeName or TimeTypeName;
+    }
+
+    /// <summary>
     /// Reads an FbZonedDateTime as a DateTimeOffset: its UTC instant, expressed at its offset when
     /// the value carries one.
     /// </summary>

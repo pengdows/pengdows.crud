@@ -79,6 +79,41 @@ public sealed class GuidParameterAllocationTests
         Assert.True(bytes <= ceiling, $"A {kind} parameter allocated {bytes} B; expected at most {ceiling} B.");
     }
 
+    // Firebird's override looked at the value's runtime type for an FbZonedDateTime before doing anything else: it boxed every
+    // value (32 B for a Guid) and compared type-name strings, on every parameter. 2.0.5 allocated 128 B for a binary Guid and
+    // 184 B for a string one.
+    [Theory]
+    [InlineData(true, 136)]
+    [InlineData(false, 192)]
+    public void AFirebirdGuidParameter_CostsNoMoreThanItDidInTheLastRelease(bool binary, long ceiling)
+    {
+        var mode = binary ? FirebirdGuidStorageMode.Binary : FirebirdGuidStorageMode.String;
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger.Instance)
+        {
+            GuidStorageMode = mode
+        };
+        DbParameter Create() => dialect.CreateDbParameter("id", DbType.Guid, Sample);
+        WarmUpToOptimizedCode(Create);
+
+        var bytes = AllocationMeasurement.Lowest(() => Measure(Create));
+
+        Assert.True(bytes <= ceiling, $"A Firebird {mode} Guid parameter allocated {bytes} B; expected at most {ceiling} B.");
+    }
+
+    // The zoned-value branch is the reason the check exists: a value that IS an FbZonedDateTime keeps its Object type.
+    [Fact]
+    public void AFirebirdZonedValue_IsStillRecognizedAndKeepsItsObjectType()
+    {
+        var dialect = new FirebirdDialect(new fakeDbFactory(SupportedDatabase.Firebird), NullLogger.Instance);
+
+        var zoned = new FirebirdSql.Data.Types.FbZonedDateTime(new DateTime(2026, 10, 11, 12, 0, 0, DateTimeKind.Utc), "UTC");
+
+        var parameter = dialect.CreateDbParameter("t", DbType.Object, zoned);
+
+        Assert.Equal(DbType.Object, parameter.DbType);
+        Assert.IsType<FirebirdSql.Data.Types.FbZonedDateTime>(parameter.Value);
+    }
+
     [Fact]
     public void ABinaryDeclaredGuid_StillBindsItsBytes()
     {

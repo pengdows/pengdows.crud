@@ -2328,7 +2328,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
 
         // TYPE-015: a float[]/double[] on a database whose VECTOR binds from text.
-        if (BindsVectorsAsText && value is float[] or double[])
+        // The type test comes before the dialect's flag in each check below: the flag is a virtual call, and a parameter
+        // that is not that type (nearly all of them) paid for it on every call.
+        if (value is float[] or double[] && BindsVectorsAsText)
         {
             var textType = type is DbType.AnsiString or DbType.StringFixedLength or DbType.AnsiStringFixedLength
                 ? type
@@ -2362,18 +2364,19 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 : CreateDbParameter(name, type, (BigInteger)uint128);
         }
 
-        if (!BindsSByteAndUnsignedNatively && TryWidenUnsignedParameter(type, value, out var wideType, out var wideValue))
+        if (type is DbType.SByte or DbType.UInt16 or DbType.UInt32 or DbType.UInt64 && !BindsSByteAndUnsignedNatively &&
+            TryWidenUnsignedParameter(type, value, out var wideType, out var wideValue))
         {
             return CreateDbParameter(name, wideType, wideValue);
         }
 
-        if (BindsByteAsBinary && type == DbType.Byte)
+        if (type == DbType.Byte && BindsByteAsBinary)
         {
             return CreateDbParameter(name, DbType.Int16,
                 value is null || value is DBNull ? (short?)null : Convert.ToInt16(value, CultureInfo.InvariantCulture));
         }
 
-        if (TimeColumnHoldsOnlyATimeOfDay && type == DbType.Time && value is TimeSpan span &&
+        if (type == DbType.Time && TimeColumnHoldsOnlyATimeOfDay && value is TimeSpan span &&
             (span < TimeSpan.Zero || span >= TimeSpan.FromDays(1)))
         {
             throw new ArgumentOutOfRangeException(nameof(value),
