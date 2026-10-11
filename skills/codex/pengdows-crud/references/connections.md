@@ -69,6 +69,9 @@ public enum DbMode
 - Reader and writer provider pools are separate and hold connections open, so when both target one server and together ask for more than it allows, its limit is divided between them in proportion to what each asked for; each role's governor and provider pool are sized to its share
 - A read replica on another host is probed and budgeted on its own; a pool sized `0` stays forbidden
 - The budget belongs to one `DatabaseContext` — keep one context per connection string (see `EnforceUniqueConnectionString`)
+- The split is static (by what each role asked for, not what it uses): both roles at 20 against a server that allows 22 gives 11 and 11, so a context that only reads loses half its capacity. If the context never writes, set `MaxConcurrentWrites = 0`: the writer pool is forbidden, nothing is divided and the reader keeps its full request
+- Failures under a spike are callers that waited `PoolAcquireTimeout` (default 5 s) and got `PoolSaturatedException`, not server refusals; size the wait with the slots (about `2 x 17 x slots` calls per two 5 s windows)
+- Planned (POOL-003, not in 2.0.6): a per-server ceiling shared by every context pointing at one server, each role keeping its configured size, engaged only when the pools together exceed the server's budget
 
 ## Constructor Overloads
 

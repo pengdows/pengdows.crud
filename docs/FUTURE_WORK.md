@@ -1317,7 +1317,98 @@ roles regardless of use; `Pengdows_Governed11` (11 per role, no clamp) fails exa
 `Pengdows_Clamped`. Declaring the context read-only (`MaxConcurrentWrites = 0`) gives the reader its full 20 and matches
 StormGate. An undeclared one-sided workload cannot be told apart from one about to write, so the remedy is a budget the
 idle role's share can be lent from, not automatic read-only promotion (the first write would be refused). Whether
-`Resolve` should keep a static split or move to a lendable shared budget is the open design decision here.
+`Resolve` should keep a static split or move to a lendable shared budget is the open design decision here: **decided
+below, in "Per-server ceiling (direction agreed 2026-10-11)"**.
+
+**Measured evidence behind that decision** (PostgreSQL `max_connections=25`, 22 usable, 1,000-way concurrency, 300 ms
+calls, 39,000 per case; per-process counts from `benchmarks/CrudBenchmarks/results/postgres-connection-governance-run-2026-10-11.md`):
+
+| Arm | Reader slots | Wait | Failed | Batch time |
+|---|---|---|---|---|
+| Governed, 20/20, no clamp | 20 | 5 s | 21,320 | 10.2 s |
+| Governed, 20/20, no clamp, patient | 20 | 30 s | 0 | 22.57 s |
+| Clamped, 20/20 | 11 | 5 s | 29,276 | 10.2 s |
+| Clamped, 20/20, patient | 11 | 30 s | 0 | 41.24 s |
+| Clamped, writes forbidden, patient | 20 | 30 s | 0 | 22.58 s |
+| 11 per role by hand, no clamp (`Governed11`) | 11 | 5 s | 29,276 | 10.2 s |
+| Writes forbidden, no clamp, default wait (`ReadOnly`) | 20 | 5 s | 21,320 | 10.2 s |
+| Dapper or EF + StormGate (20 permits) | 20 | 30 s | 0 | 22.6 s |
+
+What it proves: (1) the clamp is exactly its split (`Governed11` fails the same calls as `Clamped`); (2) a context
+that declares it never writes keeps the full reader and matches StormGate, so the split is the whole cost; (3) the
+slow-call failures are acquire timeouts that follow `2 x 17 x slots` per batch, so slots and wait decide them, not
+the clamp or a read-only declaration (`ReadOnly` fails the same 21,320 as `Governed`); (4) no pengdows arm ever caused
+a server refusal, while ungoverned Dapper and EF failed 57% to 72% of fast calls and 95.9% of slow calls, and left
+about 34,000 sockets in TIME_WAIT on the host. What it does not prove: that a sliding or shared budget is safe. Every
+arm is read-only, so the failure the clamp prevents (reader and writer together refused by the server) is not yet
+measured; the mixed read/write arm is the missing baseline.
+
+**Per-server ceiling (direction agreed 2026-10-11; not built).** Replaces the static split and the context-level
+budget above for the same-server case.
+- **Each role keeps its configured size**, trimmed individually to what the server can ever give (`ApplyServerCeiling`),
+  and is no longer divided between the roles. Governor sizes and provider `Maximum Pool Size` stay as configured.
+- **One ceiling per server endpoint, process-wide.** An internal registry keyed by `ServerEndpoint` (host and port plus
+  dialect) holds a `ServerBudget`: a `PoolGovernorConcurrencyGate` whose limit is the usable budget (probed limit minus
+  `ResourceConnectionHeadroom`), plus a count of the contexts registered against it. Contexts register at
+  construction and unregister when their governors are disposed (`DatabaseContext.Initialization.cs`, where the
+  governors are disposed); the last one removes the entry. Because `max_connections` belongs to the server and not to
+  a database, two contexts on different databases of one server share one budget, which the per-context clamp cannot do
+  (per-tenant contexts today each clamp alone and can together exceed the limit). A read replica is another endpoint
+  with its own budget. Shared registrants take the smallest usable value (limit minus headroom).
+- **It engages only when it can bind.** The budget carries the sum of the registered governor maxima. If the sum is at
+  or below the budget a volatile flag stays off and the hot path pays one volatile read, so the common case costs
+  nothing: SQL Server's unlimited default (budget 32,767) with two pools of 100 never creates a gate. Once the sum
+  exceeds the budget the flag latches on, including for contexts registered earlier. The case it is for is a budget
+  smaller than what the pools can ask for: PostgreSQL (`max_connections` 100, 3 reserved) and MySQL (151) with two
+  provider pools at their default of 100 each already overcommit (defaults quoted from memory: to be checked against
+  the dialects' `DefaultMaxPoolSize` before they are quoted elsewhere), as do many small managed tiers and many
+  per-tenant contexts on one server.
+- **Capacity slides by demand.** A caller takes its role's local gate slot first, then a server permit under the same
+  acquire deadline; at the ceiling it waits in order until one connection closes. A read-heavy phase uses almost the
+  whole budget and a write burst takes permits back as readers release. The server permit is taken after the local
+  slot, never before: a caller queued locally must not already hold a server permit, or a read storm would hoard
+  permits and starve the writer.
+- **Where it plugs into `PoolGovernor` (checked against the code).** `ReleaseToken` is the only release path, so the
+  server permit is returned there right after `ReleaseAdmission()` and before `_inUse` is decremented, keeping the
+  "zero means safe to dispose" rule. There are five admission sites that reach `OnAcquired` (the immediate path, the
+  slow path's immediate probe, the two queued waits, and the `TryAcquire` variant), so the permit step is one shared
+  helper called after each; it returns the local slot if the server wait times out or is cancelled, and
+  `AcquireProgress` gains a field for it, as for the turnstile. The immediate path computes no deadline, so when the
+  gate is engaged the wait start must be read before it. Disabled and forbidden governors return at `Gates()` and never
+  register a permit. Sentinel slots hold a governor slot for the context's life and so count against the budget, which
+  is correct, they are real connections.
+- **Wait primitive.** The existing gate, not a new queue and not a bare `Interlocked` counter: it already has strict
+  FIFO, a lock-free fast path, deadline and cancellation, interrupt-safe give-back of a grant, and `SetLimit`, which
+  the adaptive shrink (above) drives. A bare `Interlocked.Increment` cannot wait; the increment-and-check form
+  (`if (Interlocked.Increment(ref n) <= ceiling) admitted else { Decrement; slow path }`) saves a compare-and-swap
+  retry loop only under heavy contention and is a measurement question, not a design one.
+- **Cost, acceptance criteria (nothing measured yet).** The gate's uncontended fast path is one compare-and-swap, about
+  22 ns blocking and 29 ns async, no allocation (`PoolGovernorAcquireBenchmarks`); the server gate adds one more
+  atomic when engaged, and one volatile read when not. Accept only if: the engaged uncontended case adds a few
+  nanoseconds and 0 B; the not-engaged case is unchanged within noise (an arm in `PoolGovernorAcquireBenchmarks`); the
+  contended `SyncPoolStorm` shows no regression; and the mixed read/write storm shows zero server refusals and beats the
+  static split on the read-only arms.
+- **Unsolved: idle connections across the two provider pools.** A permit count bounds connections in use, not idle
+  ones, so after a read burst the reader pool can hold idle connections while the writer opens new ones. It needs the
+  "Two pools break one assumption" levers below (the provider's idle pruning, or a dialect hook that clears the other
+  role's pool when its governor holds no leases). Until that exists the ceiling is a strong guard on connections in use,
+  not an absolute bound on physical connections, and the shrink-on-refusal above stays the backstop.
+- **Floors and hysteresis.** Each role needs a minimum it can always get (for example one writer), or a read storm
+  holding the whole budget starves the first write; it must not break strict FIFO (no barging). Capacity must not bounce
+  between roles under alternating load, since every bounce costs connect churn and the TIME_WAIT sockets measured
+  above. Reclaim only when a role actually needs a connection, never on a timer.
+- **Risks to test.** A writer transaction that opens a reader lease while holding its own can deadlock when the shared
+  budget is exhausted (the same risk exists inside one governor today; the shared budget couples the two roles), bounded
+  by the acquire timeout, which needs a test that proves it fires. A proxy or load balancer in front of two servers
+  looks like one endpoint, and two names for one machine look like two; neither is tested. Embedded engines
+  (`IsClientServerDatabase` false) never register; the flag is read by the mode checks, but that the probe path skips
+  them too has not been traced.
+- **Placement.** The clamp is off by default and the registry is internal, so this adds no public API and is
+  semver-safe on 2.x. It is not part of 2.0.6, which keeps the documented static split plus the
+  `MaxConcurrentWrites = 0` escape hatch. DEC-002 put adaptive resizing in 3.0; whether the per-server ceiling ships as
+  an opt-in 2.0.x release or with 3.0 is a pending decision. First tests, red-first with fakeDb: two contexts on one
+  endpoint share one limit; the flag stays off when the sum fits; a timed-out server wait returns its local slot; the
+  smallest-usable-value rule for shared registrants.
 
 **Two pools break one assumption.** "A retry can succeed" below relies on idle connections in the *same* provider
 pool. A refused writer will not find idle reader connections: they belong to another pool, stay open on the server,

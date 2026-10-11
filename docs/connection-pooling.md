@@ -77,6 +77,25 @@ The limit each engine reports:
 
 The budget belongs to one `DatabaseContext`. It does not coordinate several contexts that point at the same server, which is one reason a `DatabaseContext` must be a singleton per connection string (see the next section and `EnforceUniqueConnectionString`).
 
+### What the split costs, and how to avoid it
+
+The split is static: it divides the server's usable connections between the reader and the writer by what each asked for, not by what each uses. With a server that allows 22 and both roles configured at 20, each gets 11. A context that only reads then has 11 reader slots and 11 slots it never uses. Measured on PostgreSQL (`max_connections=25`, 1,000 concurrent callers, 300 ms calls; `benchmarks/CrudBenchmarks/results/postgres-connection-governance-run-2026-10-11.md`):
+
+| Configuration | Reader slots | Acquire wait | Failed calls | Time |
+|---|---|---|---|---|
+| Clamp on, both roles configured | 11 | 5 s (default) | 75.07% | 10.2 s |
+| 11 per role set by hand, no clamp | 11 | 5 s | 75.07% | 10.2 s |
+| Clamp on, both roles configured | 11 | 30 s | 0 | 41.2 s |
+| Clamp on, `MaxConcurrentWrites = 0` | 20 | 30 s | 0 | 22.6 s |
+| No clamp, 20 slots | 20 | 30 s | 0 | 22.6 s |
+
+- **The clamp is exactly its split:** setting 11 per role by hand fails the same calls as the clamp.
+- **If the context never writes, say so.** `MaxConcurrentWrites = 0` makes it read-only, the writer pool is forbidden, nothing is divided, and the reader keeps its full request (bounded by the server's limit). It then matches a gate with the same slots and wait.
+- **The default wait decides whether a spike is survived.** The failures above are callers that waited `PoolAcquireTimeout` (5 s) for a slot and were turned away with `PoolSaturatedException`; the server refused nothing. A batch can serve about `2 x 17 x slots` calls per two 5 s windows, so with 11 slots a 1,500-call burst loses most of its calls and with a 30 s wait it loses none. Turning the clamp on without sizing the wait is a trap.
+- **No server refusal.** Every pengdows arm above kept the server from refusing a single connection. Dapper and EF without any gate failed 57% to 72% of fast calls and 95.9% of slow calls against the same server and left about 34,000 sockets in TIME_WAIT on the host; behind a gate of 20 permits and a 30 s wait they failed none.
+
+A context that cannot tell the clamp which role it uses (a real mix that shifts over time) pays the split. The planned remedy, tracked as POOL-003 in `docs/FUTURE_WORK.md` and not part of 2.0.6, is a per-server ceiling shared by every context that points at the same server: each role keeps the size you configured, and callers wait at the ceiling instead of being divided in advance. It engages only when the configured pools together exceed the server's budget, so a server that allows far more than the pools ask for (SQL Server's unlimited default with two pools of 100) is unaffected.
+
 ## Writer-fairness turnstile limitations
 
 Enabling `EnableSingleWriterFairness` (`SingleWriter` mode only) installs a turnstile semaphore that blocks new reader permits while a writer is waiting to acquire the single write slot. This prevents an unbounded stream of incoming readers from starving a pending writer.
