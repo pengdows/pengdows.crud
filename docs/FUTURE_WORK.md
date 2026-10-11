@@ -1310,6 +1310,15 @@ limits are a pure function of it:
   back into the context, so the order cannot invert. Refusals are rare. Recovery is evaluated on successful opens
   and reads one volatile (`budget < configuredTotal`) before taking the lock, so the steady state never takes it.
 
+**Evidence for a shared budget (2026-10-11).** The static split already costs capacity today. In the slow-call storm
+(`docs/connection-governance-investigation-2026-10.md`, 4.4) a read-only workload on a context configured 20/20
+against a server with 22 usable connections gets 11 reader slots, because the clamp divides the budget between the two
+roles regardless of use; `Pengdows_Governed11` (11 per role, no clamp) fails exactly the same 29,276 of 39,000 calls as
+`Pengdows_Clamped`. Declaring the context read-only (`MaxConcurrentWrites = 0`) gives the reader its full 20 and matches
+StormGate. An undeclared one-sided workload cannot be told apart from one about to write, so the remedy is a budget the
+idle role's share can be lent from, not automatic read-only promotion (the first write would be refused). Whether
+`Resolve` should keep a static split or move to a lendable shared budget is the open design decision here.
+
 **Two pools break one assumption.** "A retry can succeed" below relies on idle connections in the *same* provider
 pool. A refused writer will not find idle reader connections: they belong to another pool, stay open on the server,
 and count against the limit (the 4.5 gap). The provider pools' `Maximum Pool Size` is fixed in the connection

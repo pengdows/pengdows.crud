@@ -148,17 +148,42 @@ the context's own idle connection(s) in the other role's pool (hypothesis, not d
 
 ### 4.4 Slow-call storm (300 ms calls, 1,500 callers at once, ~20 concurrent)
 
-| Arm | Failures | Time/batch |
-|---|---|---|
-| Dapper + StormGate (30 s wait) | 0 | 22.6 s |
-| EF + StormGate (30 s wait) | 0 | 22.6 s |
-| pengdows clamp, **30 s** acquire timeout | 0 | 20.8 s |
-| pengdows clamp, **default 5 s** acquire timeout | 19,552 of 30,000 (65%) | 10.2 s |
-| default pengdows / Dapper / EF (ungoverned) | `NA` — **setup failed** (Docker port exhaustion), not a result | — |
+Re-measured 2026-10-11 on net10.0 and net8.0 (identical on both), server `max_connections=25`, 1,000-way concurrency,
+per-process counts from the benchmark's own sidecar files (the table's `Fails` column can include stray fragments and
+is not authoritative; see `benchmarks/CrudBenchmarks/results/postgres-connection-governance-run-2026-10-11.md`).
 
-The 20.8 s vs 22.6 s gap is slot arithmetic (22 vs 20), not efficiency. The 5 s default shedding 65% is
-fast-fail admission control working as designed, but it is the setting that decides whether a spike is
-survived — a trap if someone enables the clamp and changes nothing else.
+| Arm | Slots | Wait for a slot | Failed of 39,000 | Time/batch |
+|---|---|---|---|---|
+| Dapper + StormGate | 20 permits | 30 s | 0 | 22.6 s |
+| EF + StormGate | 20 permits | 30 s | 0 | 22.6 s |
+| pengdows, ceiling 20, **no clamp** | 20 | **30 s** | 0 | **22.57 s** |
+| pengdows, clamp, **writes forbidden** | 20 | 30 s | 0 | 22.58 s |
+| pengdows, clamp | **11** | 30 s | 0 | 41.2 s |
+| pengdows, ceiling 20, no clamp | 20 | **5 s** (default) | 21,320 (54.67%) | 10.2 s |
+| pengdows, clamp | 11 | 5 s | 29,276 (75.07%) | 10.2 s |
+| pengdows, **11 per role by hand, no clamp** (control) | 11 | 5 s | **29,276 (75.07%)** | 10.2 s |
+| Dapper / EF, uncontrolled (pool 100 on a server of 25) | n/a | n/a | ~37,400 (96%) | ~0.9 s |
+
+Every failure in the pengdows arms is a `PoolSaturatedException`: a caller that waited the full `PoolAcquireTimeout`
+(5 s by default) for a slot. A batch with `s` slots starts about 17 rounds of `s` calls inside each 5 s window and
+takes two windows, so it serves `2 x 17 x s` of its 1,500 calls: 680 with 20 slots (820 failed, exactly 820 x 26
+batches = 21,320) and 374 with 11 (1,126 failed, 29,276 over 26 batches).
+
+Two settings, not a difference between the gates, explain the table:
+- **The wait.** StormGate waits 30 s, the pengdows default is 5 s. With the same 20 slots and a 30 s wait the pengdows
+  governor and StormGate agree (22.57 s against 22.6 s, 0 failures).
+- **The slot count.** The clamp divides the server's 22 usable connections between the reader and the writer, 11 each,
+  even when only one role is ever used. Configuring 11 per role by hand with no clamp fails exactly the same 29,276
+  calls, so the clamp is the split and nothing else. A context that declares it never writes
+  (`MaxConcurrentWrites = 0`) has nothing to split and keeps the reader's full ceiling.
+
+History: an earlier measurement of the clamp with a 30 s wait took 20.8 s (22 slots). Since 1914dad0 the governors are
+sized to the split provider-pool share (a provider pool's maximum hard-caps its connections), so the clamped reader
+now has 11 and the same run takes 41 s. The change is deliberate (a governor larger than its pool only queues inside
+the provider), but it shows what the static split costs a one-sided workload; see POOL-003.
+
+The 5 s default shedding 55% to 75% of a spike is fast-fail admission control working as designed, but it is the setting
+that decides whether a spike is survived: a trap if someone enables the clamp and changes nothing else.
 
 ### 4.5 The mixed read/write physical-connection gap (red test, by design)
 
