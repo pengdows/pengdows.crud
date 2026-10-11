@@ -1233,7 +1233,13 @@ Adaptation reacts only to that type.
 **Trigger.** A provider open failure that the dialect's translator classifies as `TooManyConnectionsException`,
 and nothing else. The hook that sees the failure first is `TrackedConnection`'s open-failed callback, but it is an
 exception filter that receives the *raw* provider exception and cannot await or change state, so the decision is
-taken from the translated type, after the filter, in the retry owner below; the filter only records. A plain `ConnectionException` means an unreachable or dead
+taken from the translated type, after the filter, in the retry owner below; the filter only records.
+`TrackedConnection` has no dialect today, so `DatabaseContext` passes it a translation delegate at construction,
+`Func<Exception, DatabaseException?>`, built from the dialect the same way the transaction fix builds it
+(`SqlContainer.TranslateProviderFailure(dialect, ex, DbOperationKind.Unknown)`). The delegate is used only for
+the decision and for the exception thrown at retry exhaustion; the raw provider exception still reaches the
+existing failure-recording callback untouched, and any failure that is not a refusal propagates raw, as now, to
+be translated by `SqlContainer` / `TransactionContext`. A plain `ConnectionException` means an unreachable or dead
 server, which is not a capacity problem and never resizes. SQL Server, SAP HANA and Sybase ASE send nothing
 identifiable at their limit, so adaptation is off for them and POOL-002's up-front value is all they get.
 
@@ -1254,6 +1260,38 @@ provider connection at that point: the refusal happens inside `Open`, before a c
 transaction (`UnderlyingConnection`) exists on it, and that is asserted by a test. The slot stays attached
 throughout, so ownership of the permit never changes hands outside the gate's operation below.
 
+*Replacement ordering and failure paths.* In this order, per refusal:
+1. Translate; decide it is a refusal (otherwise rethrow the raw exception, nothing changes).
+2. Unsubscribe the `StateChange` handler from the failed provider connection, so disposing it raises no close or
+   broken transition and the open-connection count and close metrics are not touched (it never reached `Open`,
+   so there is nothing to undo).
+3. Dispose the failed provider connection immediately, so its resources are not held while the caller waits. A
+   provider whose `Dispose` throws is caught and logged at debug; the reference is dropped regardless, so the
+   retry proceeds and nothing is leaked or double-disposed.
+4. Wait for a permit through the refused lane (the gate operation below). The provider connection does not
+   exist during the wait. On timeout, cancellation or a closed gate the caller gets that exception; the
+   `TrackedConnection` is left with no live provider connection and no slot, and its own disposal must tolerate
+   exactly that (no second slot release: the swapped-out slot is marked consumed).
+5. Only after the permit is held, build the replacement from the creation delegate. If creating it throws, that
+   exception is the failure of this attempt: the new permit is released through the normal path and the
+   exception propagates (to be translated by the caller's layer like any open failure).
+6. Subscribe the handler to the replacement, reset the per-open state (`_driverReportedStateChange`; `_wasOpened`
+   is still 0 because it is only set by a successful open), and open it.
+7. A successful open runs the normal first-open and session-settings hooks, on the replacement: they run once
+   per `TrackedConnection`, after the provider open that succeeded, exactly as without a retry.
+
+*Gate API and waiter ownership.* A caller that holds a permit and was refused has no waiter to requeue: waiters
+are rented per acquisition (thread-static for blocking, a pool for async) by `EnqueueOrAdmit` and returned when
+the wait ends. So the refusal is not a requeue of an existing object but a variant of acquire:
+`Acquire` / `AcquireAsync` gain an optional refusal argument (the permit to give back and the new limit), which
+`EnqueueOrAdmit` handles first, under its single lock: apply the limit, return the permit, then admit
+immediately if capacity allows or rent a waiter and enqueue it in the refused lane. From there the call is the
+ordinary acquire: the same rent, the same cancellation registration, the same timeout and interrupt handling, the
+same return of the waiter. The refused caller is therefore represented by exactly one waiter (or none, if
+admitted at once), and no new waiter-lifetime logic exists. A refused caller bypasses the `MaxQueueDepth` check:
+it already held a permit, so the number of refused callers is bounded by the slot count. It returns the new
+permit as a new `PoolSlot`; `TrackedConnection` swaps its slot to it and marks the old one consumed.
+
 *The retry deadline.* No deadline exists at the retry owner today: `PoolGovernor.Acquire` spends its timeout
 before it returns the slot, the slot records no start time (reading a clock there would put a clock read back on
 the acquire fast path), and the synchronous `Open()` takes no token. So the deadline is defined here, the same
@@ -1261,8 +1299,8 @@ for sync and async: **the governor's configured acquire timeout, counted from th
 is computed only when a refusal happens (zero cost otherwise), is stored on the connection for the rest of that
 open, and bounds the wait in the refused lane (sync: the gate's blocking wait with the remaining time; async:
 `WaitAsync` with the remaining time and the caller's own `CancellationToken`, which a sync open lacks). The
-worst case for one operation is therefore its normal slot wait plus one retry budget; that bound is stated, not
-hidden. At expiry the caller gets `PoolSaturatedException`.
+worst case for one operation is therefore its normal slot wait plus one retry *time budget* (one duration shared
+by every attempt of that open, not a count of attempts); that bound is stated, not hidden. At expiry the caller gets `PoolSaturatedException`.
 
 **On a refusal.**
 1. Shrink the limit to the number of leases that actually *opened*, floor 1, via `SetLimit`. That is not
@@ -1272,8 +1310,8 @@ hidden. At expiry the caller gets `PoolSaturatedException`.
    slot is released, both under the gate's lock so concurrent opens and refusals compute one consistent value.
    Available permits come to 0, so nobody else is admitted until a real lease closes.
 
-   `_opened` is maintained through an explicit governor API, not by the first-open hook: after the provider's
-   `Open` returns, `TrackedConnection` tells its slot (`MarkOpened`), which increments the governor's `_opened`
+   `_opened` is maintained through an explicit governor API, not by the first-open hook: immediately after the
+   provider's `Open` returns, and before any first-open or session-settings callback runs, `TrackedConnection` tells its slot (`MarkOpened`), which increments the governor's `_opened`
    (an `Interlocked` counter: no lock on the open path), and the slot's release decrements it if it was marked.
    The count therefore does not wait for the first-open or session-settings hook: if the provider opened but that
    hook then fails, the physical connection exists and consumes a server connection until it is closed, so it
@@ -1289,8 +1327,10 @@ hidden. At expiry the caller gets `PoolSaturatedException`.
    drains the refused lane first. One shared `_queueCount` keeps the lock-free fast path ("is anyone queued?")
    unchanged. A `Queue<T>` is not an option: waiters leave from the middle, which would need scans or tombstones.
 3. The retry runs under the deadline defined above (the governor timeout from the first refusal, shared by every
-   retry of that open, never restarted per attempt), with a small retry cap; at the
-   deadline the caller gets `PoolSaturatedException`. The loop is the one in `TrackedConnection` described
+   retry of that open, never restarted per attempt), with a cap of three retries
+   (four opens in all). If the time budget runs out while waiting for a permit the caller gets
+   `PoolSaturatedException` (the pool could not admit it); if the cap is reached the caller gets the translated
+   `TooManyConnectionsException` (the real server condition). The loop is the one in `TrackedConnection` described
    above; the gate only offers `RefuseAndRequeue`.
 4. `MaxQueueDepth` stays derived from the configured maximum, not the shrunken limit, so callers are not
    rejected that the pool could serve slowly.
@@ -1317,12 +1357,17 @@ restarts `W`. A failed probe costs one connect attempt.
 **Test-first sequence.**
 1. Gate: the refused lane promotes before the normal lane; `RefuseAndRequeue` never lets a normal waiter be
    promoted between the release and the requeue (deterministic interleaving with the existing test hooks);
-   cancel, timeout and interrupt remove from either lane; the fast path ignores the lane when both are empty.
+   cancel, timeout and interrupt remove from either lane; the fast path ignores the lane when both are empty. A
+   refused caller is represented by exactly one waiter in sync and async, and cancellation or timeout cannot
+   leave a refused-lane waiter (or a permit) behind; a refused caller bypasses the queue cap.
 2. Replacement first, before any adaptive policy: with fakeDb, a connection whose failed `Open` leaves it
    unusable (the broken mode) is replaced by a fresh provider connection; the caller's `TrackedConnection`
    reference and its slot are the same objects before and after; the failed connection is disposed and its
    `StateChange` handler removed; no command, transaction or `UnderlyingConnection` consumer was attached to it.
-3. `TrackedConnection` and governor with fakeDb: a raw refusal is translated before the decision; a refusal
+3. `TrackedConnection` and governor with fakeDb: a raw refusal is translated before the decision, and the raw
+   exception the failure-recording callback sees is unchanged; the retry cap yields the translated refusal and
+   a spent time budget yields `PoolSaturatedException`; a provider `Dispose` that throws does not stop the
+   retry; a failed replacement creation releases the new permit; a refusal
    shrinks the limit to the *opened* count (several concurrent opens and refusals give one consistent value),
    requeues the caller and it either succeeds or times out at its original deadline; a plain
    `ConnectionException` changes nothing; sync and async deadlines and async cancellation; the same through
