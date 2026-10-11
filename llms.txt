@@ -124,7 +124,8 @@ database-agnostic policy decoupled from connection identity — is in
   the duplicate-connection-string check (`EnforceUniqueConnectionString`), the exact priority order that
   decides a pool's size (configuration, then the connection string, then the dialect default), and the opt-in server
   connection ceiling (`ClampPoolsToServerConnectionLimit`, `ResourceConnectionHeadroom`): how each
-  engine's limit is read and how reads and writes share it.
+  engine's limit is read, how reads and writes share it, and what that static split costs (with the measured
+  evidence and the planned per-server ceiling, POOL-003).
 - [`docs/connection/ownership-and-shutdown.md`](docs/connection/ownership-and-shutdown.md) —
   precisely what the context/transaction/reader/gateway/sentinel/registry each own, `PoolGovernor`'s
   close/drain/dispose lifecycle, `DatabaseContext`'s exact shutdown sequence, and which operations
