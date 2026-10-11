@@ -1343,6 +1343,14 @@ about 34,000 sockets in TIME_WAIT on the host. What it does not prove: that a sl
 arm is read-only, so the failure the clamp prevents (reader and writer together refused by the server) is not yet
 measured; the mixed read/write arm is the missing baseline.
 
+**MEASURED 2026-10-11, mixed read/write storm (`benchmarks/CrudBenchmarks/results/postgres-mixed-storm-run-2026-10-11.md`):
+phase 1 as built is NOT safe in a mixed workload.** Against PostgreSQL with 22 usable connections and a 30 s wait, the
+clamped arm (per-role sizes plus the shared budget) had 4,059 of 9,000 calls refused by the server at 50% reads and 700 at
+90%, all `TooManyConnectionsException`; the old static division (11 per role) had 0 at both, at 20.8 s versus 37.0 s at 90%
+reads. The budget bounds connections in use, the two provider pools keep idle connections of their own, and the server
+sees the sum. This is the idle-connection gap below, now measured, and it means phase 1 must not replace the static
+division until the reclaim step exists.
+
 **Per-server ceiling, phase 1 BUILT (2026-10-11, in 2.0.6 before release).** The clamp itself is new in 2.0.6, so
 replacing its static division with this budget changes nothing anyone has shipped. Built and covered by 31 new tests
 (`ServerBudgetRegistryTests`, `PoolGovernorServerBudgetTests`, `ServerBudgetContextTests`) plus the rewritten clamp
