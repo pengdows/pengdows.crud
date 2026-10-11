@@ -632,9 +632,23 @@ internal class FirebirdDialect : SqlDialect
             }
         }
 
-        return converted
-            ? base.CreateDbParameter<object?>(name, targetType, targetValue)
+        // 2.0.5 always re-entered the base as an object, so a T that is an interface or an open class was validated by its
+        // value's runtime type; keep that for such a T (a string, an int or a Guid has no runtime type but its own).
+        if (converted)
+        {
+            return base.CreateDbParameter<object?>(name, targetType, targetValue);
+        }
+
+        return value is not string && AnyRuntimeType<T>.Possible
+            ? base.CreateDbParameter<object?>(name, type, value)
             : base.CreateDbParameter(name, type, value);
+    }
+
+    // Whether T can hold a value whose runtime type isn't T itself (an object, an interface, an abstract or open class),
+    // decided once per T.
+    private static class AnyRuntimeType<T>
+    {
+        internal static readonly bool Possible = !typeof(T).IsValueType && !typeof(T).IsSealed;
     }
 
     // Connection pooling properties for Firebird

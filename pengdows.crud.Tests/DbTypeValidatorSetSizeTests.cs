@@ -57,4 +57,79 @@ public class DbTypeValidatorSetSizeTests
     [Fact]
     public void ATextReader_IsNotAcceptedAsBinary() =>
         Assert.Throws<ArgumentException>(() => DbTypeValidator.Validate(DbType.Binary, typeof(StringReader)));
+
+    // The object overload follows the same rules as the Type overload and IsCompatible, so a value is accepted or rejected
+    // the same whichever way it reaches the validator.
+    [Fact]
+    public void AGuidValue_IsAcceptedAsBinary() => DbTypeValidator.Validate(DbType.Binary, (object)Guid.NewGuid());
+
+    [Fact]
+    public void AStreamValue_IsAcceptedAsBinary()
+    {
+        using var stream = new MemoryStream();
+        DbTypeValidator.Validate(DbType.Binary, (object)stream);
+    }
+
+    [Theory]
+    [InlineData(DbType.String)]
+    [InlineData(DbType.AnsiString)]
+    public void ATextReaderValue_IsAcceptedAsText(DbType dbType)
+    {
+        using var reader = new StringReader("x");
+        DbTypeValidator.Validate(dbType, (object)reader);
+    }
+
+    [Theory]
+    [InlineData(DbType.StringFixedLength)]
+    [InlineData(DbType.AnsiStringFixedLength)]
+    public void ATextReader_IsNotAcceptedAsFixedLengthText(DbType dbType)
+    {
+        Assert.Throws<ArgumentException>(() => DbTypeValidator.Validate(dbType, typeof(StringReader)));
+        using var reader = new StringReader("x");
+        Assert.Throws<ArgumentException>(() => DbTypeValidator.Validate(dbType, (object)reader));
+    }
+
+    [Theory]
+    [InlineData(DbType.Int32)]
+    [InlineData(DbType.String)]
+    [InlineData(DbType.Object)]
+    public void AnEnum_IsAcceptedForNumericStringAndObject(DbType dbType)
+    {
+        DbTypeValidator.Validate(dbType, typeof(DayOfWeek));
+        DbTypeValidator.Validate(dbType, (object)DayOfWeek.Monday);
+    }
+
+    [Fact]
+    public void AnEnum_IsRejectedForBoolean()
+    {
+        var ex = Assert.Throws<ArgumentException>(() => DbTypeValidator.Validate(DbType.Boolean, typeof(DayOfWeek)));
+        Assert.Contains("enum", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void ANullableValue_IsValidatedAsItsUnderlyingType()
+    {
+        int? value = 5;
+        DbTypeValidator.Validate(DbType.Int32, (object)value);
+        Assert.Throws<ArgumentException>(() => DbTypeValidator.Validate(DbType.Boolean, (object)value));
+    }
+
+    [Fact]
+    public void AnUnknownDbType_RejectsANumericTypeAndPassesAnythingElse()
+    {
+        var unknown = (DbType)9999;
+        Assert.Throws<ArgumentException>(() => DbTypeValidator.Validate(unknown, typeof(int)));
+        Assert.Throws<ArgumentException>(() => DbTypeValidator.Validate(unknown, (object)5));
+        DbTypeValidator.Validate(unknown, typeof(DateTime));
+        DbTypeValidator.Validate(unknown, (object)DateTime.UtcNow);
+    }
+
+    [Fact]
+    public void IsCompatible_AgreesWithValidate()
+    {
+        using var stream = new MemoryStream();
+        Assert.True(DbTypeValidator.IsCompatible(DbType.Binary, stream));
+        Assert.True(DbTypeValidator.IsCompatible(DbType.Binary, Guid.NewGuid()));
+        Assert.False(DbTypeValidator.IsCompatible(DbType.Int32, stream));
+    }
 }

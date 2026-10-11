@@ -2266,9 +2266,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // If pool is full, let it get garbage collected
     }
 
-    [SuppressMessage("Security", "cs/exposure-of-private-information",
-        Justification = "This method's purpose is to store user-supplied values in DbParameters. " +
-                        "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
     // Whether a value of type T can be one of the types CreateDbParameter's value-based checks look for, decided once per T
     // (a generic static initializer): an object, an interface or an open class can hold any of them, so its runtime type
     // decides; a concrete type can only be itself.
@@ -2290,6 +2287,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
     }
 
+    [SuppressMessage("Security", "cs/exposure-of-private-information",
+        Justification = "This method's purpose is to store user-supplied values in DbParameters. " +
+                        "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         // Re-dispatched virtually, so each dialect's DateTimeOffset handling applies to it. The DbType is tested before the generic

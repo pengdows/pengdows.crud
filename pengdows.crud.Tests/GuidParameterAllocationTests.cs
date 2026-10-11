@@ -11,11 +11,12 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// 2.0.6 regression found by the A/B against 2.0.5: every Guid parameter allocated 32 B more (one extra boxed Guid) and cost
-/// 13 to 32 ns more. The TYPE-002 check <c>value is Guid g &amp;&amp; type == DbType.Binary</c> evaluated the type test first; for a
-/// generic T that is Guid, <c>box; isinst; unbox</c> cannot be folded away, so it boxed the value on every call. Testing the
-/// DbType first skips it for every Guid that is not declared Binary. A Guid parameter may cost only what an int of the same shape
-/// does plus the difference between their boxes (8 B).
+/// Pins what a parameter allocates, after the 2.0.6 A/B against 2.0.5 found every parameter allocating more: a 32 B closure in
+/// <c>DbTypeValidator</c> and a value type boxed twice. These tests fail if those return (9 of them fail with the whole parameter
+/// path reverted to before the fix). They do NOT see the CPU-only wins made alongside: the TYPE-002 test order (<c>type ==
+/// DbType.Binary &amp;&amp; value is Guid</c>), Firebird's per-<c>T</c> zoned-value check, and the per-<c>T</c> gates; on the
+/// optimized code (tier-1 JIT) the old forms allocate the same bytes. Those are guarded only by the A/B benchmark and the
+/// behavior tests (<c>ParameterValueGatingTests</c>, the Firebird zoned-value test below).
 /// </summary>
 [Collection("AllocationSerial")]
 public sealed class GuidParameterAllocationTests
@@ -79,9 +80,9 @@ public sealed class GuidParameterAllocationTests
         Assert.True(bytes <= ceiling, $"A {kind} parameter allocated {bytes} B; expected at most {ceiling} B.");
     }
 
-    // Firebird's override looked at the value's runtime type for an FbZonedDateTime before doing anything else: it boxed every
-    // value (32 B for a Guid) and compared type-name strings, on every parameter. 2.0.5 allocated 128 B for a binary Guid and
-    // 184 B for a string one.
+    // Firebird's override looked at the value's runtime type for an FbZonedDateTime before doing anything else (a box and a
+    // type-name string compare on every parameter, measured in time, not in bytes, on optimized code). This pins that a Guid
+    // costs no more than 2.0.5's 128 B (binary) and 184 B (string).
     [Theory]
     [InlineData(true, 136)]
     [InlineData(false, 192)]
