@@ -2292,8 +2292,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        // Re-dispatched virtually, so each dialect's DateTimeOffset handling applies to it.
-        if (IsDeclaredInstant(type, value, out var instant))
+        // Re-dispatched virtually, so each dialect's DateTimeOffset handling applies to it. The DbType is tested before the generic
+        // call: for a reference-typed T (a string) the call goes through a runtime generic lookup, and almost no parameter needs it.
+        if (type == DbType.DateTimeOffset && IsDeclaredInstant(type, value, out var instant))
         {
             return CreateDbParameter(name, type, instant);
         }
@@ -2317,7 +2318,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         // The value-based checks below look for a handful of value types. A T that can never be one of them (a string, an int, a
         // long, a decimal, nearly every parameter) skips all of them: each was a type-handle compare per call.
-        if (ExoticParameterValue<T>.Possible)
+        // A string can't be any of them, and testing for one is cheaper than the generic static's runtime lookup.
+        if (value is not string && ExoticParameterValue<T>.Possible)
         {
             // RowVersion is an opaque 8-byte version token: bind its raw bytes (re-dispatched
             // virtually so per-dialect byte[] handling still applies), the same DbType.Binary

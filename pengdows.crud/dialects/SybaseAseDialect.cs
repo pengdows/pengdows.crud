@@ -94,7 +94,7 @@ internal class SybaseAseDialect : SqlDialect
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
-        if (IsDeclaredInstant(type, value, out var instant))
+        if (type == DbType.DateTimeOffset && IsDeclaredInstant(type, value, out var instant))
         {
             return CreateDbParameter(name, type, instant);
         }
