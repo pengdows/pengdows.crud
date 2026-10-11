@@ -1288,7 +1288,8 @@ hidden. At expiry the caller gets `PoolSaturatedException`.
    recording its lane so a timeout, cancel or interrupt unlinks it from the right one. `PromoteOneUnderLock`
    drains the refused lane first. One shared `_queueCount` keeps the lock-free fast path ("is anyone queued?")
    unchanged. A `Queue<T>` is not an option: waiters leave from the middle, which would need scans or tombstones.
-3. The retry runs under the caller's original deadline, never a fresh one, with a small retry cap; at the
+3. The retry runs under the deadline defined above (the governor timeout from the first refusal, shared by every
+   retry of that open, never restarted per attempt), with a small retry cap; at the
    deadline the caller gets `PoolSaturatedException`. The loop is the one in `TrackedConnection` described
    above; the gate only offers `RefuseAndRequeue`.
 4. `MaxQueueDepth` stays derived from the configured maximum, not the shrunken limit, so callers are not
