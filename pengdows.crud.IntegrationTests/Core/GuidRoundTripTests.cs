@@ -115,6 +115,20 @@ public class GuidRoundTripTests : DatabaseTestBase
                 return rawFailure;
             }
 
+            // A native uuid column is not bytes to the application, but its bytes in the database's own binary form are the
+            // layout other software sees (SQL Server's uniqueidentifier is mixed-endian, PostgreSQL's uuid is RFC 4122).
+            var nativeBytes = NativeBytesExpression(provider, entry);
+            if (nativeBytes != null)
+            {
+                var native = await ReadRawAsync(context, "1", nativeBytes);
+                if (native is not byte[] nativeStored ||
+                    !nativeStored.AsSpan().SequenceEqual(Probe.ToByteArray(!MixedEndian(provider))))
+                {
+                    return $"native bytes {(native is byte[] b2 ? Convert.ToHexString(b2) : native ?? "null")}, expected " +
+                           Convert.ToHexString(Probe.ToByteArray(!MixedEndian(provider)));
+                }
+            }
+
             // Bytes laid down by other software in the database's own order read back as the same Guid.
             if (entry.DbType == DbType.Binary)
             {
@@ -186,10 +200,23 @@ public class GuidRoundTripTests : DatabaseTestBase
         return mapped.Count == 1 ? mapped[0].V : Guid.Empty;
     }
 
-    private static async Task<object?> ReadRawAsync(IDatabaseContext context, string id)
+    // The expression that returns a native uuid column's own bytes, or null where the column isn't a native uuid we can ask.
+    private static Func<string, string>? NativeBytesExpression(SupportedDatabase provider, ColumnTypeDescriptor entry) =>
+        entry.DbType == DbType.Guid
+            ? provider switch
+            {
+                SupportedDatabase.SqlServer when entry.Declaration == "UNIQUEIDENTIFIER" => column => $"CAST({column} AS BINARY(16))",
+                SupportedDatabase.PostgreSql when entry.Declaration == "UUID" => column => $"uuid_send({column})",
+                _ => null
+            }
+            : null;
+
+    private static async Task<object?> ReadRawAsync(IDatabaseContext context, string id, Func<string, string>? project = null)
     {
         await using var select = context.CreateSqlContainer();
-        select.Query.Append("SELECT ").Append(context.WrapObjectName("v")).Append(" FROM ")
+        select.Query.Append("SELECT ").Append(project == null
+                ? context.WrapObjectName("v")
+                : project(context.WrapObjectName("v"))).Append(" FROM ")
             .Append(IntegrationObjectNameHelper.Table(context, TableName))
             .Append(" WHERE ").Append(context.WrapObjectName("id")).Append(" = ").Append(id);
         await using var reader = await select.ExecuteReaderAsync();

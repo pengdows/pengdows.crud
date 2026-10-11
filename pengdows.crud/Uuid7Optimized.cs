@@ -8,7 +8,9 @@
 // - Key advantages of UUIDv7 over UUIDv4:
 //   * Chronologically sortable (great for database indexes)
 //   * Contains timestamp (useful for debugging/auditing)
-//   * No index fragmentation issues like random UUIDs
+//   * Time-ordered, so new keys land near the end of an index instead of scattering across it as random
+//     UUIDs do (far fewer page splits). Whether stored values sort in time order depends on the database's
+//     own UUID or byte comparison (SQL Server sorts a uniqueidentifier by its last bytes, not its first).
 // - Performance optimizations:
 //   * Thread-local counters eliminate CAS contention
 //   * Buffered random bytes reduce syscall overhead
