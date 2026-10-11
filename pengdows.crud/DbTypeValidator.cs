@@ -51,17 +51,19 @@ internal static class DbTypeValidator
     // Enums are accepted for all numeric and string DbTypes.
     // FrozenSet values ensure the per-DbType sets are fully immutable.
     // Accepted types a value is a subclass of, never an instance of itself: a MemoryStream or FileStream
-    // is a Stream, a StringReader a TextReader.
-    private static readonly Type[] AbstractAcceptableTypes = { typeof(Stream), typeof(TextReader) };
+    // is a Stream, a StringReader a TextReader. Kept out of AcceptableTypes: a FrozenSet of five or more types
+    // stops scanning linearly and hashes instead, which cost every string parameter about 3 ns.
+    private static readonly Type[] TextAbstractTypes = { typeof(TextReader) };
+    private static readonly Type[] BinaryAbstractTypes = { typeof(Stream) };
 
     private static readonly FrozenDictionary<DbType, FrozenSet<Type>> AcceptableTypes =
         new Dictionary<DbType, FrozenSet<Type>>
         {
             [DbType.Boolean] = new HashSet<Type> { typeof(bool) }.ToFrozenSet(),
 
-            [DbType.String] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid), typeof(TextReader) }.ToFrozenSet(),
+            [DbType.String] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
             [DbType.StringFixedLength] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
-            [DbType.AnsiString] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid), typeof(TextReader) }.ToFrozenSet(),
+            [DbType.AnsiString] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
             [DbType.AnsiStringFixedLength] = new HashSet<Type> { typeof(string), typeof(char), typeof(char[]), typeof(Guid) }.ToFrozenSet(),
             [DbType.Xml] = new HashSet<Type> { typeof(string) }.ToFrozenSet(),
 
@@ -74,7 +76,7 @@ internal static class DbTypeValidator
             [DbType.Guid] = new HashSet<Type> { typeof(Guid), typeof(string), typeof(byte[]) }.ToFrozenSet(),
 
             [DbType.Binary] = new HashSet<Type>
-                { typeof(byte[]), typeof(ArraySegment<byte>), typeof(ReadOnlyMemory<byte>), typeof(Stream), typeof(Guid) }.ToFrozenSet(),
+                { typeof(byte[]), typeof(ArraySegment<byte>), typeof(ReadOnlyMemory<byte>), typeof(Guid) }.ToFrozenSet(),
 
             [DbType.Object] = FrozenSet<Type>.Empty, // Accept anything for DbType.Object
         }.ToFrozenDictionary();
@@ -91,9 +93,9 @@ internal static class DbTypeValidator
     /// </remarks>
     internal static void Validate(DbType dbType, Type? clrType)
     {
-        if (Mismatch(dbType, clrType) is { } message)
+        if (clrType != null && !Accepts(dbType, clrType))
         {
-            throw new ArgumentException(message);
+            throw new ArgumentException(MismatchMessage(dbType, clrType));
         }
     }
 
@@ -102,15 +104,26 @@ internal static class DbTypeValidator
     /// (null always can); the non-throwing form of <see cref="Validate(DbType, object?)"/>.
     /// </summary>
     internal static bool IsCompatible(DbType dbType, object? value) =>
-        value is null or DBNull || Mismatch(dbType, Nullable.GetUnderlyingType(value.GetType()) ?? value.GetType()) == null;
+        value is null or DBNull || Accepts(dbType, Nullable.GetUnderlyingType(value.GetType()) ?? value.GetType());
 
     // A loop, not Array.Exists with a lambda: the lambda captures clrType and acceptable, and the compiler then allocates its
     // closure object for the whole scope, so every parameter paid 32 B even when the first check had already answered.
-    private static bool AcceptsASubclassOf(FrozenSet<Type> acceptable, Type clrType)
+    private static bool AcceptsASubclassOf(DbType dbType, Type clrType)
     {
-        foreach (var abstractType in AbstractAcceptableTypes)
+        var abstractTypes = dbType switch
         {
-            if (abstractType.IsAssignableFrom(clrType) && acceptable.Contains(abstractType))
+            DbType.String or DbType.AnsiString => TextAbstractTypes,
+            DbType.Binary => BinaryAbstractTypes,
+            _ => null
+        };
+        if (abstractTypes == null)
+        {
+            return false;
+        }
+
+        foreach (var abstractType in abstractTypes)
+        {
+            if (abstractType.IsAssignableFrom(clrType))
             {
                 return true;
             }
@@ -119,63 +132,41 @@ internal static class DbTypeValidator
         return false;
     }
 
-    // The mismatch message for Validate, or null when the CLR type fits the DbType.
-    private static string? Mismatch(DbType dbType, Type? clrType)
+    // The answer every parameter asks for, kept free of the message text: building a message needs interpolated-string
+    // locals, and a method that holds them pays to set them up on every call, accepted or not.
+    // clrType is already nullable-unwrapped by ResolveClrType.
+    private static bool Accepts(DbType dbType, Type clrType)
     {
-        if (clrType == null)
-        {
-            return null; // value was null — always valid
-        }
-
-        // clrType is already nullable-unwrapped by ResolveClrType.
-
         if (clrType.IsEnum)
         {
-            if (NumericDbTypes.Contains(dbType) || StringDbTypes.Contains(dbType) || dbType == DbType.Object)
-            {
-                return null;
-            }
-
-            return $"CLR type '{clrType.Name}' (enum) is not compatible with DbType.{dbType}. " +
-                $"Use an integer or string DbType for enum values.";
+            return NumericDbTypes.Contains(dbType) || StringDbTypes.Contains(dbType) || dbType == DbType.Object;
         }
 
         if (dbType == DbType.Object)
         {
-            return null;
+            return true;
         }
 
         if (NumericDbTypes.Contains(dbType))
         {
-            if (NumericTypes.Contains(clrType))
-            {
-                return null;
-            }
-
-            return $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
-                $"Ensure the value type matches the declared parameter type.";
+            return NumericTypes.Contains(clrType);
         }
 
         if (AcceptableTypes.TryGetValue(dbType, out var acceptable))
         {
-            if (acceptable.Count == 0 || acceptable.Contains(clrType) || AcceptsASubclassOf(acceptable, clrType))
-            {
-                return null;
-            }
-
-            return $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
-                $"Ensure the value type matches the declared parameter type.";
+            return acceptable.Count == 0 || acceptable.Contains(clrType) || AcceptsASubclassOf(dbType, clrType);
         }
 
-        if (NumericTypes.Contains(clrType))
-        {
-            return $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
-                $"Ensure the value type matches the declared parameter type.";
-        }
-
-        // Unknown DbType with non-numeric CLR type — pass through without blocking
-        return null;
+        // Unknown DbType: a numeric CLR type is blocked, anything else passes without validation.
+        return !NumericTypes.Contains(clrType);
     }
+
+    private static string MismatchMessage(DbType dbType, Type clrType) =>
+        clrType.IsEnum
+            ? $"CLR type '{clrType.Name}' (enum) is not compatible with DbType.{dbType}. " +
+              $"Use an integer or string DbType for enum values."
+            : $"CLR type '{clrType.Name}' is not compatible with DbType.{dbType}. " +
+              $"Ensure the value type matches the declared parameter type.";
 
     /// <summary>
     /// Validates that the CLR type of <paramref name="value"/> is compatible with
