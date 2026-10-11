@@ -2297,7 +2297,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
         // TYPE-002: a Guid declared Binary is sent as its 16 bytes in the database's Guid byte order
         // (StoresGuidBytesBigEndian), whatever the dialect's own Guid handling.
-        if (value is Guid binaryGuid && type == DbType.Binary)
+        // The DbType is tested first: for a generic T that is Guid, `value is Guid` boxes the value, and every Guid parameter
+        // (declared Guid, not Binary) paid for a box it never used.
+        if (type == DbType.Binary && value is Guid binaryGuid)
         {
             return CreateDbParameter(name, type, SerializeGuidAsBinary(binaryGuid));
         }
@@ -2428,6 +2430,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // PrepareParameterValue is still called — some dialects transform primitives
         // (e.g. Oracle converts bool→Int16 via PrepareParameterValue).
         bool handled;
+        // A value type is boxed to be passed as an object, and the calls below each need one: box it once and hand the same
+        // object to all of them (a Guid, DateTime or bool was boxed twice, 32 B or 24 B each).
+        object? boxedValue = null;
         if (runtimeType != null && s_primitiveClrTypes.Contains(runtimeType))
         {
             // Primitive fast path: skip AdvancedTypes lookup, go straight to PrepareParameterValue.
@@ -2439,10 +2444,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
             var mappedType = runtimeType == null ? null : AdvancedTypeRegistry.WriteType(runtimeType);
             handled = mappedType != null &&
                       ((AdvancedTypes.IsMappedType(mappedType) &&
-                        AdvancedTypes.TryConfigureParameter(parameter, mappedType, value, TypeMappingProvider)) ||
+                        AdvancedTypes.TryConfigureParameter(parameter, mappedType, boxedValue ??= value, TypeMappingProvider)) ||
                        // A database with no LOB mapping gets the bytes or text, never a raw instance
-                       // it cannot bind.
-                       LargeObjectParameter.TryMaterialize(parameter, value));
+                       // it cannot bind. A value type is never a Stream or TextReader, and passing it as an
+                       // object would box it (a Guid, DateTime or bool parameter paid 32 B for the answer no).
+                       (!runtimeType!.IsValueType && LargeObjectParameter.TryMaterialize(parameter, value)));
         }
 
         if (!handled)
@@ -2457,7 +2463,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
             var preparedValue = type == DbType.Decimal && value is decimal decimalValue &&
                                 TryTrimTrailingZeros(decimalValue, out var trimmed)
                 ? PrepareParameterValue(trimmed, type)
-                : PrepareParameterValue(value, type);
+                : PrepareParameterValue(boxedValue ?? value, type);
             parameter.Value = preparedValue ?? DBNull.Value;
         }
 

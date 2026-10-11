@@ -104,6 +104,21 @@ internal static class DbTypeValidator
     internal static bool IsCompatible(DbType dbType, object? value) =>
         value is null or DBNull || Mismatch(dbType, Nullable.GetUnderlyingType(value.GetType()) ?? value.GetType()) == null;
 
+    // A loop, not Array.Exists with a lambda: the lambda captures clrType and acceptable, and the compiler then allocates its
+    // closure object for the whole scope, so every parameter paid 32 B even when the first check had already answered.
+    private static bool AcceptsASubclassOf(FrozenSet<Type> acceptable, Type clrType)
+    {
+        foreach (var abstractType in AbstractAcceptableTypes)
+        {
+            if (abstractType.IsAssignableFrom(clrType) && acceptable.Contains(abstractType))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // The mismatch message for Validate, or null when the CLR type fits the DbType.
     private static string? Mismatch(DbType dbType, Type? clrType)
     {
@@ -143,8 +158,7 @@ internal static class DbTypeValidator
 
         if (AcceptableTypes.TryGetValue(dbType, out var acceptable))
         {
-            if (acceptable.Count == 0 || acceptable.Contains(clrType) ||
-                Array.Exists(AbstractAcceptableTypes, t => t.IsAssignableFrom(clrType) && acceptable.Contains(t)))
+            if (acceptable.Count == 0 || acceptable.Contains(clrType) || AcceptsASubclassOf(acceptable, clrType))
             {
                 return null;
             }
