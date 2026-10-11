@@ -54,3 +54,35 @@ timestamps and the time provider, the context lock and the single-connection tra
 They serve TYPE-005/016/008 and the reader metrics. The seven dialect-derived ones are constants per dialect and could sit behind
 one shared per-dialect object (about 32 B saved of the 80); that touches a central class and its 58 test constructions for a 1.6%
 allocation gain, so it is recorded here as an option, not done. For scale, Dapper allocates 1,839 B for the same read.
+
+## Second pass: the time that was left (2026-10-11, evening)
+
+The BenchmarkDotNet rows above swing by 5 to 10 points between runs, too much to see a 2 ns change. This pass used a loop of
+`CreateDbParameter` through `DatabaseContext` on fakeDb (2,000,000 calls, nine repeats, the minimum reported, pinned to one core),
+built once against the `v2.0.5` tree and once against HEAD; the two arms agree to about 1 ns run to run. It found two more things in
+the 2.0.6 path, both on every parameter:
+
+1. **`DbTypeValidator` was 4 to 5 ns slower than 2.0.5 for a string.** Adding `TextReader` to the String and AnsiString sets and `Guid`
+   and `Stream` to the Binary set took them from four types to five or more, and a `FrozenSet` of five or more types hashes instead of
+   scanning linearly (about 3 ns). The abstract `Stream`/`TextReader` acceptance now lives in per-DbType lists consulted only on a miss, and
+   every set is four types or fewer (`DbTypeValidatorSetSizeTests` pins that). The accept/reject answer is also computed without the
+   message text: the interpolated-string locals of the old combined method were set up on every call, accepted or not.
+2. **Pre-checks that cost a runtime generic lookup for a string.** `IsDeclaredInstant<T>` (a generic call, shared code for a
+   reference-typed `T`) ran on every parameter although it needs `DbType.DateTimeOffset`; the DbType is now tested before the call. A
+   string also skips the exotic-value gate.
+
+| per parameter, min ns (2.0.5 / HEAD) | before this pass | after |
+|---|---:|---:|
+| SQL Server string | 40.0 / 47.0 | 38.9 / 43.3 |
+| SQL Server int | 38.5 / 41.2 | 37.0 / 39.0 |
+| SQL Server Guid | 71.9 / 74.0 | 73.0 / 70.4 |
+| SQLite string | 40.0 / 52.0 | 39.5 / 48.9 |
+| SQLite Guid | 54.5 / 66.0 | 54.1 / 61.6 |
+| SQLite int | 38.0 / 42.5 | 37.4 / 41.9 |
+| Firebird Guid (binary) | 85.0 / 86.0 | 79.0 / 82.4 |
+
+SQL Server and Firebird are now within 0 to 10% (a Guid is below 2.0.5 on SQL Server). **What is left is 4 to 9 ns on a string
+parameter on PostgreSQL and SQLite and 4 to 7 on a SQLite Guid or int: the per-dialect `CreateDbParameter` overrides 2.0.6 added (TYPE-001/002/003/020: DateTime
+normalization, enum names, LSN, timetz, TimeSpan, UInt64 text), which 2.0.5 did not have for PostgreSQL at all.** Gating their value tests
+by a per-`T` static, and reordering them behind the DbType, were each tried and measured no better than the noise, so they were not kept.
+Against a 100 microsecond database call that is 0.005%.
