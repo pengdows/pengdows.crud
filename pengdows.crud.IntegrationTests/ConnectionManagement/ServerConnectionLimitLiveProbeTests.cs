@@ -72,11 +72,12 @@ public class ServerConnectionLimitLiveProbeTests
             var writer = context.GetPoolStatisticsSnapshot(PoolLabel.Writer).MaxSlots;
             _output.WriteLine($"{image}: server max_connections={ServerMaxConnections}, reader slots={reader}, writer slots={writer}");
 
-            // Each role keeps the size it asked for (here the provider default of 100), trimmed to the server's usable
-            // limit on its own. The two are not divided in advance: they draw on one per-server budget at run time.
+            // Reads and writes use separate provider pools that hold connections open, so the server's usable
+            // limit is shared between them: together the two pools fit it, and each gets its half.
             var usable = ServerMaxConnections - SuperuserReserved;
-            Assert.Equal(usable, reader);
-            Assert.Equal(usable, writer);
+            Assert.Equal(usable, reader + writer);
+            Assert.Equal(usable / 2, reader);
+            Assert.Equal(usable - usable / 2, writer);
         }
         finally
         {

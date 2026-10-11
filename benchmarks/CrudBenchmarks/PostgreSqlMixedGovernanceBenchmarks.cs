@@ -20,7 +20,7 @@ public enum MixedArm
     /// <summary>11 per role by hand, no clamp: the clamp's first design, a static division of the 22 usable connections.</summary>
     Governed11,
 
-    /// <summary>The same sizes as <see cref="Governed"/> with the clamp on: each role keeps 20 and they share one per-server budget.</summary>
+    /// <summary>The same sizes as <see cref="Governed"/> with the clamp on. On 2.0.6 that divides the usable connections between the roles in advance; on the POOL-003 branch each role keeps 20 and they share one per-server budget.</summary>
     Clamped
 }
 

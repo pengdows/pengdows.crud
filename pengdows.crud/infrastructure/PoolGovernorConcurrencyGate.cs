@@ -184,25 +184,6 @@ internal sealed class PoolGovernorConcurrencyGate : IDisposable
         return limit;
     }
 
-    internal int ConfiguredMaximum => _configuredMaximum;
-
-    // Counts leases that were already outstanding, without a permit, when this gate came into use (POOL-003: a server
-    // budget engages after some connections are open). The permits are taken even past the limit, so available can go
-    // negative and nobody new is admitted until enough of them come back; each return gives one permit back.
-    internal void AdoptActive(int count)
-    {
-        if (count <= 0)
-        {
-            return;
-        }
-
-        lock (_sync)
-        {
-            Interlocked.Add(ref _active, count);
-            Interlocked.Add(ref _available, -count);
-        }
-    }
-
     internal void Release(int permit) => Complete(ReleaseUnderLock(), null);
 
     // Gives the permit back under the lock and returns the waiter, if any, that it went to. Interrupts are only

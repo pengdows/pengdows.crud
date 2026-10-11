@@ -83,9 +83,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     // Every pengdows.crud arm runs with an explicit pool ceiling of this many connections per role, for now.
     // Dapper and EF stay on the provider default (100): they are what is being compared against.
     internal const int PengdowsCeiling = 20;
-    // What the clamp's FIRST design gave each role on this server: (25 connections - 3 reserved for superusers) = 22
-    // usable, divided between the reader and the writer. The clamp no longer divides (POOL-003 phase 1: each role keeps its
-    // size and they share one per-server budget); this arm keeps the old division as a fixed 11-slot control by hand.
+    // What the clamp gives each role on this server: (25 connections - 3 reserved for superusers) = 22 usable,
+    // divided between the reader and the writer. The Governed11 control arm configures it by hand, with no clamp.
     internal const int ClampedShare = (ServerMaxConnections - 3) / 2;
     private const int PgMaxConnections = ServerMaxConnections;
     internal static readonly TimeSpan StormGateAcquireTimeout = TimeSpan.FromSeconds(30);
@@ -248,9 +247,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsGovernedPatientGateway = new TableGateway<GovPgEntity, int>(_pengdowsGovernedPatientContext);
 
-        // The control: the old static division (11 per role), configured by hand with no clamp. Measured with the first
-        // clamp design, it failed exactly the same operations as the clamp did; with the shared budget the clamped arms
-        // are expected to differ from it, which is the point of the change.
+        // The control: the share the clamp computes, configured by hand with no clamp. If the clamp is only the
+        // split, this arm and Pengdows_Clamped fail the same operations.
         _pengdowsGoverned11Context = new DatabaseContext(
             PengdowsConfiguration(_connStr, reads: ClampedShare, writes: ClampedShare),
             NpgsqlFactory.Instance, null, typeMap);

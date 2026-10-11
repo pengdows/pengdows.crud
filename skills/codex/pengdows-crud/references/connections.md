@@ -66,12 +66,12 @@ public enum DbMode
 
 - `ClampPoolsToServerConnectionLimit = true` (default `false`) reads the server's own connection limit while the context initializes and never sizes a pool above it; `ResourceConnectionHeadroom` (default `0`) leaves that many server connections free for other clients
 - Supported for PostgreSQL/YugabyteDB (`max_connections` minus the reserved connections), MySQL/MariaDB (`@@max_connections`, or a lower per-user limit) and SQL Server (`user connections`; `0` = unlimited = unknown); other engines are left unchanged
-- Each role keeps the size it asked for, held on its own to the server's usable limit. When the roles together (or several contexts on one server) can exceed it, every governor draws on one shared per-server budget (keyed by host and port, any database): a caller takes its local slot, then a server permit under the same acquire timeout, and waits in order at the budget. It engages only when the sizes together exceed the limit; idle connections held by provider pools are not counted
+- Reader and writer provider pools are separate and hold connections open, so when both target one server and together ask for more than it allows, its limit is divided between them in proportion to what each asked for; each role's governor and provider pool are sized to its share
 - A read replica on another host is probed and budgeted on its own; a pool sized `0` stays forbidden
-- The budget is shared by every context in the process that points at the same server; keep one context per connection string (see `EnforceUniqueConnectionString`)
-- If the context never writes, set `MaxConcurrentWrites = 0`: the writer pool is forbidden and the reader keeps its full request
+- The budget belongs to one `DatabaseContext` — keep one context per connection string (see `EnforceUniqueConnectionString`)
+- The split is static (by what each role asked for, not what it uses): both roles at 20 against a server that allows 22 gives 11 and 11, so a context that only reads loses half its capacity. If the context never writes, set `MaxConcurrentWrites = 0`: the writer pool is forbidden, nothing is divided and the reader keeps its full request
 - Failures under a spike are callers that waited `PoolAcquireTimeout` (default 5 s) and got `PoolSaturatedException`, not server refusals; size the wait with the slots (about `2 x 17 x slots` calls per two 5 s windows)
-- Still planned (POOL-003, `docs/FUTURE_WORK.md`): reclaiming the other pool's idle connections, minimums per role, and shrink on refusal
+- Planned (POOL-003, not in 2.0.6): a per-server ceiling shared by every context pointing at one server, each role keeping its configured size, engaged only when the pools together exceed the server's budget
 
 ## Constructor Overloads
 

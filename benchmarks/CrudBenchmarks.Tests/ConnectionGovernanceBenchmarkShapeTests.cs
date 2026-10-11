@@ -140,8 +140,8 @@ public class ConnectionGovernanceBenchmarkShapeTests
 
     // StormGate is a plain gate: 20 permits and a 30 s wait, no clamp. The nearest pengdows.crud equivalent is the
     // ceiling-20 arm with the same 30 s wait and the clamp OFF. Without it the table cannot separate the two
-    // settings that differ from StormGate: the wait (Governed has the 5 s default) and the slot count (the first clamp
-    // design split the server's budget, so Clamped and ClampedPatient ran on fewer than 20).
+    // settings that differ from StormGate: the wait (Governed has the 5 s default) and the slot count (the clamp
+    // splits the server's budget, so Clamped and ClampedPatient run on fewer than 20).
     [Fact]
     public void StormBenchmark_HasAnUnclampedPengdowsArmWithStormGatesAcquireTimeout()
     {
@@ -153,7 +153,7 @@ public class ConnectionGovernanceBenchmarkShapeTests
     }
 
     // Control: what the clamp does is divide the server's usable connections between the two roles. Governed with
-    // that share configured by hand (no clamp) behaved exactly like Clamped under the first (dividing) design, which showed the clamp was
+    // that share configured by hand (no clamp) must therefore behave exactly like Clamped, which shows the clamp is
     // nothing more than the split and that the gap to StormGate is the share, not some other cost.
     [Fact]
     public void StormBenchmark_HasAnUnclampedPengdowsArmSizedToTheClampsShare()

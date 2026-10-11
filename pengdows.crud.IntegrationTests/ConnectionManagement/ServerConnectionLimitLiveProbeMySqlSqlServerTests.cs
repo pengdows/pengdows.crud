@@ -54,9 +54,10 @@ public class ServerConnectionLimitLiveProbeMySqlSqlServerTests
 
             var (reader, writer) = Slots(context);
             _output.WriteLine($"{MySqlImage}: max_connections={maxConnections}, max_user_connections={maxUserConnections}, reader={reader}, writer={writer}");
-            // Each role is trimmed to the usable limit on its own; the roles share one per-server budget at run time.
-            Assert.Equal(expected, reader);
-            Assert.Equal(expected, writer);
+            // The usable limit is shared between the two role pools: together they fit it exactly.
+            Assert.Equal(expected, reader + writer);
+            Assert.InRange(reader, 1, expected - 1);
+            Assert.InRange(writer, 1, expected - 1);
         }
         finally
         {

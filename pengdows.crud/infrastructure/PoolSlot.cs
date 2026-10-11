@@ -42,24 +42,21 @@ internal readonly struct PoolSlot : IDisposable, IAsyncDisposable
         private readonly long _waitStart;
         private readonly long _acquiredAt;
         private readonly bool _releaseWriterTurnstileInterest;
-        private readonly bool _serverPermit;
         private int _released;
 
-        internal PoolSlotToken(PoolGovernor governor, long waitStart, long acquiredAt, bool releaseWriterTurnstileInterest,
-            bool serverPermit = false)
+        internal PoolSlotToken(PoolGovernor governor, long waitStart, long acquiredAt, bool releaseWriterTurnstileInterest)
         {
             _governor = governor;
             _waitStart = waitStart;
             _acquiredAt = acquiredAt;
             _releaseWriterTurnstileInterest = releaseWriterTurnstileInterest;
-            _serverPermit = serverPermit;
         }
 
         public void Release()
         {
             if (Interlocked.Exchange(ref _released, 1) == 0)
             {
-                _governor.ReleaseToken(_waitStart, _acquiredAt, _releaseWriterTurnstileInterest, _serverPermit);
+                _governor.ReleaseToken(_waitStart, _acquiredAt, _releaseWriterTurnstileInterest);
             }
         }
     }

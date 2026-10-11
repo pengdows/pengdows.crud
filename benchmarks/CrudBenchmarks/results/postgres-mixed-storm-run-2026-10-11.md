@@ -1,5 +1,9 @@
 # PostgreSQL mixed read/write storm, 2026-10-11
 
+> The "Clamped" rows below ran the shared per-server budget of POOL-003 phase 1, on the local branch
+> `pool-003-shared-budget`. 2.0.6 keeps the static division (the `Governed11` rows), which is why phase 1 was withdrawn.
+> On 2.0.6 the `Clamped` arm of this benchmark is that static division, expected to match `Governed11`; not yet re-run.
+
 `PostgreSqlMixedGovernanceBenchmarks` (new), against `cdf00222` (POOL-003 phase 1), net10.0: PostgreSQL 15 with
 `max_connections=25` (22 usable), 1,000-way concurrency, 1,500 calls per batch that each hold their connection for 300 ms
 (`pg_sleep(0.3)`). `ReadPercent` of the calls read through the reader pool and the rest write through the writer pool.

@@ -1351,8 +1351,10 @@ reads. The budget bounds connections in use, the two provider pools keep idle co
 sees the sum. This is the idle-connection gap below, now measured, and it means phase 1 must not replace the static
 division until the reclaim step exists.
 
-**Per-server ceiling, phase 1 BUILT (2026-10-11, in 2.0.6 before release).** The clamp itself is new in 2.0.6, so
-replacing its static division with this budget changes nothing anyone has shipped. Built and covered by 31 new tests
+**Per-server ceiling, phase 1 BUILT but WITHDRAWN from 2.0.6 (2026-10-11).** It lives on the local branch
+`pool-003-shared-budget` (commit `cdf00222`, with the benchmarks that measured it). 2.0.6 ships the static division of the
+clamp, which the mixed storm showed is the only variant with no server refusals; the shared budget returns when the
+reclaim step makes it safe and the lock-free release closes the contended cost (both measured below). Built on the branch and covered by 31 new tests
 (`ServerBudgetRegistryTests`, `PoolGovernorServerBudgetTests`, `ServerBudgetContextTests`) plus the rewritten clamp
 tests: `infrastructure/ServerBudget.cs` (process-wide registry keyed by `ServerEndpoint`, smallest usable limit,
 engages only when the registered maxima exceed it, latched), the shared server-permit step in `PoolGovernor` (local

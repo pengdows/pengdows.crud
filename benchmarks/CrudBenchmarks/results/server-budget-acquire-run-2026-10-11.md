@@ -1,5 +1,8 @@
 # Per-server budget acquire cost, 2026-10-11
 
+> The benchmarks and the budget they measure live on the local branch `pool-003-shared-budget` (commit `cdf00222` and after);
+> POOL-003 phase 1 was withdrawn from 2.0.6 (see `docs/FUTURE_WORK.md`).
+
 POOL-003 phase 1 (`cdf00222`). BenchmarkDotNet 0.14.0, net10.0, Ryzen 9 5950X (8 logical cores used), 3 warmup and 12
 measured iterations, machine otherwise quiet. Commands:
 

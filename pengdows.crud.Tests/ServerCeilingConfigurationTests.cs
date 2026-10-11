@@ -10,8 +10,6 @@ namespace pengdows.crud.Tests;
 /// the server's limit), and headroom defaults to 0: a library should not invent a reservation the
 /// application did not ask for.
 /// </summary>
-// The per-server connection budget is process-wide and these contexts share a host name, so they run one at a time.
-[Collection("ServerBudgetSerial")]
 public sealed class ServerCeilingConfigurationTests
 {
     [Fact]
