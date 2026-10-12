@@ -33,9 +33,8 @@ that was run for the release is green. Access runs only on Windows.
 | Snowflake | 146 pass, 0 fail, 0 skip · 2026-10-12 14:58Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:45Z · 0d031db1 |
 | SapHana | 146 pass, 0 fail, 0 skip · 2026-10-12 15:02Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:49Z · 0d031db1 |
 | InterBase | 146 pass, 0 fail, 0 skip · 2026-10-12 15:12Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:57Z · 0d031db1 |
+| Access | 144 pass, 0 fail, 0 skip · 2026-10-12 19:05Z · e0137a99+ | 144 pass, 0 fail, 0 skip · 2026-10-12 19:07Z · e0137a99+ |
 | AuroraPostgreSql | 144 pass, 0 fail, 0 skip · 2026-10-12 15:21Z · 0d031db1 | 144 pass, 0 fail, 0 skip · 2026-10-12 16:06Z · 0d031db1 |
 | AuroraMySql | 144 pass, 0 fail, 0 skip · 2026-10-12 15:25Z · 0d031db1 | 144 pass, 0 fail, 0 skip · 2026-10-12 16:11Z · 0d031db1 |
-
-Opt-in, never recorded: Access.
 
 Failing now: none.
