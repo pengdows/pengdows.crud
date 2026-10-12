@@ -252,6 +252,11 @@ for tfm in ${INTEGRATION_FRAMEWORKS:-net8.0 net10.0}; do
     awk '{printf "  %-12s %6ss  %s\n", $1, $2, ($3 == 0 ? "passed" : "FAILED (exit " $3 ")")}'
 done
 
+# Record who ran, when and against which commit in docs/integration-status.md (a pass or a failure), so the
+# repo shows at a glance whether the commit about to ship has had its integration run.
+python3 "${root}/tools/record-integration-run.py" --results "${results}" --doc "${root}/docs/integration-status.md" ||
+  echo "warning: could not update docs/integration-status.md" >&2
+
 if (( ${#failed[@]} > 0 )); then
   echo "Integration suite failed on: ${failed[*]} (logs: ${results}/IntegrationTests-<tfm>-<db>.log)" >&2
   exit 1
