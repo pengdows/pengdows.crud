@@ -44,10 +44,10 @@ public class RoundTripTableCreator
         var sql = _context.Product switch
         {
             SupportedDatabase.Sqlite => CreateSqliteSql(),
-            SupportedDatabase.PostgreSql => CreatePostgreSqlSql(),
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => CreatePostgreSqlSql(),
             SupportedDatabase.CockroachDb => CreateCockroachDbSql(),
             SupportedDatabase.SqlServer => CreateSqlServerSql(),
-            SupportedDatabase.MySql => CreateMySqlSql(),
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => CreateMySqlSql(),
             SupportedDatabase.MariaDb => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
             SupportedDatabase.Oracle => CreateOracleSql(),

@@ -322,6 +322,14 @@ every CLR type and every database, whether the value round-trips and why not whe
 - Firebird `NONE`-charset text with non-Latin characters reads back correctly when another driver in
   the process has registered .NET code pages (DRY-020).
 
+## Aurora PostgreSQL
+
+- An Aurora PostgreSQL cluster is now detected as `AuroraPostgreSql` (its `Product`), where it was reported as
+  plain `PostgreSql`. The detector looked for `aurora_version()` in `pg_proc`, but on a live Aurora PostgreSQL 17.9
+  cluster the function answers when called and is not a `pg_proc` row. Detection now also checks for Aurora-only
+  settings in `pg_settings`. Code that branches on `Product` and treated Aurora as `PostgreSql` by accident should
+  handle both values (the dialect, types and error handling are the same). Aurora MySQL detection was already correct.
+
 ## SingleStore
 
 - SingleStore runs every transaction as READ COMMITTED whatever level is requested (it accepts and

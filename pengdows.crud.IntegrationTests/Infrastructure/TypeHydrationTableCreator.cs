@@ -65,9 +65,9 @@ public class TypeHydrationTableCreator
         {
             SupportedDatabase.Sqlite => CreateSqliteSql(),
             // YugabyteDb is PostgreSQL-wire-compatible like CockroachDb.
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => CreatePostgreSqlSql(),
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => CreatePostgreSqlSql(),
             SupportedDatabase.SqlServer => CreateSqlServerSql(),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
                 or SupportedDatabase.SingleStore => CreateMySqlSql(),
             SupportedDatabase.DuckDB => CreateDuckDbSql(),
             SupportedDatabase.Snowflake => CreateSnowflakeSql(),

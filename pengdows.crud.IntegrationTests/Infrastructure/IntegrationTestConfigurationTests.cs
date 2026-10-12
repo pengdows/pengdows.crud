@@ -49,6 +49,20 @@ public class IntegrationTestConfigurationTests
         Assert.Equal(includeAccess, providers.Contains(SupportedDatabase.Access));
     }
 
+    // Aurora is a managed AWS service with no Docker image: both engines are added together, only when the caller asks
+    // (INCLUDE_AURORA, with the AURORA_* connection variables).
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void GetEnabledProviders_IncludesBothAuroraEngines_OnlyWhenRequested(bool includeAurora)
+    {
+        var providers = IntegrationTestConfiguration.GetEnabledProviders(
+            includeSnowflake: false, includeAurora: includeAurora);
+
+        Assert.Equal(includeAurora, providers.Contains(SupportedDatabase.AuroraPostgreSql));
+        Assert.Equal(includeAurora, providers.Contains(SupportedDatabase.AuroraMySql));
+    }
+
     // A test that starts its own engine (an embedded database, a Docker container) asks this before it
     // does, so INTEGRATION_ONLY keeps every other database from being touched.
     [Fact]
@@ -156,7 +170,7 @@ public class IntegrationTestConfigurationTests
     [Fact]
     public void EnabledProviders_WithEveryOptIn_ListEachDatabaseOnce()
     {
-        var providers = IntegrationTestConfiguration.GetEnabledProviders(true, true, true, true);
+        var providers = IntegrationTestConfiguration.GetEnabledProviders(true, true, true, true, true);
 
         Assert.Equal(providers.Count, providers.Distinct().Count());
         Assert.Contains(SupportedDatabase.Spanner, providers);
@@ -178,7 +192,7 @@ public class IntegrationTestConfigurationTests
         Assert.Equal(IntegrationTestConfiguration.BaseProviders.Select(p => p.ToString()), listed);
 
         // Every database it can schedule has a weight (expected seconds), longest first.
-        foreach (var database in listed.Concat(new[] { "Snowflake", "SapHana", "InterBase", "Access" }))
+        foreach (var database in listed.Concat(new[] { "Snowflake", "SapHana", "InterBase", "Access", "AuroraPostgreSql", "AuroraMySql" }))
         {
             Assert.Matches(@"\[" + database + @"\]=\d+", script);
         }

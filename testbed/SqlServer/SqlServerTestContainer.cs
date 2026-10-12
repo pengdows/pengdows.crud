@@ -11,7 +11,8 @@ namespace testbed.SqlServer;
 
 public class SqlServerTestContainer : TestContainer
 {
-    private readonly IContainer _container;
+    private IContainer _container;
+    private readonly Func<IContainer> _buildContainer;
     private string? _connectionString;
     // Random per instance so two processes sharing one physical container never see each other's
     // tables, even if they run concurrently. SQL Server needs no separate fixed "bootstrap"
@@ -29,22 +30,51 @@ public class SqlServerTestContainer : TestContainer
     public SqlServerTestContainer(string? image = null)
     {
         _image = image ?? "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04";
-        var builder = new ContainerBuilder()
-            .WithImage(_image)
-            .WithEnvironment("MSSQL_SA_PASSWORD", _password)
-            .WithEnvironment("ACCEPT_EULA", "Y")
-            .WithPortBinding(1433, true);
-
-        if (TestContainerReuse.Enabled)
+        _buildContainer = () =>
         {
-            builder = builder.WithReuse(true);
-        }
+            var builder = new ContainerBuilder()
+                .WithImage(_image)
+                .WithEnvironment("MSSQL_SA_PASSWORD", _password)
+                .WithEnvironment("ACCEPT_EULA", "Y")
+                .WithPortBinding(1433, true);
 
-        _container = builder.Build();
+            if (TestContainerReuse.Enabled)
+            {
+                builder = builder.WithReuse(true);
+            }
+
+            return builder.Build();
+        };
+        _container = _buildContainer();
     }
 
 
     public override async Task StartAsync()
+    {
+        // sqlservr occasionally dies with a fatal-error core dump while it starts (the container exits and nothing
+        // ever answers). That is the vendor image, not the library under test: a container that is no longer
+        // running is replaced by a fresh one, up to three tries; one that is running and never answers still fails.
+        const int attempts = 3;
+        string connectionString;
+        for (var attempt = 1; ; attempt++)
+        {
+            try
+            {
+                connectionString = await StartContainerAndWaitAsync();
+                break;
+            }
+            catch (Exception) when (attempt < attempts && _container.State != TestcontainersStates.Running)
+            {
+                Console.WriteLine($"  [retry] SQL Server container exited while starting (attempt {attempt} of {attempts})");
+                await _container.DisposeAsync();
+                _container = _buildContainer();
+            }
+        }
+
+        await createNewDb(connectionString);
+    }
+
+    private async Task<string> StartContainerAndWaitAsync()
     {
         if (TestContainerReuse.Enabled)
         {
@@ -57,13 +87,28 @@ public class SqlServerTestContainer : TestContainer
         }
 
         var hostPort = _container.GetMappedPublicPort(1433);
-        var host = _container.IpAddress;
         var tmp =
             $@"Server=localhost,{hostPort};uid={_username};pwd={_password};Initial Catalog=master;TrustServerCertificate=true;Connection Timeout=1";
         // SQL Server's first start (system database recovery) intermittently took longer than the
-        // default 60s under full-suite load, in both the testbed and the integration suite.
-        await WaitForDbToStart(SqlClientFactory.Instance, tmp, _container, 180);
-        await createNewDb(tmp);
+        // default 60s under full-suite load, in both the testbed and the integration suite. Wait in 10 s slices up to
+        // 180 s, and give up early when the container has exited.
+        var deadline = DateTime.UtcNow.AddSeconds(180);
+        while (true)
+        {
+            if (_container.State != TestcontainersStates.Running)
+            {
+                throw new InvalidOperationException("The SQL Server container exited while starting.");
+            }
+
+            try
+            {
+                await WaitForDbToStart(SqlClientFactory.Instance, tmp, _container, 10);
+                return tmp;
+            }
+            catch (TimeoutException) when (DateTime.UtcNow < deadline)
+            {
+            }
+        }
     }
 
     private async Task createNewDb(string connectionString)

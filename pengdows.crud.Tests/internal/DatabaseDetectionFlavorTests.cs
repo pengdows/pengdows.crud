@@ -56,6 +56,17 @@ public class DatabaseDetectionFlavorTests
         Assert.Equal(SupportedDatabase.AuroraPostgreSql, detected);
     }
 
+    // Live-verified on Aurora PostgreSQL 17.9: aurora_version() answers when called but is not a row in pg_proc
+    // (the pg_proc probe alone reported plain PostgreSQL), while Aurora-only settings (aurora_compute_plan_id,
+    // aurora.enhanced_logical_replication, ...) are in pg_settings. The probe must look in both.
+    [Fact]
+    public void AuroraPostgreSqlProbe_ChecksPgSettingsAsWellAsPgProc()
+    {
+        Assert.Contains("pg_proc", pengdows.crud.@internal.DatabaseDetectionService.AuroraPostgreSqlProbe);
+        Assert.Contains("pg_settings", pengdows.crud.@internal.DatabaseDetectionService.AuroraPostgreSqlProbe);
+        Assert.Contains("'aurora%'", pengdows.crud.@internal.DatabaseDetectionService.AuroraPostgreSqlProbe);
+    }
+
     [Fact]
     public void DetectProduct_IdentifiesSingleStore_ViaMemsqlVersionProbe()
     {

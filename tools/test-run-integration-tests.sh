@@ -58,5 +58,32 @@ out="$(run_preflight Db2)"; status=$?
   && pass "a failed installer warns and the run continues" \
   || fail "a failed installer aborted the run (exit ${status})"
 
+# Aurora: opt-in; a run with no AURORA_*_HOST creates its own clusters, so it needs a signed-in AWS CLI before it starts.
+write_stub 0
+out="$(INCLUDE_AURORA=true run_preflight Sqlite)"
+grep -q "skip    Aurora" <<< "${out}" && pass "a run whose INTEGRATION_ONLY excludes Aurora does not provision it" \
+  || fail "Aurora not skipped for INTEGRATION_ONLY=Sqlite"
+
+out="$(INCLUDE_AURORA=true AURORA_MYSQL_HOST=db.example run_preflight AuroraMySql)"
+grep -q "ok      Aurora: using the clusters named by AURORA_\*_HOST" <<< "${out}" \
+  && pass "given clusters are used as they are, not created or deleted" \
+  || fail "given Aurora clusters were not reported as used"
+
+cat > "${work}/bin/aws" <<'AWS'
+#!/usr/bin/env bash
+exit 255
+AWS
+chmod +x "${work}/bin/aws"
+out="$(INCLUDE_AURORA=true run_preflight AuroraPostgreSql)"; status=$?
+[[ ${status} -ne 0 ]] && grep -q "PROBLEM Aurora: the AWS CLI is not signed in" <<< "${out}" \
+  && pass "an Aurora run with no AWS sign-in stops before creating anything" \
+  || fail "unsigned AWS CLI did not stop the run (exit ${status})"
+
+printf '#!/usr/bin/env bash\nexit 0\n' > "${work}/bin/aws"
+out="$(INCLUDE_AURORA=true run_preflight AuroraPostgreSql)"; status=$?
+[[ ${status} -eq 0 ]] && grep -q "ok      Aurora: this run creates" <<< "${out}" \
+  && pass "a signed-in AWS CLI lets the run create and delete its own clusters" \
+  || fail "signed-in AWS CLI was not accepted (exit ${status})"
+
 echo
 [[ ${failures} -eq 0 ]] && echo "all passed" || { echo "${failures} failed"; exit 1; }

@@ -759,8 +759,11 @@ All other databases must run automatically with no env var gating.
 
 `AuroraMySql` and `AuroraPostgreSql` are managed AWS services with no Docker image.
 They are detected at runtime via `DatabaseDetectionService` and delegate to the MySQL/PostgreSQL
-dialect respectively. No separate integration suite is required; they are covered by the
-MySQL/PostgreSQL suites.
+dialect respectively. They are opt-in in the integration suite: `INCLUDE_AURORA=true` (with a signed-in AWS CLI,
+`aws login`) makes `run-integration-tests.sh` create an Aurora PostgreSQL and an Aurora MySQL cluster
+(`tools/aurora-it.sh up`), run the suite against them and delete them when the script exits, however it exits.
+Set `AURORA_POSTGRES_*` / `AURORA_MYSQL_*` (`HOST`, `USER`, `PASSWORD`, `DATABASE`) to use existing clusters instead;
+those are neither created nor deleted. The clusters are billed while they exist (about 30 minutes a run).
 
 ## Core Invariants
 

@@ -110,11 +110,11 @@ public class TransientErrorTests : DatabaseTestBase
         return provider switch
         {
             SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
-                or SupportedDatabase.Spanner =>
+                or SupportedDatabase.Spanner or SupportedDatabase.AuroraPostgreSql =>
                 new DatabaseContext(WithBuilderKey(rawCs, "Port", "1"), Npgsql.NpgsqlFactory.Instance),
 
             SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
-                or SupportedDatabase.SingleStore =>
+                or SupportedDatabase.SingleStore or SupportedDatabase.AuroraMySql =>
                 new DatabaseContext(WithBuilderKey(RemoveBuilderKeys(rawCs,
                         "Allow Public Key Retrieval", "Application Name"), "Port", "1"),
                     MySql.Data.MySqlClient.MySqlClientFactory.Instance),

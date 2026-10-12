@@ -11,7 +11,7 @@ Run it right after the integration run, from the commit the results are for:
 
     python3 tools/record-integration-run.py [--results TestResults/integration] [--doc docs/integration-status.md]
 
-Opt-in databases (Snowflake, SAP HANA, InterBase, Access) get a row only once they have run.
+Opt-in databases (Snowflake, SAP HANA, InterBase, Access, Aurora) get a row only once they have run.
 """
 import argparse
 import datetime
@@ -22,7 +22,7 @@ import sys
 
 ALWAYS_ON = ["Sqlite", "PostgreSql", "SqlServer", "MySql", "MariaDb", "Firebird", "CockroachDb", "DuckDB", "Oracle",
              "YugabyteDb", "TiDb", "FlatFile", "Db2", "Informix", "SybaseASE", "Spanner", "SingleStore"]
-OPT_IN = ["Snowflake", "SapHana", "InterBase", "Access"]
+OPT_IN = ["Snowflake", "SapHana", "InterBase", "Access", "AuroraPostgreSql", "AuroraMySql"]
 TFMS = ["net8.0", "net10.0"]
 FILE_RE = re.compile(r"summary-(net[\d.]+)-([A-Za-z0-9]+)\.md$")
 WRITTEN_RE = re.compile(r"Written (\d{4}-\d\d-\d\d \d\d:\d\d:\d\d)Z; (\d+) test results")

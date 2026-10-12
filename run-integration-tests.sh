@@ -23,6 +23,16 @@ has_library() {
   return 1
 }
 
+# Aurora (opt-in, INCLUDE_AURORA=true) is a managed AWS service. With no AURORA_*_HOST given, the run creates its own
+# clusters (tools/aurora-it.sh up) and deletes them when it ends, however it ends; with them given, it uses those and
+# leaves them alone. Aurora is in scope when INTEGRATION_ONLY is empty or names one of the Aurora databases.
+aurora_in_scope() {
+  [[ "${INCLUDE_AURORA:-}" == "true" ]] || return 1
+  [[ -z "${INTEGRATION_ONLY:-}" ]] && return 0
+  [[ ",${INTEGRATION_ONLY// /}," == *,AuroraPostgreSql,* || ",${INTEGRATION_ONLY// /}," == *,AuroraMySql,* ]]
+}
+aurora_given() { [[ -n "${AURORA_POSTGRES_HOST:-}" || -n "${AURORA_MYSQL_HOST:-}" ]]; }
+
 db2_compat_runtime_dir=""
 cleanup_db2_compat_runtime() {
   if [[ -n "${db2_compat_runtime_dir}" && -d "${db2_compat_runtime_dir}" &&
@@ -125,6 +135,22 @@ preflight() {
   else
     echo "  skip    SAP HANA (opt-in: INCLUDE_SAPHANA=true)"
   fi
+  if aurora_in_scope; then
+    if aurora_given; then
+      echo "  ok      Aurora: using the clusters named by AURORA_*_HOST (not created or deleted by this run)"
+    elif ! command -v aws >/dev/null 2>&1; then
+      echo "  PROBLEM Aurora: the AWS CLI is not installed, so the clusters cannot be created"
+      fatal=1
+    elif ! aws sts get-caller-identity >/dev/null 2>&1; then
+      echo "  PROBLEM Aurora: the AWS CLI is not signed in (aws login); the clusters cannot be created"
+      fatal=1
+    else
+      echo "  ok      Aurora: this run creates an Aurora PostgreSQL and an Aurora MySQL cluster and deletes them at the end" \
+           "(tools/aurora-it.sh; billed while they exist)"
+    fi
+  else
+    echo "  skip    Aurora (opt-in: INCLUDE_AURORA=true)"
+  fi
   echo "Progress: ${root}/TestResults/integration/progress.log (summary-<tfm>.md at the end)"
   return "${fatal}"
 }
@@ -162,6 +188,27 @@ if [[ -z "${FIREBIRD_EMBEDDED_CLIENT_LIBRARY:-}" ]]; then
   trap cleanup_firebird_runtime EXIT
 fi
 
+# Aurora: create the clusters now and delete them when the script exits for any reason (success, failure, Ctrl-C),
+# so nothing keeps billing. The flag is set before `up` so a half-created run is torn down too. If the delete
+# itself fails, say so loudly: the resources are tagged pengdows-aurora-it and `tools/aurora-it.sh down` retries.
+aurora_provisioned=0
+cleanup_aurora_it() {
+  (( aurora_provisioned )) || return 0
+  aurora_provisioned=0
+  if ! "${root}/tools/aurora-it.sh" down; then
+    echo "ERROR: Aurora resources may still exist and be billing; run tools/aurora-it.sh down" >&2
+  fi
+}
+if aurora_in_scope && ! aurora_given; then
+  aurora_provisioned=1
+  trap 'cleanup_aurora_it; if declare -F cleanup_firebird_runtime >/dev/null; then cleanup_firebird_runtime; else cleanup_db2_compat_runtime; fi' EXIT
+  trap 'exit 130' INT
+  trap 'exit 143' TERM
+  "${root}/tools/aurora-it.sh" up || { echo "Aurora provisioning failed; deleting what was created." >&2; exit 1; }
+  # shellcheck disable=SC1090
+  source "$("${root}/tools/aurora-it.sh" env)"
+fi
+
 # Informix.Net.Core-lnx's native client (libthcli15a.so) resolves its own dependencies through
 # LD_LIBRARY_PATH, which glibc reads only at process start, and reads INFORMIXDIR (its CSDK tree:
 # GLS locale and message files) and INFORMIXSQLHOSTS through native getenv(), which never sees
@@ -191,7 +238,7 @@ declare -A integration_weights=(
   [Snowflake]=1146 [Spanner]=1025 [SapHana]=437 [Db2]=356 [Firebird]=278 [YugabyteDb]=228
   [SqlServer]=209 [CockroachDb]=187 [SybaseASE]=151 [Oracle]=150 [SingleStore]=146 [DuckDB]=143
   [MySql]=135 [MariaDb]=133 [PostgreSql]=130 [Sqlite]=129 [TiDb]=128 [Informix]=124
-  [InterBase]=121 [Access]=120 [FlatFile]=116
+  [InterBase]=121 [Access]=120 [FlatFile]=116 [AuroraPostgreSql]=120 [AuroraMySql]=120
 )
 
 if [[ -n "${INTEGRATION_ONLY:-}" ]]; then
@@ -201,6 +248,7 @@ else
   [[ "${INCLUDE_SNOWFLAKE:-}" == "true" ]] && requested+=(Snowflake)
   [[ "${INCLUDE_SAPHANA:-}" == "true" ]] && requested+=(SapHana)
   [[ "${INCLUDE_INTERBASE:-}" == "true" ]] && requested+=(InterBase)
+  [[ "${INCLUDE_AURORA:-}" == "true" ]] && requested+=(AuroraPostgreSql AuroraMySql)
   [[ "${OSTYPE:-}" == msys* || "${OSTYPE:-}" == cygwin* ]] && requested+=(Access)
 fi
 mapfile -t queue < <(for db in "${requested[@]}"; do echo "${integration_weights[$db]:-10} ${db}"; done |

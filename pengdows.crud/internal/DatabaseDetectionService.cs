@@ -37,7 +37,12 @@ internal static class DatabaseDetectionService
     internal const string SingleStoreProbe = "SHOW VARIABLES LIKE 'memsql_version'";
     internal const string SpannerProbe =
         "SELECT count(*) FROM information_schema.schemata WHERE schema_name = 'spanner_sys'";
-    internal const string AuroraPostgreSqlProbe = "SELECT proname FROM pg_proc WHERE proname = 'aurora_version' LIMIT 1";
+    // aurora_version() answers when called but, live-verified on Aurora PostgreSQL 17.9, is not a pg_proc row, so
+    // pg_proc alone reported plain PostgreSQL. Aurora-only settings (aurora_compute_plan_id,
+    // aurora.enhanced_logical_replication, ...) are in pg_settings; either one marks Aurora. Looked up, never called.
+    internal const string AuroraPostgreSqlProbe =
+        "SELECT name FROM (SELECT proname AS name FROM pg_proc WHERE proname = 'aurora_version' " +
+        "UNION ALL SELECT name FROM pg_settings WHERE name LIKE 'aurora%') AS aurora_markers LIMIT 1";
 
     private static readonly (SupportedDatabase Product, string[] Tokens)[] SchemaProductTokens =
     {

@@ -36,7 +36,7 @@ public class TestTableCreator
         var sql = _context.Product switch
         {
             SupportedDatabase.Sqlite => CreateSqliteTableSql(),
-            SupportedDatabase.PostgreSql => CreatePostgreSqlTableSql(),
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql => CreatePostgreSqlTableSql(),
             // Spanner's PostgreSQL interface has no plain TIMESTAMP type at all (verified live:
             // "P0001: Type <timestamp> is not supported.") — only TIMESTAMPTZ, since Spanner
             // always stores instants in UTC internally. Needs its own DDL, not the shared
@@ -44,7 +44,7 @@ public class TestTableCreator
             // since this table (unlike that one) declares TIMESTAMP.
             SupportedDatabase.Spanner => CreateSpannerTableSql(),
             SupportedDatabase.SqlServer => CreateSqlServerTableSql(),
-            SupportedDatabase.MySql => CreateMySqlTableSql(),
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql => CreateMySqlTableSql(),
             SupportedDatabase.MariaDb => CreateMariaDbTableSql(),
             SupportedDatabase.TiDb => CreateMySqlTableSql(),
             SupportedDatabase.SingleStore => CreateMySqlTableSql(),
@@ -131,7 +131,7 @@ public class TestTableCreator
                     {guidCol} TEXT NOT NULL,
                     {binCol} BLOB NOT NULL
                 )",
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => $@"
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
                     {textCol} VARCHAR(255) NOT NULL,
@@ -193,7 +193,7 @@ public class TestTableCreator
                     [guid_value] UNIQUEIDENTIFIER NOT NULL,
                     [binary_value] VARBINARY(256) NOT NULL
                 )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
                 or SupportedDatabase.SingleStore => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
@@ -369,7 +369,7 @@ public class TestTableCreator
                     {fromCol} TEXT,
                     {userCol} TEXT
                 )",
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb
                 or SupportedDatabase.Snowflake or SupportedDatabase.FlatFile or SupportedDatabase.Spanner
                 or SupportedDatabase.Informix => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
@@ -386,7 +386,7 @@ public class TestTableCreator
                     {fromCol} NVARCHAR(255),
                     {userCol} NVARCHAR(255)
                 )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
                 or SupportedDatabase.SingleStore => $@"
                 CREATE TABLE IF NOT EXISTS {table} (
                     {idCol} BIGINT PRIMARY KEY,
@@ -516,7 +516,7 @@ public class TestTableCreator
                     {0}name{1} TEXT NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
                 )", qp, qs, table),
-            SupportedDatabase.PostgreSql or SupportedDatabase.FlatFile => string.Format(@"
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.FlatFile => string.Format(@"
                 CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,
                     {0}name{1} VARCHAR(255) NOT NULL,
@@ -535,7 +535,7 @@ public class TestTableCreator
                     {0}name{1} NVARCHAR(255) NOT NULL,
                     {0}balance{1} DECIMAL(18,2) NOT NULL DEFAULT 0.00
                 )", qp, qs, table),
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb
                 or SupportedDatabase.SingleStore => string.Format(@"
                 CREATE TABLE IF NOT EXISTS {2} (
                     {0}id{1} BIGINT PRIMARY KEY,

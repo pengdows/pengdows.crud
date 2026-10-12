@@ -753,7 +753,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                     name VARCHAR(255) NOT NULL,
                     FOREIGN KEY (test_table_id) REFERENCES test_table(id)
                 )",
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => @"
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => @"
                 CREATE TABLE IF NOT EXISTS test_related (
                     id BIGSERIAL PRIMARY KEY,
                     test_table_id BIGINT NOT NULL,
@@ -777,7 +777,7 @@ public class ConstraintViolationTests : DatabaseTestBase
                     [name] NVARCHAR(255) NOT NULL,
                     FOREIGN KEY ([test_table_id]) REFERENCES [dbo].[test_table]([id])
                 )",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => @"
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb => @"
                 CREATE TABLE IF NOT EXISTS test_related (
                     id BIGINT AUTO_INCREMENT PRIMARY KEY,
                     test_table_id BIGINT NOT NULL,
@@ -926,10 +926,10 @@ public class ConstraintViolationTests : DatabaseTestBase
         var qs = context.QuoteSuffix;
         var sql = provider switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE (name)",
             SupportedDatabase.SqlServer => "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE ([name])",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT uq_name UNIQUE (name)",
             // SingleStore is NOT handled here — ISqlDialect.SupportsUniqueConstraints is false
             // for it (confirmed live: any unique key beyond the table's shard key is rejected,
@@ -985,11 +985,11 @@ public class ConstraintViolationTests : DatabaseTestBase
         var qs = context.QuoteSuffix;
         var sql = provider switch
         {
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
             SupportedDatabase.SqlServer =>
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb =>
                 "ALTER TABLE test_table ADD CONSTRAINT chk_value_positive CHECK (value >= 0)",
             // SingleStore is NOT handled here — ISqlDialect.SupportsCheckConstraints is false for
             // it (confirmed live: "Feature 'Check constraints' is not supported by SingleStore."),

@@ -37,7 +37,7 @@ internal static class IntegrationTestConfiguration
     public static IReadOnlyList<SupportedDatabase> EnabledProviders =>
         FilterIntegrationOnly(
             GetEnabledProviders(ShouldIncludeSnowflake, ShouldIncludeSapHana, ShouldIncludeInterBase,
-                ShouldIncludeAccess),
+                ShouldIncludeAccess, ShouldIncludeAurora),
             Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
 
     /// <summary>
@@ -61,12 +61,19 @@ internal static class IntegrationTestConfiguration
         string.Equals(Environment.GetEnvironmentVariable("INCLUDE_INTERBASE"), "true",
             StringComparison.OrdinalIgnoreCase);
 
+    // Aurora is a managed AWS service with no Docker image: INCLUDE_AURORA plus the engine-specific
+    // AURORA_POSTGRES_* / AURORA_MYSQL_* connection variables (see testbed/Aurora/AuroraTestConfiguration.cs).
+    public static bool ShouldIncludeAurora =>
+        string.Equals(Environment.GetEnvironmentVariable("INCLUDE_AURORA"), "true",
+            StringComparison.OrdinalIgnoreCase);
+
     // Access has no Docker image and is Windows-only (ACE OLE DB + ADOX COM interop), so it is
     // on exactly when the OS is Windows - no environment variable.
     public static bool ShouldIncludeAccess => OperatingSystem.IsWindows();
 
     internal static IReadOnlyList<SupportedDatabase> GetEnabledProviders(bool includeSnowflake,
-        bool includeSapHana = false, bool includeInterBase = false, bool includeAccess = false)
+        bool includeSapHana = false, bool includeInterBase = false, bool includeAccess = false,
+        bool includeAurora = false)
     {
         var providers = BaseProviders.ToList();
 
@@ -88,6 +95,12 @@ internal static class IntegrationTestConfiguration
         if (includeInterBase)
         {
             providers.Add(SupportedDatabase.InterBase);
+        }
+
+        if (includeAurora)
+        {
+            providers.Add(SupportedDatabase.AuroraPostgreSql);
+            providers.Add(SupportedDatabase.AuroraMySql);
         }
 
         return providers;
@@ -155,7 +168,8 @@ public class IntegrationTestFixture : IAsyncLifetime
             IntegrationTestConfiguration.ShouldIncludeSnowflake,
             includeSapHana: IntegrationTestConfiguration.ShouldIncludeSapHana,
             includeInterBase: IntegrationTestConfiguration.ShouldIncludeInterBase,
-            includeAccess: IntegrationTestConfiguration.ShouldIncludeAccess);
+            includeAccess: IntegrationTestConfiguration.ShouldIncludeAccess,
+            includeAurora: IntegrationTestConfiguration.ShouldIncludeAurora);
 
         foreach (var provider in IntegrationTestConfiguration.EnabledProviders)
         {
