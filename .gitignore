@@ -88,3 +88,6 @@ ORACLE_TALK.md
 
 # testbed run output (ParallelTestOrchestrator)
 testbed-results.json
+
+__pycache__/
+*.pyc
