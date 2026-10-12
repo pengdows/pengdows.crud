@@ -54,7 +54,7 @@ def read_results(results):
         if not m:
             continue
         tfm, db = m.groups()
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         written = WRITTEN_RE.search(text)
         rows = [r for r in ROW_RE.findall(text) if r[0] == db]
         if not written or len(rows) != 1:
@@ -68,7 +68,7 @@ def read_doc(doc):
     cells = {}
     if not doc.exists():
         return cells
-    for line in doc.read_text().splitlines():
+    for line in doc.read_text(encoding="utf-8").splitlines():
         parts = [p.strip() for p in line.strip().strip("|").split("|")]
         if len(parts) == len(TFMS) + 1 and parts[0] in ALWAYS_ON + OPT_IN:
             for tfm, cell in zip(TFMS, parts[1:]):
@@ -111,6 +111,12 @@ def render(cells):
     return "\n".join(out) + "\n"
 
 
+def write_doc(doc, text):
+    """UTF-8 with LF endings whatever the host: the doc is committed that way (a Windows default is cp1252/CRLF)."""
+    with open(doc, "w", encoding="utf-8", newline="\n") as f:
+        f.write(text)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", default="TestResults/integration")
@@ -133,7 +139,7 @@ def main():
         if old is None or written > old[3]:
             cells[key] = (pas, fail, skip, written, label)
             updated += 1
-    doc.write_text(render(cells))
+    write_doc(doc, render(cells))
     print(f"{doc}: {updated} cell(s) updated against {label}")
     if stale:
         print(f"skipped {len(stale)} result(s) older than the last code change ({cutoff}Z): " + ", ".join(sorted(stale)))
