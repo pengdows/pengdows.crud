@@ -1,3 +1,5 @@
+using Xunit;
+using pengdows.crud.IntegrationTests.Infrastructure;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
 using Npgsql;
@@ -24,11 +26,14 @@ public class ServerConnectionLimitLiveProbeTests
 
     public ServerConnectionLimitLiveProbeTests(ITestOutputHelper output) => _output = output;
 
-    [Theory]
+    [SkippableTheory]
     [InlineData("postgres:15-alpine")]
     [InlineData("postgres:17-alpine")]
     public async Task ClampOn_SharesWhatTheRealServerAllowsBetweenTheRoles(string image)
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.PostgreSql),
+            "PostgreSql is not enabled for this test run.");
+
         var container = new ContainerBuilder()
             .WithImage(image)
             .WithEnvironment("POSTGRES_PASSWORD", Password)

@@ -75,6 +75,21 @@ public sealed class ParallelTestOrchestratorDispatchOrderTests
         Assert.StartsWith("Db2 [", ordered[0].ContainerName, StringComparison.Ordinal);
     }
 
+    // Listing the configurations (names, weights, images) must not build any container: the
+    // Testcontainers builders need a Docker endpoint just to be constructed, so building them up front
+    // made every test that only inspects the list fail wherever Docker is not running - including an
+    // Access-only run, which needs no Docker at all.
+    [Fact]
+    public void GetTestConfigurations_BuildsNoContainerUntilOneIsUsed()
+    {
+        var orchestrator = new ParallelTestOrchestrator(NullServiceProvider.Instance);
+
+        var configs = orchestrator.GetTestConfigurations();
+
+        Assert.NotEmpty(configs);
+        Assert.All(configs, c => Assert.False(c.IsContainerCreated, $"{c.ContainerName} built its container eagerly"));
+    }
+
     [Fact]
     public void GetTestConfigurations_HasTwoVersionsForDockerEngines()
     {

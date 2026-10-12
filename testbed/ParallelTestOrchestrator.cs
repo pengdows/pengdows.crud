@@ -298,12 +298,12 @@ public class ParallelTestOrchestrator
     {
         var configurations = new List<TestConfiguration>();
 
-        void AddLocal(string provider, ITestContainer container, Func<IDatabaseContext, IServiceProvider, TestProvider> factory, int weight)
+        void AddLocal(string provider, Func<ITestContainer> container, Func<IDatabaseContext, IServiceProvider, TestProvider> factory, int weight)
         {
             configurations.Add(new TestConfiguration
             {
                 ContainerName = provider, DatabaseProvider = provider, DatabaseVersion = "local", Image = null,
-                Container = container, TestProviderFactory = factory, StartupWeightSeconds = weight
+                ContainerFactory = container, TestProviderFactory = factory, StartupWeightSeconds = weight
             });
         }
 
@@ -320,25 +320,27 @@ public class ParallelTestOrchestrator
                 if (versions is { Count: > 0 } && !versions.Contains(version.Label) && !versions.Contains(version.Image))
                     continue;
 
-                var container = containerFactory(version.Image);
+                var image = version.Image;
+                var container = new Lazy<ITestContainer>(() => containerFactory(image));
                 configurations.Add(new TestConfiguration
                 {
                     ContainerName = $"{provider} [{version.Label}]", DatabaseProvider = provider,
                     DatabaseVersion = version.Label, Image = version.Image,
-                    Container = container, TestProviderFactory = (db, sp) => factory(container, db, sp),
+                    ContainerFactory = () => container.Value,
+                    TestProviderFactory = (db, sp) => factory(container.Value, db, sp),
                     StartupWeightSeconds = weight
                 });
             }
         }
 
-        AddLocal("SQLite", new SqliteTestContainer(), (db, sp) => new SqliteTestProvider(db, sp), 1);
-        AddLocal("DuckDB", new DuckDbTestContainer(), (db, sp) => new DuckDbTestProvider(db, sp), 1);
-        AddLocal("FlatFile", new FlatFileTestContainer(), (db, sp) => new FlatFileTestProvider(db, sp), 1);
+        AddLocal("SQLite", () => new SqliteTestContainer(), (db, sp) => new SqliteTestProvider(db, sp), 1);
+        AddLocal("DuckDB", () => new DuckDbTestContainer(), (db, sp) => new DuckDbTestProvider(db, sp), 1);
+        AddLocal("FlatFile", () => new FlatFileTestContainer(), (db, sp) => new FlatFileTestProvider(db, sp), 1);
         AddDocker("PostgreSQL", 5, image => image.Contains("fujitsu", StringComparison.OrdinalIgnoreCase)
                 ? new PostgreSqlTestContainer(image, port: 27500, useAdminPasswordEnvVar: true)
                 : new PostgreSqlTestContainer(image),
             (db, sp) => new PostgreSQLTestProvider(db, sp));
-        AddLocal("Spanner", new SpannerOmniTestContainer(), (db, sp) => new SpannerTestProvider(db, sp), 30);
+        AddLocal("Spanner", () => new SpannerOmniTestContainer(), (db, sp) => new SpannerTestProvider(db, sp), 30);
         AddDocker("MySQL", 8, image => new MySqlTestContainer(image), (db, sp) => new TestProvider(db, sp));
         AddDocker("MariaDB", 8, image => new MariaDbContainer(image), (db, sp) => new MariaDbTestProvider(db, sp));
         AddDocker("SQL Server", 25, image => new SqlServerTestContainer(image), (db, sp) => new SqlServerTestProvider(db, sp));
@@ -358,13 +360,13 @@ public class ParallelTestOrchestrator
         // sufficient, matching how plain MySQL is registered above. Weight 15: confirmed live
         // (this session) to reach "healthy" in ~15-20s, a bit slower than MySQL's single-node 8s
         // weight since the dev image boots a 2-node (master+leaf) cluster.
-        AddLocal("SingleStore", new SingleStoreTestContainer(), (db, sp) => new TestProvider(db, sp), 15);
+        AddLocal("SingleStore", () => new SingleStoreTestContainer(), (db, sp) => new TestProvider(db, sp), 15);
 
         // SybaseTestContainer has no per-image constructor (unlike AddDocker's providers) — it
         // pins one verified image internally (nguoianphu/docker-sybase) and handles ASE 16's
         // SIGSEGV-on-boot workaround (SAP KBA 3018138: trace flag -T11889 + restart) as part of
         // its own startup sequence, so it goes through AddLocal like SQLite/DuckDB/Snowflake.
-        AddLocal("Sybase ASE", new SybaseTestContainer(), (db, sp) => new SybaseTestProvider(db, sp), 45);
+        AddLocal("Sybase ASE", () => new SybaseTestContainer(), (db, sp) => new SybaseTestProvider(db, sp), 45);
 
         // Confirmed live end-to-end (icr.io/informix/informix-developer-database pulls
         // anonymously, no registry credentials required — verified with a fresh
@@ -373,32 +375,32 @@ public class ParallelTestOrchestrator
         // InformixDialect.cs's SupportsMerge/SupportsOffsetFetch comments for the two
         // confirmed-unsupported capabilities and TestProvider.cs's Informix-specific skips for
         // the rest. Promoted from opt-in to unconditional, matching Sybase's precedent.
-        AddLocal("Informix", new InformixTestContainer(), (db, sp) => new InformixTestProvider(db, sp), 20);
+        AddLocal("Informix", () => new InformixTestContainer(), (db, sp) => new InformixTestProvider(db, sp), 20);
 
         if (_includeSnowflake)
-            AddLocal("Snowflake", new SnowflakeTestContainer(), (db, sp) => new SnowflakeTestProvider(db, sp), 5);
+            AddLocal("Snowflake", () => new SnowflakeTestContainer(), (db, sp) => new SnowflakeTestProvider(db, sp), 5);
 
         // Weight 300: CONFIRMED live to take several minutes even with the image already pulled
         // locally — by far the slowest of any database here (compare Db2's 60s weight, itself the
         // previous high-water mark). Single pinned image internally, like Sybase/Informix.
         if (_includeSapHana)
-            AddLocal("SAP HANA", new HanaTestContainer(), (db, sp) => new HanaTestProvider(db, sp), 300);
+            AddLocal("SAP HANA", () => new HanaTestContainer(), (db, sp) => new HanaTestProvider(db, sp), 300);
 
         // Weight 5: connecting to an already-running, externally-managed container (see
         // InterBaseTestContainer.cs's class remarks) — no image pull/first-boot cost like every
         // other database here, just a connection retry loop.
         if (_includeInterBase)
-            AddLocal("InterBase", new InterBaseTestContainer(), (db, sp) => new InterBaseTestProvider(db, sp), 5);
+            AddLocal("InterBase", () => new InterBaseTestContainer(), (db, sp) => new InterBaseTestProvider(db, sp), 5);
 
         // Weight 5: no Docker image at all — just a local .accdb file create (ADOX) and a
         // handful of OLE DB round trips, similar cost shape to InterBase's connection-only case.
         if (_includeAccess)
-            AddLocal("Access", new AccessTestContainer(), (db, sp) => new AccessTestProvider(db, sp), 5);
+            AddLocal("Access", () => new AccessTestContainer(), (db, sp) => new AccessTestProvider(db, sp), 5);
 
         if (_includeAurora)
         {
-            AddLocal("Aurora PostgreSQL", new AuroraPostgreSqlTestContainer(), (db, sp) => new PostgreSQLTestProvider(db, sp), 5);
-            AddLocal("Aurora MySQL", new AuroraMySqlTestContainer(), (db, sp) => new TestProvider(db, sp), 5);
+            AddLocal("Aurora PostgreSQL", () => new AuroraPostgreSqlTestContainer(), (db, sp) => new PostgreSQLTestProvider(db, sp), 5);
+            AddLocal("Aurora MySQL", () => new AuroraMySqlTestContainer(), (db, sp) => new TestProvider(db, sp), 5);
         }
 
         // Names match ignoring case and spaces, so a SupportedDatabase-style "SapHana"/"SqlServer"
@@ -552,7 +554,22 @@ public class TestConfiguration
 {
     public required string ContainerName { get; set; }
     public required string DatabaseProvider { get; set; }
-    public required ITestContainer Container { get; set; }
+    private ITestContainer? _container;
+
+    /// <summary>
+    /// Builds <see cref="Container"/> on first use. Testcontainers builders need a Docker endpoint just to
+    /// be constructed, so a configuration that is only listed or filtered must not build one.
+    /// </summary>
+    public Func<ITestContainer>? ContainerFactory { get; set; }
+
+    public bool IsContainerCreated => _container is not null;
+
+    public ITestContainer Container
+    {
+        get => _container ??= ContainerFactory?.Invoke()
+                              ?? throw new InvalidOperationException($"{ContainerName} has no container or container factory.");
+        set => _container = value;
+    }
     public required Func<IDatabaseContext, IServiceProvider, TestProvider> TestProviderFactory { get; set; }
 
     /// <summary>

@@ -1,3 +1,5 @@
+using Xunit;
+using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Collections.Concurrent;
 using System.Data;
 using DotNet.Testcontainers.Builders;
@@ -33,6 +35,12 @@ public class ServerConnectionCeilingIntegrationTests : IAsyncLifetime
 
     public async Task InitializeAsync()
     {
+        if (!IntegrationTestConfiguration.IsEnabled(SupportedDatabase.PostgreSql))
+        {
+            // Skipped in the Fact body; nothing to start (INTEGRATION_ONLY / not enabled).
+            return;
+        }
+
         _container = new ContainerBuilder()
             .WithImage("postgres:15-alpine")
             .WithEnvironment("POSTGRES_PASSWORD", Password)
@@ -74,9 +82,12 @@ public class ServerConnectionCeilingIntegrationTests : IAsyncLifetime
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task ReadBurstThenWriteBurst_NeverExceedsTheServersConnectionCeiling()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.PostgreSql),
+            "PostgreSql is not enabled for this test run.");
+
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = _connectionString,

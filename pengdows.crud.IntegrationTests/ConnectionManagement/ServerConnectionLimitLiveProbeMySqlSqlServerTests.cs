@@ -1,3 +1,5 @@
+using Xunit;
+using pengdows.crud.IntegrationTests.Infrastructure;
 using System.Data.Common;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
@@ -27,12 +29,15 @@ public class ServerConnectionLimitLiveProbeMySqlSqlServerTests
 
     public ServerConnectionLimitLiveProbeMySqlSqlServerTests(ITestOutputHelper output) => _output = output;
 
-    [Theory]
+    [SkippableTheory]
     [InlineData(25, 0, 25)]
     [InlineData(100, 15, 15)]
     public async Task MySql_ClampOn_SharesTheLowerOfMaxConnectionsAndTheUserLimitBetweenTheRoles(
         int maxConnections, int maxUserConnections, int expected)
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.MySql),
+            "MySql is not enabled for this test run.");
+
         var container = new ContainerBuilder()
             .WithImage(MySqlImage)
             .WithEnvironment("MYSQL_ROOT_PASSWORD", MySqlPassword)
@@ -66,9 +71,12 @@ public class ServerConnectionLimitLiveProbeMySqlSqlServerTests
         }
     }
 
-    [Fact]
+    [SkippableFact]
     public async Task SqlServer_ClampOn_AnUnlimitedServerLeavesThePoolsAtTheProviderDefault()
     {
+        Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.SqlServer),
+            "SqlServer is not enabled for this test run.");
+
         var container = new ContainerBuilder()
             .WithImage(SqlServerImage)
             .WithEnvironment("MSSQL_SA_PASSWORD", SqlServerPassword)
