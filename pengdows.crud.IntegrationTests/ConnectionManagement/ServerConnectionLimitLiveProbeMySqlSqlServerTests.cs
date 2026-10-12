@@ -77,14 +77,7 @@ public class ServerConnectionLimitLiveProbeMySqlSqlServerTests
         Skip.IfNot(IntegrationTestConfiguration.IsEnabled(SupportedDatabase.SqlServer),
             "SqlServer is not enabled for this test run.");
 
-        var container = new ContainerBuilder()
-            .WithImage(SqlServerImage)
-            .WithEnvironment("MSSQL_SA_PASSWORD", SqlServerPassword)
-            .WithEnvironment("ACCEPT_EULA", "Y")
-            .WithPortBinding(0, 1433)
-            .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(1433))
-            .Build();
-        await container.StartAsync();
+        var container = await StartSqlServerAsync();
 
         try
         {
@@ -104,6 +97,33 @@ public class ServerConnectionLimitLiveProbeMySqlSqlServerTests
         {
             await container.StopAsync();
             await container.DisposeAsync();
+        }
+    }
+
+    // sqlservr occasionally dies with a fatal-error core dump while it starts (the container exits and the readiness
+    // exec reports "container is not running"). That is the vendor image, not the library under test, so a start
+    // that fails is retried on a fresh container; a server that starts and then misbehaves still fails the test.
+    private static async Task<IContainer> StartSqlServerAsync()
+    {
+        const int attempts = 3;
+        for (var attempt = 1; ; attempt++)
+        {
+            var container = new ContainerBuilder()
+                .WithImage(SqlServerImage)
+                .WithEnvironment("MSSQL_SA_PASSWORD", SqlServerPassword)
+                .WithEnvironment("ACCEPT_EULA", "Y")
+                .WithPortBinding(0, 1433)
+                .WithWaitStrategy(Wait.ForUnixContainer().UntilPortIsAvailable(1433))
+                .Build();
+            try
+            {
+                await container.StartAsync();
+                return container;
+            }
+            catch (Exception) when (attempt < attempts)
+            {
+                await container.DisposeAsync();
+            }
         }
     }
 

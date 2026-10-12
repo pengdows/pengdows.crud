@@ -900,6 +900,8 @@ while the test execs inside the SQL Server container it started. That is infrast
 class passes alone, 5 of 5 on net8.0 and net10.0 (also twice earlier), and it failed in 3 of the 4 full matrix runs
 with this identical signature, so the container is dying under the matrix's parallel load. Open (test
 infrastructure, DEC-011): run the live-probe tests in their own phase, or give that container its own memory limit.
+Resolved 2026-10-12: the container's own log shows `sqlservr` dying with a fatal-error core dump while it starts (not OOM,
+not the library), so the probe now retries a failed container start up to 3 times on a fresh container.
 
 Performance (uncontended acquire + release, one slot): blocking 66.3 -> 21.8 ns, async 77.2 -> 29.5 ns, same 48 B;
 with the writer turnstile 86.9 -> 44.9 ns and 93.4 -> 51.9 ns. A 32-thread blocking storm on a 2-8 slot PostgreSQL
