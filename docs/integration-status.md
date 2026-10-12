@@ -13,28 +13,28 @@ that was run for the release is green. Access runs only on Windows.
 
 | Database | net8.0 | net10.0 |
 |---|---|---|
-| Sqlite | 147 pass, 0 fail, 0 skip · 2026-10-12 11:38Z · dcfcd1c1+ | 147 pass, 0 fail, 0 skip · 2026-10-12 11:58Z · dcfcd1c1+ |
-| PostgreSql | 163 pass, 0 fail, 0 skip · 2026-10-12 11:38Z · dcfcd1c1+ | 163 pass, 0 fail, 0 skip · 2026-10-12 11:58Z · dcfcd1c1+ |
-| SqlServer | 150 pass, 0 fail, 0 skip · 2026-10-12 14:25Z · dcfcd1c1+ | 150 pass, 0 fail, 0 skip · 2026-10-12 14:27Z · dcfcd1c1+ |
-| MySql | 152 pass, 0 fail, 0 skip · 2026-10-12 11:37Z · dcfcd1c1+ | 152 pass, 0 fail, 0 skip · 2026-10-12 11:58Z · dcfcd1c1+ |
-| MariaDb | 151 pass, 0 fail, 0 skip · 2026-10-12 11:37Z · dcfcd1c1+ | 151 pass, 0 fail, 0 skip · 2026-10-12 11:58Z · dcfcd1c1+ |
-| Firebird | 146 pass, 0 fail, 0 skip · 2026-10-12 11:27Z · dcfcd1c1+ | 146 pass, 0 fail, 0 skip · 2026-10-12 11:46Z · dcfcd1c1+ |
-| CockroachDb | 157 pass, 0 fail, 0 skip · 2026-10-12 11:33Z · dcfcd1c1+ | 157 pass, 0 fail, 0 skip · 2026-10-12 11:54Z · dcfcd1c1+ |
-| DuckDB | 146 pass, 0 fail, 0 skip · 2026-10-12 11:36Z · dcfcd1c1+ | 146 pass, 0 fail, 0 skip · 2026-10-12 11:57Z · dcfcd1c1+ |
-| Oracle | 147 pass, 0 fail, 0 skip · 2026-10-12 11:35Z · dcfcd1c1+ | 147 pass, 0 fail, 0 skip · 2026-10-12 11:56Z · dcfcd1c1+ |
-| YugabyteDb | 161 pass, 0 fail, 0 skip · 2026-10-12 11:29Z · dcfcd1c1+ | 161 pass, 0 fail, 0 skip · 2026-10-12 11:48Z · dcfcd1c1+ |
-| TiDb | 151 pass, 0 fail, 0 skip · 2026-10-12 11:38Z · dcfcd1c1+ | 151 pass, 0 fail, 0 skip · 2026-10-12 11:58Z · dcfcd1c1+ |
-| FlatFile | 146 pass, 0 fail, 0 skip · 2026-10-12 11:39Z · dcfcd1c1+ | 146 pass, 0 fail, 0 skip · 2026-10-12 11:59Z · dcfcd1c1+ |
-| Db2 | 146 pass, 0 fail, 0 skip · 2026-10-12 11:24Z · dcfcd1c1+ | 146 pass, 0 fail, 0 skip · 2026-10-12 11:43Z · dcfcd1c1+ |
-| Informix | 146 pass, 0 fail, 0 skip · 2026-10-12 11:38Z · dcfcd1c1+ | 146 pass, 0 fail, 0 skip · 2026-10-12 11:58Z · dcfcd1c1+ |
-| SybaseASE | 146 pass, 0 fail, 0 skip · 2026-10-12 11:34Z · dcfcd1c1+ | 146 pass, 0 fail, 0 skip · 2026-10-12 11:55Z · dcfcd1c1+ |
-| Spanner | 146 pass, 0 fail, 0 skip · 2026-10-12 11:38Z · dcfcd1c1+ | 146 pass, 0 fail, 0 skip · 2026-10-12 11:56Z · dcfcd1c1+ |
-| SingleStore | 148 pass, 0 fail, 0 skip · 2026-10-12 11:35Z · dcfcd1c1+ | 148 pass, 0 fail, 0 skip · 2026-10-12 11:57Z · dcfcd1c1+ |
-| Snowflake | 146 pass, 0 fail, 0 skip · 2026-10-12 11:38Z · dcfcd1c1+ | 146 pass, 0 fail, 0 skip · 2026-10-12 10:49Z · e8d73d64 |
-| SapHana | 146 pass, 0 fail, 0 skip · 2026-10-12 11:10Z · e8d73d64 | 146 pass, 0 fail, 0 skip · 2026-10-12 11:16Z · e8d73d64 |
-| InterBase | 146 pass, 0 fail, 0 skip · 2026-10-12 11:04Z · e8d73d64 | 146 pass, 0 fail, 0 skip · 2026-10-12 11:05Z · e8d73d64 |
-| AuroraPostgreSql | 144 pass, 0 fail, 0 skip · 2026-10-12 13:50Z · dcfcd1c1+ | 144 pass, 0 fail, 0 skip · 2026-10-12 14:03Z · dcfcd1c1+ |
-| AuroraMySql | 144 pass, 0 fail, 0 skip · 2026-10-12 13:55Z · dcfcd1c1+ | 144 pass, 0 fail, 0 skip · 2026-10-12 14:08Z · dcfcd1c1+ |
+| Sqlite | 147 pass, 0 fail, 0 skip · 2026-10-12 15:11Z · 0d031db1 | 147 pass, 0 fail, 0 skip · 2026-10-12 15:57Z · 0d031db1 |
+| PostgreSql | 163 pass, 0 fail, 0 skip · 2026-10-12 15:10Z · 0d031db1 | 163 pass, 0 fail, 0 skip · 2026-10-12 15:57Z · 0d031db1 |
+| SqlServer | 150 pass, 0 fail, 0 skip · 2026-10-12 15:07Z · 0d031db1 | 150 pass, 0 fail, 0 skip · 2026-10-12 15:54Z · 0d031db1 |
+| MySql | 152 pass, 0 fail, 0 skip · 2026-10-12 15:09Z · 0d031db1 | 152 pass, 0 fail, 0 skip · 2026-10-12 15:56Z · 0d031db1 |
+| MariaDb | 151 pass, 0 fail, 0 skip · 2026-10-12 15:10Z · 0d031db1 | 151 pass, 0 fail, 0 skip · 2026-10-12 15:56Z · 0d031db1 |
+| Firebird | 146 pass, 0 fail, 0 skip · 2026-10-12 15:05Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:52Z · 0d031db1 |
+| CockroachDb | 157 pass, 0 fail, 0 skip · 2026-10-12 15:06Z · 0d031db1 | 157 pass, 0 fail, 0 skip · 2026-10-12 15:54Z · 0d031db1 |
+| DuckDB | 146 pass, 0 fail, 0 skip · 2026-10-12 15:09Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:56Z · 0d031db1 |
+| Oracle | 147 pass, 0 fail, 0 skip · 2026-10-12 16:27Z · 0d031db1 | 147 pass, 0 fail, 0 skip · 2026-10-12 16:29Z · 0d031db1 |
+| YugabyteDb | 161 pass, 0 fail, 0 skip · 2026-10-12 15:05Z · 0d031db1 | 161 pass, 0 fail, 0 skip · 2026-10-12 15:52Z · 0d031db1 |
+| TiDb | 151 pass, 0 fail, 0 skip · 2026-10-12 15:11Z · 0d031db1 | 151 pass, 0 fail, 0 skip · 2026-10-12 15:57Z · 0d031db1 |
+| FlatFile | 146 pass, 0 fail, 0 skip · 2026-10-12 15:21Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 16:06Z · 0d031db1 |
+| Db2 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:02Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:50Z · 0d031db1 |
+| Informix | 146 pass, 0 fail, 0 skip · 2026-10-12 15:12Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:57Z · 0d031db1 |
+| SybaseASE | 146 pass, 0 fail, 0 skip · 2026-10-12 15:07Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:54Z · 0d031db1 |
+| Spanner | 146 pass, 0 fail, 0 skip · 2026-10-12 14:56Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:43Z · 0d031db1 |
+| SingleStore | 148 pass, 0 fail, 0 skip · 2026-10-12 15:08Z · 0d031db1 | 148 pass, 0 fail, 0 skip · 2026-10-12 15:55Z · 0d031db1 |
+| Snowflake | 146 pass, 0 fail, 0 skip · 2026-10-12 14:58Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:45Z · 0d031db1 |
+| SapHana | 146 pass, 0 fail, 0 skip · 2026-10-12 15:02Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:49Z · 0d031db1 |
+| InterBase | 146 pass, 0 fail, 0 skip · 2026-10-12 15:12Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:57Z · 0d031db1 |
+| AuroraPostgreSql | 144 pass, 0 fail, 0 skip · 2026-10-12 15:21Z · 0d031db1 | 144 pass, 0 fail, 0 skip · 2026-10-12 16:06Z · 0d031db1 |
+| AuroraMySql | 144 pass, 0 fail, 0 skip · 2026-10-12 15:25Z · 0d031db1 | 144 pass, 0 fail, 0 skip · 2026-10-12 16:11Z · 0d031db1 |
 
 Opt-in, never recorded: Access.
 
