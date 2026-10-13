@@ -17,7 +17,8 @@ namespace CrudBenchmarks;
 ///
 /// Structurally mirrors EqualFootingCrudBenchmarks (SQLite) except:
 ///   - DuckDB file-based database instead of SQLite shared-cache in-memory
-///   - No EF Core (no DuckDB EF Core provider available) — Pengdows vs Dapper only
+///   - EF Core comparison is in the net10-only DuckDbEfCoreBenchmarks project using
+///     Skirrels' DuckDB.EFCoreProvider through pengdows.stormgate.EntityFrameworkCore
 ///   - DuckDB native types: INTEGER → int32, BOOLEAN → bool, DOUBLE → double,
 ///     TIMESTAMP → DateTime — zero coercion unlike SQLite's int64/TEXT returns
 ///   - [Id(true)] throughout: DuckDB INTEGER PRIMARY KEY has no AUTOINCREMENT;
@@ -26,6 +27,13 @@ namespace CrudBenchmarks;
 ///
 /// All operations open and close connections per call on both frameworks,
 /// matching the equal-footing methodology of EqualFootingCrudBenchmarks.
+///
+/// The pengdows context here runs in Standard mode (DuckDB honors it explicitly), so it has the pool governor
+/// but no single-writer serialization. The plain *_Dapper arms are ungoverned (fresh connection per operation).
+/// The *_DapperPinnedWriter arms are the hand-rolled single writer: one pinned writer connection behind a gate,
+/// reads on their own connections. The *_DapperSingleConnection arms put reads through that same connection and
+/// gate too. The *_PengdowsSingleWriter arms run pengdows in DbMode.SingleWriter, which is what Best selects for
+/// a DuckDB file. Retry-on-exception is not a writer design and is not benchmarked.
 ///
 /// pengdows.crud side uses the full TableGateway API:
 ///   - BuildCreate / BuildUpdateAsync / BuildDelete for write operations
@@ -39,6 +47,11 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     private const int SeedRows = 1000;
 
     private string _dbFile = null!;
+
+    // The hand-rolled equivalent of SingleWriter for the *_DapperPinnedWriter arms: one long-lived writer
+    // connection, with a gate so only one write runs at a time. Dapper has nothing like this built in.
+    private DuckDBConnection _dapperWriter = null!;
+    private readonly SemaphoreSlim _dapperWriteGate = new(1, 1);
 
     // pengdows.crud — Standard mode (connection-per-op)
     private DatabaseContext _pengdowsCtx = null!;
@@ -76,6 +89,18 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     private TableGateway<DuckBenchEntity, int> _singleGateway = null!;
     private ISqlContainer _readSingleScSingle = null!;
     private ISqlContainer _readListScSingle = null!;
+
+    // pengdows.crud — SingleWriter mode (governor + write turnstile, ephemeral connections). This is what
+    // DbMode.Best selects for a DuckDB file, so it is the mode a default user runs; the Standard arms above
+    // are kept for continuity with earlier runs.
+    private DatabaseContext _pengdowsWriterCtx = null!;
+    private TableGateway<DuckBenchEntity, int> _writerGateway = null!;
+    private ISqlContainer _readSingleScWriter = null!;
+    private ISqlContainer _readListScWriter = null!;
+    private ISqlContainer _filteredQueryScWriter = null!;
+    private ISqlContainer _updateScWriter = null!;
+    private ISqlContainer _deleteScWriter = null!;
+    private ISqlContainer _aggregateScWriter = null!;
 
     [Params(1, 100)] public int RecordCount { get; set; }
 
@@ -117,6 +142,9 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
                 "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES " +
                 string.Join(",", rows));
         }
+
+        _dapperWriter = new DuckDBConnection($"Data Source={_dbFile}");
+        _dapperWriter.Open();
 
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<DuckBenchEntity>();
@@ -190,6 +218,51 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
 
         _aggregateSc = _pengdowsCtx.CreateSqlContainer(
             "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
+
+        // SingleWriter context and the same containers built against it.
+        var cfgWriter = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source={_dbFile}",
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            DbMode = DbMode.SingleWriter
+        };
+        _pengdowsWriterCtx = new DatabaseContext(cfgWriter, DuckDBClientFactory.Instance, null, _typeMap);
+        _writerGateway = new TableGateway<DuckBenchEntity, int>(_pengdowsWriterCtx);
+
+        _readSingleScWriter = _writerGateway.BuildRetrieve(new[] { 1 });
+
+        _readListScWriter = _writerGateway.BuildBaseRetrieve("b");
+        _readListScWriter.Query.Append($" WHERE {_pengdowsWriterCtx.WrapObjectName("b.age")} > ");
+        _readListScWriter.Query.Append(_readListScWriter.MakeParameterName("Age"));
+        _readListScWriter.AddParameterWithValue("Age", DbType.Int32, 0);
+        _readListScWriter.Query.Append($" LIMIT {RecordCount}");
+
+        _filteredQueryScWriter = _writerGateway.BuildBaseRetrieve("b");
+        _filteredQueryScWriter.Query.Append($" WHERE {_pengdowsWriterCtx.WrapObjectName("b.is_active")} = ");
+        _filteredQueryScWriter.Query.Append(_filteredQueryScWriter.MakeParameterName("IsActive"));
+        _filteredQueryScWriter.AddParameterWithValue("IsActive", DbType.Boolean, true);
+        _filteredQueryScWriter.Query.Append($" AND {_pengdowsWriterCtx.WrapObjectName("b.age")} >= ");
+        _filteredQueryScWriter.Query.Append(_filteredQueryScWriter.MakeParameterName("MinAge"));
+        _filteredQueryScWriter.AddParameterWithValue("MinAge", DbType.Int32, 25);
+        _filteredQueryScWriter.Query.Append($" AND {_pengdowsWriterCtx.WrapObjectName("b.age")} <= ");
+        _filteredQueryScWriter.Query.Append(_filteredQueryScWriter.MakeParameterName("MaxAge"));
+        _filteredQueryScWriter.AddParameterWithValue("MaxAge", DbType.Int32, 45);
+        _filteredQueryScWriter.Query.Append($" LIMIT {RecordCount}");
+
+        _updateScWriter = await _writerGateway.BuildUpdateAsync(new DuckBenchEntity
+        {
+            Id = 1,
+            Name = UpdateFixedName,
+            Age = UpdateFixedAge,
+            Salary = 50000.0,
+            IsActive = UpdateFixedIsActive,
+            CreatedAt = _updateFixedCreatedAt
+        });
+
+        _deleteScWriter = _writerGateway.BuildDelete(0);
+
+        _aggregateScWriter = _pengdowsWriterCtx.CreateSqlContainer(
+            "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
     }
 
     [GlobalCleanup]
@@ -214,8 +287,17 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         _deleteSc?.Dispose();
         _aggregateSc?.Dispose();
 
+        _readSingleScWriter?.Dispose();
+        _readListScWriter?.Dispose();
+        _filteredQueryScWriter?.Dispose();
+        _updateScWriter?.Dispose();
+        _deleteScWriter?.Dispose();
+        _aggregateScWriter?.Dispose();
+
         _pengdowsCtx?.Dispose();
         _pengdowsSingleCtx?.Dispose();
+        _pengdowsWriterCtx?.Dispose();
+        _dapperWriter?.Dispose();
 
         foreach (var f in new[] { _dbFile, _dbFile + ".wal" })
         {
@@ -479,6 +561,309 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         }
 
         return count;
+    }
+
+    // ========================================================================
+    // PINNED-WRITER DAPPER ARMS
+    // Every write goes through one long-lived writer connection, one at a time (_dapperWriteGate).
+    // Compare with the *_Pengdows arms; the plain *_Dapper arms are the ungoverned baseline.
+    // ========================================================================
+
+    [Benchmark]
+    public async Task<int> Create_DapperPinnedWriter()
+    {
+        const string sql =
+            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES ($Id, $Name, $Age, $Salary, $IsActive, $CreatedAt)";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            var id = Interlocked.Increment(ref _createIdSeed);
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                count += await _dapperWriter.ExecuteAsync(sql, new
+                {
+                    Id = id,
+                    Name = $"Created {id}",
+                    Age = 25,
+                    Salary = 50000.0,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> Update_DapperPinnedWriter()
+    {
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                count += await _dapperWriter.ExecuteAsync(UpdateSql, new
+                {
+                    Name = UpdateFixedName,
+                    Age = UpdateFixedAge,
+                    Salary = 60000.0 + i,
+                    IsActive = UpdateFixedIsActive,
+                    CreatedAt = _updateFixedCreatedAt,
+                    Id = (i % SeedRows) + 1
+                });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> Delete_DapperPinnedWriter()
+    {
+        const string insertSql =
+            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES ($Id, $Name, $Age, $Salary, $IsActive, $CreatedAt)";
+        const string deleteSql = "DELETE FROM benchmark WHERE id = $Id";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            var id = Interlocked.Increment(ref _deleteIdSeed);
+
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                await _dapperWriter.ExecuteAsync(insertSql, new
+                {
+                    Id = id,
+                    Name = "ToDelete",
+                    Age = 99,
+                    Salary = 1.0,
+                    IsActive = false,
+                    CreatedAt = DateTime.UtcNow
+                });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                count += await _dapperWriter.ExecuteAsync(deleteSql, new { Id = id });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return count;
+    }
+
+    // ========================================================================
+    // SINGLE-CONNECTION DAPPER ARMS (reads)
+    // One connection and one lock, and everything (reads too) goes through them. Its write arms are the
+    // *_DapperPinnedWriter ones above (there is only the one connection).
+    // ========================================================================
+
+    [Benchmark]
+    public async Task<DuckBenchEntity?> ReadSingle_DapperSingleConnection()
+    {
+        DuckBenchEntity? result = null;
+        const string sql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = $Id";
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                result = await _dapperWriter.QueryFirstOrDefaultAsync<DuckBenchEntity>(
+                    sql, new { Id = (i % SeedRows) + 1 });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return result;
+    }
+
+    [Benchmark]
+    public async Task<List<DuckBenchEntity>> ReadList_DapperSingleConnection()
+    {
+        await _dapperWriteGate.WaitAsync();
+        try
+        {
+            var rows = await _dapperWriter.QueryAsync<DuckBenchEntity>(
+                $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > $Age LIMIT {RecordCount}",
+                new { Age = 30 });
+            return rows.AsList();
+        }
+        finally
+        {
+            _dapperWriteGate.Release();
+        }
+    }
+
+    [Benchmark]
+    public async Task<List<DuckBenchEntity>> FilteredQuery_DapperSingleConnection()
+    {
+        await _dapperWriteGate.WaitAsync();
+        try
+        {
+            var rows = await _dapperWriter.QueryAsync<DuckBenchEntity>(
+                $"SELECT id, name, age, salary, is_active, created_at FROM benchmark " +
+                $"WHERE is_active = TRUE AND age >= $MinAge AND age <= $MaxAge LIMIT {RecordCount}",
+                new { MinAge = 25, MaxAge = 45 });
+            return rows.AsList();
+        }
+        finally
+        {
+            _dapperWriteGate.Release();
+        }
+    }
+
+    [Benchmark]
+    public async Task<double> Aggregate_DapperSingleConnection()
+    {
+        double result = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                result = await _dapperWriter.ExecuteScalarAsync<double>(
+                    "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return result;
+    }
+
+    // ========================================================================
+    // PENGDOWS SINGLEWRITER ARMS
+    // The same operations as the *_Pengdows arms, on a DbMode.SingleWriter context (what Best selects for a
+    // DuckDB file). Compare these with the Dapper pinned-writer / single-connection arms.
+    // ========================================================================
+
+    [Benchmark]
+    public async Task<int> Create_PengdowsSingleWriter()
+    {
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            var id = Interlocked.Increment(ref _createIdSeed);
+            var entity = new DuckBenchEntity
+            {
+                Id = id,
+                Name = $"Created {id}",
+                Age = 25,
+                Salary = 50000.0,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
+            };
+            await using var sc = _writerGateway.BuildCreate(entity);
+            count += await sc.ExecuteNonQueryAsync();
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<DuckBenchEntity?> ReadSingle_PengdowsSingleWriter()
+    {
+        DuckBenchEntity? result = null;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            _readSingleScWriter.SetParameterValue("w0", (i % SeedRows) + 1);
+            result = await _writerGateway.LoadSingleAsync(_readSingleScWriter);
+        }
+
+        return result;
+    }
+
+    [Benchmark]
+    public async Task<List<DuckBenchEntity>> ReadList_PengdowsSingleWriter()
+    {
+        _readListScWriter.SetParameterValue("Age", 30);
+        return await _writerGateway.LoadListAsync(_readListScWriter);
+    }
+
+    [Benchmark]
+    public async Task<int> Update_PengdowsSingleWriter()
+    {
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            _updateScWriter.SetParameterValue("s2", 60000.0 + i);
+            _updateScWriter.SetParameterValue("k0", (i % SeedRows) + 1);
+            count += await _updateScWriter.ExecuteNonQueryAsync();
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> Delete_PengdowsSingleWriter()
+    {
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            var id = Interlocked.Increment(ref _deleteIdSeed);
+            var entity = new DuckBenchEntity
+            {
+                Id = id,
+                Name = "ToDelete",
+                Age = 99,
+                Salary = 1.0,
+                IsActive = false,
+                CreatedAt = DateTime.UtcNow
+            };
+            await using var ins = _writerGateway.BuildCreate(entity);
+            await ins.ExecuteNonQueryAsync();
+
+            _deleteScWriter.SetParameterValue("k0", id);
+            count += await _deleteScWriter.ExecuteNonQueryAsync();
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<List<DuckBenchEntity>> FilteredQuery_PengdowsSingleWriter()
+    {
+        _filteredQueryScWriter.SetParameterValue("IsActive", true);
+        _filteredQueryScWriter.SetParameterValue("MinAge", 25);
+        _filteredQueryScWriter.SetParameterValue("MaxAge", 45);
+        return await _writerGateway.LoadListAsync(_filteredQueryScWriter);
+    }
+
+    [Benchmark]
+    public async Task<double> Aggregate_PengdowsSingleWriter()
+    {
+        double result = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            result = await _aggregateScWriter.ExecuteScalarOrNullAsync<double>();
+        }
+
+        return result;
     }
 
     // ========================================================================

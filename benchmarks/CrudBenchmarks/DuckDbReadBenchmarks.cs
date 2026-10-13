@@ -34,7 +34,8 @@ public class DuckDbReadBenchmarks : IDisposable
 
     private string _dbFile = null!;
 
-    // Dapper uses a single persistent connection (avoids per-op open/close in the Dapper path)
+    // Seed connection, kept open: the *_DapperPinnedConnection arms reuse it for every call. The plain
+    // *_Dapper arms open a connection per call, like pengdows Standard.
     private DuckDBConnection _dapperConn = null!;
 
     // pengdows.crud uses Standard mode (connection-per-op — same as EqualFootingCrudBenchmarks)
@@ -121,8 +122,8 @@ public class DuckDbReadBenchmarks : IDisposable
 
     // ========================================================================
     // READ SINGLE
-    // Opens a new connection per call (pengdows Standard) or reuses the
-    // sentinel connection (Dapper) — same structure as EqualFootingCrudBenchmarks.
+    // pengdows Standard and the plain Dapper arm each open a connection per call; the
+    // *_DapperPinnedConnection arm reuses one connection (see its comment).
     // ========================================================================
 
     [Benchmark(Baseline = true)]
@@ -142,8 +143,27 @@ public class DuckDbReadBenchmarks : IDisposable
         return result;
     }
 
+    // Opens a connection per call, like the pengdows Standard arm — the like-for-like comparison.
     [Benchmark]
     public async Task<BenchEntity?> ReadSingle_Dapper()
+    {
+        BenchEntity? result = null;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
+            await conn.OpenAsync();
+            result = await conn.QueryFirstOrDefaultAsync<BenchEntity>(
+                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
+                new { Id = (i % SeedRows) + 1 });
+        }
+
+        return result;
+    }
+
+    // One pinned connection reused for every call: the floor for a reader that never pays open/close.
+    // Not comparable with the per-call pengdows arm; it shows what the open/close costs.
+    [Benchmark]
+    public async Task<BenchEntity?> ReadSingle_DapperPinnedConnection()
     {
         BenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
@@ -175,6 +195,18 @@ public class DuckDbReadBenchmarks : IDisposable
 
     [Benchmark]
     public async Task<List<BenchEntity>> ReadList_Dapper()
+    {
+        await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
+        await conn.OpenAsync();
+        var rows = await conn.QueryAsync<BenchEntity>(
+            // DuckDB does not support named parameters in LIMIT; inline the value directly.
+            $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT {RecordCount}",
+            new { Age = 30 });
+        return rows.AsList();
+    }
+
+    [Benchmark]
+    public async Task<List<BenchEntity>> ReadList_DapperPinnedConnection()
     {
         var rows = await _dapperConn.QueryAsync<BenchEntity>(
             // DuckDB does not support named parameters in LIMIT; inline the value directly.

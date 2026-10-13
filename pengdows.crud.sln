@@ -60,6 +60,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "testbed.DriverVersionMatrix
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "pengdows.crud.analyzers.codefixes", "tools\pengdows.crud.analyzers.codefixes\pengdows.crud.analyzers.codefixes.csproj", "{7FC9964C-E3A8-4DCF-9AB8-1B4B9C75EEBE}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DuckDbEfCoreBenchmarks", "benchmarks\DuckDbEfCoreBenchmarks\DuckDbEfCoreBenchmarks.csproj", "{22A337FD-5B57-4C3D-9200-F07027E7A0F2}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -406,6 +408,18 @@ Global
 		{7FC9964C-E3A8-4DCF-9AB8-1B4B9C75EEBE}.Release|x64.Build.0 = Release|Any CPU
 		{7FC9964C-E3A8-4DCF-9AB8-1B4B9C75EEBE}.Release|x86.ActiveCfg = Release|Any CPU
 		{7FC9964C-E3A8-4DCF-9AB8-1B4B9C75EEBE}.Release|x86.Build.0 = Release|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Debug|x64.Build.0 = Debug|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Debug|x86.Build.0 = Debug|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Release|x64.ActiveCfg = Release|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Release|x64.Build.0 = Release|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Release|x86.ActiveCfg = Release|Any CPU
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -417,5 +431,6 @@ Global
 		{AB996B0B-ABBE-45C8-A53C-11F82D49F840} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 		{94382531-FA1F-4BB1-8D09-84F5CA27BB23} = {66320409-64EC-F7C5-3DEF-65E7510DAAD1}
 		{7FC9964C-E3A8-4DCF-9AB8-1B4B9C75EEBE} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
+		{22A337FD-5B57-4C3D-9200-F07027E7A0F2} = {66320409-64EC-F7C5-3DEF-65E7510DAAD1}
 	EndGlobalSection
 EndGlobal

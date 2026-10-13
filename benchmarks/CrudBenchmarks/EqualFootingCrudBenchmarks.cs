@@ -24,6 +24,14 @@ namespace CrudBenchmarks;
 /// matching production-correct "open late, close early" behavior.
 /// No framework gets an unfair advantage from a pre-opened persistent connection.
 ///
+/// The pengdows context runs in SingleWriter mode (governor + write turnstile). The plain *_Dapper arms are
+/// ungoverned: a fresh connection per operation and no write coordination, which is what most Dapper code does
+/// and which fails under concurrent writers. The *_DapperPinnedWriter arms are the hand-rolled equivalent of
+/// SingleWriter (one pinned writer connection behind a gate, reads on their own connections). The
+/// *_DapperSingleConnection arms are the other common pattern: reads go through that same one connection and
+/// gate too (its writes are the *_DapperPinnedWriter arms). Retry-on-exception is not a writer design and is
+/// not benchmarked.
+///
 /// pengdows.crud side uses the full TableGateway API:
 ///   - BuildCreate for INSERT (framework generates dialect-correct INSERT, type-safe params)
 ///   - BuildRetrieve for keyed reads (reused container + SetParameterValue)
@@ -39,10 +47,20 @@ namespace CrudBenchmarks;
 public class EqualFootingCrudBenchmarks : IDisposable
 {
     private const string ConnStr = "Data Source=EqualFootingBench;Mode=Memory;Cache=Shared";
+
+    // The Dapper and EF arms run the same PRAGMA foreign_keys command that pengdows.crud runs on every checkout
+    // (Foreign Keys=True makes Microsoft.Data.Sqlite send it on every Open), so the arms do equal work. The
+    // bundled e_sqlite3 already defaults foreign keys to ON, so this changes the work done, not the behavior.
+    private const string PragmaConnStr = ConnStr + ";Foreign Keys=True";
     private const int SeedRows = 1000;
 
     // Sentinel keeps the shared-cache database alive
     private SqliteConnection _sentinel = null!;
+
+    // The hand-rolled equivalent of SingleWriter for the *_DapperPinnedWriter arms: one long-lived writer
+    // connection, with a gate so only one write runs at a time. Dapper has nothing like this built in.
+    private SqliteConnection _dapperWriter = null!;
+    private readonly SemaphoreSlim _dapperWriteGate = new(1, 1);
 
     // pengdows.crud
     private DatabaseContext _pengdowsContext = null!;
@@ -52,6 +70,10 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
     // Entity Framework options (DbContext created per operation)
     private DbContextOptions<EfBenchContext> _efOptions = null!;
+
+    private static readonly Func<EfBenchContext, int, Task<EfBenchEntity?>> CompiledReadSingle =
+        EF.CompileAsyncQuery((EfBenchContext context, int id) =>
+            context.Benchmarks.AsNoTracking().FirstOrDefault(entity => entity.Id == id));
 
     // Counter for unique IDs in delete benchmarks
     private int _deleteIdSeed = 100_000;
@@ -95,6 +117,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
         _sentinel = new SqliteConnection(ConnStr);
         _sentinel.Open();
 
+        _dapperWriter = new SqliteConnection(PragmaConnStr);
+        _dapperWriter.Open();
+
         // Create schema via sentinel
         await using (var cmd = _sentinel.CreateCommand())
         {
@@ -137,7 +162,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
         // Entity Framework options — DbContext created per operation
         _efOptions = new DbContextOptionsBuilder<EfBenchContext>()
-            .UseSqlite(ConnStr)
+            .UseSqlite(PragmaConnStr)
             .Options;
 
         // ---- Build reusable containers once ----
@@ -246,6 +271,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         _deleteSc?.Dispose();
         _aggregateSc?.Dispose();
         _pengdowsContext?.Dispose();
+        _dapperWriter?.Dispose();
         _sentinel?.Dispose();
     }
 
@@ -330,7 +356,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
                 tx.Rollback();
             }
 
-            await using (var dapperConn = new SqliteConnection(ConnStr))
+            await using (var dapperConn = new SqliteConnection(PragmaConnStr))
             {
                 await dapperConn.OpenAsync();
                 await using var tx = await dapperConn.BeginTransactionAsync();
@@ -369,7 +395,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
                 await tx.RollbackAsync();
             }
 
-            await using (var dapperDeleteConn = new SqliteConnection(ConnStr))
+            await using (var dapperDeleteConn = new SqliteConnection(PragmaConnStr))
             {
                 await dapperDeleteConn.OpenAsync();
                 await using var tx = await dapperDeleteConn.BeginTransactionAsync();
@@ -478,7 +504,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new SqliteConnection(ConnStr);
+            await using var conn = new SqliteConnection(PragmaConnStr);
             await conn.OpenAsync();
             count += await conn.ExecuteAsync(sql, new
             {
@@ -538,7 +564,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new SqliteConnection(ConnStr);
+            await using var conn = new SqliteConnection(PragmaConnStr);
             await conn.OpenAsync();
             result = await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(
                 sql, new { Id = (i % SeedRows) + 1 });
@@ -583,6 +609,34 @@ public class EqualFootingCrudBenchmarks : IDisposable
         return result;
     }
 
+    [Benchmark]
+    public async Task<EfBenchEntity?> ReadSingle_EntityFramework_Linq()
+    {
+        EfBenchEntity? result = null;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var ctx = new EfBenchContext(_efOptions);
+            result = await ctx.Benchmarks
+                .AsNoTracking()
+                .FirstOrDefaultAsync(entity => entity.Id == (i % SeedRows) + 1);
+        }
+
+        return result;
+    }
+
+    [Benchmark]
+    public async Task<EfBenchEntity?> ReadSingle_EntityFramework_Compiled()
+    {
+        EfBenchEntity? result = null;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await using var ctx = new EfBenchContext(_efOptions);
+            result = await CompiledReadSingle(ctx, (i % SeedRows) + 1);
+        }
+
+        return result;
+    }
+
     // ========================================================================
     // READ LIST BENCHMARKS
     // ========================================================================
@@ -609,7 +663,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     {
         const string sql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
-        await using var conn = new SqliteConnection(ConnStr);
+        await using var conn = new SqliteConnection(PragmaConnStr);
         await conn.OpenAsync();
         var rows = await conn.QueryAsync<DapperBenchEntity>(
             sql, new { Age = 30, Limit = RecordCount });
@@ -664,7 +718,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new SqliteConnection(ConnStr);
+            await using var conn = new SqliteConnection(PragmaConnStr);
             await conn.OpenAsync();
             count += await conn.ExecuteAsync(UpdateSql, new
             {
@@ -731,7 +785,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new SqliteConnection(ConnStr);
+            await using var conn = new SqliteConnection(PragmaConnStr);
             await conn.OpenAsync();
             await using var tx = await conn.BeginTransactionAsync();
             count += await conn.ExecuteAsync(deleteSql, new { Id = (i % SeedRows) + 1 }, tx);
@@ -791,7 +845,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
             {
-                await using var conn = new SqliteConnection(ConnStr);
+                await using var conn = new SqliteConnection(PragmaConnStr);
                 await conn.OpenAsync();
                 await conn.ExecuteAsync(insertSql, new
                 {
@@ -805,7 +859,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
             }
 
             {
-                await using var conn = new SqliteConnection(ConnStr);
+                await using var conn = new SqliteConnection(PragmaConnStr);
                 await conn.OpenAsync();
                 count += await conn.ExecuteAsync(deleteSql, new { Id = id });
             }
@@ -863,7 +917,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     {
         const string sql =
             "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge LIMIT @Limit";
-        await using var conn = new SqliteConnection(ConnStr);
+        await using var conn = new SqliteConnection(PragmaConnStr);
         await conn.OpenAsync();
         var rows = await conn.QueryAsync<DapperBenchEntity>(
             sql, new { IsActive = true, MinAge = 25, MaxAge = 45, Limit = RecordCount });
@@ -908,7 +962,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         double result = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var conn = new SqliteConnection(ConnStr);
+            await using var conn = new SqliteConnection(PragmaConnStr);
             await conn.OpenAsync();
             result = await conn.ExecuteScalarAsync<double>(
                 "SELECT AVG(salary) FROM benchmark WHERE is_active = 1");
@@ -987,7 +1041,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
             // Measure execute phase (includes open/close)
             sw.Restart();
-            await using var conn = new SqliteConnection(ConnStr);
+            await using var conn = new SqliteConnection(PragmaConnStr);
             await conn.OpenAsync();
             await conn.QueryFirstOrDefaultAsync<DapperBenchEntity>(sql, param);
             sw.Stop();
@@ -1029,6 +1083,223 @@ public class EqualFootingCrudBenchmarks : IDisposable
     }
 
     // ========================================================================
+    // PINNED-WRITER DAPPER ARMS
+    // The hand-rolled SingleWriter: every write goes through one long-lived writer connection, one at a
+    // time (_dapperWriteGate). Reads stay on per-operation connections, as in the arms above. Compare these
+    // with the *_Pengdows arms; the plain *_Dapper arms are the ungoverned baseline.
+    // ========================================================================
+
+    [Benchmark]
+    public async Task<int> Create_DapperPinnedWriter()
+    {
+        const string sql =
+            "INSERT INTO benchmark (name, age, salary, is_active, created_at) VALUES (@Name, @Age, @Salary, @IsActive, @CreatedAt)";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                count += await _dapperWriter.ExecuteAsync(sql, new
+                {
+                    Name = $"Created {i}",
+                    Age = 25,
+                    Salary = 50000.0,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow.ToString("O")
+                });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> Update_DapperPinnedWriter()
+    {
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                count += await _dapperWriter.ExecuteAsync(UpdateSql, new
+                {
+                    Name = UpdateFixedName,
+                    Age = UpdateFixedAge,
+                    Salary = 60000.0 + i,
+                    IsActive = UpdateFixedIsActive,
+                    CreatedAt = _updateFixedCreatedAt,
+                    Id = (i % SeedRows) + 1
+                });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> DeleteOnly_DapperPinnedWriter()
+    {
+        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                await using var tx = await _dapperWriter.BeginTransactionAsync();
+                count += await _dapperWriter.ExecuteAsync(deleteSql, new { Id = (i % SeedRows) + 1 }, tx);
+                await tx.RollbackAsync();
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return count;
+    }
+
+    [Benchmark]
+    public async Task<int> DeleteInsertCycle_DapperPinnedWriter()
+    {
+        const string insertSql =
+            "INSERT INTO benchmark (id, name, age, salary, is_active, created_at) VALUES (@Id, @Name, @Age, @Salary, @IsActive, @CreatedAt)";
+        const string deleteSql = "DELETE FROM benchmark WHERE id = @Id";
+        var count = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            var id = Interlocked.Increment(ref _deleteIdSeed);
+
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                await _dapperWriter.ExecuteAsync(insertSql, new
+                {
+                    Id = id,
+                    Name = "ToDelete",
+                    Age = 99,
+                    Salary = 1.0,
+                    IsActive = false,
+                    CreatedAt = DateTime.UtcNow.ToString("O")
+                });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                count += await _dapperWriter.ExecuteAsync(deleteSql, new { Id = id });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return count;
+    }
+
+    // ========================================================================
+    // SINGLE-CONNECTION DAPPER ARMS (reads)
+    // The other common pattern: one connection and one lock, and *everything* (reads too) goes through
+    // them. Its write arms are the *_DapperPinnedWriter ones above (there is only the one connection), so
+    // only the reads are added here.
+    // ========================================================================
+
+    [Benchmark]
+    public async Task<DapperBenchEntity?> ReadSingle_DapperSingleConnection()
+    {
+        DapperBenchEntity? result = null;
+        const string sql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id";
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                result = await _dapperWriter.QueryFirstOrDefaultAsync<DapperBenchEntity>(
+                    sql, new { Id = (i % SeedRows) + 1 });
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return result;
+    }
+
+    [Benchmark]
+    public async Task<List<DapperBenchEntity>> ReadList_DapperSingleConnection()
+    {
+        const string sql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT @Limit";
+        await _dapperWriteGate.WaitAsync();
+        try
+        {
+            var rows = await _dapperWriter.QueryAsync<DapperBenchEntity>(
+                sql, new { Age = 30, Limit = RecordCount });
+            return rows.ToList();
+        }
+        finally
+        {
+            _dapperWriteGate.Release();
+        }
+    }
+
+    [Benchmark]
+    public async Task<List<DapperBenchEntity>> FilteredQuery_DapperSingleConnection()
+    {
+        const string sql =
+            "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE is_active = @IsActive AND age >= @MinAge AND age <= @MaxAge LIMIT @Limit";
+        await _dapperWriteGate.WaitAsync();
+        try
+        {
+            var rows = await _dapperWriter.QueryAsync<DapperBenchEntity>(
+                sql, new { IsActive = true, MinAge = 25, MaxAge = 45, Limit = RecordCount });
+            return rows.ToList();
+        }
+        finally
+        {
+            _dapperWriteGate.Release();
+        }
+    }
+
+    [Benchmark]
+    public async Task<double> Aggregate_DapperSingleConnection()
+    {
+        double result = 0;
+        for (var i = 0; i < RecordCount; i++)
+        {
+            await _dapperWriteGate.WaitAsync();
+            try
+            {
+                result = await _dapperWriter.ExecuteScalarAsync<double>(
+                    "SELECT AVG(salary) FROM benchmark WHERE is_active = 1");
+            }
+            finally
+            {
+                _dapperWriteGate.Release();
+            }
+        }
+
+        return result;
+    }
+
+    // ========================================================================
     // CONNECTION HOLD TIME
     // Measures how long each framework holds a database connection open
     // for a single-row read operation (open → execute → close).
@@ -1051,7 +1322,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
         // released, not before disposal runs. An `await using` declaration defers
         // DisposeAsync() to end-of-method, which would stop the watch before paying that cost.
         var sw = Stopwatch.StartNew();
-        var conn = new SqliteConnection(ConnStr);
+        var conn = new SqliteConnection(PragmaConnStr);
         try
         {
             await conn.OpenAsync();
