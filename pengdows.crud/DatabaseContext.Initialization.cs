@@ -441,14 +441,13 @@ public partial class DatabaseContext
             // embed the application name in session SQL (e.g. Oracle DBMS_APPLICATION_INFO) get
             // the correct rw/ro-suffixed name. GetFinalSessionSettings produces exactly ONE
             // optimized string per pool type (baseline + intent) for a single RTT on the hot path.
-            var rwAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
+            _sessionSettingsRwAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
                 ? null
                 : effectiveApplicationName + WriteApplicationNameSuffix;
-            var roAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
+            _sessionSettingsRoAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
                 ? null
                 : effectiveApplicationName + ReadOnlyApplicationNameSuffix;
-            _cachedReadWriteSessionSettings = _dialect.GetFinalSessionSettings(readOnly: false, rwAppName);
-            _cachedReadOnlySessionSettings  = _dialect.GetFinalSessionSettings(readOnly: true,  roAppName);
+            CacheSessionSettings();
 
             // Validate read-only connection if an explicit RO connection string was provided
             if (!string.IsNullOrWhiteSpace(configuration.ReadOnlyConnectionString) &&

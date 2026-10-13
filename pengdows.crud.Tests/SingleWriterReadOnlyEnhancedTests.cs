@@ -138,9 +138,12 @@ public class SingleWriterReadOnlyEnhancedTests
             // but session-level settings should still be applied for logical read-only behavior
             if (connectionString.Contains("Sqlite"))
             {
-                // In-memory SQLite: no Mode=ReadOnly in connection string, and no PRAGMA query_only SQL
+                // In-memory SQLite: no Mode=ReadOnly in connection string, and query_only is never turned ON.
+                // (The session settings do put it back OFF on every checkout, so a connection a caller left
+                // query_only can't fail the next write or a transaction's BEGIN IMMEDIATE; see SqliteQueryOnlySessionTests.)
                 Assert.DoesNotContain(readOnlyConnection.ConnectionStringHistory, cs => cs.Contains("Mode=ReadOnly"));
-                Assert.DoesNotContain(readOnlyConnection.ExecutedNonQueryTexts, c => c.Contains("query_only"));
+                Assert.DoesNotContain(readOnlyConnection.ExecutedNonQueryTexts,
+                    c => c.Contains("query_only = ON", StringComparison.OrdinalIgnoreCase));
             }
         }
 

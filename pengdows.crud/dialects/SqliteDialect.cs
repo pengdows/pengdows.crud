@@ -200,20 +200,63 @@ internal class SqliteDialect : SqlDialect
         return "SELECT sqlite_version()";
     }
 
-    // foreign_keys is per-connection state, so it is set on every checkout. journal_mode = WAL is
-    // stored in the database file: it runs once per context (GetDatabaseInitializationSql), on a
-    // write-capable connection only (REL-005; it ran on every checkout, read-only ones included).
+    // foreign_keys and query_only are per-connection state, so both are set on every checkout, read and write alike.
+    // The provider's pool hands a returned physical connection to the next checkout, so whatever one caller set
+    // is still there for the next unless it is put back. query_only is always OFF: pengdows.crud never turns it on
+    // (read-only is Mode=ReadOnly, below), and a connection left query_only by a caller would fail the next write
+    // with SQLITE_READONLY, or fail a read transaction at BEGIN (SQLite refuses BEGIN IMMEDIATE on a query_only
+    // connection, and Microsoft.Data.Sqlite begins every transaction that way). Both pragmas travel in the one
+    // session command. journal_mode = WAL is stored in the database file: it runs once per context
+    // (GetDatabaseInitializationSql), on a write-capable connection only (REL-005; it ran on every checkout,
+    // read-only ones included).
+    //
+    // synchronous = NORMAL is added when, and only when, the database really is in WAL: there it keeps every committed
+    // transaction through an application crash and risks only the newest commits in a power failure (never corruption),
+    // and it saves the sync FULL does on every commit. In a rollback journal NORMAL can corrupt on power loss, so a
+    // database that could not get WAL (memory, some network file systems) keeps SQLite's own default. It is
+    // per-connection state like the other two, so it is put back on every checkout too.
     public override string GetBaseSessionSettings()
     {
-        return "PRAGMA foreign_keys = ON;";
+        return _walActive
+            ? "PRAGMA foreign_keys = ON; PRAGMA query_only = OFF; PRAGMA synchronous = NORMAL;"
+            : "PRAGMA foreign_keys = ON; PRAGMA query_only = OFF;";
     }
 
+    private volatile bool _walActive;
+
     internal override string? GetDatabaseInitializationSql() => "PRAGMA journal_mode = WAL;";
+
+    // SQLite's advice for a long-lived process is PRAGMA optimize=0x10002 when it starts (and periodically). The
+    // analysis_limit keeps the work bounded on a large database and is put back so it does not stay on a connection the
+    // context keeps (SingleConnection's pinned one is the initialization connection).
+    internal override string? GetDatabaseMaintenanceSql() =>
+        "PRAGMA analysis_limit = 400; PRAGMA optimize = 0x10002; PRAGMA analysis_limit = 0;";
+
+    internal override bool ObserveDatabaseInitialization(ITrackedConnection connection)
+    {
+        var wal = false;
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "PRAGMA journal_mode";
+            wal = string.Equals(Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture), "wal",
+                StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Could not read the SQLite journal mode; synchronous stays at the database default.");
+        }
+
+        var changed = wal != _walActive;
+        _walActive = wal;
+        return changed;
+    }
 
     // Read-only enforcement for SQLite uses Mode=ReadOnly in the connection string (see
     // GetReadOnlyConnectionString and ApplyConnectionSettingsCore), which opens the database
     // file read-only at the OS level. This is stronger and more reliable than PRAGMA query_only,
-    // which is session-scoped and can be reset by any caller on the same connection.
+    // which is session-scoped and can be reset by any caller on the same connection, and unlike
+    // query_only it leaves BEGIN IMMEDIATE working, so a read transaction can still begin.
     // No session SQL or transaction SQL is used for read-only enforcement.
     public override string? GetReadOnlyConnectionParameter()
     {

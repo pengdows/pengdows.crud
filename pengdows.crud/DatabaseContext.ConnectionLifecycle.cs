@@ -665,7 +665,8 @@ public partial class DatabaseContext
     private async ValueTask ExecuteDatabaseInitializationAsync(
         ITrackedConnection connection, bool useAsync, CancellationToken cancellationToken)
     {
-        var sql = (Dialect as pengdows.crud.dialects.SqlDialect)?.GetDatabaseInitializationSql();
+        var dialect = Dialect as pengdows.crud.dialects.SqlDialect;
+        var sql = dialect?.GetDatabaseInitializationSql();
         if (string.IsNullOrWhiteSpace(sql))
         {
             return;
@@ -683,6 +684,14 @@ public partial class DatabaseContext
             {
                 cmd.ExecuteNonQuery();
             }
+
+            // What that SQL actually did can decide the session settings (SQLite: synchronous = NORMAL only in WAL).
+            if (dialect!.ObserveDatabaseInitialization(connection))
+            {
+                CacheSessionSettings();
+            }
+
+            await ExecuteDatabaseMaintenanceAsync(dialect, connection, useAsync, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -698,6 +707,55 @@ public partial class DatabaseContext
                     Product, ex);
             }
         }
+    }
+
+    /// <summary>
+    /// Runs the dialect's once-per-context maintenance (SQLite: PRAGMA optimize) as its own command, best effort: it
+    /// may need a lock, so it waits a couple of seconds at most, and a failure is logged and never fails the context.
+    /// </summary>
+    private async ValueTask ExecuteDatabaseMaintenanceAsync(
+        pengdows.crud.dialects.SqlDialect dialect, ITrackedConnection connection, bool useAsync,
+        CancellationToken cancellationToken)
+    {
+        var sql = dialect.GetDatabaseMaintenanceSql();
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return;
+        }
+
+        try
+        {
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 2;
+            if (useAsync && cmd is DbCommand dbCommand)
+            {
+                await dbCommand.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                cmd.ExecuteNonQuery();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Database maintenance was skipped for {Name}; it will run on the next start.", Name);
+        }
+    }
+
+    /// <summary>
+    /// Builds the one session-settings string per pool type (baseline + intent) the first open of a connection runs.
+    /// Called when the application names are known, and again if database initialization changed what the dialect
+    /// builds (SQLite decides synchronous from whether the database went into WAL).
+    /// </summary>
+    private void CacheSessionSettings()
+    {
+        _cachedReadWriteSessionSettings = _dialect!.GetFinalSessionSettings(readOnly: false, _sessionSettingsRwAppName);
+        _cachedReadOnlySessionSettings = _dialect.GetFinalSessionSettings(readOnly: true, _sessionSettingsRoAppName);
     }
 
     /// <summary>

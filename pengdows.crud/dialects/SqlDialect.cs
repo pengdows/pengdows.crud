@@ -3725,6 +3725,21 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual string? GetDatabaseInitializationSql() => null;
 
     /// <summary>
+    /// Maintenance run once per context right after the database initialization SQL, as its own best-effort command with
+    /// a short timeout (it may need a lock; a locked database must not stall or fail startup). <c>null</c> when there is
+    /// none. Never run on a read-only context.
+    /// </summary>
+    internal virtual string? GetDatabaseMaintenanceSql() => null;
+
+    /// <summary>
+    /// Called once on the initialization connection after the database initialization SQL ran, so a dialect can read
+    /// what that SQL actually did (SQLite: whether the database went into WAL, which decides whether
+    /// <c>synchronous = NORMAL</c> is safe). Returns <c>true</c> when the session settings this dialect builds changed
+    /// and must be computed again.
+    /// </summary>
+    internal virtual bool ObserveDatabaseInitialization(ITrackedConnection connection) => false;
+
+    /// <summary>
     /// The DbType a parameter must take after <see cref="ISqlContainer.SetParameterValue"/> gave it
     /// <paramref name="newValue"/>, prepared as <paramref name="preparedValue"/>; <c>null</c> keeps
     /// the parameter's DbType. For a dialect whose prepared value's representation depends on the

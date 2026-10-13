@@ -173,6 +173,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool? _snapshotIsolationPrefetch;
     private bool _sessionSettingsDetectionCompleted;
     private string? _cachedReadOnlySessionSettings;
+    private string? _sessionSettingsRwAppName;
+    private string? _sessionSettingsRoAppName;
     private string? _cachedReadWriteSessionSettings;
     // Set to true when the corresponding DataSource has session settings baked into its
     // startup Options parameter; allows skipping the per-checkout SET round-trip.

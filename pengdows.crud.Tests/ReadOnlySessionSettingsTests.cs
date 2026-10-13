@@ -82,8 +82,11 @@ public class ReadOnlySessionSettingsTests
 
     // Regression guard: these dialects must NOT produce session SQL for read-only enforcement —
     // they rely on connection string parameters (access_mode, Mode=ReadOnly) or server permissions.
+    // SQLite's session settings do carry "PRAGMA query_only = OFF" (put back on every checkout, because a caller can
+    // leave it ON on a pooled connection); turning it ON is what must never appear, since SQLite then refuses
+    // BEGIN IMMEDIATE and a read transaction could not begin (SqliteQueryOnlySessionTests).
     [Theory]
-    [InlineData(SupportedDatabase.Sqlite, "PRAGMA query_only")]
+    [InlineData(SupportedDatabase.Sqlite, "PRAGMA query_only = ON")]
     [InlineData(SupportedDatabase.DuckDB, "SET access_mode")]
     [InlineData(SupportedDatabase.Snowflake, "TRANSACTION_READ_ONLY")]
     public void GetFinalSessionSettings_ReadOnly_DoesNotContainRemovedSql(
