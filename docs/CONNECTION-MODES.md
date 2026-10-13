@@ -89,11 +89,16 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 
 ## 4. Session Settings & Read-Only
 
-- SessionSettingsPreamble is applied once per physical connection, at open.
-  - Not reapplied when a connection is reused from pool or pinned.
-- Session settings are enforced at physical connection open. Do not mutate session-scoped settings mid-connection when using pooling.
+- SessionSettingsPreamble is applied once per `TrackedConnection` wrapper, at its first open.
+  - Pinned (`SingleConnection`): the one wrapper lives for the context, so it runs once.
+  - Ephemeral (`Standard`, `SingleWriter`): a wrapper is created per operation, so it runs on every checkout, even when the provider's pool returns an already-open physical connection. This is deliberate; see `docs/connection/connection-modes.md`, section 4.
+- Do not mutate session-scoped settings mid-connection when using pooling.
 - ReadWriteMode.ReadOnly:
-  - Every opened connection must enforce read-only at connection string and session level (e.g., `ApplicationIntent=ReadOnly`, `SET TRANSACTION READ ONLY`, `PRAGMA query_only = 1`).
+  - Every opened connection must enforce read-only at the strongest mechanism the provider
+    supports (for example, `ApplicationIntent=ReadOnly`, `SET TRANSACTION READ ONLY`, or
+    SQLite's `Mode=ReadOnly` connection-string parameter). SQLite resets session-scoped
+    `query_only` to `OFF` rather than using it for read-only enforcement; see the detailed
+    connection-mode contract.
   - Write attempts bubble provider errors (not pre-guarded in code).
 
 ## 5. Connection Sharing & Transactions

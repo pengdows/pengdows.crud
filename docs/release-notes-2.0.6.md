@@ -322,6 +322,23 @@ every CLR type and every database, whether the value round-trips and why not whe
 - Firebird `NONE`-charset text with non-Latin characters reads back correctly when another driver in
   the process has registered .NET code pages (DRY-020).
 
+## SQLite
+
+- **A connection a caller changed no longer carries the change to the next operation.** Microsoft.Data.Sqlite's pool
+  returns a connection to the next checkout exactly as the last caller left it, and SQLite has no connection-string
+  keyword for most settings. pengdows.crud put back `foreign_keys` on every checkout; it now also puts back
+  `query_only` (always OFF: SQLite refuses `BEGIN IMMEDIATE` on a `query_only` connection and Microsoft.Data.Sqlite
+  begins every transaction that way, so a poisoned connection broke the next write, or a read transaction at BEGIN).
+  They travel in the same single command, so a checkout costs no extra round trip.
+- **`synchronous = NORMAL` when the database is in WAL mode (behavior change).** pengdows.crud already put every
+  write-capable SQLite file into WAL mode; in WAL, NORMAL keeps every committed transaction through an application
+  crash and risks only the newest commits in a power failure (the database is never corrupted), and it saves the sync
+  FULL does on every commit. It is applied only when the database really went into WAL, so a context that cannot get WAL
+  (a memory database, some network file systems) keeps SQLite's own default. It is put back on every checkout. There
+  is no setting to opt out in 2.0.6 (see `docs/FUTURE_WORK.md`, SQLITE-006).
+- **`PRAGMA optimize` once at startup.** SQLite's advice for a long-lived process, run as its own best-effort command
+  that waits at most two seconds for a lock, so a file another process is writing never stalls or fails startup.
+
 ## Aurora PostgreSQL
 
 - An Aurora PostgreSQL cluster is now detected as `AuroraPostgreSql` (its `Product`), where it was reported as

@@ -62,7 +62,10 @@ loss rate under this kind of workload varies with machine and load, so treat any
 competitor percentage as a snapshot, not a constant — the invariant is the part of this claim
 that travels. Run the benchmark on your own hardware to reproduce it. The `busy_timeout` value
 is a hardcoded constant in the benchmark (`BusyTimeoutMs`), not a `[Params]` fixture, so
-comparing settings means editing that constant and re-running.
+comparing settings means editing that constant and re-running. That workload runs on a shared-cache in-memory database, where a lock conflict is `SQLITE_LOCKED`, which, as SQLite documents it, the
+busy handler does not retry. Against a WAL file on disk (2026-10-13, `benchmarks/CrudBenchmarks/results/sqlite-file-writer-patterns-run-2026-10-13.md`)
+the same kind of storm lost no writes for any arm, and the uncoordinated Dapper arm ran 5 to 6 times slower than the coordinated ones, so there the
+protection shows as time, not as lost writes; losses appear when the queue takes longer to drain than the command timeout.
 
 This same posture — respecting the database's real constraints instead of assuming
 unlimited concurrency, unlimited query-optimizer patience, or a provider that will quietly
@@ -109,11 +112,22 @@ SQLite gets special treatment in a general-purpose tool, it's per-driver special
 connection for sqlite3" default), not a policy that would also apply if pointed at
 PostgreSQL. The tools that *do* fully automate SQLite write-serialization well —
 GRDB.swift's `DatabasePool` (a single pinned writer `SerializedDatabase` plus a separate
-reader pool), Android's `SQLiteConnectionPool`, Python's `peewee.SqliteQueueDatabase`, and
-.NET's `sqlite-net-pcl` — are all SQLite-dedicated, and all pin a single physical connection
-for the writer instead of governing admission over ephemeral ones; `sqlite-net-pcl` goes
-further and locks every operation, reads included, discarding read concurrency entirely.
-Microsoft Access/ACE has the same shape of problem and nobody was found to solve it either.
+reader pool), Android's `SQLiteConnectionPool`, Python's `peewee.SqliteQueueDatabase`, Rust's
+`sqlite-rwc` and `sqlx-sqlite-conn-mgr` (a read pool plus a write pool of exactly one
+connection, which goes back to the pool after each use and closes after 30 seconds idle by
+default), and .NET's `sqlite-net-pcl`, `EntityFrameworkCore.Sqlite.Concurrency` (a `Channel`
+drained by one background writer) and `PepperX.SqliteGate` (a single-writer queue keyed on the
+database file) — are all SQLite-dedicated, and each pins a single physical connection for the
+writer, retains it in a size-1 pool, or queues writes to one writer, instead of governing
+admission over ephemeral ones. `sqlite-net-pcl` funnels every operation, reads included,
+through one shared connection per connection string (an application `Monitor` lock, which its
+default `FullMutex` flag skips in favor of SQLite's own mutex; transactions take a separate
+lock), so it gives up read concurrency entirely. The closest precedent for the ephemeral half
+is SQLAlchemy 1.4 and earlier, whose default pool for file-backed SQLite was `NullPool` (a
+physical connection opened at checkout and closed on return, documented as suiting SQLite's
+coarse file locking); it had no write admission, so contention went to SQLite's file lock,
+and 2.0 changed the default to `QueuePool`. Microsoft Access/ACE has the same shape of
+problem and nobody was found to solve it either.
 SQL Server Compact is a real historical precedent for the same failure mode, independent of
 SQLite: it nominally permits multiple writer connections, but concurrent writers on
 logically independent rows could still deadlock through shared index-page locks, and its
@@ -158,10 +172,29 @@ policy is decoupled from connection identity.** GRDB/Peewee-style designs encode
 writer connection"; this library encodes "one writer = one unit of admitted write capacity" — the
 thing enforcing the correctness guarantee is not the thing most likely to fail.
 
+"Ephemeral" describes the lease, not necessarily the physical connection: each write checks a
+connection out and back in, and the provider's own pool (Microsoft.Data.Sqlite pools by default
+since 6.0) may keep the physical connection open between writes. What differs from a pinned
+writer is that nothing in the concurrency mechanism depends on that physical connection
+surviving. The price is the per-write check-out; what it buys is the write-storm result above
+(no failed writes, whatever `busy_timeout` is). Microbenchmarks of tiny writes against
+a named shared-cache SQLite memory database show a pinned-writer Dapper arm several times faster than any per-operation arm,
+because it never checks a connection out, and on a DuckDB file the gap is 18 to 25%
+(`benchmarks/CrudBenchmarks/README.md`, "Reading the Dapper arms"). The file-backed SQLite
+measurement is now also present: on a WAL file, coordinated arms completed the write storm in
+about 70–76 ms while uncoordinated per-operation Dapper completed it in about 440–460 ms, with
+no lost writes at the tested timeout. The mixed reader/writer run also shows the tradeoff: the
+default fair turnstile protects writer progress but permits fewer concurrent reads; disabling
+fairness is the explicit throughput option.
+
 Treat this as a strong, specifically-researched claim, not an unqualified absolute:
 re-verify against current competitors before repeating it externally, since the DAL/ORM
 landscape moves; the mechanism itself is real, tested, and described in full in principle
-5.
+5. It was re-verified on 2026-10-13 against the libraries named above (their published docs
+and, for `sqlite-net-pcl`, its source); several of the .NET and Rust entries rest on package
+and crate documentation, not on running them; apart from `EntityFrameworkCore.Sqlite.Concurrency`'s
+optional write-queue capacity, none of those pages describe queue limits, and none describe
+writer-versus-reader scheduling.
 
 ## 1. The database is the source of truth
 

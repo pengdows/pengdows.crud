@@ -97,8 +97,11 @@ database-agnostic policy decoupled from connection identity — is in
   `SingleConnection`, `Best`. `SingleWriter` is the same ephemeral connection strategy as
   `Standard` plus a semaphore-based write-admission governor capped at 1 concurrent writer
   with an optional reader-fairness turnstile — not a pinned/dedicated connection, which is
-  what makes it architecturally distinct from every other single-writer implementation
-  found in the competitive research.
+  what makes it architecturally distinct from the single-writer implementations found in the
+  competitive research (re-verified 2026-10-13), which pin or retain one writer connection, or
+  queue writes to one writer. "Ephemeral" means the lease: the provider's pool may keep the
+  physical connection open between writes. The price is a per-write check-out, measurably slower
+  than a pinned-writer Dapper on tiny writes (`benchmarks/CrudBenchmarks/README.md`).
 - [`docs/supported-databases.md`](docs/supported-databases.md) — every `SupportedDatabase`
   value with its dialect notes, minimum/recommended server versions, feature version thresholds
   (upsert/`MERGE`, `RETURNING`, savepoints, and similar), provider-vs-practical pool sizes, and the
