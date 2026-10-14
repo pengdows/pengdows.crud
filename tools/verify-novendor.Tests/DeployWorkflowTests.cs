@@ -15,8 +15,52 @@ public class DeployWorkflowTests
         var workflow = File.ReadAllText(workflowPath);
 
         Assert.Contains("dotnet pack pengdows.stormgate/pengdows.stormgate.csproj -c Release \\", workflow, StringComparison.Ordinal);
-        Assert.Contains("https://api.nuget.org/v3-flatcontainer/pengdows.stormgate/${VERSION}/${VERSION}.nupkg", workflow, StringComparison.Ordinal);
+        Assert.Contains("https://api.nuget.org/v3-flatcontainer/pengdows.stormgate/${VERSION}/pengdows.stormgate.${VERSION}.nupkg", workflow, StringComparison.Ordinal);
         Assert.Contains("dotnet nuget push pengdows.stormgate/bin/Release/pengdows.stormgate.${{ steps.version.outputs.version }}.nupkg \\", workflow, StringComparison.Ordinal);
+    }
+
+    // The flat container serves a package at {id}/{version}/{id}.{version}.nupkg. A check that asks for
+    // {id}/{version}/{version}.nupkg always gets a 404, so "already published" never fires (it did that in 2.0.x).
+    [Fact]
+    public void PublishWorkflow_AsksNuGetForEachPackageAtItsRealUrl()
+    {
+        var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var workflow = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "deploy.yml"));
+
+        var matches = System.Text.RegularExpressions.Regex.Matches(workflow,
+            @"v3-flatcontainer/(?<id>[A-Za-z.]+)/\$\{VERSION\}/(?<file>[^""]+)""");
+        Assert.Equal(5, matches.Count);
+        foreach (System.Text.RegularExpressions.Match match in matches)
+        {
+            Assert.Equal(match.Groups["id"].Value + ".${VERSION}.nupkg", match.Groups["file"].Value);
+        }
+    }
+
+    // The release notes on GitHub are the version's CHANGELOG.md section, not a fixed "Automated release" line.
+    [Fact]
+    public void PublishWorkflow_UsesTheChangelogSectionAsTheReleaseNotes()
+    {
+        var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var workflow = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "deploy.yml"));
+
+        Assert.Contains("CHANGELOG.md", workflow, StringComparison.Ordinal);
+        Assert.Contains("body_path:", workflow, StringComparison.Ordinal);
+        Assert.DoesNotContain("body: Automated release", workflow, StringComparison.Ordinal);
+    }
+
+    // Everything after the push to NuGet and the release is bookkeeping. A failure there must not turn a published
+    // release red (2.0.5's did), and an empty coverage value must not reach the comparison.
+    [Fact]
+    public void PublishWorkflow_CoverageRatchetCannotFailAPublishedRelease()
+    {
+        var repoRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", ".."));
+        var workflow = File.ReadAllText(Path.Combine(repoRoot, ".github", "workflows", "deploy.yml"));
+
+        var step = workflow.IndexOf("- name: Ratchet coverage baselines", StringComparison.Ordinal);
+        Assert.True(step >= 0);
+        var body = workflow.Substring(step, workflow.IndexOf("- name: Commit semver bump", step, StringComparison.Ordinal) - step);
+        Assert.Contains("continue-on-error: true", body, StringComparison.Ordinal);
+        Assert.Contains("-z \"$new_val\"", body, StringComparison.Ordinal);
     }
 
     [Fact]

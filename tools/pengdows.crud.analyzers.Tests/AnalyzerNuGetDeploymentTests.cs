@@ -70,7 +70,7 @@ public sealed class AnalyzerNuGetDeploymentTests
             "dotnet pack tools/pengdows.crud.analyzers/pengdows.crud.analyzers.csproj -c Release",
             workflow);
         Assert.Contains(
-            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.analyzers/${VERSION}/${VERSION}.nupkg",
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.analyzers/${VERSION}/pengdows.crud.analyzers.${VERSION}.nupkg",
             workflow);
         Assert.Contains(
             "dotnet nuget push tools/pengdows.crud.analyzers/bin/Release/pengdows.crud.analyzers.${{ steps.version.outputs.version }}.nupkg",

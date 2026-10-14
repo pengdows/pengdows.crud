@@ -409,15 +409,15 @@ jobs:
 
           VERSION="${{ steps.version.outputs.version }}"
           status_analyzers=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.analyzers/${VERSION}/${VERSION}.nupkg")
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.analyzers/${VERSION}/pengdows.crud.analyzers.${VERSION}.nupkg")
           status_crud=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://api.nuget.org/v3-flatcontainer/pengdows.crud/${VERSION}/${VERSION}.nupkg")
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud/${VERSION}/pengdows.crud.${VERSION}.nupkg")
           status_abstractions=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.abstractions/${VERSION}/${VERSION}.nupkg")
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.abstractions/${VERSION}/pengdows.crud.abstractions.${VERSION}.nupkg")
           status_fakedb=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.fakedb/${VERSION}/${VERSION}.nupkg")
+            "https://api.nuget.org/v3-flatcontainer/pengdows.crud.fakedb/${VERSION}/pengdows.crud.fakedb.${VERSION}.nupkg")
           status_stormgate=$(curl -s -o /dev/null -w "%{http_code}" \
-            "https://api.nuget.org/v3-flatcontainer/pengdows.stormgate/${VERSION}/${VERSION}.nupkg")
+            "https://api.nuget.org/v3-flatcontainer/pengdows.stormgate/${VERSION}/pengdows.stormgate.${VERSION}.nupkg")
 
           echo "NuGet status for v$VERSION:"
           echo "  pengdows.crud.analyzers: $status_analyzers"
@@ -513,13 +513,29 @@ jobs:
             git push origin "$TAG"
           fi
 
+      - name: Extract release notes from CHANGELOG.md
+        if: steps.nuget_check.outputs.skip != 'true'
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.version.outputs.version }}"
+          # The section under "## [VERSION]" up to the next "## [" heading.
+          awk -v v="$VERSION" '
+            $0 ~ "^## \\[" v "\\]" { found = 1; next }
+            found && /^## \[/ { exit }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/release-notes.md"
+          if [[ ! -s "$RUNNER_TEMP/release-notes.md" ]]; then
+            echo "❌ CHANGELOG.md has no section for $VERSION."
+            exit 1
+          fi
+
       - name: Create GitHub Release
         if: steps.nuget_check.outputs.skip != 'true'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b  # v2.5.0
         with:
           tag_name: v${{ steps.version.outputs.version }}
           name: v${{ steps.version.outputs.version }}
-          body: Automated release for version v${{ steps.version.outputs.version }}
+          body_path: ${{ runner.temp }}/release-notes.md
           target_commitish: ${{ github.sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -564,8 +580,11 @@ jobs:
             exit 1
           fi
 
+      # Bookkeeping after the release is out: a failure here is reported as a warning in the log and must not
+      # turn a published release red.
       - name: Ratchet coverage baselines
         if: steps.nuget_check.outputs.skip != 'true'
+        continue-on-error: true
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -575,6 +594,10 @@ jobs:
             local var_name="$1" new_val="$2"
             local current="${3:-0}"
             if [[ -z "$current" ]]; then current="0"; fi
+            if [[ -z "$new_val" ]]; then
+              echo "::warning::$var_name: no coverage value from the build job; baseline left at ${current}%"
+              return 0
+            fi
             local is_higher
             is_higher=$(awk "BEGIN { print ($new_val > $current) ? 1 : 0 }")
             if [[ "$is_higher" -eq 1 ]]; then
