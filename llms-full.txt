@@ -41,7 +41,7 @@ Traditional classifications place data access tools on a 1D spectrum from **Heav
 ## Project Overview
 
 
-pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8 and .NET 10 (every project in `pengdows.crud.sln` targets `net8.0;net10.0` except `tools/pengdows.crud.analyzers`, which targets `netstandard2.0`). The project consists of multiple components:
+pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8 and .NET 10 (the shipped libraries, the test projects and `testbed` target `net8.0;net10.0`; the analyzers (`tools/pengdows.crud.analyzers`, `tools/pengdows.crud.analyzers.codefixes`) target `netstandard2.0`; `testbed.DriverVersionMatrix*` and `tools/interface-api-check` target `net8.0` only and `benchmarks/DuckDbEfCoreBenchmarks` `net10.0` only). The project consists of multiple components:
 
 - `pengdows.crud` - Core library with TableGateway, DatabaseContext, and SQL dialects
 - `pengdows.crud.abstractions` - Interfaces and enums (all public APIs live here)
@@ -204,6 +204,14 @@ dotnet test -c Release --filter "FullyQualifiedName!~pengdows.crud.IntegrationTe
 # Run integration suite (requires Docker)
 dotnet run -c Release -f net10.0 --project testbed
 
+# Full integration matrix: pengdows.crud.IntegrationTests, one database per process, both frameworks
+# (requires Docker). Opt-ins: INCLUDE_SNOWFLAKE=true (credentials), INCLUDE_SAPHANA=true, INCLUDE_INTERBASE=true,
+# INCLUDE_AURORA=true (AWS; see "Aurora variants"). INTEGRATION_ONLY=Sqlite,PostgreSql limits the run,
+# INTEGRATION_FRAMEWORKS=net10.0 limits the frameworks, PREFLIGHT_ONLY=1 prints the preflight and exits.
+bash run-integration-tests.sh
+# Fold the run's results into docs/integration-status.md
+python3 tools/record-integration-run.py
+
 # Regenerate API baseline (run after intentional interface changes; the abstractions build
 # and CI run the same tool with --verify instead of --generate)
 dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Release -- \
@@ -314,8 +322,9 @@ public int Version { get; set; }
 
 **SQL generated depends on database:**
 - `MERGE` when the dialect's `SupportsMerge` is true (SQL Server, Oracle, PostgreSQL 15+, DuckDB 1.4+, …)
-- otherwise `INSERT ... ON CONFLICT` (PostgreSQL < 15, YugabyteDB, CockroachDB, SQLite, …)
-- otherwise `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB)
+- otherwise `INSERT ... ON CONFLICT` (PostgreSQL < 15, YugabyteDB, CockroachDB, Spanner, SQLite, …)
+- otherwise `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB/TiDB/SingleStore)
+- InterBase and Access have none of the three: `UpsertAsync`/`BuildUpsert` throw `NotSupportedException` (as does the unrecognized-database SQL-92 fallback)
 
 ## CRITICAL: Audit Field Behavior
 
@@ -333,6 +342,8 @@ This is intentional design — it allows "last modified" queries without checkin
 - Without resolver + user audit fields = `InvalidOperationException` at runtime
 - Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
 - The audit resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset are all supported.
+- `AuditCreationPolicy` (init-only property on every gateway, new in 2.0.6; `docs/audit-fields.md`): `PreserveExplicitValues` (default) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always overwrites them with resolver values (stops request-model binding from spoofing audit fields)
+- UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`)
 
 ## Multi-Tenancy
 
@@ -472,7 +483,7 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
-| `PreventDatabaseUnload` | 1 | Embedded DBs needing sentinel connection |
+| `PreventDatabaseUnload` | 1 | Databases that unload when idle (SQL Server LocalDB, Firebird, Db2 LUW): one sentinel connection keeps the database loaded |
 | `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
@@ -743,7 +754,7 @@ These are places outside the dialect file itself that switch or pattern-match on
 10. **`pengdows.crud/dialects/SqlDialect.cs` → `GetNaturalKeyLookupQuery()` and any other pagination/"first row only" fallback** — check whether the new database's syntax actually matches the generic `LIMIT 1` fallback. It doesn't for Oracle (`ROWNUM = 1`), and it doesn't for Db2 (`FETCH FIRST 1 ROWS ONLY`). Grep `SqlDialect.cs` for `DatabaseType ==`/`DatabaseType !=` checks and verify each one explicitly for the new database rather than assuming the catch-all branch is correct.
 11. **Exception classification lives on the dialect** — override `IsUniqueViolation`/`IsForeignKeyViolation`/`IsNotNullViolation`/`IsCheckConstraintViolation` for constraint kinds and the protected `TryClassifyProviderException` for Deadlock/SerializationFailure/Timeout/ReadOnlyViolation/AmbiguousResult. `IDbExceptionTranslator.Translate(ISqlDialect, ...)` delegates to both (via `DbExceptionTranslationSupport.TryCreateFromCategory`), so the thrown type and `AnalyzeException` agree by construction; a translator adds only non-category cases such as connection failures. Exception: Sybase's `AseException` isn't a `DbException`, so `SybaseExceptionTranslator` classifies on its own. Declare the translator in the dialect's `Create<Name>Traits()` (`DatabaseTraits`); `DbExceptionTranslatorRegistry` reads it from there. The same traits carry the database's `AdvancedTypeRegistry` mappings, read coercions and value-converter wire formats — nothing outside `dialects/` names a `SupportedDatabase` value (REV-039, guarded by `NoDatabaseTypeBranchingTests`).
 
-**Next candidate: SAP HANA.** Flag its isolation-level set (HANA's default is effectively snapshot-based, not lock-based like most of the above) and its pagination syntax (`LIMIT`/`OFFSET` are supported directly, unlike Db2 — don't assume it needs a Db2-style special case, but don't assume it matches SQL Server either) for explicit research rather than copying an existing dialect's assumptions.
+SAP HANA, InterBase, Access, Db2, Informix, Sybase ASE, Spanner, FlatFile and SingleStore went through this checklist in 2.0.6; their dialect files carry the per-database evidence (isolation sets, pagination, upsert forms).
 
 ### Opt-in exceptions (require env var)
 
@@ -859,6 +870,8 @@ All three guidance files share the same core technical information. The `skills/
 [![Build](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml/badge.svg)](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml)
 [![Coverage](https://codecov.io/gh/pengdows/pengdows.crud/branch/main/graph/badge.svg)](https://codecov.io/gh/pengdows/pengdows.crud)
 
+What is new in each release: [CHANGELOG.md](CHANGELOG.md).
+
 `pengdows.crud` is a SQL-first data access library for .NET 8+. It favors explicit SQL, inspectable command builders, and provider-aware execution over ORM-style query generation.
 
 No LINQ. No tracking. No hidden unit of work.
@@ -891,8 +904,12 @@ The repository contains concrete support for:
 
 - SQL Server
 - PostgreSQL
+  - Citus (detected as PostgreSQL; new in 2.0.6)
+  - TimescaleDB (detected as PostgreSQL; new in 2.0.6)
+  - Fujitsu Enterprise Postgres (detected as PostgreSQL; new in 2.0.6)
 - Aurora PostgreSQL
 - MySQL
+  - Percona Server for MySQL (detected as MySQL; new in 2.0.6)
 - Aurora MySQL
 - MariaDB
 - Oracle
@@ -914,6 +931,71 @@ The repository contains concrete support for:
 - pengdows.flatfile (embedded dialect over CSV/delimited/fixed-width/NDJSON files)
 
 When product detection cannot identify the connected database, the library falls back to a conservative SQL-92 dialect.
+
+### New in 2.0.6: nine more databases
+
+2.0.0 to 2.0.5 supported the same fourteen products. 2.0.6 adds nine, each with a `SupportedDatabase` value of its own
+and a full integration suite (green on net8.0 and net10.0; see [docs/integration-status.md](docs/integration-status.md)):
+
+| Database | How it is supported | Integration suite |
+|---|---|---|
+| IBM Db2 for Linux/Unix/Windows (LUW) | its own dialect; Db2 for z/OS and Db2 for i are not supported | always on |
+| FlatFile: pengdows.flatfile (CSV, delimited, fixed-width, NDJSON files) | its own dialect | always on |
+| SingleStore | detected at runtime (it reports itself as plain MySQL), MySQL dialect | always on |
+| SAP (Sybase) ASE | its own dialect | always on |
+| Google Cloud Spanner (PostgreSQL interface) | its own dialect | always on |
+| IBM Informix | its own dialect | always on |
+| SAP HANA | its own dialect | opt-in (`INCLUDE_SAPHANA=true`; the image needs 16 to 32 GB of RAM) |
+| Embarcadero InterBase | its own dialect | opt-in (`INCLUDE_INTERBASE=true`; node-locked license) |
+| Microsoft Access (Jet/ACE) | its own dialect | runs on Windows only |
+
+### Four more products, supported through their parent
+
+These are not separate `SupportedDatabase` values. Each reports itself as MySQL or PostgreSQL, so detection resolves it
+to the parent's dialect (it is a subsidiary of that type, and `Product` reports the parent). Each was verified with no code change: it passed the same integration suite as the vanilla engine, with the same number of checks.
+
+| Product | Detected as | Integration suite |
+|---|---|---|
+| Percona Server for MySQL | MySQL | always on, in the MySQL matrix |
+| Citus | PostgreSQL | always on, in the PostgreSQL matrix |
+| TimescaleDB | PostgreSQL | always on, in the PostgreSQL matrix |
+| Fujitsu Enterprise Postgres | PostgreSQL | always on, in the PostgreSQL matrix |
+
+EDB Postgres Extended very likely works the same way, but it has no public image to test against, so it is not claimed.
+Aurora MySQL and Aurora PostgreSQL are detected at runtime and use the MySQL and PostgreSQL dialects. Details and
+version thresholds: [docs/supported-databases.md](docs/supported-databases.md).
+
+### What “supported” means
+
+In `pengdows.crud`, supported means substantially more than opening a connection or successfully running `SELECT 1`.
+A database product is supported only when all of the following are true:
+
+- A usable .NET 8+ provider is available. It must expose a real `DbProviderFactory`, support the provider operations
+  used by `DatabaseContext`, and return usable `GetSchema("DataSourceInformation")` metadata. A test-only mock or an
+  unverified provider is not support evidence.
+- The product has a dialect, either dedicated or explicitly documented as a compatible delegation, that owns its
+  identifier quoting, parameter markers and binding, capability flags, session setup, transaction/isolation behavior,
+  exception translation and provider-specific type rules.
+- The dialect covers the minimum SQL emitted by `TableGateway`: quoted and parameterized SELECT/INSERT/UPDATE/DELETE,
+  generated-key retrieval, optimistic-version predicates, audit writes, batch statements, and the database's supported
+  upsert form (`MERGE`, `ON CONFLICT` or `ON DUPLICATE KEY UPDATE`). Paging, read-only transactions, savepoints,
+  stored procedures and other features must be capability-gated or documented when the product cannot provide them.
+- The complete provider-to-CLR type contract is exercised, not just scalar CRUD: nulls, numerics and precision,
+  dates/times and UTC behavior, Guid text/binary representations, booleans, strings, binary/LOB values, enums, JSON,
+  generated IDs, and applicable arrays, vectors, ranges, intervals, spatial and network values. Unsupported or lossy
+  conversions must fail explicitly rather than silently becoming defaults.
+- Real-provider integration tests pass on both `net8.0` and `net10.0`. This includes the shared
+  `pengdows.crud.IntegrationTests` suites for CRUD and generated keys, type round-trips and mapping, parameters,
+  transactions/isolation/savepoints, upserts and optimistic concurrency, audit fields, error translation, identifier
+  quoting, read-only behavior, connection modes/pooling and provider-specific database behavior. The `testbed` adds
+  live-provider provisioning, schema creation and database-mode smoke checks. Capability-based exclusions must be
+  explicit and justified; “connects” or “SELECT 1” alone is not a passing support result.
+- The supported server/version floor, recommended version, provider limitations and any opt-in or platform requirement
+  are documented with real evidence.
+
+The full contract, test expectations, version floors and per-database limitations are maintained in
+[docs/supported-databases.md](docs/supported-databases.md). A database that has only passed connectivity or basic
+CRUD is considered partially supported until it completes this contract.
 
 ## Quick Start
 
@@ -1031,7 +1113,8 @@ DatabaseException (abstract — carries Database, SqlState, ErrorCode, Constrain
   │    ├─ ConnectionException
   │    │    ├─ FileLockContentionException ← embedded-engine file lock held by another process; IsTransient = false
   │    │    └─ TooManyConnectionsException ← server reached but at its connection limit; IsTransient = true
-  │    ├─ ReadOnlyViolationException      ← write reached a read-only SQLite/DuckDB connection
+  │    ├─ ReadOnlyViolationException      ← write refused by a read-only connection, transaction or database
+  │    ├─ AmbiguousResultException        ← commit outcome unknown (e.g. CockroachDB 40003); IsTransient = false
   │    ├─ TransactionException
   │    ├─ TransientWriteConflictException ← IsTransient = true
   │    │    ├─ DeadlockException
@@ -1049,7 +1132,7 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `ModeContentionException : TimeoutException` — shared-connection mode lock (e.g. SingleConnection) or transaction-completion lock exceeded `ModeLockTimeout`
 - `PoolSaturatedException : TimeoutException` — no governor slot became available within `PoolAcquireTimeout` (includes SingleWriter write-slot waits)
 - `PoolForbiddenException : InvalidOperationException` — connection requested from a pool configured to reject all requests (e.g. the write pool of a `ReadOnly` context)
-- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/SingleStore/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
+- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
 - `ConnectionFailedException : ConnectionException` — startup connection failure (carries `Phase` and `Role`, plus the underlying SQLSTATE/error code/`IsTransient`); since 2.0.6 `catch (ConnectionException)` and `catch (DatabaseException)` see it too
 
 ```csharp
@@ -1166,8 +1249,8 @@ This document deliberately doesn't quote measured failure counts or latencies: c
 loss rate under this kind of workload varies with machine and load, so treat any single
 competitor percentage as a snapshot, not a constant — the invariant is the part of this claim
 that travels. Run the benchmark on your own hardware to reproduce it. The `busy_timeout` value
-is a hardcoded constant in the benchmark (`BusyTimeoutMs`), not a `[Params]` fixture, so
-comparing settings means editing that constant and re-running. That workload runs on a shared-cache in-memory database, where a lock conflict is `SQLITE_LOCKED`, which, as SQLite documents it, the
+is a `[Params(10, 5000)]` axis in the benchmark (`BusyTimeoutMs`, with the command timeout scaled
+to match), so one run produces both settings. That workload runs on a shared-cache in-memory database, where a lock conflict is `SQLITE_LOCKED`, which, as SQLite documents it, the
 busy handler does not retry. Against a WAL file on disk (2026-10-13, `benchmarks/CrudBenchmarks/results/sqlite-file-writer-patterns-run-2026-10-13.md`)
 the same kind of storm lost no writes for any arm, and the uncoordinated Dapper arm ran 5 to 6 times slower than the coordinated ones, so there the
 protection shows as time, not as lost writes; losses appear when the queue takes longer to drain than the command timeout.
@@ -1192,7 +1275,7 @@ contract, moving between databases costs a dialect swap and verification, not a 
 (principle 8). This isn't aspirational: `pengdows.hangfire` (SQL-first Hangfire job
 storage built on this library) demonstrates it directly — its integration test suite
 defines each storage behavior once as a generic abstract test class and runs it unchanged
-against 10 database engines (SQLite, PostgreSQL, SQL Server, Oracle, Firebird, CockroachDB,
+against 11 database engines (SQLite, PostgreSQL, SQL Server, MySQL, Oracle, Firebird, CockroachDB,
 MariaDB, DuckDB, YugabyteDB, TiDB) via per-database subclasses that differ only in which
 `StorageFixture` they pass to the base constructor — no per-database test logic, no
 per-database application code. Moving that project from SQL Server to SQLite is a
@@ -1541,8 +1624,8 @@ reports `SupportsBatchInsert`/`SupportsBatchUpdate`/`SupportsInsertOnConflict`/
 per-entity statement per row through that same API when those flags are absent, rather than
 emitting SQL those engines don't support. Savepoints follow the identical pattern:
 `SupportsSavepoints` is explicitly `true` for SQLite, Oracle, Firebird, and SQL Server
-(which overrides the SQL to `SAVE TRANSACTION`/`ROLLBACK TRANSACTION`) and explicitly
-`false` for DuckDB and Snowflake — the absence is a declared capability, not a gap
+(which overrides the SQL to `SAVE TRANSACTION`/`ROLLBACK TRANSACTION`), among others, and explicitly
+`false` for DuckDB, Snowflake, Spanner and SingleStore — the absence is a declared capability, not a gap
 discovered in production.
 
 ## 7. Database metadata is preserved, not flattened
@@ -1722,7 +1805,7 @@ resource a tenant's workload touches.
 | `pengdows.crud` | Core DAL: gateways, `ISqlContainer`, dialects — the architecture itself (principles 1–10) |
 | `pengdows.crud.abstractions` | Public interfaces/enums — the coordinated boundary's contract surface |
 | `pengdows.crud.fakeDb` | Fake ADO.NET provider — falsifiability for principle 10 |
-| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026 — compile-time enforcement, principle 9 |
+| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026/028/029 — compile-time enforcement, principle 9 |
 | `pengdows.poco.mint.cli` + Dockerized web UI | Schema-first POCO generation, built on `IDatabaseContext`/`ISqlDialect` — see principle 1 |
 | `pengdows.hangfire` | SQL-first Hangfire job storage — a real downstream consumer, showing the architecture generalizes past CRUD |
 | `pengdows.stormgate` | ADO.NET connection admission control — a sibling package, not wired into `DatabaseContext`'s own governance |
@@ -1926,7 +2009,7 @@ Most data access layers test either against superficial mocks or against SQLite 
 
 4. **Automated Hostile Contention & Hydration Benchmarks**:
    - **Hydration Hot Path**: BenchmarkDotNet benchmarks in `benchmarks/CrudBenchmarks/` compare pure row materialization against Dapper independently of connection acquisition. Results are engine-specific and don't generalize: on SQL Server, `DbMode.Standard`'s per-checkout session-settings enforcement (see `docs/sql-server-session-settings.md`) is a deliberate correctness trade-off that costs throughput. Run the benchmarks for current numbers.
-   - **Contention Storm Survival**: `SQLiteWriteContentionBenchmarks` stresses 100 concurrent writers under aggressive `busy_timeout=10ms` locks and counts lock exceptions per framework — the `SingleWriter` turnstile serializes write admission so pengdows writers never contend for SQLite's lock, whereas Dapper and EF Core race for it and surface `SQLITE_BUSY` ("database is locked") failures. The Dapper arm is uncoordinated; a Dapper application with its own writer lock would not race either (see `benchmarks/CrudBenchmarks/README.md`, "Reading the Dapper arms").
+   - **Contention Storm Survival**: `SQLiteWriteContentionBenchmarks` stresses 100 concurrent writers under aggressive `busy_timeout=10ms` locks and counts lock exceptions per framework — the `SingleWriter` turnstile serializes write admission so pengdows writers never contend for SQLite's lock, whereas Dapper and EF Core race for it and surface lock failures (on the benchmark's shared-cache in-memory database; against a WAL file no arm lost a write and the uncoordinated Dapper arm was 5 to 6 times slower, see `benchmarks/CrudBenchmarks/results/sqlite-file-writer-patterns-run-2026-10-13.md`).
    - **Active Query Plan Validation**: `BenchmarkValidation.SqlServer.cs` executes `SET STATISTICS XML ON`, parses XML execution plans with namespace verification, ensures views have unique clustered indexes, and validates index matching.
    - **Defect Absorption Engine**: Discovered engine quirks (e.g. MariaDB's `tx_read_only` vs MySQL's `transaction_read_only`, Db2 `FINAL TABLE` key generation, MySQL 8.0.20's upsert-alias change) are generalized into `ISqlDialect` capabilities and permanently locked down with regression tests.
 
@@ -2014,9 +2097,9 @@ architecture and would otherwise make the thesis go stale every time an implemen
 detail shifts. Treat everything here as a snapshot verified against source as of the date
 below; re-verify against current code before quoting it externally.
 
-Last verified: 2026-10-13, against branch `2.0.6` — a source-level re-check of every API,
-including the SQLite session-setting and connection-lifecycle changes documented in this release.
-name, value, file path, and test citation below. This document deliberately records no
+Last verified: 2026-10-13, against branch `2.0.6` — a source-level re-check of every API
+name, value, file path, and test citation below (the 2026-09-24 pass, with the analyzer list, the named-parameter
+flags and the testbed/integration-suite description corrected). This document deliberately records no
 test-run totals or testbed pass/fail counts; run the suites yourself before quoting results.
 
 ## Ecosystem package status
@@ -2026,7 +2109,7 @@ test-run totals or testbed pass/fail counts; run the suites yourself before quot
 | `pengdows.crud` | Core DAL: gateways, `ISqlContainer`, dialects | The architecture itself (principles 1–10) |
 | `pengdows.crud.abstractions` | Public interfaces/enums | The coordinated boundary's contract surface |
 | `pengdows.crud.fakeDb` | Fake ADO.NET provider | Falsifiability for principle 10 |
-| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026 | Compile-time enforcement, principle 9 |
+| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026/028/029 | Compile-time enforcement, principle 9 |
 | `pengdows.poco.mint.cli` + Dockerized web UI | Schema-first POCO generation | Genuinely reuses `IDatabaseContext`/`ISqlDialect` for schema inspection (verified in `DatabaseInspector.cs`) — see principle 1 |
 | `pengdows.hangfire` | SQL-first Hangfire job storage | A real downstream consumer: depends on `pengdows.crud` and `pengdows.crud.analyzers`, showing the architecture generalizes past CRUD to background-job storage |
 | `pengdows.stormgate` | ADO.NET connection admission control (prevents "connection storm" thundering-herd opens) | Ships from the same repository/solution as `pengdows.crud` but is a standalone, separately-adopted package — not wired into `DatabaseContext`'s own connection governance (the `SingleWriter` turnstile governor is a distinct, internal mechanism) |
@@ -2050,7 +2133,7 @@ MySQL/Snowflake 65535, Firebird 1499, PostgreSQL 100.
 
 Other stored-procedure capability flags, as currently implemented:
 - `SupportsNamedParameters` — `false` for the generic ANSI fallback dialect (`Sql92Dialect`)
-  and for Informix, SAP HANA, Access, and FlatFile; `true` for every other dialect.
+  and for Informix, SAP HANA, and Access; `true` for every other dialect (FlatFile included).
 - `SupportsRepeatedNamedParameters` — defaults to the dialect's `SupportsNamedParameters`
   value; Oracle is the one dialect that supports named parameters but explicitly overrides
   this to `false` (no reusing a bind-variable name within one statement).
@@ -2070,7 +2153,7 @@ inherits from the other.
 
 ## Complete analyzer rule list (principle 9)
 
-The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
+The `pengdows.crud.analyzers` Roslyn package currently defines six rules:
 
 - **PGC001** — DI registrations of `DatabaseContext`/`TableGateway`/`PrimaryKeyTableGateway`
   as `AddScoped`/`AddTransient` are errors; these types must be singletons.
@@ -2084,6 +2167,9 @@ The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
   (`DataSource`, the SQL-standard-level heuristics, internal bookkeeping types, the inert type
   attributes), and on assigning `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are
   fixed at construction (the setters are no-ops; 3.0 makes them `init`).
+- **PGC029** — an error, opt-in (`<PengdowsMultiTenancy>true</PengdowsMultiTenancy>`): every call to a
+  gateway execution/build method must supply a non-null `IDatabaseContext`/`ITransactionContext`
+  instead of relying on the gateway's default context (`GatewayCallSiteContextAnalyzer`).
 
 ## BenchmarkValidation mechanism (principle 10)
 
@@ -2145,15 +2231,21 @@ the tests will always exist under these names.
 
 ## Provider/version evidence
 
-The maintained testbed (`testbed/`, run via `dotnet run -c Release -f net10.0 --project testbed`;
-see `testbed/readme.md`) is the executable source of "verified database support" claims: it runs
-one shared matrix of checks (CRUD, transactions, stored-procedure invocation, and the rest listed
-in the readme) through the public pengdows.crud surface against real databases via
-Testcontainers. The always-on set is SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server,
-CockroachDB, Firebird, TiDB, and YugabyteDB; Oracle (`INCLUDE_ORACLE=true`, license acceptance)
-and Snowflake (`INCLUDE_SNOWFLAKE=true`, cloud-only credentials) are opt-in. `AuroraMySql` and
+The maintained integration suite is the executable source of "verified database support" claims. The testbed
+(`testbed/`, run via `dotnet run -c Release -f net10.0 --project testbed`; see `testbed/readme.md`) starts each
+database through Testcontainers (or a local file/in-memory provider), creates the shared test table, runs the
+idle-unload probe and the container-level checks; the CRUD, transaction, stored-procedure and error-mapping checks run
+against the same databases as xUnit tests in `pengdows.crud.IntegrationTests` (see its README), both through the public
+pengdows.crud surface. The always-on set is SQLite, DuckDB, FlatFile, PostgreSQL, Spanner, MySQL, MariaDB, SQL Server,
+CockroachDB, Firebird, TiDB, YugabyteDB, Oracle, Db2 LUW, SingleStore, Sybase ASE and Informix
+(`ParallelTestOrchestrator.GetTestConfigurations()`); the PostgreSQL and MySQL entries run a version
+matrix that includes the compatible forks Citus, TimescaleDB, Fujitsu Enterprise Postgres and Percona
+Server. Snowflake (`INCLUDE_SNOWFLAKE=true`, cloud-only credentials), SAP HANA (`INCLUDE_SAPHANA=true`,
+16-32GB RAM), InterBase (`INCLUDE_INTERBASE=true`, node-locked license) and the Aurora variants
+(`INCLUDE_AURORA=true`) are opt-in, and Access runs automatically on Windows only. `AuroraMySql` and
 `AuroraPostgreSql` are managed-AWS variants detected at runtime and covered by the MySQL/
-PostgreSQL paths rather than separate targets (see CLAUDE.md's "Aurora variants" section).
+PostgreSQL paths (see CLAUDE.md's "Aurora variants" section), with an opt-in suite against real
+clusters.
 
 This document does not record a per-engine pass/fail/skip table or tested version list — those
 are properties of a specific run. Regenerate them from a fresh testbed run before quoting them.
@@ -2334,7 +2426,7 @@ Interlocked.Decrement(ref _connectionCount);
 **MetricsUpdated event** is fired **without holding locks**:
 
 ```csharp
-// pengdows.crud/DatabaseContext.Metrics.cs:322 (inside a per-subscriber try/catch)
+// pengdows.crud/DatabaseContext.Metrics.cs, OnMetricsCollectorUpdated (inside a per-subscriber try/catch)
 ((EventHandler<DatabaseMetrics>)invocation).Invoke(this, metrics);  // No lock held during callback
 ```
 
@@ -2380,6 +2472,7 @@ await conn.DisposeAsync();  // Returns to provider pool
 - Whether to use ephemeral (pool) or persistent (pinned) connections
 - Connection lifecycle (open/close timing)
 - Connection locking for shared connections
+- Admission control: a `PoolGovernor` (`pengdows.crud/infrastructure/PoolGovernor.cs`) per reader/writer pool caps concurrent connections and, in `SingleWriter`, also holds the writer-preference turnstile. It gates how many operations may hold a connection; the physical pool underneath is still the provider's
 
 **What the PROVIDER manages**:
 - Physical connection pooling
@@ -2392,23 +2485,31 @@ await conn.DisposeAsync();  // Returns to provider pool
 
 | Database | Connection String | Auto-Selected Mode | Why |
 |----------|------------------|-------------------|-----|
-| SQLite | `Data Source=:memory:` (isolated) | `SingleConnection` | **REQUIRED** - Each `:memory:` = separate database |
+| SQLite / DuckDB | `:memory:` (isolated) | `SingleConnection` | **REQUIRED** - Each `:memory:` = separate database |
 | SQLite | File-based (`mydb.db`) | `SingleWriter` | **OPTIMAL** - Prevents lock contention, WAL allows many readers + one writer |
+| DuckDB | File-based | `SingleWriter` | **OPTIMAL** - Disjoint-row writers proceed, but concurrent same-row writers conflict; one admitted writer does not. An explicit `Standard` is honored with a warning |
+| Microsoft Access | Any | `SingleWriter` | **OPTIMAL** - Concurrent writers fail with "currently locked"; an explicit `Standard` is honored with a warning |
+| pengdows.flatfile | `path`/`file` | `SingleWriter` | **REQUIRED** - Concurrent writers queue inside `Open()` and time out; `Standard` is not honored |
 | PostgreSQL | Any | `Standard` | **OPTIMAL** - Full server, high concurrency, provider pooling |
 | SQL Server | LocalDB | `PreventDatabaseUnload` | **DEFAULT** (Best) - Prevents instance unload; explicit `Standard` honored with a performance warning |
 | Firebird | Any | `PreventDatabaseUnload` | **DEFAULT** (Best) - Keeps a sentinel per pool so `LINGER=0` doesn't discard the page cache; every explicit mode honored |
+| Db2 (LUW) | Any | `PreventDatabaseUnload` | **DEFAULT** (Best) - Implicit-activation unload cost; only when the live detection query recognizes Db2 LUW, otherwise `Standard`; every explicit mode honored (`Db2Dialect.CoerceConnectionMode`) |
+| Every other database (SQL Server, Oracle, MySQL/MariaDB/SingleStore/TiDB, CockroachDB, YugabyteDB, Snowflake, Spanner, Informix, SAP HANA, Sybase ASE, InterBase, ...) | Any | `Standard` | The base `SqlDialect.CoerceConnectionMode`: `Best` selects `Standard` and every explicit mode is honored |
 
 **Coercion** (forced mode change):
 - SQLite `:memory:` + Standard → **Coerced to SingleConnection** (correctness)
 - SQLite file + Standard → **Coerced to SingleWriter** (safety, prevents SQLITE_BUSY)
+- pengdows.flatfile + Standard/PreventDatabaseUnload → **Coerced to SingleWriter**; DuckDB file and Microsoft Access + `Best` or PreventDatabaseUnload → `SingleWriter`, but an explicit `Standard` is **honored with a warning** for both (their vendors document concurrent connections; concurrent writers were still observed to fail: same-row conflicts on DuckDB, "currently locked" on Access)
 - Firebird (embedded or client-server) → **Not coerced**; `Best` selects `PreventDatabaseUnload` and every explicit mode is honored
-- Whenever `Best` would select `PreventDatabaseUnload` (e.g. LocalDB, Firebird), it uses `Standard` instead if the configured max pool size is under 2: the sentinel needs a second pooled connection, and `Best` must not override a caller's explicit one-connection pool (`CoerceMode`, DatabaseContext.Initialization.cs:1879-1891)
+- SQL Server LocalDB + `PreventDatabaseUnload`/`SingleWriter`/`SingleConnection` → **Coerced to PreventDatabaseUnload**; an explicit `Standard` is honored with a performance warning
+- Whenever `Best` would select `PreventDatabaseUnload` (e.g. LocalDB, Firebird, Db2 LUW), it uses `Standard` instead if the configured max pool size is under 2: the sentinel needs a second pooled connection, and `Best` must not override a caller's explicit one-connection pool (`DatabaseContext.CoerceMode`, DatabaseContext.Initialization.cs)
 
 **Mode Mismatch Warnings** (safe but suboptimal):
-- PostgreSQL + SingleConnection → Logs warning (limits concurrency unnecessarily)
-- SQL Server + SingleWriter → Logs warning (limits concurrency unnecessarily)
+- Any client-server database + SingleConnection or SingleWriter (e.g. PostgreSQL + SingleConnection, SQL Server + SingleWriter) → Logs warning (limits concurrency unnecessarily)
+- DuckDB or Microsoft Access, file-based, with an explicit `Standard` → Logs the dialect's evidence-backed risk description (`DescribeStandardModeRisk`)
+- SQL Server LocalDB with an explicit `Standard` → Logs a performance-only warning
 
-See `pengdows.crud/DatabaseContext.Initialization.cs` for full coercion logic.
+See `CoerceMode` and `WarnOnModeMismatch` in `pengdows.crud/DatabaseContext.Initialization.cs` and each dialect's `CoerceConnectionMode` override for full coercion logic.
 
 ---
 
@@ -2459,12 +2560,9 @@ pengdows.crud uses **context-level + connection-level** locking:
 **Implementation** (pengdows.crud/wrappers/TrackedConnection.cs):
 
 ```csharp
-public ILockerAsync GetLock()
-{
-    // Shared connections: Real lock (serialize access)
-    // Ephemeral connections: NoOp lock (no contention)
-    return _locker;
-}
+public ILockerAsync GetLock() => _isSharedConnection
+    ? new RealAsyncLocker(_semaphoreSlim!, _modeContentionStats, _mode, _modeLockTimeout)  // shared: real lock
+    : NoOpAsyncLocker.Instance;                                                            // ephemeral: no contention
 ```
 
 ### Acquisition Pattern
@@ -2668,7 +2766,7 @@ behavior, not as a capability contract for new code.
 
 **PreventDatabaseUnload mode** (`PreventDatabaseUnloadConnectionStrategy`):
 - One sentinel connection kept open (never used)
-- Prevents database unload (LocalDB, embedded SQLite)
+- Prevents database unload (SQL Server LocalDB, Firebird, Db2 LUW; SQLite, DuckDB and Access never reach this strategy, their dialects coerce `PreventDatabaseUnload` to `SingleWriter`)
 - All work uses ephemeral connections (identical to Standard)
 
 **SingleWriter mode** (`StandardConnectionStrategy` + governor policy):
@@ -2684,13 +2782,13 @@ behavior, not as a capability contract for new code.
 
 ### Strategy Selection Logic
 
-**Initialization** (DatabaseContext.Initialization.cs:607, :619):
+**Initialization** (`InitializeCoreAsync` in DatabaseContext.Initialization.cs):
 ```csharp
 ConnectionMode = CoerceMode(requestedMode, product, topology);
 WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode, isLocalDb);
 ```
 
-**Strategy instantiation** (strategies/connection/ConnectionStrategyFactory.cs):
+**Strategy instantiation** (strategies/connection/ConnectionStrategyFactory.cs, called from the same initialization path):
 ```csharp
 internal static class ConnectionStrategyFactory
 {
@@ -2701,7 +2799,7 @@ internal static class ConnectionStrategyFactory
             DbMode.Standard => new StandardConnectionStrategy(context),
             DbMode.PreventDatabaseUnload => new PreventDatabaseUnloadConnectionStrategy(context),
             DbMode.SingleConnection => new SingleConnectionStrategy(context),
-            // SingleWriter uses Standard lifecycle + governor policy (WriteSlots=1 + turnstile)
+            // SingleWriter now uses Standard lifecycle with governor policy (WriteSlots=1 + turnstile)
             DbMode.SingleWriter => new StandardConnectionStrategy(context),
             _ => throw new NotSupportedException($"Unsupported database mode: {mode}")
         };
@@ -2714,12 +2812,16 @@ Note: there is no silent fallback for an unrecognized mode — the default case 
 
 **Purpose**: Handle database-specific stored procedure invocation syntax.
 
-**Implementations**:
-- `NoProcWrappingStrategy`: Direct call (`EXEC sp_name @p1, @p2`)
-- `FunctionCallProcWrappingStrategy`: Function syntax (`SELECT sp_name(@p1, @p2)`)
-- `ExecProcWrappingStrategy`: EXEC keyword required
+**Implementations** (`pengdows.crud/strategies/proc/`, chosen by `ProcWrappingStrategyFactory` from the dialect's `ProcWrappingStyle`):
+- `ExecProcWrappingStrategy` (`Exec`): `EXEC name args` (SQL Server, Sybase ASE)
+- `CallProcWrappingStrategy` (`Call`): `CALL name(args)` (MySQL family, Db2, Snowflake, SAP HANA)
+- `PostgresProcWrappingStrategy` (`PostgreSQL`): `SELECT * FROM name(args)` for reads, `CALL` for writes
+- `OracleProcWrappingStrategy` (`Oracle`): `BEGIN name(args); END;`
+- `ExecuteProcedureWrappingStrategy` (`ExecuteProcedure`): Firebird/InterBase; selectable procedures are queried, others use `EXECUTE PROCEDURE`
+- `InformixProcWrappingStrategy` (`Informix`): `EXECUTE PROCEDURE name(args)`
+- `UnsupportedProcWrappingStrategy` (`None`, and the fallback for an unknown style): throws `NotSupportedException`
 
-**Selection**: Determined by `DataSourceInformation.ProcWrappingStyle` based on detected database type.
+**Selection**: `DataSourceInformation.ProcWrappingStyle`, which reads the detected dialect's `ProcWrappingStyle`.
 
 ---
 
@@ -2741,24 +2843,23 @@ When you call `ExecuteReaderAsync()`, the returned `ITrackedReader` represents a
 **CRITICAL**: The connection lock is held for the **entire lifetime** of the reader.
 
 ```csharp
-// pengdows.crud/wrappers/TrackedReader.cs (simplified)
-public class TrackedReader : ITrackedReader
+// pengdows.crud/wrappers/TrackedReader.cs (simplified; the class is internal, callers see ITrackedReader)
+internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalTrackedReader
 {
-    private readonly ITrackedConnection _connection;
-    private readonly IDisposable _lockHandle;  // ← Lock acquired at creation
-
-    public TrackedReader(DbDataReader reader, ITrackedConnection connection)
+    // SqlContainer acquires the connection lock BEFORE creating the reader and hands it over,
+    // so the reader owns its release from then on.
+    internal TrackedReader(DbDataReader reader, ITrackedConnection connection,
+        IAsyncDisposable connectionLocker, bool shouldCloseConnection, /* command, metrics, ... */)
     {
         _reader = reader;
         _connection = connection;
-        _lockHandle = await connection.GetLock().LockAsync();  // ← ACQUIRE
+        _connectionLocker = connectionLocker;       // ← lock handed over, held for the reader's lifetime
     }
 
-    public async ValueTask DisposeAsync()
+    protected override async ValueTask DisposeManagedAsync()
     {
-        await _reader.DisposeAsync();
-        await _connection.CloseAndDisposeAsync();
-        _lockHandle?.Dispose();  // ← RELEASE
+        // dispose the reader and its command, close the connection when this reader owns it,
+        // then release the connection lock (and any context/transaction gate)
     }
 }
 ```
@@ -2795,12 +2896,13 @@ await reader.DisposeAsync();
 **TrackedReader** auto-disposes when `Read()` or `ReadAsync()` returns `false`:
 
 ```csharp
-// pengdows.crud/wrappers/TrackedReader.cs:487
+// pengdows.crud/wrappers/TrackedReader.cs (simplified; read-failure translation omitted)
 public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
 {
-    if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+    var hasRow = await _reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+    if (hasRow)
     {
-        Interlocked.Increment(ref _rowsRead);
+        RecordRow();
         return true;
     }
 
@@ -3131,7 +3233,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 **Actual selection**:
 - PostgreSQL/MySQL/Oracle → Standard (full concurrency)
 - SQLite `:memory:` → SingleConnection (required for correctness)
-- SQLite file → SingleWriter (optimal for WAL)
+- SQLite file, DuckDB file, Microsoft Access and pengdows.flatfile → SingleWriter (writes serialize; reads stay concurrent)
 - SQL Server LocalDB → PreventDatabaseUnload (prevents unload)
 - Firebird → PreventDatabaseUnload (keeps the page cache warm under `LINGER=0`)
 
@@ -3147,7 +3249,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 - Subscribers expected to be observers, not controllers
 
 **What's actually done**:
-- Warning in XML docs (DatabaseContext.Metrics.cs:43-85); event invoked at DatabaseContext.Metrics.cs:322
+- Warning in the XML docs of the `MetricsUpdated` event (DatabaseContext.Metrics.cs); the event is invoked from `OnMetricsCollectorUpdated`, once per subscriber inside its own try/catch
 - Event fired without holding locks
 - User responsible for not re-entering
 
@@ -3203,7 +3305,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 - Connection lock **must** be held from reader creation until reader disposal
 - Auto-disposal **must** release connection and lock
 
-**Enforcement**: TrackedReader.cs:81-170 (`DisposeManaged`) and 348-450 (`DisposeManagedAsync`)
+**Enforcement**: `TrackedReader.DisposeManaged` and `DisposeManagedAsync` (`pengdows.crud/wrappers/TrackedReader.cs`)
 
 **On a transaction specifically, this fails fast — it does not block.** A reader opened on an `ITransactionContext` holds the transaction's user lock (`ReusableAsyncLocker` over `_userLock`) until the reader is disposed, and `ReusableAsyncLocker.MarkHeldByActiveReader()` marks that hold as owned by the reader. While it is marked, *any* further lock attempt on the transaction — another command, `Commit`/`Rollback` (sync or async), `SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync`, from the same logical flow or another thread — throws `InvalidOperationException("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active...")` immediately. Blocking would deadlock when the waiter is the flow that must dispose the reader (e.g. writing while still streaming a `LoadStreamAsync` result from the same transaction). A failed `Commit`/`Rollback` leaves the transaction uncompleted, so dispose the reader and retry. `Dispose()` of the transaction does not throw here, but skips the rollback and leaves the transaction and connection to the reader; dispose the reader first.
 
@@ -3215,11 +3317,11 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 
 **Contract**:
 - MetricsCollector fires MetricsChanged event **without holding locks**
-- DatabaseContext subscribes during construction when `EnableMetrics` is set (DatabaseContext.Initialization.cs:288)
-- DatabaseContext unsubscribes in disposal (DatabaseContext.cs:525, :573)
+- DatabaseContext subscribes (`_metricsCollector.MetricsChanged += OnMetricsCollectorUpdated`) during initialization when metrics are enabled (DatabaseContext.Initialization.cs)
+- DatabaseContext unsubscribes in both disposal paths (DatabaseContext.cs)
 - Event handler (OnMetricsCollectorUpdated) **must not** acquire locks
 
-**Enforcement**: DatabaseContext.Metrics.cs:299-333 (`OnMetricsCollectorUpdated`)
+**Enforcement**: `OnMetricsCollectorUpdated` in DatabaseContext.Metrics.cs
 
 ### SqlDialect ↔ DataSourceInformation
 
@@ -3229,7 +3331,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 - Dialect selection based on SupportedDatabase enum
 - Vendor-specific behaviors encapsulated in dialect implementation
 
-**Enforcement**: DatabaseContext.Initialization.cs:290-315 (dialect detection and `SqlDialect` type check); mode coercion is `CoerceMode` at :1869-1899, delegating to each dialect's `CoerceConnectionMode`
+**Enforcement**: dialect detection in `InitializeCoreAsync` (DatabaseContext.Initialization.cs); mode coercion is `CoerceMode` in the same file, delegating to each dialect's `CoerceConnectionMode`
 
 ### TransactionContext ↔ IsolationResolver
 
@@ -3311,7 +3413,7 @@ Command preparation isn't a single global `Prepare=true`/`false` switch. `IConne
 
 ### Dialect-level connection-cleanup hooks for provider-specific write hazards
 
-Two `internal`, off-by-default `SqlDialect` members (deliberately not part of `ISqlDialect`) exist purely as `SqlContainer` connection-cleanup implementation details, not caller-observable capabilities — found and fixed together while implementing Oracle's batch-UPDATE strategy:
+Three `internal`, off-by-default `SqlDialect` members (deliberately not part of `ISqlDialect`) exist purely as `SqlContainer` connection-cleanup implementation details, not caller-observable capabilities — found and fixed together while implementing Oracle's batch-UPDATE strategy:
 
 - **`RequiresExplicitRollbackAfterFailedWrite`** (`false` by default, `true` for Firebird and InterBase) — `FirebirdSql.Data.FirebirdClient` starts an implicit transaction per command and auto-commits it on success, but has no corresponding auto-rollback on failure, so a failed write left its transaction's lock dangling on the pooled connection indefinitely. `SqlContainer.ExecuteNonQueryAsync` (and the reader/scalar execution paths that also perform writes) issues an explicit bare `ROLLBACK` after any failed write when the dialect requires it, before the connection returns to the pool — skipped entirely inside an explicit `ITransactionContext`, since that connection's commit/rollback lifecycle already belongs to the transaction.
 - **`RequiresConnectionPoolResetForDdl`** (`false` by default, `true` for Firebird) — Firebird's DDL commit requires no *other* pooled connection to still be referencing the table's prior metadata generation, even one holding only cleanly-committed transactions; enough prior round trips reusing pooled connections could make a later `CREATE`/`DROP`/`ALTER`/`TRUNCATE` fail with nothing actually uncommitted. `SqlContainer` calls the internal `SqlDialect.ResetConnectionPoolForDdl(connectionString)` before such a statement when the dialect overrides it — Firebird's override reflects into the static `FbConnection.ClearAllPools()` (no hard package reference from `pengdows.crud` to `FirebirdSql.Data.FirebirdClient`, the same reflection pattern `OracleDialect` uses for its `StatementCacheSize` hook) and swallows any failure as best-effort. It clears every Firebird pool process-wide, so the `connectionString` argument no longer decides which pools are reset: `ClearPool(connectionString)` only cleared the issuing context's own pool and could not reach a second, independent `DatabaseContext`'s pools (confirmed live).
@@ -3377,18 +3479,15 @@ var loggerFactory = LoggerFactory.Create(builder =>
     builder.AddConsole().SetMinimumLevel(LogLevel.Debug);
 });
 
-var context = new DatabaseContext(
-    connectionString,
-    factory,
-    new DatabaseContextConfiguration { LoggerFactory = loggerFactory }
-);
+var configuration = new DatabaseContextConfiguration { ConnectionString = connectionString };
+var context = new DatabaseContext(configuration, factory, loggerFactory);
 ```
 
-**What gets logged**:
-- Mode coercion (EventIds.ModeCoerced: 1002)
+**What gets logged with a dedicated event id** (`pengdows.crud/diagnostics/EventIds.cs`):
+- Mode coercion (EventIds.ModeCoerced: 1002), a warning when an explicit mode is changed (a `Best` auto-selection is logged at Information level without an event id)
 - Mode mismatch warnings (EventIds.ModeMismatch: 1001)
-- Connection lifecycle (EventIds.ConnectionLifecycle: 4001)
-- Dialect detection issues (EventIds.DialectDetection: 3001)
+
+`EventIds.ConnectionLifecycle` (4001) and `EventIds.DialectDetection` (3001) are declared but no code path logs with them yet, so filtering on them returns nothing.
 
 ### Inspect Metrics
 
@@ -3492,10 +3591,11 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
    - Events are fired without locks by design.
    - Re-entrancy can deadlock or corrupt expectations.
 
-7. **DbMode.Best can coerce unsafe choices.**
+7. **DbMode.Best can coerce unsafe choices.** The policy lives on each dialect (`CoerceConnectionMode`); see `connection/connection-modes.md`.
    - SQLite/DuckDB isolated `:memory:` must be SingleConnection.
-   - SQLite/DuckDB file databases and FlatFile resolve to SingleWriter (WAL-friendly); an explicit Standard/PreventDatabaseUnload request is coerced to SingleWriter.
-   - SQL Server LocalDB coerces to PreventDatabaseUnload.
+   - SQLite/DuckDB/Access file databases and FlatFile resolve to SingleWriter from `Best`; an explicit PreventDatabaseUnload is coerced to SingleWriter, and so is an explicit Standard on SQLite and FlatFile (DuckDB and Access honor Standard and log a risk warning).
+   - SQL Server LocalDB, Firebird and Db2 LUW resolve to PreventDatabaseUnload from `Best` (LocalDB also coerces the single-connection modes to it); an explicit Standard is honored on all three.
+   - Every other client-server database resolves to Standard and honors any explicit mode.
 
 8. **fakeDb is control-flow, not database semantics.**
    - It simulates provider behavior, not SQL execution or constraints.
@@ -3526,7 +3626,7 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 - **SqlContainer owns SQL + parameters; it does not track entity state.**
 - **Dialect selection is immutable post-initialization.**
 - **MySQL upserts depend on the `incoming` alias when the server supports it.**
-  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it: MySQL returns `"incoming"` on 8.0.20+ (`null` below that); MariaDB explicitly returns `null` (it does not support `INSERT ... AS alias`); Snowflake returns `"src"`.
+  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it: MySQL returns `"incoming"` on 8.0.20+ (`null` below that); MariaDB and TiDB explicitly return `null` (neither supports `INSERT ... AS alias`); Snowflake and Firebird return `"src"`.
   - `TableGateway`/`PrimaryKeyTableGateway` only inject `AS <alias>` before `ON DUPLICATE KEY UPDATE` when the alias is provided, so keep the property around even if you don’t use it.
   - Tests should cover both alias-enabled and legacy (fallback to `VALUES(...)`) behaviors.
 
@@ -3567,7 +3667,7 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
 ### Standard
 
 - Semantics: Ephemeral pooled connections. New connection for each statement unless inside a transaction.
-- Production default for all full server databases (PostgreSQL, SQL Server, Oracle, MySQL, MariaDB, CockroachDB).
+- Production default for the client-server databases (SQL Server, PostgreSQL and its forks, MySQL/MariaDB/SingleStore/TiDB, Oracle, Snowflake, Spanner, Informix, SAP HANA, InterBase, Sybase ASE; Firebird and Db2 LUW accept it explicitly, though their `Best` default is `PreventDatabaseUnload`).
 - Constructor behavior: Attempts to open a connection at initialization to detect dialect.
   - If Open() fails → throw immediately.
   - If connection opens but dialect cannot be resolved → fall back to SQL-92 dialect (SQL-92 is a fallback behavior, not a distinct DbMode or supported database product).
@@ -3619,16 +3719,17 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 - Used for: the file-based embedded engines (SQLite, DuckDB, Microsoft Access, pengdows.flatfile) and SQLite shared caches, where writers must serialize without pinning a connection. `SingleWriter` is a general write-admission policy, not a SQLite workaround: any engine whose safe topology needs one writer at a time gets it.
 - **The turnstile is held for the writer's entire transaction, not just the moment of acquiring the write permit** — a deliberate tradeoff, not an oversight. It exists specifically to prevent writer starvation: without it, a steady stream of readers could keep a waiting writer permanently queued behind them under `PoolGovernor`'s otherwise reader/writer-symmetric admission. Holding it for the whole transaction span means new readers gate behind an in-flight writer (readers already queued when the writer grabbed the turnstile are not displaced — see `PoolGovernor`'s own remarks), trading a bounded amount of reader latency for a hard guarantee that writers make progress.
 - **Production default for the file-based embedded engines (SQLite, DuckDB, Access, pengdows.flatfile)** (equal footing with Standard's production status for client-server databases). For SQLite, the turnstile-governed write serialization is purpose-built to eliminate the file-locking errors (`SQLITE_BUSY`) the engine is otherwise prone to under concurrent writers. DuckDB's own engine handles concurrent *disjoint-row* writes, but concurrent writers targeting the *same* row/resource can fail with a write-write conflict (surfaced as `SerializationConflictException`) — so SingleWriter there is both a deterministic policy choice for the disjoint case AND a fix for the same-resource case, not purely a policy preference (see `docs/positioning/product-thesis.md`). Reads still execute fully concurrently on ephemeral connections for both — a level of write-contention governance most comparable libraries don't provide for these engines at all.
-- **The write permit is not the connection.** `PoolGovernor`'s capacity-1 semaphore for writers is enforced via `PoolSlot`/`PoolSlotToken` (`pengdows.crud/infrastructure/PoolSlot.cs`), which holds no reference to any `DbConnection`/`DbCommand` at all — releasing a slot back to the governor is pure counter bookkeeping, independent of whether the connection used during that slot's lifetime succeeded or died. A pinned-writer design (GRDB's `DatabasePool`, Peewee's `SqliteQueueDatabase`) makes the one long-lived writer connection itself part of the concurrency mechanism, so a poisoned or severed connection requires rebuilding the writer object to recover. Here, a bad connection is simply discarded and the next admitted write acquires a fresh ephemeral one — concurrency policy is decoupled from connection identity. See `docs/positioning/product-thesis.md`'s expanded treatment of this distinction.
+- **The write permit is not the connection.** `PoolGovernor`'s capacity-1 semaphore for writers is enforced via `PoolSlot`/`PoolSlotToken` (`pengdows.crud/infrastructure/PoolSlot.cs`), which holds no reference to any `DbConnection`/`DbCommand` at all — releasing a slot back to the governor is pure counter bookkeeping, independent of whether the connection used during that slot's lifetime succeeded or died. A pinned-writer design (GRDB's `DatabasePool`, Peewee's `SqliteQueueDatabase`, or a size-1 writer pool such as Rust's `sqlx-sqlite-conn-mgr`) makes the one long-lived writer connection itself part of the concurrency mechanism, so a poisoned or severed connection requires rebuilding the writer object to recover. (Writer queues such as `EntityFrameworkCore.Sqlite.Concurrency` serialize through one background writer in the same way.) "Ephemeral" here means the lease: the provider's own pool may keep the physical connection open between writes, and the per-write check-out costs more than a pinned writer on tiny writes (see `benchmarks/CrudBenchmarks/README.md`). Here, a bad connection is simply discarded and the next admitted write acquires a fresh ephemeral one — concurrency policy is decoupled from connection identity. See `docs/positioning/product-thesis.md`'s expanded treatment of this distinction.
 
 ### Best
 
 - Resolver hint only. Not an actual strategy.
 - Defaults to the safest mode based on dialect + connection string:
-  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, non-LUW Db2) → Standard; Firebird and Db2 LUW → PreventDatabaseUnload
+  - Full servers (PostgreSQL family, MySQL family, Oracle, SQL Server, Snowflake, Spanner, Informix, SAP HANA, InterBase, Sybase ASE, non-LUW Db2) → Standard; Firebird and Db2 LUW → PreventDatabaseUnload
+  - A `Best` that would select PreventDatabaseUnload falls back to Standard when the configured maximum pool size is below 2 (the sentinel needs a second pooled connection)
   - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
-  - SQLite/DuckDB file-based → SingleWriter
+  - SQLite/DuckDB file-based (and shared in-memory), Access, pengdows.flatfile → SingleWriter
   - Unknown product → Standard
 
 ## 2. Provider-Driven Coercion
@@ -3648,6 +3749,8 @@ The mode retains one sentinel connection per enabled pool: the connection opened
   warning (`DuckDbDialect.DescribeStandardModeRisk`): same-row concurrent writers can fail with
   `SerializationConflictException`, which SingleWriter prevents. See
   `SqlDialect.CoerceEmbeddedSingleWriterMode`'s `allowStandard` parameter.
+
+### pengdows.flatfile: same policy as SQLite (`CoerceEmbeddedSingleWriterMode`, no `allowStandard`): `Best`, `Standard` and `PreventDatabaseUnload` all resolve to SingleWriter, because a FlatFile writer holds a per-directory write lock (`FlatFileDialect.IsEmbeddedSingleWriterEngine`). It has no in-memory mode.
 
 ### Allowed for Access file-based:
 
@@ -3697,7 +3800,7 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 ### Db2: on a positively detected Db2 LUW server `Best` selects PreventDatabaseUnload; on any other or unrecognized Db2 server it selects Standard (and a warning is logged: only Db2 LUW is supported). Every explicit choice — including `Standard` — is honored.
 
-### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. SQL Server with `AUTO_CLOSE` can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
+### Every other client-server database (PostgreSQL family incl. CockroachDB/YugabyteDB/Spanner, MySQL family incl. SingleStore/TiDB, Oracle, SQL Server, Snowflake, Informix, SAP HANA, InterBase, Sybase ASE): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. SQL Server with `AUTO_CLOSE` can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
 
 ### FakeDb: no special case. It emulates a real dialect via `EmulatedProduct` and follows all the above rules.
 
@@ -3737,8 +3840,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Session settings are enforced at logical connection open (per the wrapper-lifetime rules above).
   Do not mutate session-scoped settings mid-connection when using pooling.
 - ReadWriteMode.ReadOnly:
-  - `SqlContainer` pre-guards every write in code: it throws `NotSupportedException` for
-    `ExecutionType.Write` when `ReadWriteMode.ReadOnly` is set, before any provider call is
+  - `SqlContainer` pre-guards every write in code: it throws `ReadOnlyContextException` (a
+    `NotSupportedException`) for `ExecutionType.Write` when `ReadWriteMode.ReadOnly` is set, before any provider call is
     made. This covers every database, including ones with no enforcement below it.
   - Where the database itself also enforces read-only, the mechanism is dialect-specific and
     not uniform: PostgreSQL/MySQL/MariaDB/SQLite/DuckDB enforce at the connection/session
@@ -3747,7 +3850,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
     READ ONLY`, no persistent session mode); SQL Server's `ApplicationIntent=ReadOnly` is
     documented by `SqlServerDialect` as an Availability-Group routing hint only — it does
     NOT enforce server-side read-only state. SQLite uses `Mode=ReadOnly` in the connection
-    string for read-only contexts. Separately, every SQLite checkout resets the session-scoped
+    string for read-only contexts; Access and pengdows.flatfile pass `Mode=Read` and `readonly=true` respectively. Separately, every SQLite checkout resets the session-scoped
     `PRAGMA query_only` to `OFF`; pengdows.crud never turns it on because SQLite refuses the
     `BEGIN IMMEDIATE` used by Microsoft.Data.Sqlite for transactions on a query-only connection.
 
@@ -3767,6 +3870,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Persistent modes (PreventDatabaseUnload/SingleConnection): if a required connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
 - **`PreventDatabaseUnload` repairs a lost sentinel lazily.** At the top of every `GetConnection`/`GetConnectionAsync`, any sentinel whose state is `Broken` or `Closed` is disposed (releasing its governor permit) and replaced by a freshly opened connection that takes a new permit from the same pool, with a warning logged. There is no background monitor, so the guarantee is "repaired before the next operation", not continuous; a dropped sentinel never breaks reads or writes, which use their own ephemeral connections. A repair that races context disposal disposes its replacement instead of installing it.
+- **DDL on Firebird closes the sentinels first.** Firebird fails `DROP`/`ALTER` of a table the application has used with "object ... is in use" while any other attachment exists, so a dialect that sets `RequiresConnectionPoolResetForDdl` (only Firebird) has the context close every `PreventDatabaseUnload` sentinel (releasing its permit) and clear the provider pool before such a DDL statement, then reopen the sentinels after it; a failed reopen is logged and left to the lazy repair above.
 - **`SingleConnection` never recreates its pinned connection.** It cannot safely recreate a connection for disposable `:memory:` databases; a replacement would be a different empty database.
 
   **For `:memory:` SQLite/DuckDB, this isn't a missing feature — it's unrepairable in principle, not just in the current implementation.** The entire database lives only inside that one connection; there is no separate file or server for a replacement connection to reconnect to. Opening a *new* connection to the same `:memory:` connection string doesn't recover the old data, it silently creates a brand-new, empty database — which would be a much worse failure mode than the current loud "every operation now fails" behavior. So for `:memory:` specifically, treat `SingleConnection` mode as "the data does not survive a connection break," full stop, not as a gap to fix.
@@ -3779,6 +3883,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite file-based → SingleWriter
   - DuckDB/Access file-based → honored, with a risk warning
+  - pengdows.flatfile → SingleWriter
 - Firebird (embedded or client-server) → `Best` selects PreventDatabaseUnload; every explicit choice is honored.
 - LocalDB → `Best` selects PreventDatabaseUnload; explicit `Standard` honored with a performance warning.
 - Unknown product with Best → Standard.
@@ -3854,14 +3959,20 @@ not something known at compile time.
 }
 ```
 
-**Entry point — read this first.** `DbProviderLoader`'s constructor is `internal`, and this
-release ships no public `IServiceCollection` extension that wraps it, so application code outside
-`pengdows.crud` has no supported way to construct one — an instance can only be created from
-inside `pengdows.crud` itself or its `InternalsVisibleTo` test assemblies, which is where its
-public `IDbProviderLoader.LoadAndRegisterProviders(IServiceCollection)` member is exercised today.
-For application code, the supported path is to register
-each provider's factory directly as a keyed singleton, using the same key contract described
-below:
+**Entry point.** `DbProviderLoader`'s constructor is `internal`; application code reaches it
+through the public `AddDbProviderLoading` extension on `IServiceCollection`
+(`pengdows.crud/configuration/DbProviderLoaderServiceCollectionExtensions.cs`), which constructs
+the loader and calls `LoadAndRegisterProviders` for you:
+
+```csharp
+services.AddDbProviderLoading(configuration);          // reads the "DatabaseProviders" section
+services.AddDbProviderLoading(configuration, logger);  // optional ILogger<DbProviderLoader> for diagnostics
+```
+
+The logger is optional because this runs at composition time, before the service provider exists,
+so no resolved `ILogger<DbProviderLoader>` is available; it defaults to a null logger. If you
+would rather not load providers from configuration, register each provider's factory directly as
+a keyed singleton, using the same key contract described below:
 
 ```csharp
 services.AddKeyedSingleton<DbProviderFactory>("sqlserver", Microsoft.Data.SqlClient.SqlClientFactory.Instance);
@@ -3886,11 +3997,13 @@ this order:
      `AppDomain.CurrentDomain.BaseDirectory`. The resolved path **must stay within the
      application's base directory** — this is an enforced containment boundary, not a
      convention; a path that escapes it (e.g. via `..` segments or an absolute path elsewhere)
-     throws `InvalidOperationException`. The check is **lexical**: it normalizes the path with
-     `Path.GetFullPath` and compares prefixes; it does not resolve symlinks, so a symlink placed
-     inside the base directory that points outside it passes the check. The boundary assumes the
-     app's own base directory hasn't been compromised with planted links — an attacker who can
-     write there already has a materially larger foothold than a single configured path.
+     throws `InvalidOperationException`. The path is first normalized with `Path.GetFullPath` and
+     its prefix compared; if the file then exists, `File.ResolveLinkTarget(returnFinalTarget: true)`
+     follows any symlink chain and the final target must also stay inside the base directory, so a
+     symlink inside the base directory that points outside it is rejected. Hard links and other
+     filesystem tricks are not detected; the boundary assumes the app's own base directory hasn't
+     been compromised — an attacker who can write there already has a materially larger foothold
+     than a single configured path.
      A path that passes containment but doesn't exist throws `InvalidOperationException` too.
    - `AssemblyName` — loaded via `Assembly.Load` (uses the standard assembly-resolution probing,
      not path-based).
@@ -3909,10 +4022,15 @@ this order:
 ## DI registration key vs. `ProviderName` — the gotcha
 
 `LoadAndRegisterProviders` registers each resolved factory as a **keyed singleton under the
-configuration section key**, not under `ProviderName`:
+configuration section key** and, when `ProviderName` is spelled differently, under `ProviderName`
+as well; it also registers it with `DbProviderFactories` for the legacy path:
 
 ```csharp
 services.AddKeyedSingleton<DbProviderFactory>(providerKey, factory); // providerKey = "sqlserver" above
+if (config.ProviderName != providerKey)
+{
+    services.AddKeyedSingleton<DbProviderFactory>(config.ProviderName, factory); // same factory, second key
+}
 DbProviderFactories.RegisterFactory(config.ProviderName, factory);   // legacy compatibility path only
 ```
 
@@ -3923,18 +4041,16 @@ factory with:
 _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
 ```
 
-**This means a tenant's `IDatabaseContextConfiguration.ProviderName` must equal the
-`DatabaseProviders` section key it should resolve to — not necessarily the ADO.NET invariant
-name that field's own name suggests.** In the example above, a tenant that should use the first
-provider must set `ProviderName = "sqlserver"`, not `"System.Data.SqlClient"` — even though
-`"System.Data.SqlClient"` is what the *loader's own* `ProviderName` field holds for that same
-entry (that value is only used for the legacy `DbProviderFactories.RegisterFactory` call, a
-separate registration path from keyed DI). Setting a tenant's `ProviderName` to the invariant
-name instead of the section key makes the keyed lookup return `null`, and tenant-context
-construction throws `InvalidOperationException("No factory registered for '<ProviderName>'.")`
-— the message names the key it looked for, not the fix, so check this mismatch first when you
-see it. The same rule applies to keyed factories you register by hand: the tenant's
-`ProviderName` must equal the registration key.
+**This means a tenant's `IDatabaseContextConfiguration.ProviderName` must equal a registered
+key: either the `DatabaseProviders` section key or the entry's own `ProviderName`.** In the
+example above, a tenant that should use the first provider can set `ProviderName = "sqlserver"`
+(the section key) or `"System.Data.SqlClient"` (the loader's `ProviderName` for that entry); both
+resolve to the same factory. A tenant `ProviderName` that matches neither makes the keyed lookup
+return `null`, and tenant-context construction throws
+`InvalidOperationException("No factory registered for '<ProviderName>'.")` — the message names
+the key it looked for, not the fix, so check this mismatch first when you see it. Keyed
+factories you register by hand are registered under one key only: the tenant's `ProviderName`
+must equal it exactly.
 
 Outside `ITenantContextRegistry`, resolve a keyed factory the same way it was registered — by
 key:
@@ -3947,9 +4063,9 @@ var factory = provider.GetRequiredKeyedService<DbProviderFactory>("sqlserver");
 
 `TenantContextRegistry` accepts an optional `maxTenantCount` constructor argument that throws
 `InvalidOperationException` from `GetContext`/`AcquireLease` for a new tenant once that many
-distinct tenants have been cached (call `Invalidate`/`InvalidateAll` to free capacity). It is a
-constructor argument only: `MultiTenantOptions` has no corresponding setting, and the registry
-`services.AddMultiTenancy(configuration)` registers is unbounded. To set a cap, register
+distinct tenants have been cached (call `Invalidate`/`InvalidateAll` to free capacity).
+`services.AddMultiTenancy(configuration)` passes `MultiTenantOptions.MaxTenantCount` (the
+`MultiTenant:MaxTenantCount` configuration key) through to it; to set a cap in code, register
 `ITenantContextRegistry` yourself with a factory delegate that passes `maxTenantCount` — see
 [`multitenancy.md`](./multitenancy.md#tenant-cardinality-maxtenantcount) for the registration.
 
@@ -4011,8 +4127,8 @@ is equivalent to directly referencing and calling into arbitrary code at startup
 
 **Path containment (`ResolveAssemblyPath`, described above) is a *path* guarantee, not a *code*
 guarantee.** It answers one narrow question — "does the configured `AssemblyPath`, lexically
-normalized, resolve to a location inside the application's own base directory?" — and nothing
-else (it does not follow symlinks). It
+normalized, resolve (after following any symlink) to a location inside the application's own
+base directory?" — and nothing else. It
 says nothing about what the assembly at that path is permitted to do once loaded, whether it's
 been tampered with, or whether its own transitive dependencies are trustworthy. Do not read
 "path containment enforced" as "the loaded code is sandboxed" — those are unrelated properties,
@@ -4102,7 +4218,8 @@ different server versions; nothing requires them to share an engine. `ProviderNa
 name: `TenantContextRegistry` resolves each tenant's factory with
 `GetKeyedService<DbProviderFactory>(config.ProviderName)`, so every `ProviderName` your tenants use
 needs a matching `services.AddKeyedSingleton<DbProviderFactory>("sqlserver", SqlClientFactory.Instance)`
-(etc.) registration — `AddMultiTenancy` does not register provider factories for you. See
+(etc.) registration, or a `services.AddDbProviderLoading(configuration)` call that registers them from
+a `DatabaseProviders` section — `AddMultiTenancy` does not register provider factories for you. See
 [`dynamic-provider-loading.md`](./dynamic-provider-loading.md#di-registration-key-vs-providername--the-gotcha)
 for the same contract as it applies to `DbProviderLoader`.
 
@@ -4120,9 +4237,9 @@ This single call, reading the `MultiTenant` configuration section, registers:
 - `IDatabaseContextFactory` as a singleton (`TryAddSingleton<IDatabaseContextFactory,
   DefaultDatabaseContextFactory>()` — see "Replacing the context factory" below)
 - `ITenantContextRegistry` as a singleton (`TenantContextRegistry`), wired to the resolver and
-  factory above. The registry is constructed by the container, so its optional `maxTenantCount`
-  argument is left at its default (`null`, unbounded) — see "Tenant cardinality" below for how to
-  set a cap
+  factory above. Its optional `maxTenantCount` argument is taken from
+  `MultiTenantOptions.MaxTenantCount` (the `MultiTenant:MaxTenantCount` key; `null`, unbounded, by
+  default) — see "Tenant cardinality" below
 
 ## Custom resolver (no `AddMultiTenancy`)
 
@@ -4423,10 +4540,9 @@ distinct tenants are cached, `GetContext`/`AcquireLease` for a *new* tenant thro
 tenants keep resolving normally. Admission is atomic — the count check and the cache insert happen
 under one lock, so concurrent first requests for different new tenants cannot overshoot the cap.
 
-`MultiTenantOptions` has no cardinality setting and `AddMultiTenancy` does not pass one, so the
-registry it registers is unbounded (the default). To set a cap, register the registry yourself
-with a factory delegate — after `AddMultiTenancy` (the last `ITenantContextRegistry` registration
-is the one the container resolves) or in a fully custom setup:
+With `AddMultiTenancy`, set `MultiTenant:MaxTenantCount` (`MultiTenantOptions.MaxTenantCount`); it
+is passed through to the registry, and left unset the registry is unbounded (the default). In a
+fully custom setup, register the registry yourself with a factory delegate:
 
 ```csharp
 services.AddSingleton<ITenantContextRegistry>(sp => new TenantContextRegistry(
@@ -4493,11 +4609,11 @@ This distinction matters for anyone evaluating the isolation guarantee:
 | Library-enforced | Deployment/caller responsibility |
 |---|---|
 | Each tenant's `IDatabaseContext` has independent, non-shared `PoolGovernor` instances — one tenant's connection saturation cannot consume another tenant's admission slots. | **Database-per-tenant is a convention the library assumes, not one it verifies.** Nothing in `TenantContextRegistry`/`TenantConnectionResolver` checks that tenant A's and tenant B's connection strings point at physically distinct databases. If two tenant configurations point at the same database, the library isolates the *connections/admission*, not the *data* — that's an operator configuration error, not something the library detects or prevents. |
-| One context per tenant identifier is created and cached (`ConcurrentDictionary<string, TenantContextEntry>`, each entry wrapping a `Lazy<IDatabaseContext>` with `LazyThreadSafetyMode.ExecutionAndPublication` — the factory runs at most once per key even under concurrent first access, whether the racing callers are `GetContext`, `AcquireLease`, or any mix). | **Tenant identity itself must be trusted before it reaches the registry.** `GetContext(tenant)` does not authenticate anything; it is a lookup key. Resolving `tenant` from validated authentication/authorization state upstream is the caller's job. |
+| One context per tenant identifier is created and cached (`ConcurrentDictionary<string, TenantContextEntry>`, each entry wrapping a `Lazy<Task<IDatabaseContext>>` with `LazyThreadSafetyMode.ExecutionAndPublication` — the factory runs at most once per key even under concurrent first access, whether the racing callers are `GetContext`, `GetContextAsync`, `AcquireLease`, `AcquireLeaseAsync`, or any mix). | **Tenant identity itself must be trusted before it reaches the registry.** `GetContext(tenant)` does not authenticate anything; it is a lookup key. Resolving `tenant` from validated authentication/authorization state upstream is the caller's job. |
 | Tenant-ID comparison is case-insensitive (`StringComparer.OrdinalIgnoreCase`) end to end — `TenantConnectionResolver`'s configuration dictionary and `TenantContextRegistry`'s context cache use the same comparer, so `"acme"` and `"ACME"` always resolve to exactly one cached context, never two independently governed ones (fixed as CORE-009; this is not an accidental convenience, it's an invariant relied on to prevent duplicate-context/cardinality-evasion bugs). | No other normalization (trimming, casing conventions beyond ordinal case-insensitivity, Unicode normalization) is applied to the tenant identifier. Two strings that differ only by leading/trailing whitespace, for example, are treated as different tenants. |
-| An optional `maxTenantCount` cap (a `TenantContextRegistry` constructor argument; `AddMultiTenancy` does not set it — see [`multitenancy.md`](./multitenancy.md#tenant-cardinality-maxtenantcount)) is enforced atomically against concurrent admission of *different* new tenants — the count-check and dictionary-add happen under one lock, so two threads racing to admit two different new tenants cannot both slip past the check. | Choosing and sizing the cap for the deployment's actual tenant cardinality; the library defaults to unbounded. |
+| An optional `maxTenantCount` cap (a `TenantContextRegistry` constructor argument; `AddMultiTenancy` passes `MultiTenantOptions.MaxTenantCount` (`MultiTenant:MaxTenantCount`) to it, `null` meaning unbounded — see [`multitenancy.md`](./multitenancy.md#tenant-cardinality-maxtenantcount)) is enforced atomically against concurrent admission of *different* new tenants — the count-check and dictionary-add happen under one lock, so two threads racing to admit two different new tenants cannot both slip past the check. | Choosing and sizing the cap for the deployment's actual tenant cardinality; the library defaults to unbounded. |
 | Object identity *is* tenant identity for lifecycle events — `ContextCreated`/`ContextRemoved` pass the `IDatabaseContext` instance itself, nothing else (see CORE-011's resolution: this is a deliberate architectural decision, not a missing feature — there is no separate tenant-ID field threaded through the API for a subscriber to correlate against). | A subscriber that needs a human-readable tenant label must derive or capture it itself (e.g. from the same call site that invoked `GetContext(tenantId)`), since the event does not supply one. |
-| Each `DatabaseContext`'s own operational logging (connection lifecycle, dialect detection, session settings, etc.) uses the `ILoggerFactory` passed to *that* context's constructor (or `IDatabaseContextFactory.Create`), so per-tenant sinks/scopes work correctly for everything the context itself logs. | **`TypeCoercionHelper`'s diagnostic logging is process-wide, not per-tenant.** It's an `internal static` utility with one static `Logger`, assigned by the first `DatabaseContext` constructed in the process (the constructor sets it only while it is still the default `NullLogger` — a check-then-assign, not an atomic operation, so contexts constructed at the same instant race and one of them wins). In a deployment with distinct per-tenant `ILoggerFactory` instances, every tenant *except* the first one to construct has its type-coercion warnings/errors logged through the *first* tenant's logger — misattributed, not lost. If per-tenant attribution of coercion diagnostics specifically matters, don't rely on this logger for it. |
+| Each `DatabaseContext`'s own operational logging (connection lifecycle, dialect detection, session settings, etc.) uses the `ILoggerFactory` passed to *that* context's constructor (or `IDatabaseContextFactory.Create`), so per-tenant sinks/scopes work correctly for everything the context itself logs. | **`TypeCoercionHelper`'s diagnostic logging is process-wide, not per-tenant.** It's an `internal static` utility with one static `Logger`, assigned by the first `DatabaseContext` to initialize in the process (`TypeCoercionHelper.SetLoggerIfUnset` adopts a logger only while it is still the default `NullLogger`, via `Interlocked.CompareExchange`, so contexts created at the same instant race but exactly one wins). In a deployment with distinct per-tenant `ILoggerFactory` instances, every tenant *except* the first one to construct has its type-coercion warnings/errors logged through the *first* tenant's logger — misattributed, not lost. If per-tenant attribution of coercion diagnostics specifically matters, don't rely on this logger for it. |
 
 ## Context disposal: application shutdown, or live rotation via leases
 
@@ -4547,7 +4663,7 @@ disposal races a concurrent `GetContext`/`AcquireLease` call that is still in th
 *constructing* a new context for that same tenant, the registry does not leak an orphaned,
 untracked context: the entry's own disposal path (`ScheduleDisposeEntry` for `Invalidate`, a
 background shutdown work item for registry disposal) blocks on that same
-`Lazy<IDatabaseContext>.Value` off the caller's thread and disposes the result once construction
+`Lazy<Task<IDatabaseContext>>` off the caller's thread and disposes the result once construction
 completes. What is *not* guaranteed is the racing bare-reference caller's outcome: `GetContext`
 does not re-verify its entry after construction, so it can be handed the context that is about to
 be (or already has been) disposed by that path. Callers that need a usable context across such a
@@ -4557,7 +4673,7 @@ The registry-disposal variant is covered by `TenantTests.cs`
 
 **Concurrent callers racing to construct the same new tenant (true single-flight).**
 `GetContext` and `AcquireLease` both resolve through the same `TenantContextEntry.LazyContext` — a
-`Lazy<IDatabaseContext>` under `LazyThreadSafetyMode.ExecutionAndPublication`. The factory runs
+`Lazy<Task<IDatabaseContext>>` under `LazyThreadSafetyMode.ExecutionAndPublication`. The factory runs
 exactly once per tenant generation, and every racing caller blocks on that one construction and
 receives the same instance — the underlying connection/dialect-detection work is never duplicated
 and there is no "loser" whose redundant context has to be discarded. A faulted construction is
@@ -4645,7 +4761,9 @@ pengdows.crud supports 23 directly supported database products via the `Supporte
 | `Informix=524288` | IBM Informix Dynamic Server |
 | `SapHana=1048576` | SAP HANA (opt-in integration coverage) |
 | `InterBase=2097152` | Embarcadero InterBase (opt-in integration coverage) |
-| `Access=4194304` | Microsoft Access / Jet/ACE (Windows-only, opt-in integration coverage) |
+| `Access=4194304` | Microsoft Access / Jet/ACE (Windows-only; the integration suite runs it automatically on Windows and not elsewhere, `testbed/Program.cs`) |
+
+> **New in 2.0.6:** `Db2`, `FlatFile`, `SingleStore`, `SybaseASE`, `Spanner`, `Informix`, `SapHana`, `InterBase` and `Access` are the first databases added in 2.0; 2.0.0 to 2.0.5 had the other fourteen. Their integration status is in [integration-status.md](integration-status.md) and the release history in [CHANGELOG.md](../CHANGELOG.md).
 
 > **SQL-92 fallback:** If dialect detection cannot identify the connected product, pengdows.crud falls back to a conservative SQL-92 compatible dialect. SQL-92 is a fallback behavior, not a distinct supported database product, and has no `SupportedDatabase` enum value.
 
@@ -4653,11 +4771,11 @@ pengdows.crud supports 23 directly supported database products via the `Supporte
 
 > **Verified PostgreSQL/MySQL-compatible forks:** Percona Server for MySQL, Citus, TimescaleDB, and Fujitsu Enterprise Postgres are not distinct `SupportedDatabase` values — each still reports itself via the standard `DataSourceProductName`/version-string mechanism as "MySQL" or "PostgreSQL", so `DatabaseDetectionService` resolves them to `SupportedDatabase.MySql`/`PostgreSql` and they run through the exact same dialect and test suite as the vanilla engine. All four were verified live (full `PostgreSQLTestProvider`/MySQL test-provider suite, 100% pass, same check count as vanilla) and are always-on entries in the testbed (`testbed/ParallelTestOrchestrator.cs`) — not opt-in. Fujitsu Enterprise Postgres needs two non-default container settings to start at all: it listens on port **27500**, not 5432, and its entrypoint has no "skip if this is the default superuser" special-case, so configuring it via `PG_USER=postgres` crashes the container ("role postgres already exists") — use `PG_ADMIN_PASSWORD` instead to set the existing superuser's password. **EDB Postgres Extended** is very likely also just `PostgreSql` (same wire-protocol/version-string shape), but has no public Docker image to verify against — EDB moved it behind a private, subscription-gated registry — so it is *not* claimed as verified here.
 
-> **SingleStore:** unlike the verified forks above, SingleStore genuinely needs its own `SupportedDatabase` value — it reports itself via schema/`SELECT VERSION()` as generic, indistinguishable MySQL (`5.7.32` with no marker), so `DatabaseDetectionService` runs a dedicated `SELECT @@memsql_version` probe (a SingleStore-only system variable, structurally identical to the existing `@@aurora_version` Aurora MySQL probe) to tell it apart. Once detected, it delegates to `MySqlDialect` the same way `AuroraMySql` does. Verified live against `ghcr.io/singlestore-labs/singlestoredb-dev`: core CRUD passes, and stored procedures need SingleStore's own syntax — `CREATE PROCEDURE proc() AS BEGIN ECHO SELECT ...; END` rather than MySQL's bare `BEGIN SELECT ...; END` (a real syntax error on SingleStore) — `CALL` invocation and quoted-identifier handling are otherwise identical to MySQL/MariaDB. SingleStore is not yet wired into the testbed orchestrator as an always-on container entry — that remains open work, distinct from the detection/dialect support described here.
+> **SingleStore:** unlike the verified forks above, SingleStore genuinely needs its own `SupportedDatabase` value — it reports itself via schema/`SELECT VERSION()` as generic, indistinguishable MySQL (`5.7.32` with no marker), so `DatabaseDetectionService` runs a dedicated `SHOW VARIABLES LIKE 'memsql_version'` probe (a SingleStore-only system variable, structurally identical to the `SHOW VARIABLES LIKE 'aurora_version'` Aurora MySQL probe; `@@memsql_version` raised "Unknown system variable" on the others) to tell it apart. Once detected, it delegates to `MySqlDialect` the same way `AuroraMySql` does. Verified live against `ghcr.io/singlestore-labs/singlestoredb-dev`: core CRUD passes, and stored procedures need SingleStore's own syntax — `CREATE PROCEDURE proc() AS BEGIN ECHO SELECT ...; END` rather than MySQL's bare `BEGIN SELECT ...; END` (a real syntax error on SingleStore) — `CALL` invocation and quoted-identifier handling are otherwise identical to MySQL/MariaDB. SingleStore is an always-on entry in the testbed (`testbed/SingleStore`), and its integration suite is green ([integration-status.md](integration-status.md)).
 
-> **FlatFile:** [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) is a file-backed ADO.NET provider over CSV/TSV/pipe/delimited/fixed-width/NDJSON files. The dialect is verified against the provider source (0.2.1-preview.1) and runs in the testbed. Parameters are named `:name` (positional `?` also works, but not mixed in one statement). `DbMode.Best`, `Standard` and `PreventDatabaseUnload` resolve to `SingleWriter`: the provider allows one non-readonly connection per database, and a second in-process writer waits `connectionTimeout` then throws `TimeoutException`; reads use `readonly=true` connections. Isolation: `ReadUncommitted`, `ReadCommitted` and `RepeatableRead` (a per-table snapshot on first read); `Serializable`/`Snapshot` requests and `StrictConsistency` throw; `SafeNonBlockingReads` runs as `RepeatableRead`, `FastWithRisks` as `ReadUncommitted`. Savepoints (create/rollback/release), `SET TRANSACTION READ ONLY`, `MERGE` upserts, schema-qualified tables and `OFFSET ... FETCH` paging are supported; there is no `LIMIT`, `RETURNING`, identity column or stored procedure, so `[Id(false)]` keys need a correlation-token column. Text columns cannot tell `NULL` from `''` unless the table declares `CREATE TABLE ... WITH (NULLTOKEN = '...')`. Server version comes from `FlatFileConnection.ServerVersion`. `pengdows.crud` takes no dependency on the `pengdows.flatfile` package.
+> **FlatFile:** [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) is a file-backed ADO.NET provider over CSV/TSV/pipe/delimited/fixed-width/NDJSON files. The dialect is verified against the provider source (0.2.1-preview.1) and runs in the testbed (which references 0.2.1-preview.2). Parameters are named `:name` (positional `?` also works, but not mixed in one statement). `DbMode.Best`, `Standard` and `PreventDatabaseUnload` resolve to `SingleWriter`: the provider allows one non-readonly connection per database, and a second in-process writer waits `connectionTimeout` then throws `TimeoutException`; reads use `readonly=true` connections. Isolation: `ReadUncommitted`, `ReadCommitted` and `RepeatableRead` (a per-table snapshot on first read); `Serializable`/`Snapshot` requests and `StrictConsistency` throw; `SafeNonBlockingReads` runs as `RepeatableRead`, `FastWithRisks` as `ReadUncommitted`. Savepoints (create/rollback/release), `SET TRANSACTION READ ONLY`, `MERGE` upserts, schema-qualified tables and `OFFSET ... FETCH` paging are supported; there is no `LIMIT`, `RETURNING`, identity column or stored procedure, so `[Id(false)]` keys need a correlation-token column. Text columns cannot tell `NULL` from `''` unless the table declares `CREATE TABLE ... WITH (NULLTOKEN = '...')`. Server version comes from `FlatFileConnection.ServerVersion`. `pengdows.crud` takes no dependency on the `pengdows.flatfile` package.
 
-> **Sybase (SAP ASE):** has its own dedicated `SybaseAseDialect` (not a fork delegating to another dialect) and a real testbed container (`nguoianphu/docker-sybase`), verified live against ASE 16. Notable genuine differences from every other T-SQL/SQL-92-family dialect here, all confirmed live rather than assumed from SQL Server parity: MERGE works but rejects a trailing statement-terminator semicolon (`RequiresMergeStatementTerminator => false`, same mechanism Oracle uses — this branch's Oracle MERGE-terminator fix was added alongside this Sybase support, since Sybase needed the same mechanism); `;` is rejected as a multi-statement batch separator entirely, not just as a trailing terminator (`SupportsSemicolonStatementSeparator => false`); no multi-row `INSERT ... VALUES`, no `VALUES`-derived-table-as-MERGE-source, and no `LIMIT`/`OFFSET` paging (uses `SELECT TOP N` like SQL Server instead); NOT NULL-by-default columns and a non-Unicode default charset. `AdoNetCore.AseClient`'s `AseException` does not derive from `DbException` and `GetSchema()` is unimplemented — both are handled generically via a duck-typed "Errors collection" fallback in `DbExceptionTranslationSupport` rather than Sybase-specific special-casing.
+> **Sybase (SAP ASE):** has its own dedicated `SybaseAseDialect` (not a fork delegating to another dialect) and a real testbed container (`nguoianphu/docker-sybase`), verified live against ASE 16. Notable genuine differences from every other T-SQL/SQL-92-family dialect here, all confirmed live rather than assumed from SQL Server parity: MERGE works but rejects a trailing statement-terminator semicolon (`RequiresMergeStatementTerminator => false`, same mechanism Oracle uses); `;` is rejected as a multi-statement batch separator entirely, not just as a trailing terminator (`SupportsSemicolonStatementSeparator => false`); no multi-row `INSERT ... VALUES`, no `VALUES`-derived-table-as-MERGE-source, and no `LIMIT`/`OFFSET` paging (uses `SELECT TOP N` like SQL Server instead); NOT NULL-by-default columns and a non-Unicode default charset. `AdoNetCore.AseClient`'s `AseException` does not derive from `DbException` and `GetSchema()` is unimplemented — both are handled generically via a duck-typed "Errors collection" fallback in `DbExceptionTranslationSupport` rather than Sybase-specific special-casing.
 
 > **Sybase ASE Guids:** store Guids in `BINARY(16)`. `SybaseAseDialect` passes `DbType.Guid` straight to AdoNetCore.AseClient (unchanged since 2.0.5), which writes the 16-byte `Guid.ToByteArray()` form; that reads back as the same Guid and matches in equality lookups. Into a `CHAR(36)` column the driver writes those 16 bytes as characters, which do not read back as a Guid. Verified live on ASE 16.0 SP02.
 
@@ -4665,7 +4783,7 @@ pengdows.crud supports 23 directly supported database products via the `Supporte
 
 > **Informix special registers:** an *unqualified* quoted identifier named after a special register (`user`, `today`, `current`, `sitename`, `dbservername`, `current_user`) resolves to the register, not the column, wherever it appears in an expression. For example, `DELETE FROM "t" WHERE "user" = ?` compares the session user name. The gateways table-qualify every column reference on Informix, so generated SQL is safe. In your own SQL, always qualify such columns (`"t"."user"`, or an alias). Informix's .NET provider also trims trailing spaces from every `VARCHAR`/`LVARCHAR` value it reads, with no option to turn it off (IBM APAR IC63704); see `ISqlDialect.PreservesTrailingWhitespace`.
 
-> **IBM Db2:** only Db2 for Linux/Unix/Windows (LUW) is supported. The Db2 family is three separate IBM products sharing a common SQL subset (Db2 LUW, Db2 for z/OS, Db2 for i), not one engine on different operating systems, and their real features differ — transactions among them (e.g. IBM i commitment control depends on journaling) — so Db2 for z/OS and Db2 for i are **not supported**. A Db2 server not recognized as LUW (via `SYSPROC.ENV_GET_INST_INFO()`, which exists only on LUW) logs a warning rather than refusing, because a restricted LUW user may be unable to run the recognition query. They are planned as separate `SupportedDatabase` values with their own dialects once they can be tested (tracker VAR-003). The dedicated `Db2Dialect` is verified live against Db2 LUW (`ibmcom/db2`) in the always-on testbed run (`testbed/Db2`). **Pool-size caveat (IBM driver, confirmed live):** IBM.Data.Db2 fixes a pool's size the first time a connection string opens it and rejects a later string that asks a different size for the same server and database. `PreventDatabaseUnload` needs at least two pooled connections, so `DbMode.Best` stays `Standard` when you configure a maximum pool size below 2; requesting `PreventDatabaseUnload` explicitly together with `Max Pool Size=1` fails in the driver with "Invalid argument" — use a maximum of at least 2 for that mode. `DbMode.Best`: on a positively detected Db2 LUW server it selects `PreventDatabaseUnload` (LUW's default implicit activation deactivates an idle database; measured ~1.1 s per cold connection versus ~4 ms with a sentinel); any other or unrecognized Db2 server keeps `Standard`, and an explicit `Standard` is always honored. Generated-key retrieval wraps the ENTIRE insert statement — `SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...))` — rather than appending a trailing RETURNING/OUTPUT clause; this branch's dialect layer has no per-database "wrap the whole statement" hook (unlike newer branches), so `TableGateway.Core.cs` (`BuildCreateWithReturning`) special-cases `SupportedDatabase.Db2` directly, matching its existing SqlServer/Oracle special cases. Isolation levels (Db2's UR/CS/RS/RR map to ReadUncommitted/ReadCommitted/RepeatableRead/Serializable) are registered in `IsolationResolver`'s central per-database switch, not on the dialect itself — this branch's isolation system predates per-dialect isolation customization. Stored procedures use SQL-standard `CALL` syntax (same wrapping style as MySQL/MariaDB); a bare `SAVEPOINT name` is rejected (`SQL0104N`) — Db2 requires `ON ROLLBACK RETAIN CURSORS`. IBM's `DB2Exception` declares its own all-caps `SQLState` property (ambiguous with the inherited `DbException.SqlState`) and often doesn't populate SqlState via any property at all — both are handled by `DbExceptionTranslationSupport`'s ambiguity-safe reflection scan plus a message-embedded-SQLSTATE regex fallback, not Db2-specific special-casing.
+> **IBM Db2:** only Db2 for Linux/Unix/Windows (LUW) is supported. The Db2 family is three separate IBM products sharing a common SQL subset (Db2 LUW, Db2 for z/OS, Db2 for i), not one engine on different operating systems, and their real features differ — transactions among them (e.g. IBM i commitment control depends on journaling) — so Db2 for z/OS and Db2 for i are **not supported**. A Db2 server not recognized as LUW (via `SYSPROC.ENV_GET_INST_INFO()`, which exists only on LUW) logs a warning rather than refusing, because a restricted LUW user may be unable to run the recognition query. They are planned as separate `SupportedDatabase` values with their own dialects once they can be tested (tracker VAR-003). The dedicated `Db2Dialect` is verified live against Db2 LUW (`ibmcom/db2`) in the always-on testbed run (`testbed/Db2`). **Pool-size caveat (IBM driver, confirmed live):** IBM.Data.Db2 fixes a pool's size the first time a connection string opens it and rejects a later string that asks a different size for the same server and database. `PreventDatabaseUnload` needs at least two pooled connections, so `DbMode.Best` stays `Standard` when you configure a maximum pool size below 2; requesting `PreventDatabaseUnload` explicitly together with `Max Pool Size=1` fails in the driver with "Invalid argument" — use a maximum of at least 2 for that mode. `DbMode.Best`: on a positively detected Db2 LUW server it selects `PreventDatabaseUnload` (LUW's default implicit activation deactivates an idle database; measured ~1.1 s per cold connection versus ~4 ms with a sentinel); any other or unrecognized Db2 server keeps `Standard`, and an explicit `Standard` is always honored. Generated-key retrieval wraps the ENTIRE insert statement — `SELECT "Id" FROM FINAL TABLE (INSERT INTO t (...) VALUES (...))` — rather than appending a trailing RETURNING/OUTPUT clause; the dialect owns that shape. Isolation levels (Db2's UR/CS/RS/RR map to ReadUncommitted/ReadCommitted/RepeatableRead/Serializable) and the portable profile mapping are declared on `Db2Dialect` (`GetSupportedIsolationLevels`, `GetIsolationProfileMapping`). Stored procedures use SQL-standard `CALL` syntax (same wrapping style as MySQL/MariaDB); a bare `SAVEPOINT name` is rejected (`SQL0104N`) — Db2 requires `ON ROLLBACK RETAIN CURSORS`. IBM's `DB2Exception` declares its own all-caps `SQLState` property (ambiguous with the inherited `DbException.SqlState`) and often doesn't populate SqlState via any property at all — both are handled by `DbExceptionTranslationSupport`'s ambiguity-safe reflection scan plus a message-embedded-SQLSTATE regex fallback, not Db2-specific special-casing.
 
 Providers must support `DbProviderFactory` and `GetSchema("DataSourceInformation")`.
 
@@ -4735,6 +4853,15 @@ Two thresholds matter for each database:
 | CockroachDB | ~22.x | latest | PostgreSQL 13-compatible wire protocol; version not user-controlled in the same way |
 | YugabyteDB | 2.x | latest | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
 | Snowflake | service | service | Cloud service — version managed by Snowflake; no minimum to configure |
+| TiDB | not recorded | not recorded | Runs on `MySqlDialect`; the integration suite covers v7.5.7 and v8.5.7 (`TestbedImageMatrix`). `READ ONLY` transactions are a no-op unless `tidb_enable_noop_functions` is set |
+| Aurora MySQL / Aurora PostgreSQL | service | service | AWS-managed; same floor and recommendation as the MySQL / PostgreSQL row for the engine version the cluster runs |
+| SingleStore | not recorded | not recorded | Detected by `SHOW VARIABLES LIKE 'memsql_version'`, runs on `MySqlDialect`; suite runs `ghcr.io/singlestore-labs/singlestoredb-dev` |
+| Db2 (LUW) | not recorded | not recorded | The dialect has no version gate; the suite covers 11.5.0.0a and 11.5.8.0 (`ibmcom/db2`) |
+| Informix | not recorded | not recorded | No version gate in `InformixDialect`; the suite runs `icr.io/informix/informix-developer-database:latest` |
+| Sybase ASE | not recorded | not recorded | No version gate in `SybaseAseDialect`; verified live against ASE 16 (SP02) |
+| Spanner | not recorded | not recorded | PostgreSQL interface through PGAdapter; the suite runs Spanner Omni `2026.r2.1-beta` with the PGAdapter image |
+| SAP HANA, InterBase, Access | not recorded | not recorded | No version gates in their dialects; opt-in (HANA, InterBase) or Windows-only (Access) integration coverage, no server version recorded in the repo |
+| FlatFile | n/a | n/a | Embedded provider; dialect verified against `pengdows.flatfile` 0.2.1-preview.1 source, testbed runs 0.2.1-preview.2 |
 
 > **MySQL / MariaDB read-only note:** The `SET SESSION transaction_read_only = 1` syntax requires
 > MySQL 5.7.20+. MariaDB uses `SET SESSION tx_read_only = 1` which is available in 10.1+.
@@ -4750,7 +4877,7 @@ What version of each database first enables each major feature:
 | **MERGE / Upsert** | 2008 (v10) | 15 | — (uses `ON DUPLICATE KEY`) | — (uses `ON DUPLICATE KEY`) | 9i (always on) | — (uses `ON CONFLICT`) | 1.4 | 2.0 |
 | **INSERT ON CONFLICT** | — | 9.5 (always on) | — | — | — | 3.24 (always on) | 1.0 (always on) | — |
 | **ON DUPLICATE KEY UPDATE** | — | — | always on | always on | — | — | — | — |
-| **INSERT RETURNING** | always on | always on | — | — | always on | 3.35 | always on | always on (2.1+) |
+| **INSERT RETURNING** | always on | always on | — | 10.5 | always on | 3.35 | always on | always on (2.1+) |
 | **JSON types** | 2016 (v13) | 9.x | 5.7.8 | — (no native JSON) | 12c | 3.45 | always on | — |
 | **CTEs** | always on | always on | 8.0 | 10.2 | always on | 3.8.3 | always on | 2.0 |
 | **Window functions** | always on | always on | 8.0 | 10.2 | always on | 3.25 | always on | 3.0 |
@@ -4759,6 +4886,8 @@ What version of each database first enables each major feature:
 | **Identity / autoincrement** | always on | always on | always on | always on | 12c | always on | always on | always on |
 
 `—` means the feature is either not supported or uses a different mechanism on that database.
+
+This table covers only the databases whose dialects gate a capability on the server version. The others are not columns because their dialects do not gate on version: CockroachDB, YugabyteDB and Spanner inherit the PostgreSQL dialect's flags (`SupportsMerge` is `false` on all three: excluded for CockroachDB in `PostgreSqlDialect`, overridden in `YugabyteDbDialect` and `SpannerDialect`), TiDB, SingleStore and the Aurora variants follow their MySQL/PostgreSQL parent, and Snowflake, Db2, Informix, SAP HANA, InterBase, Sybase ASE, Access and FlatFile declare fixed flags. Read the flags for the connected server at runtime through `context.Dialect` (see [capability-discovery.md](capability-discovery.md)) rather than from this document.
 
 ### Latent Version Mismatches
 
@@ -4779,6 +4908,17 @@ The following features have no version gate in the dialect code but require a mi
 | Oracle (Oracle.ManagedDataAccess) | 100 | 50-200 | Sessions are heavier (few MB each). Practical max often 100-300 before session/memory limits kick in. Enterprise tuning often caps at 100-150 per instance. |
 | Sqlite (Microsoft.Data.Sqlite) | Effectively unlimited (pooling enabled by default since v6, no hard max) | 1-20 (or unlimited for in-memory) | Single-writer lock means >1-4 concurrent writers kills perf. Practical: keep pool small (5-20) or disable pooling for high concurrency. In-memory/shared can handle more, but still file-lock limited on disk. |
 | DuckDb (.NET DuckDB) | Effectively unlimited (no hard pool limit in most impls) | 1-8 (or up to threads count) | Embedded: connection creation is cheap. Practical: single connection often best; multiple only if parallelizing queries. Limit to CPU cores or threads setting. No real pool exhaustion; bottleneck is CPU/RAM for queries, not connections. |
+| CockroachDb / YugabyteDb / Spanner (Npgsql) | 100 (Npgsql) | Follow the PostgreSql row | Run on `PostgreSqlDialect`: same `Minimum Pool Size` / `Maximum Pool Size` keywords, dialect default 100. Spanner reaches PGAdapter over Npgsql. |
+| AuroraPostgreSql | 100 (Npgsql) | Follow the PostgreSql row | Same dialect as PostgreSql (detection label only). |
+| TiDb / SingleStore / AuroraMySql | 100 (MySqlConnector / MySql.Data) | Follow the MySql row | Run on `MySqlDialect`: `MinimumPoolSize` / `MaximumPoolSize` with MySqlConnector, `Min Pool Size` / `Max Pool Size` with MySql.Data; dialect default 100. |
+| Firebird (FirebirdClient) | Not verified in this repo | Not verified | Keywords `MinPoolSize` / `MaxPoolSize` (`FirebirdDialect`); dialect default 100. |
+| Snowflake (Snowflake.Data) | 10 (Snowflake.Data 4.x, per the dialect comment) | Not verified | Keywords `minPoolSize` / `maxPoolSize`; `SnowflakeDialect.DefaultMaxPoolSize` is 10, kept aligned with the provider unless the caller configures a limit. |
+| Db2 (IBM.Data.Db2) | Not verified in this repo | Not verified | Keywords `Min Pool Size` / `Max Pool Size`; dialect default 100. The driver fixes a pool's size the first time a connection string opens it (see the Db2 note above). |
+| Informix (Informix.Net.Core) | 100 (builder default, per the dialect comment) | Not verified | `InformixDialect` registers no pool-size keyword, so a `MaxPoolSize` you write into the connection string is not read by pengdows.crud; it governs on the dialect default 100. |
+| Sybase ASE (AdoNetCore.AseClient), SAP HANA, InterBase | Not verified in this repo | Not verified | No pool-size keyword registered in `SybaseAseDialect`, `HanaDialect` or `InterBaseDialect`, so pengdows.crud governs on the dialect default 100 and does not read an explicit maximum from the connection string. |
+| Access (Jet/ACE over OLE DB), FlatFile | Not applicable | Not applicable | `SupportsExternalPooling` is `false`: no ADO.NET pool keywords are injected (Access rejects an unrecognised `Pooling` keyword). Both run in `SingleWriter`. |
+
+The "provider default" column is what the ADO.NET provider does on its own; pengdows.crud's own limit (the governor) is the explicit `MaxPoolSize` in the connection string where the dialect registers a keyword for it, otherwise `DefaultMaxPoolSize` on the dialect (100 unless a row above says otherwise; `int.MaxValue` for SQLite and DuckDB).
 
 ---
 
@@ -4786,17 +4926,29 @@ The following features have no version gate in the dialect code but require a mi
 
 pengdows.crud enforces read-only intent at multiple levels where supported by the database engine and provider.
 
-| Database | Connection String | Session SQL | Dual Enforcement | Enforcement Strategy |
+| Database | Connection String | Session / transaction SQL | Dual Enforcement | Enforcement Strategy |
 | :--- | :---: | :---: | :---: | :--- |
-| **PostgreSQL** | Yes | Yes | **Yes** | `Options='-c default_transaction_read_only=on'` + `SET ...` |
+| **PostgreSQL** | Yes | Yes | **Yes** | `Options='-c default_transaction_read_only=on'` + `SET default_transaction_read_only = on` |
+| **CockroachDB**, **YugabyteDB** | Yes | Yes | **Yes** | Inherit `PostgreSqlDialect` unchanged (YugabyteDB does not bake startup options, so the `SET` runs on every checkout) |
+| **Spanner** | Yes | Yes | **Yes** | Inherits `PostgreSqlDialect`, but the database does not refuse a write in a read-intent transaction (`EnforcesReadOnlyTransactions` is `false`, live); only the library guard protects |
 | **SQLite** | Yes | No | No | `Mode=ReadOnly` (file opened read-only; not applied to `:memory:` databases) |
 | **DuckDB** | Yes | No | No | `access_mode=READ_ONLY` (file-open attribute; cannot be changed on an open connection) |
-| **SQL Server** | Yes | No | No | `ApplicationIntent=ReadOnly` (Driver-managed) |
+| **SQL Server** | Yes | No | No | `ApplicationIntent=ReadOnly`: an Availability Group routing hint, not server-side enforcement (`SqlServerDialect.GetReadOnlyConnectionParameter`); hard enforcement needs read-only credentials or permissions |
 | **MySQL** | No | Yes | No | `SET SESSION transaction_read_only = 1` (5.7.20+) |
 | **MariaDB** | No | Yes | No | `SET SESSION tx_read_only = 1` (10.1+) |
+| **TiDB** | No | Yes | No | MySQL's `SET SESSION transaction_read_only = 1`, but TiDB treats `READ ONLY` as a no-op unless `tidb_enable_noop_functions` is set |
+| **SingleStore** | No | Yes | No | MySQL's `SET SESSION transaction_read_only = 1`; SingleStore accepts the statement and still allows the write (live) |
+| **Aurora MySQL**, **Aurora PostgreSQL** | as parent | as parent | as parent | Same dialect as MySQL / PostgreSQL |
 | **Snowflake** | No | No | No | None — Snowflake has no session read-only mode; use read-only roles/credentials |
 | **Oracle** | No | Yes | No | `SET TRANSACTION READ ONLY` (issued at read-only transaction start; no persistent session mode) |
 | **Firebird** | No | Yes | No | `SET TRANSACTION READ ONLY` |
+| **InterBase** | No | No | No | None wired: the driver supports read-only transactions through `IBTransactionOptions` at creation time, which the dialect hook (SQL after the transaction opens) cannot use |
+| **Db2** | No | No | No | None: `Db2Dialect` defines no read-only connection parameter or SQL; only the library guard applies |
+| **Sybase ASE** | No | No | No | None: `SybaseAseDialect` defines no read-only connection parameter or SQL; only the library guard applies |
+| **Informix** | No | Yes | No | `SET TRANSACTION READ ONLY` at read-only transaction start |
+| **SAP HANA** | No | Yes | No | `SET TRANSACTION READ ONLY` at read-only transaction start; the session is reset to `SET TRANSACTION READ WRITE` because HANA's setting is sticky across commits |
+| **FlatFile** | Yes | Yes | No | `readonly=true` connection parameter + `SET TRANSACTION READ ONLY` |
+| **Access** | Yes | No | No | `Mode=Read` (ACE read-only open; a write fails with "must use an updateable query") |
 
 > **Dual Enforcement:** For PostgreSQL, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool. SQLite and DuckDB rely on the connection-string parameter alone: it is applied when the database file is opened, which is stronger than a session flag any caller could reset.
 
@@ -4807,7 +4959,7 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 
 ## Starting a transaction
 
-`TransactionContext` drives every explicit `BeginTransactionAsync` call. The factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, DuckDB begins with the provider default (its ADO.NET provider rejects explicit levels; the resolved level is still reported), and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only; requesting `ExecutionType.Read` on a write-only context throws `InvalidOperationException`). A dedicated `SemaphoreSlim` user lock (wrapped by `ReusableAsyncLocker`) serializes operations on the pinned connection, and a separate completion `SemaphoreSlim` serializes commit/rollback.
+`TransactionContext` drives every explicit `BeginTransactionAsync` call. The factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/PreventDatabaseUnload/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, DuckDB begins with the provider default (its ADO.NET provider rejects explicit levels; the resolved level is still reported), and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only; requesting `ExecutionType.Read` on a write-only context throws `InvalidOperationException`). A dedicated `SemaphoreSlim` user lock (wrapped by `ReusableAsyncLocker`) serializes operations on the pinned connection, and a separate completion `SemaphoreSlim` serializes commit/rollback.
 
 ### Async signatures (all return ValueTask)
 
@@ -4917,10 +5069,37 @@ await tx.ReleaseSavepointAsync("checkpoint1", ct);
 
 Isolation **fails up, never down**:
 
-- **Explicit `IsolationLevel`:** used as-is if the database supports it; otherwise the weakest supported level that is at least as strong is used (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot sits above ReadCommitted and is satisfied only by Snapshot or Serializable; RepeatableRead is satisfied only by Serializable). For example, `ReadCommitted` on CockroachDB or DuckDB runs as `Serializable`. If nothing at or above the requested level exists (e.g. `Serializable` on TiDB, Snowflake or SingleStore), `BeginTransaction` throws `InvalidOperationException`.
+- **Explicit `IsolationLevel`:** used as-is if the database supports it; otherwise the weakest supported level that is at least as strong is used (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot sits above ReadCommitted and is satisfied only by Snapshot or Serializable; RepeatableRead is satisfied only by Serializable). For example, `ReadCommitted` on CockroachDB or DuckDB runs as `Serializable`. If nothing at or above the requested level exists (e.g. `Serializable` on TiDB, Snowflake, SingleStore, Access or FlatFile), `BeginTransaction` throws `InvalidOperationException`.
 - **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, SingleStore, Access, or FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation enabled. On PostgreSQL/YugabyteDB `SafeNonBlockingReads` runs as `RepeatableRead` (an MVCC snapshot: non-blocking, no non-repeatable reads).
 - **Read-only `BeginTransaction` with no level and no profile** (`ExecutionType.Read`, `isolationLevel: null`): uses the `SafeNonBlockingReads` mapping and logs a warning if that mapping is degraded — it never throws for that.
 - **Write `BeginTransaction` with no level:** `ReadCommitted` if supported, else `Serializable`.
+
+### Per-database isolation and savepoint support
+
+Read from each dialect's `GetSupportedIsolationLevels`, `GetIsolationProfileMapping` and `SupportsSavepoints`/`SavepointCapabilities` (RU = ReadUncommitted, RC = ReadCommitted, RR = RepeatableRead, Ser = Serializable, Snap = Snapshot). "throws" means the profile's guarantee cannot be met, so an `IsolationProfile` request throws `TransactionModeNotSupportedException`. Savepoint columns: `C` create, `R` rollback-to, `Rel` release.
+
+| Database | Supported levels | SafeNonBlockingReads / StrictConsistency / FastWithRisks | Savepoints |
+|---|---|---|---|
+| SQL Server | RU, RC, RR, Ser, plus Snap when `ALLOW_SNAPSHOT_ISOLATION` is on | Snap, or RC (throws) when snapshot isolation is off / Ser / RU | C, R (no release) |
+| PostgreSQL (Aurora PostgreSQL, Citus, TimescaleDB), YugabyteDB | RC, RR, Ser | RR / Ser / RC | C, R, Rel |
+| CockroachDB | Ser | Ser / Ser / Ser | C, R, Rel |
+| Spanner | RR, Ser | RR / Ser / RR | none |
+| MySQL (Aurora MySQL, Percona), MariaDB | RU, RC, RR, Ser | RR / Ser / RU | C, R, Rel |
+| TiDB | RC, RR (accepts `SERIALIZABLE` syntax but does not enforce it, so it is not offered) | RR / RR (throws) / RC | C, R, Rel |
+| SingleStore | RC | RC / RC (throws) / RC | none |
+| Oracle | RC, Ser | RC / Ser / RC | C, R (no release) |
+| SQLite | RC, Ser | RC / Ser / RC | C, R, Rel |
+| DuckDB | Ser (the provider rejects an explicit level, so the transaction begins with its default) | Ser / Ser / Ser | none |
+| Firebird | RC, Snap, Ser | Snap / Ser / RC | C, R, Rel |
+| InterBase | RU, RC, RR, Ser, Snap | Snap / Ser / RC | C, R, Rel |
+| Snowflake | RC | RC / RC (throws) / RC | none |
+| Db2 (LUW) | RU, RC, RR, Ser | RC / Ser / RU | C, R, Rel |
+| SAP HANA | RU, RC, RR, Ser | RC / Ser / RU | C, R, Rel |
+| Informix | RU, RC, RR, Ser | RC / Ser / RU | C, R, Rel |
+| Sybase ASE | RU, RC, RR, Ser | RR / Ser / RU | C, R (no release) |
+| pengdows.flatfile | RU, RC, RR | RR / RR (throws) / RU | C, R, Rel |
+| Access | RU, RC | RC / RC (throws) / RU | none |
+| Unknown (SQL-92 fallback dialect) | RC, RR, Ser | RC / Ser / RC | none |
 
 ## Connection sharing inside transactions
 
@@ -5080,8 +5259,9 @@ carry a version guard:
 | Batch upsert shape | Version guard | Stale `[Version]` on an existing row |
 |---|---|---|
 | Multi-row `INSERT ... ON CONFLICT DO UPDATE ... WHERE` (dialects with `SupportsOnConflictWhere`: PostgreSQL family, SQLite, DuckDB) | yes | row skipped, throws |
-| Per-entity `MERGE` fallback (SQL Server, Oracle, Db2, Snowflake, ...) | yes | row skipped, throws |
-| Multi-row `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL, MariaDB, TiDB, Aurora MySQL) | **no** | **row overwritten, no exception** |
+| Per-entity `MERGE` fallback (SQL Server, Oracle, Db2, Snowflake, SAP HANA, pengdows.flatfile) | yes | row skipped, throws |
+| Informix per-entity `MERGE` | not expressible (its `MERGE` has no conditional matched clause) | upsert of a `[Version]` entity throws `NotSupportedException` |
+| Multi-row `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL, MariaDB, TiDB, SingleStore, Aurora MySQL) | **no** | **row overwritten, no exception** |
 | Firebird `UPDATE OR INSERT ... MATCHING` | **no** | **row overwritten, no exception** |
 | Sybase ASE per-entity `MERGE` | yes | **row skipped, no exception** (ASE still reports 1 row affected) |
 
@@ -5135,8 +5315,8 @@ This keeps generated statements within provider limits without exposing a user-c
 
 ### Dialect Strategy / Fallback Rules
 
-- Batch insert uses a multi-row statement only when the dialect advertises `SupportsBatchInsert`; otherwise the gateway falls back to one container per entity. The multi-row shape is dialect-owned (`BuildBatchInsertSql`): most dialects emit `INSERT ... VALUES (...), (...)`; Oracle overrides it to emit `INSERT ALL INTO ... VALUES (...) ... SELECT 1 FROM DUAL`. **Oracle is a third case** (BP-309): it uses neither shape for `BuildBatchCreate`/`BatchCreateAsync` — an internal `SupportsArrayBinding` flag takes priority over `SupportsBatchInsert` there, producing one parameterized, single-row-shaped `INSERT` per chunk with each column bound to an array of per-row values (`OracleCommand.ArrayBindCount`), not the `INSERT ALL ... SELECT 1 FROM DUAL` multi-row-literal shape (Oracle's `BuildBatchInsertSql` override remains for other callers, e.g. `PrimaryKeyTableGateway`'s batch upsert fallback). An internal execution-strategy choice; the public contract is unchanged.
-- Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity. As of this writing, `SupportsBatchUpdate` is `true` for PostgreSQL/CockroachDB/YugabyteDB (`UPDATE ... FROM (VALUES ...)`), SQL Server (`MERGE ... USING (VALUES ...)`), Snowflake (`UPDATE ... FROM (VALUES ...)`, no target alias), and Oracle (`MERGE ... USING (SELECT ... FROM DUAL UNION ALL ...)` — Oracle has no `VALUES(...)` row-constructor table literal, so the MERGE source is built the same row-per-`SELECT ... FROM DUAL` shape as Oracle's own batch INSERT). All other dialects fall back to one update per entity. `PrimaryKeyTableGateway<TEntity>` batch update always builds one update container per entity.
+- Batch insert uses a multi-row statement only when the dialect advertises `SupportsBatchInsert`; otherwise the gateway falls back to one container per entity. `SupportsBatchInsert` is `false` for Firebird, InterBase, Informix, SAP HANA, Sybase ASE and Access (each rejects or lacks the multi-row `VALUES` form). The multi-row shape is dialect-owned (`BuildBatchInsertSql`): most dialects emit `INSERT ... VALUES (...), (...)`; Oracle overrides it to emit `INSERT ALL INTO ... VALUES (...) ... SELECT 1 FROM DUAL`. **Oracle is a third case** (BP-309): it uses neither shape for `BuildBatchCreate`/`BatchCreateAsync` — an internal `SupportsArrayBinding` flag takes priority over `SupportsBatchInsert` there, producing one parameterized, single-row-shaped `INSERT` per chunk with each column bound to an array of per-row values (`OracleCommand.ArrayBindCount`), not the `INSERT ALL ... SELECT 1 FROM DUAL` multi-row-literal shape (Oracle's `BuildBatchInsertSql` override remains for other callers, e.g. `PrimaryKeyTableGateway`'s batch upsert fallback). An internal execution-strategy choice; the public contract is unchanged.
+- Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity. As of this writing, `SupportsBatchUpdate` is `true` for PostgreSQL/CockroachDB/YugabyteDB (`UPDATE ... FROM (VALUES ...)`; not Spanner, which inherits PostgreSQL's dialect but sets it to `false`), SQL Server (`MERGE ... USING (VALUES ...)`), Snowflake (`UPDATE ... FROM (VALUES ...)`, no target alias), and Oracle (`MERGE ... USING (SELECT ... FROM DUAL UNION ALL ...)` — Oracle has no `VALUES(...)` row-constructor table literal, so the MERGE source is built the same row-per-`SELECT ... FROM DUAL` shape as Oracle's own batch INSERT). All other dialects (MySQL family, SQLite, DuckDB, Firebird, InterBase, Db2, SAP HANA, Informix, Sybase ASE, pengdows.flatfile, Access, Spanner) fall back to one update per entity. `PrimaryKeyTableGateway<TEntity>` batch update always builds one update container per entity.
 - `TableGateway<T,TId>` batch update keys its WHERE/match condition on the `[Id]` column on every path, exactly like single-row `UpdateAsync`; `[PrimaryKey]` columns are ordinary updateable SET columns, and `[CreatedBy]`/`[CreatedOn]` are never written. An entity with no `[Id]` throws `NotSupportedException` — use `PrimaryKeyTableGateway<TEntity>` for `[PrimaryKey]`-only entities.
 - Batch upsert uses multi-row `ON CONFLICT` or `ON DUPLICATE KEY` only when the connected product advertises those capabilities; otherwise it falls back to one `BuildUpsert(...)` container per entity.
 - Batch delete by IDs uses chunked `WHERE ... IN (...)`.
@@ -5168,7 +5348,34 @@ This keeps generated statements within provider limits without exposing a user-c
 | MySQL-compatible products with `SupportsOnDuplicateKey` | multi-row `INSERT ... ON DUPLICATE KEY UPDATE ...` |
 | Products without either flag | per-entity `BuildUpsert(...)` fallback |
 
-That means SQL Server, Oracle, Firebird, and similar engines still support batch upsert through the batch API, but the batch is executed as a sequence of per-entity upsert containers rather than a single multi-row upsert statement.
+That means SQL Server, Oracle, Firebird, Snowflake, Db2, SAP HANA, Informix, Sybase ASE, pengdows.flatfile and similar engines still support batch upsert through the batch API, but the batch is executed as a sequence of per-entity upsert containers rather than a single multi-row upsert statement. InterBase and Access have no upsert statement at all, so a batch upsert (like a single upsert) throws `NotSupportedException`.
+
+### Per-database summary (all 23 `SupportedDatabase` values)
+
+Read from each dialect's capability flags (`SupportsBatchInsert`, `SupportsBatchUpdate`, `SupportsMerge`, `SupportsInsertOnConflict`, `SupportsOnDuplicateKey`):
+
+| Database | Multi-row batch create | Multi-row batch update | Batch upsert |
+|---|---|---|---|
+| SQL Server | yes (at most 1000 rows per statement) | yes (`MERGE ... USING (VALUES ...)`) | per-entity `MERGE` |
+| PostgreSQL (and Aurora PostgreSQL) | yes | yes (`UPDATE ... FROM (VALUES ...)`) | multi-row `ON CONFLICT` |
+| CockroachDB, YugabyteDB | yes | yes | multi-row `ON CONFLICT` (no `MERGE`) |
+| Spanner (PostgreSQL interface) | yes | no | multi-row `ON CONFLICT` (primary-key target only) |
+| MySQL (and Aurora MySQL), MariaDB, SingleStore | yes | no | multi-row `ON DUPLICATE KEY UPDATE` |
+| TiDB | yes | no | multi-row `ON DUPLICATE KEY UPDATE` (per row for a `BIT`-risk column, see above) |
+| Oracle | yes (array binding, one statement per chunk) | yes (`MERGE ... USING (SELECT ... FROM DUAL ...)`) | per-entity `MERGE` |
+| SQLite, DuckDB | yes | no | multi-row `ON CONFLICT` |
+| Firebird | no | no | per-entity `UPDATE OR INSERT ... MATCHING` |
+| InterBase | no | no | not supported (no upsert statement) |
+| Snowflake | yes (at most 16384 rows) | yes (`UPDATE ... FROM (VALUES ...)`) | per-entity `MERGE` |
+| Db2 (LUW) | yes | no | per-entity `MERGE` |
+| SAP HANA | no | no | per-entity `MERGE` |
+| Informix | no | no | per-entity `MERGE` (not for `[Version]` entities) |
+| Sybase ASE | no | no | per-entity `MERGE` |
+| pengdows.flatfile | yes | no | per-entity `MERGE` |
+| Access | no | no | not supported |
+| Unknown (SQL-92 fallback dialect) | yes | no | not supported |
+
+`PrimaryKeyTableGateway<TEntity>` builds one update container per entity on every database (see above).
 
 ## What Is Not Implemented
 
@@ -5264,7 +5471,9 @@ functionality:
 
 Aurora PostgreSQL and Aurora MySQL are opt-in external targets. The harness connects to existing
 clusters, creates a unique test schema/database, runs the normal provider suite, and drops only
-that generated namespace during teardown. It never creates, stops, or deletes AWS infrastructure.
+that generated namespace during teardown; it never creates, stops, or deletes AWS infrastructure.
+`run-integration-tests.sh` with `INCLUDE_AURORA=true` and no `AURORA_*_HOST` set provisions its own clusters
+(`tools/aurora-it.sh up`) and deletes them when it exits; set the variables below to use existing clusters instead.
 
 ```bash
 export INCLUDE_AURORA=true
@@ -5315,8 +5524,8 @@ dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj
 # A single target framework
 dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj -f net10.0
 
-# Integration tests plus the testbed matrix for each framework in TESTBED_FRAMEWORKS
-# (default "net8.0 net10.0")
+# Integration tests (frameworks in INTEGRATION_FRAMEWORKS) plus the testbed matrix (frameworks in
+# TESTBED_FRAMEWORKS); both default to "net8.0 net10.0"
 ./run-integration-tests.sh
 ```
 
@@ -5364,7 +5573,10 @@ dotnet test --filter "FullyQualifiedName~ErrorHandling"
 #### Database Provider Selection
 
 Tests derived from `DatabaseTestBase` run against SQLite, PostgreSQL, SQL Server, MySQL, MariaDB, Firebird,
-CockroachDB, DuckDB, Oracle, YugabyteDB, and TiDB by default.
+CockroachDB, DuckDB, Oracle, YugabyteDB, TiDB, FlatFile, IBM Db2, SingleStore, Sybase ASE, Google Spanner and
+Informix by default, and against Microsoft Access whenever the OS is Windows. SAP HANA, InterBase, Snowflake and
+the two Aurora engines are opt-in (below). The PostgreSQL and MySQL containers run a version matrix that includes
+the compatible forks Citus, TimescaleDB, Fujitsu Enterprise Postgres and Percona Server.
 
 ```bash
 # Include Snowflake tests (requires Snowflake credentials)
@@ -5379,6 +5591,8 @@ export TESTBED_EXCLUDE="Oracle,Firebird"
 
 # Optional diagnostics and container control
 export INTEGRATION_TRACE=true                # verbose per-provider trace output
+export INTEGRATION_SETUP_TIMEOUT_SECONDS=300 # per-provider setup timeout (default 300)
+export INTEGRATION_TEST_TIMEOUT_SECONDS=600  # per-provider test timeout (default 600)
 export TESTBED_STARTUP_TIMEOUT_SECONDS=300   # override container startup wait
 export TESTBED_KEEP_CONTAINERS=true          # keep testbed containers running after the run
 ```
@@ -5389,6 +5603,8 @@ opt-in databases, which `IntegrationMatrixTests` does not enable:
 - `INCLUDE_SAPHANA=true` — SAP HANA (Docker image, needs 16-32GB RAM)
 - `INCLUDE_INTERBASE=true` — InterBase (a pre-registered, licensed, already-running container; also needs
   `LD_LIBRARY_PATH` pointing to a directory containing `libgds.so`)
+- `INCLUDE_AURORA=true` — Aurora PostgreSQL and Aurora MySQL (a signed-in AWS CLI; `run-integration-tests.sh` creates and
+  deletes temporary clusters, billed while they exist)
 - Microsoft Access runs automatically on Windows (requires the Access Database Engine Redistributable); no env var
 
 #### Snowflake Configuration
@@ -5424,11 +5640,12 @@ The tests automatically start database containers using Testcontainers. Ensure D
 # Verify Docker is running
 docker info
 
-# Pull required images (optional - done automatically)
-docker pull postgres:latest
-docker pull mcr.microsoft.com/mssql/server:latest
-docker pull mysql:latest
-docker pull mariadb:latest
+# Pull required images (optional - done automatically; the full pinned image matrix is TestbedImageMatrix in
+# testbed/ParallelTestOrchestrator.cs)
+docker pull postgres:16.4
+docker pull mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04
+docker pull mysql:8.4.11
+docker pull mariadb:11.4.12
 ```
 
 ## Test Architecture
@@ -5694,7 +5911,7 @@ state independent of `SafeAsyncDisposableBase.IsDisposed`:
 1. Unsubscribe from the metrics collector's own change event.
 2. Dispose the persistent connections, if any (`SingleConnection` pinned connection /
    every `PreventDatabaseUnload` sentinel — one per enabled pool).
-3. Dispose the connection-open coordination primitives (`_connectionOpenLocker`/`_connectionOpenGate`).
+3. Dispose the connection-open coordination primitive (`_connectionOpenGate`, used only where a provider needs opens serialized).
 4. **Drain each governor (writer first, then reader) with `PoolAcquireTimeout` as the drain
    timeout, then dispose it** — a *different* use from ordinary slot acquisition, but the same
    configured value (`DatabaseContextConfiguration.PoolAcquireTimeout`, default 5s). There is no
@@ -5703,14 +5920,19 @@ state independent of `SafeAsyncDisposableBase.IsDisposed`:
    governor's `Dispose()` closes admission once the drain completes.
 5. **If a governor times out (or is cancelled) draining**, a warning is logged and that governor
    is deliberately left undisposed — a lease may still be genuinely outstanding, and disposing
-   its semaphore out from under the holder would make that holder's `Release()` throw.
-6. Dispose the owned `DbDataSource`(s) — this runs whether or not the drains succeeded. A
-   caller-supplied `DbDataSource` (via the `DatabaseContext(configuration, dataSource, factory,
-   loggerFactory)` overload) is never disposed by the context; only internally created ones are.
-   Exceptions from data-source disposal are swallowed.
+   its semaphore out from under the holder would make that holder's `Release()` throw. The
+   context also **defers** disposing its data sources and releasing its unique-connection-string
+   claim (step 6): a background continuation waits, without holding a thread, for the undrained
+   governor to drain, then disposes the governor, the data sources and the claim.
+6. When every governor drained, clear the pool of and dispose the owned `DbDataSource`(s) and
+   release the context's `EnforceUniqueConnectionString` claim. A caller-supplied `DbDataSource`
+   (via the `DatabaseContext(configuration, dataSource, factory, loggerFactory)` overload) is
+   never disposed by the context; only internally created ones are. Exceptions from data-source
+   disposal are swallowed.
 7. Base-class disposal completes (lifetime listeners, `DisposeUnmanaged`).
 
-The context itself is fully, terminally disposed regardless of whether step 5 applied.
+The context itself is terminally disposed (`IsDisposed` is set, new work is rejected) regardless
+of whether step 5 applied; only the data sources outlive it, until the last lease returns.
 
 **Sync vs. async disposal** run the same sequence. `DisposeManagedAsync` uses async-native
 implementations for each phase (`DisposeAsync` on the persistent connection,
@@ -5726,14 +5948,14 @@ for a context whose constructor threw.
 
 ## The exception you get after disposal
 
-**`ObjectDisposedException`**, for every operation that would touch a connection — but note
-the one entry point that does *not* reject on its own:
+**`ObjectDisposedException`**, for every operation that would touch a connection or build a
+container:
 
-- `CreateSqlContainer(...)` on a disposed `DatabaseContext` does **not** throw — it still returns
-  a container (it only builds SQL text and parameters). The rejection happens when that container
-  is executed (next bullet). (`TransactionContext.CreateSqlContainer` is different: it throws
-  `InvalidOperationException` once the transaction has completed — which includes a disposed
-  transaction, since `Dispose()` rolls back an uncompleted one.)
+- `CreateSqlContainer(...)` on a disposed `DatabaseContext` throws `ObjectDisposedException`
+  (`DatabaseContext.ValidateCanCreateContainer`). A container created *before* disposal is
+  rejected when it is executed (next bullet). (`TransactionContext.CreateSqlContainer` is
+  different: it throws `InvalidOperationException` once the transaction has completed — which
+  includes a disposed transaction, since `Dispose()` rolls back an uncompleted one.)
 - `BeginTransaction(...)`/`BeginTransactionAsync(...)` — rejected with `ObjectDisposedException`.
 - A container executed against a disposed context — whether it was created before or after
   disposal (`ExecuteNonQueryAsync`, `ExecuteReaderAsync`, `ExecuteScalarOrNullAsync`, ...) —
@@ -5758,9 +5980,11 @@ A `TransactionContext` pins one physical connection for its entire lifetime. `Co
 `Rollback()` (and `Dispose()`'s auto-rollback) all route through the same completion path,
 serialized by an internal completion lock (a `SemaphoreSlim` bounded by the context's
 `ModeLockTimeout`, throwing `InvalidOperationException` if it can't be acquired in time). That
-lock is deliberately separate from the transaction's user/command lock — completion does not wait
-for, or block against, an in-flight command or an open reader on the transaction, so dispose
-readers before committing. `IsCompleted` flips to `true` exactly once, atomically, at the *start*
+lock is deliberately separate from the transaction's user/command lock. Completion does take the
+same reader-aware lock ordinary commands use, so an open reader on the transaction makes
+`Commit()`/`Rollback()` fail fast with `InvalidOperationException` ("...while a reader opened on
+it is still active") rather than block or tear the connection out from under it; dispose readers
+before committing. That failed attempt leaves the transaction retryable once the reader is gone. `IsCompleted` flips to `true` exactly once, atomically, at the *start*
 of the first completion attempt (before the provider's commit/rollback runs) and stays `true` even
 if that commit/rollback then fails (surfaced as `TransactionException`); a second attempt observes
 it and throws `InvalidOperationException("Transaction already completed.")` rather than racing
@@ -5836,13 +6060,15 @@ consumer's `await foreach` exits:
 //   concurrent rotation" section) so it isn't disposed out from under it
 //   mid-use.
 // - Program.cs wiring at the bottom shows the full "Option A" DI setup:
-//   keyed DbProviderFactory registrations, IDatabaseContextFactory, and
+//   keyed DbProviderFactory registrations, a minimal IDatabaseContextFactory
+//   (the library's default is internal), and
 //   ITenantContextRegistry — everything AddMultiTenancy would otherwise do
 //   for you, done by hand because the tenant list isn't static configuration.
 // =============================================================================
 
 using System.Collections.Concurrent;
 using System.Data.Common;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.tenant;
@@ -5948,6 +6174,17 @@ public sealed class SqlControlPlaneTenantResolver : ITenantConnectionResolver
     }
 }
 
+/// <summary>
+/// Minimal <see cref="IDatabaseContextFactory"/> for the fully custom wiring below. The library's
+/// own default (used by <c>AddMultiTenancy</c>) is internal, so a hand-wired setup supplies one.
+/// </summary>
+public sealed class ExampleDatabaseContextFactory : IDatabaseContextFactory
+{
+    public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+        ILoggerFactory loggerFactory) =>
+        new DatabaseContext(configuration, factory, loggerFactory);
+}
+
 // -----------------------------------------------------------------------------
 // Program.cs / Startup wiring ("Option A" — fully custom resolver, no
 // AddMultiTenancy call, since the tenant list isn't static configuration):
@@ -5974,7 +6211,9 @@ public sealed class SqlControlPlaneTenantResolver : ITenantConnectionResolver
 // // 3. IDatabaseContextFactory and ITenantContextRegistry — AddMultiTenancy registers both of
 // //    these for you; a fully custom setup registers them directly instead. (TenantContextRegistry
 // //    also needs ILoggerFactory, which the host builder's default logging registration provides.)
-// builder.Services.AddSingleton<IDatabaseContextFactory, DefaultDatabaseContextFactory>();
+// //    The library's own DefaultDatabaseContextFactory is internal, so register the small
+// //    ExampleDatabaseContextFactory defined above in this file (or your own implementation).
+// builder.Services.AddSingleton<IDatabaseContextFactory, ExampleDatabaseContextFactory>();
 // builder.Services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
 // //    Optional tenant-cardinality cap: register the registry via a factory instead, e.g.
 // //    sp => new TenantContextRegistry(sp, sp.GetRequiredService<ITenantConnectionResolver>(),
@@ -6188,8 +6427,8 @@ gateway SQL builders (`TableGateway.Sql.cs`/`.Batch.cs`), independent of the gen
 - **`[CreatedOn]`/`[LastUpdatedOn]` need no resolver** — they use `DateTime.UtcNow` (or
   `DateTimeOffset`/`TimestampOffset`, all UTC) directly. Property type must be `DateTime` or
   `DateTimeOffset` (nullable allowed) — anything else throws `SqlGenerationException`. Why UTC: [utc-and-time.md](utc-and-time.md).
-- **`AuditCreationPolicy`** (a settable property on every `ITableGateway`/`IPrimaryKeyTableGateway`,
-  default `PreserveExplicitValues`) controls whether a caller-supplied `CreatedBy`/`CreatedOn` on
+- **`AuditCreationPolicy`** (an init-only property on every `ITableGateway`/`IPrimaryKeyTableGateway`, set in an
+  object initializer at construction; default `PreserveExplicitValues`) controls whether a caller-supplied `CreatedBy`/`CreatedOn` on
   the entity survives `CreateAsync` instead of being overwritten by the resolver — see CLAUDE.md's
   "CRITICAL: Audit Field Behavior" section for the security implication of the default when an
   entity is populated from untrusted input. Set `Authoritative` to always trust the resolver.
@@ -6350,6 +6589,8 @@ public interface IAuditValues
     object UserId { get; init; }
     DateTime UtcNow { get; }
     DateTimeOffset? TimestampOffset { get; }
+
+    T As<T>();   // default interface method: casts UserId to T
 }
 ```
 
@@ -6398,18 +6639,17 @@ single-row UPDATE's SET clause by dedicated filtering in the gateway SQL builder
 flag, which is a separate mechanism (see `entity-mapping.md`). Every per-entity batch-update
 fallback reuses that single-row builder and gets the same exclusion.
 
-**Exception — the multi-row `TableGateway<T,TId>.BuildBatchUpdate`/`BatchUpdateAsync` path**
-(dialects with `SupportsBatchUpdate`: PostgreSQL/CockroachDB/YugabyteDB, SQL Server, Snowflake)
-selects its SET columns with only the `[NonUpdateable]`/`[Id]`/`[PrimaryKey]` filter, so
-`CreatedBy`/`CreatedOn` are written back from the entity's current in-memory values. They are not
-re-stamped by the resolver, but an entity whose `CreatedBy`/`CreatedOn` were never loaded (or were
-modified) will overwrite the stored values. Mark those properties `[NonUpdateable]` as well if you
-batch-update partially populated entities on those dialects.
+The multi-row `TableGateway<T,TId>.BuildBatchUpdate`/`BatchUpdateAsync` path (dialects with
+`SupportsBatchUpdate`: PostgreSQL/CockroachDB/YugabyteDB, SQL Server, Oracle, Snowflake; not used
+for an entity with a `[Version]` column, which always takes the per-row UPDATE) excludes
+`CreatedBy`/`CreatedOn` from its SET columns the same way
+(`TableGateway.Batch.cs` `GetCachedUpdateableColumns`).
 
 ## `AuditCreationPolicy` — the security-relevant control
 
-A settable property on every `ITableGateway`/`IPrimaryKeyTableGateway`, default
-`PreserveExplicitValues`:
+An init-only property on every `ITableGateway`/`IPrimaryKeyTableGateway` (set it in an object
+initializer when constructing the gateway: `new TableGateway<T, TId>(ctx) { AuditCreationPolicy = ... }`),
+default `PreserveExplicitValues`:
 
 | Policy | CREATE behavior |
 |---|---|
@@ -6484,7 +6724,7 @@ fields" rule above, not a gap in it.
 | `CreateAsync`, `PreserveExplicitValues` + entity already has a value | Preserved as-is | Set from resolver | 1 |
 | `CreateAsync`, `Authoritative` | Always overwritten | Set from resolver | 1 |
 | `UpdateAsync` | Untouched (excluded from SET clause) | Set from resolver | 1 |
-| `BatchCreateAsync`/`BatchUpdateAsync` (N entities) | Per-entity, same rules as above — except the multi-row `TableGateway` batch-update path, which writes back the in-memory values (see UPDATE above) | Per-entity, same rules as above | **1 total**, reused for all N |
+| `BatchCreateAsync`/`BatchUpdateAsync` (N entities) | Per-entity, same rules as above | Per-entity, same rules as above | **1 total**, reused for all N |
 | Write fails (exception or 0 rows affected) | Restored to pre-Build value | Restored to pre-Build value | (already spent, no re-resolve on retry) |
 
 ## Source: `docs/utc-and-time.md`
@@ -6703,7 +6943,7 @@ returns: `+ int recordsAffected` (sets `RecordsAffected`), `+ Exception recordsA
 Exception)` (the reader yields N rows successfully, then throws on the next `Read()`), and
 `+ (int cancelAfterRowCount, CancellationTokenSource)` (yields N rows, then **cancels the real
 token** passed into `ReadAsync` — proving genuine cancellation propagation through your code, not a
-canned `OperationCanceledException`). `EnqueueMultiResultReader(IEnumerable<IEnumerable<Dictionary<string,object>>>)`
+canned `OperationCanceledException`). `EnqueueMultiResultReader(IEnumerable<IEnumerable<Dictionary<string, object?>>>)`
 builds one reader whose `NextResult()` advances through each set, for compound statements like
 `INSERT` followed by `SELECT LAST_INSERT_ID()`.
 
@@ -6912,9 +7152,11 @@ discipline this library applies to its own test suite: fakeDb for fast, determin
 
 By default a statement shape the parser doesn't recognize quietly "succeeds": an unparseable
 `INSERT` or other unrecognized nonquery returns 1 affected row, and an unrecognized `SELECT` returns
-no rows. Set `FakeDataStore.StrictMode = true` (e.g. `connection.DataStore.StrictMode = true`) to
-make all three throw `NotSupportedException` instead, so a test fails when fakeDb didn't understand
-its SQL rather than passing without having run it.
+no rows. Set `FakeDataStore.StrictMode = true` to make all three throw `NotSupportedException` instead, so a
+test fails when fakeDb didn't understand its SQL rather than passing without having run it. The
+store a factory shares between its connections is not exposed, so build your own and hand it to the
+connection: `var store = new FakeDataStore { StrictMode = true }; var conn = new fakeDbConnection(store);`
+(`fakeDbConnection.DataStore` itself is `internal`).
 
 ## Building your own fixture layer
 
@@ -7158,7 +7400,7 @@ await gateway.CountWhereEqualsAsync("queue", "default",
 ## Identifier quoting and parameterization
 
 - Every table and column name passed through `column`, `andWhereNull`, or `andWhereNotNull` goes
-  through `ISqlContainer.WrapObjectName(...)` — the same dialect-aware identifier quoting (ANSI
+  through the dialect's `WrapObjectName(...)` (on dialects that need qualified column references the column is prefixed with the quoted table name; a `column` that already contains a `.` is quoted as given) — the same dialect-aware identifier quoting (ANSI
   double quotes for almost every dialect; Access uses brackets) used everywhere else in the library (see CLAUDE.md's `WrapObjectName` section). There is no raw string
   concatenation of identifiers into SQL text.
 - Every `value` is bound as a `DbType.String` parameter via `AddParameterWithValue` /
@@ -7209,7 +7451,7 @@ iterator method — no custom buffering, no prefetch queue:
 public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc,
     [EnumeratorCancellation] CancellationToken cancellationToken)
 {
-    await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken)
+    await using var reader = await OpenHydrationReaderAsync(sc, singleRow: false, cancellationToken)
         .ConfigureAwait(false);
     HybridRecordsetPlan? plan = null;
     while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -7220,6 +7462,9 @@ public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc,
     }
 }
 ```
+
+(The `LoadStreamAsync(sc)` overload is the same loop with `CancellationToken.None`;
+`OpenHydrationReaderAsync` opens the reader the way gateway hydration does.)
 
 `RetrieveStreamAsync` (`TableGateway.Core.cs`) builds its own container internally
 (`GetRetrieveContainer`, disposed via `await using`) and delegates to `LoadStreamAsync`.
@@ -7254,7 +7499,7 @@ a parameter actually threads an external token into the iterator body. `Retrieve
 always has this. `LoadStreamAsync` has two overloads:
 
 - `LoadStreamAsync(sc)` — no cancellation parameter; internally passes `CancellationToken.None` to
-  `ExecuteReaderAsync`/`ReadAsync`. Calling `.WithCancellation(token)` on the `IAsyncEnumerable`
+  the reader open and `ReadAsync`. Calling `.WithCancellation(token)` on the `IAsyncEnumerable`
   this returns has **no effect** — without a `[EnumeratorCancellation]` parameter on the iterator
   method itself, `WithCancellation`'s token is never delivered into the method body. Use the other
   overload if you need real cancellation.
@@ -7295,8 +7540,8 @@ pass the transaction as the container's context like any other operation. The co
 (`SqlContainer.ExecuteReaderAsync` transfers the context lock to the returned `TrackedReader`,
 which releases it only on disposal; see also [`transactions.md`](./transactions.md)'s connection
 sharing section). Streaming inside a transaction means
-**the transaction is locked against every other operation — including `CommitAsync`,
-`RollbackAsync`, and any other command — for the entire time you're enumerating the stream**, not
+**the transaction is locked against every other operation — including `Commit`/`CommitAsync`,
+`Rollback`/`RollbackAsync`, and any other command — for the entire time you're enumerating the stream**, not
 just for the initial query execution. Fully consume (or explicitly dispose) the stream before
 issuing any other operation on that transaction, exactly as you would for a plain
 `ExecuteReaderAsync` result.
@@ -7360,9 +7605,10 @@ that you're about to add with the same name.
 
 ## Choosing an execution overload
 
-Every `ISqlContainer` execution method comes in extension-method overloads (added via
-`SqlContainerExtensions` without breaking the interface) that add `ExecutionType`,
-`CommandType`, and `CancellationToken` selection:
+Every `ISqlContainer` execution method comes in overloads that add `ExecutionType`,
+`CommandType`, and `CancellationToken` selection (some on the interface itself, the rest as
+`SqlContainerExtensions` extension methods that call the concrete `SqlContainer` overloads when
+available):
 
 ```csharp
 // Explicit execution intent (Read/Write) + cancellation — the fully-specified form:
@@ -7392,8 +7638,8 @@ await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken);
 
 ## Gateway and context diagnostics
 
-A few useful, easy-to-miss members that live on concrete types rather than the three-tier
-Build/Load/convenience API surface:
+A few useful, easy-to-miss members outside the three-tier Build/Load/convenience API surface
+(`ClearCaches()` lives on the concrete `BaseTableGateway<TEntity>`):
 
 - **`BuildWhereByPrimaryKey(...)`** (on `ITableGateway`/`IPrimaryKeyTableGateway`) adds a parameterized natural-key
   predicate to an existing container — useful when composing custom SQL that still needs to filter
@@ -7417,8 +7663,6 @@ Build/Load/convenience API surface:
   `PoolSaturatedException` instead of waiting out `PoolAcquireTimeout` (`0` disables queueing for
   that role; `null`, the default, sets no cap on 2.0.x, as in 2.0.5, so a waiting caller is bounded
   only by `PoolAcquireTimeout`).
-- **Pool size priority** — each pool (reads, writes) is sized on its own from the first source that applies: `MaxConcurrentReads`/`MaxConcurrentWrites` (on `DatabaseContextConfiguration`), then the pool-size setting in that pool's connection string (`Max Pool Size`, `MaxPoolSize`, `Maximum Pool Size`), then the dialect's default (100). The winner is used for both the governor and the provider pool, then the absolute ceiling of 512, the mode rules (`SingleWriter` = one writer; `PreventDatabaseUnload` raises a pool below 2 to 2) and the optional server ceiling apply. `0` in configuration forbids a pool; `0` in a connection string counts as unset. See [`connection-pooling.md`](./connection-pooling.md).
-- **`ClampPoolsToServerConnectionLimit`** and **`ResourceConnectionHeadroom`** (on `DatabaseContextConfiguration`, off/`0` by default, 2.0.6) read the database server's own connection limit while the context initializes and size each role's pool so the reader and writer pools together never exceed it, leaving optional headroom for other clients — supported for PostgreSQL/YugabyteDB, MySQL/MariaDB and SQL Server; see [`connection-pooling.md`](./connection-pooling.md). The split between the two roles is static (by what each asked for, not by use): a read-only context should set `MaxConcurrentWrites = 0` so the reader keeps its full request; the measured cost and the planned per-server ceiling (POOL-003, not in 2.0.6) are in the same document.
 - **`EnforceUniqueConnectionString`** (on `DatabaseContextConfiguration`, default `false`, 2.0.6)
   turns the always-on duplicate-connection-string warning into an `InvalidOperationException` at
   construction — see [`connection-pooling.md`](./connection-pooling.md).
@@ -7511,13 +7755,13 @@ per call against the real operation context:
 ```csharp
 // Built once, e.g. lazily cached inside a gateway
 var template = templateContext.CreateSqlContainer(
-    "SELECT id, name, email FROM users WHERE id = ");
+    "SELECT id, name, email FROM users WHERE id = {P}p0");
 template.AddParameterWithValue("p0", DbType.Int32, 0); // placeholder value, never executed as-is
 
 // Per call, per tenant:
 using var container = template.Clone(tenantContext);
 container.SetParameterValue("p0", actualUserId);
-var result = await gateway.LoadSingleAsync<User>(container);
+var result = await userGateway.LoadSingleAsync(container);
 ```
 
 Because the clone's parameters are independent `DbParameter` instances, concurrent clones from the
@@ -7565,8 +7809,8 @@ view over the original.
 # Stored Procedures
 
 `pengdows.crud` calls stored procedures through the same `ISqlContainer` you use for ordinary SQL
-— there is no separate "procedure gateway" type. The library detects which of five call syntaxes
-(`ProcWrappingStyle`) the connected dialect needs and renders the correct one; you write the
+— there is no separate "procedure gateway" type. The library detects which of six call syntaxes
+(`ProcWrappingStyle`: `Call`, `Exec`, `PostgreSQL`, `Oracle`, `ExecuteProcedure`, `Informix`; `None` means unsupported) the connected dialect needs and renders the correct one; you write the
 procedure name and bind parameters exactly as you would for any other command.
 
 ## Two calling patterns
@@ -7726,13 +7970,17 @@ parameter marker pattern/regex/max length, named/repeated-parameter support, par
 limits, default-prepare recommendation, procedure wrapping style, and a handful of DDL-capability
 flags (`SupportsDropTableIfExists`, `SupportsTruncateTable`, `SupportsMerge`,
 `SupportsInsertOnConflict`, `SupportsOnDuplicateKey`), fallback-dialect
-status, and `GetCompatibilityWarning()`. Everything on it also appears on `ISqlDialect`, which is
-the larger and more current surface — reach for `context.Dialect` first; `DataSourceInfo` exists
-for callers that only need this narrower metadata view.
+status, and `GetCompatibilityWarning()`. Most capability flags on it also appear on `ISqlDialect`,
+which is the larger and more current surface — reach for `context.Dialect` first. A few members
+exist only on `IDataSourceInformation`: `ParameterMarkerPattern`, `ParameterNamePatternRegex`,
+`DatabaseProductName`/`DatabaseProductVersion`, `DefaultPrepareStatements`, `Product`,
+`IsUsingFallbackDialect` and `StandardCompliance` (the dialect has `ProductInfo`,
+`PrepareStatements` and `IsFallbackDialect` instead); `DataSourceInfo` suits callers that only
+need the narrower metadata view.
 
 ## `ISqlDialect` mixes two audiences — know which one you're calling
 
-`ISqlDialect` (`pengdows.crud.abstractions/dialects/ISqlDialect.cs`, ~900 lines) is CLAUDE.md's
+`ISqlDialect` (`pengdows.crud.abstractions/dialects/ISqlDialect.cs`, ~870 lines) is CLAUDE.md's
 documented "official surface area" — but reading through it, its members split into two genuinely
 different jobs:
 
@@ -7832,11 +8080,11 @@ strategy is a real bug this codebase has already hit. PostgreSQL 15+ has **both*
 batch-`MERGE` implementation for any dialect) **at the same time**. Code that checked only
 `SupportsMerge` to decide which upsert-fragment shape to build leaked a `MERGE`-only SQL fragment
 (referencing `s.column`, `MERGE`'s own `USING (...) AS s` alias) into batch `ON CONFLICT` SQL,
-which has no such alias — a real, shipped bug. The cached fragment is still pre-built in
-`MERGE` form whenever `SupportsMerge` is true (`TableGateway.Sql.cs`'s `upsertUpdateFragment`
-pre-build); the batch path fixes it by checking *both* flags and rewriting the `s.` source-alias
-references to `EXCLUDED.` when a dialect supports `MERGE` and `ON CONFLICT` at the same time
-(see `TableGateway.Batch.cs`'s batch-upsert builder and its inline comment). The lesson generalizes: check the specific flags relevant to the *specific
+which has no such alias — a real, shipped bug. The fix is that `TableGateway.Sql.cs` pre-builds two
+fragments, because one dialect can need both: `UpsertUpdateFragment` in `MERGE` form (source alias `s`,
+target alias `t`) when `SupportsMerge` is true, and `UpsertUpdateFragmentOnConflict` for `ON CONFLICT` /
+`ON DUPLICATE KEY`. The single-row path uses the first; the batch path (`TableGateway.Batch.cs`) takes
+the second (and, on `ON DUPLICATE KEY` dialects, checks `UpsertFragmentHasUnreliableIncoming`). The lesson generalizes: check the specific flags relevant to the *specific
 operation* you're generating, not a single flag as a stand-in for "which dialect family is this."
 
 ```csharp
@@ -7888,10 +8136,10 @@ otherwise below.
 
 | Cache | Scope | Key | Bound | Notes |
 |---|---|---|---|---|
-| `DataReaderMapper._planCache` | Static, process-wide | `PlanCacheKey(Type, SchemaHash, ColumnsOnly, EnumMode)` — `SchemaHash` is a 64-bit arithmetic hash of the column names+types | 128 (`MaxPlanCacheSize`) | `DataReaderMapper` is public and externally reachable (`DataReaderMapper.Instance`, see `docs/data-reader-mapper.md`) — this cache backs its own hydration path, separate from gateway hydration's `_readerPlans` below. Not tenant-cardinality-related; keyed by entity type + result shape. |
+| `DataReaderMapper._planCache` | Static, process-wide | `PlanCacheKey(Type, RecordsetShape, ColumnsOnly, EnumMode, Coercion)` — `RecordsetShape` is the structural column names+types of the result set, compared by value, not a hash | 128 (`MaxPlanCacheSize`) | `DataReaderMapper` is public and externally reachable (`DataReaderMapper.Instance`, see `docs/data-reader-mapper.md`) — this cache backs its own hydration path, separate from gateway hydration's `_readerPlans` below. Not tenant-cardinality-related; keyed by entity type + result shape. |
 | `DataReaderMapper._setterCache` | Static, process-wide | `SetterCacheKey` (property-level) | 512 (`MaxSetterCacheSize`) | Same as above. |
 | `DataReaderMapper._propertyLookupCache` | Static, process-wide | `PropertyLookupCacheKey` | 64 (`MaxPropertyLookupCacheSize`) | Same as above. |
-| `BaseTableGateway._readerPlans` | Per-gateway-instance | `long` hash of the recordset shape (column count, names case-insensitively, and field types, via `System.HashCode`) | Configurable via `ReaderPlanCacheSize`, default 32 (`DefaultReaderPlanCapacity`) | **Not tenant-cardinality-bound and doesn't need to be** — captured once at gateway construction (CORE-019: intentional, not a gap), keyed by result-set shape, which is a property of the query/entity, not of which tenant executed it. One singleton gateway serving 10,000 tenants still has at most a few dozen distinct shapes. |
+| `BaseTableGateway._readerPlans` | Per-gateway-instance | `ReaderPlanKey(RecordsetShape, TypeCoercionOptions)` — the structural recordset shape (column names and field types, compared by value) plus the reading context's coercion options | Configurable via `ReaderPlanCacheSize`, default 32 (`DefaultReaderPlanCapacity`) | **Not tenant-cardinality-bound and doesn't need to be** — captured once at gateway construction (CORE-019: intentional, not a gap), keyed by result-set shape, which is a property of the query/entity, not of which tenant executed it. One singleton gateway serving 10,000 tenants still has at most a few dozen distinct shapes. |
 | `BaseTableGateway._columnListCache` | Per-gateway-instance | `string` | 100 (`MaxCacheSize`) | Same tenant-independence reasoning as `_readerPlans`. |
 | `BaseTableGateway._queryCache` | Per-gateway-instance, two-level | Outer: `ConditionalWeakTable<ISqlDialect, BoundedCache<string,string>>` keyed by **dialect instance**; inner: `BoundedCache` capped at 100 per dialect instance | Outer table holds one entry per live dialect instance, reclaimed by the GC once that dialect (and the `DatabaseContext` that owns it) is no longer referenced | **This is the multi-tenant cache-design point**: keying by dialect instance (not by the coarse `SupportedDatabase` enum) is deliberate — two tenants on *different* versions of the same engine (e.g. MySQL 8.0.19 vs. 8.0.33) can never share SQL text that was generated for the other's version. The cost is redundancy: each tenant context has its own dialect instance, so N live tenant contexts on the same engine+version each build and hold their own inner cache (at most 100 short strings each), rather than sharing one. The `ConditionalWeakTable` keeps this from becoming a leak — entries for disposed/unreferenced tenant contexts are collected, not retained for the process lifetime. |
 | `BaseTableGateway._whereParameterNames` | Per-gateway-instance, two-level | Same dialect-instance-keyed `ConditionalWeakTable` structure as `_queryCache` | Same reasoning | Same as `_queryCache`. |
@@ -7910,12 +8158,9 @@ tenant identity baked in.
 `Equals`/`GetHashCode` contract for its key type, and the dialect-instance-keyed tables use
 reference identity — for string-, type-, and instance-keyed caches a hash collision resolves
 correctly via `Equals` and never returns the wrong entry. The two **shape-keyed** reader-plan caches
-are the exception: `BaseTableGateway._readerPlans` is keyed by the shape hash itself (a `long`
-widened from a 32-bit `HashCode`), and `DataReaderMapper._planCache`'s key embeds a 64-bit
-`SchemaHash` rather than the column list. Neither re-verifies the actual column names/types on a
-hit, so two distinct result shapes whose hashes collide would share a compiled plan. The
-probability is very low at these cache sizes, but it is a hash-equality guarantee, not a
-structural one.
+(`BaseTableGateway._readerPlans` and `DataReaderMapper._planCache`) key on the structural
+`RecordsetShape` (the actual column names and types) rather than a hash of it, so two distinct
+result shapes whose hashes collide still compare unequal and never share a compiled plan.
 
 ## Context-derived generation contract
 
@@ -8081,14 +8326,14 @@ generator, execution path, or verification step implemented anywhere in this rep
 
 | Plan | How it works | Round trips | Used when |
 |---|---|---|---|
-| `Returning` | Inline `INSERT ... RETURNING id` | 1, atomic | PostgreSQL, Firebird, DuckDB, SQLite 3.35+, Db2 (`FROM FINAL TABLE`) |
+| `Returning` | Inline `INSERT ... RETURNING id` | 1, atomic | PostgreSQL (and CockroachDB, YugabyteDB, Spanner), Firebird, DuckDB, SQLite 3.35+, MariaDB 10.5+, Oracle (`RETURNING ... INTO` an OUT parameter), Db2 (`FROM FINAL TABLE`) |
 | `OutputInserted` | Inline `INSERT ... OUTPUT INSERTED.id` | 1, atomic | SQL Server |
 | `SessionScopedFunction` | The INSERT, then a session-scoped last-id query as a separate statement on the same pinned connection | 2 | Informix (`DBINFO`), SAP HANA (`CURRENT_IDENTITY_VALUE()`), Access (`@@IDENTITY`): drivers that reject a compound statement and expose no id |
 | `PrefetchSequence` | `SELECT seq.NEXTVAL` before the INSERT, then insert the already-known value | 2, but ID is known before the write | InterBase (`CREATE GENERATOR` + `GEN_ID(name, 1)`), FlatFile (`VALUES (NEXT VALUE FOR "<table>_seq")`); see the Oracle note below for why Oracle itself doesn't. The prefetch runs on a write connection: advancing a sequence is a write |
 | `CorrelationToken` | Add a unique token value to the INSERT, then `SELECT` the row back by that token | 2 | Universal fallback — works on any database with a uniqueness guarantee on the token column |
 | `NaturalKeyLookup` | Look up the just-inserted row by its natural key columns within the same transaction | 2 | Last resort; requires unique constraints on the lookup columns and explicit opt-in due to race-condition risk |
-| `CompoundStatement` | `INSERT ...; SELECT LAST_INSERT_ID()` as one multi-statement batch | 1 (batched) | MySql.Data, SQLite before 3.35, Sybase ASE. Saves `SessionScopedFunction`'s second round trip; requires multi-statement support on the connection. |
-| `ReaderInsertedId` | Execute the INSERT as a reader and read the generated key off a provider-specific `DbDataReader` property (e.g. `MySqlDataReader.LastInsertedId`), populated from the database's own OK packet | 1 | MySqlConnector, which deliberately does not support `AllowMultipleStatements` |
+| `CompoundStatement` | `INSERT ...; SELECT LAST_INSERT_ID()` as one multi-statement batch | 1 (batched) | MySql.Data (and MySQL-family databases on it), SQLite before 3.35, Sybase ASE. Saves `SessionScopedFunction`'s second round trip; requires multi-statement support on the connection. |
+| `ReaderInsertedId` | Execute the INSERT as a reader and read the generated key off a provider-specific `DbDataReader` property (e.g. `MySqlDataReader.LastInsertedId`), populated from the database's own OK packet | 1 | MySqlConnector (MySQL and TiDB, SingleStore through the same dialect), and MariaDB before 10.5; MySqlConnector deliberately does not support `AllowMultipleStatements` |
 | `None` | No retrieval strategy | — | Database doesn't support auto-generated keys, or the dialect hasn't configured one |
 
 ## The id query always runs on the INSERT's connection
@@ -8119,14 +8364,14 @@ The same pin covers the fallback id query of `Returning`/`OutputInserted`, `Comp
 
 | Database | Plan | Notes |
 |---|---|---|
-| Oracle | `Returning` | `OracleDialect.GetGeneratedKeyPlan()` explicitly overrides the base class and returns `Returning`, not the `PrefetchSequence` the base `SqlDialect` special-cases for Oracle. The doc comment on the neighboring `RenderInsertReturningClause` method still says "in normal operation Oracle uses PrefetchSequence" — that comment is stale; `Returning` is the deliberate, working design. Oracle's `RETURNING id INTO :o0` binds through an ADO.NET OUT parameter rather than a result set, so `TableGateway.Core.cs`'s `CreateAsync` special-cases `DatabaseType == SupportedDatabase.Oracle` and uses `ExecuteNonQueryAsync` + `GetParameterValue` instead of the `ExecuteScalarOrNullAsync` path other `Returning` dialects use. |
+| Oracle | `Returning` | `OracleDialect.GetGeneratedKeyPlan()` explicitly overrides the base class and returns `Returning`, not the `PrefetchSequence` the base `SqlDialect` special-cases for Oracle. Oracle's `RETURNING id INTO :o0` binds through an ADO.NET OUT parameter rather than a result set, so the dialect reports `RequiresOutputParameterForReturning()` and `TableGateway.Core.cs`'s `CreateAsync` uses `ExecuteNonQueryAsync` + `GetParameterValue` for it instead of the `ExecuteScalarOrNullAsync` path other `Returning` dialects use. |
 | SQL Server | `OutputInserted` | Base logic |
-| PostgreSQL, CockroachDB, YugabyteDB, DuckDB | `Returning` | Base logic |
+| PostgreSQL, CockroachDB, YugabyteDB, Spanner, DuckDB | `Returning` | Base logic (CockroachDB, YugabyteDB and Spanner inherit `PostgreSqlDialect`; Aurora PostgreSQL is PostgreSQL) |
 | Firebird | `Returning` | Explicit override (matches base logic) |
 | Db2 | `Returning` | Explicit override — actually emitted as `SELECT ... FROM FINAL TABLE (INSERT ...)`, wrapping the whole INSERT rather than a trailing clause |
 | SQLite | `Returning` (3.35+), else `CompoundStatement` | Explicit override: `Returning` when `SupportsInsertReturning` is true, `CompoundStatement` (`; SELECT last_insert_rowid()`) when it is false |
-| MariaDB | `ReaderInsertedId` | Explicit override — always, regardless of driver |
-| MySQL (and TiDB, which inherits `MySqlDialect`) | `ReaderInsertedId` if using MySqlConnector, else `CompoundStatement` | Explicit override, driver-dependent — the only dialect where the ADO.NET driver in use, not just the database engine, changes the generated-key strategy |
+| MariaDB | `Returning` (10.5+), else `ReaderInsertedId` | Explicit override: `Returning` when `SupportsInsertReturning` is true (server 10.5 or later), otherwise `ReaderInsertedId` |
+| MySQL (and TiDB, which inherits `MySqlDialect`; SingleStore and Aurora MySQL run on the same dialect) | `ReaderInsertedId` if using MySqlConnector, else `CompoundStatement` | Explicit override, driver-dependent — the only dialect where the ADO.NET driver in use, not just the database engine, changes the generated-key strategy |
 | Sybase ASE | `CompoundStatement` | Explicit override — `SybaseAseDialect.GetGeneratedKeyPlan()`. ASE has no OUTPUT/RETURNING clause; the ID is read back with a space-separated `INSERT ... SELECT @@IDENTITY` batch (`GetCompoundInsertIdSuffix`), since a semicolon-separated batch is rejected by ASE |
 | SAP HANA | `SessionScopedFunction` | Explicit override (2.0.6). `SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`, confirmed live to return the new id right after the INSERT on the same connection, now runs on the pinned connection. `CompoundStatement` is rejected live (no multi-statement commands). HANA is opt-in in the integration suite (16-32 GB image), so the pinned path is unit-tested and was not run live in 2.0.6 |
 | Informix | `SessionScopedFunction` | Explicit override (2.0.6). `SELECT CASE WHEN DBINFO('bigserial') <> 0 THEN DBINFO('bigserial') WHEN DBINFO('serial8') <> 0 THEN DBINFO('serial8') ELSE DBINFO('sqlca.sqlerrd1') END FROM systables WHERE tabid = 1` returns the id for SERIAL, SERIAL8 and BIGSERIAL (each `DBINFO` form reports only its own type). Compound statements are rejected by Informix.Net.Core. Verified live on the pinned connection |
@@ -8218,7 +8463,8 @@ never wrapped into a `DatabaseException` (see CLAUDE.md's Exception Hierarchy se
 4. `DbExceptionTranslationSupport.LooksLikeTimeout`, which walks the `InnerException` chain and
    checks exception type names as well as messages → `Timeout`.
 5. Message-text heuristics (deadlock, serialization, constraint keywords) → the matching
-   category, else `Unknown`.
+   category, else `Unknown`. An error the provider identified with its own SQLSTATE or error
+   number is not re-guessed from its text: it is `Unknown` unless steps 2–4 recognized it.
 
 `PostgreSqlDialect` covers CockroachDB, YugabyteDB, Aurora PostgreSQL and Spanner by
 inheritance; `MySqlDialect` covers MariaDB, TiDB, Aurora MySQL and SingleStore. `SybaseAseDialect`
@@ -8233,10 +8479,10 @@ Concrete examples from the current mapping:
 
 Constraint kinds come from each dialect's `Is*Violation` overrides — e.g. MySQL `1062`/`1169`
 unique, `1216`/`1451`/`1452` foreign key, `1048` not-null, `3819`/`4025` check. Oracle, SQLite,
-DuckDB, Firebird, Db2, Informix, SAP HANA, Spanner and Access have their own
+DuckDB, Firebird, Db2, Informix, SAP HANA, InterBase, FlatFile, Spanner and Access have their own
 `TryClassifyProviderException` overrides; check the dialect file directly for the exact codes if
-you're targeting one of those specifically. Snowflake, InterBase and FlatFile override only the
-`Is*Violation` checks and fall through to steps 4–5 for other categories. Access
+you're targeting one of those specifically. Snowflake overrides only the
+`Is*Violation` checks and falls through to steps 4–5 for other categories. Access
 is the most extreme case of the "no numeric signal at all" shape: `OleDbException.ErrorCode` is
 always the identical generic COM HRESULT (`-2147467259`) and `Errors` is empty for every
 violation kind, including connection failures — classification (constraint kinds, a lock-wait
@@ -8380,20 +8626,20 @@ used everywhere:
 
 Percentile tracking is **opt-in** (`MetricsOptions.EnableApproxPercentiles`, default `false`,
 set via `DatabaseContextConfiguration.MetricsOptions`) — a `P95CommandMs`/`P99CommandMs` of `0` is
-ambiguous between "genuinely fast" and "tracking is off, or no samples yet." `DatabaseMetrics`
-carries no availability flag of its own, so check the `MetricsOptions` you configured before
-trusting a percentile value:
+ambiguous between "genuinely fast" and "tracking is off, or no samples yet." Resolve the ambiguity
+with the availability flags that `DatabaseMetrics` (and each `DatabaseRoleMetrics`) carries:
+`CommandPercentilesAvailable` / `TransactionPercentilesAvailable` are true only when the matching
+P95/P99 values hold real samples.
 
 ```csharp
-var percentilesOn = configuration.MetricsOptions.EnableApproxPercentiles;
-if (percentilesOn && metrics.CommandsExecuted > 0)
+if (metrics.CommandPercentilesAvailable)
 {
     // metrics.P95CommandMs / P99CommandMs reflect real samples
 }
 ```
 
-Same caveat for `P95TransactionMs`/`P99TransactionMs`. If percentiles are consistently `0` in
-production, first confirm percentile tracking is enabled — that's a configuration gap, not
+Same for `P95TransactionMs`/`P99TransactionMs` with `TransactionPercentilesAvailable`. If the flag is consistently
+false in production, first confirm percentile tracking is enabled — that's a configuration gap, not
 evidence the database is fast.
 
 ## "Are connections piling up, or leaking?"
@@ -8454,9 +8700,12 @@ That's the entire setup. Every real command execution — `ExecuteNonQueryAsync`
 |---|---|
 | `db.system` | Detected product, lowercased (e.g. `"postgresql"`) |
 | `db.name` | The owning context's name |
-| `db.statement` | The query text as built — parameterized, never interpolated literal values |
+| `db.statement` | The query text as built — parameterized, never interpolated literal values; truncated to 4000 characters with a `...(truncated)` suffix |
 | `db.operation` | `"ExecuteNonQuery"` or `"ExecuteReader"` |
 | `pengdows.context_id` | The owning `DatabaseContext`'s root ID |
+| `db.rows_affected` | Rows affected; set only on a successful `ExecuteNonQuery` span |
+
+Spans are `ActivityKind.Client`. A successful command ends with status `Ok`; a failure ends with status `Error` carrying no description, plus a sanitized `exception` event (exception type and a message truncated to 1000 characters, never the stack trace), so raw provider messages do not reach trace storage by a second path (`SqlContainer.cs`, CORE-024).
 
 `pengdows.context_id` is the same tag `pengdows.crud.opentelemetry`'s metrics adapter uses internally to filter spans when deriving its `db.client.operation.duration` histogram — useful for correlating a trace span with which `DatabaseContext` instance produced it in a multi-context (e.g. multi-tenant) application, without needing that separate package installed just to get the correlation ID.
 
@@ -8522,7 +8771,7 @@ Uuid7Optimized.Configure(new Uuid7Options(
 
 `Uuid7Options` fields: `Mode`, `MaxNegativeSkewMs` (default 5), `MaxSpinCount` (default 128, spin-wait cycles before sleeping on counter overflow), `SleepMs` (default 1), `FailFastOnBurst` (default `false`; when true, the blocking generators throw on burst exhaustion — see above).
 
-If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults — for `PtpSynced` that includes `FailFastOnBurst = true`. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
+The example above passes custom values, so `FailFastOnBurst` stays at its record default `false` (it blocks on burst) even in `PtpSynced`; set `FailFastOnBurst: true` explicitly to throw. If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults — for `PtpSynced` that includes `FailFastOnBurst = true`. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
 
 ## Other entry points
 
@@ -8626,7 +8875,10 @@ public RowVersion Rv { get; set; }
 
 `JsonDocument` (the BCL type, not `JsonValue`) is also directly mapped in
 the dialects' type mappings for PostgreSQL/CockroachDB/YugabyteDB (`jsonb`),
-MySQL/TiDB (`JSON`), and SQL Server (`NVARCHAR(MAX)`). `JsonValue` is a separate, provider-agnostic
+MySQL/TiDB (`JSON`), and SQL Server (`NVARCHAR(MAX)`); no other dialect registers a `JsonDocument`
+mapping (MariaDB has no native JSON type, and Spanner registers none of the PostgreSQL-family
+mappings above). Aurora PostgreSQL and Aurora MySQL bind through their parent's mappings
+(`TypeMappingProvider`), so they behave as PostgreSQL and MySQL in the table above. `JsonValue` is a separate, provider-agnostic
 wrapper maintained in the newer coercion system — prefer it for new code since it works
 uniformly across dialects without a per-provider registration; `JsonDocument` remains supported
 for existing code and BCL interop. Don't confuse either with the entity-level `[Json]` attribute
@@ -8910,6 +9162,12 @@ This is a hybrid export model, and the design held up through implementation:
    for tracing, filtered to `Track()`ed contexts via a `pengdows.context_id` Activity tag.
    The `pengdows.db.client.*` percentile/EMA gauges still ship alongside it rather than being
    replaced — both naming schemes coexist so no existing consumer of the gauges breaks.
+5. **Semantic-convention connection instruments** — alongside the histogram, four observable
+   instruments follow the OTel database semantic conventions and are read live from each
+   context's reader and writer `PoolStatisticsSnapshot`: `db.client.connection.count`
+   (state `used`), `db.client.connection.max`, `db.client.connection.pending_requests` and
+   `db.client.connection.timeouts` (slot plus turnstile timeouts). In total the observer
+   creates 53 instruments: 48 `pengdows.db.client.*` and these 5 `db.client.*`.
 
 `ModeContentionSnapshot` (`pengdows.crud/metrics/ModeContentionStats.cs`) does exist in
 source — it's a real public record (`CurrentWaiters`, `PeakWaiters`, `TotalWaits`,
@@ -8932,6 +9190,11 @@ What's actually applied, per `PengdowsMetricsObserver.cs`:
   doesn't yet expose the `DatabaseMetrics.Read`/`.Write` per-role split that
   `IDatabaseContext.GetPoolStatisticsSnapshot(PoolLabel)` already has internally).
 - `error.type` — on trace-derived spans/exceptions only.
+- The `db.client.*` semantic-convention instruments use the OpenTelemetry tag names instead:
+  `db.client.operation.duration` is tagged `db.system.name`, `db.namespace`, `db.operation.name`
+  (plus `error.type` when the span failed); `db.client.connection.*` carry
+  `db.client.connection.pool.name` (`<context name>.reader` / `<context name>.writer`), and
+  `connection.count` also `db.client.connection.state`.
 
 No `db.mode` or `execution.role` tag exists — an earlier draft proposed both; neither was
 built.
@@ -9180,7 +9443,7 @@ provider-casting gap described above entirely.
 | **Complexity** | Minimal (1 class) | Full-featured Framework |
 | **Admission Control** | Single Global Gate | Read/Write Lane Separation |
 | **Metrics** | Basic (Logging) | 36+ Detailed Metrics |
-| **Multi-Dialect** | No (Provider Agnostic) | Yes (22 DB specific optimizations) |
+| **Multi-Dialect** | No (Provider Agnostic) | Yes (23 supported database values, dialect-specific SQL and behavior) |
 | **Legacy Apps** | **Perfect** (Dapper, etc.) | Requires migration |
 
 ---
@@ -9603,6 +9866,8 @@ dotnet pack <project>.csproj -c Release
 - Program to interfaces whenever possible; concrete types should primarily exist to satisfy the interface contracts, and consumers should depend on the abstractions located under `pengdows.crud.abstractions`.
 - Expose `ITableGateway`, `IDatabaseContext`, `ISqlContainer`, etc., as the official surface area for `pengdows.crud` and keep implementation types internal unless there is a compelling reason to document them directly.
 - Hide implementation details as `internal` by default. Prefer factory/DI creation. Public constructors are allowed for core entry points (`DatabaseContext`, `TableGateway<,>`, tenant helpers) and should remain deliberate and documented.
+- Expose only what needs exposing: public is permanent (adding costs a minor version, removing a major), so every new public or protected member needs a consumer that cannot do without it and a recorded reason. Raw ADO.NET objects (`DbConnection`, `DbCommand`, `DbDataReader`, `DbTransaction`, `DbDataSource`) never appear in public outputs and no public type inherits one; the sanctioned form is a governed lease wrapper such as `ITrackedReader`. fakeDb may grow freely, but provider-shaped test doubles stay `internal`. See REVIEW_POLICY.md §4D.
+- **Every public or protected member is declared** in the project's `PublicAPI.Shipped.txt` (the 2.0.5 surface) or `PublicAPI.Unshipped.txt` (additions since, each with a reason). An undeclared one fails the build (RS0016); adding a line there is a deliberate, reviewed act.
 
 ## Interface-first Mandate
 
@@ -9761,9 +10026,10 @@ The `[Version]` attribute enables optimistic concurrency control:
 3. **Error:** Throws if no `[PrimaryKey]` AND `[Id]` is not writable (`[Id(false)]`)
 
 **SQL generated depends on database** (`MERGE` is preferred wherever the dialect supports it, then `ON CONFLICT`, then `ON DUPLICATE KEY`):
-- SQL Server/Oracle/PostgreSQL 15+/Firebird/Snowflake/Db2/Sybase ASE/SAP HANA (and DuckDB 1.4+): `MERGE`
-- PostgreSQL < 15/CockroachDB/YugabyteDB/SQLite (and DuckDB < 1.4): `INSERT ... ON CONFLICT`
+- SQL Server/Oracle/PostgreSQL 15+/Firebird/Snowflake/Db2/Informix/Sybase ASE/SAP HANA/FlatFile (and DuckDB 1.4+): `MERGE`
+- PostgreSQL < 15/CockroachDB/YugabyteDB/Spanner/SQLite (and DuckDB < 1.4): `INSERT ... ON CONFLICT`
 - MySQL/MariaDB/TiDB (and Aurora MySQL/SingleStore): `INSERT ... ON DUPLICATE KEY UPDATE`
+- InterBase/Access: no upsert form; `UpsertAsync`/`BuildUpsert` throw `NotSupportedException`
 
 ## Multi-Tenancy
 
@@ -9841,6 +10107,8 @@ This is intentional design — it allows "last modified" queries without checkin
 - Without resolver + user audit fields = `InvalidOperationException` at runtime
 - Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
 - The audit resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset are all supported.
+- `AuditCreationPolicy` (init-only property on every gateway, new in 2.0.6; `docs/audit-fields.md`): `PreserveExplicitValues` (default) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always overwrites them with resolver values (stops request-model binding from spoofing audit fields)
+- UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`)
 
 ## Connection Management and DbMode
 
@@ -9849,7 +10117,7 @@ This is intentional design — it allows "last modified" queries without checkin
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
-| `PreventDatabaseUnload` | 1 | Sentinel connection keeps the database loaded (SQL Server LocalDB); `KeepAlive` is an `[Obsolete]` alias |
+| `PreventDatabaseUnload` | 1 | Sentinel connection keeps an idle-unloading database loaded (SQL Server LocalDB, Firebird, Db2 LUW); `KeepAlive` is an `[Obsolete]` alias |
 | `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
@@ -9959,7 +10227,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite `Standard` -> `SingleWriter`); where `Best` picks `PreventDatabaseUnload` (LocalDB, Firebird) an explicit `Standard` is honored
+8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite `Standard` -> `SingleWriter`); where `Best` picks `PreventDatabaseUnload` (LocalDB, Firebird, Db2 LUW) an explicit `Standard` is honored
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `ctx.BeginTransaction()`
 11. **ISqlContainer execution methods return ValueTask** — not Task, for reduced allocations
@@ -10051,7 +10319,7 @@ The framework provides intelligent, adaptive connection strategies to ensure opt
 - **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string:
     - `:memory:` SQLite/DuckDB → `SingleConnection`
     - File-based SQLite/DuckDB/pengdows.flatfile (and shared-cache in-memory SQLite) and Microsoft Access → `SingleWriter`
-    - SQL Server LocalDB and Firebird → `PreventDatabaseUnload` (a sentinel per pool; an explicit `Standard` is always honored; `KeepAlive` is an `[Obsolete]` alias)
+    - SQL Server LocalDB, Firebird and Db2 LUW → `PreventDatabaseUnload` (a sentinel per pool; an explicit `Standard` is always honored; `KeepAlive` is an `[Obsolete]` alias)
     - Everything else → `Standard`
 - **`ModeLockTimeout`:** Configurable timeout (`TimeSpan?`) for internal mode locks and transaction completion locks; `null` means wait indefinitely.
 
@@ -10232,7 +10500,9 @@ public int Version { get; set; }
 
 - Entities with `[CreatedBy]` or `[LastUpdatedBy]` REQUIRE `IAuditValueResolver`.
 - Without resolver + user audit fields = `InvalidOperationException` at runtime.
+- Audit timestamps are always UTC. UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`).
 - The resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset all supported.
+- `AuditCreationPolicy` (init-only property on every gateway, new in 2.0.6; `docs/audit-fields.md`): `PreserveExplicitValues` (default) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always overwrites them with resolver values (stops request-model binding from spoofing audit fields).
 
 ## Multi-Tenancy
 
@@ -10311,7 +10581,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB = SingleWriter, LocalDB = PreventDatabaseUnload; unsafe explicit modes are coerced (e.g., SQLite `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
+8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; unsafe explicit modes are coerced (e.g., SQLite `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations
@@ -10344,6 +10614,9 @@ The project CI enforces a minimum of **83% line coverage**. However, for all new
 ### 3. Interface-First Design
 
 All public APIs must be exposed via interfaces in `pengdows.crud.abstractions`. Implementation details should remain internal to `pengdows.crud` whenever possible, and new public constructors should be introduced only for clear SDK-use scenarios.
+
+Expose only what needs exposing: public is permanent (adding costs a minor version, removing a major), so every new public or protected member needs a consumer that cannot do without it and a recorded reason. Raw ADO.NET objects (`DbConnection`, `DbCommand`, `DbDataReader`, `DbTransaction`, `DbDataSource`) never appear in public outputs and no public type inherits one; the sanctioned form is a governed lease wrapper such as `ITrackedReader`. fakeDb may grow freely, but provider-shaped test doubles stay `internal`. See REVIEW_POLICY.md §4D.
+- **Every public or protected member is declared** in the project's `PublicAPI.Shipped.txt` (the 2.0.5 surface) or `PublicAPI.Unshipped.txt` (additions since, each with a reason). An undeclared one fails the build (RS0016); adding a line there is a deliberate, reviewed act.
 
 ## Building and Testing
 

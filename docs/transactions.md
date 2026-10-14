@@ -2,7 +2,7 @@
 
 ## Starting a transaction
 
-`TransactionContext` drives every explicit `BeginTransactionAsync` call. The factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, DuckDB begins with the provider default (its ADO.NET provider rejects explicit levels; the resolved level is still reported), and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only; requesting `ExecutionType.Read` on a write-only context throws `InvalidOperationException`). A dedicated `SemaphoreSlim` user lock (wrapped by `ReusableAsyncLocker`) serializes operations on the pinned connection, and a separate completion `SemaphoreSlim` serializes commit/rollback.
+`TransactionContext` drives every explicit `BeginTransactionAsync` call. The factory invokes `context.GetConnection` with the resolved `ExecutionType` so the configured connection strategy (Standard/PreventDatabaseUnload/SingleWriter/SingleConnection) can pick the right physical connection, and the connection is opened before the transaction starts. CockroachDB always moves to `IsolationLevel.Serializable`, DuckDB begins with the provider default (its ADO.NET provider rejects explicit levels; the resolved level is still reported), and read-only contexts are prohibited from opening write transactions (`NotSupportedException` if the caller requests `ExecutionType.Write` while the context is read-only; requesting `ExecutionType.Read` on a write-only context throws `InvalidOperationException`). A dedicated `SemaphoreSlim` user lock (wrapped by `ReusableAsyncLocker`) serializes operations on the pinned connection, and a separate completion `SemaphoreSlim` serializes commit/rollback.
 
 ### Async signatures (all return ValueTask)
 
@@ -112,10 +112,37 @@ await tx.ReleaseSavepointAsync("checkpoint1", ct);
 
 Isolation **fails up, never down**:
 
-- **Explicit `IsolationLevel`:** used as-is if the database supports it; otherwise the weakest supported level that is at least as strong is used (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot sits above ReadCommitted and is satisfied only by Snapshot or Serializable; RepeatableRead is satisfied only by Serializable). For example, `ReadCommitted` on CockroachDB or DuckDB runs as `Serializable`. If nothing at or above the requested level exists (e.g. `Serializable` on TiDB, Snowflake or SingleStore), `BeginTransaction` throws `InvalidOperationException`.
+- **Explicit `IsolationLevel`:** used as-is if the database supports it; otherwise the weakest supported level that is at least as strong is used (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot sits above ReadCommitted and is satisfied only by Snapshot or Serializable; RepeatableRead is satisfied only by Serializable). For example, `ReadCommitted` on CockroachDB or DuckDB runs as `Serializable`. If nothing at or above the requested level exists (e.g. `Serializable` on TiDB, Snowflake, SingleStore, Access or FlatFile), `BeginTransaction` throws `InvalidOperationException`.
 - **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, SingleStore, Access, or FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation enabled. On PostgreSQL/YugabyteDB `SafeNonBlockingReads` runs as `RepeatableRead` (an MVCC snapshot: non-blocking, no non-repeatable reads).
 - **Read-only `BeginTransaction` with no level and no profile** (`ExecutionType.Read`, `isolationLevel: null`): uses the `SafeNonBlockingReads` mapping and logs a warning if that mapping is degraded — it never throws for that.
 - **Write `BeginTransaction` with no level:** `ReadCommitted` if supported, else `Serializable`.
+
+### Per-database isolation and savepoint support
+
+Read from each dialect's `GetSupportedIsolationLevels`, `GetIsolationProfileMapping` and `SupportsSavepoints`/`SavepointCapabilities` (RU = ReadUncommitted, RC = ReadCommitted, RR = RepeatableRead, Ser = Serializable, Snap = Snapshot). "throws" means the profile's guarantee cannot be met, so an `IsolationProfile` request throws `TransactionModeNotSupportedException`. Savepoint columns: `C` create, `R` rollback-to, `Rel` release.
+
+| Database | Supported levels | SafeNonBlockingReads / StrictConsistency / FastWithRisks | Savepoints |
+|---|---|---|---|
+| SQL Server | RU, RC, RR, Ser, plus Snap when `ALLOW_SNAPSHOT_ISOLATION` is on | Snap, or RC (throws) when snapshot isolation is off / Ser / RU | C, R (no release) |
+| PostgreSQL (Aurora PostgreSQL, Citus, TimescaleDB), YugabyteDB | RC, RR, Ser | RR / Ser / RC | C, R, Rel |
+| CockroachDB | Ser | Ser / Ser / Ser | C, R, Rel |
+| Spanner | RR, Ser | RR / Ser / RR | none |
+| MySQL (Aurora MySQL, Percona), MariaDB | RU, RC, RR, Ser | RR / Ser / RU | C, R, Rel |
+| TiDB | RC, RR (accepts `SERIALIZABLE` syntax but does not enforce it, so it is not offered) | RR / RR (throws) / RC | C, R, Rel |
+| SingleStore | RC | RC / RC (throws) / RC | none |
+| Oracle | RC, Ser | RC / Ser / RC | C, R (no release) |
+| SQLite | RC, Ser | RC / Ser / RC | C, R, Rel |
+| DuckDB | Ser (the provider rejects an explicit level, so the transaction begins with its default) | Ser / Ser / Ser | none |
+| Firebird | RC, Snap, Ser | Snap / Ser / RC | C, R, Rel |
+| InterBase | RU, RC, RR, Ser, Snap | Snap / Ser / RC | C, R, Rel |
+| Snowflake | RC | RC / RC (throws) / RC | none |
+| Db2 (LUW) | RU, RC, RR, Ser | RC / Ser / RU | C, R, Rel |
+| SAP HANA | RU, RC, RR, Ser | RC / Ser / RU | C, R, Rel |
+| Informix | RU, RC, RR, Ser | RC / Ser / RU | C, R, Rel |
+| Sybase ASE | RU, RC, RR, Ser | RR / Ser / RU | C, R (no release) |
+| pengdows.flatfile | RU, RC, RR | RR / RR (throws) / RU | C, R, Rel |
+| Access | RU, RC | RC / RC (throws) / RU | none |
+| Unknown (SQL-92 fallback dialect) | RC, RR, Ser | RC / Ser / RC | none |
 
 ## Connection sharing inside transactions
 

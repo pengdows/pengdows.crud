@@ -61,7 +61,8 @@ different server versions; nothing requires them to share an engine. `ProviderNa
 name: `TenantContextRegistry` resolves each tenant's factory with
 `GetKeyedService<DbProviderFactory>(config.ProviderName)`, so every `ProviderName` your tenants use
 needs a matching `services.AddKeyedSingleton<DbProviderFactory>("sqlserver", SqlClientFactory.Instance)`
-(etc.) registration — `AddMultiTenancy` does not register provider factories for you. See
+(etc.) registration, or a `services.AddDbProviderLoading(configuration)` call that registers them from
+a `DatabaseProviders` section — `AddMultiTenancy` does not register provider factories for you. See
 [`dynamic-provider-loading.md`](./dynamic-provider-loading.md#di-registration-key-vs-providername--the-gotcha)
 for the same contract as it applies to `DbProviderLoader`.
 
@@ -79,9 +80,9 @@ This single call, reading the `MultiTenant` configuration section, registers:
 - `IDatabaseContextFactory` as a singleton (`TryAddSingleton<IDatabaseContextFactory,
   DefaultDatabaseContextFactory>()` — see "Replacing the context factory" below)
 - `ITenantContextRegistry` as a singleton (`TenantContextRegistry`), wired to the resolver and
-  factory above. The registry is constructed by the container, so its optional `maxTenantCount`
-  argument is left at its default (`null`, unbounded) — see "Tenant cardinality" below for how to
-  set a cap
+  factory above. Its optional `maxTenantCount` argument is taken from
+  `MultiTenantOptions.MaxTenantCount` (the `MultiTenant:MaxTenantCount` key; `null`, unbounded, by
+  default) — see "Tenant cardinality" below
 
 ## Custom resolver (no `AddMultiTenancy`)
 
@@ -382,10 +383,9 @@ distinct tenants are cached, `GetContext`/`AcquireLease` for a *new* tenant thro
 tenants keep resolving normally. Admission is atomic — the count check and the cache insert happen
 under one lock, so concurrent first requests for different new tenants cannot overshoot the cap.
 
-`MultiTenantOptions` has no cardinality setting and `AddMultiTenancy` does not pass one, so the
-registry it registers is unbounded (the default). To set a cap, register the registry yourself
-with a factory delegate — after `AddMultiTenancy` (the last `ITenantContextRegistry` registration
-is the one the container resolves) or in a fully custom setup:
+With `AddMultiTenancy`, set `MultiTenant:MaxTenantCount` (`MultiTenantOptions.MaxTenantCount`); it
+is passed through to the registry, and left unset the registry is unbounded (the default). In a
+fully custom setup, register the registry yourself with a factory delegate:
 
 ```csharp
 services.AddSingleton<ITenantContextRegistry>(sp => new TenantContextRegistry(

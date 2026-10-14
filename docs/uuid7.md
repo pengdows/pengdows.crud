@@ -45,7 +45,7 @@ Uuid7Optimized.Configure(new Uuid7Options(
 
 `Uuid7Options` fields: `Mode`, `MaxNegativeSkewMs` (default 5), `MaxSpinCount` (default 128, spin-wait cycles before sleeping on counter overflow), `SleepMs` (default 1), `FailFastOnBurst` (default `false`; when true, the blocking generators throw on burst exhaustion — see above).
 
-If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults — for `PtpSynced` that includes `FailFastOnBurst = true`. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
+The example above passes custom values, so `FailFastOnBurst` stays at its record default `false` (it blocks on burst) even in `PtpSynced`; set `FailFastOnBurst: true` explicitly to throw. If you pass only `Mode` (every other field left at its record default), `Configure` substitutes that mode's own defaults — for `PtpSynced` that includes `FailFastOnBurst = true`. If you pass custom values, they are clamped per mode: `PtpSynced` caps `MaxNegativeSkewMs` at 1 and `MaxSpinCount` at 64; `NtpSynced` raises them to at least 5 and 128; `SingleInstance` uses them as given.
 
 ## Other entry points
 

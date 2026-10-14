@@ -16,7 +16,7 @@
 - [ ] **Hot paths use `ValueTask`** (minimize allocations).
 - [ ] **Public APIs are in `.abstractions`**.
 - [ ] **Nothing new is public unless it needs to be**: every new public/protected member is listed in `PublicAPI.Unshipped.txt` with a reason, and no raw `DbConnection`/`DbCommand`/`DbDataReader`/`DbTransaction`/`DbDataSource` appears in a public output.
-- [ ] **13 DBs verified**: changes tested/verified against all supported providers.
+- [ ] **All supported DBs verified**: changes tested/verified against every `SupportedDatabase` value that the change can affect (the integration run covers the always-on set).
 - [ ] **TDD First**: Tests included to reproduce fix or verify feature.
 
 ## DB Impact Notes

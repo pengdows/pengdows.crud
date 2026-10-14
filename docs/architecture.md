@@ -165,7 +165,7 @@ Interlocked.Decrement(ref _connectionCount);
 **MetricsUpdated event** is fired **without holding locks**:
 
 ```csharp
-// pengdows.crud/DatabaseContext.Metrics.cs:322 (inside a per-subscriber try/catch)
+// pengdows.crud/DatabaseContext.Metrics.cs, OnMetricsCollectorUpdated (inside a per-subscriber try/catch)
 ((EventHandler<DatabaseMetrics>)invocation).Invoke(this, metrics);  // No lock held during callback
 ```
 
@@ -211,6 +211,7 @@ await conn.DisposeAsync();  // Returns to provider pool
 - Whether to use ephemeral (pool) or persistent (pinned) connections
 - Connection lifecycle (open/close timing)
 - Connection locking for shared connections
+- Admission control: a `PoolGovernor` (`pengdows.crud/infrastructure/PoolGovernor.cs`) per reader/writer pool caps concurrent connections and, in `SingleWriter`, also holds the writer-preference turnstile. It gates how many operations may hold a connection; the physical pool underneath is still the provider's
 
 **What the PROVIDER manages**:
 - Physical connection pooling
@@ -223,7 +224,7 @@ await conn.DisposeAsync();  // Returns to provider pool
 
 | Database | Connection String | Auto-Selected Mode | Why |
 |----------|------------------|-------------------|-----|
-| SQLite | `Data Source=:memory:` (isolated) | `SingleConnection` | **REQUIRED** - Each `:memory:` = separate database |
+| SQLite / DuckDB | `:memory:` (isolated) | `SingleConnection` | **REQUIRED** - Each `:memory:` = separate database |
 | SQLite | File-based (`mydb.db`) | `SingleWriter` | **OPTIMAL** - Prevents lock contention, WAL allows many readers + one writer |
 | DuckDB | File-based | `SingleWriter` | **OPTIMAL** - Disjoint-row writers proceed, but concurrent same-row writers conflict; one admitted writer does not. An explicit `Standard` is honored with a warning |
 | Microsoft Access | Any | `SingleWriter` | **OPTIMAL** - Concurrent writers fail with "currently locked"; an explicit `Standard` is honored with a warning |
@@ -231,19 +232,23 @@ await conn.DisposeAsync();  // Returns to provider pool
 | PostgreSQL | Any | `Standard` | **OPTIMAL** - Full server, high concurrency, provider pooling |
 | SQL Server | LocalDB | `PreventDatabaseUnload` | **DEFAULT** (Best) - Prevents instance unload; explicit `Standard` honored with a performance warning |
 | Firebird | Any | `PreventDatabaseUnload` | **DEFAULT** (Best) - Keeps a sentinel per pool so `LINGER=0` doesn't discard the page cache; every explicit mode honored |
+| Db2 (LUW) | Any | `PreventDatabaseUnload` | **DEFAULT** (Best) - Implicit-activation unload cost; only when the live detection query recognizes Db2 LUW, otherwise `Standard`; every explicit mode honored (`Db2Dialect.CoerceConnectionMode`) |
+| Every other database (SQL Server, Oracle, MySQL/MariaDB/SingleStore/TiDB, CockroachDB, YugabyteDB, Snowflake, Spanner, Informix, SAP HANA, Sybase ASE, InterBase, ...) | Any | `Standard` | The base `SqlDialect.CoerceConnectionMode`: `Best` selects `Standard` and every explicit mode is honored |
 
 **Coercion** (forced mode change):
 - SQLite `:memory:` + Standard → **Coerced to SingleConnection** (correctness)
 - SQLite file + Standard → **Coerced to SingleWriter** (safety, prevents SQLITE_BUSY)
 - pengdows.flatfile + Standard/PreventDatabaseUnload → **Coerced to SingleWriter**; DuckDB file and Microsoft Access + `Best` or PreventDatabaseUnload → `SingleWriter`, but an explicit `Standard` is **honored with a warning** for both (their vendors document concurrent connections; concurrent writers were still observed to fail: same-row conflicts on DuckDB, "currently locked" on Access)
 - Firebird (embedded or client-server) → **Not coerced**; `Best` selects `PreventDatabaseUnload` and every explicit mode is honored
-- Whenever `Best` would select `PreventDatabaseUnload` (e.g. LocalDB, Firebird), it uses `Standard` instead if the configured max pool size is under 2: the sentinel needs a second pooled connection, and `Best` must not override a caller's explicit one-connection pool (`CoerceMode`, DatabaseContext.Initialization.cs:1879-1891)
+- SQL Server LocalDB + `PreventDatabaseUnload`/`SingleWriter`/`SingleConnection` → **Coerced to PreventDatabaseUnload**; an explicit `Standard` is honored with a performance warning
+- Whenever `Best` would select `PreventDatabaseUnload` (e.g. LocalDB, Firebird, Db2 LUW), it uses `Standard` instead if the configured max pool size is under 2: the sentinel needs a second pooled connection, and `Best` must not override a caller's explicit one-connection pool (`DatabaseContext.CoerceMode`, DatabaseContext.Initialization.cs)
 
 **Mode Mismatch Warnings** (safe but suboptimal):
-- PostgreSQL + SingleConnection → Logs warning (limits concurrency unnecessarily)
-- SQL Server + SingleWriter → Logs warning (limits concurrency unnecessarily)
+- Any client-server database + SingleConnection or SingleWriter (e.g. PostgreSQL + SingleConnection, SQL Server + SingleWriter) → Logs warning (limits concurrency unnecessarily)
+- DuckDB or Microsoft Access, file-based, with an explicit `Standard` → Logs the dialect's evidence-backed risk description (`DescribeStandardModeRisk`)
+- SQL Server LocalDB with an explicit `Standard` → Logs a performance-only warning
 
-See `pengdows.crud/DatabaseContext.Initialization.cs` for full coercion logic.
+See `CoerceMode` and `WarnOnModeMismatch` in `pengdows.crud/DatabaseContext.Initialization.cs` and each dialect's `CoerceConnectionMode` override for full coercion logic.
 
 ---
 
@@ -294,12 +299,9 @@ pengdows.crud uses **context-level + connection-level** locking:
 **Implementation** (pengdows.crud/wrappers/TrackedConnection.cs):
 
 ```csharp
-public ILockerAsync GetLock()
-{
-    // Shared connections: Real lock (serialize access)
-    // Ephemeral connections: NoOp lock (no contention)
-    return _locker;
-}
+public ILockerAsync GetLock() => _isSharedConnection
+    ? new RealAsyncLocker(_semaphoreSlim!, _modeContentionStats, _mode, _modeLockTimeout)  // shared: real lock
+    : NoOpAsyncLocker.Instance;                                                            // ephemeral: no contention
 ```
 
 ### Acquisition Pattern
@@ -503,7 +505,7 @@ behavior, not as a capability contract for new code.
 
 **PreventDatabaseUnload mode** (`PreventDatabaseUnloadConnectionStrategy`):
 - One sentinel connection kept open (never used)
-- Prevents database unload (LocalDB, embedded SQLite)
+- Prevents database unload (SQL Server LocalDB, Firebird, Db2 LUW; SQLite, DuckDB and Access never reach this strategy, their dialects coerce `PreventDatabaseUnload` to `SingleWriter`)
 - All work uses ephemeral connections (identical to Standard)
 
 **SingleWriter mode** (`StandardConnectionStrategy` + governor policy):
@@ -519,13 +521,13 @@ behavior, not as a capability contract for new code.
 
 ### Strategy Selection Logic
 
-**Initialization** (DatabaseContext.Initialization.cs:607, :619):
+**Initialization** (`InitializeCoreAsync` in DatabaseContext.Initialization.cs):
 ```csharp
 ConnectionMode = CoerceMode(requestedMode, product, topology);
 WarnOnModeMismatch(ConnectionMode, product, requestedMode != ConnectionMode, isLocalDb);
 ```
 
-**Strategy instantiation** (strategies/connection/ConnectionStrategyFactory.cs):
+**Strategy instantiation** (strategies/connection/ConnectionStrategyFactory.cs, called from the same initialization path):
 ```csharp
 internal static class ConnectionStrategyFactory
 {
@@ -536,7 +538,7 @@ internal static class ConnectionStrategyFactory
             DbMode.Standard => new StandardConnectionStrategy(context),
             DbMode.PreventDatabaseUnload => new PreventDatabaseUnloadConnectionStrategy(context),
             DbMode.SingleConnection => new SingleConnectionStrategy(context),
-            // SingleWriter uses Standard lifecycle + governor policy (WriteSlots=1 + turnstile)
+            // SingleWriter now uses Standard lifecycle with governor policy (WriteSlots=1 + turnstile)
             DbMode.SingleWriter => new StandardConnectionStrategy(context),
             _ => throw new NotSupportedException($"Unsupported database mode: {mode}")
         };
@@ -549,12 +551,16 @@ Note: there is no silent fallback for an unrecognized mode — the default case 
 
 **Purpose**: Handle database-specific stored procedure invocation syntax.
 
-**Implementations**:
-- `NoProcWrappingStrategy`: Direct call (`EXEC sp_name @p1, @p2`)
-- `FunctionCallProcWrappingStrategy`: Function syntax (`SELECT sp_name(@p1, @p2)`)
-- `ExecProcWrappingStrategy`: EXEC keyword required
+**Implementations** (`pengdows.crud/strategies/proc/`, chosen by `ProcWrappingStrategyFactory` from the dialect's `ProcWrappingStyle`):
+- `ExecProcWrappingStrategy` (`Exec`): `EXEC name args` (SQL Server, Sybase ASE)
+- `CallProcWrappingStrategy` (`Call`): `CALL name(args)` (MySQL family, Db2, Snowflake, SAP HANA)
+- `PostgresProcWrappingStrategy` (`PostgreSQL`): `SELECT * FROM name(args)` for reads, `CALL` for writes
+- `OracleProcWrappingStrategy` (`Oracle`): `BEGIN name(args); END;`
+- `ExecuteProcedureWrappingStrategy` (`ExecuteProcedure`): Firebird/InterBase; selectable procedures are queried, others use `EXECUTE PROCEDURE`
+- `InformixProcWrappingStrategy` (`Informix`): `EXECUTE PROCEDURE name(args)`
+- `UnsupportedProcWrappingStrategy` (`None`, and the fallback for an unknown style): throws `NotSupportedException`
 
-**Selection**: Determined by `DataSourceInformation.ProcWrappingStyle` based on detected database type.
+**Selection**: `DataSourceInformation.ProcWrappingStyle`, which reads the detected dialect's `ProcWrappingStyle`.
 
 ---
 
@@ -576,24 +582,23 @@ When you call `ExecuteReaderAsync()`, the returned `ITrackedReader` represents a
 **CRITICAL**: The connection lock is held for the **entire lifetime** of the reader.
 
 ```csharp
-// pengdows.crud/wrappers/TrackedReader.cs (simplified)
-public class TrackedReader : ITrackedReader
+// pengdows.crud/wrappers/TrackedReader.cs (simplified; the class is internal, callers see ITrackedReader)
+internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInternalTrackedReader
 {
-    private readonly ITrackedConnection _connection;
-    private readonly IDisposable _lockHandle;  // ← Lock acquired at creation
-
-    public TrackedReader(DbDataReader reader, ITrackedConnection connection)
+    // SqlContainer acquires the connection lock BEFORE creating the reader and hands it over,
+    // so the reader owns its release from then on.
+    internal TrackedReader(DbDataReader reader, ITrackedConnection connection,
+        IAsyncDisposable connectionLocker, bool shouldCloseConnection, /* command, metrics, ... */)
     {
         _reader = reader;
         _connection = connection;
-        _lockHandle = await connection.GetLock().LockAsync();  // ← ACQUIRE
+        _connectionLocker = connectionLocker;       // ← lock handed over, held for the reader's lifetime
     }
 
-    public async ValueTask DisposeAsync()
+    protected override async ValueTask DisposeManagedAsync()
     {
-        await _reader.DisposeAsync();
-        await _connection.CloseAndDisposeAsync();
-        _lockHandle?.Dispose();  // ← RELEASE
+        // dispose the reader and its command, close the connection when this reader owns it,
+        // then release the connection lock (and any context/transaction gate)
     }
 }
 ```
@@ -630,12 +635,13 @@ await reader.DisposeAsync();
 **TrackedReader** auto-disposes when `Read()` or `ReadAsync()` returns `false`:
 
 ```csharp
-// pengdows.crud/wrappers/TrackedReader.cs:487
+// pengdows.crud/wrappers/TrackedReader.cs (simplified; read-failure translation omitted)
 public async ValueTask<bool> ReadAsync(CancellationToken cancellationToken)
 {
-    if (await _reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+    var hasRow = await _reader.ReadAsync(cancellationToken).ConfigureAwait(false);
+    if (hasRow)
     {
-        Interlocked.Increment(ref _rowsRead);
+        RecordRow();
         return true;
     }
 
@@ -982,7 +988,7 @@ This section addresses **frequent misunderstandings** by developers and AI syste
 - Subscribers expected to be observers, not controllers
 
 **What's actually done**:
-- Warning in XML docs (DatabaseContext.Metrics.cs:43-85); event invoked at DatabaseContext.Metrics.cs:322
+- Warning in the XML docs of the `MetricsUpdated` event (DatabaseContext.Metrics.cs); the event is invoked from `OnMetricsCollectorUpdated`, once per subscriber inside its own try/catch
 - Event fired without holding locks
 - User responsible for not re-entering
 
@@ -1038,7 +1044,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 - Connection lock **must** be held from reader creation until reader disposal
 - Auto-disposal **must** release connection and lock
 
-**Enforcement**: TrackedReader.cs:81-170 (`DisposeManaged`) and 348-450 (`DisposeManagedAsync`)
+**Enforcement**: `TrackedReader.DisposeManaged` and `DisposeManagedAsync` (`pengdows.crud/wrappers/TrackedReader.cs`)
 
 **On a transaction specifically, this fails fast — it does not block.** A reader opened on an `ITransactionContext` holds the transaction's user lock (`ReusableAsyncLocker` over `_userLock`) until the reader is disposed, and `ReusableAsyncLocker.MarkHeldByActiveReader()` marks that hold as owned by the reader. While it is marked, *any* further lock attempt on the transaction — another command, `Commit`/`Rollback` (sync or async), `SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync`, from the same logical flow or another thread — throws `InvalidOperationException("Cannot execute another command, or commit/roll back this transaction, while a reader opened on it is still active...")` immediately. Blocking would deadlock when the waiter is the flow that must dispose the reader (e.g. writing while still streaming a `LoadStreamAsync` result from the same transaction). A failed `Commit`/`Rollback` leaves the transaction uncompleted, so dispose the reader and retry. `Dispose()` of the transaction does not throw here, but skips the rollback and leaves the transaction and connection to the reader; dispose the reader first.
 
@@ -1050,11 +1056,11 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 
 **Contract**:
 - MetricsCollector fires MetricsChanged event **without holding locks**
-- DatabaseContext subscribes during construction when `EnableMetrics` is set (DatabaseContext.Initialization.cs:288)
-- DatabaseContext unsubscribes in disposal (DatabaseContext.cs:525, :573)
+- DatabaseContext subscribes (`_metricsCollector.MetricsChanged += OnMetricsCollectorUpdated`) during initialization when metrics are enabled (DatabaseContext.Initialization.cs)
+- DatabaseContext unsubscribes in both disposal paths (DatabaseContext.cs)
 - Event handler (OnMetricsCollectorUpdated) **must not** acquire locks
 
-**Enforcement**: DatabaseContext.Metrics.cs:299-333 (`OnMetricsCollectorUpdated`)
+**Enforcement**: `OnMetricsCollectorUpdated` in DatabaseContext.Metrics.cs
 
 ### SqlDialect ↔ DataSourceInformation
 
@@ -1064,7 +1070,7 @@ The public `IDatabaseContext`/`ISqlDialect` interfaces deliberately omit connect
 - Dialect selection based on SupportedDatabase enum
 - Vendor-specific behaviors encapsulated in dialect implementation
 
-**Enforcement**: DatabaseContext.Initialization.cs:290-315 (dialect detection and `SqlDialect` type check); mode coercion is `CoerceMode` at :1869-1899, delegating to each dialect's `CoerceConnectionMode`
+**Enforcement**: dialect detection in `InitializeCoreAsync` (DatabaseContext.Initialization.cs); mode coercion is `CoerceMode` in the same file, delegating to each dialect's `CoerceConnectionMode`
 
 ### TransactionContext ↔ IsolationResolver
 
@@ -1146,7 +1152,7 @@ Command preparation isn't a single global `Prepare=true`/`false` switch. `IConne
 
 ### Dialect-level connection-cleanup hooks for provider-specific write hazards
 
-Two `internal`, off-by-default `SqlDialect` members (deliberately not part of `ISqlDialect`) exist purely as `SqlContainer` connection-cleanup implementation details, not caller-observable capabilities — found and fixed together while implementing Oracle's batch-UPDATE strategy:
+Three `internal`, off-by-default `SqlDialect` members (deliberately not part of `ISqlDialect`) exist purely as `SqlContainer` connection-cleanup implementation details, not caller-observable capabilities — found and fixed together while implementing Oracle's batch-UPDATE strategy:
 
 - **`RequiresExplicitRollbackAfterFailedWrite`** (`false` by default, `true` for Firebird and InterBase) — `FirebirdSql.Data.FirebirdClient` starts an implicit transaction per command and auto-commits it on success, but has no corresponding auto-rollback on failure, so a failed write left its transaction's lock dangling on the pooled connection indefinitely. `SqlContainer.ExecuteNonQueryAsync` (and the reader/scalar execution paths that also perform writes) issues an explicit bare `ROLLBACK` after any failed write when the dialect requires it, before the connection returns to the pool — skipped entirely inside an explicit `ITransactionContext`, since that connection's commit/rollback lifecycle already belongs to the transaction.
 - **`RequiresConnectionPoolResetForDdl`** (`false` by default, `true` for Firebird) — Firebird's DDL commit requires no *other* pooled connection to still be referencing the table's prior metadata generation, even one holding only cleanly-committed transactions; enough prior round trips reusing pooled connections could make a later `CREATE`/`DROP`/`ALTER`/`TRUNCATE` fail with nothing actually uncommitted. `SqlContainer` calls the internal `SqlDialect.ResetConnectionPoolForDdl(connectionString)` before such a statement when the dialect overrides it — Firebird's override reflects into the static `FbConnection.ClearAllPools()` (no hard package reference from `pengdows.crud` to `FirebirdSql.Data.FirebirdClient`, the same reflection pattern `OracleDialect` uses for its `StatementCacheSize` hook) and swallows any failure as best-effort. It clears every Firebird pool process-wide, so the `connectionString` argument no longer decides which pools are reset: `ClearPool(connectionString)` only cleared the issuing context's own pool and could not reach a second, independent `DatabaseContext`'s pools (confirmed live).
@@ -1212,18 +1218,15 @@ var loggerFactory = LoggerFactory.Create(builder =>
     builder.AddConsole().SetMinimumLevel(LogLevel.Debug);
 });
 
-var context = new DatabaseContext(
-    connectionString,
-    factory,
-    new DatabaseContextConfiguration { LoggerFactory = loggerFactory }
-);
+var configuration = new DatabaseContextConfiguration { ConnectionString = connectionString };
+var context = new DatabaseContext(configuration, factory, loggerFactory);
 ```
 
-**What gets logged**:
-- Mode coercion (EventIds.ModeCoerced: 1002)
+**What gets logged with a dedicated event id** (`pengdows.crud/diagnostics/EventIds.cs`):
+- Mode coercion (EventIds.ModeCoerced: 1002), a warning when an explicit mode is changed (a `Best` auto-selection is logged at Information level without an event id)
 - Mode mismatch warnings (EventIds.ModeMismatch: 1001)
-- Connection lifecycle (EventIds.ConnectionLifecycle: 4001)
-- Dialect detection issues (EventIds.DialectDetection: 3001)
+
+`EventIds.ConnectionLifecycle` (4001) and `EventIds.DialectDetection` (3001) are declared but no code path logs with them yet, so filtering on them returns nothing.
 
 ### Inspect Metrics
 

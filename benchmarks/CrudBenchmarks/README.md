@@ -17,8 +17,9 @@ overall winner.
 
 Benchmarks use **Testcontainers** to automatically spin up and tear down database containers:
 
-- **PostgreSQL benchmarks**: Automatic Testcontainers (postgres:15-alpine)
+- **PostgreSQL benchmarks**: Automatic Testcontainers (postgres:15-alpine or postgres:16-alpine, depending on the class)
 - **SQL Server benchmarks**: Automatic Testcontainers (SQL Server 2022)
+- **MySQL benchmarks**: Automatic Testcontainers (mysql:8.0)
 
 **No manual Docker setup required!** Each benchmark manages its own container lifecycle:
 
@@ -41,23 +42,23 @@ dotnet run -c Release
 # SQL Generation (no database required)
 dotnet run -c Release --filter "*SqlGenerationBenchmark*"
 
-# Advanced Types (no database required)
-dotnet run -c Release --filter "*AdvancedTypeBenchmarks*"
+# Type handling (no database required; opt-in)
+dotnet run -c Release -- --include-opt-in --filter "*TypeHandlingBenchmarks*"
 
 # Cloning Performance (no database required)
 dotnet run -c Release --filter "*CloningPerformanceTest*"
 
-# PostgreSQL CRUD (uses Testcontainers)
-dotnet run -c Release --filter "*Pagila*"
+# PostgreSQL CRUD, equal footing (uses Testcontainers)
+dotnet run -c Release --filter "*PostgreSqlEqualFooting*"
 
-# Indexed Views (requires SQL Server)
-dotnet run -c Release --filter "*IndexedView*"
+# SQL Server CRUD, equal footing (uses Testcontainers)
+dotnet run -c Release --filter "*SqlServerEqualFooting*"
 
-# Automatic View Matching (requires SQL Server)
-dotnet run -c Release --filter "*AutomaticViewMatching*"
+# Materialized views (requires PostgreSQL; opt-in)
+dotnet run -c Release -- --include-opt-in --filter "*MaterializedViewPerformanceBenchmarks*"
 
-# Database-Specific Features (requires PostgreSQL)
-dotnet run -c Release --filter "*DatabaseSpecificFeatureBenchmarks*"
+# Database-specific features (requires PostgreSQL; opt-in)
+dotnet run -c Release -- --include-opt-in --filter "*DatabaseFeatureBenchmarks*"
 
 # MySQL default concurrency stress (opt-in benchmark)
 dotnet run -c Release -- --include-opt-in --filter "*MySqlDefaultConcurrencyBenchmarks*"
@@ -142,9 +143,8 @@ dotnet run -c Release -- --job long   # More iterations, more accurate
 ### No Database Required
 
 - **SqlGenerationBenchmark**: SQL query generation performance
-- **AdvancedTypeBenchmarks**: Custom type handling (Inet, Range, Geometry, etc.)
-- **CloningPerformanceTest**: SqlContainer cloning vs traditional approach
-- **WeirdTypeCoercionBenchmarks**: Edge case type conversions
+- **TypeHandlingBenchmarks**: AdvancedTypeRegistry parameter configuration and CoercionRegistry type conversion (opt-in)
+- **CloningPerformanceTest**: SqlContainer cloning vs traditional approach (opt-in)
 
 ### SQLite (In-Memory / File)
 
@@ -171,22 +171,22 @@ The EF results are intentionally isolated because Skirrels' provider requires EF
 
 ### SQL Server Required (Testcontainers - automatic)
 
-- **IndexedViewBenchmarks**: Indexed view performance
-- **AutomaticViewMatchingBenchmarks**: SQL Server query optimizer view matching
-- **SqlServerBenchmarks**: SQL Server specific features
+- **SqlServerEqualFootingBenchmarks**: CRUD against SQL Server
 - **SqlServerHydrationHotPathBenchmarks**: Network row hydration performance against SQL Server 2022
-- **MaterializedViewBenchmarks**: Materialized view patterns
+- **SqlServerConnectionGovernanceBenchmarks**: connection pressure against SQL Server (opt-in)
 
 ### PostgreSQL Required (Testcontainers - automatic)
 
-- **DatabaseSpecificFeatureBenchmarks**: PostgreSQL features (JSONB, arrays, FTS, geospatial)
+- **PostgreSqlEqualFootingBenchmarks**: CRUD against PostgreSQL
+- **DatabaseFeatureBenchmarks**: PostgreSQL features (ENUMs, JSONB, arrays, full text search; opt-in)
     - Note: Entity Framework comparisons will fail (NA results) - this is expected and demonstrates EF's limitations
-- **PagilaBenchmarks**: Real-world dataset benchmarks
+- **MaterializedViewPerformanceBenchmarks**: Materialized-view strategies (opt-in)
+- **ServerExecutionTimeBenchmarks**: server time versus client/DAL time (opt-in)
+- **PostgreSqlConnectionGovernanceBenchmarks**, **PostgreSqlBackpressureBenchmarks**, **PostgreSqlMixedGovernanceBenchmarks**, **PostgreSqlSyncPoolStormBenchmarks**, **PeakConnectionsBenchmarks**: pool governance and admission under load (all but `PostgreSqlSyncPoolStormBenchmarks` are opt-in)
 
-### Multiple Databases
+### Internal
 
-- **RealWorldScenarioBenchmarks**: Common CRUD scenarios across databases
-- **IsolationBenchmarks**: Transaction isolation level handling
+- **IsolationBenchmarks**: Transaction isolation level handling (opt-in)
 
 ### MySQL Required (Testcontainers - automatic)
 
@@ -199,11 +199,9 @@ The EF results are intentionally isolated because Skirrels' provider requires EF
 
 - **HydrationHotPathBenchmarks**: Pure row hydration throughput on SQLite, excluding connection acquisition (~35–36% faster than Dapper, ~50% lower allocations — see [results/hydration-hotpath-run-2026-08-13.md](./results/hydration-hotpath-run-2026-08-13.md); does not generalize to SQL Server, see [results/sqlserver-hydration-hotpath-run-2026-08-13.md](./results/sqlserver-hydration-hotpath-run-2026-08-13.md))
 - **SQLiteWriteContentionBenchmarks**: 100-writer lock contention resilience (0 lock exceptions under SingleWriter turnstile vs 268 in Dapper and 348 in EF Core, measured on a shared-cache in-memory database; the Dapper arm there is uncoordinated, a Dapper app with its own writer lock would not race either, and against a WAL file on disk the same storm lost no writes and ran 5 to 6 times slower: see "What the cost buys")
-- **PagilaBenchmarks**: Basic CRUD operations vs Dapper/EF using PostgreSQL
-- **IndexedViewBenchmarks**: Demonstrates pengdows.crud's indexed view advantages over EF
-- **SqlServerBenchmarks**: SQL Server specific features and optimizations
-- **IsolationBenchmarks**: Transaction isolation level performance
-- **DatabaseSpecificFeatureBenchmarks**: Advanced PostgreSQL features
+- **PostgreSqlEqualFootingBenchmarks** / **SqlServerEqualFootingBenchmarks**: CRUD against Dapper and EF Core on a real server
+- **IsolationBenchmarks**: Transaction isolation level performance (opt-in)
+- **DatabaseFeatureBenchmarks**: Advanced PostgreSQL features (opt-in)
 
 ## Reading the Dapper arms (SQLite and DuckDB)
 
@@ -347,8 +345,9 @@ Notes on ratios:
 - **BenchmarkDotNet** runs in Release mode by default
 - **Memory diagnostics** are enabled for allocation tracking
 - **Testcontainers** automatically manage database container lifecycle
-    - PostgreSQL: postgres:15-alpine
+    - PostgreSQL: postgres:15-alpine or postgres:16-alpine (per class)
     - SQL Server: mcr.microsoft.com/mssql/server:2022-latest
+    - MySQL: mysql:8.0
 - **Dataset sizes** controlled by benchmark attributes (e.g., FilmCount=1000, ActorCount=200)
 - **Container management**: Each benchmark starts its own container and cleans it up when done
 - **No manual setup**: Just run the benchmarks, containers are handled automatically

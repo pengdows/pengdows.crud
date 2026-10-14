@@ -1,7 +1,7 @@
 # Connection Pooling and Governors
 
 ## Pooling defaults
-`DatabaseContext` automatically rewrites connection strings for Standard, PreventDatabaseUnload, and SingleWriter modes so sockets and clients stay in a managed pool. `ConnectionPoolingConfiguration.ApplyPoolingDefaults` detects whether the provider supports external pooling, skips raw connection strings (like `:memory:` or a bare file path), and forces `Pooling=true` when the flag is missing. It does not inject a `Min Pool Size` value in `Standard` or `SingleWriter` mode—if you want a minimum, set it explicitly in your connection string. `PreventDatabaseUnload` is the one exception (see below). These defaults respect your existing pooling settings when you have custom values or pooling is intentionally turned off.
+`DatabaseContext` automatically rewrites connection strings for Standard, PreventDatabaseUnload, and SingleWriter modes so sockets and clients stay in a managed pool. `ConnectionPoolingConfiguration.ApplyPoolingDefaults` detects whether the provider supports external pooling, skips raw connection strings (like `:memory:` or a bare file path), and adds `Pooling=true` when the flag is missing. `Pooling=false` is not honored: it throws `InvalidOperationException` (use `DbMode.SingleConnection` if you need one persistent connection). `SingleWriter` and `SingleConnection` then strip the pooling keyword from the context's connection string again. It does not inject a `Min Pool Size` value in `Standard` or `SingleWriter` mode—if you want a minimum, set it explicitly in your connection string. `PreventDatabaseUnload` is the one exception (see below). Existing custom pooling values (such as `Max Pool Size`) are respected.
 
 ## Pool governors
 The context creates read and write `PoolGovernor` instances in every mode except `SingleConnection`, issuing `PoolSlot` tokens before any connection is acquired. Each governor waits no longer than `PoolAcquireTimeout` (default 5 seconds via `DatabaseContextConfiguration.PoolAcquireTimeout`) before throwing a `PoolSaturatedException` with queue and slot statistics, so you fail fast instead of saturating the provider pool. Governors need no configuration: each is sized automatically from the connection string, using the provider's maximum-pool-size setting (`Max Pool Size`, `MaxPoolSize`, `Maximum Pool Size` and the provider's other spellings) when it is present and the dialect's default otherwise, and the resolved size is written back into the provider's connection string so the governor and the provider pool always agree. `MaxConcurrentReads`/`MaxConcurrentWrites` are optional overrides for when you want a different limit, and the snapshots let you correlate hot paths with pool contention.
@@ -14,7 +14,7 @@ The read pool and the write pool are sized separately. Each uses the **first** o
 |---|---|---|
 | 1 (highest) | `MaxConcurrentReads` / `MaxConcurrentWrites` on `DatabaseContextConfiguration` | `0` forbids that pool (see below) |
 | 2 | The pool-size setting in that pool's connection string | `Max Pool Size`, `MaxPoolSize`, `Maximum Pool Size` or `MaximumPoolSize`. Reads use `ReadOnlyConnectionString` when you supply one and `ConnectionString` otherwise; writes always use `ConnectionString` |
-| 3 (lowest) | The dialect's default | 100 for the engines that have a provider pool |
+| 3 (lowest) | The dialect's default | 100 for the engines that have a provider pool, except Snowflake (10) |
 
 When configuration and the connection string disagree, configuration wins and a warning names both values and the one in effect.
 
@@ -29,7 +29,7 @@ Special values:
 - `MaxConcurrentReads = 0` or `MaxConcurrentWrites = 0` **forbids** that pool: every acquire throws `PoolForbiddenException`. `MaxConcurrentWrites = 0` also makes the whole context read-only, in every `DbMode`.
 - A `0` in a **connection string** is not a forbid: it counts as unset and the next source applies.
 - A negative size, in configuration or in a connection string, throws `ArgumentOutOfRangeException`.
-- Engines with no provider pool to configure (SQLite and DuckDB run in-process) **ignore** a pool size in the connection string. Their default is unbounded, so only the 512 ceiling applies, and `MaxConcurrentReads`/`MaxConcurrentWrites` still work.
+- Engines with no provider pool to configure (DuckDB, Access and pengdows.flatfile always, and SQLite under Microsoft.Data.Sqlite, run in-process) **ignore** a pool size in the connection string. The governor default is unbounded for SQLite and DuckDB, so only the 512 ceiling applies; Access and pengdows.flatfile keep the base default of 100. In both cases `MaxConcurrentReads`/`MaxConcurrentWrites` still work.
 
 Worked examples (the first four use a PostgreSQL connection string and `DbMode.Standard`):
 

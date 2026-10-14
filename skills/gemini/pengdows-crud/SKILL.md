@@ -194,7 +194,7 @@ These append WHERE clauses to a container you already have:
 
 ```csharp
 // Appends WHERE column IN (@p0, @p1, ...) to an existing container
-BuildWhere("e.Id", ids, existingContainer);
+BuildWhere(existingContainer.WrapObjectName("e.Id"), ids, existingContainer);   // first argument is already-wrapped
 
 // Appends WHERE clause using [PrimaryKey] columns
 BuildWhereByPrimaryKey(entities, existingContainer, "e");
@@ -270,8 +270,9 @@ services.AddSingleton<IOrderGateway>(sp =>
 // AuditResolver is SINGLETON - must be thread-safe (use IHttpContextAccessor/AsyncLocal internally)
 services.AddSingleton<IAuditValueResolver, OidcAuditContextProvider>();
 
-// TenantContextRegistry is SINGLETON
-services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
+// TenantContextRegistry is SINGLETON — services.AddMultiTenancy(configuration) registers it
+// (its constructor needs a resolver, a context factory and a logger factory, so don't hand-register it
+// with the bare AddSingleton<ITenantContextRegistry, TenantContextRegistry>() form)
 ```
 
 ## Extending TableGateway - THE CORRECT PATTERN
@@ -514,11 +515,8 @@ public async ValueTask<List<Order>> GetRecentLargeOrdersAsync(decimal minTotal)
 }
 ```
 
-**WrapObjectName behavior by database:**
-- SQL Server: `[o].[total]`
-- PostgreSQL: `"o"."total"`
-- MySQL: `` `o`.`total` ``
-- Oracle: `"o"."total"`
+**WrapObjectName behavior by database:** ANSI double quotes (`"o"."total"`) on every dialect except Access, which uses `[o].[total]`.
+This includes SQL Server (the session forces `QUOTED_IDENTIFIER ON`) and MySQL/MariaDB (the session `sql_mode` includes `ANSI_QUOTES`) — never brackets or backticks.
 
 ## Connection Management (DbMode)
 
@@ -527,10 +525,10 @@ Use lowest number possible:
 | Mode | Use Case |
 |------|----------|
 | `Standard` (0) | **Production default** - pool per operation |
-| `KeepAlive` (1) | Sentinel connection that is NEVER used for operations — prevents engine/proxy idle timeout. Use cases: LocalDB, Aurora Serverless scaling-to-zero, RDS Proxy idle disconnection, long-running Lambda. NOT for connection reuse or efficiency. |
-| `SingleWriter` (2) | File-based SQLite/DuckDB |
-| `SingleConnection` (4) | In-memory `:memory:` databases |
-| `Best` (15) | Auto-select optimal mode for the database |
+| `PreventDatabaseUnload` (1) | Sentinel connection that is NEVER used for operations — keeps an embedded/local database (or a proxy/serverless endpoint) from unloading when idle. `Best` picks it for SQL Server LocalDB, Firebird and Db2 LUW. NOT for connection reuse or efficiency. `KeepAlive` is only an `[Obsolete]` alias of the same value. |
+| `SingleWriter` (2) | File-based SQLite/DuckDB/Access/pengdows.flatfile: serializes writes through a governor (ephemeral connections, no pinned writer) |
+| `SingleConnection` (4) | In-memory `:memory:` SQLite/DuckDB |
+| `Best` (15) | Auto-select optimal mode for the database and connection string; an explicit `Standard` is always honored |
 
 ```csharp
 // Using IDatabaseContextConfiguration to specify DbMode with a factory
@@ -555,7 +553,8 @@ public async ValueTask<bool> CancelOrderAsync(long orderId)
     await using var txn = await Context.BeginTransactionAsync();
     try
     {
-        var order = await RetrieveOneAsync(orderId);
+        // Pass txn to every call that must take part in the transaction
+        var order = await RetrieveOneAsync(orderId, txn);
         if (order == null || order.Status == OrderStatus.Shipped)
         {
             await txn.RollbackAsync();
@@ -563,7 +562,7 @@ public async ValueTask<bool> CancelOrderAsync(long orderId)
         }
 
         order.Status = OrderStatus.Cancelled;
-        var affected = await UpdateAsync(order);
+        var affected = await UpdateAsync(order, txn);
 
         if (affected > 0)
         {
@@ -576,7 +575,11 @@ public async ValueTask<bool> CancelOrderAsync(long orderId)
     }
     catch
     {
-        await txn.RollbackAsync();
+        if (!txn.IsCompleted) // a failed commit has already completed the transaction
+        {
+            await txn.RollbackAsync();
+        }
+
         throw;
     }
 }
@@ -587,6 +590,12 @@ using var txn = Context.BeginTransaction(IsolationLevel.Serializable);
 // Async version with profile
 await using var txn = await Context.BeginTransactionAsync(IsolationProfile.SafeNonBlockingReads);
 ```
+
+**Isolation rules:**
+- A write transaction with neither a level nor a profile defaults to `ReadCommitted`; only a read-only `BeginTransaction` uses the `SafeNonBlockingReads` mapping (it logs a warning if degraded).
+- Isolation fails up, never down: an unsupported explicit `IsolationLevel` runs as the weakest supported level at least as strong, and throws `InvalidOperationException` if none exists (e.g. `Serializable` on TiDB/Snowflake/SingleStore).
+- An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee: `StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile, `SafeNonBlockingReads` on SQL Server without snapshot isolation.
+- Savepoints (`SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync`) throw `NotSupportedException` where the dialect lacks the capability.
 
 **Resource Safety:**
 Always use `await using` for `ITransactionContext` and `ITrackedReader` to ensure connections are released correctly.
@@ -615,7 +624,7 @@ catch (SqlException ex) when (ex.Number == 2627) { }         // SQL Server only
 catch (NpgsqlException ex) when (ex.SqlState == "23505") { } // PostgreSQL only
 catch (MySqlException ex) when (ex.Number == 1062) { }       // MySQL only
 
-// CORRECT — uniform across all 13 databases
+// CORRECT — uniform across all 23 supported databases
 catch (UniqueConstraintViolationException ex) { }
 catch (ForeignKeyViolationException ex) { }
 catch (DeadlockException ex) { /* retry logic */ }
@@ -626,20 +635,34 @@ catch (CommandTimeoutException ex) { /* timeout handling */ }
 ### Exception Hierarchy
 
 ```
-DatabaseException (root — all translated DB failures)
+DatabaseException (abstract root — namespace pengdows.crud.exceptions)
     carries: Database, SqlState, ErrorCode, ConstraintName, IsTransient
     InnerException preserves raw provider exception for diagnostics
-├── ConstraintViolationException
-│   ├── UniqueConstraintViolationException  — duplicate key / PK / unique value
-│   ├── ForeignKeyViolationException        — missing reference or blocked delete
-│   ├── NotNullViolationException           — required field missing
-│   └── CheckConstraintViolationException   — database rule rejected values
-├── DeadlockException                       — DB chose this transaction as victim
-├── SerializationConflictException          — serializable/distributed write conflict
-├── CommandTimeoutException                 — command timed out
-└── ConcurrencyConflictException            — version-guarded UPDATE returned 0 rows
-                                              (framework-generated, not provider-translated)
+├── DatabaseOperationException              — runtime database failures
+│   ├── ConstraintViolationException (abstract)
+│   │   ├── UniqueConstraintViolationException  — duplicate key / PK / unique value
+│   │   ├── ForeignKeyViolationException        — missing reference or blocked delete
+│   │   ├── NotNullViolationException           — required field missing
+│   │   └── CheckConstraintViolationException   — database rule rejected values
+│   ├── TransientWriteConflictException     (IsTransient = true)
+│   │   ├── DeadlockException               — DB chose this transaction as victim
+│   │   └── SerializationConflictException  — serializable/distributed write conflict
+│   ├── AmbiguousResultException            — commit outcome unknown (IsTransient = false)
+│   ├── ConcurrencyConflictException        — version-guarded UPDATE returned 0 rows
+│   │                                         (framework-generated, not provider-translated)
+│   ├── CommandTimeoutException             — command timed out (IsTransient = true)
+│   ├── ConnectionException                 — connection-level failure
+│   │   ├── ConnectionFailedException       — DatabaseContext construction could not connect
+│   │   ├── FileLockContentionException     — embedded-file lock contention
+│   │   └── TooManyConnectionsException     — server at its connection limit (IsTransient = true)
+│   ├── ReadOnlyViolationException          — write refused by a read-only connection, transaction or database
+│   │                                         (many dialects, not just SQLite/DuckDB)
+│   └── TransactionException                — begin/commit/rollback failure
+├── SqlGenerationException                  — entity metadata programmer error (at registration/gateway construction)
+└── DataMappingException                    — value can't be converted to its property
 ```
+
+`OperationCanceledException` is never wrapped. `TransactionModeNotSupportedException` derives from `NotSupportedException`, not `DatabaseException`.
 
 ### Key Design Points
 
@@ -648,8 +671,9 @@ DatabaseException (root — all translated DB failures)
   is present and UPDATE affects 0 rows — it is NOT a translated provider exception
 - Non-database and internal exceptions propagate unchanged — this normalizes
   database failures, it does not wrap everything
-- Translation is per provider family: SQL Server, PostgreSQL/CockroachDB/YugabyteDB,
-  MySQL/MariaDB/TiDB, SQLite each have dedicated translators
+- Classification lives on each dialect (`IsUniqueViolation`/`IsForeignKeyViolation`/…, `TryClassifyProviderException`),
+  so every one of the 23 databases maps to the same hierarchy; `ISqlDialect.AnalyzeException(ex)` returns a provider-neutral
+  `DbExceptionInfo` (`Category`, `ConstraintKind`, `IsTransient`, `IsRetryable`) for control flow
 
 ### Common Patterns
 
@@ -712,6 +736,10 @@ public int Version { get; set; }
 | JOIN conditions | `j{n}` | `j0`, `j1` |
 | Batch row values | `b{n}` | `b0`, `b1`, `b2` |
 
+Pass the base name (`"w0"`, not `"@w0"`) to `SetParameterValue`. The marker is dialect-specific and comes from
+`MakeParameterName`: `@` for SQL Server/PostgreSQL/MySQL/MariaDB and most others, `$` for DuckDB, `:` for Oracle/Snowflake/FlatFile,
+bare positional `?` for Informix/SAP HANA/Access. Never hard-code a marker.
+
 ```csharp
 // Reuse container with updated parameters
 container.SetParameterValue("w0", newId);
@@ -742,28 +770,33 @@ public class OrderGatewayTests
     }
 
     [Fact]
-    public void ConnectionFailure_ThrowsException()
+    public void ConnectionFailure_ThrowsFromTheConstructor()
     {
+        // The first open happens while the context initializes, so the context itself throws
         var factory = fakeDbFactory.CreateFailingFactory(
             SupportedDatabase.PostgreSql,
             ConnectionFailureMode.FailOnOpen);
-        var context = new DatabaseContext("test", factory);
+        var config = new DatabaseContextConfiguration { ConnectionString = "test", DbMode = DbMode.Standard };
 
-        Assert.Throws<InvalidOperationException>(() =>
-        {
-            using var container = context.CreateSqlContainer("SELECT 1");
-            container.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult();
-        });
+        var ex = Assert.Throws<ConnectionFailedException>(() => new DatabaseContext(config, factory));
+        Assert.Equal("InitConnect", ex.Phase);
     }
 }
 ```
 
 ## Supported Databases
 
-SQL Server, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake
-(+ AuroraMySql and AuroraPostgreSql — auto-detected at runtime, no extra setup)
+23 `SupportedDatabase` values: PostgreSql, SqlServer, Oracle, Firebird, CockroachDb, MariaDb, MySql, Sqlite, DuckDB,
+YugabyteDb, TiDb, Snowflake, AuroraMySql, AuroraPostgreSql (auto-detected at runtime, delegate to the MySQL/PostgreSQL dialect),
+Db2 (LUW only), FlatFile (pengdows.flatfile), SingleStore (detected as MySQL via `SHOW VARIABLES LIKE 'memsql_version'`, MySQL dialect),
+SybaseASE, Spanner (PostgreSQL interface), Informix, SapHana (opt-in suite), InterBase (opt-in suite), Access (Windows only).
+The original fourteen shipped in 2.0.0-2.0.5; Db2, FlatFile, SingleStore, SybaseASE, Spanner, Informix, SapHana, InterBase and Access are new in 2.0.6.
+Percona Server for MySQL, Citus, TimescaleDB and Fujitsu Enterprise Postgres need no code change (they are detected as
+their MySQL/PostgreSQL parent; no separate value).
 
-Each uses optimal SQL syntax (MERGE vs ON CONFLICT vs ON DUPLICATE KEY UPDATE).
+Each uses optimal SQL syntax: `MERGE` where the dialect supports it, else `INSERT ... ON CONFLICT`, else `ON DUPLICATE KEY UPDATE`
+(MySQL family); Firebird uses `UPDATE OR INSERT`; InterBase and Access have no upsert (`NotSupportedException`).
+Stored procedures use one of six call styles (`ProcWrappingStyle`: `Call`, `Exec`, `PostgreSQL`, `Oracle`, `ExecuteProcedure`, `Informix`; `None` means unsupported).
 
 ## Testing Requirements
 
@@ -774,7 +807,7 @@ Tests are required. Coverage minimums are enforced in CI.
 - Write tests once the design stabilizes
 - NO skipped tests
 - `pengdows.crud.fakeDb` enables unit testing without a real database
-- Integration tests run against all 13 real databases
+- Integration tests run against real databases (always-on Docker matrix; Snowflake, SAP HANA, InterBase and Access are opt-in, Aurora needs `INCLUDE_AURORA=true`)
 
 ## Core Invariants
 
@@ -785,7 +818,7 @@ Tests are required. Coverage minimums are enforced in CI.
 5. **TenantContextRegistry is SINGLETON** - manages per-tenant contexts
 6. **Transactions are operation-scoped** - create inside methods, never store as fields
 7. **ITrackedReader is a lease** - pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** - SQLite/DuckDB `:memory:` = SingleConnection; file-based SQLite/DuckDB = SingleWriter; LocalDB = KeepAlive; all others = Standard
+8. **DbMode.Best auto-selects** - SQLite/DuckDB `:memory:` = SingleConnection; file-based SQLite/DuckDB/Access/FlatFile = SingleWriter; SQL Server LocalDB, Firebird and Db2 LUW = PreventDatabaseUnload; all others = Standard (explicit `Standard` always honored)
 9. **Always use WrapObjectName()** - for column names and aliases in custom SQL
 10. **NEVER use TransactionScope** - incompatible with connection management, use Context.BeginTransaction()
 11. **Execution methods return ValueTask** - not Task, for reduced allocations

@@ -25,7 +25,6 @@ recover is not a better result.
 | Suite | Classification | What it establishes | Result interpretation |
 |---|---|---|---|
 | `SqlGenerationBenchmark` | `RawHotPath` | Cost of building SQL containers | Code-generation cost only; not end-to-end DAL performance |
-| `AdvancedTypeBenchmarks` | `RawHotPath`, `ProviderCapability` | Type conversion and provider-specific value handling | Correctness and mapping tradeoffs matter alongside time |
 | `CloningPerformanceTest` | `RawHotPath`, `ProductionLifecycle` | Reusing SQL containers versus rebuilding them | Supports the inspectable/reusable-container model |
 | `HydrationHotPathBenchmarks` | `RawHotPath` | Pure row materialization | Mapping result only; connection acquisition is intentionally excluded |
 | `SqlServerHydrationHotPathBenchmarks` | `RawHotPath`, `ProviderCapability` | Hydration with a real SQL Server | Provider/network-specific; does not generalize to SQLite |
@@ -35,7 +34,7 @@ recover is not a better result.
 | `PostgreSqlEqualFootingBenchmarks` | `EqualFootingThroughput` | CRUD cost against PostgreSQL | Network/server latency can compress client-framework differences |
 | `SqlServerEqualFootingBenchmarks` | `EqualFootingThroughput` | CRUD cost against SQL Server | Include session-settings and provider costs in the production profile |
 | `DuckDbEqualFootingBenchmarks` | `EqualFootingThroughput` | DuckDB CRUD across connection patterns | Show the cost of lifecycle choices; do not treat pinned connections as universally safe |
-| `DuckDbEfCoreBenchmarks` | `EqualFootingThroughput`, `Methodology` | Skirrels EF provider with ordinary and compiled EF paths | Provider/context overhead is the finding; StormGate is not a speed optimization |
+| `DuckDbEfCoreEqualFootingBenchmarks` (project `DuckDbEfCoreBenchmarks`) | `EqualFootingThroughput`, `Methodology` | Skirrels EF provider with ordinary and compiled EF paths | Provider/context overhead is the finding; StormGate is not a speed optimization |
 | `DuckDbReadBenchmarks` | `EqualFootingThroughput`, `ProductionLifecycle` | DuckDB read patterns | The per-call SQL-building Pengdows arm is not comparable to the reused-container arm |
 | `ApplesToApplesDapperBenchmarks` | `EqualFootingThroughput` | Dapper versus Pengdows with separated connection and mapping paths | Distinguishes DAL lifecycle cost from pure mapping cost |
 | `BrokenMappingBenchmarks` | `FailureContainment`, `ProviderCapability` | Behavior and cost when mappings are incomplete or unusual | Correct failure is more important than a fast invalid result |
@@ -46,7 +45,6 @@ recover is not a better result.
 | `SqliteConcurrencyBenchmark` | `CorrectnessStress` | SQLite concurrent operation behavior | Report successful work and failures, not just elapsed time |
 | `ConnectionPoolProtectionBenchmarks` | `Governance`, `CorrectnessStress` | Pool exhaustion, write storms, sustained pressure, and hold time | A bounded queue is preferable to unbounded connection pressure |
 | `PeakConnectionsBenchmarks` | `Governance` | Peak connection demand under matched load | Compare resource shape, not only throughput |
-| `SyncPoolStormBenchmarks` | `Governance`, `CorrectnessStress` | Synchronous pool pressure and saturation | Look for bounded admission and failure behavior |
 | `PostgreSqlConnectionGovernanceBenchmarks` | `Governance`, `CorrectnessStress` | PostgreSQL connection governance under pressure | Pool behavior and correctness are primary outcomes |
 | `PostgreSqlBackpressureBenchmarks` | `Governance`, `CorrectnessStress` | Backpressure under PostgreSQL load | Queueing is an intentional control, not automatically a regression |
 | `PostgreSqlMixedGovernanceBenchmarks` | `Governance`, `CorrectnessStress` | Mixed read/write admission behavior | Evaluate fairness and bounded resource use |
@@ -55,9 +53,6 @@ recover is not a better result.
 | `SqliteMethodologyBenchmarks` | `Methodology` | SQLite raw SQL, LINQ, pooled EF, compiled EF, and API paths | Shows what query compilation and context pooling actually change |
 | `PostgreSqlMethodologyBenchmarks` | `Methodology` | PostgreSQL raw SQL, pooled EF, LINQ, compiled EF, and API paths | Explains provider, network, pooling, and query-pipeline effects |
 | `DatabaseFeatureBenchmarks` | `ProviderCapability`, `EqualFootingThroughput` | JSON, arrays, full text, bulk upsert, and other provider features | Unsupported/invalid EF rows are capability evidence, not missing speed rows |
-| `IndexedViewBenchmarks` | `ProviderCapability`, `EqualFootingThroughput` | Database view/index behavior | Measures database-aware SQL strategy, not generic CRUD speed |
-| `AutomaticViewMatchingBenchmarks` | `ProviderCapability` | SQL Server optimizer/view interaction | Correct generated SQL and optimizer behavior are primary |
-| `ViewPerformanceBenchmarks` | `ProviderCapability`, `EqualFootingThroughput` | View/materialized-view execution strategies | Compare the strategy, not just the framework label |
 | `IsolationBenchmarks` | `ProviderCapability`, `ProductionLifecycle` | Isolation-level behavior and cost | Never trade away the requested consistency guarantee for time |
 | `ServerExecutionTimeBenchmarks` | `Methodology` | Server time versus client/DAL time | Identifies where a measured difference actually occurs |
 | `BenchmarkGuidParameters` | `ProviderCapability`, `RawHotPath` | GUID representation and parameter handling across providers | Type correctness and provider compatibility first |
@@ -66,8 +61,6 @@ recover is not a better result.
 | `SentinelHotPathBenchmarks` | `RawHotPath`, `ProductionLifecycle` | Sentinel/keep-alive path cost | Measures database-liveness policy overhead |
 | `MaterializedViewPerformanceBenchmarks` | `ProviderCapability`, `EqualFootingThroughput` | Materialized-view strategies | Database strategy result, not a universal ORM ranking |
 | `PostgreSqlSyncPoolStormBenchmarks` | `Governance`, `CorrectnessStress` | Synchronous pool saturation | Bounded pressure and failure behavior are primary |
-| `PagilaBenchmarks` | `ProviderCapability`, `EqualFootingThroughput` | Real-world PostgreSQL dataset behavior | Scenario evidence; not a synthetic universal ranking |
-| `RealWorldScenarioBenchmarks` | `EqualFootingThroughput`, `ProductionLifecycle` | Common workflows across providers | Evaluate end-to-end behavior and portability |
 
 ## Arm profiles
 
@@ -110,7 +103,7 @@ The benchmarks under `Internal/` are intentionally narrower than the framework c
 - `TypeHandlingBenchmarks`, `SqliteNativeTypesBenchmarks`, `SqliteDateHandlingBenchmarks`,
   `ReaderMappingBenchmark`, and `UpsertCapabilityBenchmarks` are `ProviderCapability` and
   type/mapping tests.
-- `EntityHelperClientOnlyBenchmarks`, `PerformanceOptimizationBenchmarks`, and
+- `TableGatewayClientOnlyBenchmarks`, `PerformanceOptimizationBenchmarks`, and
   `ValueTaskExecutionBenchmarks` are `RawHotPath` allocation/dispatch tests.
 - `CreateAsyncAuditOverheadBenchmarks` is `ProductionLifecycle`: it measures the cost of
   audit correctness and state handling, not whether audit fields should exist.

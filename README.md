@@ -5,6 +5,8 @@
 [![Build](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml/badge.svg)](https://github.com/pengdows/pengdows.crud/actions/workflows/deploy.yml)
 [![Coverage](https://codecov.io/gh/pengdows/pengdows.crud/branch/main/graph/badge.svg)](https://codecov.io/gh/pengdows/pengdows.crud)
 
+What is new in each release: [CHANGELOG.md](CHANGELOG.md).
+
 `pengdows.crud` is a SQL-first data access library for .NET 8+. It favors explicit SQL, inspectable command builders, and provider-aware execution over ORM-style query generation.
 
 No LINQ. No tracking. No hidden unit of work.
@@ -37,8 +39,12 @@ The repository contains concrete support for:
 
 - SQL Server
 - PostgreSQL
+  - Citus (detected as PostgreSQL; new in 2.0.6)
+  - TimescaleDB (detected as PostgreSQL; new in 2.0.6)
+  - Fujitsu Enterprise Postgres (detected as PostgreSQL; new in 2.0.6)
 - Aurora PostgreSQL
 - MySQL
+  - Percona Server for MySQL (detected as MySQL; new in 2.0.6)
 - Aurora MySQL
 - MariaDB
 - Oracle
@@ -60,6 +66,71 @@ The repository contains concrete support for:
 - pengdows.flatfile (embedded dialect over CSV/delimited/fixed-width/NDJSON files)
 
 When product detection cannot identify the connected database, the library falls back to a conservative SQL-92 dialect.
+
+### New in 2.0.6: nine more databases
+
+2.0.0 to 2.0.5 supported the same fourteen products. 2.0.6 adds nine, each with a `SupportedDatabase` value of its own
+and a full integration suite (green on net8.0 and net10.0; see [docs/integration-status.md](docs/integration-status.md)):
+
+| Database | How it is supported | Integration suite |
+|---|---|---|
+| IBM Db2 for Linux/Unix/Windows (LUW) | its own dialect; Db2 for z/OS and Db2 for i are not supported | always on |
+| FlatFile: pengdows.flatfile (CSV, delimited, fixed-width, NDJSON files) | its own dialect | always on |
+| SingleStore | detected at runtime (it reports itself as plain MySQL), MySQL dialect | always on |
+| SAP (Sybase) ASE | its own dialect | always on |
+| Google Cloud Spanner (PostgreSQL interface) | its own dialect | always on |
+| IBM Informix | its own dialect | always on |
+| SAP HANA | its own dialect | opt-in (`INCLUDE_SAPHANA=true`; the image needs 16 to 32 GB of RAM) |
+| Embarcadero InterBase | its own dialect | opt-in (`INCLUDE_INTERBASE=true`; node-locked license) |
+| Microsoft Access (Jet/ACE) | its own dialect | runs on Windows only |
+
+### Four more products, supported through their parent
+
+These are not separate `SupportedDatabase` values. Each reports itself as MySQL or PostgreSQL, so detection resolves it
+to the parent's dialect (it is a subsidiary of that type, and `Product` reports the parent). Each was verified with no code change: it passed the same integration suite as the vanilla engine, with the same number of checks.
+
+| Product | Detected as | Integration suite |
+|---|---|---|
+| Percona Server for MySQL | MySQL | always on, in the MySQL matrix |
+| Citus | PostgreSQL | always on, in the PostgreSQL matrix |
+| TimescaleDB | PostgreSQL | always on, in the PostgreSQL matrix |
+| Fujitsu Enterprise Postgres | PostgreSQL | always on, in the PostgreSQL matrix |
+
+EDB Postgres Extended very likely works the same way, but it has no public image to test against, so it is not claimed.
+Aurora MySQL and Aurora PostgreSQL are detected at runtime and use the MySQL and PostgreSQL dialects. Details and
+version thresholds: [docs/supported-databases.md](docs/supported-databases.md).
+
+### What “supported” means
+
+In `pengdows.crud`, supported means substantially more than opening a connection or successfully running `SELECT 1`.
+A database product is supported only when all of the following are true:
+
+- A usable .NET 8+ provider is available. It must expose a real `DbProviderFactory`, support the provider operations
+  used by `DatabaseContext`, and return usable `GetSchema("DataSourceInformation")` metadata. A test-only mock or an
+  unverified provider is not support evidence.
+- The product has a dialect, either dedicated or explicitly documented as a compatible delegation, that owns its
+  identifier quoting, parameter markers and binding, capability flags, session setup, transaction/isolation behavior,
+  exception translation and provider-specific type rules.
+- The dialect covers the minimum SQL emitted by `TableGateway`: quoted and parameterized SELECT/INSERT/UPDATE/DELETE,
+  generated-key retrieval, optimistic-version predicates, audit writes, batch statements, and the database's supported
+  upsert form (`MERGE`, `ON CONFLICT` or `ON DUPLICATE KEY UPDATE`). Paging, read-only transactions, savepoints,
+  stored procedures and other features must be capability-gated or documented when the product cannot provide them.
+- The complete provider-to-CLR type contract is exercised, not just scalar CRUD: nulls, numerics and precision,
+  dates/times and UTC behavior, Guid text/binary representations, booleans, strings, binary/LOB values, enums, JSON,
+  generated IDs, and applicable arrays, vectors, ranges, intervals, spatial and network values. Unsupported or lossy
+  conversions must fail explicitly rather than silently becoming defaults.
+- Real-provider integration tests pass on both `net8.0` and `net10.0`. This includes the shared
+  `pengdows.crud.IntegrationTests` suites for CRUD and generated keys, type round-trips and mapping, parameters,
+  transactions/isolation/savepoints, upserts and optimistic concurrency, audit fields, error translation, identifier
+  quoting, read-only behavior, connection modes/pooling and provider-specific database behavior. The `testbed` adds
+  live-provider provisioning, schema creation and database-mode smoke checks. Capability-based exclusions must be
+  explicit and justified; “connects” or “SELECT 1” alone is not a passing support result.
+- The supported server/version floor, recommended version, provider limitations and any opt-in or platform requirement
+  are documented with real evidence.
+
+The full contract, test expectations, version floors and per-database limitations are maintained in
+[docs/supported-databases.md](docs/supported-databases.md). A database that has only passed connectivity or basic
+CRUD is considered partially supported until it completes this contract.
 
 ## Quick Start
 
@@ -177,7 +248,8 @@ DatabaseException (abstract — carries Database, SqlState, ErrorCode, Constrain
   │    ├─ ConnectionException
   │    │    ├─ FileLockContentionException ← embedded-engine file lock held by another process; IsTransient = false
   │    │    └─ TooManyConnectionsException ← server reached but at its connection limit; IsTransient = true
-  │    ├─ ReadOnlyViolationException      ← write reached a read-only SQLite/DuckDB connection
+  │    ├─ ReadOnlyViolationException      ← write refused by a read-only connection, transaction or database
+  │    ├─ AmbiguousResultException        ← commit outcome unknown (e.g. CockroachDB 40003); IsTransient = false
   │    ├─ TransactionException
   │    ├─ TransientWriteConflictException ← IsTransient = true
   │    │    ├─ DeadlockException
@@ -195,7 +267,7 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `ModeContentionException : TimeoutException` — shared-connection mode lock (e.g. SingleConnection) or transaction-completion lock exceeded `ModeLockTimeout`
 - `PoolSaturatedException : TimeoutException` — no governor slot became available within `PoolAcquireTimeout` (includes SingleWriter write-slot waits)
 - `PoolForbiddenException : InvalidOperationException` — connection requested from a pool configured to reject all requests (e.g. the write pool of a `ReadOnly` context)
-- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/SingleStore/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
+- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
 - `ConnectionFailedException : ConnectionException` — startup connection failure (carries `Phase` and `Role`, plus the underlying SQLSTATE/error code/`IsTransient`); since 2.0.6 `catch (ConnectionException)` and `catch (DatabaseException)` see it too
 
 ```csharp

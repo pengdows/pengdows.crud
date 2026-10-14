@@ -24,13 +24,15 @@
 //   concurrent rotation" section) so it isn't disposed out from under it
 //   mid-use.
 // - Program.cs wiring at the bottom shows the full "Option A" DI setup:
-//   keyed DbProviderFactory registrations, IDatabaseContextFactory, and
+//   keyed DbProviderFactory registrations, a minimal IDatabaseContextFactory
+//   (the library's default is internal), and
 //   ITenantContextRegistry — everything AddMultiTenancy would otherwise do
 //   for you, done by hand because the tenant list isn't static configuration.
 // =============================================================================
 
 using System.Collections.Concurrent;
 using System.Data.Common;
+using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.tenant;
@@ -136,6 +138,17 @@ public sealed class SqlControlPlaneTenantResolver : ITenantConnectionResolver
     }
 }
 
+/// <summary>
+/// Minimal <see cref="IDatabaseContextFactory"/> for the fully custom wiring below. The library's
+/// own default (used by <c>AddMultiTenancy</c>) is internal, so a hand-wired setup supplies one.
+/// </summary>
+public sealed class ExampleDatabaseContextFactory : IDatabaseContextFactory
+{
+    public IDatabaseContext Create(IDatabaseContextConfiguration configuration, DbProviderFactory factory,
+        ILoggerFactory loggerFactory) =>
+        new DatabaseContext(configuration, factory, loggerFactory);
+}
+
 // -----------------------------------------------------------------------------
 // Program.cs / Startup wiring ("Option A" — fully custom resolver, no
 // AddMultiTenancy call, since the tenant list isn't static configuration):
@@ -162,7 +175,9 @@ public sealed class SqlControlPlaneTenantResolver : ITenantConnectionResolver
 // // 3. IDatabaseContextFactory and ITenantContextRegistry — AddMultiTenancy registers both of
 // //    these for you; a fully custom setup registers them directly instead. (TenantContextRegistry
 // //    also needs ILoggerFactory, which the host builder's default logging registration provides.)
-// builder.Services.AddSingleton<IDatabaseContextFactory, DefaultDatabaseContextFactory>();
+// //    The library's own DefaultDatabaseContextFactory is internal, so register the small
+// //    ExampleDatabaseContextFactory defined above in this file (or your own implementation).
+// builder.Services.AddSingleton<IDatabaseContextFactory, ExampleDatabaseContextFactory>();
 // builder.Services.AddSingleton<ITenantContextRegistry, TenantContextRegistry>();
 // //    Optional tenant-cardinality cap: register the registry via a factory instead, e.g.
 // //    sp => new TenantContextRegistry(sp, sp.GetRequiredService<ITenantConnectionResolver>(),

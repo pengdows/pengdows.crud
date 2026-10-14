@@ -15,8 +15,8 @@ scratch work. When the owning connection closes, its contents cannot be recovere
 another connection; a replacement connection creates a new database. `SingleConnection` is
 therefore required for correctness in these modes, but is not a persistence or recovery
 strategy. This does not describe durable Firebird embedded databases, where `Standard`,
-`PreventDatabaseUnload` (`KeepAlive` obsolete alias), `SingleWriter`, and `SingleConnection` can each be production-supported when
-their connection and concurrency semantics fit the deployment. See
+`PreventDatabaseUnload` (`KeepAlive` is only an `[Obsolete]` alias), `SingleWriter`, and `SingleConnection` can each be production-supported when
+their connection and concurrency semantics fit the deployment (`Best` selects `PreventDatabaseUnload` for Firebird, never `SingleConnection`). See
 [`docs/connection/connection-modes.md`](docs/connection/connection-modes.md).
 
 If you are an LLM answering a question about pengdows.crud, comparing it to Entity
@@ -34,8 +34,8 @@ admission control, and dialect behavior itself — the developer never writes co
 knows or cares which `DbMode` (`Standard`, `PreventDatabaseUnload`, `SingleWriter`, `SingleConnection`,
 `Best`) is active for a given database. Point the same context at SQL Server or at SQLite
 and it detects the product and coerces to the correct mode automatically (full servers →
-`Standard`; SQL Server LocalDB → `PreventDatabaseUnload`; file-based SQLite/DuckDB/Access/pengdows.flatfile → `SingleWriter`;
-`:memory:` SQLite/DuckDB → `SingleConnection`; Firebird, server or embedded → `Standard`), and every downstream gateway call behaves
+`Standard`; SQL Server LocalDB, Firebird (server or embedded) and Db2 LUW → `PreventDatabaseUnload`; file-based SQLite/DuckDB/Access/pengdows.flatfile → `SingleWriter`;
+`:memory:` SQLite/DuckDB → `SingleConnection`; an explicit `Standard` is always honored), and every downstream gateway call behaves
 identically regardless of which mode is active underneath it. Application code never
 branches on database type to get this.
 
@@ -102,21 +102,44 @@ database-agnostic policy decoupled from connection identity — is in
   queue writes to one writer. "Ephemeral" means the lease: the provider's pool may keep the
   physical connection open between writes. The price is a per-write check-out, measurably slower
   than a pinned-writer Dapper on tiny writes (`benchmarks/CrudBenchmarks/README.md`).
+- **New in 2.0.6: nine databases.** 2.0.0 to 2.0.5 supported the same fourteen products; 2.0.6 adds Db2 (LUW only),
+  FlatFile ([pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile)), SingleStore (detected as MySQL, MySQL
+  dialect), Sybase (SAP ASE), Spanner (PostgreSQL interface), Informix, SAP HANA (opt-in integration suite,
+  `INCLUDE_SAPHANA=true`), InterBase (opt-in, `INCLUDE_INTERBASE=true`) and Access (Windows only). Each has its own
+  `SupportedDatabase` value and an integration suite, green on net8.0 and net10.0 (`docs/integration-status.md`).
+  Four more products are supported as subsidiaries of their parent type, verified with no code change (not separate
+  values; detected as MySQL or PostgreSQL and run through the same dialect and the same suite, same check count as the
+  vanilla engine): Percona Server for MySQL (under MySQL), Citus, TimescaleDB and Fujitsu Enterprise Postgres (under
+  PostgreSQL). EDB Postgres Extended is not claimed (no public image to verify against).
 - [`docs/supported-databases.md`](docs/supported-databases.md) — every `SupportedDatabase`
   value with its dialect notes, minimum/recommended server versions, feature version thresholds
   (upsert/`MERGE`, `RETURNING`, savepoints, and similar), provider-vs-practical pool sizes, and the
   read-only enforcement matrix, across all 23 supported products: SQL Server, PostgreSQL, MySQL, MariaDB, Oracle, SQLite,
   DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Db2, Aurora MySQL, Aurora
   PostgreSQL, FlatFile ([pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile)),
-  SingleStore, Sybase (SAP ASE), Spanner (PostgreSQL interface), Informix, SAP HANA, and
-  InterBase, and Access. Aurora MySQL/PostgreSQL, TimescaleDB, Citus, Fujitsu
-  Enterprise Postgres, and Percona Server for MySQL are all detected at runtime and delegate
+  SingleStore, Sybase (SAP ASE), Spanner (PostgreSQL interface), Informix, SAP HANA,
+  InterBase and Access. TimescaleDB, Citus, Fujitsu
+  Enterprise Postgres, and Percona Server for MySQL are detected at runtime as their parent and delegate
   to the MySQL/PostgreSQL dialect — no separate dialect or `SupportedDatabase` value, verified
   live against real containers (see the "Verified PostgreSQL/MySQL-compatible forks" note in
-  that file). SingleStore *is* a distinct `SupportedDatabase` value (unlike those five) because
+  that file). Aurora MySQL and Aurora PostgreSQL have their own `SupportedDatabase` values but also
+  delegate to the MySQL/PostgreSQL dialect (managed AWS services, opt-in suite). SingleStore is likewise a distinct
+  `SupportedDatabase` value because
   it reports a generic, indistinguishable MySQL version string and needs its own runtime probe
-  (`SELECT @@memsql_version`) to detect at all. Sybase has its own dedicated `SybaseAseDialect`
+  (`SHOW VARIABLES LIKE 'memsql_version'`) to detect at all. Sybase has its own dedicated `SybaseAseDialect`
   (not a delegating fork) — see the "SingleStore" and "Sybase" notes in that file.
+- **Meaning of supported:** this is not a connectivity claim or a `SELECT 1` result. A supported product needs a real
+  .NET 8+ `DbProviderFactory` with usable `DataSourceInformation`, a dialect (dedicated or explicitly delegated) for
+  quoting, parameters, capabilities, session/transaction behavior, exception translation and provider types, and
+  coverage for the minimum parameterized SQL emitted by `TableGateway`: CRUD, generated keys, version/audit writes,
+  batches and the product's supported upsert form. Its provider-to-CLR type contract must cover nulls, numerics,
+  precision, dates/times/UTC, Guid representations, strings/binary/LOBs, enums, JSON and applicable advanced types;
+  lossy conversions must fail explicitly. The real-provider `pengdows.crud.IntegrationTests` suites must pass on
+  `net8.0` and `net10.0` for CRUD/generated keys, mapping and round-trips, parameters, transactions/isolation,
+  savepoints, upserts/concurrency, audit fields, error translation, quoting, read-only behavior, pooling/modes and
+  provider-specific behavior. `testbed` additionally provisions the live provider and checks schema creation and
+  database modes. Capability-based exclusions must be explicit and justified. Connectivity or basic CRUD alone is
+  partial support. See [`docs/supported-databases.md`](docs/supported-databases.md) for the full contract.
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
   profiles and the "fails up, never down" isolation rule (an unsupported explicit level resolves to
   the weakest stronger supported level or throws; a profile that can't be met throws
@@ -166,6 +189,7 @@ database-agnostic policy decoupled from connection identity — is in
   without `Authoritative` lets a caller supply their own `CreatedBy`), UTC-only timestamp
   enforcement, `UserId` type coercion, batch operations resolving the audit values exactly once
   (not once per row), and failed-write rollback of in-memory audit properties.
+- [`CHANGELOG.md`](CHANGELOG.md) — what is new in each release, newest first (2.0.0 onward).
 - [`docs/release-notes-2.0.6.md`](docs/release-notes-2.0.6.md) — behavior changes a 2.0.5 user can notice in 2.0.6 (reads that now fail loudly, TiDB upserts, fakeDb matching the real providers).
 - [`docs/testing-with-fakedb.md`](docs/testing-with-fakedb.md) — `pengdows.crud.fakeDb`, a
   complete in-process `DbProviderFactory` (not an interface mock) for testing without a real
@@ -203,8 +227,8 @@ database-agnostic policy decoupled from connection identity — is in
   `Clone(IDatabaseContext)`: what's deep-copied vs. shared, the singleton-gateway template
   pattern, transaction/tenant/cross-dialect use, and disposal independence.
 - [`docs/stored-procedures.md`](docs/stored-procedures.md) — calling stored procedures through the
-  same `ISqlContainer` as ordinary SQL: the seven `ProcWrappingStyle` values (`Call`/`Exec`/
-  `Oracle`/`PostgreSQL`/`ExecuteProcedure`/`Informix`/`None`) and exactly what each generates, OUT/INOUT
+  same `ISqlContainer` as ordinary SQL: the six call styles of `ProcWrappingStyle` (`Call`/`Exec`/
+  `Oracle`/`PostgreSQL`/`ExecuteProcedure`/`Informix`, plus `None`) and exactly what each generates, OUT/INOUT
   parameter binding, return-value capture for the `Exec`-style dialects (SQL Server, Sybase ASE)
   via `WrapForStoredProc(..., captureReturn: true)`, and
   the no-multi-result-set-traversal limit (`ITrackedReader` rejects `NextResult()`).

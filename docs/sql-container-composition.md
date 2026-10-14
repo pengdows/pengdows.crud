@@ -46,9 +46,10 @@ that you're about to add with the same name.
 
 ## Choosing an execution overload
 
-Every `ISqlContainer` execution method comes in extension-method overloads (added via
-`SqlContainerExtensions` without breaking the interface) that add `ExecutionType`,
-`CommandType`, and `CancellationToken` selection:
+Every `ISqlContainer` execution method comes in overloads that add `ExecutionType`,
+`CommandType`, and `CancellationToken` selection (some on the interface itself, the rest as
+`SqlContainerExtensions` extension methods that call the concrete `SqlContainer` overloads when
+available):
 
 ```csharp
 // Explicit execution intent (Read/Write) + cancellation — the fully-specified form:
@@ -78,8 +79,8 @@ await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken);
 
 ## Gateway and context diagnostics
 
-A few useful, easy-to-miss members that live on concrete types rather than the three-tier
-Build/Load/convenience API surface:
+A few useful, easy-to-miss members outside the three-tier Build/Load/convenience API surface
+(`ClearCaches()` lives on the concrete `BaseTableGateway<TEntity>`):
 
 - **`BuildWhereByPrimaryKey(...)`** (on `ITableGateway`/`IPrimaryKeyTableGateway`) adds a parameterized natural-key
   predicate to an existing container — useful when composing custom SQL that still needs to filter

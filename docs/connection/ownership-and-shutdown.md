@@ -57,7 +57,7 @@ state independent of `SafeAsyncDisposableBase.IsDisposed`:
 1. Unsubscribe from the metrics collector's own change event.
 2. Dispose the persistent connections, if any (`SingleConnection` pinned connection /
    every `PreventDatabaseUnload` sentinel — one per enabled pool).
-3. Dispose the connection-open coordination primitives (`_connectionOpenLocker`/`_connectionOpenGate`).
+3. Dispose the connection-open coordination primitive (`_connectionOpenGate`, used only where a provider needs opens serialized).
 4. **Drain each governor (writer first, then reader) with `PoolAcquireTimeout` as the drain
    timeout, then dispose it** — a *different* use from ordinary slot acquisition, but the same
    configured value (`DatabaseContextConfiguration.PoolAcquireTimeout`, default 5s). There is no
@@ -66,14 +66,19 @@ state independent of `SafeAsyncDisposableBase.IsDisposed`:
    governor's `Dispose()` closes admission once the drain completes.
 5. **If a governor times out (or is cancelled) draining**, a warning is logged and that governor
    is deliberately left undisposed — a lease may still be genuinely outstanding, and disposing
-   its semaphore out from under the holder would make that holder's `Release()` throw.
-6. Dispose the owned `DbDataSource`(s) — this runs whether or not the drains succeeded. A
-   caller-supplied `DbDataSource` (via the `DatabaseContext(configuration, dataSource, factory,
-   loggerFactory)` overload) is never disposed by the context; only internally created ones are.
-   Exceptions from data-source disposal are swallowed.
+   its semaphore out from under the holder would make that holder's `Release()` throw. The
+   context also **defers** disposing its data sources and releasing its unique-connection-string
+   claim (step 6): a background continuation waits, without holding a thread, for the undrained
+   governor to drain, then disposes the governor, the data sources and the claim.
+6. When every governor drained, clear the pool of and dispose the owned `DbDataSource`(s) and
+   release the context's `EnforceUniqueConnectionString` claim. A caller-supplied `DbDataSource`
+   (via the `DatabaseContext(configuration, dataSource, factory, loggerFactory)` overload) is
+   never disposed by the context; only internally created ones are. Exceptions from data-source
+   disposal are swallowed.
 7. Base-class disposal completes (lifetime listeners, `DisposeUnmanaged`).
 
-The context itself is fully, terminally disposed regardless of whether step 5 applied.
+The context itself is terminally disposed (`IsDisposed` is set, new work is rejected) regardless
+of whether step 5 applied; only the data sources outlive it, until the last lease returns.
 
 **Sync vs. async disposal** run the same sequence. `DisposeManagedAsync` uses async-native
 implementations for each phase (`DisposeAsync` on the persistent connection,
@@ -89,14 +94,14 @@ for a context whose constructor threw.
 
 ## The exception you get after disposal
 
-**`ObjectDisposedException`**, for every operation that would touch a connection — but note
-the one entry point that does *not* reject on its own:
+**`ObjectDisposedException`**, for every operation that would touch a connection or build a
+container:
 
-- `CreateSqlContainer(...)` on a disposed `DatabaseContext` does **not** throw — it still returns
-  a container (it only builds SQL text and parameters). The rejection happens when that container
-  is executed (next bullet). (`TransactionContext.CreateSqlContainer` is different: it throws
-  `InvalidOperationException` once the transaction has completed — which includes a disposed
-  transaction, since `Dispose()` rolls back an uncompleted one.)
+- `CreateSqlContainer(...)` on a disposed `DatabaseContext` throws `ObjectDisposedException`
+  (`DatabaseContext.ValidateCanCreateContainer`). A container created *before* disposal is
+  rejected when it is executed (next bullet). (`TransactionContext.CreateSqlContainer` is
+  different: it throws `InvalidOperationException` once the transaction has completed — which
+  includes a disposed transaction, since `Dispose()` rolls back an uncompleted one.)
 - `BeginTransaction(...)`/`BeginTransactionAsync(...)` — rejected with `ObjectDisposedException`.
 - A container executed against a disposed context — whether it was created before or after
   disposal (`ExecuteNonQueryAsync`, `ExecuteReaderAsync`, `ExecuteScalarOrNullAsync`, ...) —
@@ -121,9 +126,11 @@ A `TransactionContext` pins one physical connection for its entire lifetime. `Co
 `Rollback()` (and `Dispose()`'s auto-rollback) all route through the same completion path,
 serialized by an internal completion lock (a `SemaphoreSlim` bounded by the context's
 `ModeLockTimeout`, throwing `InvalidOperationException` if it can't be acquired in time). That
-lock is deliberately separate from the transaction's user/command lock — completion does not wait
-for, or block against, an in-flight command or an open reader on the transaction, so dispose
-readers before committing. `IsCompleted` flips to `true` exactly once, atomically, at the *start*
+lock is deliberately separate from the transaction's user/command lock. Completion does take the
+same reader-aware lock ordinary commands use, so an open reader on the transaction makes
+`Commit()`/`Rollback()` fail fast with `InvalidOperationException` ("...while a reader opened on
+it is still active") rather than block or tear the connection out from under it; dispose readers
+before committing. That failed attempt leaves the transaction retryable once the reader is gone. `IsCompleted` flips to `true` exactly once, atomically, at the *start*
 of the first completion attempt (before the provider's commit/rollback runs) and stays `true` even
 if that commit/rollback then fails (surfaced as `TransactionException`); a second attempt observes
 it and throws `InvalidOperationException("Transaction already completed.")` rather than racing

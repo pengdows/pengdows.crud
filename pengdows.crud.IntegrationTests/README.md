@@ -72,7 +72,9 @@ functionality:
 
 Aurora PostgreSQL and Aurora MySQL are opt-in external targets. The harness connects to existing
 clusters, creates a unique test schema/database, runs the normal provider suite, and drops only
-that generated namespace during teardown. It never creates, stops, or deletes AWS infrastructure.
+that generated namespace during teardown; it never creates, stops, or deletes AWS infrastructure.
+`run-integration-tests.sh` with `INCLUDE_AURORA=true` and no `AURORA_*_HOST` set provisions its own clusters
+(`tools/aurora-it.sh up`) and deletes them when it exits; set the variables below to use existing clusters instead.
 
 ```bash
 export INCLUDE_AURORA=true
@@ -123,8 +125,8 @@ dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj
 # A single target framework
 dotnet test pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj -f net10.0
 
-# Integration tests plus the testbed matrix for each framework in TESTBED_FRAMEWORKS
-# (default "net8.0 net10.0")
+# Integration tests (frameworks in INTEGRATION_FRAMEWORKS) plus the testbed matrix (frameworks in
+# TESTBED_FRAMEWORKS); both default to "net8.0 net10.0"
 ./run-integration-tests.sh
 ```
 
@@ -172,7 +174,10 @@ dotnet test --filter "FullyQualifiedName~ErrorHandling"
 #### Database Provider Selection
 
 Tests derived from `DatabaseTestBase` run against SQLite, PostgreSQL, SQL Server, MySQL, MariaDB, Firebird,
-CockroachDB, DuckDB, Oracle, YugabyteDB, and TiDB by default.
+CockroachDB, DuckDB, Oracle, YugabyteDB, TiDB, FlatFile, IBM Db2, SingleStore, Sybase ASE, Google Spanner and
+Informix by default, and against Microsoft Access whenever the OS is Windows. SAP HANA, InterBase, Snowflake and
+the two Aurora engines are opt-in (below). The PostgreSQL and MySQL containers run a version matrix that includes
+the compatible forks Citus, TimescaleDB, Fujitsu Enterprise Postgres and Percona Server.
 
 ```bash
 # Include Snowflake tests (requires Snowflake credentials)
@@ -187,6 +192,8 @@ export TESTBED_EXCLUDE="Oracle,Firebird"
 
 # Optional diagnostics and container control
 export INTEGRATION_TRACE=true                # verbose per-provider trace output
+export INTEGRATION_SETUP_TIMEOUT_SECONDS=300 # per-provider setup timeout (default 300)
+export INTEGRATION_TEST_TIMEOUT_SECONDS=600  # per-provider test timeout (default 600)
 export TESTBED_STARTUP_TIMEOUT_SECONDS=300   # override container startup wait
 export TESTBED_KEEP_CONTAINERS=true          # keep testbed containers running after the run
 ```
@@ -197,6 +204,8 @@ opt-in databases, which `IntegrationMatrixTests` does not enable:
 - `INCLUDE_SAPHANA=true` — SAP HANA (Docker image, needs 16-32GB RAM)
 - `INCLUDE_INTERBASE=true` — InterBase (a pre-registered, licensed, already-running container; also needs
   `LD_LIBRARY_PATH` pointing to a directory containing `libgds.so`)
+- `INCLUDE_AURORA=true` — Aurora PostgreSQL and Aurora MySQL (a signed-in AWS CLI; `run-integration-tests.sh` creates and
+  deletes temporary clusters, billed while they exist)
 - Microsoft Access runs automatically on Windows (requires the Access Database Engine Redistributable); no env var
 
 #### Snowflake Configuration
@@ -232,11 +241,12 @@ The tests automatically start database containers using Testcontainers. Ensure D
 # Verify Docker is running
 docker info
 
-# Pull required images (optional - done automatically)
-docker pull postgres:latest
-docker pull mcr.microsoft.com/mssql/server:latest
-docker pull mysql:latest
-docker pull mariadb:latest
+# Pull required images (optional - done automatically; the full pinned image matrix is TestbedImageMatrix in
+# testbed/ParallelTestOrchestrator.cs)
+docker pull postgres:16.4
+docker pull mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04
+docker pull mysql:8.4.11
+docker pull mariadb:11.4.12
 ```
 
 ## Test Architecture

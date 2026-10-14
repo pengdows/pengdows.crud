@@ -75,13 +75,13 @@ per call against the real operation context:
 ```csharp
 // Built once, e.g. lazily cached inside a gateway
 var template = templateContext.CreateSqlContainer(
-    "SELECT id, name, email FROM users WHERE id = ");
+    "SELECT id, name, email FROM users WHERE id = {P}p0");
 template.AddParameterWithValue("p0", DbType.Int32, 0); // placeholder value, never executed as-is
 
 // Per call, per tenant:
 using var container = template.Clone(tenantContext);
 container.SetParameterValue("p0", actualUserId);
-var result = await gateway.LoadSingleAsync<User>(container);
+var result = await userGateway.LoadSingleAsync(container);
 ```
 
 Because the clone's parameters are independent `DbParameter` instances, concurrent clones from the

@@ -60,20 +60,20 @@ used everywhere:
 
 Percentile tracking is **opt-in** (`MetricsOptions.EnableApproxPercentiles`, default `false`,
 set via `DatabaseContextConfiguration.MetricsOptions`) — a `P95CommandMs`/`P99CommandMs` of `0` is
-ambiguous between "genuinely fast" and "tracking is off, or no samples yet." `DatabaseMetrics`
-carries no availability flag of its own, so check the `MetricsOptions` you configured before
-trusting a percentile value:
+ambiguous between "genuinely fast" and "tracking is off, or no samples yet." Resolve the ambiguity
+with the availability flags that `DatabaseMetrics` (and each `DatabaseRoleMetrics`) carries:
+`CommandPercentilesAvailable` / `TransactionPercentilesAvailable` are true only when the matching
+P95/P99 values hold real samples.
 
 ```csharp
-var percentilesOn = configuration.MetricsOptions.EnableApproxPercentiles;
-if (percentilesOn && metrics.CommandsExecuted > 0)
+if (metrics.CommandPercentilesAvailable)
 {
     // metrics.P95CommandMs / P99CommandMs reflect real samples
 }
 ```
 
-Same caveat for `P95TransactionMs`/`P99TransactionMs`. If percentiles are consistently `0` in
-production, first confirm percentile tracking is enabled — that's a configuration gap, not
+Same for `P95TransactionMs`/`P99TransactionMs` with `TransactionPercentilesAvailable`. If the flag is consistently
+false in production, first confirm percentile tracking is enabled — that's a configuration gap, not
 evidence the database is fast.
 
 ## "Are connections piling up, or leaking?"

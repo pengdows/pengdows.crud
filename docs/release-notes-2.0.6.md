@@ -1,8 +1,37 @@
-# pengdows.crud 2.0.6 release notes (in progress)
+# pengdows.crud 2.0.6 release notes
 
 2.0.6 is binary compatible with 2.0.5 (package validation against 2.0.5 for `pengdows.crud`,
-`pengdows.crud.abstractions` and `pengdows.crud.fakeDb`). This file collects behavior changes a
-2.0.5 user can notice; the release (REL-008) completes it.
+`pengdows.crud.abstractions` and `pengdows.crud.fakeDb`). This file collects what is new and the behavior
+changes a 2.0.5 user can notice.
+
+## New databases
+
+2.0.0 to 2.0.5 supported the same fourteen databases. 2.0.6 adds nine, each with a `SupportedDatabase` value of its
+own (23 in all), its own detection, and an integration suite that passes on net8.0 and net10.0
+([integration-status.md](integration-status.md)). A new value is additive: nothing that compiled against 2.0.5
+changes.
+
+| Database | How it is supported | Integration suite |
+|---|---|---|
+| IBM Db2 for Linux/Unix/Windows (LUW) | its own dialect; Db2 for z/OS and Db2 for i are not supported | always on |
+| FlatFile: [pengdows.flatfile](https://github.com/pengdows/pengdows.flatfile) (CSV, delimited, fixed-width, NDJSON files) | its own dialect | always on |
+| SingleStore | detected at runtime (it reports itself as plain MySQL); MySQL dialect | always on |
+| SAP (Sybase) ASE | its own dialect | always on |
+| Google Cloud Spanner (PostgreSQL interface) | its own dialect, derived from the PostgreSQL dialect | always on |
+| IBM Informix | its own dialect | always on |
+| SAP HANA | its own dialect | opt-in: `INCLUDE_SAPHANA=true` (the image needs 16 to 32 GB of RAM) |
+| InterBase | its own dialect | opt-in: `INCLUDE_INTERBASE=true` (node-locked license) |
+| Microsoft Access (Jet/ACE) | its own dialect | runs when the OS is Windows (no env var) |
+
+Four more products are supported as subsidiaries of their parent, with **no code change and no new
+`SupportedDatabase` value**: Percona Server for MySQL (under MySQL), and Citus, TimescaleDB and Fujitsu Enterprise
+Postgres (under PostgreSQL). Each reports itself as MySQL or PostgreSQL, so detection resolves it to the parent's
+dialect (`Product` reports the parent), and each passed the same integration suite as the vanilla engine with the same
+number of checks. EDB Postgres Extended is not claimed (no public image to verify against).
+
+Aurora PostgreSQL and Aurora MySQL are detected at runtime and use the PostgreSQL and MySQL dialects; they are opt-in in
+the integration run (`INCLUDE_AURORA=true`). Per-database requirements and version floors:
+[supported-databases.md](supported-databases.md).
 
 ## Reads that now fail instead of returning a wrong value
 
@@ -41,6 +70,13 @@
   mapped `[Column]` name for custom SQL: `sc.WrapObjectName("o." + ColumnName(nameof(Order.CustomerId)))`
   instead of a hard-coded `"o.customer_id"`. Both interface members have default implementations, so
   implementations compiled against 2.0.5 still load. See [entity-mapping.md](entity-mapping.md).
+
+- `AuditCreationPolicy` (enum in `pengdows.crud.abstractions`) and an init-only `AuditCreationPolicy` property on
+  `ITableGateway`, `IPrimaryKeyTableGateway` and `BaseTableGateway`. `PreserveExplicitValues` (the default, and the
+  2.0.5 behavior) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always
+  overwrites them with the resolver's values, so request-model binding cannot spoof them. The interface members
+  have default implementations, so implementations compiled against 2.0.5 still load. See
+  [audit-fields.md](audit-fields.md).
 
 - `ClampPoolsToServerConnectionLimit` and `ResourceConnectionHeadroom` on `DatabaseContextConfiguration`
   (off and `0` by default) read the database server's own connection limit while a context initializes and

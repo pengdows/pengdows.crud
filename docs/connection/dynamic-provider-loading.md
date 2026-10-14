@@ -25,14 +25,20 @@ not something known at compile time.
 }
 ```
 
-**Entry point — read this first.** `DbProviderLoader`'s constructor is `internal`, and this
-release ships no public `IServiceCollection` extension that wraps it, so application code outside
-`pengdows.crud` has no supported way to construct one — an instance can only be created from
-inside `pengdows.crud` itself or its `InternalsVisibleTo` test assemblies, which is where its
-public `IDbProviderLoader.LoadAndRegisterProviders(IServiceCollection)` member is exercised today.
-For application code, the supported path is to register
-each provider's factory directly as a keyed singleton, using the same key contract described
-below:
+**Entry point.** `DbProviderLoader`'s constructor is `internal`; application code reaches it
+through the public `AddDbProviderLoading` extension on `IServiceCollection`
+(`pengdows.crud/configuration/DbProviderLoaderServiceCollectionExtensions.cs`), which constructs
+the loader and calls `LoadAndRegisterProviders` for you:
+
+```csharp
+services.AddDbProviderLoading(configuration);          // reads the "DatabaseProviders" section
+services.AddDbProviderLoading(configuration, logger);  // optional ILogger<DbProviderLoader> for diagnostics
+```
+
+The logger is optional because this runs at composition time, before the service provider exists,
+so no resolved `ILogger<DbProviderLoader>` is available; it defaults to a null logger. If you
+would rather not load providers from configuration, register each provider's factory directly as
+a keyed singleton, using the same key contract described below:
 
 ```csharp
 services.AddKeyedSingleton<DbProviderFactory>("sqlserver", Microsoft.Data.SqlClient.SqlClientFactory.Instance);
@@ -57,11 +63,13 @@ this order:
      `AppDomain.CurrentDomain.BaseDirectory`. The resolved path **must stay within the
      application's base directory** — this is an enforced containment boundary, not a
      convention; a path that escapes it (e.g. via `..` segments or an absolute path elsewhere)
-     throws `InvalidOperationException`. The check is **lexical**: it normalizes the path with
-     `Path.GetFullPath` and compares prefixes; it does not resolve symlinks, so a symlink placed
-     inside the base directory that points outside it passes the check. The boundary assumes the
-     app's own base directory hasn't been compromised with planted links — an attacker who can
-     write there already has a materially larger foothold than a single configured path.
+     throws `InvalidOperationException`. The path is first normalized with `Path.GetFullPath` and
+     its prefix compared; if the file then exists, `File.ResolveLinkTarget(returnFinalTarget: true)`
+     follows any symlink chain and the final target must also stay inside the base directory, so a
+     symlink inside the base directory that points outside it is rejected. Hard links and other
+     filesystem tricks are not detected; the boundary assumes the app's own base directory hasn't
+     been compromised — an attacker who can write there already has a materially larger foothold
+     than a single configured path.
      A path that passes containment but doesn't exist throws `InvalidOperationException` too.
    - `AssemblyName` — loaded via `Assembly.Load` (uses the standard assembly-resolution probing,
      not path-based).
@@ -80,10 +88,15 @@ this order:
 ## DI registration key vs. `ProviderName` — the gotcha
 
 `LoadAndRegisterProviders` registers each resolved factory as a **keyed singleton under the
-configuration section key**, not under `ProviderName`:
+configuration section key** and, when `ProviderName` is spelled differently, under `ProviderName`
+as well; it also registers it with `DbProviderFactories` for the legacy path:
 
 ```csharp
 services.AddKeyedSingleton<DbProviderFactory>(providerKey, factory); // providerKey = "sqlserver" above
+if (config.ProviderName != providerKey)
+{
+    services.AddKeyedSingleton<DbProviderFactory>(config.ProviderName, factory); // same factory, second key
+}
 DbProviderFactories.RegisterFactory(config.ProviderName, factory);   // legacy compatibility path only
 ```
 
@@ -94,18 +107,16 @@ factory with:
 _serviceProvider.GetKeyedService<DbProviderFactory>(config.ProviderName)
 ```
 
-**This means a tenant's `IDatabaseContextConfiguration.ProviderName` must equal the
-`DatabaseProviders` section key it should resolve to — not necessarily the ADO.NET invariant
-name that field's own name suggests.** In the example above, a tenant that should use the first
-provider must set `ProviderName = "sqlserver"`, not `"System.Data.SqlClient"` — even though
-`"System.Data.SqlClient"` is what the *loader's own* `ProviderName` field holds for that same
-entry (that value is only used for the legacy `DbProviderFactories.RegisterFactory` call, a
-separate registration path from keyed DI). Setting a tenant's `ProviderName` to the invariant
-name instead of the section key makes the keyed lookup return `null`, and tenant-context
-construction throws `InvalidOperationException("No factory registered for '<ProviderName>'.")`
-— the message names the key it looked for, not the fix, so check this mismatch first when you
-see it. The same rule applies to keyed factories you register by hand: the tenant's
-`ProviderName` must equal the registration key.
+**This means a tenant's `IDatabaseContextConfiguration.ProviderName` must equal a registered
+key: either the `DatabaseProviders` section key or the entry's own `ProviderName`.** In the
+example above, a tenant that should use the first provider can set `ProviderName = "sqlserver"`
+(the section key) or `"System.Data.SqlClient"` (the loader's `ProviderName` for that entry); both
+resolve to the same factory. A tenant `ProviderName` that matches neither makes the keyed lookup
+return `null`, and tenant-context construction throws
+`InvalidOperationException("No factory registered for '<ProviderName>'.")` — the message names
+the key it looked for, not the fix, so check this mismatch first when you see it. Keyed
+factories you register by hand are registered under one key only: the tenant's `ProviderName`
+must equal it exactly.
 
 Outside `ITenantContextRegistry`, resolve a keyed factory the same way it was registered — by
 key:
@@ -118,9 +129,9 @@ var factory = provider.GetRequiredKeyedService<DbProviderFactory>("sqlserver");
 
 `TenantContextRegistry` accepts an optional `maxTenantCount` constructor argument that throws
 `InvalidOperationException` from `GetContext`/`AcquireLease` for a new tenant once that many
-distinct tenants have been cached (call `Invalidate`/`InvalidateAll` to free capacity). It is a
-constructor argument only: `MultiTenantOptions` has no corresponding setting, and the registry
-`services.AddMultiTenancy(configuration)` registers is unbounded. To set a cap, register
+distinct tenants have been cached (call `Invalidate`/`InvalidateAll` to free capacity).
+`services.AddMultiTenancy(configuration)` passes `MultiTenantOptions.MaxTenantCount` (the
+`MultiTenant:MaxTenantCount` configuration key) through to it; to set a cap in code, register
 `ITenantContextRegistry` yourself with a factory delegate that passes `maxTenantCount` — see
 [`multitenancy.md`](./multitenancy.md#tenant-cardinality-maxtenantcount) for the registration.
 
@@ -182,8 +193,8 @@ is equivalent to directly referencing and calling into arbitrary code at startup
 
 **Path containment (`ResolveAssemblyPath`, described above) is a *path* guarantee, not a *code*
 guarantee.** It answers one narrow question — "does the configured `AssemblyPath`, lexically
-normalized, resolve to a location inside the application's own base directory?" — and nothing
-else (it does not follow symlinks). It
+normalized, resolve (after following any symlink) to a location inside the application's own
+base directory?" — and nothing else. It
 says nothing about what the assembly at that path is permitted to do once loaded, whether it's
 been tampered with, or whether its own transitive dependencies are trustworthy. Do not read
 "path containment enforced" as "the loaded code is sandboxed" — those are unrelated properties,

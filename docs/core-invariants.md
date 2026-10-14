@@ -30,10 +30,11 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
    - Events are fired without locks by design.
    - Re-entrancy can deadlock or corrupt expectations.
 
-7. **DbMode.Best can coerce unsafe choices.**
+7. **DbMode.Best can coerce unsafe choices.** The policy lives on each dialect (`CoerceConnectionMode`); see `connection/connection-modes.md`.
    - SQLite/DuckDB isolated `:memory:` must be SingleConnection.
-   - SQLite/DuckDB file databases and FlatFile resolve to SingleWriter (WAL-friendly); an explicit Standard/PreventDatabaseUnload request is coerced to SingleWriter.
-   - SQL Server LocalDB coerces to PreventDatabaseUnload.
+   - SQLite/DuckDB/Access file databases and FlatFile resolve to SingleWriter from `Best`; an explicit PreventDatabaseUnload is coerced to SingleWriter, and so is an explicit Standard on SQLite and FlatFile (DuckDB and Access honor Standard and log a risk warning).
+   - SQL Server LocalDB, Firebird and Db2 LUW resolve to PreventDatabaseUnload from `Best` (LocalDB also coerces the single-connection modes to it); an explicit Standard is honored on all three.
+   - Every other client-server database resolves to Standard and honors any explicit mode.
 
 8. **fakeDb is control-flow, not database semantics.**
    - It simulates provider behavior, not SQL execution or constraints.
@@ -64,7 +65,7 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 - **SqlContainer owns SQL + parameters; it does not track entity state.**
 - **Dialect selection is immutable post-initialization.**
 - **MySQL upserts depend on the `incoming` alias when the server supports it.**
-  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it: MySQL returns `"incoming"` on 8.0.20+ (`null` below that); MariaDB explicitly returns `null` (it does not support `INSERT ... AS alias`); Snowflake returns `"src"`.
+  - `ISqlDialect.UpsertIncomingAlias` defaults to `null` but dialects can override it: MySQL returns `"incoming"` on 8.0.20+ (`null` below that); MariaDB and TiDB explicitly return `null` (neither supports `INSERT ... AS alias`); Snowflake and Firebird return `"src"`.
   - `TableGateway`/`PrimaryKeyTableGateway` only inject `AS <alias>` before `ON DUPLICATE KEY UPDATE` when the alias is provided, so keep the property around even if you don’t use it.
   - Tests should cover both alias-enabled and legacy (fallback to `VALUES(...)`) behaviors.
 

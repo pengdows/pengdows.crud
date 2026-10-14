@@ -94,7 +94,10 @@ public RowVersion Rv { get; set; }
 
 `JsonDocument` (the BCL type, not `JsonValue`) is also directly mapped in
 the dialects' type mappings for PostgreSQL/CockroachDB/YugabyteDB (`jsonb`),
-MySQL/TiDB (`JSON`), and SQL Server (`NVARCHAR(MAX)`). `JsonValue` is a separate, provider-agnostic
+MySQL/TiDB (`JSON`), and SQL Server (`NVARCHAR(MAX)`); no other dialect registers a `JsonDocument`
+mapping (MariaDB has no native JSON type, and Spanner registers none of the PostgreSQL-family
+mappings above). Aurora PostgreSQL and Aurora MySQL bind through their parent's mappings
+(`TypeMappingProvider`), so they behave as PostgreSQL and MySQL in the table above. `JsonValue` is a separate, provider-agnostic
 wrapper maintained in the newer coercion system — prefer it for new code since it works
 uniformly across dialects without a per-provider registration; `JsonDocument` remains supported
 for existing code and BCL interop. Don't confuse either with the entity-level `[Json]` attribute

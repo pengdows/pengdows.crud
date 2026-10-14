@@ -8,8 +8,8 @@ container-provisioning-adjacent work per database: spin up a real Testcontainers
 (`CreateTable`), run a scalar-UDF smoke check and the `DbMode`/`PreventDatabaseUnload`
 idle-unload probe, then dispose the container — plus a `RunAdditionalTestsAsync()` hook for the
 handful of checks that genuinely need the live container itself (not just a connection string),
-overridden today by SQLite, DuckDB, PostgreSQL, SQL Server, MariaDB, Spanner, and Db2's own
-`TestProvider` subclasses.
+overridden today by the SQLite, DuckDB, PostgreSQL, SQL Server, MariaDB, Firebird, Spanner, Db2 and
+Access `TestProvider` subclasses.
 
 Everything else — CRUD round-trips, parameter binding, transactions/isolation, stored procedures,
 upsert/error-mapping/identifier-quoting capability probes, pool isolation, kill-connection
@@ -40,9 +40,13 @@ TESTBED_POSTGRESQL_IMAGES=postgres:9.5,postgres:16.4 dotnet run -c Release -f ne
 
 # Exclude specific databases
 dotnet run -c Release -f net10.0 --project testbed -- --exclude SQLite
-
-Per-engine overrides use `TESTBED_<ENGINE>_IMAGES` with two comma-separated image references. The `--versions` filter accepts configured labels or exact image references. Results are named `Engine [version]`.
 ```
+
+`--only`, `--exclude` and `--versions` also read `TESTBED_ONLY`, `TESTBED_EXCLUDE` and `TESTBED_VERSIONS`.
+Per-engine image overrides use `TESTBED_<ENGINE>_IMAGES` (the provider name upper-cased with spaces removed, e.g.
+`TESTBED_SQLSERVER_IMAGES`) with a comma-separated list of image references. The `--versions` filter accepts configured
+labels or exact image references. Results are named `Engine [version]`. `TESTBED_STARTUP_TIMEOUT_SECONDS` overrides the
+container startup wait and `TESTBED_KEEP_CONTAINERS=true` leaves the containers running after the run.
 
 ## Always-on Databases
 
@@ -54,6 +58,9 @@ SQLite, DuckDB, FlatFile (not an RDBMS — a flat-file provider, included here s
 the same way), PostgreSQL, Google Spanner, MySQL, MariaDB, SQL Server, CockroachDB, Firebird,
 TiDB, YugabyteDB, Oracle, IBM Db2 LUW, SingleStore, Sybase ASE, Informix
 
+The PostgreSQL and MySQL entries each run a version matrix that includes compatible forks, which pass the same
+suite with no code change: Citus, TimescaleDB and Fujitsu Enterprise Postgres (PostgreSQL), Percona Server (MySQL).
+
 ## Opt-in Databases
 
 | Database | Env var | Reason |
@@ -61,6 +68,7 @@ TiDB, YugabyteDB, Oracle, IBM Db2 LUW, SingleStore, Sybase ASE, Informix
 | Snowflake | `INCLUDE_SNOWFLAKE=true` | Cloud-only, requires credentials |
 | SAP HANA | `INCLUDE_SAPHANA=true` | Real Docker image, but a working container needs 16-32GB RAM — far beyond a standard CI runner and every database above |
 | InterBase | `INCLUDE_INTERBASE=true` | A personal, non-shareable, node-locked Developer Edition license (registration state lives in a persistent volume, not the image) plus a native `libgds.so` required on the host running the testbed process — see `InterBaseTestContainer.cs` |
+| Aurora PostgreSQL / Aurora MySQL | `INCLUDE_AURORA=true` | Managed AWS services with no Docker image; `run-integration-tests.sh` creates and deletes temporary clusters (billed while they exist) |
 | Access | runs automatically on Windows | No Docker image exists at all — Access isn't a server process. Windows-only (the ACE OLE DB provider and the ADOX COM interop used to create the `.accdb` file both require it) — see `AccessTestContainer.cs` |
 
 > **SAP HANA**: `HanaTestContainer`/`HanaTestProvider` spin up `saplabs/hanaexpress`, single pinned
@@ -82,7 +90,7 @@ TiDB, YugabyteDB, Oracle, IBM Db2 LUW, SingleStore, Sybase ASE, Informix
 ## What Still Runs Here
 
 ### CreateTable
-Drops and recreates a 10-column test table (`id`, `name`, `description`, `value`, `is_active`,
+Drops and recreates a 9-column test table (`id`, `name`, `description`, `value`, `is_active`,
 `created_at`, `created_by`, `updated_at`, `updated_by`) using dialect-specific DDL. Oracle uses
 `NUMBER` + `SEQUENCE`/`TRIGGER`; SQL Server uses `IDENTITY`; MySQL uses `BIGINT AUTO_INCREMENT`,
 etc. Runs for every database, every time.
@@ -101,7 +109,7 @@ asserting them).
 ### `RunAdditionalTestsAsync()` container-level hooks
 A small number of databases override this for a check that genuinely needs the live container
 itself, not just a pooled connection string — currently SQLite, DuckDB, PostgreSQL, SQL Server,
-MariaDB, Spanner, and Db2. See each database's own `*TestProvider.cs` for what it actually checks;
+MariaDB, Firebird, Spanner, Db2 and Access. See each database's own `*TestProvider.cs` for what it actually checks;
 these are container-provisioning-adjacent probes, not general CRUD/transaction coverage.
 
 ## Where the Rest Moved
@@ -118,14 +126,14 @@ grep the folder for the scenario name if you need the precise file):
 |---|---|
 | Insert/Retrieve/Delete, row round-trip, type fidelity | `Core/BasicCrudTests.cs`, `Core/RoundTripTests.cs`, `Core/TypeHydrationTests.cs` |
 | Transactions (commit/rollback/read-your-writes) | `Core/TransactionResilienceTests.cs` |
-| Savepoints | `Core/TransactionResilienceTests.cs` (capability-gated per dialect's `SupportsSavepoints`) |
+| Savepoints | `Advanced/TransactionTests.cs` (skips providers without savepoint support) |
 | Stored procedures | `Core/StoredProcedureTests.cs` |
 | Parameter binding | `Core/ParameterBindingTests.cs` |
 | Command/container reuse | `Core/SqlContainerReuseTests.cs` |
 | Upsert / merge conflicts | `Core/MergeConflictTests.cs`, `Core/VersionedUpsertConflictTests.cs` |
 | Identifier quoting | `Core/QuotingTortureTests.cs`, `Core/EmbeddedQuoteIdentifierIntegrationTests.cs` |
 | Error mapping (constraint violations, deadlocks, timeouts, transient errors) | `ErrorHandling/ConstraintViolationTests.cs` and siblings |
-| Pool isolation, kill-connection rollback, `DbMode` lock contention | `DatabaseSpecific/`, `Core/MultiTenantDialectVersionTests.cs`, `Core/RetryContextTests.cs` |
+| Pool isolation, kill-connection rollback, `DbMode` lock contention | `DatabaseSpecific/`, `Core/MultiTenantDialectVersionTests.cs`, `ConnectionManagement/DbModeTests.cs` |
 
 If you're adding integration coverage for a new behavior, it almost certainly belongs in one of
 those `pengdows.crud.IntegrationTests` folders, not here — see `CLAUDE.md`'s "Adding a New
@@ -167,6 +175,7 @@ testbed/
 ├── TestContainer.cs                  Shared container startup / wait-for-ready logic
 ├── Sqlite/                           SQLite — no container (file/memory based)
 ├── DuckDb/
+├── FlatFile/                         Provider from the pengdows.flatfile package — no container
 ├── Db2/
 ├── PostgreSQL/
 ├── Spanner/
@@ -181,6 +190,7 @@ testbed/
 ├── SingleStore/
 ├── Sybase/
 ├── Informix/
+├── Aurora/                           Opt-in (INCLUDE_AURORA=true) — connects to existing Aurora clusters
 ├── Snowflake/                        Opt-in (INCLUDE_SNOWFLAKE=true)
 ├── SapHana/                          Opt-in (INCLUDE_SAPHANA=true)
 ├── InterBase/                        Opt-in (INCLUDE_INTERBASE=true)
@@ -194,7 +204,8 @@ probe, the `RunAdditionalTestsAsync` hook) are described above under "What Still
 
 Each database subdirectory contains:
 - `*TestContainer.cs` — starts the Testcontainers image and returns a connection string
-- `*TestProvider.cs` — inherits `TestProvider`, overrides DDL and any dialect-specific checks
+- `*TestProvider.cs` — inherits `TestProvider`, overrides DDL and any dialect-specific checks (MySQL, SingleStore and
+  Aurora MySQL have none and run the base `TestProvider`)
 
 Provider overrides are minimal by design — any deviation from baseline behavior (e.g. Oracle
 using `NUMBER` instead of `INT`, Oracle requiring distinct parameter names) is captured in the

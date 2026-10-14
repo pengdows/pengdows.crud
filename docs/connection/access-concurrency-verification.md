@@ -102,8 +102,8 @@ behavior). Phase 3 below tests exactly this.
 - [Microsoft Access Database Engine Redistributable](https://www.microsoft.com/en-us/download/details.aspx?id=54920)
   (provides `Microsoft.ACE.OLEDB.16.0` and the `ADOX.Catalog` COM type used to create `.accdb`
   files). `AccessTestContainer.cs` already depends on this being installed — if
-  `INCLUDE_ACCESS=true dotnet run -f net10.0 --project testbed -- --only "Access"` already works on the
-  machine, this is satisfied.
+  `dotnet run -f net10.0 --project testbed -- --only "Access"` already works on the
+  machine (Access is on automatically when the OS is Windows; no env var), this is satisfied.
 - .NET 8 SDK.
 - A checkout of this repo (`pengdows.crud`) so the probe can reference the real `pengdows.crud`
   project and exercise `DatabaseContext`/`DbMode`, not just raw `OleDb`.
@@ -321,7 +321,7 @@ Depending on what Phase 3 shows:
 Either way:
 
 1. Update `AccessDialect.cs`'s file-level AI SUMMARY and `DescribeStandardModeRisk()` with the real, dated findings (see `DuckDbDialect.cs` for the pattern to follow).
-2. Update `CLAUDE.md`'s "DuckDB and Access similarly allow..." paragraph and `docs/connection/connection-modes.md`'s "Standard → honored, not coerced" entry to match.
+2. Update `docs/connection/connection-modes.md`'s "Standard → honored, not coerced" entry to match.
 3. If feasible, add a Windows-gated (`[SkippableFact]`/`OperatingSystem.IsWindows()`) permanent regression test analogous to
    `SerializationConflictTests.DuckDb_ConcurrentSameRowUpdates_UnderSingleWriterMode_AllSucceedWithZeroConflicts`
    — even though it won't run in this repo's (Linux) CI, it gives future Windows-based verification

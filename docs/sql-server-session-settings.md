@@ -1,6 +1,10 @@
 # SQL Server Session Settings
 
-pengdows.crud enforces a fixed ANSI session-settings baseline on every SQL Server connection checkout. The goal is deterministic SQL semantics regardless of server defaults, driver behavior, or installation quirks. A connection from the pool that was previously used by external code with different session settings will be corrected before any framework SQL runs.
+pengdows.crud defines a fixed ANSI session-settings baseline for SQL Server. The goal is deterministic SQL semantics regardless of server defaults, driver behavior, or installation quirks. Whether the `SET` script is actually sent depends on the database's compatibility level, probed once during initialization (`SqlServerDialect.GetSqlServerSessionSettings`):
+
+- **Compatibility level 90 (SQL Server 2005) or higher** - every supported server in practice: the script is empty and nothing is sent. The driver's login sequence and `sp_reset_connection` already guarantee these settings on a pooled connection, so the per-checkout round trip is skipped (the log line reads "already compliant").
+- **Level unknown (the probe failed) or below 90, or the settings probe threw**: the full baseline below is sent on every checkout, so a pooled connection previously changed by external code is corrected before any framework SQL runs.
+- **Detection never ran** before the first checkout: the full baseline is used.
 
 The baseline is defined as a single static array in `SqlServerDialect.cs` (`SessionSettingsDef`). Both the `SET` script and the validation dictionary are derived from that array — there is no divergence between what gets applied and what gets checked.
 
@@ -94,7 +98,7 @@ Omitting it is a deliberate and defensible choice. Teams with stored procedure-h
 
 ## Validation in Benchmarks
 
-The `benchmarks/` suite uses `DBCC USEROPTIONS` to capture the active session state and asserts that all seven settings are in effect before timed iterations begin. See `docs/INDEXED_VIEW_VALIDATION.md` for the artifact layout and validation report structure.
+The `benchmarks/` suite uses `DBCC USEROPTIONS` to capture the active session state and applies the baseline itself and asserts that five of the seven are in effect before timed iterations begin (`arithabort`, `ansi_warnings`, `ansi_nulls`, `quoted_identifier`, `concat_null_yields_null`; `ANSI_PADDING` is not asserted, and `numeric_roundabort OFF` is the default so `DBCC USEROPTIONS` omits it). See `docs/INDEXED_VIEW_VALIDATION.md` for the artifact layout and validation report structure.
 
 `SET STATISTICS XML ON; ... SET STATISTICS XML OFF` appears in benchmark code solely to capture query execution plans. It is ephemeral per-command usage, not a persistent session setting.
 

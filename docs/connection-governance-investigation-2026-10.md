@@ -4,6 +4,13 @@ A record of one long working session (2026-10-08, branch `2.0.6`) that started w
 complete?" and turned into an investigation of what `PoolGovernor` and `StormGate` actually buy you over a
 correctly sized provider pool. Written so that it can be picked up cold.
 
+**Status update (2026-10-13, added to the record; the text below is unchanged history):** the `pengdows.crud`
+work described here has since been committed on `2.0.6` (`debef346`, `8b263659`, `1914dad0`), so the working-tree
+description in "Read this first" and Section 8 no longer applies to it. `ReleaseBuildFactAttribute` (Section 7.4) no
+longer exists: the allocation tests now run in both builds and `pengdows.crud.Tests/OptimizedBuild.cs` adds a stated
+Debug allowance to each Release budget. Section 9 at the end (the formal-review corrections) supersedes Sections 6
+and 7 where they disagree, and the operator-facing description is `docs/connection-pooling.md`.
+
 **Read this first:** nothing here is committed. Everything is in the working tree of `pengdows.crud` and
 `pengdows.hangfire` on branch `2.0.6` (see [Section 8](#8-state-of-the-working-tree)). Numbers are from
 single runs unless a section says otherwise. Anything marked **unverified** was not confirmed against a

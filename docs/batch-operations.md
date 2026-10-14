@@ -145,8 +145,9 @@ carry a version guard:
 | Batch upsert shape | Version guard | Stale `[Version]` on an existing row |
 |---|---|---|
 | Multi-row `INSERT ... ON CONFLICT DO UPDATE ... WHERE` (dialects with `SupportsOnConflictWhere`: PostgreSQL family, SQLite, DuckDB) | yes | row skipped, throws |
-| Per-entity `MERGE` fallback (SQL Server, Oracle, Db2, Snowflake, ...) | yes | row skipped, throws |
-| Multi-row `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL, MariaDB, TiDB, Aurora MySQL) | **no** | **row overwritten, no exception** |
+| Per-entity `MERGE` fallback (SQL Server, Oracle, Db2, Snowflake, SAP HANA, pengdows.flatfile) | yes | row skipped, throws |
+| Informix per-entity `MERGE` | not expressible (its `MERGE` has no conditional matched clause) | upsert of a `[Version]` entity throws `NotSupportedException` |
+| Multi-row `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL, MariaDB, TiDB, SingleStore, Aurora MySQL) | **no** | **row overwritten, no exception** |
 | Firebird `UPDATE OR INSERT ... MATCHING` | **no** | **row overwritten, no exception** |
 | Sybase ASE per-entity `MERGE` | yes | **row skipped, no exception** (ASE still reports 1 row affected) |
 
@@ -200,8 +201,8 @@ This keeps generated statements within provider limits without exposing a user-c
 
 ### Dialect Strategy / Fallback Rules
 
-- Batch insert uses a multi-row statement only when the dialect advertises `SupportsBatchInsert`; otherwise the gateway falls back to one container per entity. The multi-row shape is dialect-owned (`BuildBatchInsertSql`): most dialects emit `INSERT ... VALUES (...), (...)`; Oracle overrides it to emit `INSERT ALL INTO ... VALUES (...) ... SELECT 1 FROM DUAL`. **Oracle is a third case** (BP-309): it uses neither shape for `BuildBatchCreate`/`BatchCreateAsync` — an internal `SupportsArrayBinding` flag takes priority over `SupportsBatchInsert` there, producing one parameterized, single-row-shaped `INSERT` per chunk with each column bound to an array of per-row values (`OracleCommand.ArrayBindCount`), not the `INSERT ALL ... SELECT 1 FROM DUAL` multi-row-literal shape (Oracle's `BuildBatchInsertSql` override remains for other callers, e.g. `PrimaryKeyTableGateway`'s batch upsert fallback). An internal execution-strategy choice; the public contract is unchanged.
-- Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity. As of this writing, `SupportsBatchUpdate` is `true` for PostgreSQL/CockroachDB/YugabyteDB (`UPDATE ... FROM (VALUES ...)`), SQL Server (`MERGE ... USING (VALUES ...)`), Snowflake (`UPDATE ... FROM (VALUES ...)`, no target alias), and Oracle (`MERGE ... USING (SELECT ... FROM DUAL UNION ALL ...)` — Oracle has no `VALUES(...)` row-constructor table literal, so the MERGE source is built the same row-per-`SELECT ... FROM DUAL` shape as Oracle's own batch INSERT). All other dialects fall back to one update per entity. `PrimaryKeyTableGateway<TEntity>` batch update always builds one update container per entity.
+- Batch insert uses a multi-row statement only when the dialect advertises `SupportsBatchInsert`; otherwise the gateway falls back to one container per entity. `SupportsBatchInsert` is `false` for Firebird, InterBase, Informix, SAP HANA, Sybase ASE and Access (each rejects or lacks the multi-row `VALUES` form). The multi-row shape is dialect-owned (`BuildBatchInsertSql`): most dialects emit `INSERT ... VALUES (...), (...)`; Oracle overrides it to emit `INSERT ALL INTO ... VALUES (...) ... SELECT 1 FROM DUAL`. **Oracle is a third case** (BP-309): it uses neither shape for `BuildBatchCreate`/`BatchCreateAsync` — an internal `SupportsArrayBinding` flag takes priority over `SupportsBatchInsert` there, producing one parameterized, single-row-shaped `INSERT` per chunk with each column bound to an array of per-row values (`OracleCommand.ArrayBindCount`), not the `INSERT ALL ... SELECT 1 FROM DUAL` multi-row-literal shape (Oracle's `BuildBatchInsertSql` override remains for other callers, e.g. `PrimaryKeyTableGateway`'s batch upsert fallback). An internal execution-strategy choice; the public contract is unchanged.
+- Batch update uses dialect-specific SQL only when the dialect advertises `SupportsBatchUpdate`; otherwise it falls back to one update statement per entity. As of this writing, `SupportsBatchUpdate` is `true` for PostgreSQL/CockroachDB/YugabyteDB (`UPDATE ... FROM (VALUES ...)`; not Spanner, which inherits PostgreSQL's dialect but sets it to `false`), SQL Server (`MERGE ... USING (VALUES ...)`), Snowflake (`UPDATE ... FROM (VALUES ...)`, no target alias), and Oracle (`MERGE ... USING (SELECT ... FROM DUAL UNION ALL ...)` — Oracle has no `VALUES(...)` row-constructor table literal, so the MERGE source is built the same row-per-`SELECT ... FROM DUAL` shape as Oracle's own batch INSERT). All other dialects (MySQL family, SQLite, DuckDB, Firebird, InterBase, Db2, SAP HANA, Informix, Sybase ASE, pengdows.flatfile, Access, Spanner) fall back to one update per entity. `PrimaryKeyTableGateway<TEntity>` batch update always builds one update container per entity.
 - `TableGateway<T,TId>` batch update keys its WHERE/match condition on the `[Id]` column on every path, exactly like single-row `UpdateAsync`; `[PrimaryKey]` columns are ordinary updateable SET columns, and `[CreatedBy]`/`[CreatedOn]` are never written. An entity with no `[Id]` throws `NotSupportedException` — use `PrimaryKeyTableGateway<TEntity>` for `[PrimaryKey]`-only entities.
 - Batch upsert uses multi-row `ON CONFLICT` or `ON DUPLICATE KEY` only when the connected product advertises those capabilities; otherwise it falls back to one `BuildUpsert(...)` container per entity.
 - Batch delete by IDs uses chunked `WHERE ... IN (...)`.
@@ -233,7 +234,34 @@ This keeps generated statements within provider limits without exposing a user-c
 | MySQL-compatible products with `SupportsOnDuplicateKey` | multi-row `INSERT ... ON DUPLICATE KEY UPDATE ...` |
 | Products without either flag | per-entity `BuildUpsert(...)` fallback |
 
-That means SQL Server, Oracle, Firebird, and similar engines still support batch upsert through the batch API, but the batch is executed as a sequence of per-entity upsert containers rather than a single multi-row upsert statement.
+That means SQL Server, Oracle, Firebird, Snowflake, Db2, SAP HANA, Informix, Sybase ASE, pengdows.flatfile and similar engines still support batch upsert through the batch API, but the batch is executed as a sequence of per-entity upsert containers rather than a single multi-row upsert statement. InterBase and Access have no upsert statement at all, so a batch upsert (like a single upsert) throws `NotSupportedException`.
+
+### Per-database summary (all 23 `SupportedDatabase` values)
+
+Read from each dialect's capability flags (`SupportsBatchInsert`, `SupportsBatchUpdate`, `SupportsMerge`, `SupportsInsertOnConflict`, `SupportsOnDuplicateKey`):
+
+| Database | Multi-row batch create | Multi-row batch update | Batch upsert |
+|---|---|---|---|
+| SQL Server | yes (at most 1000 rows per statement) | yes (`MERGE ... USING (VALUES ...)`) | per-entity `MERGE` |
+| PostgreSQL (and Aurora PostgreSQL) | yes | yes (`UPDATE ... FROM (VALUES ...)`) | multi-row `ON CONFLICT` |
+| CockroachDB, YugabyteDB | yes | yes | multi-row `ON CONFLICT` (no `MERGE`) |
+| Spanner (PostgreSQL interface) | yes | no | multi-row `ON CONFLICT` (primary-key target only) |
+| MySQL (and Aurora MySQL), MariaDB, SingleStore | yes | no | multi-row `ON DUPLICATE KEY UPDATE` |
+| TiDB | yes | no | multi-row `ON DUPLICATE KEY UPDATE` (per row for a `BIT`-risk column, see above) |
+| Oracle | yes (array binding, one statement per chunk) | yes (`MERGE ... USING (SELECT ... FROM DUAL ...)`) | per-entity `MERGE` |
+| SQLite, DuckDB | yes | no | multi-row `ON CONFLICT` |
+| Firebird | no | no | per-entity `UPDATE OR INSERT ... MATCHING` |
+| InterBase | no | no | not supported (no upsert statement) |
+| Snowflake | yes (at most 16384 rows) | yes (`UPDATE ... FROM (VALUES ...)`) | per-entity `MERGE` |
+| Db2 (LUW) | yes | no | per-entity `MERGE` |
+| SAP HANA | no | no | per-entity `MERGE` |
+| Informix | no | no | per-entity `MERGE` (not for `[Version]` entities) |
+| Sybase ASE | no | no | per-entity `MERGE` |
+| pengdows.flatfile | yes | no | per-entity `MERGE` |
+| Access | no | no | not supported |
+| Unknown (SQL-92 fallback dialect) | yes | no | not supported |
+
+`PrimaryKeyTableGateway<TEntity>` builds one update container per entity on every database (see above).
 
 ## What Is Not Implemented
 

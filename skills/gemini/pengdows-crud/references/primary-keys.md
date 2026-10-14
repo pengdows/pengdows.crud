@@ -225,7 +225,7 @@ pengdows.crud enforces this philosophy through its attribute system:
 | Only `[PrimaryKey]` (no `[Id]`) | `PrimaryKeyTableGateway<TEntity>` — all ops keyed on business columns |
 | Both `[Id]` + `[PrimaryKey]` on different columns | `TableGateway<TEntity, TRowID>` |
 
-`PrimaryKeyTableGateway<TEntity>` is ideal for junction tables, legacy schemas, and DBA-owned tables with natural keys. It provides the same three-tier API (Build/Load/Convenience) without requiring a surrogate `[Id]` column.
+`PrimaryKeyTableGateway<TEntity>` is ideal for junction tables, legacy schemas, and DBA-owned tables with natural keys. It provides the same three-tier API (Build/Load/Convenience) without requiring a surrogate `[Id]` column. The constructor throws `InvalidOperationException` if the entity has no `[PrimaryKey]` column.
 
 ### Flexible CRUD Operations
 

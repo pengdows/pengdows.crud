@@ -13,10 +13,10 @@ otherwise below.
 
 | Cache | Scope | Key | Bound | Notes |
 |---|---|---|---|---|
-| `DataReaderMapper._planCache` | Static, process-wide | `PlanCacheKey(Type, SchemaHash, ColumnsOnly, EnumMode)` — `SchemaHash` is a 64-bit arithmetic hash of the column names+types | 128 (`MaxPlanCacheSize`) | `DataReaderMapper` is public and externally reachable (`DataReaderMapper.Instance`, see `docs/data-reader-mapper.md`) — this cache backs its own hydration path, separate from gateway hydration's `_readerPlans` below. Not tenant-cardinality-related; keyed by entity type + result shape. |
+| `DataReaderMapper._planCache` | Static, process-wide | `PlanCacheKey(Type, RecordsetShape, ColumnsOnly, EnumMode, Coercion)` — `RecordsetShape` is the structural column names+types of the result set, compared by value, not a hash | 128 (`MaxPlanCacheSize`) | `DataReaderMapper` is public and externally reachable (`DataReaderMapper.Instance`, see `docs/data-reader-mapper.md`) — this cache backs its own hydration path, separate from gateway hydration's `_readerPlans` below. Not tenant-cardinality-related; keyed by entity type + result shape. |
 | `DataReaderMapper._setterCache` | Static, process-wide | `SetterCacheKey` (property-level) | 512 (`MaxSetterCacheSize`) | Same as above. |
 | `DataReaderMapper._propertyLookupCache` | Static, process-wide | `PropertyLookupCacheKey` | 64 (`MaxPropertyLookupCacheSize`) | Same as above. |
-| `BaseTableGateway._readerPlans` | Per-gateway-instance | `long` hash of the recordset shape (column count, names case-insensitively, and field types, via `System.HashCode`) | Configurable via `ReaderPlanCacheSize`, default 32 (`DefaultReaderPlanCapacity`) | **Not tenant-cardinality-bound and doesn't need to be** — captured once at gateway construction (CORE-019: intentional, not a gap), keyed by result-set shape, which is a property of the query/entity, not of which tenant executed it. One singleton gateway serving 10,000 tenants still has at most a few dozen distinct shapes. |
+| `BaseTableGateway._readerPlans` | Per-gateway-instance | `ReaderPlanKey(RecordsetShape, TypeCoercionOptions)` — the structural recordset shape (column names and field types, compared by value) plus the reading context's coercion options | Configurable via `ReaderPlanCacheSize`, default 32 (`DefaultReaderPlanCapacity`) | **Not tenant-cardinality-bound and doesn't need to be** — captured once at gateway construction (CORE-019: intentional, not a gap), keyed by result-set shape, which is a property of the query/entity, not of which tenant executed it. One singleton gateway serving 10,000 tenants still has at most a few dozen distinct shapes. |
 | `BaseTableGateway._columnListCache` | Per-gateway-instance | `string` | 100 (`MaxCacheSize`) | Same tenant-independence reasoning as `_readerPlans`. |
 | `BaseTableGateway._queryCache` | Per-gateway-instance, two-level | Outer: `ConditionalWeakTable<ISqlDialect, BoundedCache<string,string>>` keyed by **dialect instance**; inner: `BoundedCache` capped at 100 per dialect instance | Outer table holds one entry per live dialect instance, reclaimed by the GC once that dialect (and the `DatabaseContext` that owns it) is no longer referenced | **This is the multi-tenant cache-design point**: keying by dialect instance (not by the coarse `SupportedDatabase` enum) is deliberate — two tenants on *different* versions of the same engine (e.g. MySQL 8.0.19 vs. 8.0.33) can never share SQL text that was generated for the other's version. The cost is redundancy: each tenant context has its own dialect instance, so N live tenant contexts on the same engine+version each build and hold their own inner cache (at most 100 short strings each), rather than sharing one. The `ConditionalWeakTable` keeps this from becoming a leak — entries for disposed/unreferenced tenant contexts are collected, not retained for the process lifetime. |
 | `BaseTableGateway._whereParameterNames` | Per-gateway-instance, two-level | Same dialect-instance-keyed `ConditionalWeakTable` structure as `_queryCache` | Same reasoning | Same as `_queryCache`. |
@@ -35,12 +35,9 @@ tenant identity baked in.
 `Equals`/`GetHashCode` contract for its key type, and the dialect-instance-keyed tables use
 reference identity — for string-, type-, and instance-keyed caches a hash collision resolves
 correctly via `Equals` and never returns the wrong entry. The two **shape-keyed** reader-plan caches
-are the exception: `BaseTableGateway._readerPlans` is keyed by the shape hash itself (a `long`
-widened from a 32-bit `HashCode`), and `DataReaderMapper._planCache`'s key embeds a 64-bit
-`SchemaHash` rather than the column list. Neither re-verifies the actual column names/types on a
-hit, so two distinct result shapes whose hashes collide would share a compiled plan. The
-probability is very low at these cache sizes, but it is a hash-equality guarantee, not a
-structural one.
+(`BaseTableGateway._readerPlans` and `DataReaderMapper._planCache`) key on the structural
+`RecordsetShape` (the actual column names and types) rather than a hash of it, so two distinct
+result shapes whose hashes collide still compare unequal and never share a compiled plan.
 
 ## Context-derived generation contract
 

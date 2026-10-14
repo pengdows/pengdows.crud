@@ -22,7 +22,7 @@ iterator method — no custom buffering, no prefetch queue:
 public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc,
     [EnumeratorCancellation] CancellationToken cancellationToken)
 {
-    await using var reader = await sc.ExecuteReaderAsync(CommandType.Text, cancellationToken)
+    await using var reader = await OpenHydrationReaderAsync(sc, singleRow: false, cancellationToken)
         .ConfigureAwait(false);
     HybridRecordsetPlan? plan = null;
     while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -33,6 +33,9 @@ public async IAsyncEnumerable<TEntity> LoadStreamAsync(ISqlContainer sc,
     }
 }
 ```
+
+(The `LoadStreamAsync(sc)` overload is the same loop with `CancellationToken.None`;
+`OpenHydrationReaderAsync` opens the reader the way gateway hydration does.)
 
 `RetrieveStreamAsync` (`TableGateway.Core.cs`) builds its own container internally
 (`GetRetrieveContainer`, disposed via `await using`) and delegates to `LoadStreamAsync`.
@@ -67,7 +70,7 @@ a parameter actually threads an external token into the iterator body. `Retrieve
 always has this. `LoadStreamAsync` has two overloads:
 
 - `LoadStreamAsync(sc)` — no cancellation parameter; internally passes `CancellationToken.None` to
-  `ExecuteReaderAsync`/`ReadAsync`. Calling `.WithCancellation(token)` on the `IAsyncEnumerable`
+  the reader open and `ReadAsync`. Calling `.WithCancellation(token)` on the `IAsyncEnumerable`
   this returns has **no effect** — without a `[EnumeratorCancellation]` parameter on the iterator
   method itself, `WithCancellation`'s token is never delivered into the method body. Use the other
   overload if you need real cancellation.
@@ -108,8 +111,8 @@ pass the transaction as the container's context like any other operation. The co
 (`SqlContainer.ExecuteReaderAsync` transfers the context lock to the returned `TrackedReader`,
 which releases it only on disposal; see also [`transactions.md`](./transactions.md)'s connection
 sharing section). Streaming inside a transaction means
-**the transaction is locked against every other operation — including `CommitAsync`,
-`RollbackAsync`, and any other command — for the entire time you're enumerating the stream**, not
+**the transaction is locked against every other operation — including `Commit`/`CommitAsync`,
+`Rollback`/`RollbackAsync`, and any other command — for the entire time you're enumerating the stream**, not
 just for the initial query execution. Fully consume (or explicitly dispose) the stream before
 issuing any other operation on that transaction, exactly as you would for a plain
 `ExecuteReaderAsync` result.

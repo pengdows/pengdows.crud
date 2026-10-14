@@ -616,7 +616,8 @@ suite passed on net10 and net8). 3.0 takes the same fixes after 2.0.6 ships.
 ## Code review of 2.0.6 vs `main`, third pass (2026-10-03)
 
 Fresh review of `c8835796..HEAD` (8 parallel slice reviews plus a measured de/serialization
-performance pass; every P0/P1 below re-checked against the code, several reproduced). All Open.
+performance pass; every P0/P1 below re-checked against the code, several reproduced). Every row is now
+Fixed or Done (see its Status column); the pass opened with all of them Open.
 "Live" = reproduced against the real database in the integration environment.
 
 | ID | Sev | Finding | Status |
@@ -657,7 +658,8 @@ string → `DateTime` column +230 ns (see REV-059); public `MapReaderToObject` r
 ## Code review of the 2026-10-04 changes (`9be016d7..HEAD`, fourth pass)
 
 Review per REVIEW_POLICY.md of the 34 commits since `9be016d7` (four parallel slice reviews; every
-P0/P1 re-checked against the code). Verdict: MERGE NO until REV-068/069 are fixed. All Open. Live
+P0/P1 re-checked against the code). Verdict when written: MERGE NO until REV-068/069 are fixed; both are Fixed
+(2026-10-04), as is every other row below (see its Status column). Live
 integration at the end of the day: 419/424 passed, only the tracked type-matrix items failed
 (WRT-001/004-007/010).
 
@@ -736,7 +738,7 @@ repositories (pengdows.hangfire `FUTURE_WORK.md`, pengdows.messaging `ROADMAP.md
 | DRY-007 | `EnumParseFailureMode.SetNullAndLog` meant three things: `TypeCoercionHelper` returned null even for a non-nullable property (DataReaderMapper then failed to unbox it), and the gateway gave the default without logging | **Fixed** 2026-10-04: one rule on every path, null where the property is nullable and the enum's default otherwise, with `LogEnumFailure` logging for `SetNullAndLog`. Two tests that pinned the null for non-nullable properties now expect the default (`ReadPathParityTests.UnreadableEnum_*`, `Gateway_SetNullAndLog_LogsTheUnreadableEnum`) |
 | DRY-008 | Two typed-getter tables (`CompiledMapperFactory.GetReaderMethod`, `DataReaderMapper.TypedGetter`, the latter reflecting on every call) and four lookups of `DbDataReader.GetFieldValue<T>` (`DataReaderMapper`, `ProviderValueFieldReader`, `IntervalFieldReader`, `InetFieldReader`) | **Fixed** 2026-10-04 (refactor): `ReaderGetters` holds the table, the cached lookups and `GetValue`; DataReaderMapper still skips Int64 (Informix) and decimal (HANA) |
 | DRY-009 | Read-path duplication still open after DRY-001..008, from the 2026-10-04 inventory: (1) `DataReaderMapper` reads the provider's reader, not `TrackedReader`, so it skips its workarounds (Informix `GetInt64`, out-of-range decimals, the Npgsql timestamp fallbacks, unreadable-value translation); the live type matrix covers it on 19 databases, so no wrong value is known; (2) Guid bytes are still decoded in `GuidCoercion` (always mixed-endian, reachable only for `ArraySegment<byte>`), `ConvertWithCache` and `ProviderValueFieldReader.ReadGuidBytes`; (3) a wide integer into `double` rounds in `TypeCoercionHelper` but truncates in `WideIntegerFieldReader.ReadDouble` (Snowflake `NUMBER` beyond Int64 on the gateway); (4) three copies of stream materialization; `InetFieldReader`/`IntervalFieldReader` are near-copies; (5) `Coerce(IColumnInfo)`/`ResolveCoercer(IColumnInfo)`/`CoerceJsonValue` are reached only by tests (decide with COR-007) | **Partly done** 2026-10-04: (2) an `ArraySegment<byte>` Guid is now decoded in the dialect's byte order with the other byte forms (`GuidByteOrderTests`; it fell through to the mixed-endian coercion); (3) `WideIntegerFieldReader.ReadDouble` now parses the digits, rounding to nearest like `TypeCoercionHelper` (it truncated: `ulong.MaxValue` read as 1.844674407370955E+19 on the gateway; `WideIntegerColumnReadTests`); (5) `CoerceJsonValue` is now reached from `CoerceCore` too (COR-007); (4) the byte[] coercion uses `LargeObjectParameter.ReadAll` and `InetFieldReader`/`IntervalFieldReader` became one `NpgsqlTypedFieldReader` with two instances. **Done**: (1) is left by decision: the live type matrix runs `DataReaderMapper` on every enabled database with no wrong value, the getter exclusions it needs (Informix Int64, HANA decimal) are applied since DRY-008, and an out-of-range Informix decimal still fails loudly (`IsDBNull` throws, reported as `DataMappingException` in strict mode); routing every value through `TrackedReader` would add an indirection per value for no observed difference |
-| DRY-010 | **One type system** (user directive 2026-10-05: "type coercion really needs to be complete, finished, and centralized"). Today three mechanisms overlap: `CoercionRegistry` (read-only in practice: its write side is never called in production), `AdvancedTypeRegistry` converters (the live write path; their read side is mostly shadowed because `CoerceCore` asks the coercion registry first) and special cases in `TypeCoercionHelper`, re-implemented again in the mappers, value objects, field readers and dialect `CreateDbParameter` overrides. Plan, one commit per stage: (0) pin behaviour with read/write parity tests; (1) delete dead code (coercion write path, `Coerce`/`ResolveCoercer` `IColumnInfo` overloads = DRY-002's remainder, shadowed `IntRange`/`DateTimeRange` coercions, unreachable `DateTimeCoercion`/`DateTimeOffsetCoercion`, test-only 3-argument `ResolveCoercer`); (2) fix the drift bugs DRY-011..015; (3) centralize on `AdvancedTypeRegistry` + `TypeCoercionHelper`: converters own read and write, the remaining coercions fold into them, dialect value quirks become provider mappings in the dialect's traits, one plan-time read resolver for every read path, one numeric expression builder, one helper per primitive (DateTime normalization x4, spatial SRID, binary/Guid reads, value to JSON); (4) a completeness test (every supported CLR type has a read and a write path on every database, or an explicit "not supported" with the reason) and `docs/type-handling.md` | **Done** 2026-10-05, unit-verified; live matrix re-run pending: stage 0 pins (41241abe), 1 dead code (f85f076c), 2 drift fixes (DRY-011..015), 3 one reader per type (4da8c55f) plus the dirty-check, mapper and dialect dedupes (ad5f4b68, a040b9f3, 527fef4b, 462f7fdb), 4 `TypeCompletenessTests` and the generated docs/type-support-matrix.md; its findings are DRY-021..023 |
+| DRY-010 | **One type system** (user directive 2026-10-05: "type coercion really needs to be complete, finished, and centralized"). Today three mechanisms overlap: `CoercionRegistry` (read-only in practice: its write side is never called in production), `AdvancedTypeRegistry` converters (the live write path; their read side is mostly shadowed because `CoerceCore` asks the coercion registry first) and special cases in `TypeCoercionHelper`, re-implemented again in the mappers, value objects, field readers and dialect `CreateDbParameter` overrides. Plan, one commit per stage: (0) pin behaviour with read/write parity tests; (1) delete dead code (coercion write path, `Coerce`/`ResolveCoercer` `IColumnInfo` overloads = DRY-002's remainder, shadowed `IntRange`/`DateTimeRange` coercions, unreachable `DateTimeCoercion`/`DateTimeOffsetCoercion`, test-only 3-argument `ResolveCoercer`); (2) fix the drift bugs DRY-011..015; (3) centralize on `AdvancedTypeRegistry` + `TypeCoercionHelper`: converters own read and write, the remaining coercions fold into them, dialect value quirks become provider mappings in the dialect's traits, one plan-time read resolver for every read path, one numeric expression builder, one helper per primitive (DateTime normalization x4, spatial SRID, binary/Guid reads, value to JSON); (4) a completeness test (every supported CLR type has a read and a write path on every database, or an explicit "not supported" with the reason) and `docs/type-handling.md` | **Done** 2026-10-05, unit-verified; live matrix re-run pending: stage 0 pins (41241abe), 1 dead code (f85f076c), 2 drift fixes (DRY-011..015), 3 one reader per type (4da8c55f) plus the dirty-check, mapper and dialect dedupes (ad5f4b68, a040b9f3, 527fef4b, 462f7fdb), 4 `TypeCompletenessTests` and the generated docs/type-support-matrix.md; its findings are DRY-021..023. (Stage 4's planned `docs/type-handling.md` was not created; `docs/type-support-matrix.md` and `docs/advanced-types.md` carry that content.) |
 | DRY-011 | `GeographyConverter.ExtractSridFromEwkb` reads the SRID but returns the EWKB unchanged (flag and SRID still in the WKB); `GeometryConverter`'s copy strips them (TYPE-002). `GeographyCoercion` (`AdvancedCoercions.cs`) and `GeographyConverter.FromBinary` use the broken copy; PostgreSQL calls the Geometry one. The text and GeoJSON SRID helpers are copied too, and the `SRID=` prefix is parsed in three more places | **Fixed** 2026-10-05 (f69d26e2): one SRID helper (GeometryConverter's) serves both spatial types; EWKB read as a Geography is plain WKB with its SRID. `SpatialSridDriftTests` |
 | DRY-012 | Value-object parsing copied into converters, drifted: `InetConverter`/`CidrConverter` copy `Inet.Parse`/`Cidr.Parse`; `IntervalYearMonthConverter`/`IntervalDaySecondConverter` copy the value objects' `Parse` but take only upper-case unit letters. Inet/Cidr/MacAddress/RowVersion read logic exists twice (coercion and converter) with different accepted inputs | **Fixed** 2026-10-05 (f69d26e2, ea6ce06d, 4da8c55f): one strict parser per interval type reads every written/returned form to the tick, anything else fails; Inet/Cidr/MacAddress/RowVersion are read by their converters alone. `IntervalParsingTests`, `OneReaderPerTypeTests` |
 | DRY-013 | Two range grammars: `Range<T>.Parse`/`ToString` and `PostgreSqlRangeConverter.Parse`/`FormatRange` differ on error (throw vs Empty), element parsing and formatting (", " vs ","). `PostgreSqlRange{Int,DateTime,Long}Coercion` are one class three times | **Fixed** 2026-10-05 (ea6ce06d): one range grammar (`Range<T>.TryParseText`/`ToCanonicalText`), bounds through TypeCoercionHelper, unbounded bounds stay unbounded; the three range coercions deleted. `RangeGrammarTests` |
@@ -880,7 +882,7 @@ acquire path, no clock reads when metrics are off) and the public-surface audit 
 | CR5-006 | P1 | The stale-registration guard in the cached sync waiter had no test (a mutation survived). | Test-only hook holds a cancellation callback in flight; the mutation is now caught. |
 | CR5-007 | P1 | Two methods took five parameters (policy 5B). | The per-attempt flags are one small struct; costs 1-5% (0.3-2.3 ns) on the uncontended acquire. |
 | CR5-008 | P2 | The metrics collector read the Stopwatch while the reader's timestamps came from the injected clock. | The reader supplies all three timestamps; `MetricsClock` refuses a clock at another frequency. |
-| CR5-010 | P0 as rated by the separate review pass; P1 by the author | `ITrackedReader` publicly inherits `System.Data.IDataReader` (and `IDataRecord`) and is what `ISqlContainer.ExecuteReaderAsync` returns, so a System.Data reader interface is reachable; the new guard checked member outputs only, not base types, and could not see it. | The guard gap is fixed: `NoPublicTypeInheritsARawAdoNetType_ExceptTheGovernedReaderLease` inspects interfaces and base types and allows exactly `ITrackedReader` (mutation-checked: emptying the allowlist fails on it). The policy now says what "raw" means (the provider's own object, or a public type inheriting one) and names the sanctioned form, a governed lease wrapper. Not a leak of the provider's reader: the type documents lease semantics (holds the connection lock until disposed) and the raw reader never leaves the library. Whether it should keep inheriting `IDataReader` is API-010. |
+| CR5-010 | P0 as rated by the separate review pass; P1 by the author | `ITrackedReader` publicly inherits `System.Data.IDataReader` (and `IDataRecord`) and is what `ISqlContainer.ExecuteReaderAsync` returns, so a System.Data reader interface is reachable; the new guard checked member outputs only, not base types, and could not see it. | The guard gap is fixed: `NoPublicTypeInheritsARawAdoNetType_ExceptTheGovernedReaderLease` inspects interfaces and base types and allows exactly `ITrackedReader` (mutation-checked: emptying the allowlist fails on it). The policy now says what "raw" means (the provider's own object, or a public type inheriting one) and names the sanctioned form, a governed lease wrapper. Not a leak of the provider's reader: the type documents lease semantics (holds the connection lock until disposed) and the raw reader never leaves the library. Whether it should keep inheriting `IDataReader` was API-010, closed 2026-10-10: it stays. |
 | CR5-009 | P2 | Test adequacy: long-timeout tests passed vacuously if the thread started late; timing bounds could flake; a failed writer attempt leaving its writer interest behind was unobserved. | Tests wait for the waiter to be queued; bounds compare against the timeout, then dropped in favour of the timeout counters; new writer-interest test (mutation-checked). |
 
 Also from the separate review pass: a real-PostgreSQL integration test that queues a read with a 60-day
@@ -889,8 +891,9 @@ Also from the separate review pass: a real-PostgreSQL integration test that queu
 Evidence: 11,284 unit tests on net8.0 and net10.0; full integration matrix on `306f6957` (17 databases, both
 frameworks, 5,861 passed each) with one failure everywhere, **`Db2NativeLibraryBootstrapTests.TheModuleInitializerRegistersOnce_AndRegisteringAgainChangesNothing`**
 ("expected 1, got 2"). That test is **pre-existing**: the identical single-database run at `1914dad0` fails the same
-way, it passes when run alone, and no commit in this range touches it or the Db2 bootstrap. Open: fix it (it
-interacts with another test in the same process).
+way, it passes when run alone, and no commit in this range touches it or the Db2 bootstrap. Fixed afterwards by
+9a1e3bc8 ("Db2 bootstrap adds clidriver dirs to LD_LIBRARY_PATH only once across assembly copies": it changes
+`testbed/Db2/Db2NativeLibraryBootstrap.cs` and adds a case to `Db2NativeLibraryBootstrapTests`); not re-run by the 2026-10-13 audit.
 
 Integration re-run on the final code, after the public-surface pull-back (`d479482b`): 17 databases on each
 framework, 5,861 and 5,860 passed, the same counts as before the pull-back; the pre-existing Db2 bootstrap failure on
@@ -1087,13 +1090,11 @@ buffer `N` rows at a time rather than pre-splitting the full list.
 
 ## Session Settings
 
-The `SessionSettingsPreamble` property on `IDatabaseContext` is marked `[Obsolete]`.
-The replacement (`GetBaseSessionSettings()` / `GetReadOnlySessionSettings()`) is implemented.
-Remove `SessionSettingsPreamble` from the interface in the next major version. **Done on 3.0**
-(no longer public there; only an internal extension remains). Stays `[Obsolete]` on 2.0.x.
-
-Tracked usage: `benchmarks/CrudBenchmarks/ViewPerformanceBenchmarks.cs:131` (generates a
-build warning today; `WarningsAsErrors` is off for that project).
+**Done** (checked 2026-10-13). `SessionSettingsPreamble` is not a member of `IDatabaseContext` on 2.0.5 (tag `v2.0.5`)
+or on 2.0.6: only the internal extension `GetSessionSettingsPreamble()`
+(`pengdows.crud/internal/InternalSessionSettingsExtensions.cs`) remains. The public replacement is
+`GetBaseSessionSettings()` / `GetReadOnlySessionSettings()` (`PublicAPI.Shipped.txt`). The earlier
+tracked usage in `benchmarks/CrudBenchmarks/ViewPerformanceBenchmarks.cs` no longer exists.
 
 ---
 
@@ -1224,12 +1225,12 @@ under `benchmarks/CrudBenchmarks/results/`). The gate can already resize:
 leases are out (lowering never revokes a lease, raising admits queued waiters) and is covered by race tests.
 What is missing is the wiring and the policy.
 
-**Prerequisite (2.0.6; written and green, not yet committed).** A refusal reached the caller as
+**Prerequisite (2.0.6; committed as ec65b1e0).** A refusal reached the caller as
 `TooManyConnectionsException` from commands but not from `BeginTransaction`: `TransactionContext` threw the raw
 provider exception from the open step and wrapped a refused begin in a generic `TransactionException`.
 The fix (a shared `SqlContainer.TranslateProviderFailure` used by both `TransactionContext` paths) and
 `ConnectionLimitRefusalSurfacingTests` (9 cases, every entry point) pass on net8.0 and net10.0 (11,294 unit
-tests), but they are not in `HEAD` yet: they land in 2.0.6 as their own commit before any adaptive work starts.
+tests), and are in `HEAD` as their own commit, ahead of any adaptive work.
 
 **The idea: a refused caller never leaves its place.** Work is not dequeued until it holds a successful
 connection. When an open is refused, the caller **keeps its permit**, the limit is lowered, and the caller retries
@@ -1685,7 +1686,11 @@ What's left:
 ### P2
 
 - **SQL Server pays a live session-settings SET round trip on every operation under
-  `DbMode.Standard`, unlike PostgreSQL.** Quantified by
+  `DbMode.Standard`, unlike PostgreSQL.** *Status note, 2026-10-13: superseded for modern
+  servers. `SqlServerDialect.GetSqlServerSessionSettings` reads the database's compatibility level and,
+  at 90 or above, returns an empty script (the driver's login sequence and `sp_reset_connection` already
+  guarantee the baseline), so only a pre-2005 level or an unreadable level still pays the SET; the
+  measurement below predates that.* Quantified by
   `benchmarks/CrudBenchmarks/results/sqlserver-equal-footing-run-2026-08-13.md`: under
   `DbMode.Standard` (a fresh ephemeral connection per operation), pengdows is consistently
   ~1.4-2.0x slower than Dapper (and, unusually, slower than EF Core too) against SQL
@@ -2114,7 +2119,8 @@ value back into the caller's entity today. This splits into two cases with very 
 fixability:
 - **App-managed integer/counter version** (`SET version = version + 1`) — pengdows computed that
   increment itself and knows the exact new value with certainty. Free fix (no round trip): write
-  it back to the entity on success. Not yet done.
+  it back to the entity on success. **Done on 2.0.6** (BP-203; `BaseTableGateway.Version.cs`
+  `WriteBackIncrementedVersion`).
 - **DB-managed `rowversion`/`timestamp`** (`byte[]`, already correctly excluded from the SET
   clause — see `TableGateway.Sql.cs`'s "DB handles increment" comment) — the new value is
   generated server-side. There's no free fix; closing this needs either `OUTPUT`/`RETURNING`
@@ -2139,8 +2145,10 @@ Detected optimistic-concurrency failure         FIXED
 0-row non-throwing failure                      FIXED
 Post-write-success failure (must NOT restore)   FIXED, flag placed at the true write boundary
 Build mutates prepared entity state             BY DESIGN — documented above, not a defect
-Partial batch failure                           STILL OPEN — see above
-Entity freshness after a successful write       SEPARATE OPTIONAL CAPABILITY — see above
+Partial batch failure                           FIXED — see "Implemented — partial batch failure" above
+Numeric [Version] write-back after success      FIXED (BP-203, WriteBackIncrementedVersion); opaque byte[]/RowVersion
+                                                values are DB-generated and not written back
+Entity freshness after a successful write       SEPARATE OPTIONAL CAPABILITY (DB-generated values) — see above
 ```
 
 
@@ -2179,7 +2187,9 @@ Root cause of #3/#4: `SupportsMerge` is overloaded to mean both "in the merge-sy
 version-gated SQL:2003-level support) but needs `false` for the second everywhere it's consumed,
 so every consumer had bolted on its own `!= Firebird` patch instead of asking a single capability.
 
-**Fix:** three new `ISqlDialect` capabilities, following the exact pattern the codebase already
+**Fix:** three new `ISqlDialect` capabilities (*on 2.0.6 they live on the internal `IInternalSqlDialect`,
+`pengdows.crud.abstractions/dialects/IInternalSqlDialect.cs`, because adding them to `ISqlDialect` was not semver-safe: REV-020*),
+following the exact pattern the codebase already
 uses successfully for `GeneratedKeyPlan` and `InsertReturningClauseBeforeValues` — declared as
 C# 8 default-interface-method properties (so only dialects that differ from the default need to
 override), with a matching `public virtual` declaration on the `SqlDialect` base class (required
@@ -2283,10 +2293,10 @@ WarmupCount=5`, all fakeDb/in-memory, no real I/O). Results:
 - **Dialect capability property reads:** SQL Server ANSI-MERGE and Firebird MATCHING-MERGE builds
   differ by ~1% between baseline and current, fully inside noise — consistent with a virtual
   property read costing the same as the enum comparison it replaced.
-- **Fingerprint caching (multitenancy fix):** not independently isolated in a per-call benchmark —
-  it's already committed on `2.0.6` HEAD (not part of this session's uncommitted diff), and
-  architecturally it's a one-time-per-dialect-fingerprint cost (`Lazy`-cached template building via
-  `ConcurrentDictionary<string, T>`), so a per-call `CreateAsync`/`BuildUpsert` benchmark wouldn't
+- **Dialect-keyed template caching (multitenancy fix):** not independently isolated in a per-call benchmark.
+  (As written on 2026-08-14 this described fingerprint-keyed `ConcurrentDictionary<string, T>` caches; on 2.0.6
+  the gateway caches are still keyed by dialect instance in `ConditionalWeakTable<ISqlDialect, ...>`, see the
+  follow-up above, so the cost is one template build per live dialect instance.) Either way it is a one-time cost, so a per-call `CreateAsync`/`BuildUpsert` benchmark wouldn't
   show it regardless. Allocated bytes were flat across all three benchmarked states, consistent
   with no added steady-state cost. If a dedicated cache-hit-rate/warm-up benchmark is wanted later,
   it isn't built yet.
@@ -2302,8 +2312,8 @@ Maintainer direction (2026-10-13): Microsoft.Data.Sqlite is the SQLite provider 
 
 | ID | Item | Status |
 |---|---|---|
-| SQLITE-001 | **A pragma the caller sets on a pooled connection outlives the checkout.** pengdows.crud re-asserted only `foreign_keys` on every checkout, so `PRAGMA query_only = ON` run through a container was still set when Microsoft.Data.Sqlite's pool handed the same physical connection to a later write, which failed with `ReadOnlyViolationException` (SQLite error 8). | **Done** on 2.0.6 (2026-10-13): `SqliteDialect.GetBaseSessionSettings()` is now `PRAGMA foreign_keys = ON; PRAGMA query_only = OFF;`, in the same command, for read and write checkouts alike. `query_only` is never turned ON: SQLite refuses `BEGIN IMMEDIATE` on a `query_only` connection and Microsoft.Data.Sqlite begins every transaction that way, so read-only stays `Mode=ReadOnly`. `SqliteQueryOnlySessionTests`. Other pragmas a caller changes (`journal_mode`, `synchronous`, ...) are still not re-asserted. |
-| SQLITE-002 | **`SQLitePCLRaw.lib.e_sqlite3` known high-severity advisory** ([GHSA-2m69-gcr7-jv3q](https://github.com/advisories/GHSA-2m69-gcr7-jv3q)), reported by `NU1903` on restore. The benchmarks project resolves 2.1.6 (Microsoft.Data.Sqlite 8.0.11); Microsoft.Data.Sqlite 9.0.5 resolves 2.1.10. Newer stable releases exist (2.1.12 on 2026-07-14, 2.1.13 on 2026-08-13). Not yet traced: which package versions reach the library, tests and testbed, and which release fixes the advisory. | Open |
+| SQLITE-001 | **A pragma the caller sets on a pooled connection outlives the checkout.** pengdows.crud re-asserted only `foreign_keys` on every checkout, so `PRAGMA query_only = ON` run through a container was still set when Microsoft.Data.Sqlite's pool handed the same physical connection to a later write, which failed with `ReadOnlyViolationException` (SQLite error 8). | **Done** on 2.0.6 (2026-10-13): `SqliteDialect.GetBaseSessionSettings()` is now `PRAGMA foreign_keys = ON; PRAGMA query_only = OFF;`, in the same command, for read and write checkouts alike (plus `PRAGMA synchronous = NORMAL;` when the file is in WAL: SQLITE-006, `SqliteDialect.GetBaseSessionSettings`). `query_only` is never turned ON: SQLite refuses `BEGIN IMMEDIATE` on a `query_only` connection and Microsoft.Data.Sqlite begins every transaction that way, so read-only stays `Mode=ReadOnly`. `SqliteQueryOnlySessionTests`. Other pragmas a caller changes (`journal_mode`, `synchronous`, ...) are still not re-asserted. |
+| SQLITE-002 | **`SQLitePCLRaw.lib.e_sqlite3` known high-severity advisory** ([GHSA-2m69-gcr7-jv3q](https://github.com/advisories/GHSA-2m69-gcr7-jv3q)), reported by `NU1903` on restore. The benchmarks project resolves 2.1.6 (Microsoft.Data.Sqlite 8.0.11); Microsoft.Data.Sqlite 9.0.5 resolves 2.1.10. Newer stable releases exist (2.1.12 on 2026-07-14, 2.1.13 on 2026-08-13). Not yet traced: which package versions reach the library, tests and testbed, and which release fixes the advisory. Traced for the benchmarks project only: `benchmarks/CrudBenchmarks/CrudBenchmarks.csproj` pins `SQLitePCLRaw.bundle_e_sqlite3` 2.1.12 (its comment: bundles SQLite 3.53.3, past the 3.50.2 fix). `pengdows.crud.Tests` references Microsoft.Data.Sqlite 10.0.11 and the testbed 9.0.5 with `SQLitePCLRaw.bundle_e_sqlite3` 3.0.3; those were not traced. | Open |
 | SQLITE-003 | **Use the provider's own `GetSchema("DataSourceInformation")`.** The maintainer's change is merged in dotnet/efcore `main`, but no release carries it as of 2026-10-13: Microsoft.Data.Sqlite 8.0.11, 9.0.5, 10.0.11, 10.0.12 and 11.0.0-rc.1 all throw `ArgumentException: The requested collection 'DataSourceInformation' is not defined`. When a release has it, `SqliteDialect.GetDataSourceInformationSchema` can prefer the provider's answer and keep the embedded `Sqlite.schema.xml` as the fallback for older packages. Re-run the probe against each new 11.0 release to find the first one. | Waiting on an upstream release |
 | SQLITE-004 | **Drop System.Data.SQLite support (3.0).** `SqliteDialect` still branches on `_systemDataSqlite` (the max-pool-size keyword, external pooling). Removing shipped support is a 3.0 change under the semver rule. | 3.0 only |
 | SQLITE-005 | **Transactions rely on Microsoft.Data.Sqlite's default `BEGIN IMMEDIATE`.** Verified 2026-10-13 on 8.0.11, 9.0.5 and 10.0.11: `BeginTransaction()`, `ReadCommitted`, `RepeatableRead` and `Serializable` take the write lock at BEGIN; `ReadUncommitted` does not, and pengdows.crud never requests it on SQLite (it fails up to `ReadCommitted`). Pinned by `SqliteTransactionLockTests`. Nothing to change unless a provider's default changes. | **Done** (characterisation test) |
@@ -2315,6 +2325,9 @@ Maintainer direction (2026-10-13): Microsoft.Data.Sqlite is the SQLite provider 
 | SESSION-002 | **"Paranoid" pool mode (3.0; maintainer direction, 2026-10-13).** Two ways to apply the merged session settings of SESSION-001 to a new connection. **Paranoid:** the full set on every connection, which is what 2.0.6 does for every database today. **Delta (the other mode):** only the settings whose wanted value differs from what a fresh connection reports raw (the baseline probed once at context creation), so a database whose defaults already match sends little or nothing. Delta is only safe where the provider's pool returns a connection reset to the baseline: if a poisoned connection comes back as it was left, a setting with baseline equal to wanted (SQLite `query_only` 0 and 0) is not in the delta and stays poisoned. So the default is per dialect and provider, from the POISON-001 audit: paranoid where the pool does not reset (Microsoft.Data.Sqlite always; Oracle's pool probably), delta only where a reset is verified (SqlClient `sp_reset_connection`, Npgsql, MySqlConnector), and a user setting forces paranoid anywhere (covers `No Reset On Close`, `ConnectionReset=false`, or distrust). Delta must never weaken the 2.0.6 guarantee (2.0.6 is paranoid for everything), so it is a cost reduction for resetting providers. Maintainer argument (2026-10-13): pengdows.crud's connection strings are unique to the context, so another component cannot reach its pool and poison it; poisoning then takes deliberate action through the context, not an accident, so paranoid should not be needed. Evidence from the code (fakeDb, 2026-10-13): SQL Server gets `application name=<app>-rw`/`-ro` added, so its pool is private by construction; MySQL gets pool and `Allow Multiple Statements` settings, so a distinct but not named string; PostgreSQL's real path uses its own `NpgsqlDataSource`; SQLite's writer string is only lowercased (`data source=/data/app.db`), and Microsoft.Data.Sqlite keys its pool on the raw, case-sensitive string, so the pool is private by accident of the lowercasing, not by design, and SQLite has no keyword that could make it unique. What remains once other components are excluded is code running through the context itself, and that is not only deliberate: SQLite's own recipe for ALTER TABLE workarounds starts with `PRAGMA foreign_keys = OFF;`, so a migration run through a container that fails halfway leaves it off, and a bulk load that sets `synchronous = OFF` and fails before restoring it does the same. So: delta is a reasonable default where the pool is private and the provider resets; SQLite keeps re-asserting its small curated set (about +4 µs) because its pool resets nothing. Known limits: the baseline is a snapshot, so a delta computed at startup is stale if a DBA changes a role or database default while the app runs, which paranoid does not suffer; reading each new connection to decide costs more than sending (+31 to +50 µs measured on SQLite), so the delta is computed once, not per connection. | 3.0 only |
 
 ## RetryContext Subsystem (Governor-Aware Resilient Execution)
+
+**3.0 only.** `RetryContext` does not exist on 2.0.x (no such type in `pengdows.crud` or `pengdows.crud.abstractions` on
+2.0.6) and is out of scope for 2.0.x (maintainer decision, "Enforcement" above). The design below is the 3.0 design.
 
 ### Architectural Problem
 Existing third-party retry libraries (such as Polly or manual retry loops) are unaware of low-level connection pool topology, connection hold times, or admission control. Wrapping raw ADO.NET or TableGateway calls in an external retry policy leads to two critical operational failure modes:

@@ -1,8 +1,8 @@
 # Performance Evaluation: pengdows.crud 2.0
 
-**Benchmark environment:** Ubuntu 24.04.4 LTS · AMD Ryzen 9 5950X (8 cores) · .NET 8.0.24 · BenchmarkDotNet v0.14.0
+**Benchmark environment:** Ubuntu 24.04.4 LTS · AMD Ryzen 9 5950X (8 cores) · .NET 8.0.24 (SQLite run) and 8.0.25 (PostgreSQL run) · BenchmarkDotNet v0.14.0
 
-**Reproducing:** Clone the repository and run `./run-benchmarks.sh` from the `benchmarks/CrudBenchmarks/` directory. Results land in `benchmarks/CrudBenchmarks/results/`.
+**Reproducing:** Clone the repository and run `./run-benchmarks.sh` from the repository root (`BENCH_FRAMEWORK` selects `net8.0` or `net10.0`; the default is `net10.0`), or use the `dotnet run` filters at the end of this document. The checked-in runs are in `benchmarks/CrudBenchmarks/results/`. The SQLite section below is the 2026-03-04 run (`run-2026-03-04-session-settings-overhaul.md`), the PostgreSQL section the 2026-03-15 equal-footing run (`postgres-run-2026-03-15-after-fix.md`); newer runs, for example `sqlite-equal-footing-run-2026-10-03.md`, sit beside them.
 
 ---
 
@@ -14,19 +14,21 @@ The suite uses a purpose-built "equal footing" design — each framework gets th
 - **Dapper** uses inline SQL strings with anonymous parameter objects — the standard Dapper usage pattern.
 - **Entity Framework Core** creates a fresh `DbContext` per iteration with `AsNoTracking()`, matching real-world DI usage.
 
+On PostgreSQL all three frameworks run with the same Npgsql auto-prepare configuration (see below); an earlier run that gave only pengdows auto-prepare was biased and is superseded.
+
 All three hit the same database. The benchmarks are tested against two databases with very different latency profiles — SQLite (embedded, sub-microsecond round trip) and PostgreSQL (network, ~190 μs round trip) — because the overhead profile of a framework looks very different depending on which dominates: the framework or the wire.
 
 **RecordCount** parameterizes the loop inside each benchmark method. `ReadSingle×N` makes N individual queries. `ReadList` makes ONE query that returns all N rows. This lets you measure both bulk-read and per-row performance in the same suite.
 
 ### PostgreSQL-specific design notes
 
-The PostgreSQL benchmark's `DatabaseContext` is constructed with `NpgsqlFactory.Instance` and a standard connection string. The framework bakes two optimizations directly into the Npgsql `NpgsqlDataSource` at startup:
+The PostgreSQL benchmark's `DatabaseContext` is constructed with `NpgsqlFactory.Instance` and a standard connection string. The framework bakes two optimizations directly into the Npgsql `NpgsqlDataSource` at startup (`PostgreSqlDialect.cs`; YugabyteDB's dialect turns auto-prepare off again):
 
 1. **Session settings baked into startup Options** — `standard_conforming_strings`, `client_min_messages`, and `default_transaction_read_only` are injected as `-c key=value` tokens in the connection string `Options` parameter. PostgreSQL treats these as session-level GUC defaults, so `RESET ALL` on pool return restores them. This eliminates the per-checkout `SET` round-trip (~190 μs) that prior versions paid.
 
 2. **Npgsql auto-prepare enabled** — `MaxAutoPrepare=64` and `AutoPrepareMinUsages=2` are baked into the DataSource. After two executions of the same SQL text on a given connection, Npgsql transparently server-side prepares it, eliminating PostgreSQL's parse and plan phase on subsequent calls.
 
-Dapper's benchmark uses `NpgsqlFactory.Instance.CreateDataSource(connStr)` with no auto-prepare configuration — the Npgsql default is disabled (`MaxAutoPrepare=0`). Dapper never gets server-side prepared statements.
+For equal footing the Dapper and EF Core arms use a connection string with the same `MaxAutoPrepare=64;AutoPrepareMinUsages=2` (`PostgreSqlEqualFootingBenchmarks.cs`), so all three frameworks get server-side prepared statements. Without it the Npgsql default is disabled (`MaxAutoPrepare=0`), and the earlier 2026-03-04/10 run, in which only pengdows had auto-prepare, overstated pengdows' read advantage (`postgres-run-2026-03-04.md` carries that warning).
 
 The `GlobalSetup` method runs a 20-iteration pre-warming pass over every reusable container before BenchmarkDotNet's own warmup begins. This ensures all five pre-created pool connections (Minimum Pool Size=5) have crossed the `AutoPrepareMinUsages=2` threshold on every statement before measurement starts.
 
@@ -79,68 +81,42 @@ This proves the "open late, close early" design is working correctly — connect
 
 ---
 
-## PostgreSQL Results (network database, 2026-03-10)
+## PostgreSQL Results (network database, 2026-03-15, equal footing)
 
-PostgreSQL changes the picture significantly. A single network round trip to a local Docker PostgreSQL is ~190–200 μs. At this scale, infrastructure advantages — eliminated round-trips and server-side prepared statements — become material.
+A single network round trip to a local Docker PostgreSQL is ~140-200 μs, so framework overhead is a small share of every operation. All three frameworks use identical Npgsql auto-prepare configuration. `P÷D` is pengdows mean ÷ Dapper mean (below 1.0 means pengdows is faster); `EF÷P` is EF Core mean ÷ pengdows mean.
+
+> The `Update` and `ConnectionHoldTime` rows were found to carry methodology asymmetries on 2026-09-19 (the source of truth is the note at the top of `postgres-run-2026-03-15-after-fix.md`); the benchmark was fixed and a live re-run showed `Update` on par (357.7 μs vs 360.0 μs). Treat those two rows as pending a full re-run.
 
 ### Single-record operations (N=1)
 
-| Operation | pengdows | Dapper | EF Core | pengdows/Dapper | pengdows/EF |
-|-----------|----------|--------|---------|-----------------|-----------  |
-| Create | 327.9 μs / 8.7 KB | 322.5 μs / 4.4 KB | 384.5 μs / 39.6 KB | **tied (1.02x)** | **1.2x faster** |
-| ReadSingle | 171.9 μs / 5.9 KB | 195.2 μs / 3.3 KB | 323.7 μs / 50.9 KB | **12% faster** | **1.9x faster** |
-| ReadList | 147.7 μs / 6.0 KB | 193.3 μs / 3.7 KB | 284.3 μs / 50.4 KB | **24% faster** | **1.9x faster** |
-| Update | 340.6 μs / 6.1 KB | 340.7 μs / 3.1 KB | 405.0 μs / 37.0 KB | **tied (1.00x)** | **1.2x faster** |
-| FilteredQuery | 153.4 μs / 6.3 KB | 212.1 μs / 4.2 KB | 314.8 μs / 51.9 KB | **28% faster** | **2.1x faster** |
-| Aggregate | 228.2 μs / 5.4 KB | 234.1 μs / 2.2 KB | 293.7 μs / 34.1 KB | **tied (0.97x)** | **1.3x faster** |
-| Delete | 633.5 μs / 10.6 KB | 645.8 μs / 6.8 KB | 806.2 μs / 75.9 KB | **tied (0.98x)** | **1.3x faster** |
+| Operation | pengdows | Dapper | EF Core | P÷D | EF÷P |
+|-----------|----------|--------|---------|-----|------|
+| Create | 326.7 μs / 8.7 KB | 303.5 μs / 4.4 KB | 368.5 μs / 39.7 KB | 1.08 | 1.13 |
+| ReadSingle | 164.1 μs / 5.9 KB | 164.7 μs / 3.1 KB | 254.9 μs / 50.8 KB | 1.00 | 1.55 |
+| ReadList | 137.3 μs / 6.0 KB | 133.4 μs / 3.5 KB | 224.7 μs / 50.2 KB | 1.03 | 1.64 |
+| Update | 339.3 μs / 6.1 KB | 327.5 μs / 3.2 KB | 387.2 μs / 37.1 KB | 1.04 | 1.14 |
+| FilteredQuery | 138.9 μs / 6.3 KB | 137.4 μs / 4.1 KB | 223.5 μs / 51.8 KB | 1.01 | 1.61 |
+| Aggregate | 205.8 μs / 5.5 KB | 202.6 μs / 2.3 KB | 257.6 μs / 34.2 KB | 1.02 | 1.25 |
+| DeleteOnly | 267.6 μs / 7.1 KB | 266.5 μs / 3.3 KB | 332.0 μs / 37.2 KB | 1.00 | 1.24 |
+| DeleteInsertCycle | 595.3 μs / 10.6 KB | 608.9 μs / 6.9 KB | 718.4 μs / 76.0 KB | 0.98 | 1.21 |
 
-pengdows is **faster than or equal to Dapper on every operation** at N=1, and **faster than EF Core across the board**.
-
-**Why pengdows beats Dapper on reads:** Both frameworks use the same Npgsql driver. The difference is that pengdows' `DatabaseContext` bakes `MaxAutoPrepare=64` into the Npgsql `NpgsqlDataSource` — Npgsql server-side prepares statements after 2 uses per connection. Dapper uses a plain `NpgsqlFactory.Instance.CreateDataSource()` with no `MaxAutoPrepare` configured; Dapper never gets prepared statements. For reusable read containers (`ReadSingle`, `ReadList`, `FilteredQuery`), pengdows gets zero-allocation parameter reuse AND server-side execution of pre-compiled query plans. Dapper sends unprepared SQL on every call, paying parse and plan cost each time.
-
-**Why writes are tied:** `UPDATE`, `INSERT`, and `DELETE` carry heavier server-side execution cost (lock acquisition, WAL writes, index updates). The parse/plan savings from prepared statements are proportionally smaller. Dapper's lower client-side allocation partially offsets this; the two frameworks converge.
-
-**Why the previous results were wrong:** An earlier PostgreSQL run showed pengdows 1.5–2.2x _slower_ than Dapper. That run lacked both optimizations: session settings were still issued as a post-checkout `SET` command (one extra network round-trip per connection), and the benchmark's `GlobalSetup` did not pre-warm all pool connections past the `AutoPrepareMinUsages` threshold. With only 3 BenchmarkDotNet warmup iterations at RecordCount=1, some pool connections never accumulated enough executions to trigger auto-prepare before measurement began, producing a mixed average of prepared and unprepared executions.
+pengdows is at parity with Dapper: within about 10% on every scenario and record count (`P÷D` 0.94-1.10), with Create the slowest at about 5-8% (SQL generation overhead). pengdows is 1.1-1.6x faster than EF Core. Both frameworks use the same Npgsql driver and the same server-side prepared statements, so the wire dominates.
 
 ### PostgreSQL batch reads
 
 | Records | pengdows ReadList | Dapper ReadList | EF ReadList | ReadSingle×N (pengdows) |
 |---------|------------------|-----------------|-------------|-------------------------|
-| 1 | 147.7 μs | 193.3 μs | 284.3 μs | 171.9 μs |
-| 10 | 141.9 μs | 193.1 μs | 267.0 μs | 1,545.7 μs |
-| 100 | 200.3 μs | 220.0 μs | 338.0 μs | 15,261.6 μs |
+| 1 | 137.3 μs | 133.4 μs | 224.7 μs | 164.1 μs |
+| 10 | 143.6 μs | 140.5 μs | 231.0 μs | 1,616.1 μs |
+| 100 | 203.6 μs | 185.6 μs | 293.5 μs | 15,666.1 μs |
 
-At 100 records:
+At 100 records `ReadList` (one query, 100 rows) costs 204 μs for pengdows, 186 μs for Dapper and 294 μs for EF Core; 100 individual `ReadSingle` queries cost 15,666 μs for pengdows (about 77x slower), 15,270 μs for Dapper and 24,421 μs for EF Core. The pattern is the same in every framework, so the choice of query pattern matters far more than the choice of framework.
 
-- `ReadList_Pengdows` (1 query, 100 rows): **200 μs**
-- `ReadList_Dapper` (1 query, 100 rows): **220 μs** — pengdows 9% faster
-- `ReadList_EF` (1 query, 100 rows): **338 μs** — pengdows 1.7x faster
-- `ReadSingle_Pengdows×100` (100 individual queries): **15,262 μs** — **76x slower**
-
-The critical point for application architects: making individual per-row database calls in a loop costs 15 ms on PostgreSQL to fetch 100 records. With `ReadList` you spend 200 μs. The choice of query pattern matters far more than the choice of framework.
-
-`FilteredQuery` shows the same pattern:
-
-| Records | pengdows FilteredQuery | Dapper FilteredQuery | EF FilteredQuery |
-|---------|----------------------|---------------------|-----------------|
-| 1 | 153 μs | 212 μs | 315 μs |
-| 10 | 147 μs | 205 μs | 290 μs |
-| 100 | 217 μs | 236 μs | 358 μs |
-
-pengdows leads Dapper at every RecordCount on filtered reads, and leads EF Core by 1.7x at N=100.
+`FilteredQuery` shows the same pattern: 139 / 137 / 224 μs (pengdows / Dapper / EF Core) at N=1, 226 / 211 / 323 μs at N=100.
 
 ### Connection lifecycle on PostgreSQL
 
-`ConnectionHoldTime_Pengdows` stays flat across all record counts:
-
-| RecordCount | pengdows | Dapper |
-|-------------|----------|--------|
-| 1 | 172.5 μs | 198.3 μs |
-| 10 | 164.9 μs | 184.7 μs |
-| 100 | 162.6 μs | 186.1 μs |
-
-The ~163–173 μs base cost is the single PostgreSQL network round trip. Pengdows runs this query **faster than Dapper** at every record count — server-side prepared statement execution returns results without the server re-parsing the query on each call.
+`ConnectionHoldTime` stays flat across record counts (pengdows 164.0 / 165.7 / 170.1 μs at N=1 / 10 / 100, Dapper 164.0 / 163.9 / 180.9 μs); the ~164 μs base cost is the single PostgreSQL network round trip. This row is one of the two pending a full re-run (see the note above).
 
 ---
 
@@ -150,10 +126,10 @@ The ~163–173 μs base cost is the single PostgreSQL network round trip. Pengdo
 |----------|--------------------|---------------------|
 | SQLite, single op | 1.4–1.6x slower | **2–4x faster** |
 | SQLite, 100-row batch read | **~parity (7% slower)** | ~1.1x faster |
-| PostgreSQL, single op reads | **12–28% faster** | **1.9–2.1x faster** |
-| PostgreSQL, writes | **tied** | **1.2x faster** |
-| PostgreSQL, 100-row batch read | **9% faster** | **1.7x faster** |
-| Memory per operation | 2–3x more than Dapper | **5–12x less than EF Core** |
+| PostgreSQL, reads | **parity (within about 10%)** | **1.4–1.6x faster** |
+| PostgreSQL, writes | **parity (Create about 5–8% slower)** | **1.1–1.3x faster** |
+| PostgreSQL, 100-row batch read | **parity (about 10% slower)** | **1.4x faster** |
+| Memory per operation | about 2x more than Dapper (up to 3x on SQLite) | **5–12x less than EF Core** |
 
 ---
 
@@ -161,11 +137,11 @@ The ~163–173 μs base cost is the single PostgreSQL network round trip. Pengdo
 
 **If your bottleneck is raw single-operation throughput against an embedded database** (SQLite, DuckDB) in a tight loop: Dapper will be faster, and that gap is real. Pengdows adds ~12 μs per operation on SQLite. At 10,000 operations/second that is 120 ms/second of overhead — plan for it.
 
-**If your bottleneck is raw single-operation throughput against a network database** (PostgreSQL, SQL Server, Oracle): the ~190 μs network round trip dominates, and pengdows' structural advantages — baked session settings and Npgsql auto-prepare — actually make it _faster_ than Dapper on read operations, and equal on writes. The overhead that was visible on SQLite is invisible at network latency because it is dwarfed by the wire.
+**If your bottleneck is raw single-operation throughput against a network database** (measured here on PostgreSQL): the ~140–200 μs network round trip dominates, and with equal Npgsql auto-prepare configuration pengdows is at parity with Dapper (within about 10%). The overhead that was visible on SQLite is largely hidden at network latency because it is dwarfed by the wire. The framework also bakes the auto-prepare settings and the session settings into the Npgsql data source, so you get them without configuring them yourself; a Dapper user would have to set `MaxAutoPrepare` explicitly.
 
-**If you read rows in sets** — which is the right pattern for almost all real applications: pengdows leads Dapper at every RecordCount on PostgreSQL batch reads, and closes to within 7% on SQLite at 100 rows. More importantly, it beats EF Core comfortably at all scales. Use `LoadListAsync` or `RetrieveStreamAsync` rather than calling `RetrieveOneAsync` in a loop.
+**If you read rows in sets** — which is the right pattern for almost all real applications: pengdows is within about 10% of Dapper at every RecordCount on PostgreSQL batch reads, and within 7% on SQLite at 100 rows. More importantly, it beats EF Core comfortably at all scales. Use `LoadListAsync` or `RetrieveStreamAsync` rather than calling `RetrieveOneAsync` in a loop.
 
-**Memory:** pengdows uses 2–3x more heap than raw Dapper per operation. This reflects real infrastructure: connection pool tracking, `ISqlContainer` state, compiled accessor caches, and type mapping — overhead that provides strong typing, audit fields, optimistic concurrency, and connection safety guarantees. EF Core uses 5–12x more memory than pengdows for the same operations.
+**Memory:** pengdows uses about 2x more heap than raw Dapper per operation on PostgreSQL (up to about 3x on SQLite). This reflects real infrastructure: connection pool tracking, `ISqlContainer` state, compiled accessor caches, and type mapping — overhead that provides strong typing, audit fields, optimistic concurrency, and connection safety guarantees. EF Core uses 5–12x more memory than pengdows for the same operations.
 
 **The framework overhead is not query time.** Changing to a faster ORM does not make your PostgreSQL server issue plans faster. Profile your actual queries before optimizing framework choice.
 

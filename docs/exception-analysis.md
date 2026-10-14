@@ -72,7 +72,8 @@ never wrapped into a `DatabaseException` (see CLAUDE.md's Exception Hierarchy se
 4. `DbExceptionTranslationSupport.LooksLikeTimeout`, which walks the `InnerException` chain and
    checks exception type names as well as messages → `Timeout`.
 5. Message-text heuristics (deadlock, serialization, constraint keywords) → the matching
-   category, else `Unknown`.
+   category, else `Unknown`. An error the provider identified with its own SQLSTATE or error
+   number is not re-guessed from its text: it is `Unknown` unless steps 2–4 recognized it.
 
 `PostgreSqlDialect` covers CockroachDB, YugabyteDB, Aurora PostgreSQL and Spanner by
 inheritance; `MySqlDialect` covers MariaDB, TiDB, Aurora MySQL and SingleStore. `SybaseAseDialect`
@@ -87,10 +88,10 @@ Concrete examples from the current mapping:
 
 Constraint kinds come from each dialect's `Is*Violation` overrides — e.g. MySQL `1062`/`1169`
 unique, `1216`/`1451`/`1452` foreign key, `1048` not-null, `3819`/`4025` check. Oracle, SQLite,
-DuckDB, Firebird, Db2, Informix, SAP HANA, Spanner and Access have their own
+DuckDB, Firebird, Db2, Informix, SAP HANA, InterBase, FlatFile, Spanner and Access have their own
 `TryClassifyProviderException` overrides; check the dialect file directly for the exact codes if
-you're targeting one of those specifically. Snowflake, InterBase and FlatFile override only the
-`Is*Violation` checks and fall through to steps 4–5 for other categories. Access
+you're targeting one of those specifically. Snowflake overrides only the
+`Is*Violation` checks and falls through to steps 4–5 for other categories. Access
 is the most extreme case of the "no numeric signal at all" shape: `OleDbException.ErrorCode` is
 always the identical generic COM HRESULT (`-2147467259`) and `Errors` is empty for every
 violation kind, including connection failures — classification (constraint kinds, a lock-wait

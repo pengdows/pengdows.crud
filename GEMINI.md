@@ -44,7 +44,7 @@ The framework provides intelligent, adaptive connection strategies to ensure opt
 - **`Best` Mode:** Automatically selects the safest and most performant `DbMode` based on the provider and connection string:
     - `:memory:` SQLite/DuckDB → `SingleConnection`
     - File-based SQLite/DuckDB/pengdows.flatfile (and shared-cache in-memory SQLite) and Microsoft Access → `SingleWriter`
-    - SQL Server LocalDB and Firebird → `PreventDatabaseUnload` (a sentinel per pool; an explicit `Standard` is always honored; `KeepAlive` is an `[Obsolete]` alias)
+    - SQL Server LocalDB, Firebird and Db2 LUW → `PreventDatabaseUnload` (a sentinel per pool; an explicit `Standard` is always honored; `KeepAlive` is an `[Obsolete]` alias)
     - Everything else → `Standard`
 - **`ModeLockTimeout`:** Configurable timeout (`TimeSpan?`) for internal mode locks and transaction completion locks; `null` means wait indefinitely.
 
@@ -227,6 +227,7 @@ public int Version { get; set; }
 - Without resolver + user audit fields = `InvalidOperationException` at runtime.
 - Audit timestamps are always UTC. UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`).
 - The resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset all supported.
+- `AuditCreationPolicy` (init-only property on every gateway, new in 2.0.6; `docs/audit-fields.md`): `PreserveExplicitValues` (default) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always overwrites them with resolver values (stops request-model binding from spoofing audit fields).
 
 ## Multi-Tenancy
 
@@ -305,7 +306,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB = SingleWriter, LocalDB = PreventDatabaseUnload; unsafe explicit modes are coerced (e.g., SQLite `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
+8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; unsafe explicit modes are coerced (e.g., SQLite `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations

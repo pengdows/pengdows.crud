@@ -56,9 +56,14 @@ The repository contains concrete support for:
 - InterBase
 - Google Spanner (PostgreSQL interface)
 - Microsoft Access
-- pengdows.flatfile (partial dialect over CSV/delimited/fixed-width/NDJSON files)
+- FlatFile: pengdows.flatfile (embedded dialect over CSV/delimited/fixed-width/NDJSON files)
 
 When product detection cannot identify the connected database, the library falls back to a conservative SQL-92 dialect.
+
+New in 2.0.6: Db2 (LUW), FlatFile, SingleStore, Sybase ASE, Spanner, Informix, SAP HANA, InterBase and Access (2.0.0 to
+2.0.5 supported the other fourteen). Four more products are supported as subsidiaries of their parent: Percona Server for MySQL (under MySQL), Citus,
+TimescaleDB and Fujitsu Enterprise Postgres (under PostgreSQL). Each was verified with no code change: they report themselves as MySQL or PostgreSQL and pass the same integration suite. See the
+[changelog](https://github.com/pengdows/pengdows.crud/blob/main/CHANGELOG.md).
 
 ## Quick Start
 
@@ -144,7 +149,8 @@ DatabaseException (abstract — carries Database, SqlState, ErrorCode, Constrain
   │    ├─ ConnectionException
   │    │    ├─ FileLockContentionException ← embedded-engine file lock held by another process; IsTransient = false
   │    │    └─ TooManyConnectionsException ← server reached but at its connection limit; IsTransient = true
-  │    ├─ ReadOnlyViolationException      ← write reached a read-only SQLite/DuckDB connection
+  │    ├─ ReadOnlyViolationException      ← write refused by a read-only connection, transaction or database
+  │    ├─ AmbiguousResultException        ← commit outcome unknown (e.g. CockroachDB 40003); IsTransient = false
   │    ├─ TransactionException
   │    ├─ TransientWriteConflictException ← IsTransient = true
   │    │    ├─ DeadlockException
@@ -162,8 +168,8 @@ Non-`DatabaseException` subtypes thrown by the infrastructure:
 - `ModeContentionException : TimeoutException` — shared-connection mode lock (e.g. SingleConnection) or transaction-completion lock exceeded `ModeLockTimeout`
 - `PoolSaturatedException : TimeoutException` — no governor slot became available within `PoolAcquireTimeout` (includes SingleWriter write-slot waits)
 - `PoolForbiddenException : InvalidOperationException` — connection requested from a pool configured to reject all requests (e.g. the write pool of a `ReadOnly` context)
-- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/Access; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
-- `ConnectionFailedException : Exception` — startup connection failure (carries `Phase` and `Role`)
+- `TransactionModeNotSupportedException : NotSupportedException` — `BeginTransaction`/`BeginTransactionAsync` with an `IsolationProfile` the database cannot guarantee (`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation). Isolation never silently weakens: an explicit `IsolationLevel` is raised to the weakest supported level at least as strong, or throws `InvalidOperationException` if none exists. Savepoint calls on dialects without savepoints throw plain `NotSupportedException`.
+- `ConnectionFailedException : ConnectionException` — startup connection failure (carries `Phase` and `Role`, plus the underlying SQLSTATE/error code/`IsTransient`); since 2.0.6 `catch (ConnectionException)` and `catch (DatabaseException)` see it too
 
 ```csharp
 using pengdows.crud.exceptions;

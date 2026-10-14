@@ -2,7 +2,7 @@
 
 `pengdows.crud.fakeDb` provides a fake ADO.NET provider that you can use to **mock low-level database calls**. It lets
 `pengdows.crud` execute SQL without a real database connection, which is handy for integration or unit tests. The
-package ships with schema files to emulate different products so tests remain provider agnostic.
+package ships an embedded schema file for each of the 23 `SupportedDatabase` values (`xml/*.schema.xml`: PostgreSql, SqlServer, Oracle, Firebird, CockroachDb, MariaDb, MySql, Sqlite, DuckDB, YugabyteDb, TiDb, Snowflake, AuroraMySql, AuroraPostgreSql, Db2, FlatFile, SingleStore, SybaseASE, Spanner, Informix, SapHana, InterBase, Access) so tests remain provider agnostic.
 
 ## Usage
 
@@ -20,12 +20,16 @@ var context = new DatabaseContext(
 ```
 
 You can also use the fake provider without `DatabaseContext`. Create a `fakeDbConnection`
-directly and work with it using normal ADO.NET APIs:
+directly (its only constructor takes an optional shared `FakeDataStore`, so the connection string, with its
+`EmulatedProduct`, is assigned through `ConnectionString`) and work with it using normal ADO.NET APIs:
 
 ```csharp
 using pengdows.crud.fakeDb;
 
-using var connection = new fakeDbConnection("Data Source=ignored;EmulatedProduct=Sqlite");
+using var connection = new fakeDbConnection
+{
+    ConnectionString = "Data Source=ignored;EmulatedProduct=Sqlite"
+};
 await connection.OpenAsync();
 using var command = connection.CreateCommand();
 command.CommandText = "SELECT 1";
@@ -46,9 +50,11 @@ The `fakeDbConnection` can be configured to fail in various ways:
 
 - **FailOnOpen**: Connection fails when `Open()` or `OpenAsync()` is called
 - **FailOnCommand**: Connection fails when creating commands
-- **FailOnTransaction**: Connection fails when beginning transactions
-- **FailAfterCount**: Connection works for N operations then fails
-- **Broken**: Connection is permanently broken
+- **FailOnTransaction**: Connection fails when beginning transactions (`SetFailOnBeginTransaction`)
+- **FailAfterCount**: Connection works for N opens then fails (`SetFailAfterOpenCount`)
+- **Broken**: Connection is permanently broken (`SetBroken`)
+
+`ConnectionFailureMode` is the enum behind the same modes for `fakeDbFactory.CreateFailingFactory(...)`.
 
 ### Basic Failure Testing
 
@@ -134,7 +140,7 @@ connection.Open(); // Succeeds
 command is executed. This allows tests to simulate query responses:
 
 ```csharp
-var conn = new fakeDbConnection("Data Source=:memory:;EmulatedProduct=Sqlite");
+var conn = new fakeDbConnection { ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite" };
 conn.EnqueueScalarResult(5);
 conn.EnqueueReaderResult(new[] { new Dictionary<string, object>{{"Name", "Jane"}} });
 conn.Open();

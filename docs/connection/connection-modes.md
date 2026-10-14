@@ -20,7 +20,7 @@ The `DbMode` enum values are: `Standard=0`, `PreventDatabaseUnload=1`, `SingleWr
 ### Standard
 
 - Semantics: Ephemeral pooled connections. New connection for each statement unless inside a transaction.
-- Production default for all full server databases (PostgreSQL, SQL Server, Oracle, MySQL, MariaDB, CockroachDB).
+- Production default for the client-server databases (SQL Server, PostgreSQL and its forks, MySQL/MariaDB/SingleStore/TiDB, Oracle, Snowflake, Spanner, Informix, SAP HANA, InterBase, Sybase ASE; Firebird and Db2 LUW accept it explicitly, though their `Best` default is `PreventDatabaseUnload`).
 - Constructor behavior: Attempts to open a connection at initialization to detect dialect.
   - If Open() fails → throw immediately.
   - If connection opens but dialect cannot be resolved → fall back to SQL-92 dialect (SQL-92 is a fallback behavior, not a distinct DbMode or supported database product).
@@ -78,10 +78,11 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 - Resolver hint only. Not an actual strategy.
 - Defaults to the safest mode based on dialect + connection string:
-  - Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server, non-LUW Db2) → Standard; Firebird and Db2 LUW → PreventDatabaseUnload
+  - Full servers (PostgreSQL family, MySQL family, Oracle, SQL Server, Snowflake, Spanner, Informix, SAP HANA, InterBase, Sybase ASE, non-LUW Db2) → Standard; Firebird and Db2 LUW → PreventDatabaseUnload
+  - A `Best` that would select PreventDatabaseUnload falls back to Standard when the configured maximum pool size is below 2 (the sentinel needs a second pooled connection)
   - LocalDb → PreventDatabaseUnload
   - SQLite/DuckDB `:memory:` → SingleConnection
-  - SQLite/DuckDB file-based → SingleWriter
+  - SQLite/DuckDB file-based (and shared in-memory), Access, pengdows.flatfile → SingleWriter
   - Unknown product → Standard
 
 ## 2. Provider-Driven Coercion
@@ -101,6 +102,8 @@ The mode retains one sentinel connection per enabled pool: the connection opened
   warning (`DuckDbDialect.DescribeStandardModeRisk`): same-row concurrent writers can fail with
   `SerializationConflictException`, which SingleWriter prevents. See
   `SqlDialect.CoerceEmbeddedSingleWriterMode`'s `allowStandard` parameter.
+
+### pengdows.flatfile: same policy as SQLite (`CoerceEmbeddedSingleWriterMode`, no `allowStandard`): `Best`, `Standard` and `PreventDatabaseUnload` all resolve to SingleWriter, because a FlatFile writer holds a per-directory write lock (`FlatFileDialect.IsEmbeddedSingleWriterEngine`). It has no in-memory mode.
 
 ### Allowed for Access file-based:
 
@@ -150,7 +153,7 @@ The mode retains one sentinel connection per enabled pool: the connection opened
 
 ### Db2: on a positively detected Db2 LUW server `Best` selects PreventDatabaseUnload; on any other or unrecognized Db2 server it selects Standard (and a warning is logged: only Db2 LUW is supported). Every explicit choice — including `Standard` — is honored.
 
-### Full servers (PostgreSQL, MySQL/MariaDB, Oracle, SQL Server): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. SQL Server with `AUTO_CLOSE` can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
+### Every other client-server database (PostgreSQL family incl. CockroachDB/YugabyteDB/Spanner, MySQL family incl. SingleStore/TiDB, Oracle, SQL Server, Snowflake, Informix, SAP HANA, InterBase, Sybase ASE): `Best` always selects Standard; every explicit choice — including `PreventDatabaseUnload` — is honored as-is, no warning logged. SQL Server with `AUTO_CLOSE` can unload a database once its last connection closes; `PreventDatabaseUnload` is the knob for that.
 
 ### FakeDb: no special case. It emulates a real dialect via `EmulatedProduct` and follows all the above rules.
 
@@ -190,8 +193,8 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Session settings are enforced at logical connection open (per the wrapper-lifetime rules above).
   Do not mutate session-scoped settings mid-connection when using pooling.
 - ReadWriteMode.ReadOnly:
-  - `SqlContainer` pre-guards every write in code: it throws `NotSupportedException` for
-    `ExecutionType.Write` when `ReadWriteMode.ReadOnly` is set, before any provider call is
+  - `SqlContainer` pre-guards every write in code: it throws `ReadOnlyContextException` (a
+    `NotSupportedException`) for `ExecutionType.Write` when `ReadWriteMode.ReadOnly` is set, before any provider call is
     made. This covers every database, including ones with no enforcement below it.
   - Where the database itself also enforces read-only, the mechanism is dialect-specific and
     not uniform: PostgreSQL/MySQL/MariaDB/SQLite/DuckDB enforce at the connection/session
@@ -200,7 +203,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
     READ ONLY`, no persistent session mode); SQL Server's `ApplicationIntent=ReadOnly` is
     documented by `SqlServerDialect` as an Availability-Group routing hint only — it does
     NOT enforce server-side read-only state. SQLite uses `Mode=ReadOnly` in the connection
-    string for read-only contexts. Separately, every SQLite checkout resets the session-scoped
+    string for read-only contexts; Access and pengdows.flatfile pass `Mode=Read` and `readonly=true` respectively. Separately, every SQLite checkout resets the session-scoped
     `PRAGMA query_only` to `OFF`; pengdows.crud never turns it on because SQLite refuses the
     `BEGIN IMMEDIATE` used by Microsoft.Data.Sqlite for transactions on a query-only connection.
 
@@ -220,6 +223,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
 - Persistent modes (PreventDatabaseUnload/SingleConnection): if a required connection fails to open at ctor, error bubbles immediately.
 - No silent deferrals beyond SQL-92 fallback when dialect is unknown.
 - **`PreventDatabaseUnload` repairs a lost sentinel lazily.** At the top of every `GetConnection`/`GetConnectionAsync`, any sentinel whose state is `Broken` or `Closed` is disposed (releasing its governor permit) and replaced by a freshly opened connection that takes a new permit from the same pool, with a warning logged. There is no background monitor, so the guarantee is "repaired before the next operation", not continuous; a dropped sentinel never breaks reads or writes, which use their own ephemeral connections. A repair that races context disposal disposes its replacement instead of installing it.
+- **DDL on Firebird closes the sentinels first.** Firebird fails `DROP`/`ALTER` of a table the application has used with "object ... is in use" while any other attachment exists, so a dialect that sets `RequiresConnectionPoolResetForDdl` (only Firebird) has the context close every `PreventDatabaseUnload` sentinel (releasing its permit) and clear the provider pool before such a DDL statement, then reopen the sentinels after it; a failed reopen is logged and left to the lazy repair above.
 - **`SingleConnection` never recreates its pinned connection.** It cannot safely recreate a connection for disposable `:memory:` databases; a replacement would be a different empty database.
 
   **For `:memory:` SQLite/DuckDB, this isn't a missing feature — it's unrepairable in principle, not just in the current implementation.** The entire database lives only inside that one connection; there is no separate file or server for a replacement connection to reconnect to. Opening a *new* connection to the same `:memory:` connection string doesn't recover the old data, it silently creates a brand-new, empty database — which would be a much worse failure mode than the current loud "every operation now fails" behavior. So for `:memory:` specifically, treat `SingleConnection` mode as "the data does not survive a connection break," full stop, not as a gap to fix.
@@ -232,6 +236,7 @@ DbMode override: requested {requested}, coerced to {resolved} — reason: {reaso
   - SQLite/DuckDB `:memory:` → SingleConnection
   - SQLite file-based → SingleWriter
   - DuckDB/Access file-based → honored, with a risk warning
+  - pengdows.flatfile → SingleWriter
 - Firebird (embedded or client-server) → `Best` selects PreventDatabaseUnload; every explicit choice is honored.
 - LocalDB → `Best` selects PreventDatabaseUnload; explicit `Standard` honored with a performance warning.
 - Unknown product with Best → Standard.

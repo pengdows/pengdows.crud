@@ -143,9 +143,9 @@ sc.SetParameterValue("i1", 25);           // second insertable column
 
 Parameters follow the same `i{n}` pattern as INSERT, pre-computed by the dialect from the
 cached template's `UpsertParameterNames`. The exact SQL depends on the database:
-- PostgreSQL/CockroachDB: `INSERT ... ON CONFLICT DO UPDATE SET ...`
-- MySQL/MariaDB: `INSERT ... ON DUPLICATE KEY UPDATE ...`
-- SQL Server/Oracle: `MERGE ...`
+- `MERGE ...` when the dialect's `SupportsMerge` is true (SQL Server, Oracle, PostgreSQL 15+, DuckDB 1.4+, Firebird, Db2, SAP HANA, Snowflake, Sybase ASE, Informix, FlatFile, ...)
+- otherwise `INSERT ... ON CONFLICT DO UPDATE SET ...` (PostgreSQL before 15, CockroachDB, YugabyteDB, Spanner, SQLite)
+- otherwise `INSERT ... ON DUPLICATE KEY UPDATE ...` (MySQL family)
 
 ---
 
@@ -194,12 +194,17 @@ correct database-specific prefix before the name is embedded in SQL:
 
 | Database | Prefix | In SQL |
 |----------|--------|--------|
-| SQL Server | `@` | `@w0` |
-| PostgreSQL | `$` | `$w0` (positional index) |
-| Oracle | `:` | `:w0` |
-| MySQL/MariaDB | positional | `?` |
-| SQLite | `@` | `@w0` |
+| SQL Server, Sybase ASE | `@` | `@w0` |
+| PostgreSQL, CockroachDB, YugabyteDB, Spanner, Aurora PostgreSQL | `@` | `@w0` |
+| MySQL, MariaDB, TiDB, SingleStore, Aurora MySQL | `@` | `@w0` |
+| SQLite, Firebird, InterBase, Db2 | `@` | `@w0` |
+| Oracle, Snowflake | `:` | `:w0` |
+| FlatFile | `:` | `:w0` (positional `?` also works, but not mixed in one statement) |
 | DuckDB | `$` | `$w0` |
+| Informix, SAP HANA, Access | positional (no named parameters) | `?` |
+
+Taken from each dialect's `ParameterMarker` and `SupportsNamedParameters`; where
+`SupportsNamedParameters` is false, `MakeParameterName()` returns a bare `?`.
 
 The base name (without prefix) is always what you pass to `SetParameterValue()`.
 

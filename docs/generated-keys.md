@@ -6,14 +6,14 @@
 
 | Plan | How it works | Round trips | Used when |
 |---|---|---|---|
-| `Returning` | Inline `INSERT ... RETURNING id` | 1, atomic | PostgreSQL, Firebird, DuckDB, SQLite 3.35+, Db2 (`FROM FINAL TABLE`) |
+| `Returning` | Inline `INSERT ... RETURNING id` | 1, atomic | PostgreSQL (and CockroachDB, YugabyteDB, Spanner), Firebird, DuckDB, SQLite 3.35+, MariaDB 10.5+, Oracle (`RETURNING ... INTO` an OUT parameter), Db2 (`FROM FINAL TABLE`) |
 | `OutputInserted` | Inline `INSERT ... OUTPUT INSERTED.id` | 1, atomic | SQL Server |
 | `SessionScopedFunction` | The INSERT, then a session-scoped last-id query as a separate statement on the same pinned connection | 2 | Informix (`DBINFO`), SAP HANA (`CURRENT_IDENTITY_VALUE()`), Access (`@@IDENTITY`): drivers that reject a compound statement and expose no id |
 | `PrefetchSequence` | `SELECT seq.NEXTVAL` before the INSERT, then insert the already-known value | 2, but ID is known before the write | InterBase (`CREATE GENERATOR` + `GEN_ID(name, 1)`), FlatFile (`VALUES (NEXT VALUE FOR "<table>_seq")`); see the Oracle note below for why Oracle itself doesn't. The prefetch runs on a write connection: advancing a sequence is a write |
 | `CorrelationToken` | Add a unique token value to the INSERT, then `SELECT` the row back by that token | 2 | Universal fallback — works on any database with a uniqueness guarantee on the token column |
 | `NaturalKeyLookup` | Look up the just-inserted row by its natural key columns within the same transaction | 2 | Last resort; requires unique constraints on the lookup columns and explicit opt-in due to race-condition risk |
-| `CompoundStatement` | `INSERT ...; SELECT LAST_INSERT_ID()` as one multi-statement batch | 1 (batched) | MySql.Data, SQLite before 3.35, Sybase ASE. Saves `SessionScopedFunction`'s second round trip; requires multi-statement support on the connection. |
-| `ReaderInsertedId` | Execute the INSERT as a reader and read the generated key off a provider-specific `DbDataReader` property (e.g. `MySqlDataReader.LastInsertedId`), populated from the database's own OK packet | 1 | MySqlConnector, which deliberately does not support `AllowMultipleStatements` |
+| `CompoundStatement` | `INSERT ...; SELECT LAST_INSERT_ID()` as one multi-statement batch | 1 (batched) | MySql.Data (and MySQL-family databases on it), SQLite before 3.35, Sybase ASE. Saves `SessionScopedFunction`'s second round trip; requires multi-statement support on the connection. |
+| `ReaderInsertedId` | Execute the INSERT as a reader and read the generated key off a provider-specific `DbDataReader` property (e.g. `MySqlDataReader.LastInsertedId`), populated from the database's own OK packet | 1 | MySqlConnector (MySQL and TiDB, SingleStore through the same dialect), and MariaDB before 10.5; MySqlConnector deliberately does not support `AllowMultipleStatements` |
 | `None` | No retrieval strategy | — | Database doesn't support auto-generated keys, or the dialect hasn't configured one |
 
 ## The id query always runs on the INSERT's connection
@@ -44,14 +44,14 @@ The same pin covers the fallback id query of `Returning`/`OutputInserted`, `Comp
 
 | Database | Plan | Notes |
 |---|---|---|
-| Oracle | `Returning` | `OracleDialect.GetGeneratedKeyPlan()` explicitly overrides the base class and returns `Returning`, not the `PrefetchSequence` the base `SqlDialect` special-cases for Oracle. The doc comment on the neighboring `RenderInsertReturningClause` method still says "in normal operation Oracle uses PrefetchSequence" — that comment is stale; `Returning` is the deliberate, working design. Oracle's `RETURNING id INTO :o0` binds through an ADO.NET OUT parameter rather than a result set, so `TableGateway.Core.cs`'s `CreateAsync` special-cases `DatabaseType == SupportedDatabase.Oracle` and uses `ExecuteNonQueryAsync` + `GetParameterValue` instead of the `ExecuteScalarOrNullAsync` path other `Returning` dialects use. |
+| Oracle | `Returning` | `OracleDialect.GetGeneratedKeyPlan()` explicitly overrides the base class and returns `Returning`, not the `PrefetchSequence` the base `SqlDialect` special-cases for Oracle. Oracle's `RETURNING id INTO :o0` binds through an ADO.NET OUT parameter rather than a result set, so the dialect reports `RequiresOutputParameterForReturning()` and `TableGateway.Core.cs`'s `CreateAsync` uses `ExecuteNonQueryAsync` + `GetParameterValue` for it instead of the `ExecuteScalarOrNullAsync` path other `Returning` dialects use. |
 | SQL Server | `OutputInserted` | Base logic |
-| PostgreSQL, CockroachDB, YugabyteDB, DuckDB | `Returning` | Base logic |
+| PostgreSQL, CockroachDB, YugabyteDB, Spanner, DuckDB | `Returning` | Base logic (CockroachDB, YugabyteDB and Spanner inherit `PostgreSqlDialect`; Aurora PostgreSQL is PostgreSQL) |
 | Firebird | `Returning` | Explicit override (matches base logic) |
 | Db2 | `Returning` | Explicit override — actually emitted as `SELECT ... FROM FINAL TABLE (INSERT ...)`, wrapping the whole INSERT rather than a trailing clause |
 | SQLite | `Returning` (3.35+), else `CompoundStatement` | Explicit override: `Returning` when `SupportsInsertReturning` is true, `CompoundStatement` (`; SELECT last_insert_rowid()`) when it is false |
-| MariaDB | `ReaderInsertedId` | Explicit override — always, regardless of driver |
-| MySQL (and TiDB, which inherits `MySqlDialect`) | `ReaderInsertedId` if using MySqlConnector, else `CompoundStatement` | Explicit override, driver-dependent — the only dialect where the ADO.NET driver in use, not just the database engine, changes the generated-key strategy |
+| MariaDB | `Returning` (10.5+), else `ReaderInsertedId` | Explicit override: `Returning` when `SupportsInsertReturning` is true (server 10.5 or later), otherwise `ReaderInsertedId` |
+| MySQL (and TiDB, which inherits `MySqlDialect`; SingleStore and Aurora MySQL run on the same dialect) | `ReaderInsertedId` if using MySqlConnector, else `CompoundStatement` | Explicit override, driver-dependent — the only dialect where the ADO.NET driver in use, not just the database engine, changes the generated-key strategy |
 | Sybase ASE | `CompoundStatement` | Explicit override — `SybaseAseDialect.GetGeneratedKeyPlan()`. ASE has no OUTPUT/RETURNING clause; the ID is read back with a space-separated `INSERT ... SELECT @@IDENTITY` batch (`GetCompoundInsertIdSuffix`), since a semicolon-separated batch is rejected by ASE |
 | SAP HANA | `SessionScopedFunction` | Explicit override (2.0.6). `SELECT CURRENT_IDENTITY_VALUE() FROM DUMMY`, confirmed live to return the new id right after the INSERT on the same connection, now runs on the pinned connection. `CompoundStatement` is rejected live (no multi-statement commands). HANA is opt-in in the integration suite (16-32 GB image), so the pinned path is unit-tested and was not run live in 2.0.6 |
 | Informix | `SessionScopedFunction` | Explicit override (2.0.6). `SELECT CASE WHEN DBINFO('bigserial') <> 0 THEN DBINFO('bigserial') WHEN DBINFO('serial8') <> 0 THEN DBINFO('serial8') ELSE DBINFO('sqlca.sqlerrd1') END FROM systables WHERE tabid = 1` returns the id for SERIAL, SERIAL8 and BIGSERIAL (each `DBINFO` form reports only its own type). Compound statements are rejected by Informix.Net.Core. Verified live on the pinned connection |

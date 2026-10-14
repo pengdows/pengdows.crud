@@ -71,6 +71,12 @@ This is a hybrid export model, and the design held up through implementation:
    for tracing, filtered to `Track()`ed contexts via a `pengdows.context_id` Activity tag.
    The `pengdows.db.client.*` percentile/EMA gauges still ship alongside it rather than being
    replaced — both naming schemes coexist so no existing consumer of the gauges breaks.
+5. **Semantic-convention connection instruments** — alongside the histogram, four observable
+   instruments follow the OTel database semantic conventions and are read live from each
+   context's reader and writer `PoolStatisticsSnapshot`: `db.client.connection.count`
+   (state `used`), `db.client.connection.max`, `db.client.connection.pending_requests` and
+   `db.client.connection.timeouts` (slot plus turnstile timeouts). In total the observer
+   creates 53 instruments: 48 `pengdows.db.client.*` and these 5 `db.client.*`.
 
 `ModeContentionSnapshot` (`pengdows.crud/metrics/ModeContentionStats.cs`) does exist in
 source — it's a real public record (`CurrentWaiters`, `PeakWaiters`, `TotalWaits`,
@@ -93,6 +99,11 @@ What's actually applied, per `PengdowsMetricsObserver.cs`:
   doesn't yet expose the `DatabaseMetrics.Read`/`.Write` per-role split that
   `IDatabaseContext.GetPoolStatisticsSnapshot(PoolLabel)` already has internally).
 - `error.type` — on trace-derived spans/exceptions only.
+- The `db.client.*` semantic-convention instruments use the OpenTelemetry tag names instead:
+  `db.client.operation.duration` is tagged `db.system.name`, `db.namespace`, `db.operation.name`
+  (plus `error.type` when the span failed); `db.client.connection.*` carry
+  `db.client.connection.pool.name` (`<context name>.reader` / `<context name>.writer`), and
+  `connection.count` also `db.client.connection.state`.
 
 No `db.mode` or `execution.role` tag exists — an earlier draft proposed both; neither was
 built.

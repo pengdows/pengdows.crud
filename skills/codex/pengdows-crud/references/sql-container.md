@@ -35,7 +35,7 @@ An `ISqlQueryBuilder` used to build the SQL command text. It is a pooled, high-p
 
 Used to bind parameters to the command.
 
-- Automatically supports `@name`, `:name`, or positional `?`
+- The marker is per dialect: `@name` (SQL Server, PostgreSQL family, MySQL family, SQLite, Firebird, InterBase, Db2, Sybase ASE), `$name` (DuckDB), `:name` (Oracle, Snowflake, FlatFile), positional `?` (Informix, SAP HANA, Access). Always get it from `MakeParameterName`
 - Parameters are created using `DbProviderFactory`
 - `AddParameterWithValue` creates and adds parameter in one call
 - Overloads with `ParameterDirection` support output/return parameters
@@ -158,13 +158,17 @@ Returns the wrapped SQL string. The `captureReturn` parameter enables capturing 
 
 ### Procedure Wrapping Syntax by Database
 
-| Database | Syntax Used |
-|----------|-------------|
-| SQL Server | `EXEC procName` |
-| Oracle | `BEGIN procName; END;` |
-| PostgreSQL | `CALL procName()` or `SELECT * FROM procName()` |
-| MySQL / MariaDB | `CALL procName()` |
-| Firebird | `EXECUTE PROCEDURE procName` |
+Six call styles (`ProcWrappingStyle`); `None` means unsupported (`WrapForStoredProc` throws `NotSupportedException`). Detail: `docs/stored-procedures.md`.
+
+| Style | Databases | Generated call |
+|-------|-----------|----------------|
+| `Call` | MySQL, MariaDB, Aurora MySQL, SingleStore, Db2, SAP HANA, Snowflake | `CALL procName(args)` |
+| `Exec` | SQL Server, Sybase ASE | `EXEC procName arg1, arg2` (space-separated); `captureReturn: true` works only here |
+| `Oracle` | Oracle | `BEGIN procName(args); END;` |
+| `PostgreSQL` | PostgreSQL, CockroachDB, YugabyteDB, Aurora PostgreSQL | write: `CALL procName(args)`; read: `SELECT * FROM funcName(args)` |
+| `Informix` | Informix | `EXECUTE PROCEDURE procName(args)` |
+| `ExecuteProcedure` | Firebird, InterBase | write: `EXECUTE PROCEDURE procName(args)`; read: `SELECT * FROM procName(args)` |
+| `None` | SQLite, DuckDB, Access, TiDB, Spanner, FlatFile | not supported |
 
 ### Not Supported
 
@@ -194,14 +198,16 @@ Wraps table or column names using the database's quote character. This will spli
 
 ```csharp
 var name = sc.WrapObjectName("MyTable");
-// Returns "MyTable" or [MyTable] or `MyTable` or similarly appropriate value
+// Returns "MyTable" (ANSI double quotes on every dialect except Access, which returns [MyTable])
 
 var schemaAndName = sc.WrapObjectName("dbo.mytable");
-// Returns "dbo"."mytable" or [dbo].[mytable] or `dbo`.`mytable`
+// Returns "dbo"."mytable" (Access: [dbo].[mytable])
 
 var aliasedColumn = sc.WrapObjectName("o.total");
-// Returns "o"."total" or [o].[total] or `o`.`total`
+// Returns "o"."total" (Access: [o].[total])
 ```
+
+SQL Server and MySQL/MariaDB also use double quotes: their sessions set `QUOTED_IDENTIFIER ON` and an `sql_mode` including `ANSI_QUOTES`.
 
 **IMPORTANT:** Always use `WrapObjectName()` for all table names, column names, and aliases in custom SQL to ensure proper quoting per database dialect.
 

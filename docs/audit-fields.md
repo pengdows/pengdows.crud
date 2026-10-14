@@ -20,6 +20,8 @@ public interface IAuditValues
     object UserId { get; init; }
     DateTime UtcNow { get; }
     DateTimeOffset? TimestampOffset { get; }
+
+    T As<T>();   // default interface method: casts UserId to T
 }
 ```
 
@@ -68,18 +70,17 @@ single-row UPDATE's SET clause by dedicated filtering in the gateway SQL builder
 flag, which is a separate mechanism (see `entity-mapping.md`). Every per-entity batch-update
 fallback reuses that single-row builder and gets the same exclusion.
 
-**Exception — the multi-row `TableGateway<T,TId>.BuildBatchUpdate`/`BatchUpdateAsync` path**
-(dialects with `SupportsBatchUpdate`: PostgreSQL/CockroachDB/YugabyteDB, SQL Server, Snowflake)
-selects its SET columns with only the `[NonUpdateable]`/`[Id]`/`[PrimaryKey]` filter, so
-`CreatedBy`/`CreatedOn` are written back from the entity's current in-memory values. They are not
-re-stamped by the resolver, but an entity whose `CreatedBy`/`CreatedOn` were never loaded (or were
-modified) will overwrite the stored values. Mark those properties `[NonUpdateable]` as well if you
-batch-update partially populated entities on those dialects.
+The multi-row `TableGateway<T,TId>.BuildBatchUpdate`/`BatchUpdateAsync` path (dialects with
+`SupportsBatchUpdate`: PostgreSQL/CockroachDB/YugabyteDB, SQL Server, Oracle, Snowflake; not used
+for an entity with a `[Version]` column, which always takes the per-row UPDATE) excludes
+`CreatedBy`/`CreatedOn` from its SET columns the same way
+(`TableGateway.Batch.cs` `GetCachedUpdateableColumns`).
 
 ## `AuditCreationPolicy` — the security-relevant control
 
-A settable property on every `ITableGateway`/`IPrimaryKeyTableGateway`, default
-`PreserveExplicitValues`:
+An init-only property on every `ITableGateway`/`IPrimaryKeyTableGateway` (set it in an object
+initializer when constructing the gateway: `new TableGateway<T, TId>(ctx) { AuditCreationPolicy = ... }`),
+default `PreserveExplicitValues`:
 
 | Policy | CREATE behavior |
 |---|---|
@@ -154,5 +155,5 @@ fields" rule above, not a gap in it.
 | `CreateAsync`, `PreserveExplicitValues` + entity already has a value | Preserved as-is | Set from resolver | 1 |
 | `CreateAsync`, `Authoritative` | Always overwritten | Set from resolver | 1 |
 | `UpdateAsync` | Untouched (excluded from SET clause) | Set from resolver | 1 |
-| `BatchCreateAsync`/`BatchUpdateAsync` (N entities) | Per-entity, same rules as above — except the multi-row `TableGateway` batch-update path, which writes back the in-memory values (see UPDATE above) | Per-entity, same rules as above | **1 total**, reused for all N |
+| `BatchCreateAsync`/`BatchUpdateAsync` (N entities) | Per-entity, same rules as above | Per-entity, same rules as above | **1 total**, reused for all N |
 | Write fails (exception or 0 rows affected) | Restored to pre-Build value | Restored to pre-Build value | (already spent, no re-resolve on retry) |

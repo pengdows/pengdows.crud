@@ -111,9 +111,13 @@ ValueTask<long> CountWhereEqualsAsync(string column, string value, string? andWh
 
 ```csharp
 string WrappedTableName { get; }                    // Fully qualified, quoted table name
-EnumParseFailureMode EnumParseBehavior { get; }      // Enum parse failure handling (init-only; set via constructor)
+EnumParseFailureMode EnumParseBehavior { get; }      // Enum parse failure handling (set via constructor)
+string ColumnName(string propertyName);              // Mapped column name for custom SQL: ColumnName(nameof(Order.CustomerId))
+// Any entity, from a context: ctx.ColumnName<TEntity>(nameof(TEntity.Prop))  (DatabaseContextColumnNameExtensions)
+
+// Public on the concrete gateway classes, NOT on the interfaces:
 Action<object, object?> GetOrCreateSetter(PropertyInfo prop); // Compiled setter
-TEntity MapReaderToObject(ITrackedReader reader);    // Row-to-entity mapping
+TEntity MapReaderToObject(ITrackedReader reader);             // Row-to-entity mapping
 ```
 
 ## IPrimaryKeyTableGateway<TEntity>
@@ -188,6 +192,8 @@ void BuildWhereByPrimaryKey(IReadOnlyCollection<TEntity>? entities, ISqlContaine
 ```csharp
 string WrappedTableName { get; }
 EnumParseFailureMode EnumParseBehavior { get; }
+string ColumnName(string propertyName);
+// Public on the concrete PrimaryKeyTableGateway, not on the interface:
 Action<object, object?> GetOrCreateSetter(PropertyInfo prop);
 TEntity MapReaderToObject(ITrackedReader reader);
 ```
@@ -209,7 +215,7 @@ TEntity MapReaderToObject(ITrackedReader reader);
 
 ```csharp
 ISqlQueryBuilder Query { get; }           // SQL text builder (pooled, zero-alloc appends)
-bool HasWhereAppended { get; set; }       // Whether WHERE exists
+bool HasWhereAppended { get; }            // Whether WHERE exists
 int ParameterCount { get; }               // Current parameter count
 string QuotePrefix { get; }               // Dialect quote prefix
 string QuoteSuffix { get; }               // Dialect quote suffix
@@ -316,7 +322,7 @@ EventHandler<DatabaseMetrics> MetricsUpdated;  // Raised when metrics change
 CommandPrepareMode PrepareMode { get; }        // Auto/Always/Never statement preparation
 bool SupportsInsertReturning { get; }          // True if INSERT ... RETURNING is supported
 bool SupportsNamedParameters { get; }          // False for providers that use positional ? markers
-string Name { get; set; }                      // Logical name for this context (for logging/multi-tenancy)
+string Name { get; }                           // Logical name for this context (for logging/multi-tenancy)
 Guid RootId { get; }                           // Unique identity of this context instance
 ReadWriteMode ReadWriteMode { get; }           // Read-only or read-write
 bool IsReadOnlyConnection { get; }             // True if context was opened read-only
@@ -344,6 +350,8 @@ void Rollback();
 ValueTask RollbackAsync(CancellationToken ct = default);
 ValueTask SavepointAsync(string name, CancellationToken ct = default);
 ValueTask RollbackToSavepointAsync(string name, CancellationToken ct = default);
+ValueTask ReleaseSavepointAsync(string name, CancellationToken ct = default);
+// Each savepoint call throws NotSupportedException when the dialect's SavepointCapabilities lacks Create/Rollback/Release.
 ```
 
 ### Transaction State
@@ -417,9 +425,20 @@ public enum SupportedDatabase
     TiDb = 1024,
     Snowflake = 2048,
     AuroraMySql = 4096,
-    AuroraPostgreSql = 8192
+    AuroraPostgreSql = 8192,
+    Db2 = 16384,            // 2.0.6: LUW only
+    FlatFile = 32768,       // 2.0.6: pengdows.flatfile
+    SingleStore = 65536,    // 2.0.6: detected via SHOW VARIABLES LIKE 'memsql_version'; MySQL dialect
+    SybaseASE = 131072,     // 2.0.6
+    Spanner = 262144,       // 2.0.6: PostgreSQL interface
+    Informix = 524288,      // 2.0.6
+    SapHana = 1048576,      // 2.0.6 (opt-in integration suite)
+    InterBase = 2097152,    // 2.0.6 (opt-in integration suite)
+    Access = 4194304        // 2.0.6 (Windows only)
 }
 ```
+
+Percona Server for MySQL, Citus, TimescaleDB and Fujitsu Enterprise Postgres have no value: they are detected as MySQL/PostgreSQL and run through that dialect.
 
 ## IAuditValueResolver / IAuditValues
 
@@ -489,7 +508,7 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 │   │   ├── ForeignKeyViolationException
 │   │   ├── NotNullViolationException
 │   │   └── CheckConstraintViolationException
-│   ├── TransientWriteConflictException (abstract, IsTransient = true)
+│   ├── TransientWriteConflictException (IsTransient = true)
 │   │   ├── DeadlockException
 │   │   └── SerializationConflictException
 │   ├── AmbiguousResultException            — commit outcome unknown (e.g. CockroachDB 40003; IsTransient = false)
@@ -499,6 +518,7 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 │   │   ├── ConnectionFailedException       — DatabaseContext construction could not connect (Phase/Role)
 │   │   ├── FileLockContentionException     — embedded-file lock contention (IsTransient = false)
 │   │   └── TooManyConnectionsException     — server reached but at its connection limit (IsTransient = true)
+│   ├── ReadOnlyViolationException          — write refused: read-only connection, transaction or database (many dialects; docs/read-only-enforcement.md)
 │   └── TransactionException               — begin/commit/rollback failure
 ├── SqlGenerationException                  — entity metadata programmer error (TypeMapRegistry)
 └── DataMappingException                    — strict-mode coercion failure (DataReaderMapper)
@@ -507,7 +527,7 @@ DatabaseException (abstract)           Properties: Database, SqlState, ErrorCode
 **Key throw sites:**
 - `SqlGenerationException` — thrown by `TypeMapRegistry` at entity registration/gateway construction for missing `[Table]`, empty column name, invalid enum `DbType`, duplicate columns, no `[Id]`/`[PrimaryKey]`, PK order errors, invalid `[Version]`/audit field types. Uses `SupportedDatabase.Unknown`.
 - `DataMappingException` — thrown in strict mode (`MapperOptions.Strict = true`) when column→property coercion fails. Uses `SupportedDatabase.Unknown`.
-- `ConnectionException` — thrown by provider translators for connection-level failures.
+- `ConnectionException` — thrown by provider translators for connection-level failures. `TransactionModeNotSupportedException` derives from `NotSupportedException`, not `DatabaseException`.
 - `TooManyConnectionsException` — a `ConnectionException` (`IsTransient = true`) for a server that was reached but reported it is at its connection limit (PostgreSQL 53300, MySQL 1040/1203/1226, Oracle ORA-02391/00018/00020 (and ORA-50201 wrapping the listener's ORA-12516/12519/12520), Db2 57030, Informix -25571, InterBase 335544744). SQL Server, SAP HANA and Sybase ASE only drop the socket at their limit, so they stay a plain `ConnectionException`.
 - `TransactionException` — thrown by `TransactionContext` for begin/commit/rollback failures. After failure, `IsCompleted = true` and the connection is released; `Dispose` will not attempt a second rollback.
 - `OperationCanceledException` — **never** wrapped; propagates as-is.

@@ -61,8 +61,8 @@ This document deliberately doesn't quote measured failure counts or latencies: c
 loss rate under this kind of workload varies with machine and load, so treat any single
 competitor percentage as a snapshot, not a constant — the invariant is the part of this claim
 that travels. Run the benchmark on your own hardware to reproduce it. The `busy_timeout` value
-is a hardcoded constant in the benchmark (`BusyTimeoutMs`), not a `[Params]` fixture, so
-comparing settings means editing that constant and re-running. That workload runs on a shared-cache in-memory database, where a lock conflict is `SQLITE_LOCKED`, which, as SQLite documents it, the
+is a `[Params(10, 5000)]` axis in the benchmark (`BusyTimeoutMs`, with the command timeout scaled
+to match), so one run produces both settings. That workload runs on a shared-cache in-memory database, where a lock conflict is `SQLITE_LOCKED`, which, as SQLite documents it, the
 busy handler does not retry. Against a WAL file on disk (2026-10-13, `benchmarks/CrudBenchmarks/results/sqlite-file-writer-patterns-run-2026-10-13.md`)
 the same kind of storm lost no writes for any arm, and the uncoordinated Dapper arm ran 5 to 6 times slower than the coordinated ones, so there the
 protection shows as time, not as lost writes; losses appear when the queue takes longer to drain than the command timeout.
@@ -87,7 +87,7 @@ contract, moving between databases costs a dialect swap and verification, not a 
 (principle 8). This isn't aspirational: `pengdows.hangfire` (SQL-first Hangfire job
 storage built on this library) demonstrates it directly — its integration test suite
 defines each storage behavior once as a generic abstract test class and runs it unchanged
-against 10 database engines (SQLite, PostgreSQL, SQL Server, Oracle, Firebird, CockroachDB,
+against 11 database engines (SQLite, PostgreSQL, SQL Server, MySQL, Oracle, Firebird, CockroachDB,
 MariaDB, DuckDB, YugabyteDB, TiDB) via per-database subclasses that differ only in which
 `StorageFixture` they pass to the base constructor — no per-database test logic, no
 per-database application code. Moving that project from SQL Server to SQLite is a
@@ -436,8 +436,8 @@ reports `SupportsBatchInsert`/`SupportsBatchUpdate`/`SupportsInsertOnConflict`/
 per-entity statement per row through that same API when those flags are absent, rather than
 emitting SQL those engines don't support. Savepoints follow the identical pattern:
 `SupportsSavepoints` is explicitly `true` for SQLite, Oracle, Firebird, and SQL Server
-(which overrides the SQL to `SAVE TRANSACTION`/`ROLLBACK TRANSACTION`) and explicitly
-`false` for DuckDB and Snowflake — the absence is a declared capability, not a gap
+(which overrides the SQL to `SAVE TRANSACTION`/`ROLLBACK TRANSACTION`), among others, and explicitly
+`false` for DuckDB, Snowflake, Spanner and SingleStore — the absence is a declared capability, not a gap
 discovered in production.
 
 ## 7. Database metadata is preserved, not flattened
@@ -617,7 +617,7 @@ resource a tenant's workload touches.
 | `pengdows.crud` | Core DAL: gateways, `ISqlContainer`, dialects — the architecture itself (principles 1–10) |
 | `pengdows.crud.abstractions` | Public interfaces/enums — the coordinated boundary's contract surface |
 | `pengdows.crud.fakeDb` | Fake ADO.NET provider — falsifiability for principle 10 |
-| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026 — compile-time enforcement, principle 9 |
+| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026/028/029 — compile-time enforcement, principle 9 |
 | `pengdows.poco.mint.cli` + Dockerized web UI | Schema-first POCO generation, built on `IDatabaseContext`/`ISqlDialect` — see principle 1 |
 | `pengdows.hangfire` | SQL-first Hangfire job storage — a real downstream consumer, showing the architecture generalizes past CRUD |
 | `pengdows.stormgate` | ADO.NET connection admission control — a sibling package, not wired into `DatabaseContext`'s own governance |

@@ -8,8 +8,9 @@ architecture and would otherwise make the thesis go stale every time an implemen
 detail shifts. Treat everything here as a snapshot verified against source as of the date
 below; re-verify against current code before quoting it externally.
 
-Last verified: 2026-09-24, against branch `2.0.6` — a source-level re-check of every API
-name, value, file path, and test citation below. This document deliberately records no
+Last verified: 2026-10-13, against branch `2.0.6` — a source-level re-check of every API
+name, value, file path, and test citation below (the 2026-09-24 pass, with the analyzer list, the named-parameter
+flags and the testbed/integration-suite description corrected). This document deliberately records no
 test-run totals or testbed pass/fail counts; run the suites yourself before quoting results.
 
 ## Ecosystem package status
@@ -19,7 +20,7 @@ test-run totals or testbed pass/fail counts; run the suites yourself before quot
 | `pengdows.crud` | Core DAL: gateways, `ISqlContainer`, dialects | The architecture itself (principles 1–10) |
 | `pengdows.crud.abstractions` | Public interfaces/enums | The coordinated boundary's contract surface |
 | `pengdows.crud.fakeDb` | Fake ADO.NET provider | Falsifiability for principle 10 |
-| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026 | Compile-time enforcement, principle 9 |
+| `pengdows.crud.analyzers` | Roslyn rules PGC001/008/025/026/028/029 | Compile-time enforcement, principle 9 |
 | `pengdows.poco.mint.cli` + Dockerized web UI | Schema-first POCO generation | Genuinely reuses `IDatabaseContext`/`ISqlDialect` for schema inspection (verified in `DatabaseInspector.cs`) — see principle 1 |
 | `pengdows.hangfire` | SQL-first Hangfire job storage | A real downstream consumer: depends on `pengdows.crud` and `pengdows.crud.analyzers`, showing the architecture generalizes past CRUD to background-job storage |
 | `pengdows.stormgate` | ADO.NET connection admission control (prevents "connection storm" thundering-herd opens) | Ships from the same repository/solution as `pengdows.crud` but is a standalone, separately-adopted package — not wired into `DatabaseContext`'s own connection governance (the `SingleWriter` turnstile governor is a distinct, internal mechanism) |
@@ -43,7 +44,7 @@ MySQL/Snowflake 65535, Firebird 1499, PostgreSQL 100.
 
 Other stored-procedure capability flags, as currently implemented:
 - `SupportsNamedParameters` — `false` for the generic ANSI fallback dialect (`Sql92Dialect`)
-  and for Informix, SAP HANA, Access, and FlatFile; `true` for every other dialect.
+  and for Informix, SAP HANA, and Access; `true` for every other dialect (FlatFile included).
 - `SupportsRepeatedNamedParameters` — defaults to the dialect's `SupportsNamedParameters`
   value; Oracle is the one dialect that supports named parameters but explicitly overrides
   this to `false` (no reusing a bind-variable name within one statement).
@@ -63,7 +64,7 @@ inherits from the other.
 
 ## Complete analyzer rule list (principle 9)
 
-The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
+The `pengdows.crud.analyzers` Roslyn package currently defines six rules:
 
 - **PGC001** — DI registrations of `DatabaseContext`/`TableGateway`/`PrimaryKeyTableGateway`
   as `AddScoped`/`AddTransient` are errors; these types must be singletons.
@@ -77,6 +78,9 @@ The `pengdows.crud.analyzers` Roslyn package currently defines four rules:
   (`DataSource`, the SQL-standard-level heuristics, internal bookkeeping types, the inert type
   attributes), and on assigning `DatabaseContext.ReadWriteMode`/`ProcWrappingStyle`, which are
   fixed at construction (the setters are no-ops; 3.0 makes them `init`).
+- **PGC029** — an error, opt-in (`<PengdowsMultiTenancy>true</PengdowsMultiTenancy>`): every call to a
+  gateway execution/build method must supply a non-null `IDatabaseContext`/`ITransactionContext`
+  instead of relying on the gateway's default context (`GatewayCallSiteContextAnalyzer`).
 
 ## BenchmarkValidation mechanism (principle 10)
 
@@ -138,15 +142,21 @@ the tests will always exist under these names.
 
 ## Provider/version evidence
 
-The maintained testbed (`testbed/`, run via `dotnet run -c Release -f net10.0 --project testbed`;
-see `testbed/readme.md`) is the executable source of "verified database support" claims: it runs
-one shared matrix of checks (CRUD, transactions, stored-procedure invocation, and the rest listed
-in the readme) through the public pengdows.crud surface against real databases via
-Testcontainers. The always-on set is SQLite, DuckDB, PostgreSQL, MySQL, MariaDB, SQL Server,
-CockroachDB, Firebird, TiDB, and YugabyteDB; Oracle (`INCLUDE_ORACLE=true`, license acceptance)
-and Snowflake (`INCLUDE_SNOWFLAKE=true`, cloud-only credentials) are opt-in. `AuroraMySql` and
+The maintained integration suite is the executable source of "verified database support" claims. The testbed
+(`testbed/`, run via `dotnet run -c Release -f net10.0 --project testbed`; see `testbed/readme.md`) starts each
+database through Testcontainers (or a local file/in-memory provider), creates the shared test table, runs the
+idle-unload probe and the container-level checks; the CRUD, transaction, stored-procedure and error-mapping checks run
+against the same databases as xUnit tests in `pengdows.crud.IntegrationTests` (see its README), both through the public
+pengdows.crud surface. The always-on set is SQLite, DuckDB, FlatFile, PostgreSQL, Spanner, MySQL, MariaDB, SQL Server,
+CockroachDB, Firebird, TiDB, YugabyteDB, Oracle, Db2 LUW, SingleStore, Sybase ASE and Informix
+(`ParallelTestOrchestrator.GetTestConfigurations()`); the PostgreSQL and MySQL entries run a version
+matrix that includes the compatible forks Citus, TimescaleDB, Fujitsu Enterprise Postgres and Percona
+Server. Snowflake (`INCLUDE_SNOWFLAKE=true`, cloud-only credentials), SAP HANA (`INCLUDE_SAPHANA=true`,
+16-32GB RAM), InterBase (`INCLUDE_INTERBASE=true`, node-locked license) and the Aurora variants
+(`INCLUDE_AURORA=true`) are opt-in, and Access runs automatically on Windows only. `AuroraMySql` and
 `AuroraPostgreSql` are managed-AWS variants detected at runtime and covered by the MySQL/
-PostgreSQL paths rather than separate targets (see CLAUDE.md's "Aurora variants" section).
+PostgreSQL paths (see CLAUDE.md's "Aurora variants" section), with an opt-in suite against real
+clusters.
 
 This document does not record a per-engine pass/fail/skip table or tested version list — those
 are properties of a specific run. Regenerate them from a fresh testbed run before quoting them.

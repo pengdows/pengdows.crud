@@ -118,7 +118,7 @@ await gateway.CountWhereEqualsAsync("queue", "default",
 ## Identifier quoting and parameterization
 
 - Every table and column name passed through `column`, `andWhereNull`, or `andWhereNotNull` goes
-  through `ISqlContainer.WrapObjectName(...)` — the same dialect-aware identifier quoting (ANSI
+  through the dialect's `WrapObjectName(...)` (on dialects that need qualified column references the column is prefixed with the quoted table name; a `column` that already contains a `.` is quoted as given) — the same dialect-aware identifier quoting (ANSI
   double quotes for almost every dialect; Access uses brackets) used everywhere else in the library (see CLAUDE.md's `WrapObjectName` section). There is no raw string
   concatenation of identifiers into SQL text.
 - Every `value` is bound as a `DbType.String` parameter via `AddParameterWithValue` /

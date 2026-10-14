@@ -26,13 +26,17 @@ parameter marker pattern/regex/max length, named/repeated-parameter support, par
 limits, default-prepare recommendation, procedure wrapping style, and a handful of DDL-capability
 flags (`SupportsDropTableIfExists`, `SupportsTruncateTable`, `SupportsMerge`,
 `SupportsInsertOnConflict`, `SupportsOnDuplicateKey`), fallback-dialect
-status, and `GetCompatibilityWarning()`. Everything on it also appears on `ISqlDialect`, which is
-the larger and more current surface — reach for `context.Dialect` first; `DataSourceInfo` exists
-for callers that only need this narrower metadata view.
+status, and `GetCompatibilityWarning()`. Most capability flags on it also appear on `ISqlDialect`,
+which is the larger and more current surface — reach for `context.Dialect` first. A few members
+exist only on `IDataSourceInformation`: `ParameterMarkerPattern`, `ParameterNamePatternRegex`,
+`DatabaseProductName`/`DatabaseProductVersion`, `DefaultPrepareStatements`, `Product`,
+`IsUsingFallbackDialect` and `StandardCompliance` (the dialect has `ProductInfo`,
+`PrepareStatements` and `IsFallbackDialect` instead); `DataSourceInfo` suits callers that only
+need the narrower metadata view.
 
 ## `ISqlDialect` mixes two audiences — know which one you're calling
 
-`ISqlDialect` (`pengdows.crud.abstractions/dialects/ISqlDialect.cs`, ~900 lines) is CLAUDE.md's
+`ISqlDialect` (`pengdows.crud.abstractions/dialects/ISqlDialect.cs`, ~870 lines) is CLAUDE.md's
 documented "official surface area" — but reading through it, its members split into two genuinely
 different jobs:
 
@@ -132,11 +136,11 @@ strategy is a real bug this codebase has already hit. PostgreSQL 15+ has **both*
 batch-`MERGE` implementation for any dialect) **at the same time**. Code that checked only
 `SupportsMerge` to decide which upsert-fragment shape to build leaked a `MERGE`-only SQL fragment
 (referencing `s.column`, `MERGE`'s own `USING (...) AS s` alias) into batch `ON CONFLICT` SQL,
-which has no such alias — a real, shipped bug. The cached fragment is still pre-built in
-`MERGE` form whenever `SupportsMerge` is true (`TableGateway.Sql.cs`'s `upsertUpdateFragment`
-pre-build); the batch path fixes it by checking *both* flags and rewriting the `s.` source-alias
-references to `EXCLUDED.` when a dialect supports `MERGE` and `ON CONFLICT` at the same time
-(see `TableGateway.Batch.cs`'s batch-upsert builder and its inline comment). The lesson generalizes: check the specific flags relevant to the *specific
+which has no such alias — a real, shipped bug. The fix is that `TableGateway.Sql.cs` pre-builds two
+fragments, because one dialect can need both: `UpsertUpdateFragment` in `MERGE` form (source alias `s`,
+target alias `t`) when `SupportsMerge` is true, and `UpsertUpdateFragmentOnConflict` for `ON CONFLICT` /
+`ON DUPLICATE KEY`. The single-row path uses the first; the batch path (`TableGateway.Batch.cs`) takes
+the second (and, on `ON DUPLICATE KEY` dialects, checks `UpsertFragmentHasUnreliableIncoming`). The lesson generalizes: check the specific flags relevant to the *specific
 operation* you're generating, not a single flag as a stand-in for "which dialect family is this."
 
 ```csharp

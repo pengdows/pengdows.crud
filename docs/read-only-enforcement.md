@@ -29,17 +29,18 @@ The exact session SQL varies by dialect, but the framework can enforce read inte
 - dialect-specific session settings when the provider requires it
 - transaction creation rules that reject write intent on a read-only context
 
-The details live in the dialect and connection-lifecycle code, not in a separate read-only subsystem with its own public API.
+The details live in the dialect and connection-lifecycle code, not in a separate read-only subsystem with its own public API. The per-database mechanism (connection string, session or transaction SQL) is tabulated in [supported-databases.md](supported-databases.md#read-only-enforcement-matrix). Aurora MySQL and Aurora PostgreSQL behave as their MySQL / PostgreSQL parent throughout this document.
 
 ### DuckDB exception
 
 On a `ReadWrite` DuckDB context, read-intent operations do not switch to a read-only connection, even when a `ReadOnlyConnectionString` is configured: a DuckDB read-only connection on the same file can lock out concurrent writers. Only an explicit `ReadWriteMode.ReadOnly` context uses read-only DuckDB connections.
+
 ## Read-only violation exceptions
 
 A write attempt is checked against **two separate flags, in sequence**, each throwing a different exception type — a catch block that only handles one will miss the other:
 
-1. **Context-level configuration**: if `context.ReadWriteMode == ReadWriteMode.ReadOnly` (the whole context was configured read-only), throws `NotSupportedException("Write operations are not supported in read-only mode.")`.
-2. **Connection/transaction-scoped intent**: checked second, only if the first check passes. `context.IsReadOnlyConnection` is a *different* flag — set per connection/transaction, e.g. a transaction opened with `ExecutionType.Read` on an otherwise-writable context. If set, throws `InvalidOperationException("Transaction is read-only.")` (`InternalConnectionAccessAssertions.AssertIsWriteConnection`).
+1. **Context-level configuration**: if `context.ReadWriteMode == ReadWriteMode.ReadOnly` (the whole context was configured read-only), throws `ReadOnlyContextException` (a `NotSupportedException`, message "Write operations are not supported in read-only mode.").
+2. **Connection/transaction-scoped intent**: checked second, only if the first check passes. `context.IsReadOnlyConnection` is a *different* flag — set per connection/transaction, e.g. a transaction opened with `ExecutionType.Read` on an otherwise-writable context. If set, throws `ReadOnlyAccessException` (an `InvalidOperationException`, message "Transaction is read-only.") (`InternalConnectionAccessAssertions.AssertIsWriteConnection`, `TransactionContext.AssertIsWriteConnection`).
 
 These are real, production-active guards (not `Debug.Assert`), checked on every write execution.
 Both library-generated exceptions implement the public `IReadOnlyViolation` marker interface
@@ -67,6 +68,7 @@ transient. The provider codes, checked live on 2026-10-03 unless marked document
 | Db2 | -817 (documented, prohibited update such as a read-only standby) |
 | Spanner | SQLSTATE P0001 with "not allowed for read-only transactions" |
 | SQLite, DuckDB, FlatFile, Access, SAP HANA | their read-only file/connection errors |
+| Snowflake, SingleStore | none translated: Snowflake has no read-only mode, and SingleStore accepts the write (below) |
 
 ### Is a read-intent transaction read-only at the database?
 
@@ -74,7 +76,7 @@ transient. The provider codes, checked live on 2026-10-03 unless marked document
 Whether the **database** also refuses a write through it depends on the database (live, 2026-10-03):
 
 - **Yes**: PostgreSQL, CockroachDB, YugabyteDB, MySQL, MariaDB, Oracle, SQLite, FlatFile, Informix,
-  SAP HANA.
+  SAP HANA, Access (`Mode=Read`; the dialect declares it enforcing, `EnforcesReadOnlyTransactions`).
 - **No** (the library's guard is the only protection): SQL Server, Sybase ASE, Db2, Firebird,
   InterBase, DuckDB, Snowflake, Spanner, TiDB (`READ ONLY` is a no-op unless
   `tidb_enable_noop_functions` is set), SingleStore.

@@ -73,20 +73,33 @@ public async Task QueuedScalarAndReaderResults_AreReturnedInOrder()
 
 ```csharp
 [Fact]
-public void OpenFailure_IsConfigurable()
+public void OpenFailure_ThrowsFromTheConstructor()
 {
+    // The first open happens while the context initializes, so the context itself throws
     var factory = fakeDbFactory.CreateFailingFactory(
         SupportedDatabase.Sqlite,
         ConnectionFailureMode.FailOnOpen);
+    var config = new DatabaseContextConfiguration { ConnectionString = "Data Source=test", DbMode = DbMode.Standard };
 
-    var context = new DatabaseContext("test", factory);
+    var ex = Assert.Throws<ConnectionFailedException>(() => new DatabaseContext(config, factory));
+    Assert.Equal("InitConnect", ex.Phase);
+}
 
-    using var sc = context.CreateSqlContainer("SELECT 1");
-    Assert.ThrowsAny<Exception>(() => sc.ExecuteScalarRequiredAsync<int>().GetAwaiter().GetResult());
+[Fact]
+public async Task CommandFailure_ThrowsOnExecute()
+{
+    var factory = fakeDbFactory.CreateFailingFactory(
+        SupportedDatabase.Sqlite,
+        ConnectionFailureMode.FailOnCommand);
+    var config = new DatabaseContextConfiguration { ConnectionString = "Data Source=test", DbMode = DbMode.Standard };
+
+    using var context = new DatabaseContext(config, factory);
+    using var sc = context.CreateSqlContainer("UPDATE widgets SET name = 'x'");
+    await Assert.ThrowsAsync<InvalidOperationException>(async () => await sc.ExecuteNonQueryAsync());
 }
 ```
 
-The five supported failure modes on `ConnectionFailureMode` are:
+`ConnectionFailedException` is in `pengdows.crud.exceptions`. The failure modes on `ConnectionFailureMode` are `None` plus:
 
 | Mode | Behavior |
 |------|----------|
@@ -105,6 +118,12 @@ Additional failure controls are available on `fakeDbConnection`, including:
 - `SetCustomFailureException(...)` — override the exception thrown on failure
 
 Custom exception injection is supported — pass a specific exception instance to `SetCustomFailureException` to control exactly what is thrown. Connection tracking and disposal verification are also available for asserting correct resource cleanup.
+
+## Emulating Any Supported Database
+
+`new fakeDbFactory(SupportedDatabase.X)` (or the string overload, or `EmulatedProduct=...` in the connection string) makes the fake provider answer the
+dialect's schema/version probes as that product, so the same test can run against the quoting, parameter markers and SQL shape of any of the 23
+`SupportedDatabase` values. Full capability list (result injection, failure injection, parameter capture, `FakeDataStore`): `docs/testing-with-fakedb.md`.
 
 ## Recommended Coverage Pattern
 

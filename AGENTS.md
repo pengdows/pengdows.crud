@@ -236,9 +236,10 @@ The `[Version]` attribute enables optimistic concurrency control:
 3. **Error:** Throws if no `[PrimaryKey]` AND `[Id]` is not writable (`[Id(false)]`)
 
 **SQL generated depends on database** (`MERGE` is preferred wherever the dialect supports it, then `ON CONFLICT`, then `ON DUPLICATE KEY`):
-- SQL Server/Oracle/PostgreSQL 15+/Firebird/Snowflake/Db2/Sybase ASE/SAP HANA (and DuckDB 1.4+): `MERGE`
-- PostgreSQL < 15/CockroachDB/YugabyteDB/SQLite (and DuckDB < 1.4): `INSERT ... ON CONFLICT`
+- SQL Server/Oracle/PostgreSQL 15+/Firebird/Snowflake/Db2/Informix/Sybase ASE/SAP HANA/FlatFile (and DuckDB 1.4+): `MERGE`
+- PostgreSQL < 15/CockroachDB/YugabyteDB/Spanner/SQLite (and DuckDB < 1.4): `INSERT ... ON CONFLICT`
 - MySQL/MariaDB/TiDB (and Aurora MySQL/SingleStore): `INSERT ... ON DUPLICATE KEY UPDATE`
+- InterBase/Access: no upsert form; `UpsertAsync`/`BuildUpsert` throw `NotSupportedException`
 
 ## Multi-Tenancy
 
@@ -316,6 +317,7 @@ This is intentional design — it allows "last modified" queries without checkin
 - Without resolver + user audit fields = `InvalidOperationException` at runtime
 - Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
 - The audit resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset are all supported.
+- `AuditCreationPolicy` (init-only property on every gateway, new in 2.0.6; `docs/audit-fields.md`): `PreserveExplicitValues` (default) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always overwrites them with resolver values (stops request-model binding from spoofing audit fields)
 - UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`)
 
 ## Connection Management and DbMode
@@ -325,7 +327,7 @@ This is intentional design — it allows "last modified" queries without checkin
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
-| `PreventDatabaseUnload` | 1 | Sentinel connection keeps the database loaded (SQL Server LocalDB); `KeepAlive` is an `[Obsolete]` alias |
+| `PreventDatabaseUnload` | 1 | Sentinel connection keeps an idle-unloading database loaded (SQL Server LocalDB, Firebird, Db2 LUW); `KeepAlive` is an `[Obsolete]` alias |
 | `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
@@ -435,7 +437,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite `Standard` -> `SingleWriter`); where `Best` picks `PreventDatabaseUnload` (LocalDB, Firebird) an explicit `Standard` is honored
+8. **DbMode selection/coercion is safety-first** — `Best` auto-selects; explicitly unsafe modes are coerced when required (e.g., SQLite `Standard` -> `SingleWriter`); where `Best` picks `PreventDatabaseUnload` (LocalDB, Firebird, Db2 LUW) an explicit `Standard` is honored
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `ctx.BeginTransaction()`
 11. **ISqlContainer execution methods return ValueTask** — not Task, for reduced allocations

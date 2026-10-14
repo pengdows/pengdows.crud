@@ -21,7 +21,7 @@ The philosophy is simple:
 public enum DbMode
 {
     Standard = 0,         // Recommended for production
-    KeepAlive = 1,        // Keeps one sentinel connection open
+    PreventDatabaseUnload = 1, // Keeps one sentinel connection open ([Obsolete] alias: KeepAlive)
     SingleWriter = 2,     // Governor-enforced single writer, concurrent ephemeral readers
     SingleConnection = 4, // All work goes through one pinned connection
     Best = 15             // Auto-select best mode for the database
@@ -38,11 +38,13 @@ public enum DbMode
 - Each operation opens a new connection from the pool and closes it after use, unless inside a transaction
 - Fully supports parallelism and provider connection pooling
 
-### KeepAlive
+### PreventDatabaseUnload
 
-- Keeps a single sentinel connection open (never used for work) to prevent idle disconnection
+- Keeps a single sentinel connection open (never used for work) so an embedded/local database does not unload when idle
 - Otherwise behaves like `Standard`
-- Modern use cases: long-running Lambda, Aurora Serverless cold-start prevention, RDS Proxy idle disconnection, LocalDB unload prevention
+- `Best` selects it for SQL Server LocalDB, Firebird (embedded and client-server) and Db2 LUW; an explicit `Standard` is always honored. It is a knob for other engines (e.g. SQL Server with `AUTO_CLOSE`, proxy/serverless idle disconnection)
+- `KeepAlive` is only an `[Obsolete]` alias for the same value (`1`); new code uses `PreventDatabaseUnload`
+- The sentinel needs a second pooled connection: a pool below 2 is raised to 2, and a `Best` that would pick it falls back to `Standard` when the configured maximum is below 2
 
 ### SingleWriter
 
@@ -52,7 +54,19 @@ public enum DbMode
 ### SingleConnection
 
 - All work — reads and writes — is funneled through a single pinned connection
-- Used automatically for in-memory SQLite (see Connection Pooling)
+- Used automatically (`Best`) for in-memory `:memory:` SQLite/DuckDB only. Never selected for Firebird (`Best` gives it `PreventDatabaseUnload`)
+- A `:memory:` database lives and dies with its connection: this mode is required for correctness there, not a persistence or recovery strategy
+
+### Best
+
+| Database | `Best` resolves to |
+|----------|--------------------|
+| SQLite / DuckDB file, Access, FlatFile | `SingleWriter` (they coerce to it; FlatFile has no in-memory mode) |
+| SQLite / DuckDB `:memory:` | `SingleConnection` |
+| SQL Server LocalDB, Firebird, Db2 LUW | `PreventDatabaseUnload` |
+| every other client-server database (SQL Server, PostgreSQL family incl. CockroachDB/YugabyteDB/Spanner/Aurora, MySQL family incl. MariaDB/TiDB/SingleStore, Oracle, Snowflake, Informix, SAP HANA, InterBase, Sybase ASE, non-LUW Db2) | `Standard` |
+
+`Pooling=false` in a connection string is rejected with `InvalidOperationException` (use `SingleConnection` for one persistent connection).
 
 ## Pool Size Priority
 
@@ -127,7 +141,7 @@ services.AddSingleton<IDatabaseContext>(sp =>
 ## Best Practices
 
 - **Use Standard in production** for scalability and correctness
-- KeepAlive, SingleWriter, and SingleConnection are best suited for embedded/local DBs or dev/test
+- PreventDatabaseUnload, SingleWriter, and SingleConnection are best suited for embedded/local DBs or dev/test; let `Best` choose them
 - Each DatabaseContext can be safely used as a singleton (via DI or subclassing)
 
 ## Benefits
@@ -148,6 +162,10 @@ public enum IsolationProfile
     FastWithRisks          // Lowest isolation; maximum throughput, accepts dirty/non-repeatable reads
 }
 ```
+
+A profile never runs below its guarantee: `BeginTransaction(profile)` throws `TransactionModeNotSupportedException` when the database can't meet it
+(`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation).
+A write transaction with neither a level nor a profile defaults to `ReadCommitted`; only a read-only transaction uses the `SafeNonBlockingReads` mapping.
 
 Usage:
 ```csharp
@@ -214,19 +232,24 @@ Combined with a `readOnlyConnectionString`, pengdows.crud creates separate read 
 
 ## Default Pool Sizes by Database
 
-| Database | Provider Default | Recommended |
+pengdows.crud's governor uses the explicit max-pool-size keyword in the connection string where the dialect registers one, otherwise the dialect default
+(100; `int.MaxValue` for SQLite and DuckDB; 10 for Snowflake). Values below are what the dialects and docs/supported-databases.md record; "not verified" means no recorded provider default.
+
+| Database | Provider default | Recommended |
 |----------|-----------------|-------------|
 | SQL Server | 100 | 50-200 |
 | PostgreSQL | 100 | 20-100 (use PgBouncer if more needed) |
-| MySQL/MariaDB | 100 | 50-200 |
+| MySQL / MariaDB / TiDB / SingleStore / Aurora MySQL | 100 | 50-200 |
 | Oracle | 100 | 50-200 |
 | SQLite | Unlimited | 1-20 |
 | DuckDB | Unlimited | 1-8 |
-| CockroachDB | 100 (Npgsql) | 20-100 |
-| YugabyteDB | 100 (Npgsql) | 20-100 |
-| TiDB | 100 (MySQL) | 50-200 |
-| Firebird | 50 | 10-50 |
-| Snowflake | provider-managed | provider default |
+| CockroachDB / YugabyteDB / Spanner / Aurora PostgreSQL | 100 (Npgsql) | 20-100 |
+| Firebird | not verified (dialect default 100) | not verified |
+| Snowflake | 10 (dialect default) | not verified |
+| Db2 | not verified (dialect default 100) | not verified |
+| Informix | 100 (builder default); the dialect reads no pool keyword, so it governs on its default 100 | not verified |
+| Sybase ASE / SAP HANA / InterBase | not verified; no pool keyword registered, governed on the dialect default 100 | not verified |
+| Access / FlatFile | not applicable (no external pooling; both run `SingleWriter`) | not applicable |
 
 ## Related Pages
 

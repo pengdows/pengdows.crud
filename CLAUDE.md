@@ -31,7 +31,7 @@ Traditional classifications place data access tools on a 1D spectrum from **Heav
 ## Project Overview
 
 
-pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8 and .NET 10 (every project in `pengdows.crud.sln` targets `net8.0;net10.0` except `tools/pengdows.crud.analyzers`, which targets `netstandard2.0`). The project consists of multiple components:
+pengdows.crud 2.0 is a SQL-first, strongly-typed, testable data access layer for .NET 8 and .NET 10 (the shipped libraries, the test projects and `testbed` target `net8.0;net10.0`; the analyzers (`tools/pengdows.crud.analyzers`, `tools/pengdows.crud.analyzers.codefixes`) target `netstandard2.0`; `testbed.DriverVersionMatrix*` and `tools/interface-api-check` target `net8.0` only and `benchmarks/DuckDbEfCoreBenchmarks` `net10.0` only). The project consists of multiple components:
 
 - `pengdows.crud` - Core library with TableGateway, DatabaseContext, and SQL dialects
 - `pengdows.crud.abstractions` - Interfaces and enums (all public APIs live here)
@@ -194,6 +194,14 @@ dotnet test -c Release --filter "FullyQualifiedName!~pengdows.crud.IntegrationTe
 # Run integration suite (requires Docker)
 dotnet run -c Release -f net10.0 --project testbed
 
+# Full integration matrix: pengdows.crud.IntegrationTests, one database per process, both frameworks
+# (requires Docker). Opt-ins: INCLUDE_SNOWFLAKE=true (credentials), INCLUDE_SAPHANA=true, INCLUDE_INTERBASE=true,
+# INCLUDE_AURORA=true (AWS; see "Aurora variants"). INTEGRATION_ONLY=Sqlite,PostgreSql limits the run,
+# INTEGRATION_FRAMEWORKS=net10.0 limits the frameworks, PREFLIGHT_ONLY=1 prints the preflight and exits.
+bash run-integration-tests.sh
+# Fold the run's results into docs/integration-status.md
+python3 tools/record-integration-run.py
+
 # Regenerate API baseline (run after intentional interface changes; the abstractions build
 # and CI run the same tool with --verify instead of --generate)
 dotnet run --project tools/interface-api-check/InterfaceApiCheck.csproj -c Release -- \
@@ -304,8 +312,9 @@ public int Version { get; set; }
 
 **SQL generated depends on database:**
 - `MERGE` when the dialect's `SupportsMerge` is true (SQL Server, Oracle, PostgreSQL 15+, DuckDB 1.4+, …)
-- otherwise `INSERT ... ON CONFLICT` (PostgreSQL < 15, YugabyteDB, CockroachDB, SQLite, …)
-- otherwise `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB)
+- otherwise `INSERT ... ON CONFLICT` (PostgreSQL < 15, YugabyteDB, CockroachDB, Spanner, SQLite, …)
+- otherwise `INSERT ... ON DUPLICATE KEY UPDATE` (MySQL/MariaDB/TiDB/SingleStore)
+- InterBase and Access have none of the three: `UpsertAsync`/`BuildUpsert` throw `NotSupportedException` (as does the unrecognized-database SQL-92 fallback)
 
 ## CRITICAL: Audit Field Behavior
 
@@ -323,6 +332,7 @@ This is intentional design — it allows "last modified" queries without checkin
 - Without resolver + user audit fields = `InvalidOperationException` at runtime
 - Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
 - The audit resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset are all supported.
+- `AuditCreationPolicy` (init-only property on every gateway, new in 2.0.6; `docs/audit-fields.md`): `PreserveExplicitValues` (default) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always overwrites them with resolver values (stops request-model binding from spoofing audit fields)
 - UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`)
 
 ## Multi-Tenancy
@@ -463,7 +473,7 @@ See `docs/parameter-naming-convention.md` for full per-operation detail.
 | Mode | Value | Use Case |
 |------|-------|----------|
 | `Standard` | 0 | **Production default** — pool per operation |
-| `PreventDatabaseUnload` | 1 | Embedded DBs needing sentinel connection |
+| `PreventDatabaseUnload` | 1 | Databases that unload when idle (SQL Server LocalDB, Firebird, Db2 LUW): one sentinel connection keeps the database loaded |
 | `SingleWriter` | 2 | File-based SQLite/DuckDB/Access/pengdows.flatfile — serializes writes via turnstile governor |
 | `SingleConnection` | 4 | In-memory `:memory:` databases |
 | `Best` | 15 | Auto-select optimal mode based on provider and connection string |
@@ -734,7 +744,7 @@ These are places outside the dialect file itself that switch or pattern-match on
 10. **`pengdows.crud/dialects/SqlDialect.cs` → `GetNaturalKeyLookupQuery()` and any other pagination/"first row only" fallback** — check whether the new database's syntax actually matches the generic `LIMIT 1` fallback. It doesn't for Oracle (`ROWNUM = 1`), and it doesn't for Db2 (`FETCH FIRST 1 ROWS ONLY`). Grep `SqlDialect.cs` for `DatabaseType ==`/`DatabaseType !=` checks and verify each one explicitly for the new database rather than assuming the catch-all branch is correct.
 11. **Exception classification lives on the dialect** — override `IsUniqueViolation`/`IsForeignKeyViolation`/`IsNotNullViolation`/`IsCheckConstraintViolation` for constraint kinds and the protected `TryClassifyProviderException` for Deadlock/SerializationFailure/Timeout/ReadOnlyViolation/AmbiguousResult. `IDbExceptionTranslator.Translate(ISqlDialect, ...)` delegates to both (via `DbExceptionTranslationSupport.TryCreateFromCategory`), so the thrown type and `AnalyzeException` agree by construction; a translator adds only non-category cases such as connection failures. Exception: Sybase's `AseException` isn't a `DbException`, so `SybaseExceptionTranslator` classifies on its own. Declare the translator in the dialect's `Create<Name>Traits()` (`DatabaseTraits`); `DbExceptionTranslatorRegistry` reads it from there. The same traits carry the database's `AdvancedTypeRegistry` mappings, read coercions and value-converter wire formats — nothing outside `dialects/` names a `SupportedDatabase` value (REV-039, guarded by `NoDatabaseTypeBranchingTests`).
 
-**Next candidate: SAP HANA.** Flag its isolation-level set (HANA's default is effectively snapshot-based, not lock-based like most of the above) and its pagination syntax (`LIMIT`/`OFFSET` are supported directly, unlike Db2 — don't assume it needs a Db2-style special case, but don't assume it matches SQL Server either) for explicit research rather than copying an existing dialect's assumptions.
+SAP HANA, InterBase, Access, Db2, Informix, Sybase ASE, Spanner, FlatFile and SingleStore went through this checklist in 2.0.6; their dialect files carry the per-database evidence (isolation sets, pagination, upsert forms).
 
 ### Opt-in exceptions (require env var)
 

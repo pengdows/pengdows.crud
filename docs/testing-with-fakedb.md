@@ -80,7 +80,7 @@ returns: `+ int recordsAffected` (sets `RecordsAffected`), `+ Exception recordsA
 Exception)` (the reader yields N rows successfully, then throws on the next `Read()`), and
 `+ (int cancelAfterRowCount, CancellationTokenSource)` (yields N rows, then **cancels the real
 token** passed into `ReadAsync` — proving genuine cancellation propagation through your code, not a
-canned `OperationCanceledException`). `EnqueueMultiResultReader(IEnumerable<IEnumerable<Dictionary<string,object>>>)`
+canned `OperationCanceledException`). `EnqueueMultiResultReader(IEnumerable<IEnumerable<Dictionary<string, object?>>>)`
 builds one reader whose `NextResult()` advances through each set, for compound statements like
 `INSERT` followed by `SELECT LAST_INSERT_ID()`.
 
@@ -289,9 +289,11 @@ discipline this library applies to its own test suite: fakeDb for fast, determin
 
 By default a statement shape the parser doesn't recognize quietly "succeeds": an unparseable
 `INSERT` or other unrecognized nonquery returns 1 affected row, and an unrecognized `SELECT` returns
-no rows. Set `FakeDataStore.StrictMode = true` (e.g. `connection.DataStore.StrictMode = true`) to
-make all three throw `NotSupportedException` instead, so a test fails when fakeDb didn't understand
-its SQL rather than passing without having run it.
+no rows. Set `FakeDataStore.StrictMode = true` to make all three throw `NotSupportedException` instead, so a
+test fails when fakeDb didn't understand its SQL rather than passing without having run it. The
+store a factory shares between its connections is not exposed, so build your own and hand it to the
+connection: `var store = new FakeDataStore { StrictMode = true }; var conn = new fakeDbConnection(store);`
+(`fakeDbConnection.DataStore` itself is `internal`).
 
 ## Building your own fixture layer
 

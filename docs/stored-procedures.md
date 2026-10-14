@@ -1,8 +1,8 @@
 # Stored Procedures
 
 `pengdows.crud` calls stored procedures through the same `ISqlContainer` you use for ordinary SQL
-— there is no separate "procedure gateway" type. The library detects which of five call syntaxes
-(`ProcWrappingStyle`) the connected dialect needs and renders the correct one; you write the
+— there is no separate "procedure gateway" type. The library detects which of six call syntaxes
+(`ProcWrappingStyle`: `Call`, `Exec`, `PostgreSQL`, `Oracle`, `ExecuteProcedure`, `Informix`; `None` means unsupported) the connected dialect needs and renders the correct one; you write the
 procedure name and bind parameters exactly as you would for any other command.
 
 ## Two calling patterns

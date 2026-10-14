@@ -18,14 +18,13 @@ Advantages:
 ## DbMode Enum
 
 ```csharp
-[Flags]
 public enum DbMode
 {
     Standard = 0,       // Recommended for production
     PreventDatabaseUnload = 1,      // Keeps one sentinel connection open
     SingleWriter = 2,   // Standard lifecycle + single-write-slot governor
     SingleConnection = 4, // All work goes through one pinned connection
-    Best = 15
+    Best = 15           // Resolver hint: the dialect picks the mode (see below)
 }
 ```
 
@@ -39,7 +38,7 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 * Fully supports parallelism and provider connection pooling.
 
 ### PreventDatabaseUnload
-* Keeps a single sentinel connection open (never used for work) to prevent unloads in some embedded/local DBs.
+* Keeps a sentinel connection open per enabled pool (never used for work) to prevent a database from unloading when its last connection closes. `Best` selects it for SQL Server LocalDB, Firebird (embedded and client-server) and Db2 LUW; an explicit request is honored on every client-server database. On SQLite, DuckDB, Access and pengdows.flatfile an explicit request is coerced to `SingleWriter`.
 * Otherwise behaves like `Standard`.
 * `KeepAlive` is the old name for this mode, retained only as an `[Obsolete]` compatibility alias with the identical underlying value (`1`) — use `PreventDatabaseUnload` in new code. Because both names share the value, `ToString()`, logs and serialized configuration may print `PreventDatabaseUnload` for a mode you set as `KeepAlive`; both names parse back to the same value, but compare the enum value, not its text.
 
@@ -54,22 +53,21 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
   finish, and a read through the context throws `InvalidOperationException` (read through the
   transaction instead). An open plain reader holds the connection until disposed, so a
   transaction waits for it.
-* Used automatically for isolated in-memory SQLite/DuckDB where each `:memory:` connection would otherwise create its own databa
-se (see Connection Pooling).
+* Used automatically for isolated in-memory SQLite/DuckDB where each `:memory:` connection would otherwise create its own database (see Connection Pooling).
 
 ## Best Practices
 
 * **Use Standard in production** for scalability and correctness.
-* PreventDatabaseUnload, SingleWriter, and SingleConnection are best suited for embedded/local DBs or dev/test.
+* PreventDatabaseUnload and SingleWriter are production modes for the engines they fit (LocalDB, Firebird, Db2 LUW; the file-based embedded engines). SingleConnection is for isolated in-memory databases, tests and ephemeral scratch data.
 * Each DatabaseContext can be safely used as a singleton (via DI or subclassing).
 
 ## Shared connection locking & timeouts
 
-The SingleConnection pin relies on a `RealAsyncLocker` backed by a `SemaphoreSlim` to serialize all operations through the shared connection. PreventDatabaseUnload's sentinel is a persistent connection that keeps the database loaded but is never used for work — actual operations use ephemeral connections with no serialization overhead. The lock includes a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`); exhausting that window throws `ModeContentionException`, which includes a `ModeContentionSnapshot` describing the number of waiters and timeouts. Tune the timeout (or set it to `null`) to trade between waiting for transient contention and failing fast when the pool is saturated, and monitor `ModeContentionStats` through logs/metrics if you need to understand which operations are queuing.
+The SingleConnection pin relies on a `RealAsyncLocker` backed by a `SemaphoreSlim` to serialize all operations through the shared connection. PreventDatabaseUnload's sentinel is a persistent connection that keeps the database loaded but is never used for work — actual operations use ephemeral connections with no serialization overhead. The lock includes a default `ModeLockTimeout` of 30 seconds (`DatabaseContextConfiguration.ModeLockTimeout` / `IDatabaseContextConfiguration.ModeLockTimeout`); exhausting that window throws `ModeContentionException`, which includes a `ModeContentionSnapshot` describing the number of waiters and timeouts. The same timeout also bounds the single-connection transaction gate (also `ModeContentionException`) and a transaction's completion lock (`InvalidOperationException`: "Transaction completion timed out waiting for internal lock."). It must be greater than zero when specified; `null` waits indefinitely. Tune the timeout (or set it to `null`) to trade between waiting for transient contention and failing fast when the pool is saturated, and monitor `ModeContentionStats` through logs/metrics if you need to understand which operations are queuing.
 
 ## Pool governors & acquisition windows
 
-The context installs read and write `PoolGovernor` instances in every mode except `SingleConnection`, gating access to each database provider’s connection pool. Each governor issues `PoolSlot` tokens with a default `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`) before opening a connection. Each PreventDatabaseUnload sentinel (one per enabled pool) grabs a slot from its own pool during initialization so the pool accounts for the pinned connection; a sentinel repaired after breaking swaps its slot rather than leaking it. SingleWriter mode enforces `MaxConcurrentWrites = 1`, `MaxConcurrentReads = N`, and, when configured, a writer-preference turnstile so readers stop entering while a writer waits. If a governor cannot deliver a slot within the timeout, a `PoolSaturatedException` is raised along with statistics for the queue depth and slot usage so you can scale the pool or reduce concurrency. Governors are sized automatically from the connection string's pool-size setting (or the dialect's default); override `MaxConcurrentReads`/`MaxConcurrentWrites` (legacy `ReadPoolSize`/`WritePoolSize`) to set a different limit. Configuration wins over the connection string, and the winning size is used for both the governor and the provider pool; see [`connection-pooling.md`](./connection-pooling.md) for the full priority order.
+The context installs read and write `PoolGovernor` instances in every mode except `SingleConnection`, gating access to each database provider’s connection pool. Each governor issues `PoolSlot` tokens with a default `PoolAcquireTimeout` of 5 seconds (`DatabaseContextConfiguration.PoolAcquireTimeout`) before opening a connection. Each PreventDatabaseUnload sentinel (one per enabled pool) grabs a slot from its own pool during initialization so the pool accounts for the pinned connection; a sentinel repaired after breaking swaps its slot rather than leaking it. SingleWriter mode enforces `MaxConcurrentWrites = 1`, `MaxConcurrentReads = N`, and, when configured, a writer-preference turnstile so readers stop entering while a writer waits. If a governor cannot deliver a slot within the timeout, a `PoolSaturatedException` is raised along with statistics for the queue depth and slot usage so you can scale the pool or reduce concurrency. Governors are sized automatically from the connection string's pool-size setting (or the dialect's default); override `MaxConcurrentReads`/`MaxConcurrentWrites` to set a different limit. Configuration wins over the connection string, and the winning size is used for both the governor and the provider pool; see [`connection-pooling.md`](./connection-pooling.md) for the full priority order.
 
 ## Benefits
 

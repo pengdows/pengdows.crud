@@ -1,6 +1,6 @@
 All Copilot code reviews for this repository MUST adhere to the standards defined in the canonical review policy.
 
-The full review policy is embedded below:
+A condensed copy of the review policy follows; REVIEW_POLICY.md is canonical and wins on any conflict:
 
 ---
 # REVIEW_POLICY.md (canonical)
@@ -40,7 +40,7 @@ If you see these, it is a hard "DO NOT MERGE":
 * **TDD First** — Every bug fix or feature must have a corresponding test that reproduces the issue or verifies the feature.
 * **ValueTask on Hot Paths** — Hot-path methods (hydration, reader loops) must return `ValueTask` to minimize allocations.
 * **Interface-First** — Public APIs must be in `pengdows.crud.abstractions`.
-* **Multi-Dialect Correctness** — Changes to SQL generation must work correctly across all 13 supported providers.
+* **Multi-Dialect Correctness** — Changes to SQL generation must work correctly across all 23 `SupportedDatabase` values.
 
 ## 5) The Review Format
 
