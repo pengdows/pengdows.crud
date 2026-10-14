@@ -30,6 +30,10 @@ No LINQ. No tracking. No hidden unit of work.
 - `DbMode` strategies: `Standard`, `PreventDatabaseUnload`, `SingleWriter`, `SingleConnection`, and `Best`
 - Typed exception hierarchy: provider `DbException` is translated to structured subtypes (`ConcurrencyConflictException`, `UniqueConstraintViolationException`, `DeadlockException`, etc.)
 
+For production, use `DbMode.Best` by default. It selects the most performant mode that pengdows.crud considers safe for the detected database and connection string. Explicit modes are mainly for tests, deliberate deployment constraints, or provider-specific compatibility decisions. Requests for an unsafe mode are coerced downward: for example, `Standard` with SQLite `:memory:` becomes `SingleConnection`. Access and DuckDB are deliberate exceptions: `Best` selects `SingleWriter` because independent testing found concurrent-writer behavior less reliable than their conditional provider documentation suggests. You may explicitly choose `Standard` for those providers, but bugs dependent on that override are outside the supported safety guarantee.
+
+`PreventDatabaseUnload`/`KeepAlive` is exactly `Standard` mode plus unused passive sentinel connections. The sentinels never execute database work; every real read and write still opens late and closes early through its own ephemeral pooled connection. Their only purpose is to keep the database loaded so the next real operation does not pay the slow database reload/startup cost after an idle period. When `Best` selects this mode for SQL Server LocalDB, Firebird, or Db2 LUW, you may explicitly choose `Standard` to disable the sentinels. This is reasonable for a workload that stays busy enough not to be unloaded while idle; LocalDB logs a performance-only warning because an idle period can make the next request pay the restart cost. `KeepAlive` is the obsolete alias; use `PreventDatabaseUnload` in new code.
+
 ## Supported Products
 
 The repository contains concrete support for:
@@ -60,10 +64,13 @@ The repository contains concrete support for:
 
 When product detection cannot identify the connected database, the library falls back to a conservative SQL-92 dialect.
 
-New in 2.0.6: Db2 (LUW), FlatFile, SingleStore, Sybase ASE, Spanner, Informix, SAP HANA, InterBase and Access (2.0.0 to
-2.0.5 supported the other fourteen). Four more products are supported as subsidiaries of their parent: Percona Server for MySQL (under MySQL), Citus,
-TimescaleDB and Fujitsu Enterprise Postgres (under PostgreSQL). Each was verified with no code change: they report themselves as MySQL or PostgreSQL and pass the same integration suite. See the
-[changelog](https://github.com/pengdows/pengdows.crud/blob/main/CHANGELOG.md).
+### Database support by 2.0 version
+
+- **2.0.0 baseline:** SQL Server/Azure SQL/LocalDB, PostgreSQL, Oracle, MySQL, MariaDB, SQLite, DuckDB, Firebird, CockroachDB, YugabyteDB, TiDB, Snowflake, Aurora MySQL, and Aurora PostgreSQL.
+- **2.0.1–2.0.5:** No additional `SupportedDatabase` enum values; the 2.0.0 families remained the baseline while compatibility and dialect behavior evolved.
+- **2.0.6 additions:** Db2 for LUW, FlatFile, SingleStore, Sybase ASE, Spanner through PGAdapter, Informix, SAP HANA, InterBase, and Access through OLE DB/ACE.
+
+Percona Server for MySQL is detected as MySQL. Citus, TimescaleDB, and Fujitsu Enterprise Postgres are detected as PostgreSQL. These are delegated compatible products, not additional enum values. Support tiers differ: SAP HANA and InterBase require opt-in integration coverage, Access is Windows-only, Db2 support is LUW-only, and Spanner uses its PostgreSQL interface. See the [version matrix and provider notes in the wiki](https://github.com/pengdows/pengdows.crud/wiki/v2-Supported-Databases) for the current details.
 
 ## Quick Start
 

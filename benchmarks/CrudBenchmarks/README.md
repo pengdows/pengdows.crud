@@ -48,6 +48,9 @@ dotnet run -c Release -- --include-opt-in --filter "*TypeHandlingBenchmarks*"
 # Cloning Performance (no database required)
 dotnet run -c Release --filter "*CloningPerformanceTest*"
 
+# Pure fakeDb hydration: no connection, command, SQL, provider, or database work
+dotnet run -c Release -f net8.0 --filter "*FakeDbHydrationBenchmarks*"
+
 # PostgreSQL CRUD, equal footing (uses Testcontainers)
 dotnet run -c Release --filter "*PostgreSqlEqualFooting*"
 
@@ -145,6 +148,7 @@ dotnet run -c Release -- --job long   # More iterations, more accurate
 - **SqlGenerationBenchmark**: SQL query generation performance
 - **TypeHandlingBenchmarks**: AdvancedTypeRegistry parameter configuration and CoercionRegistry type conversion (opt-in)
 - **CloningPerformanceTest**: SqlContainer cloning vs traditional approach (opt-in)
+- **FakeDbHydrationBenchmarks**: warmed, hydration-to-hydration comparison of pengdows.crud and Dapper over the same fakeDb rows and schema. It excludes connection acquisition, command creation, SQL generation, provider I/O, pooling, transactions, and network effects. It still includes equal reader iteration, fakeDb row access, POCO allocation, and result-list allocation in both arms. `Hydrate_CompiledGateway` exercises the actual TableGateway monolithic compiled mapper; `Hydrate_Pengdows` exercises the general `DataReaderMapper` path. Because fakeDb getters are intentionally cheap, this exposes mapper overhead and is a lower-bound/diagnostic measurement; it must not be substituted for the real-provider hydration benchmarks when making production performance claims. Its `Hydrate_Manual` arm is a typed-assignment ceiling and `ReadOnly` is a reader traversal floor, allowing mapper overhead to be separated from fakeDb access.
 
 ### SQLite (In-Memory / File)
 

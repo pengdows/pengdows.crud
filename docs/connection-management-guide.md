@@ -38,8 +38,8 @@ Use the lowest number (closest to Standard) possible for best results. Best, wil
 * Fully supports parallelism and provider connection pooling.
 
 ### PreventDatabaseUnload
-* Keeps a sentinel connection open per enabled pool (never used for work) to prevent a database from unloading when its last connection closes. `Best` selects it for SQL Server LocalDB, Firebird (embedded and client-server) and Db2 LUW; an explicit request is honored on every client-server database. On SQLite, DuckDB, Access and pengdows.flatfile an explicit request is coerced to `SingleWriter`.
-* Otherwise behaves like `Standard`.
+* **This is `Standard` mode plus an unused sentinel connection.** The sentinel is never used for database work: it never executes application commands, opens transactions, or serves readers. Every real read and write still follows Standard's open-late/close-early lifecycle on its own ephemeral pooled connection.
+* The sentinel exists only to prevent a database from unloading/deactivating when its last real connection closes, avoiding the slow database reload/startup cost on the next operation. `Best` selects it for SQL Server LocalDB, Firebird (embedded and client-server) and Db2 LUW; an explicit `Standard` request is honored there when you intentionally want the sentinel disabled. On SQLite, DuckDB, Access and pengdows.flatfile an explicit request is coerced according to their embedded-engine rules.
 * `KeepAlive` is the old name for this mode, retained only as an `[Obsolete]` compatibility alias with the identical underlying value (`1`) — use `PreventDatabaseUnload` in new code. Because both names share the value, `ToString()`, logs and serialized configuration may print `PreventDatabaseUnload` for a mode you set as `KeepAlive`; both names parse back to the same value, but compare the enum value, not its text.
 
 ### SingleWriter

@@ -25,6 +25,8 @@ strategy. This does not describe durable Firebird embedded databases, where `Sta
 their connection and concurrency semantics fit the deployment (`Best` selects `PreventDatabaseUnload` for Firebird, never `SingleConnection`). See
 [`docs/connection/connection-modes.md`](docs/connection/connection-modes.md).
 
+`PreventDatabaseUnload`/`KeepAlive` is exactly `Standard` mode plus unused passive sentinel connections. The sentinels never execute commands, open transactions, or serve readers. Every real read and write still follows the identical open-late/close-early path as `Standard` through its own ephemeral pooled connection. The sentinels exist only to keep the database loaded so the next real operation does not pay the slow database reload/startup cost after an idle period. When `Best` selects this mode for SQL Server LocalDB, Firebird, or Db2 LUW, an explicit `Standard` request is supported and disables the sentinels.
+
 ## A minimal example
 
 The normal path is deliberately explicit: build SQL, inspect or modify the container, then
@@ -199,8 +201,67 @@ selects or coerces the appropriate `DbMode` (`Standard`, `PreventDatabaseUnload`
 and it detects the product and coerces to the correct mode automatically (full servers →
 `Standard`; SQL Server LocalDB, Firebird (server or embedded) and Db2 LUW → `PreventDatabaseUnload`; file-based SQLite/DuckDB/Access/pengdows.flatfile → `SingleWriter`;
 `:memory:` SQLite/DuckDB → `SingleConnection`; explicit `Standard` is honored where the dialect
-permits it, while SQLite and pengdows.flatfile coerce it to `SingleWriter`), and every downstream gateway call behaves
+permits it — including an explicit override to disable the sentinels when `Best` would select
+`PreventDatabaseUnload` — while SQLite and pengdows.flatfile coerce it to `SingleWriter`), and every downstream gateway call behaves
 consistently while the lifecycle and capability details remain database-specific.
+
+## Why a DBA may standardize on pengdows.crud for SaaS
+
+For a greenfield .NET SaaS application, pengdows.crud is a thin SQL-first layer over ADO.NET
+that centralizes the difficult, repetitive data-access work teams otherwise reimplement badly:
+connection ownership, reader leases, pool admission, provider session setup, transactions,
+portable parameters and quoting, exception translation, and database-specific concurrency rules.
+It keeps SQL visible. Table gateways build SQL for their mapped table and do not generate
+cross-table selects; joins and other cross-table queries are explicit application SQL.
+
+The most important operational property is lifecycle discipline. Ordinary commands open a pooled
+connection only when execution begins and release it immediately when the operation completes.
+SQL construction and other application work do not keep a connection open. Transactions
+intentionally pin a connection for their scope, and a tracked reader intentionally holds a lease
+until it is disposed. `PreventDatabaseUnload` is still Standard execution: its passive sentinels
+are never used for commands, transactions, or readers; they exist only to prevent an idle database
+from unloading so the next real operation avoids reload/startup cost. This makes accidental leaks
+near-impossible on completed and governed paths, while a genuinely hung command or undisposed
+reader remains the application's responsibility through cancellation, timeouts, and disposal.
+
+Reader and writer pools can be separated. Read connections can receive provider session and
+connection-string read-only settings so writes are rejected even when code requests the wrong
+path. Use separate read and write credentials when possible: settings are defense in depth, while
+database credentials are the authorization boundary.
+
+The database remains the source of truth for entity shape. `pengdows.poco.mint` can inspect the
+database and generate attributed POCOs as part of a build, or a DBA can generate and review the
+entities before handing them to developers. Keys are modeled explicitly: `[Id]` is a pseudo/row
+key for gateway operations, while `[PrimaryKey]` represents business uniqueness and may be
+composite. Composite key members have an explicit order, and generated gateway SQL uses those
+mapped key columns consistently and deterministically.
+
+The DBA governance case also includes bounded and observable operational policy: reader/writer
+pool governors limit admission and time out with typed `PoolSaturatedException` diagnostics;
+transactions are operation-scoped and `TransactionScope` is explicitly incompatible, avoiding
+accidental MSDTC promotion; isolation profiles do not silently weaken and unsupported savepoints
+fail explicitly; `[Version]` turns lost updates into `ConcurrencyConflictException`; audit fields
+are populated consistently with UTC and an explicit creation-value policy; analyzers catch unsafe
+singleton lifetimes, unparameterized predicates, missing gateway context propagation, unsafe
+identifier handling, compatibility-only APIs, and opt-in multi-tenancy mistakes; provider failures
+are categorized as deadlocks, serialization conflicts, timeouts, read-only violations, constraint
+violations, connection failures, or mapping failures; and context/pool/tenant metrics provide
+capacity and noisy-neighbor evidence. This lets a DBA standardize guardrails across teams while
+developers retain inspectable SQL and database control.
+
+For SaaS tenancy, the recommended boundary is one tenant per configured `DatabaseContext`,
+normally one tenant database. Tenant selection is physical context selection, not automatic
+`WHERE tenant_id = ...` injection. That removes a major class of omitted-filter mistakes and can
+let tenants use different database products. The application still owns authentication,
+authorization, tenant provisioning, migrations, credential rotation, tenant-catalog integrity,
+pool/cardinality limits, and noisy-neighbor capacity policy. Shared-table tenant filtering is
+possible only as explicit hand-written SQL; pengdows.crud does not make that model automatic.
+
+This is why a DBA can mandate the library without mandating an ORM: developers keep inspectable
+SQL and database control, while the platform gets one governed execution architecture. The tradeoff
+is intentional: no LINQ translation, automatic change tracking, or hidden unit of work. See the
+wiki's [https://github.com/pengdows/pengdows.crud/wiki/v2-Why-pengdows-for-SaaS-and-Greenfield
+SaaS and greenfield rationale] for the human-facing version.
 
 As separate downstream evidence, not proof of the complete 2.0.6 support matrix,
 [`pengdows.hangfire`](https://github.com/pengdows/pengdows.hangfire) (SQL-first Hangfire

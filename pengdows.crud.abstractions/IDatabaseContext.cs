@@ -272,7 +272,8 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     /// <remarks>
     /// Never runs below the profile's guarantee: throws <c>TransactionModeNotSupportedException</c>
     /// when the database cannot provide it (StrictConsistency on TiDB, Snowflake, or Access;
-    /// SafeNonBlockingReads on SQL Server without snapshot isolation, or on PostgreSQL/YugabyteDB).
+    /// SafeNonBlockingReads on SQL Server without snapshot isolation). PostgreSQL and YugabyteDB
+    /// provide SafeNonBlockingReads through their MVCC RepeatableRead mapping.
     /// </remarks>
     ITransactionContext BeginTransaction(
         IsolationProfile isolationProfile,
