@@ -653,15 +653,42 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             return;
         }
 
-        // Give up. Leak the connection rather than dispose/release a lock this call was never
-        // actually granted: whatever still holds the lock keeps a working connection instead of
-        // crashing with an ObjectDisposedException, and this method returns instead of hanging
-        // its caller forever.
+        // Do not dispose underneath the operation that owns the lock. Continue the cleanup in
+        // the background and wait without a timeout there: once the holder finishes, the normal
+        // disposal path closes the connection and releases its governor slot. The bounded waits
+        // above preserve Dispose/DisposeAsync's non-hanging behavior for a permanently stuck
+        // operation, while the deferred wait prevents that bounded shutdown policy from becoming
+        // a permanent resource leak.
         if (_logger.IsEnabled(LogLevel.Error))
         {
             _logger.LogError(
-                "Giving up waiting to dispose shared connection {Name} after {TotalSeconds}s total; leaking the connection instead of disposing it while its lock is still held by another operation.",
+                "Deferring disposal of shared connection {Name} after {TotalSeconds}s total until the active operation releases its lock.",
                 GetName(), _sharedDisposeTimeout.TotalSeconds * 2);
+        }
+
+        _ = DisposeSharedConnectionAfterLockAsync();
+    }
+
+    private async Task DisposeSharedConnectionAfterLockAsync()
+    {
+        try
+        {
+            await _semaphoreSlim!.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                await DisposeConnectionAsyncCore().ConfigureAwait(false);
+            }
+            finally
+            {
+                _semaphoreSlim.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            // The original Dispose/DisposeAsync call has already completed. Do not create an
+            // unobserved task exception if a provider or lifecycle callback fails during the
+            // eventual cleanup; the connection remains governed and the failure is diagnosable.
+            _logger.LogError(ex, "Deferred disposal of shared connection {Name} failed.", GetName());
         }
     }
 

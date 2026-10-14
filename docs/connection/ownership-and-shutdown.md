@@ -147,9 +147,16 @@ MySql.Data `NullReferenceException` quirk during reader/command disposal, which 
 propagates and the remaining steps are skipped, so a provider that throws while disposing its
 reader can leave the rest of the lease unreleased.
 
-`Close()` is **not** equivalent to `Dispose()`: it only closes the underlying `DbDataReader`. It
-does not dispose the command, release the connection/permit, or release the locks — always
-dispose the reader (or read to end-of-results) rather than relying on `Close()`.
+`Close()` delegates to `Dispose()` and is equivalent to disposing the tracked reader: it closes
+the underlying `DbDataReader`, disposes the command, releases the connection/permit and locks,
+and records the lease completion. Callers may use either `Close()` or `Dispose()` when they are
+finished with the reader; reading to end-of-results also triggers the same full disposal.
+
+For a shared connection, disposal never closes the connection underneath an active operation. If
+the bounded shutdown waits expire while another operation still owns the shared lock, disposal is
+deferred until that holder releases it; the connection and governor slot are then released by the
+normal cleanup path. A permanently hung holder can therefore keep the connection open until its
+command or external cancellation policy ends it, but it is not silently disposed while in use.
 
 Reaching end-of-results (`Read()`/`ReadAsync()` returning `false`) triggers the same full disposal
 automatically — confirmed directly in `TrackedReader.ReadAsync(CancellationToken)`

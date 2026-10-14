@@ -6,6 +6,8 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using pengdows.crud.fakeDb;
+using pengdows.crud.enums;
+using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -102,6 +104,40 @@ public class TrackedConnectionAdditionalBranchTests
         Assert.Equal(ConnectionState.Open, conn.State);
 
         await locker.DisposeAsync();
+    }
+
+    // The give-up above must not become a leak: once the operation that held the lock lets go, the connection the
+    // disposal could not take is disposed then, not left open for good (and its pool slot not left taken).
+    [Fact]
+    public async Task DisposeAsync_SharedConnection_LockReleasedAfterGiveUp_ConnectionIsStillDisposed()
+    {
+        await using var conn = new fakeDbConnection();
+        using var governor = new PoolGovernor(PoolLabel.Reader, "deferred-disposal", 1,
+            TimeSpan.FromSeconds(1));
+        var slot = governor.Acquire();
+        await using var tracked = new TrackedConnection(conn, isSharedConnection: true,
+            sharedDisposeTimeout: TimeSpan.FromMilliseconds(30), slot: slot);
+
+        await tracked.OpenAsync();
+
+        var locker = tracked.GetLock();
+        await locker.LockAsync();
+
+        await tracked.DisposeAsync(); // gives up while the lock is held
+        Assert.Equal(ConnectionState.Open, conn.State); // never disposed under the holder
+
+        await locker.DisposeAsync(); // the holder finishes
+
+        var deadline = DateTime.UtcNow.AddSeconds(2);
+        // The slot goes back after the close, in the same deferred cleanup, so wait for both.
+        while ((conn.State != ConnectionState.Closed || governor.GetSnapshot().InUse != 0) &&
+               DateTime.UtcNow < deadline)
+        {
+            await Task.Delay(10);
+        }
+
+        Assert.Equal(ConnectionState.Closed, conn.State);
+        Assert.Equal(0, governor.GetSnapshot().InUse);
     }
 
     private sealed class ThrowingDisposeAsyncConnection : DbConnection
