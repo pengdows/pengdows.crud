@@ -17,7 +17,7 @@ SqlContainer is responsible for:
 Instances of SqlContainer are constructed internally by `DatabaseContext` or `TransactionContext`, both implement `IDatabaseContext`.
 
 ```csharp
-var sc = context.CreateSqlContainer();
+await using var sc = context.CreateSqlContainer();
 ```
 
 You may also optionally pass a pre-existing query string.
@@ -231,7 +231,7 @@ Methods that take a column name, like `CountWhereEqualsAsync`, accept the result
 ## Complete Example
 
 ```csharp
-var sc = context.CreateSqlContainer();
+await using var sc = context.CreateSqlContainer();
 
 // Build SELECT with proper identifier quoting
 sc.Query.Append("SELECT * FROM ");
@@ -296,7 +296,7 @@ await foreach (var user in gateway.LoadStreamAsync(sc))
 ## Stored Procedure Example
 
 ```csharp
-var sc = context.CreateSqlContainer();
+await using var sc = context.CreateSqlContainer();
 sc.Query.Append("GetUsersByRole");
 
 var roleParam = sc.AddParameterWithValue("role", DbType.String, "Admin");

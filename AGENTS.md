@@ -32,15 +32,15 @@ dotnet restore
 # Build (treats warnings as errors for libraries)
 dotnet build pengdows.crud.sln -c Release
 
-# Test (local)
-dotnet test -c Release --results-directory TestResults --logger trx
+# Unit tests only (never the solution-level `dotnet test`, which also runs the integration project)
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Release --results-directory TestResults --logger trx
 
-# Run specific test
-dotnet test --filter "FullyQualifiedName~TestMethodName"
-dotnet test --filter "FullyQualifiedName~MyTests"
+# Run a specific unit test
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj --filter "FullyQualifiedName~TestMethodName"
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj --filter "FullyQualifiedName~MyTests"
 
 # Test with coverage (CI-like)
-dotnet test -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
 
 # Integration suite (requires Docker)
 dotnet run -c Release -f net10.0 --project testbed
@@ -60,6 +60,7 @@ dotnet pack <project>.csproj -c Release
 
 - `testbed` is the integration testing app; treat it as part of the primary verification flow.
 - Whenever work is completed, ensure all unit tests and integration tests pass with no skipped tests.
+- **Test vocabulary (exact meanings):** "all tests" = all unit tests AND all integration tests. "Unit tests" = every unit test and NO integration tests (`pengdows.crud.Tests` only; no Docker, no real database, no environment variables). "Integration tests" = every integration test and NO unit tests (`run-integration-tests.sh`, one database per process). A request to run unit tests never builds or runs `pengdows.crud.IntegrationTests`, and an integration failure is never reported as a caveat on a unit run. The solution-level `dotnet test` includes the integration project, so do not use it for a unit run.
 - If the intended functionality is unclear, consult the wiki (`pengdows.crud.wiki/`) or ask for clarification before proceeding.
 
 ## Coding Style & Naming Conventions
@@ -447,7 +448,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 
 - Commits: short, imperative; optional prefixes `feat:`, `fix:`, `refactor:`, `chore:`.
 - PRs: clear description, rationale, scope; link issues; list behavioral/provider impacts; include tests.
-- Before review: ensure `dotnet build` and `dotnet test` pass locally.
+- Before review: ensure `dotnet build pengdows.crud.sln -c Release`, the project-scoped unit test command, and the integration test command pass locally.
 
 ## Security & Configuration Tips
 

@@ -171,6 +171,8 @@ await gateway.BatchDeleteAsync(new[] { item });
 
 ## Development Commands
 
+**Test vocabulary (exact meanings):** "all tests" = all unit tests AND all integration tests. "Unit tests" = every unit test and NO integration tests (`pengdows.crud.Tests` only; no Docker, no real database, no environment variables). "Integration tests" = every integration test and NO unit tests (`run-integration-tests.sh`, one database per process). A request to run unit tests never builds or runs `pengdows.crud.IntegrationTests`, and an integration failure is never reported as a caveat on a unit run. The solution-level `dotnet test` includes the integration project, so do not use it for a unit run.
+
 **IMPORTANT**: All unit tests must pass and all integration tests (testbed) must pass. No tests may be skipped. CI enforces minimum **83% coverage**; target **95%** for new work.
 
 ### Build and Test
@@ -178,17 +180,17 @@ await gateway.BatchDeleteAsync(new[] { item });
 # Build entire solution
 dotnet build pengdows.crud.sln -c Release
 
-# Run all tests
-dotnet test -c Release --results-directory TestResults --logger trx
+# Run all unit tests (no integration tests)
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Release --results-directory TestResults --logger trx
 
-# Run specific test by name
-dotnet test --filter "FullyQualifiedName~TestMethodName"
+# Run a specific unit test by name
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj --filter "FullyQualifiedName~TestMethodName"
 
-# Run tests for specific class
-dotnet test --filter "FullyQualifiedName~TableGatewayCoreBehaviorTests"
+# Run tests for a specific unit-test class
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj --filter "FullyQualifiedName~TableGatewayCoreBehaviorTests"
 
 # Test with coverage (CI-like)
-dotnet test -c Release --filter "FullyQualifiedName!~pengdows.crud.IntegrationTests" \
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Release \
   --collect:"XPlat Code Coverage" --results-directory TestResults --settings coverage.runsettings
 
 # Run integration suite (requires Docker)
@@ -775,7 +777,7 @@ those are neither created nor deleted. The clusters are billed while they exist 
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload (explicit `Standard` always honored)
+8. **DbMode.Best auto-selects** — SQLite `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; explicit `Standard` is honored where the dialect permits it, but SQLite and pengdows.flatfile coerce it to SingleWriter
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `Context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations
@@ -796,7 +798,7 @@ those are neither created nor deleted. The clusters are billed while they exist 
 
 - Commits: short, imperative; optional prefixes `feat:`, `fix:`, `refactor:`, `chore:`.
 - PRs: clear description, rationale, scope; link issues; list behavioral/provider impacts; include tests.
-- Before review: ensure `dotnet build` and `dotnet test` pass locally.
+- Before review: ensure `dotnet build pengdows.crud.sln -c Release`, the project-scoped unit test command, and the integration test command pass locally.
 
 ## Key Implementation Details
 

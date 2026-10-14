@@ -83,7 +83,7 @@ A multi-layered, high-performance, and extensible type coercion system.
 
 ### 6. Comprehensive Metrics
 
-Provides deep operational visibility via `DatabaseMetrics` (35 top-level metrics plus separate `Read`/`Write` role breakdowns) for connections, contention (from the `PoolGovernor`), command timings, transactions, and more. Metrics are collected inside the execution pipeline, providing precise observability into every connection open, slot acquisition, and command dispatch.
+Provides deep operational visibility via the current `DatabaseMetrics` snapshot plus separate `Read`/`Write` role breakdowns for connections, contention (from the `PoolGovernor`), command timings, transactions, and more. Metrics are collected inside the execution pipeline, providing precise observability into every connection open, slot acquisition, and command dispatch.
 
 ## Coding Style & Naming
 
@@ -306,7 +306,7 @@ public class OrderGateway : TableGateway<Order, long>, IOrderGateway
 5. **TenantContextRegistry is SINGLETON** — manages per-tenant contexts
 6. **Transactions are operation-scoped** — create inside methods, never store as fields
 7. **ITrackedReader is a lease** — pins connection until disposed, dispose promptly
-8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; unsafe explicit modes are coerced (e.g., SQLite `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
+8. **DbMode.Best auto-selects** — SQLite/DuckDB `:memory:` = SingleConnection, file SQLite/DuckDB/Access/pengdows.flatfile = SingleWriter, LocalDB/Firebird/Db2 LUW = PreventDatabaseUnload; unsafe explicit modes are coerced where required (e.g., SQLite and pengdows.flatfile `Standard` → `SingleWriter`; DuckDB and Access honor an explicit `Standard` with a risk warning)
 9. **Always use WrapObjectName()** — for column names and aliases in custom SQL. Get a mapped column's name with `ColumnName(nameof(Order.CustomerId))` on a gateway, or `ctx.ColumnName<Customer>(nameof(Customer.Name))` for any entity, instead of hard-coding it
 10. **NEVER use TransactionScope** — incompatible with connection management, use `context.BeginTransaction()`
 11. **Execution methods return ValueTask** — not Task, for reduced allocations
@@ -349,14 +349,14 @@ Expose only what needs exposing: public is permanent (adding costs a minor versi
 # Build
 dotnet build pengdows.crud.sln -c Release
 
-# Unit tests
-dotnet test -c Release --results-directory TestResults --logger trx
+# Unit tests only (never the solution-level `dotnet test`, which also runs the integration project)
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Release --results-directory TestResults --logger trx
 
-# Run specific test
-dotnet test --filter "FullyQualifiedName~TestMethodName"
+# Run a specific unit test
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj --filter "FullyQualifiedName~TestMethodName"
 
 # Test with coverage (CI-like)
-dotnet test -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
+dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Release --results-directory TestResults -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Exclude="[pengdows.crud.Tests]*;[pengdows.crud.abstractions]*;[pengdows.crud.fakeDb]*;[testbed]*"
 
 # Integration tests (requires Docker)
 dotnet run -c Release -f net10.0 --project testbed
@@ -380,13 +380,14 @@ dotnet run -f net10.0 --project benchmarks/CrudBenchmarks -- --filter '*MyBenchm
 ```
 
 - All unit tests and integration tests must pass with NO skipped tests.
+- **Test vocabulary (exact meanings):** "all tests" = all unit tests AND all integration tests. "Unit tests" = every unit test and NO integration tests (`pengdows.crud.Tests` only; no Docker, no real database, no environment variables). "Integration tests" = every integration test and NO unit tests (`run-integration-tests.sh`, one database per process). A request to run unit tests never builds or runs `pengdows.crud.IntegrationTests`, and an integration failure is never reported as a caveat on a unit run. The solution-level `dotnet test` includes the integration project, so do not use it for a unit run.
 - The entire unit-test suite finishes in under 30 seconds; investigate immediately if it approaches 3 minutes.
 
 ## Commit & Pull Request Guidelines
 
 - Commits: short, imperative; optional prefixes `feat:`, `fix:`, `refactor:`, `chore:`.
 - PRs: clear description, rationale, scope; link issues; list behavioral/provider impacts; include tests.
-- Before review: ensure `dotnet build` and `dotnet test` pass locally.
+- Before review: ensure `dotnet build pengdows.crud.sln -c Release`, the project-scoped unit test command, and the integration test command pass locally.
 
 ## Related Projects
 
