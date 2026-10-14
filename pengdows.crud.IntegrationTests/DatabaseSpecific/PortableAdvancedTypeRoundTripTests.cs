@@ -16,15 +16,16 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
         : base(output, fixture) { }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
-        [SupportedDatabase.SqlServer, SupportedDatabase.PostgreSql, SupportedDatabase.MySql,
-         SupportedDatabase.MariaDb, SupportedDatabase.Sqlite, SupportedDatabase.DuckDB,
-         SupportedDatabase.Firebird, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb,
-         SupportedDatabase.TiDb, SupportedDatabase.Db2, SupportedDatabase.Oracle,
-         // TYPE-004: every database, not only the first twelve. SAP HANA, InterBase and Snowflake are
-         // opt-in (see IntegrationTestConfiguration) and run only when enabled.
-         SupportedDatabase.Spanner, SupportedDatabase.SybaseASE, SupportedDatabase.Informix,
-         SupportedDatabase.SingleStore, SupportedDatabase.FlatFile, SupportedDatabase.SapHana,
-         SupportedDatabase.InterBase, SupportedDatabase.Snowflake];
+        // TYPE-004: every database. Both families come whole (Aurora included); SAP HANA, InterBase, Snowflake and
+        // Aurora are opt-in (see IntegrationTestConfiguration) and run only when enabled.
+        DatabaseFamilies.PostgreSql.Concat(DatabaseFamilies.MySql).Concat(new[]
+        {
+            SupportedDatabase.SqlServer, SupportedDatabase.Sqlite, SupportedDatabase.DuckDB,
+            SupportedDatabase.Firebird, SupportedDatabase.Db2, SupportedDatabase.Oracle,
+            SupportedDatabase.Spanner, SupportedDatabase.SybaseASE, SupportedDatabase.Informix,
+            SupportedDatabase.FlatFile, SupportedDatabase.SapHana, SupportedDatabase.InterBase,
+            SupportedDatabase.Snowflake
+        });
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -36,8 +37,8 @@ public sealed class PortableAdvancedTypeRoundTripTests : DatabaseTestBase
         {
             SupportedDatabase.SqlServer => "CREATE TABLE [dbo].[portable_advanced_types] ([id] INT NOT NULL PRIMARY KEY, [payload] NVARCHAR(MAX) NOT NULL, [bytes] VARBINARY(MAX) NOT NULL, [content] VARBINARY(MAX) NOT NULL, [notes] NVARCHAR(MAX) NOT NULL)",
             SupportedDatabase.Spanner => "CREATE TABLE portable_advanced_types (id BIGINT PRIMARY KEY, payload JSONB NOT NULL, bytes BYTEA NOT NULL, content BYTEA NOT NULL, notes TEXT NOT NULL)",
-            SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "CREATE TABLE portable_advanced_types (id INT PRIMARY KEY, payload JSONB NOT NULL, bytes BYTEA NOT NULL, content BYTEA NOT NULL, notes TEXT NOT NULL)",
-            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.SingleStore => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload JSON NOT NULL, bytes LONGBLOB NOT NULL, content LONGBLOB NOT NULL, notes LONGTEXT NOT NULL)",
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.CockroachDb or SupportedDatabase.YugabyteDb => "CREATE TABLE portable_advanced_types (id INT PRIMARY KEY, payload JSONB NOT NULL, bytes BYTEA NOT NULL, content BYTEA NOT NULL, notes TEXT NOT NULL)",
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb or SupportedDatabase.SingleStore => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload JSON NOT NULL, bytes LONGBLOB NOT NULL, content LONGBLOB NOT NULL, notes LONGTEXT NOT NULL)",
             SupportedDatabase.TiDb => "CREATE TABLE portable_advanced_types (id INT NOT NULL PRIMARY KEY, payload LONGTEXT NOT NULL, bytes LONGBLOB NOT NULL, content LONGBLOB NOT NULL, notes LONGTEXT NOT NULL)",
             SupportedDatabase.DuckDB => "CREATE TABLE portable_advanced_types (id INTEGER PRIMARY KEY, payload JSON NOT NULL, bytes BLOB NOT NULL, content BLOB NOT NULL, notes VARCHAR NOT NULL)",
             SupportedDatabase.Firebird => "CREATE TABLE \"portable_advanced_types\" (\"id\" INTEGER PRIMARY KEY, \"payload\" BLOB SUB_TYPE TEXT NOT NULL, \"bytes\" BLOB SUB_TYPE BINARY NOT NULL, \"content\" BLOB SUB_TYPE BINARY NOT NULL, \"notes\" BLOB SUB_TYPE TEXT NOT NULL)",

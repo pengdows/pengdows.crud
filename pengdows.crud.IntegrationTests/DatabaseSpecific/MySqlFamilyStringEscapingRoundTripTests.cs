@@ -19,12 +19,7 @@ public sealed class MySqlFamilyStringEscapingRoundTripTests : DatabaseTestBase
     {
     }
 
-    private static readonly SupportedDatabase[] Providers =
-    {
-        SupportedDatabase.MySql,
-        SupportedDatabase.MariaDb,
-        SupportedDatabase.TiDb
-    };
+    private static readonly SupportedDatabase[] Providers = DatabaseFamilies.MySql;
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
         base.GetSupportedProviders().Where(Providers.Contains).ToArray();

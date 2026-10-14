@@ -33,7 +33,10 @@ public class ConcurrencyConflictTests : DatabaseTestBase
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders()
     {
-        return new[] { SupportedDatabase.Sqlite, SupportedDatabase.PostgreSql };
+        // The version guard is the same generated UPDATE on every dialect; run it on SQLite and both families.
+        return new[] { SupportedDatabase.Sqlite }
+            .Concat(DatabaseFamilies.PostgreSql)
+            .Concat(DatabaseFamilies.MySql);
     }
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
@@ -47,11 +50,20 @@ public class ConcurrencyConflictTests : DatabaseTestBase
                     version INTEGER NOT NULL DEFAULT 0
                 )
                 """,
-            SupportedDatabase.PostgreSql => """
+            SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql or SupportedDatabase.CockroachDb
+                or SupportedDatabase.YugabyteDb => """
                 CREATE TABLE IF NOT EXISTS versioned_jobs (
                     id BIGSERIAL PRIMARY KEY,
                     name VARCHAR(255) NOT NULL,
                     version INTEGER NOT NULL DEFAULT 0
+                )
+                """,
+            SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb
+                or SupportedDatabase.TiDb or SupportedDatabase.SingleStore => """
+                CREATE TABLE IF NOT EXISTS versioned_jobs (
+                    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+                    name VARCHAR(255) NOT NULL,
+                    version INT NOT NULL DEFAULT 0
                 )
                 """,
             _ => throw new NotSupportedException($"Provider {provider} is not supported.")

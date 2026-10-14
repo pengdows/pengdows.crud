@@ -352,7 +352,7 @@ layer applies where matters more than a single "read-only is enforced" claim wou
 SQL Server sits outside both database-enforced layers entirely: `SqlServerDialect`
 documents `ApplicationIntent=ReadOnly` as "a routing hint for Availability Groups... does
 NOT enforce server-side read-only state," and has no transaction-level override either — a
-SQL Server write, transactional or not, is caught only by layer 1.
+SQL Server write, transactional or not, is caught only by layer 1. Firebird, Db2, Sybase ASE, InterBase, DuckDB, Snowflake, Spanner, TiDB and SingleStore are in the same position for a read-intent transaction (live-verified 2026-10-03; the per-database list is in [`read-only-enforcement.md`](../read-only-enforcement.md)): Firebird's dialect issues `SET TRANSACTION READ ONLY` as its session setting, but the database does not then refuse a write through a later transaction, so only layer 1 protects it.
 
 ## 5. Connections are ephemeral and governed by design
 

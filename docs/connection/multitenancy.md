@@ -25,6 +25,48 @@ in a one-entry `MultiTenant:Tenants` list and resolve through `ITenantContextReg
 a single `IDatabaseContext`), but the earlier you adopt the pattern, the less application code ever
 has to be rewritten to stop assuming a single, ambient database connection.
 
+## Why this matters for SaaS
+
+For a multi-tenant SaaS, a connection leak is not merely a request bug. It can consume a governed
+pool, increase queueing for unrelated requests, and become a noisy-neighbor or tenant-availability
+incident. Context-per-tenant makes the reliability boundary explicit: each tenant's context carries
+its own connection string, provider/dialect selection, pool governors, mode strategy, transaction
+behavior, and metrics. The registry then gives the application one controlled place to resolve,
+rotate, evict, and lease those contexts.
+
+This is the main operational reason to choose the pattern over threading a `tenant_id` through
+ordinary queries. There is no library-injected tenant predicate to forget, bypass, or accidentally
+apply to the wrong table. A gateway executes against the tenant context supplied by the request, and
+the context's database boundary supplies the isolation. The application still must authenticate the
+request, authorize the tenant, provision the correct database, and protect the resolver from an
+untrusted tenant string; the library does not establish tenant identity or provision databases.
+
+### SaaS operating checklist
+
+- Register `ITenantContextRegistry`, `IDatabaseContextFactory`, gateways, and provider factories as
+  singletons. Do not create a context or gateway per request.
+- Resolve the tenant from authenticated, authorized request state. Never trust a raw route, header,
+  or form value as the tenant identity without authorization and normalization.
+- Use `AcquireLease`/`AcquireLeaseAsync` when a request holds a tenant context across `await` or
+  while a context rotation may occur. A bare `GetContext` reference is not protected from concurrent
+  `Invalidate`/`InvalidateAll` disposal.
+- Size tenant pools and `MaxTenantCount` against the actual tenant cardinality and database/server
+  connection limits. A context-per-tenant design isolates policy, but it does not create unlimited
+  database capacity; many active tenants can still multiply physical pool demand.
+- Treat tenant configuration and credentials as control-plane data. Rotate them with
+  `Register`/`Invalidate`, and use the lease contract so in-flight requests finish on the old
+  context before it is disposed.
+- Monitor per-context metrics, pool waits/timeouts, mode contention, command duration, and errors.
+  These signals help distinguish one tenant's database outage or workload spike from a global SaaS
+  problem.
+- Plan schema migrations per tenant. The registry resolves runtime contexts; it does not coordinate
+  rollout ordering, migration locking, backup policy, or recovery across tenant databases.
+
+The guarantee is deliberately bounded: pengdows.crud prevents ordinary completed and governed
+execution paths from relying on call-site cleanup, but it cannot safely close a connection underneath
+a command that is still running. Command timeouts, cancellation, database provisioning, tenant
+identity, migration orchestration, and capacity planning remain deployment responsibilities.
+
 ## Configuration shape
 
 ```json

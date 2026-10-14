@@ -47,6 +47,90 @@ async stream releases the reader, command, connection, locks, and governor permi
 path. A command that genuinely remains active can keep a shared connection open until its command
 timeout or external cancellation policy ends it.
 
+## Choosing a DAL for a new .NET project
+
+There is no universally best DAL. Choose based on who should own the SQL, how much database
+behavior must be governed, and whether the application wants an object model or a relational
+execution contract.
+
+### The key proposition: Dapper-class speed with near-leak-proof lifecycle ownership
+
+The usual objection to a governed DAL is that safety costs performance. In the fair,
+methodology-corrected PostgreSQL equal-footing run, reads stayed within **±3% of Dapper across
+record counts**, with common CRUD operations close to parity as well. See the raw
+[`PostgreSQL benchmark result`](benchmarks/CrudBenchmarks/results/postgres-run-2026-03-15-after-fix.md)
+for the workload, numbers, and limitations.
+
+The practical choice is therefore not “the incumbent DAL is fast, pengdows is a heavy abstraction.”
+It is:
+
+> **Dapper-like throughput, plus a library-owned execution lifecycle.**
+
+With any conventional DAL—whether EF Core, RepoDb, Dapper, or another mapper—the application still
+has to understand and correctly compose the library's command/reader disposal, connection return,
+transaction ownership, cancellation, provider session reset, pool admission, and concurrency
+policies. The APIs differ, and some provide parts of this story, but the lifecycle responsibility
+is still spread across framework rules and application code. Any forgotten disposal, early return,
+exception path, or mismatched transaction can turn that responsibility into a connection leak, pool
+starvation, or provider-session bug.
+
+pengdows.crud moves that ownership into the execution architecture: commands and connections are
+governed leases, non-lease execution paths self-clean on success and failure, readers release their
+complete lease at disposal or end-of-results, transactions pin and release one governed connection,
+and `PoolGovernor` controls admission before the database is overwhelmed. This is intentionally
+near-leak-proof for completed and governed execution paths: the developer cannot accidentally omit
+the critical connection/command/permit cleanup at every call site because the call site does not
+own those pieces individually.
+
+The boundary is important and honest: a genuinely hung command remains live and cannot safely be
+closed underneath. Its shared connection is deferred until the holder releases it or the command's
+timeout/cancellation policy ends it. That is an active operation, not an ordinary forgotten lease.
+
+| Choose | When it is the strongest fit | What you give up or must accept |
+|---|---|---|
+| **EF Core** | The domain is naturally modeled as tracked entities; LINQ queries, migrations, conventions, and rapid application development are more valuable than exact SQL control. | Change tracking and LINQ translation become part of the execution model; provider-specific SQL and high-contention behavior still need investigation. |
+| **Dapper** | The team already owns the SQL and wants a very thin mapper with minimal policy and minimal abstraction overhead. | Connection lifetime, concurrency admission, dialect differences, transactions, session state, and observability remain largely application responsibilities. |
+| **RepoDb** | The team wants convention-driven CRUD and mapping with more helpers than Dapper while retaining SQL escape hatches. | The application still needs to decide how much connection governance, provider normalization, and database-specific policy it builds around the library. |
+| **pengdows.crud** | The team wants explicit SQL and inspectable execution, Dapper-class measured throughput, and connection governance, database-aware dialect behavior, operation-scoped transactions, lease-safe readers, concurrency controls, analyzers, and metrics to be framework responsibilities. | SQL remains an intentional application responsibility; there is no LINQ query model, change tracker, implicit unit of work, or promise that every provider exposes identical capabilities. |
+
+### A practical decision rule
+
+- Choose **EF Core** when the object model and LINQ productivity are the product's center of gravity.
+- Choose **Dapper** when the database is simple enough that the application team is comfortable
+  owning all lifecycle and concurrency policy itself.
+- Choose **RepoDb** when convention-based CRUD is the priority and the team wants a richer mapper
+  without adopting a full ORM.
+- Choose **pengdows.crud** when SQL is a first-class artifact and database behavior is part of
+  the reliability boundary: SQLite/DuckDB/Access write contention, multiple provider dialects,
+  tenant-specific contexts, strict transaction/isolation behavior, streaming readers, or bounded
+  connection resources are not edge concerns but design requirements—and you do not want to pay a
+  large throughput penalty for getting that governance.
+
+Do not generalize the PostgreSQL result to every database or workload. The governed per-operation
+strategy can be slower than a pinned connection for tiny local operations; the SQLite file run,
+for example, reports 1.04–1.26x per-operation Dapper for its measured CRUD cases. Choose pengdows
+when the execution contract matters and the measured overhead is acceptable for your workload. For
+the detailed comparison and its limitations, read
+[`docs/positioning/dal-taxonomy-and-comparison.md`](docs/positioning/dal-taxonomy-and-comparison.md)
+and [`docs/positioning/product-thesis.md`](docs/positioning/product-thesis.md).
+
+### Why this is especially relevant to SaaS
+
+For a multi-tenant SaaS, a connection leak is not merely a request bug: it can consume a governed
+pool, increase queueing for unrelated requests, and become a noisy-neighbor or tenant-availability
+incident. pengdows.crud's context-per-tenant model gives each tenant an independently governed
+`IDatabaseContext` with its own connection configuration, provider/dialect selection, pool policy,
+mode strategy, and metrics. The registry provides one controlled place to resolve, rotate, evict,
+and lease those contexts.
+
+This is stronger than threading `tenant_id` through ordinary queries. The library does not inject a
+tenant predicate that can be forgotten or bypassed; the tenant database boundary supplies the
+isolation. The application remains responsible for authenticating and authorizing tenant identity,
+provisioning databases, rotating credentials, coordinating migrations, and planning total capacity.
+Use `AcquireLease` when a request holds a tenant context across `await` or while rotation may occur.
+See [`docs/connection/multitenancy.md`](docs/connection/multitenancy.md) for the SaaS checklist and
+the exact boundary between library guarantees and deployment responsibilities.
+
 ## Why pengdows.crud is unusually powerful
 
 Most data-access libraries stop at one of two jobs: map objects to SQL, or pool connections.
@@ -207,9 +291,10 @@ for the comparison methodology and limitations.
   per-operation connection strategy can cost more than a pinned connection on tiny local writes;
   the trade is lifecycle isolation, provider-session normalization, and concurrency control. The
   benchmark suite reports workload-specific comparisons rather than one marketing number: the
-  dated PostgreSQL run includes near-parity cases and slower cases, while the SQLite file run
-  reports roughly 1.04–1.26x per-operation Dapper for its measured CRUD cases and a pinned writer
-  is faster. Start with [`benchmarks/CrudBenchmarks/README.md`](benchmarks/CrudBenchmarks/README.md)
+  dated PostgreSQL run is at parity with Dapper (within 3% on reads, up to 8% slower on writes) and 1.1x to 1.5x faster than EF Core,
+  while on SQLite pengdows.crud takes 1.2x to 1.5x a plain per-operation Dapper's time (in-memory,
+  2026-10-03), narrowing to 1.04x to 1.26x when that Dapper does the same session work (file,
+  2026-10-13), and a pinned writer is faster. Start with [`benchmarks/CrudBenchmarks/README.md`](benchmarks/CrudBenchmarks/README.md)
   and its dated result files before quoting any ratio.
 - [`docs/transactions.md`](docs/transactions.md) — `ITransactionContext`, isolation
   profiles and the "fails up, never down" isolation rule (an unsupported explicit level resolves to

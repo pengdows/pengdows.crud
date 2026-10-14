@@ -18,12 +18,7 @@ public class PostgreSqlIntervalRoundTripTests : DatabaseTestBase
 {
     private static long _nextId;
 
-    private static readonly SupportedDatabase[] IntervalProviders =
-    {
-        SupportedDatabase.PostgreSql,
-        SupportedDatabase.CockroachDb,
-        SupportedDatabase.YugabyteDb
-    };
+    private static readonly SupportedDatabase[] IntervalProviders = DatabaseFamilies.PostgreSql;
 
     public PostgreSqlIntervalRoundTripTests(ITestOutputHelper output, IntegrationTestFixture fixture)
         : base(output, fixture)

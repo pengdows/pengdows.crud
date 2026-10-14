@@ -14,12 +14,7 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 [Collection("IntegrationTests")]
 public sealed class PostgreSqlFamilySetValuedRetrieveTests : DatabaseTestBase
 {
-    private static readonly SupportedDatabase[] Providers =
-    {
-        SupportedDatabase.PostgreSql,
-        SupportedDatabase.CockroachDb,
-        SupportedDatabase.YugabyteDb
-    };
+    private static readonly SupportedDatabase[] Providers = DatabaseFamilies.PostgreSql;
 
     public PostgreSqlFamilySetValuedRetrieveTests(ITestOutputHelper output, IntegrationTestFixture fixture)
         : base(output, fixture)

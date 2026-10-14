@@ -15,8 +15,7 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 [Collection("IntegrationTests")]
 public class PostgreSqlInetPrefixRoundTripTests : DatabaseTestBase
 {
-    private static readonly SupportedDatabase[] Family =
-        { SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb };
+    private static readonly SupportedDatabase[] Family = DatabaseFamilies.PostgreSql;
 
     public PostgreSqlInetPrefixRoundTripTests(ITestOutputHelper output, IntegrationTestFixture fixture) : base(output, fixture)
     {

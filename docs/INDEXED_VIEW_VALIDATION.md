@@ -1,10 +1,19 @@
 # Indexed View Benchmark Validation
 
-The new indexed-view benchmarks are proof-based: every scenario validates that the indexed view is indexed, the optimizer uses the expected objects, and the session settings are correct before the timed iterations start.
+This page describes the validation helper for SQL Server indexed-view benchmarks. **No benchmark in
+`benchmarks/CrudBenchmarks` calls it today**: the helper (`BenchmarkValidation.SqlServer.cs`, with
+`IndexedViewEnvironment.cs` and `verify-validation-artifacts.sh`) is in place, but the indexed-view benchmark
+families that would use it (the `DirectView` and `AutoSubstitution` variants below) have not been written. The layout
+below is what the helper produces for a family that does call it; the one view benchmark that exists,
+`MaterializedViewPerformanceBenchmarks`, is PostgreSQL-only and does not use it. Why SQL Server session settings matter
+for indexed views: [sql-server-session-settings.md](sql-server-session-settings.md).
+
+A benchmark that calls the helper validates, before the timed iterations start, that the indexed view is indexed, the
+optimizer uses the expected objects, and the session settings are correct.
 
 ## What is validated
 
-Each benchmark variant uses `BenchmarkValidation.SqlServer` to automatically:
+A benchmark variant that uses `BenchmarkValidation.SqlServer` gets, automatically:
 
 - Confirm `dbo.vw_CustomerOrderSummary` has a **unique clustered index**.
 - Capture `SET` options via `DBCC USEROPTIONS` and assert the required SQL Server session flags (e.g., `ARITHABORT ON`, `ANSI_WARNINGS ON`, etc.).
@@ -15,7 +24,7 @@ If the validation fails, the benchmark run aborts with a clear error message con
 
 ## Artifact layout
 
-After a successful run the following structure is populated:
+After a successful run of a family that uses the helper, the following structure is populated (family and variant names are illustrative):
 
 ```
 BenchmarkDotNet.Artifacts/validation/
@@ -41,7 +50,3 @@ Run the helper script to ensure every variant has emitted both files:
 ```
 
 If the script fails, rerun the corresponding benchmark family so the validation can re-run under a clean SQL Server instance.
-
-## Fairness reporting
-
-`MixedLoadFairnessBenchmarks` prints tail latencies for the writer workload (p50/p95/p99 wait time and p95 execution time) together with the final reader/writer `PoolStatisticsSnapshot`. Use these console logs to compare writer latency under read-heavy load and confirm the governor prevents starvation.

@@ -231,6 +231,30 @@ public sealed class DocumentationConsistencyTests
         }
     }
 
+    // A benchmark script whose --filter names a class that does not exist runs nothing and says nothing. Every
+    // *Name* pattern in benchmarks/run-*.sh must match a class declared in the benchmark project.
+    [Theory]
+    [InlineData("run-thesis-proof.sh")]
+    [InlineData("run-simple-crud.sh")]
+    public void BenchmarkScripts_FilterOnlyClassesThatExist(string script)
+    {
+        var root = FindRepositoryRoot();
+        var text = File.ReadAllText(Path.Combine(root, "benchmarks", script));
+        var declared = Directory.GetFiles(Path.Combine(root, "benchmarks", "CrudBenchmarks"), "*.cs")
+            .Select(File.ReadAllText)
+            .SelectMany(c => Regex.Matches(c, @"\bclass\s+(\w+)").Cast<Match>().Select(m => m.Groups[1].Value))
+            .ToHashSet();
+
+        var filterLine = text.Split('\n').Single(l => l.Contains("--filter"));
+        var patterns = Regex.Matches(filterLine, @"\*(\w+)\*").Cast<Match>().Select(m => m.Groups[1].Value).ToList();
+        Assert.NotEmpty(patterns);
+        foreach (var pattern in patterns)
+        {
+            Assert.True(declared.Any(c => c.Contains(pattern)),
+                $"{script} filters on '*{pattern}*' but no benchmark class matches it");
+        }
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

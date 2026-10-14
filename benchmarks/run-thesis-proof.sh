@@ -1,9 +1,9 @@
 #!/bin/bash
-# THESIS PROOF BENCHMARK SUITE
-# Proves that pengdows.crud is superior to EF/Dapper in:
-# 1. Connection pool management (Standard mode)
-# 2. SQL generation safety (handles spaces, schemas, keywords)
-# 3. Raw performance (very close to Dapper)
+# THESIS EVIDENCE BENCHMARK SUITE
+# Runs the benchmarks that back the product thesis. Each reports what it measured; none is a proof:
+# 1. Connection pool protection under a request storm
+# 2. Broken mapping (a wrong read fails loudly or silently)
+# 3. Equal-footing CRUD against Dapper and EF Core (SQLite in-memory)
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -11,23 +11,13 @@ echo "========================================================================="
 echo "PENGDOWS.CRUD THESIS PROOF BENCHMARK SUITE"
 echo "========================================================================="
 echo ""
-echo "This suite will prove:"
+echo "This suite runs:"
 echo ""
-echo "  1. CONNECTION POOL SUPERIORITY"
-echo "     - Standard mode handles high concurrency better than EF/Dapper"
-echo "     - Resists pool exhaustion under pressure"
-echo "     - 'Open late, close early' strategy is safer"
+echo "  1. ConnectionPoolProtectionBenchmarks - pool behavior under pressure"
+echo "  2. BrokenMappingBenchmarks - what each library does with a wrong mapping"
+echo "  3. EqualFootingCrudBenchmarks - CRUD time against Dapper and EF Core"
 echo ""
-echo "  2. SQL GENERATION PERFECTION"
-echo "     - Handles column names with spaces ('Fred Flintstone')"
-echo "     - Handles reserved keywords ('select', 'from')"
-echo "     - Automatic, correct quoting via dialect system"
-echo "     - EF requires configuration, Dapper requires manual quoting"
-echo ""
-echo "  3. RAW PERFORMANCE PARITY"
-echo "     - Very close to Dapper (within 5-15%)"
-echo "     - Much faster than Entity Framework"
-echo "     - Optimizations: compiled setters, plan caching, StringBuilderLite"
+echo "See benchmarks/README.md for the dated results and what each one does and does not show."
 echo ""
 echo "========================================================================="
 echo ""
@@ -35,26 +25,14 @@ echo "Running benchmarks... (this will take ~10-15 minutes)"
 echo ""
 
 # Run all thesis-proof benchmarks
-dotnet run -c Release -f "${BENCH_FRAMEWORK:-net10.0}" --project "${root}/CrudBenchmarks" --filter "*ConnectionPoolStressBenchmarks*,*SqlGenerationSafetyBenchmarks*,*RawPerformanceComparison*"
+dotnet run -c Release -f "${BENCH_FRAMEWORK:-net10.0}" --project "${root}/CrudBenchmarks" -- --filter "*ConnectionPoolProtectionBenchmarks*" "*BrokenMappingBenchmarks*" "*EqualFootingCrudBenchmarks*"
 
 echo ""
 echo "========================================================================="
 echo "BENCHMARK COMPLETE"
 echo "========================================================================="
 echo ""
-echo "Key metrics to look for:"
-echo ""
-echo "CONNECTION POOL TESTS:"
-echo "  - pengdows.crud should complete all operations without exceptions"
-echo "  - Dapper/EF may show pool timeout exceptions or slower performance"
-echo ""
-echo "SQL SAFETY TESTS:"
-echo "  - pengdows.crud should handle weird names automatically"
-echo "  - Note the simplicity vs Dapper's manual quoting"
-echo "  - Note EF's extensive configuration requirements"
-echo ""
-echo "RAW PERFORMANCE TESTS:"
-echo "  - pengdows.crud should be within 1.05x-1.15x of Dapper baseline"
-echo "  - EF should be 2x-10x slower depending on operation"
+echo "Read the results in BenchmarkDotNet.Artifacts/ against the dated numbers in benchmarks/README.md."
+echo "Every ratio depends on the workload, the database and the hardware; quote none without its run."
 echo ""
 echo "========================================================================="

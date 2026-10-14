@@ -163,14 +163,14 @@ public class StoredProcedureTests : DatabaseTestBase
     /// (<c>SELECT * FROM function_name()</c>, covered by the read-path checks elsewhere in this
     /// harness). PostgreSQL returns a procedure's INOUT parameter value as a one-row result set
     /// from CALL itself — no provider-level output-parameter binding is needed, unlike SQL
-    /// Server's OUTPUT. Scoped to PostgreSQL, CockroachDB, and YugabyteDB — the three databases
+    /// Server's OUTPUT. Scoped to the PostgreSQL family (PostgreSQL, Aurora PostgreSQL, CockroachDB and YugabyteDB) — the databases
     /// that share <c>PostgresProcWrappingStrategy</c> via <c>ProcWrappingStyle.PostgreSQL</c>.
     /// </summary>
     [SkippableFact]
     public Task StoredProc_Call_RealProcedureWithInoutParameter_ExecutesViaCall()
     {
         return RunTestAgainstProvidersAsync(
-            new[] { SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb },
+            DatabaseFamilies.PostgreSql,
             async (provider, context) =>
         {
             if (context.ProcWrappingStyle == ProcWrappingStyle.None)

@@ -20,10 +20,7 @@ public sealed class PostgreSqlFamilyReaderOptionsTests : DatabaseTestBase
     }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
-        base.GetSupportedProviders()
-            .Where(p => p is SupportedDatabase.PostgreSql or SupportedDatabase.CockroachDb
-                or SupportedDatabase.YugabyteDb)
-            .ToArray();
+        base.GetSupportedProviders().Where(DatabaseFamilies.PostgreSql.Contains).ToArray();
 
     [SkippableFact]
     public async Task CallerSuppliedOptions_ReachReadConnections_AndReadsStayReadOnly()

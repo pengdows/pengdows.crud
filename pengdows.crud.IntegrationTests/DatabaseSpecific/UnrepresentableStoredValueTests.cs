@@ -23,12 +23,14 @@ public sealed class UnrepresentableStoredValueTests : DatabaseTestBase
         : base(output, fixture) { }
 
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
-        [SupportedDatabase.MySql, SupportedDatabase.SqlServer, SupportedDatabase.PostgreSql];
+        DatabaseFamilies.MySql.Concat(new[] { SupportedDatabase.SqlServer }).Concat(DatabaseFamilies.PostgreSql);
 
     private static (string Ddl, string Literal) Case(SupportedDatabase provider) => provider switch
     {
-        SupportedDatabase.MySql => ("DATETIME", "'0000-00-00 00:00:00'"),
+        var p when DatabaseFamilies.MySql.Contains(p) => ("DATETIME", "'0000-00-00 00:00:00'"),
         SupportedDatabase.SqlServer => ("geometry", "geometry::Parse('POINT(1 2)')"),
+        // YugabyteDB: "DECIMAL does not support NaN yet", so it stores a number above decimal.MaxValue instead.
+        SupportedDatabase.YugabyteDb => ("NUMERIC", "1e40"),
         _ => ("NUMERIC", "'NaN'")
     };
 
@@ -48,7 +50,7 @@ public sealed class UnrepresentableStoredValueTests : DatabaseTestBase
 
         // MySQL's default sql_mode rejects a zero date on INSERT; the row models legacy data.
         await using var insert = context.CreateSqlContainer(
-            (provider == SupportedDatabase.MySql ? "INSERT IGNORE" : "INSERT") +
+            (DatabaseFamilies.MySql.Contains(provider) ? "INSERT IGNORE" : "INSERT") +
             $" INTO {table} ({context.WrapObjectName("id")}, {context.WrapObjectName("v")}) VALUES (1, {literal})");
         await insert.ExecuteNonQueryAsync();
     }
@@ -60,7 +62,7 @@ public sealed class UnrepresentableStoredValueTests : DatabaseTestBase
         {
             DataMappingException ex = provider switch
             {
-                SupportedDatabase.MySql => await Assert.ThrowsAsync<DataMappingException>(
+                var p when DatabaseFamilies.MySql.Contains(p) => await Assert.ThrowsAsync<DataMappingException>(
                     async () => await new TableGateway<ZeroDateRow, int>(context).RetrieveOneAsync(1, context)),
                 SupportedDatabase.SqlServer => await Assert.ThrowsAsync<DataMappingException>(
                     async () => await new TableGateway<GeometryRow, int>(context).RetrieveOneAsync(1, context)),

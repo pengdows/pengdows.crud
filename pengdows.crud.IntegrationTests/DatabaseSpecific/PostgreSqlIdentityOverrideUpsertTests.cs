@@ -14,12 +14,7 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 [Collection("IntegrationTests")]
 public sealed class PostgreSqlIdentityOverrideUpsertTests : DatabaseTestBase
 {
-    private static readonly SupportedDatabase[] Providers =
-    {
-        SupportedDatabase.PostgreSql,
-        SupportedDatabase.YugabyteDb,
-        SupportedDatabase.CockroachDb
-    };
+    private static readonly SupportedDatabase[] Providers = DatabaseFamilies.PostgreSql;
 
     public PostgreSqlIdentityOverrideUpsertTests(ITestOutputHelper output, IntegrationTestFixture fixture)
         : base(output, fixture)

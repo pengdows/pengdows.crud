@@ -26,8 +26,11 @@ public sealed class MySqlSpatialRoundTripTests : DatabaseTestBase
     {
     }
 
-    protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
-        new[] { SupportedDatabase.MySql, SupportedDatabase.MariaDb };
+    // TiDB and SingleStore have no MySQL spatial types (GEOMETRY), so the MySQL family runs without them.
+    private static readonly SupportedDatabase[] SpatialProviders =
+        DatabaseFamilies.MySql.Except(new[] { SupportedDatabase.TiDb, SupportedDatabase.SingleStore }).ToArray();
+
+    protected override IEnumerable<SupportedDatabase> GetSupportedProviders() => SpatialProviders;
 
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
@@ -52,7 +55,7 @@ public sealed class MySqlSpatialRoundTripTests : DatabaseTestBase
     [SkippableFact]
     public async Task MySqlSpatialTypes_RoundTripThroughCrudMapper()
     {
-        await RunTestAgainstProvidersAsync(new[] { SupportedDatabase.MySql, SupportedDatabase.MariaDb }, async (provider, context) =>
+        await RunTestAgainstProvidersAsync(SpatialProviders, async (provider, context) =>
         {
             var geographyWkb = BuildPointWkb(-87.6298, 41.8781);
             var entity = new MySqlSpatialEntity

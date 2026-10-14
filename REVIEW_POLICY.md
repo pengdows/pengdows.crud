@@ -147,7 +147,7 @@ Never mix business logic into I/O layers. Block if:
 ### A. pengdows.crud core invariants
 
 * **ValueTask in hot paths** — execution methods return `ValueTask`/`ValueTask<T>`; do not regress to `Task`.
-* **No public constructors** on implementation types except `DatabaseContext`.
+* **No public constructors** on implementation types except the deliberate entry points: `DatabaseContext`, `TableGateway<,>`, `PrimaryKeyTableGateway<>` and the tenant helpers (`TenantConnectionResolver`, `TenantContextRegistry`). A new public constructor needs a recorded reason (§4D).
 * **Interface-first** — consumers depend on abstractions, not implementation types.
 * **TableGateway extension rule** — extend TableGateway; do not wrap it with service layers.
 * **[Id] vs [PrimaryKey]** — never apply both to the same property; preserve documented upsert key priority.

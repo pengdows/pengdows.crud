@@ -22,10 +22,7 @@ public class PostgreSqlDateNumTzRangeRoundTripTests : DatabaseTestBase
 
     // CockroachDB has no range types.
     private static readonly SupportedDatabase[] RangeProviders =
-    {
-        SupportedDatabase.PostgreSql,
-        SupportedDatabase.YugabyteDb
-    };
+        DatabaseFamilies.PostgreSql.Except(new[] { SupportedDatabase.CockroachDb }).ToArray();
 
     public PostgreSqlDateNumTzRangeRoundTripTests(ITestOutputHelper output, IntegrationTestFixture fixture)
         : base(output, fixture)

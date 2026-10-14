@@ -38,6 +38,13 @@ This 1D spectrum creates a **false dilemma**:
 
 `pengdows.crud` is a **Database Execution Governance Engine + Inspectable SQL-First Gateway**. It provides full execution governance while keeping SQL completely explicit, inspectable, and developer-controlled.
 
+For a multi-tenant SaaS, this combination changes the operational risk profile: tenant contexts
+carry their own governed database boundary, while command, reader, connection, transaction, and
+admission ownership stay inside the execution architecture rather than being reimplemented in each
+request handler. This does not replace application authorization, database provisioning, migration
+orchestration, or capacity planning. It means a normal completed request is not dependent on every
+call site remembering the complete cleanup protocol before the next tenant can use its resources.
+
 ---
 
 ## The Three Pillars of pengdows.crud
