@@ -202,11 +202,8 @@ public class StoredProcedureTests : DatabaseTestBase
             {
                 await using var sc = context.CreateSqlContainer("sp_pengdows_family_test_proc");
                 sc.AddParameterWithValue("result", DbType.Int32, DBNull.Value);
-                var wrapped = sc.WrapForStoredProc(ExecutionType.Write);
-
-                await using var execContainer = context.CreateSqlContainer(wrapped);
-                execContainer.AddParameterWithValue("result", DbType.Int32, DBNull.Value);
-                var result = await execContainer.ExecuteScalarRequiredAsync<int>();
+                var result = await sc.ExecuteScalarRequiredAsync<int>(
+                    ExecutionType.Write, CommandType.StoredProcedure);
 
                 Assert.Equal(42, result);
                 Output.WriteLine($"{provider}: real PROCEDURE invoked via CALL, INOUT result = {result}");
@@ -248,10 +245,8 @@ public class StoredProcedureTests : DatabaseTestBase
             try
             {
                 await using var sc = context.CreateSqlContainer("sp_pengdows_db2_test");
-                var wrapped = sc.WrapForStoredProc(ExecutionType.Write);
-
-                await using var execContainer = context.CreateSqlContainer(wrapped);
-                var result = await execContainer.ExecuteScalarRequiredAsync<int>();
+                var result = await sc.ExecuteScalarRequiredAsync<int>(
+                    ExecutionType.Write, CommandType.StoredProcedure);
 
                 Assert.Equal(42, result);
             }
@@ -299,16 +294,13 @@ public class StoredProcedureTests : DatabaseTestBase
                     Assert.Equal(42, readResult);
                 }
 
-                // Write style: EXECUTE PROCEDURE proc(args) — explicit ExecutionType.Write wrap.
+                // Write style: ExecuteScalar with CommandType.StoredProcedure selects the
+                // dialect's write-side procedure syntax.
                 await using (var writeSc = context.CreateSqlContainer("sp_pengdows_fb_test"))
                 {
                     writeSc.AddParameterWithValue("input_value", DbType.Int32, 99);
-                    var wrapped = writeSc.WrapForStoredProc(ExecutionType.Write);
-                    Assert.StartsWith("EXECUTE PROCEDURE", wrapped, StringComparison.OrdinalIgnoreCase);
-
-                    await using var execContainer = context.CreateSqlContainer(wrapped);
-                    execContainer.AddParameterWithValue("input_value", DbType.Int32, 99);
-                    var writeResult = await execContainer.ExecuteScalarRequiredAsync<int>();
+                    var writeResult = await writeSc.ExecuteScalarRequiredAsync<int>(
+                        ExecutionType.Write, CommandType.StoredProcedure);
                     Assert.Equal(100, writeResult);
                 }
 
@@ -323,13 +315,13 @@ public class StoredProcedureTests : DatabaseTestBase
 
     /// <summary>
     /// Every database whose dialect has a <see cref="ProcWrappingStyle"/> creates, invokes through
-    /// <c>WrapForStoredProc</c>, and drops a real procedure (ported from the testbed's
+    /// <c>CommandType.StoredProcedure</c>, and drops a real procedure (ported from the testbed's
     /// TestStoredProcReturnValue when its check battery moved here). A database with a wrapping
     /// style but no case below fails, so a new database cannot silently go untested; one with
     /// <see cref="ProcWrappingStyle.None"/> has no procedure support (a capability, not a skip).
     /// </summary>
     [SkippableFact]
-    public async Task StoredProc_WrapForStoredProc_InvokesARealProcedureOnEveryProcCapableDatabase()
+    public async Task StoredProc_CommandTypeStoredProcedure_InvokesARealProcedureOnEveryProcCapableDatabase()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
@@ -348,7 +340,7 @@ public class StoredProcedureTests : DatabaseTestBase
                                context.WrapObjectName("ReturnFive");
                     sc.Query.Append($"CREATE OR ALTER PROCEDURE {name} AS BEGIN RETURN 5 END");
                     await sc.ExecuteNonQueryAsync();
-                    Assert.Equal(5, await InvokeAsync(sc, "dbo.ReturnFive", ExecutionType.Read, captureReturn: true));
+                    Assert.Equal(5, await InvokeReturnCodeAsync(sc, "dbo.ReturnFive", ExecutionType.Read));
                     await DropProcAsync(sc, $"DROP PROCEDURE {name}");
                     break;
                 }
@@ -362,10 +354,8 @@ public class StoredProcedureTests : DatabaseTestBase
                     await sc.ExecuteNonQueryAsync();
                     sc.Clear();
                     sc.Query.Append("sp_pengdows_test");
-                    var wrapped = sc.WrapForStoredProc(ExecutionType.Read);
-                    sc.Clear();
-                    sc.Query.Append(wrapped);
-                    Assert.False(string.IsNullOrWhiteSpace(await sc.ExecuteScalarOrNullAsync<string>()));
+                    Assert.False(string.IsNullOrWhiteSpace(await sc.ExecuteScalarOrNullAsync<string>(
+                        ExecutionType.Read, CommandType.StoredProcedure)));
                     await DropProcAsync(sc, $"DROP PROCEDURE {name}()");
                     break;
                 }
@@ -433,10 +423,7 @@ public class StoredProcedureTests : DatabaseTestBase
                     await sc.ExecuteNonQueryAsync();
                     sc.Clear();
                     sc.Query.Append("sp_pengdows_test");
-                    var wrapped = sc.WrapForStoredProc(ExecutionType.Write);
-                    sc.Clear();
-                    sc.Query.Append(wrapped);
-                    await sc.ExecuteNonQueryAsync();
+                    await sc.ExecuteNonQueryAsync(ExecutionType.Write, CommandType.StoredProcedure);
                     await DropProcAsync(sc, $"DROP PROCEDURE {name}");
                     break;
                 }
@@ -501,7 +488,7 @@ public class StoredProcedureTests : DatabaseTestBase
                     sc.Clear();
                     sc.Query.Append($"CREATE PROCEDURE {name} AS BEGIN RETURN 5 END");
                     await sc.ExecuteNonQueryAsync();
-                    Assert.Equal(5, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Read, captureReturn: true));
+                    Assert.Equal(5, await InvokeReturnCodeAsync(sc, "sp_pengdows_test", ExecutionType.Read));
                     await DropProcAsync(sc, $"DROP PROCEDURE {name}");
                     break;
                 }
@@ -518,10 +505,8 @@ public class StoredProcedureTests : DatabaseTestBase
                         sc.Clear();
                         sc.Query.Append("sp_pengdows_test");
                         sc.AddParameterWithValue("a", DbType.Int32, 1);
-                        var wrapped = sc.WrapForStoredProc(executionType);
-                        sc.Query.Clear();
-                        sc.Query.Append(wrapped);
-                        Assert.Equal(42, await sc.ExecuteScalarOrNullAsync<int>());
+                        Assert.Equal(42, await sc.ExecuteScalarOrNullAsync<int>(
+                            executionType, CommandType.StoredProcedure));
                     }
 
                     await DropProcAsync(sc, $"DROP PROCEDURE {name}");
@@ -535,12 +520,23 @@ public class StoredProcedureTests : DatabaseTestBase
         });
     }
 
-    private static async Task<int?> InvokeAsync(ISqlContainer sc, string procName, ExecutionType executionType,
-        bool captureReturn = false)
+    private static async Task<int?> InvokeAsync(ISqlContainer sc, string procName, ExecutionType executionType)
     {
         sc.Clear();
         sc.Query.Append(procName);
-        var wrapped = sc.WrapForStoredProc(executionType, captureReturn: captureReturn);
+        return await sc.ExecuteScalarOrNullAsync<int>(executionType, CommandType.StoredProcedure);
+    }
+
+    // T-SQL RETURN codes are the one deliberate exception to the public
+    // CommandType.StoredProcedure path: the automatic path invokes with
+    // captureReturn: false. This helper keeps that generation-only assertion
+    // isolated from the ordinary procedure execution tests above.
+    private static async Task<int?> InvokeReturnCodeAsync(
+        ISqlContainer sc, string procName, ExecutionType executionType)
+    {
+        sc.Clear();
+        sc.Query.Append(procName);
+        var wrapped = sc.WrapForStoredProc(executionType, captureReturn: true);
         sc.Clear();
         sc.Query.Append(wrapped);
         return await sc.ExecuteScalarOrNullAsync<int>();
