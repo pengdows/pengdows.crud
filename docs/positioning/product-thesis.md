@@ -74,9 +74,20 @@ storms: identifier quoting is forced to ANSI double-quotes even on databases who
 dialect uses something else (`QUOTED_IDENTIFIER ON` on SQL Server, `ANSI_QUOTES` mode on
 MySQL/MariaDB — a session-level policy enforced by the dialect, not left to each provider's
 default), and stored-procedure invocation is dispatched per the target database's real
-calling convention (principle 6) rather than assuming one style works everywhere. None of
-these are performance optimizations — they're correctness guarantees a DBA would otherwise
-have to police by hand.
+calling convention (principle 6) rather than assuming one style works everywhere. Almost
+all of these session settings are correctness guarantees a DBA would otherwise have to
+police by hand: SQL Server's `ANSI_NULLS`, `CONCAT_NULL_YIELDS_NULL`, `ARITHABORT`, and
+`ANSI_WARNINGS` change predicate, expression, and overflow semantics; MySQL strict mode
+prevents silent truncation and invalid-date coercion; PostgreSQL's
+`standard_conforming_strings` determines whether backslashes are data or escapes; Oracle's
+session time zone affects timestamp round-trips; and SQLite's `foreign_keys` pragma is what
+makes declared foreign keys enforceable.
+
+Two settings are deliberately different. PostgreSQL's `client_min_messages = warning` only
+reduces diagnostic noise, and the 30-second `lock_timeout` used by distributed PostgreSQL
+compatible dialects is an operational safety default, not a correctness invariant. The
+former is a baseline convenience; the latter must remain configurable for workloads that
+need a shorter timeout or no timeout. Neither should be presented as a universal rule.
 
 That same posture pays off for the developer, not only the DBA. pengdows.crud knows the
 nuances of each supported database — dialect differences, isolation semantics, identifier

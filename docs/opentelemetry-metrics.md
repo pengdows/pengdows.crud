@@ -115,7 +115,11 @@ histograms (`create_time`/`wait_time`/`use_time`) would require new event hooks 
 `PoolGovernor`'s concurrency-critical code, deliberately deferred rather than rushed; and
 command/connection/transaction counters are not yet split by read/write role in the OTel
 bridge (see Tags, above). The package is also not yet published to NuGet as of this
-writing — check nuget.org for current status before citing it externally.
+writing — check nuget.org for current status before citing it externally. The adapter does
+not autoscale application instances. Its pool queue and command-latency signals support the
+scaling decision: queue growth with stable command latency points to application admission
+capacity, while queue growth with worsening command latency points to database saturation.
+KEDA integration remains future work.
 
 ## Test coverage
 

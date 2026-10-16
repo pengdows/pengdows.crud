@@ -2,6 +2,16 @@
 
 pengdows.crud applies dialect-specific session-settings scripts **after** it knows which dialect it is talking to and **only if** the dialect provides non-empty SQL. The policy is "Always SET" (`SqlDialect.BuildSessionSettingsScript`): the script carries every expected setting and is sent on every checkout, with no check of the current value first. A pooled connection may have been changed by an earlier caller, and sending the settings costs less than reading them to decide (measured on SQLite: about 1 µs per extra setting in one command, against +31 to +50 µs for a query that reads them).
 
+Most baseline settings are correctness invariants: they keep SQL meaning and stored data
+stable across pooled sessions. Examples include SQL Server's ANSI and arithmetic settings,
+MySQL strict mode, PostgreSQL `standard_conforming_strings`, Oracle's session time zone, and
+SQLite `foreign_keys`. Two settings should be read as defaults instead: PostgreSQL's
+`client_min_messages = warning` only limits message noise, while the 30-second
+`lock_timeout` used by distributed PostgreSQL-compatible dialects is operational policy.
+The distributed dialects use that value as a safety default; an explicit `lock_timeout`
+startup option remains the caller's choice where startup options are supported. The ordinary
+PostgreSQL baseline does not impose a fixed lock timeout.
+
 ## Key guarantees
 
 - Dialect detection completes during `DatabaseContext` initialization (`DatabaseContext.Initialization.cs`), flipping `_sessionSettingsDetectionCompleted`. Any physical connection opened before that flag would block is now a no-op for session SQL.

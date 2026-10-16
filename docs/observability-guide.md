@@ -19,6 +19,31 @@ Compare three independent numbers before assuming it's the database:
 latency (timeouts, cancellations, errors) never contaminates the success-path
 `Avg`/`P95`/`P99` you'd use for an SLO.
 
+## "Should I raise the pool limit, add app instances, or fix the database?"
+
+Use governor queue depth together with command latency. They distinguish two overload cases
+that look the same from an application's outside:
+
+- **Governor queues rise while command times stay normal.** The application's admission limit
+  is the bottleneck. Raise the relevant reader/writer pool limit or add application capacity,
+  then verify that the database command latency remains healthy.
+- **Governor queues rise and command times rise.** The database is saturated. Adding app
+  instances would add more competing connections and can make the problem worse; scale or
+  tune the database instead.
+
+This is also why the governor makes retries less necessary under load. It queues requests
+before they reach the database, keeping concurrency within the configured capacity instead
+of sending an overload of competing commands to the server and waiting for timeouts. Retries
+remain an application policy for genuine transient failures, but queue depth and command
+latency show whether the underlying problem is application-side admission or database-side
+saturation.
+
+The OpenTelemetry adapter exports the relevant signals as part of its shipped 53-instrument
+surface: pool slots and queue depth, slot/turnstile timeouts and canceled waits, command
+latency, connection and reader lifetimes, transactions, sessions, and categorized errors.
+These metrics tell you when to scale and what to scale. They do not currently implement an
+autoscaler; KEDA integration is future work.
+
 ## "Why is this specific reader slow — the database, or my own consumption loop?"
 
 Three EWMA fields on `DatabaseMetrics`/`DatabaseRoleMetrics` decompose a reader's total lease
