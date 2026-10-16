@@ -103,11 +103,12 @@ public class SqlContainerBranchTests
         {
             new Dictionary<string, object?> { { "version", "3.42.0" } }
         });
+        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
+        // Queued after the context exists: initialization reads SQLite's catalogs and would consume it first.
         connection.EnqueueReaderResult(new[]
         {
             new Dictionary<string, object?> { { "value", "raw" } }
         });
-        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT 1");
 
         var result = await container.ExecuteScalarOrNullAsync<object>();
@@ -123,11 +124,12 @@ public class SqlContainerBranchTests
         {
             new Dictionary<string, object?> { { "version", "3.42.0" } }
         });
+        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
+        // Queued after the context exists: initialization reads SQLite's catalogs and would consume it first.
         connection.EnqueueReaderResult(new[]
         {
             new Dictionary<string, object?> { { "value", DBNull.Value } }
         });
-        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
@@ -142,11 +144,12 @@ public class SqlContainerBranchTests
         {
             new Dictionary<string, object?> { { "version", "3.42.0" } }
         });
+        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
+        // Queued after the context exists: initialization reads SQLite's catalogs and would consume it first.
         connection.EnqueueReaderResult(new[]
         {
             new Dictionary<string, object?> { { "value", DBNull.Value } }
         });
-        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
         var result = await container.ExecuteScalarRequiredAsync<int?>();
@@ -162,11 +165,12 @@ public class SqlContainerBranchTests
         {
             new Dictionary<string, object?> { { "version", "3.42.0" } }
         });
+        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
+        // Queued after the context exists: initialization reads SQLite's catalogs and would consume it first.
         connection.EnqueueReaderResult(new[]
         {
             new Dictionary<string, object?> { { "value", "raw" } }
         });
-        using var ctx = CreateContext(SupportedDatabase.Sqlite, connection);
         var container = ctx.CreateSqlContainer("SELECT scalar_test");
 
         var result = await container.ExecuteScalarRequiredAsync<object>();

@@ -39,9 +39,6 @@
         <ProjectReference Include="..\pengdows.crud.abstractions\pengdows.crud.abstractions.csproj"/>
     </ItemGroup>
     <ItemGroup>
-        <EmbeddedResource Include="xml\Sqlite.schema.xml"/>
-    </ItemGroup>
-    <ItemGroup>
         <InternalsVisibleTo Include="pengdows.crud.Tests"/>
         <InternalsVisibleTo Include="pengdows.crud.IntegrationTests"/>
         <InternalsVisibleTo Include="CrudBenchmarks"/>

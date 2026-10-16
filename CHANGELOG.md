@@ -63,6 +63,9 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
   existing rows; version and audit state is restored correctly when a write fails.
 - Connection-limit failures are translated consistently, including transaction begin and Oracle listener-capacity
   failures. Metrics now count affected rows, connection timings and pool waits correctly.
+- SQLite is described by the library actually loaded, not a fixed table: the product version, the join types it
+  supports, the parameter limit (including a custom `MAX_VARIABLE_NUMBER`) and JSON and window-function support are
+  read from the live database, and the provider's own `GetSchema` answer is used when it has one.
 - Every read path now converts values the same way (one type system), and fakeDb behavior is closer to the real
   providers it emulates.
 

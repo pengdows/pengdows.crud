@@ -133,7 +133,9 @@ internal class SqliteDialect : SqlDialect
     public override bool SupportsNamedParameters => true;
 
     // IMMUTABLE: SQLite SQLITE_MAX_VARIABLE_NUMBER default - do not change without extensive testing
-    public override int MaxParameterLimit => IsVersionAtLeast(3, 32) ? 32766 : 999;
+    // What the loaded library reports (ProbeLibrary) wins; the version rule is the fallback when it could not be read.
+    public override int MaxParameterLimit =>
+        Volatile.Read(ref _probedMaxVariableNumber) is > 0 and var probed ? probed : IsVersionAtLeast(3, 32) ? 32766 : 999;
 
     // SQLite has no server-side row-per-batch limit; only the parameter limit constrains chunk size
     public override int MaxRowsPerBatch => int.MaxValue;
@@ -165,8 +167,8 @@ internal class SqliteDialect : SqlDialect
 
     // SQLite has no native BOOLEAN type; store as INTEGER.
     public override DbType BooleanDbType => DbType.Int32;
-    public override bool SupportsJsonTypes => IsVersionAtLeast(3, 45);
-    public override bool SupportsWindowFunctions => IsVersionAtLeast(3, 25);
+    public override bool SupportsJsonTypes => Probed(_jsonbFunction) ?? IsVersionAtLeast(3, 45);
+    public override bool SupportsWindowFunctions => Probed(_rowNumberFunction) ?? IsVersionAtLeast(3, 25);
     public override bool SupportsCommonTableExpressions => IsVersionAtLeast(3, 8, 3);
 
     public override bool SupportsInsertReturning => IsVersionAtLeast(3, 35);
@@ -224,6 +226,69 @@ internal class SqliteDialect : SqlDialect
 
     private volatile bool _walActive;
 
+    private int _probedMaxVariableNumber; // 0 = not read
+    private int _jsonbFunction;           // 0 = not read, 1 = present, 2 = absent
+    private int _rowNumberFunction;
+
+    private static bool? Probed(int state) => Volatile.Read(ref state) switch { 1 => true, 2 => false, _ => null };
+
+    // Reads what this SQLite build actually has from its own catalogs, so a custom build (a larger
+    // MAX_VARIABLE_NUMBER, JSON or window functions compiled out) is not mis-described by its version number. Any
+    // failure leaves the value unread and the version rules apply.
+    private void ProbeLibrary(ITrackedConnection connection)
+    {
+        try
+        {
+            foreach (var option in ReadFirstColumn(connection, "SELECT compile_options FROM pragma_compile_options"))
+            {
+                const string prefix = "MAX_VARIABLE_NUMBER=";
+                if (option.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                    int.TryParse(option.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture,
+                        out var max) && max > 0)
+                {
+                    Volatile.Write(ref _probedMaxVariableNumber, max);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Could not read SQLite compile options; the version rules apply.");
+        }
+
+        try
+        {
+            var functions = new HashSet<string>(
+                ReadFirstColumn(connection, "SELECT DISTINCT name FROM pragma_function_list"),
+                StringComparer.OrdinalIgnoreCase);
+            if (functions.Count > 0)
+            {
+                Volatile.Write(ref _jsonbFunction, functions.Contains("jsonb") ? 1 : 2);
+                Volatile.Write(ref _rowNumberFunction, functions.Contains("row_number") ? 1 : 2);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Could not read the SQLite function list; the version rules apply.");
+        }
+    }
+
+    private static List<string> ReadFirstColumn(ITrackedConnection connection, string sql)
+    {
+        var values = new List<string>();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            if (!reader.IsDBNull(0))
+            {
+                values.Add(Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty);
+            }
+        }
+
+        return values;
+    }
+
     internal override string? GetDatabaseInitializationSql() => "PRAGMA journal_mode = WAL;";
 
     // SQLite's advice for a long-lived process is PRAGMA optimize=0x10002 when it starts (and periodically). The
@@ -234,6 +299,7 @@ internal class SqliteDialect : SqlDialect
 
     internal override bool ObserveDatabaseInitialization(ITrackedConnection connection)
     {
+        ProbeLibrary(connection);
         var wal = false;
         try
         {
@@ -304,14 +370,114 @@ internal class SqliteDialect : SqlDialect
         return lower.Contains(":memory:") || lower.Contains("mode=memory");
     }
 
+    // Ask the provider first: Microsoft.Data.Sqlite releases after 10.0.x implement the DataSourceInformation
+    // collection themselves (from the live library version), and any other SQLite client may too. Older releases and
+    // clients throw, so describe the database actually connected instead of a canned file.
     public override DataTable GetDataSourceInformationSchema(ITrackedConnection connection)
     {
-        var resourceName = $"pengdows.crud.xml.{SupportedDatabase.Sqlite}.schema.xml";
-        using var stream = typeof(SqliteDialect).Assembly.GetManifestResourceStream(resourceName)
-                           ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
-        var table = new DataTable();
-        table.ReadXml(stream);
+        try
+        {
+            var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
+            if (schema.Rows.Count > 0)
+            {
+                return schema;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "The SQLite provider has no DataSourceInformation schema; describing the live database.");
+        }
+
+        return BuildDataSourceInformation(ReadLiveVersion(connection));
+    }
+
+    private string? ReadLiveVersion(ITrackedConnection connection)
+    {
+        try
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = GetVersionQuery();
+            return Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Could not read sqlite_version() for the DataSourceInformation schema.");
+            return null;
+        }
+    }
+
+    // Same values Microsoft.Data.Sqlite reports for this collection, so the two sources agree.
+    private static DataTable BuildDataSourceInformation(string? versionText)
+    {
+        var table = new DataTable(DbMetaDataCollectionNames.DataSourceInformation);
+        table.Columns.Add(DbMetaDataColumnNames.CompositeIdentifierSeparatorPattern);
+        table.Columns.Add(DbMetaDataColumnNames.DataSourceProductName);
+        table.Columns.Add(DbMetaDataColumnNames.DataSourceProductVersion);
+        table.Columns.Add(DbMetaDataColumnNames.DataSourceProductVersionNormalized);
+        table.Columns.Add(DbMetaDataColumnNames.GroupByBehavior, typeof(int));
+        table.Columns.Add(DbMetaDataColumnNames.IdentifierCase, typeof(int));
+        table.Columns.Add(DbMetaDataColumnNames.IdentifierPattern);
+        table.Columns.Add(DbMetaDataColumnNames.OrderByColumnsInSelect, typeof(bool));
+        table.Columns.Add(DbMetaDataColumnNames.ParameterMarkerFormat);
+        table.Columns.Add(DbMetaDataColumnNames.ParameterMarkerPattern);
+        table.Columns.Add(DbMetaDataColumnNames.ParameterNameMaxLength, typeof(int));
+        table.Columns.Add(DbMetaDataColumnNames.ParameterNamePattern);
+        table.Columns.Add(DbMetaDataColumnNames.QuotedIdentifierCase, typeof(int));
+        table.Columns.Add(DbMetaDataColumnNames.QuotedIdentifierPattern);
+        table.Columns.Add(DbMetaDataColumnNames.StatementSeparatorPattern);
+        table.Columns.Add(DbMetaDataColumnNames.StringLiteralPattern);
+        table.Columns.Add(DbMetaDataColumnNames.SupportedJoinOperators, typeof(int));
+
+        var version = TryParseSqliteVersion(versionText);
+        // RIGHT and FULL OUTER JOIN arrived in SQLite 3.39; an unreadable version claims only what every SQLite has.
+        var joins = SupportedJoinOperators.Inner | SupportedJoinOperators.LeftOuter;
+        if (version >= new Version(3, 39))
+        {
+            joins |= SupportedJoinOperators.RightOuter | SupportedJoinOperators.FullOuter;
+        }
+
+        var normalized = version == null
+            ? string.Empty
+            : string.Format(CultureInfo.InvariantCulture, "{0:00}.{1:000}.{2:0000}.{3:0000}", version.Major,
+                version.Minor, Math.Max(version.Build, 0), Math.Max(version.Revision, 0));
+
+        table.Rows.Add(
+            "\\.",
+            "SQLite",
+            versionText ?? string.Empty,
+            normalized,
+            2,
+            1,
+            @"[\p{L}_\x80-\uFFFF][\p{L}\p{N}_$\x80-\uFFFF]*",
+            false,
+            "@{0}",
+            @"(\?[0-9]+|\?|[@:$][\p{L}\p{N}_\x80-\uFFFF][\p{L}\p{N}_$\x80-\uFFFF]*)",
+            DBNull.Value,
+            @"^[\p{L}\p{N}_\x80-\uFFFF][\p{L}\p{N}_$\x80-\uFFFF]*$",
+            1,
+            "^(([^\"]|\"\")*)$",
+            ";",
+            "'(([^']|'')*)'",
+            (int)joins);
+
         return table;
+    }
+
+    private static Version? TryParseSqliteVersion(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        // sqlite_version() is "3.45.1"; some builds append a suffix after a space or dash.
+        var end = 0;
+        while (end < text.Length && (char.IsDigit(text[end]) || text[end] == '.'))
+        {
+            end++;
+        }
+
+        return Version.TryParse(text.AsSpan(0, end), out var v) ? v : null;
     }
 
     internal override async Task<string?> GetProductNameCoreAsync(ITrackedConnection connection, bool useAsync)

@@ -255,6 +255,38 @@ public sealed class DocumentationConsistencyTests
         }
     }
 
+    [Fact]
+    public void ReleaseGateScript_CoversEveryStepOfTheRelease008Gate()
+    {
+        var path = Path.Combine(FindRepositoryRoot(), "tools", "release-gate.sh");
+        Assert.True(File.Exists(path), "tools/release-gate.sh is missing");
+        var text = File.ReadAllText(path);
+        foreach (var step in new[]
+                 {
+                     "git status --porcelain", // refuses a dirty tree
+                     "pengdows.crud.Tests/pengdows.crud.Tests.csproj", // unit tests only
+                     "net8.0", "net10.0",
+                     "interface-api-check", "--verify",
+                     "run-integration-tests.sh",
+                     "dotnet pack"
+                 })
+        {
+            Assert.Contains(step, text);
+        }
+
+        Assert.DoesNotContain("dotnet test pengdows.crud.sln", text);
+    }
+
+    [Fact]
+    public void FutureWork_Sqlite002_IsClosedWithTracedEvidence()
+    {
+        var text = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "docs", "FUTURE_WORK.md"));
+        var row = text.Split('\n').Single(l => l.StartsWith("| SQLITE-002 |", StringComparison.Ordinal));
+        Assert.EndsWith("| Closed |", row.TrimEnd());
+        Assert.Contains("--vulnerable", row);
+        Assert.Contains("| PKCS-001 |", text);
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);
