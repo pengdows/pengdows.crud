@@ -167,8 +167,8 @@ internal class SqliteDialect : SqlDialect
 
     // SQLite has no native BOOLEAN type; store as INTEGER.
     public override DbType BooleanDbType => DbType.Int32;
-    public override bool SupportsJsonTypes => Probed(_jsonbFunction) ?? IsVersionAtLeast(3, 45);
-    public override bool SupportsWindowFunctions => Probed(_rowNumberFunction) ?? IsVersionAtLeast(3, 25);
+    public override bool SupportsJsonTypes => Probed(ref _jsonbFunction) ?? IsVersionAtLeast(3, 45);
+    public override bool SupportsWindowFunctions => Probed(ref _rowNumberFunction) ?? IsVersionAtLeast(3, 25);
     public override bool SupportsCommonTableExpressions => IsVersionAtLeast(3, 8, 3);
 
     public override bool SupportsInsertReturning => IsVersionAtLeast(3, 35);
@@ -230,24 +230,37 @@ internal class SqliteDialect : SqlDialect
     private int _jsonbFunction;           // 0 = not read, 1 = present, 2 = absent
     private int _rowNumberFunction;
 
-    private static bool? Probed(int state) => Volatile.Read(ref state) switch { 1 => true, 2 => false, _ => null };
+    private static bool? Probed(ref int state) => Volatile.Read(ref state) switch { 1 => true, 2 => false, _ => null };
+
+    // Both probes are one scalar query each (never a reader), so a test double's queued reader results are left alone.
+    private const string MaxVariableNumberProbeSql =
+        "SELECT compile_options FROM pragma_compile_options WHERE compile_options LIKE 'MAX_VARIABLE_NUMBER=%'";
+
+    // 256 marks the answer as this probe's (a test double's canned scalar has no such bit); then bit 0: the function
+    // list could be read at all; bit 1: jsonb; bit 2: row_number.
+    private const int FunctionProbeMarker = 256;
+
+    private const string FunctionProbeSql =
+        "SELECT 256 + (SELECT count(*) > 0 FROM pragma_function_list)" +
+        " + 2 * (SELECT count(*) > 0 FROM pragma_function_list WHERE name = 'jsonb')" +
+        " + 4 * (SELECT count(*) > 0 FROM pragma_function_list WHERE name = 'row_number')";
 
     // Reads what this SQLite build actually has from its own catalogs, so a custom build (a larger
     // MAX_VARIABLE_NUMBER, JSON or window functions compiled out) is not mis-described by its version number. Any
-    // failure leaves the value unread and the version rules apply.
+    // failure leaves the value unread and the version rules apply. The compile-time limit is the one visible from SQL;
+    // a host lowering it at run time with sqlite3_limit() cannot be seen from here.
     private void ProbeLibrary(ITrackedConnection connection)
     {
         try
         {
-            foreach (var option in ReadFirstColumn(connection, "SELECT compile_options FROM pragma_compile_options"))
+            const string prefix = "MAX_VARIABLE_NUMBER=";
+            var option = Convert.ToString(ProbeScalar(connection, MaxVariableNumberProbeSql),
+                CultureInfo.InvariantCulture);
+            if (option != null && option.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
+                int.TryParse(option.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture,
+                    out var max) && max > 0)
             {
-                const string prefix = "MAX_VARIABLE_NUMBER=";
-                if (option.StartsWith(prefix, StringComparison.OrdinalIgnoreCase) &&
-                    int.TryParse(option.AsSpan(prefix.Length), NumberStyles.None, CultureInfo.InvariantCulture,
-                        out var max) && max > 0)
-                {
-                    Volatile.Write(ref _probedMaxVariableNumber, max);
-                }
+                Volatile.Write(ref _probedMaxVariableNumber, max);
             }
         }
         catch (Exception ex)
@@ -257,13 +270,12 @@ internal class SqliteDialect : SqlDialect
 
         try
         {
-            var functions = new HashSet<string>(
-                ReadFirstColumn(connection, "SELECT DISTINCT name FROM pragma_function_list"),
-                StringComparer.OrdinalIgnoreCase);
-            if (functions.Count > 0)
+            var raw = ProbeScalar(connection, FunctionProbeSql);
+            var mask = raw is null or DBNull ? 0L : Convert.ToInt64(raw, CultureInfo.InvariantCulture);
+            if ((mask & FunctionProbeMarker) != 0 && (mask & 1) != 0)
             {
-                Volatile.Write(ref _jsonbFunction, functions.Contains("jsonb") ? 1 : 2);
-                Volatile.Write(ref _rowNumberFunction, functions.Contains("row_number") ? 1 : 2);
+                Volatile.Write(ref _jsonbFunction, (mask & 2) != 0 ? 1 : 2);
+                Volatile.Write(ref _rowNumberFunction, (mask & 4) != 0 ? 1 : 2);
             }
         }
         catch (Exception ex)
@@ -272,21 +284,11 @@ internal class SqliteDialect : SqlDialect
         }
     }
 
-    private static List<string> ReadFirstColumn(ITrackedConnection connection, string sql)
+    private static object? ProbeScalar(ITrackedConnection connection, string sql)
     {
-        var values = new List<string>();
         using var command = connection.CreateCommand();
         command.CommandText = sql;
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            if (!reader.IsDBNull(0))
-            {
-                values.Add(Convert.ToString(reader.GetValue(0), CultureInfo.InvariantCulture) ?? string.Empty);
-            }
-        }
-
-        return values;
+        return command.ExecuteScalar();
     }
 
     internal override string? GetDatabaseInitializationSql() => "PRAGMA journal_mode = WAL;";
@@ -383,9 +385,16 @@ internal class SqliteDialect : SqlDialect
                 return schema;
             }
         }
+        catch (Exception ex) when (ex is NotSupportedException or ArgumentException)
+        {
+            // Providers without the collection throw this way (Microsoft.Data.Sqlite: "The requested collection ... is
+            // not defined"), which is the expected case today.
+            Logger.LogDebug(ex, "The SQLite provider has no DataSourceInformation schema; describing the live database.");
+        }
         catch (Exception ex)
         {
-            Logger.LogDebug(ex, "The SQLite provider has no DataSourceInformation schema; describing the live database.");
+            Logger.LogWarning(ex,
+                "The SQLite provider's DataSourceInformation schema failed unexpectedly; describing the live database instead.");
         }
 
         return BuildDataSourceInformation(ReadLiveVersion(connection));

@@ -48,6 +48,17 @@ public sealed class DirectStoredProcedureWrapperAnalyzer : DiagnosticAnalyzer
             return;
         }
 
+        // captureReturn is only reachable through the direct call (CommandType.StoredProcedure never captures the
+        // return value) and is documented in docs/stored-procedures.md, so asking for it is not a bypass.
+        foreach (var argument in invocation.Arguments)
+        {
+            if (argument.Parameter?.Name == "captureReturn" && !argument.IsImplicit
+                && !(argument.Value.ConstantValue is { HasValue: true, Value: false }))
+            {
+                return;
+            }
+        }
+
         context.ReportDiagnostic(Diagnostic.Create(Rule, invocation.Syntax.GetLocation()));
     }
 

@@ -986,7 +986,6 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         _cachedCommandTextVersion = -1;
     }
 
-    [Obsolete("Use an ExecuteScalarAsync or ExecuteNonQueryAsync overload with CommandType.StoredProcedure instead.", false)]
     public string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true,
         bool captureReturn = false)
     {

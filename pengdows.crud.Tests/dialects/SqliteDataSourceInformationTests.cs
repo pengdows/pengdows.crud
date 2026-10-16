@@ -112,30 +112,27 @@ public class SqliteDataSourceInformationTests
 
     // What the loaded SQLite library really has, read once from its own catalogs when the context initializes,
     // beats guessing from the version number: a custom build can raise MAX_VARIABLE_NUMBER or compile JSON out.
-    private static ITrackedConnection LiveLibrary(string[] compileOptions, string[]? functions)
+    // Both probes are single scalar queries, so they never consume reader results a fakeDb test queued.
+    private const string MaxVariableNumberSql =
+        "SELECT compile_options FROM pragma_compile_options WHERE compile_options LIKE 'MAX_VARIABLE_NUMBER=%'";
+
+    private const string FunctionsSql =
+        "SELECT 256 + (SELECT count(*) > 0 FROM pragma_function_list)" +
+        " + 2 * (SELECT count(*) > 0 FROM pragma_function_list WHERE name = 'jsonb')" +
+        " + 4 * (SELECT count(*) > 0 FROM pragma_function_list WHERE name = 'row_number')";
+
+    private static ITrackedConnection LiveLibrary(string? maxVariableNumber, long? functionMask)
     {
         var inner = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite };
         inner.ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite";
         inner.Open();
         inner.SetScalarResultForCommand("PRAGMA journal_mode", "memory");
-        inner.EnqueueReaderResult(Rows(compileOptions));
-        if (functions != null)
-        {
-            inner.EnqueueReaderResult(Rows(functions));
-        }
+        inner.SetScalarResultForCommand(MaxVariableNumberSql, maxVariableNumber);
+        inner.SetScalarResultForCommand(FunctionsSql, functionMask);
 
         var tracked = new Mock<ITrackedConnection>();
         tracked.Setup(c => c.CreateCommand()).Returns(() => inner.CreateCommand());
         return tracked.Object;
-    }
-
-    private static System.Collections.Generic.IEnumerable<System.Collections.Generic.Dictionary<string, object?>> Rows(
-        string[] names)
-    {
-        foreach (var n in names)
-        {
-            yield return new System.Collections.Generic.Dictionary<string, object?> { ["name"] = n };
-        }
     }
 
     [Fact]
@@ -144,7 +141,7 @@ public class SqliteDataSourceInformationTests
         var dialect = NewDialect();
         Assert.Equal(999, dialect.MaxParameterLimit); // uninitialized: the version rule has nothing to go on
 
-        dialect.ObserveDatabaseInitialization(LiveLibrary(["ENABLE_FTS5", "MAX_VARIABLE_NUMBER=250000"], ["abs"]));
+        dialect.ObserveDatabaseInitialization(LiveLibrary("MAX_VARIABLE_NUMBER=250000", 256 + 1));
 
         Assert.Equal(250000, dialect.MaxParameterLimit);
     }
@@ -153,12 +150,12 @@ public class SqliteDataSourceInformationTests
     public void Init_JsonSupportFollowsTheFunctionListNotTheVersion()
     {
         var with = NewDialect();
-        with.ObserveDatabaseInitialization(LiveLibrary(["THREADSAFE=1"], ["abs", "json", "jsonb", "row_number"]));
+        with.ObserveDatabaseInitialization(LiveLibrary(null, 256 + 1 + 2 + 4));
         Assert.True(with.SupportsJsonTypes);
         Assert.True(with.SupportsWindowFunctions);
 
         var without = NewDialect();
-        without.ObserveDatabaseInitialization(LiveLibrary(["OMIT_JSON"], ["abs", "count"]));
+        without.ObserveDatabaseInitialization(LiveLibrary(null, 256 + 1));
         Assert.False(without.SupportsJsonTypes);
         Assert.False(without.SupportsWindowFunctions);
     }
@@ -180,5 +177,56 @@ public class SqliteDataSourceInformationTests
         Assert.Null(ex);
         Assert.Equal(999, dialect.MaxParameterLimit);
         Assert.False(dialect.SupportsJsonTypes);
+    }
+
+    private sealed class CollectingLogger : Microsoft.Extensions.Logging.ILogger
+    {
+        public System.Collections.Generic.List<Microsoft.Extensions.Logging.LogLevel> Levels { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+            TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Levels.Add(logLevel);
+    }
+
+    private static ITrackedConnection ProviderFailingWith(Exception failure)
+    {
+        var inner = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite };
+        inner.ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite";
+        inner.Open();
+        inner.SetScalarResultForCommand("SELECT sqlite_version()", "3.50.4");
+        var tracked = new Mock<ITrackedConnection>();
+        tracked.Setup(c => c.GetSchema(It.IsAny<string>())).Throws(failure);
+        tracked.Setup(c => c.CreateCommand()).Returns(() => inner.CreateCommand());
+        return tracked.Object;
+    }
+
+    [Theory]
+    [InlineData(typeof(NotSupportedException))]
+    [InlineData(typeof(ArgumentException))] // Microsoft.Data.Sqlite: "The requested collection is not defined"
+    public void ProviderWithoutTheCollection_FallsBackWithoutAWarning(Type failure)
+    {
+        var logger = new CollectingLogger();
+        var dialect = new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), logger);
+
+        var table = dialect.GetDataSourceInformationSchema(
+            ProviderFailingWith((Exception)Activator.CreateInstance(failure)!));
+
+        Assert.Equal("3.50.4", Row(table)["DataSourceProductVersion"]);
+        Assert.DoesNotContain(Microsoft.Extensions.Logging.LogLevel.Warning, logger.Levels);
+    }
+
+    [Fact]
+    public void ProviderFailingForAnyOtherReason_StillFallsBackButWarns()
+    {
+        var logger = new CollectingLogger();
+        var dialect = new SqliteDialect(new fakeDbFactory(SupportedDatabase.Sqlite), logger);
+
+        var table = dialect.GetDataSourceInformationSchema(
+            ProviderFailingWith(new InvalidOperationException("database is locked")));
+
+        Assert.Equal("3.50.4", Row(table)["DataSourceProductVersion"]);
+        Assert.Contains(Microsoft.Extensions.Logging.LogLevel.Warning, logger.Levels);
     }
 }

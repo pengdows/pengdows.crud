@@ -407,7 +407,6 @@ public interface ISqlContainer : ISafeAsyncDisposableBase
     /// <param name="executionType">The procedure execution type.</param>
     /// <param name="includeParameters">Whether to include parameters in the wrapper.</param>
     /// <param name="captureReturn">Whether to capture the procedure return value when supported.</param>
-    [Obsolete("Use an ExecuteScalarAsync or ExecuteNonQueryAsync overload with CommandType.StoredProcedure instead.", false)]
     string WrapForStoredProc(ExecutionType executionType, bool includeParameters = true, bool captureReturn = false);
 
     /// <summary>
