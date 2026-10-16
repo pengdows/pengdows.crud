@@ -24,6 +24,12 @@ public sealed class DiagnosticIdTests
     }
 
     [Fact]
+    public void DirectStoredProcedureWrapperAnalyzer_UsesPGC030()
+    {
+        Assert.Equal("PGC030", DirectStoredProcedureWrapperAnalyzer.DiagnosticId);
+    }
+
+    [Fact]
     public void EveryRuleInTheAssembly_HasItsOwnId()
     {
         var descriptors = typeof(CompatibilityLeakAnalyzer).Assembly.GetTypes()

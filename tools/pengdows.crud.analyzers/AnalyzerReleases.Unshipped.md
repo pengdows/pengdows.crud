@@ -7,3 +7,4 @@ Rule ID | Category | Severity | Notes
 --------|----------|----------|-------
 PGC028 | Usage | Error | CompatibilityLeakAnalyzer
 PGC029 | Usage | Error | GatewayCallSiteContextAnalyzer
+PGC030 | Usage | Error | DirectStoredProcedureWrapperAnalyzer
