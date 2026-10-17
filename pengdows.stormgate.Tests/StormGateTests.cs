@@ -22,7 +22,8 @@ public class StormGateTests
 
         // Take the only permit
         _dataSource.Returns(new fakeDbConnection());
-        await gate.OpenAsync();
+        // Held for the whole test: a dropped gated connection can be finalized, which releases its permit.
+        using var heldConnection = await gate.OpenAsync();
 
         // Act & Assert
         await Assert.ThrowsAsync<TimeoutException>(() => gate.OpenAsync());

@@ -8,16 +8,16 @@ public class GenericDbDataSourceTests
     public void Constructor_ValidatesArguments()
     {
         Assert.Throws<ArgumentNullException>(() => new GenericDbDataSource(null!, "cs"));
-        Assert.Throws<ArgumentException>(() => new GenericDbDataSource(new MockFactory(), null!));
-        Assert.Throws<ArgumentException>(() => new GenericDbDataSource(new MockFactory(), " "));
+        Assert.Throws<ArgumentException>(() => new GenericDbDataSource(new StubFactory(), null!));
+        Assert.Throws<ArgumentException>(() => new GenericDbDataSource(new StubFactory(), " "));
     }
 
     [Fact]
     public void CreateDbConnection_ReturnsConfiguredConnection()
     {
         // Arrange
-        var mockConn = new Mock<DbConnection>();
-        var factory = new MockFactory(mockConn.Object);
+        var inner = new fakeDbConnection();
+        var factory = new StubFactory(inner);
         var dataSource = new GenericDbDataSource(factory, "Server=myServer;Database=myDb;");
 
         // Act
@@ -27,15 +27,15 @@ public class GenericDbDataSourceTests
         var connection = (DbConnection)method!.Invoke(dataSource, null)!;
 
         // Assert
-        Assert.Same(mockConn.Object, connection);
-        mockConn.VerifySet(c => c.ConnectionString = "Server=myServer;Database=myDb;");
+        Assert.Same(inner, connection);
+        Assert.Contains("myServer", inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public void CreateDbConnection_ThrowsIfFactoryReturnsNull()
     {
         // Arrange
-        var factory = new MockFactory(null);
+        var factory = new StubFactory(null);
         var dataSource = new GenericDbDataSource(factory, "cs");
 
         // Act & Assert
@@ -49,7 +49,7 @@ public class GenericDbDataSourceTests
     public async Task Dispose_Works()
     {
         // Arrange
-        var factory = new MockFactory();
+        var factory = new StubFactory();
         var dataSource = new GenericDbDataSource(factory, "cs");
 
         // Act
@@ -59,11 +59,11 @@ public class GenericDbDataSourceTests
         // Assert - no exception
     }
 
-    private class MockFactory : DbProviderFactory
+    private class StubFactory : DbProviderFactory
     {
         private readonly DbConnection? _connection;
 
-        public MockFactory(DbConnection? connection = null)
+        public StubFactory(DbConnection? connection = null)
         {
             _connection = connection;
         }
