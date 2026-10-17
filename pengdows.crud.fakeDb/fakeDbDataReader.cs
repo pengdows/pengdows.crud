@@ -598,6 +598,13 @@ public class fakeDbDataReader : DbDataReader
     {
         IsDBNullCallCount++;
         CheckSequentialAccess(i);
+        if (!HasReadQuirks)
+        {
+            // A provider's IsDBNull is a flag read: answered from the cell, with no read behind it.
+            var cell = RawValue(i);
+            return cell is null || cell == DBNull.Value;
+        }
+
         if (OutOfRangeReturnsNullColumns != null && OutOfRangeReturnsNullColumns.Contains(GetName(i)))
         {
             throw new OverflowException("Value was either too large or too small for a Decimal.");
@@ -787,6 +794,13 @@ public class fakeDbDataReader : DbDataReader
     // first non-null value in the current result set (object when every value is NULL).
     // Column metadata comes from the stored value, never through GetValue: a real provider's
     // GetFieldType/GetDataTypeName don't fail because a value can't be converted.
+    // True when any emulated provider quirk is configured; a reader with none answers IsDBNull from the cell alone.
+    private bool HasReadQuirks =>
+        ColumnReadExceptions != null || OutOfRangeReturnsNullColumns != null || Int64TextColumns != null ||
+        HandlerlessColumns != null || DoubleBeyondDecimalColumns != null || UnknownTypeColumns != null ||
+        NullableElementArrayColumns != null || UnloadableUdtColumns != null || OffsetDroppedByGetValueColumns != null ||
+        ProviderDecimalColumns != null;
+
     private object? RawValue(int i)
     {
         var row = CurrentRow ?? (CurrentRows.Count > 0 ? CurrentRows[0] : null)
