@@ -54,6 +54,4 @@ internal partial class ScriptedDatabaseContext : global::pengdows.crud.IDatabase
     bool global::pengdows.crud.IDatabaseContext.SnapshotIsolationEnabled { get => throw Unscripted("SnapshotIsolationEnabled"); }
     event global::System.EventHandler<global::pengdows.crud.metrics.DatabaseMetrics> global::pengdows.crud.IDatabaseContext.MetricsUpdated { add => throw Unscripted("MetricsUpdated"); remove => throw Unscripted("MetricsUpdated"); }
     bool global::pengdows.crud.infrastructure.ISafeAsyncDisposableBase.IsDisposed { get => throw Unscripted("IsDisposed"); }
-    global::System.Threading.Tasks.ValueTask global::System.IAsyncDisposable.DisposeAsync() => throw Unscripted("DisposeAsync");
-    void global::System.IDisposable.Dispose() => throw Unscripted("Dispose");
 }

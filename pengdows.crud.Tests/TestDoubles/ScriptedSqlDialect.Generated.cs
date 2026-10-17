@@ -19,7 +19,6 @@ internal partial class ScriptedSqlDialect : global::pengdows.crud.dialects.ISqlD
     string global::pengdows.crud.dialects.ISqlDialect.GetSavepointSql(string name) => throw Unscripted("GetSavepointSql");
     string global::pengdows.crud.dialects.ISqlDialect.GetRollbackToSavepointSql(string name) => throw Unscripted("GetRollbackToSavepointSql");
     string global::pengdows.crud.dialects.ISqlDialect.GetCompatibilityWarning() => throw Unscripted("GetCompatibilityWarning");
-    string global::pengdows.crud.dialects.ISqlDialect.WrapObjectName(string name) => throw Unscripted("WrapObjectName");
     string global::pengdows.crud.dialects.ISqlDialect.MakeParameterName(string parameterName) => throw Unscripted("MakeParameterName");
     string global::pengdows.crud.dialects.ISqlDialect.MakeParameterName(global::System.Data.Common.DbParameter dbParameter) => throw Unscripted("MakeParameterName");
     string global::pengdows.crud.dialects.ISqlDialect.UpsertIncomingColumn(string columnName) => throw Unscripted("UpsertIncomingColumn");
@@ -89,7 +88,6 @@ internal partial class ScriptedSqlDialect : global::pengdows.crud.dialects.ISqlD
     bool global::pengdows.crud.dialects.ISqlDialect.SupportsJsonTable { get => throw Unscripted("SupportsJsonTable"); }
     bool global::pengdows.crud.dialects.ISqlDialect.SupportsInsertOnConflict { get => throw Unscripted("SupportsInsertOnConflict"); }
     bool global::pengdows.crud.dialects.ISqlDialect.SupportsOnDuplicateKey { get => throw Unscripted("SupportsOnDuplicateKey"); }
-    bool global::pengdows.crud.dialects.ISqlDialect.SupportsSavepoints { get => throw Unscripted("SupportsSavepoints"); }
     bool global::pengdows.crud.dialects.ISqlDialect.SupportsDropTableIfExists { get => throw Unscripted("SupportsDropTableIfExists"); }
     bool global::pengdows.crud.dialects.ISqlDialect.RequiresStoredProcParameterNameMatch { get => throw Unscripted("RequiresStoredProcParameterNameMatch"); }
     bool global::pengdows.crud.dialects.ISqlDialect.MergeUpdateRequiresTargetAlias { get => throw Unscripted("MergeUpdateRequiresTargetAlias"); }
@@ -105,6 +103,4 @@ internal partial class ScriptedSqlDialect : global::pengdows.crud.dialects.ISqlD
     string global::pengdows.crud.dialects.ISqlDialect.PoolingSettingName { get => throw Unscripted("PoolingSettingName"); }
     string global::pengdows.crud.dialects.ISqlDialect.MinPoolSizeSettingName { get => throw Unscripted("MinPoolSizeSettingName"); }
     string global::pengdows.crud.dialects.ISqlDialect.MaxPoolSizeSettingName { get => throw Unscripted("MaxPoolSizeSettingName"); }
-    bool global::pengdows.crud.dialects.ISqlDialect.SupportsOffsetFetch { get => throw Unscripted("SupportsOffsetFetch"); }
-    bool global::pengdows.crud.dialects.ISqlDialect.SupportsLimitOffset { get => throw Unscripted("SupportsLimitOffset"); }
 }

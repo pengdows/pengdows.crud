@@ -44,7 +44,25 @@ sb.AppendLine("using System;");
 sb.AppendLine();
 sb.AppendLine("namespace pengdows.crud.Tests;");
 sb.AppendLine();
-sb.AppendLine($"internal partial class {className} : {TypeName(iface)}");
+var classGenerics = iface.IsGenericTypeDefinition
+    ? "<" + string.Join(", ", iface.GetGenericArguments().Select(a => a.Name)) + ">"
+    : "";
+var constraints = new StringBuilder();
+if (iface.IsGenericTypeDefinition)
+{
+    foreach (var arg in iface.GetGenericArguments())
+    {
+        var parts = new List<string>();
+        var attrs = arg.GenericParameterAttributes;
+        if ((attrs & GenericParameterAttributes.ReferenceTypeConstraint) != 0) parts.Add("class");
+        if ((attrs & GenericParameterAttributes.NotNullableValueTypeConstraint) != 0) parts.Add("struct");
+        parts.AddRange(arg.GetGenericParameterConstraints().Where(c => c != typeof(ValueType)).Select(TypeName));
+        if ((attrs & GenericParameterAttributes.DefaultConstructorConstraint) != 0 &&
+            (attrs & GenericParameterAttributes.NotNullableValueTypeConstraint) == 0) parts.Add("new()");
+        if (parts.Count > 0) constraints.Append($" where {arg.Name} : {string.Join(", ", parts)}");
+    }
+}
+sb.AppendLine($"internal partial class {className}{classGenerics} : {TypeName(iface)}{constraints}");
 sb.AppendLine("{");
 sb.AppendLine($"    private static NotSupportedException Unscripted(string member) => new($\"{className} does not script {{member}}.\");");
 sb.AppendLine();
