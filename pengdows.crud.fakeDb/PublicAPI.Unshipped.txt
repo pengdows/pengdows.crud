@@ -193,3 +193,10 @@ readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedScalarTexts -> System.Col
 pengdows.crud.fakeDb.fakeDbConnection.SchemaException.get -> System.Exception?
 pengdows.crud.fakeDb.fakeDbConnection.SchemaException.set -> void
 override pengdows.crud.fakeDb.fakeDbConnection.GetSchema(string! collectionName, string?[]! restrictionValues) -> System.Data.DataTable!
+pengdows.crud.fakeDb.fakeDbConnection.Operations.get -> System.Collections.Generic.IReadOnlyList<string!>!
+pengdows.crud.fakeDb.fakeDbConnection.ClearOperations() -> void
+pengdows.crud.fakeDb.fakeDbCommand.Operations.get -> System.Collections.Generic.IReadOnlyList<string!>!
+pengdows.crud.fakeDb.fakeDbTransaction.Operations.get -> System.Collections.Generic.IReadOnlyList<string!>!
+override pengdows.crud.fakeDb.fakeDbCommand.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override pengdows.crud.fakeDb.fakeDbTransaction.DisposeAsync() -> System.Threading.Tasks.ValueTask
+override pengdows.crud.fakeDb.fakeDbConnection.BeginDbTransactionAsync(System.Data.IsolationLevel isolationLevel, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Data.Common.DbTransaction!>

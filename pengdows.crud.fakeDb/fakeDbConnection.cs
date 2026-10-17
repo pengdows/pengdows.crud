@@ -822,6 +822,19 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         _ => GetConnectionStringValue(new[] { "Database", "Initial Catalog" }, string.Empty)!
     };
 
+    private readonly OperationLog _log = new();
+
+    /// <summary>
+    /// The provider-contract members called on this connection, in order: Open, OpenAsync, Close, CloseAsync,
+    /// ChangeDatabase(name), BeginTransaction(level), BeginTransactionAsync(level), CreateCommand, Dispose and DisposeAsync. A
+    /// sync member and its async twin are different entries, so a test of a wrapper can tell which route it took; a member the
+    /// fake runs on behalf of another (Dispose closing the connection) is not logged separately.
+    /// </summary>
+    public IReadOnlyList<string> Operations => _log.Snapshot();
+
+    /// <summary>Empties <see cref="Operations"/>, to look only at what a test does next.</summary>
+    public void ClearOperations() => _log.Clear();
+
     private string? GetConnectionStringValue(string[] keys, string? defaultValue)
     {
         var builder = new DbConnectionStringBuilder { ConnectionString = ConnectionString };
@@ -857,6 +870,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override void Open()
     {
+        _log.Record("Open");
         OpenCore(countAsSyncOpen: true);
     }
 
@@ -980,6 +994,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override void Close()
     {
+        _log.Record("Close");
         if (_closeFailureException != null)
         {
             throw _closeFailureException;
@@ -1002,6 +1017,9 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override void ChangeDatabase(string databaseName)
     {
+        // Refused, as it always was: to use another database, open another context. The attempt is still logged, so a test of a
+        // wrapper can see that the call reached the connection.
+        _log.Record($"ChangeDatabase({databaseName})");
         throw new NotSupportedException();
     }
 
@@ -1009,12 +1027,13 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     {
         if (disposing)
         {
+            _log.Record("Dispose");
             DisposeCount++;
         }
 
         try
         {
-            Close();
+            _log.Unlogged(Close);
         }
         catch
         {
@@ -1030,9 +1049,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public override async ValueTask DisposeAsync()
     {
         // Not counted here: base.DisposeAsync() below runs Dispose(true), which counts the disposal.
+        _log.Record("DisposeAsync");
         try
         {
-            await CloseAsync();
+            await _log.Unlogged(CloseAsync);
         }
         catch
         {
@@ -1040,13 +1060,16 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             // Dispose(bool)'s existing swallow-on-close-failure behavior.
         }
 
-        await base.DisposeAsync();
+        await _log.Unlogged(BaseDisposeAsync);
         _disposedForEvents = true;
     }
 
+    private ValueTask BaseDisposeAsync() => base.DisposeAsync();
+
     public override Task CloseAsync()
     {
-        Close();
+        _log.Record("CloseAsync");
+        _log.Unlogged(Close);
         return Task.CompletedTask;
     }
 
@@ -1108,6 +1131,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             return Task.FromCanceled(cancellationToken);
         }
 
+        _log.Record("OpenAsync");
         OpenAsyncCount++;
 
         var gate = _openGate;
@@ -1228,6 +1252,32 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
     {
+        _log.Record($"BeginTransaction({isolationLevel})");
+        return CreateTransaction(isolationLevel);
+    }
+
+    // A provider with a native async begin does not run its sync one: the fake keeps the two routes apart too.
+    protected override ValueTask<DbTransaction> BeginDbTransactionAsync(IsolationLevel isolationLevel,
+        CancellationToken cancellationToken)
+    {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return ValueTask.FromCanceled<DbTransaction>(cancellationToken);
+        }
+
+        _log.Record($"BeginTransactionAsync({isolationLevel})");
+        try
+        {
+            return new ValueTask<DbTransaction>(CreateTransaction(isolationLevel));
+        }
+        catch (Exception ex)
+        {
+            return ValueTask.FromException<DbTransaction>(ex);
+        }
+    }
+
+    private DbTransaction CreateTransaction(IsolationLevel isolationLevel)
+    {
         if (_shouldFailOnBeginTransaction)
         {
             ThrowConfiguredException("Simulated transaction begin failure");
@@ -1265,6 +1315,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     protected override DbCommand CreateDbCommand()
     {
+        _log.Record("CreateCommand");
         if (_shouldFailOnCommand)
         {
             ThrowConfiguredException("Simulated command creation failure");

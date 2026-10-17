@@ -19,6 +19,14 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     protected override DbConnection? DbConnection { get; }
 
+    private readonly OperationLog _log = new();
+
+    /// <summary>
+    /// The provider-contract members called on this transaction, in order: Commit, CommitAsync, Rollback, RollbackAsync,
+    /// Dispose and DisposeAsync. A sync member and its async twin are different entries.
+    /// </summary>
+    public IReadOnlyList<string> Operations => _log.Snapshot();
+
     /// <summary>When set, Commit() throws this exception.</summary>
     public Exception? CommitException { get; set; }
 
@@ -61,6 +69,7 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     public override void Commit()
     {
+        _log.Record("Commit");
         CommitCallCount++;
         CommitStarted?.Set();
         CommitGate?.Wait();
@@ -72,6 +81,7 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     public override void Rollback()
     {
+        _log.Record("Rollback");
         RollbackCallCount++;
         RollbackStarted?.Set();
         RollbackGate?.Wait();
@@ -83,15 +93,17 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     public override Task CommitAsync(CancellationToken cancellationToken = default)
     {
+        _log.Record("CommitAsync");
         CommitAsyncCallCount++;
-        Commit();
+        _log.Unlogged(Commit);
         return Task.CompletedTask;
     }
 
     public override Task RollbackAsync(CancellationToken cancellationToken = default)
     {
+        _log.Record("RollbackAsync");
         RollbackAsyncCallCount++;
-        Rollback();
+        _log.Unlogged(Rollback);
         return Task.CompletedTask;
     }
 
@@ -99,6 +111,7 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
     {
         if (disposing)
         {
+            _log.Record("Dispose");
             DisposeCallCount++;
             if (DisposeException != null)
             {
@@ -107,6 +120,13 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
         }
 
         base.Dispose(disposing);
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _log.Record("DisposeAsync");
+        _log.Unlogged(Dispose);
+        return ValueTask.CompletedTask;
     }
 
     public override IsolationLevel IsolationLevel { get; }

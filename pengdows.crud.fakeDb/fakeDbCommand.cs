@@ -71,12 +71,23 @@ public class fakeDbCommand : DbCommand
 
     protected override DbTransaction? DbTransaction { get; set; }
 
+    private readonly OperationLog _log = new();
+
+    /// <summary>
+    /// The provider-contract members called on this command, in order: Cancel, Prepare, PrepareAsync, ExecuteNonQuery,
+    /// ExecuteNonQueryAsync, ExecuteScalar, ExecuteScalarAsync, ExecuteReader(behavior), ExecuteReaderAsync(behavior),
+    /// CreateParameter, Dispose and DisposeAsync. A sync member and its async twin are different entries.
+    /// </summary>
+    public IReadOnlyList<string> Operations => _log.Snapshot();
+
     public override void Cancel()
     {
+        _log.Record("Cancel");
     }
 
     public override void Prepare()
     {
+        _log.Record("Prepare");
         PrepareCount++;
     }
 
@@ -109,6 +120,7 @@ public class fakeDbCommand : DbCommand
 
     public override int ExecuteNonQuery()
     {
+        _log.Record("ExecuteNonQuery");
         EnforceAsyncOnly(nameof(ExecuteNonQuery));
         SyncExecuteCount++;
         return ExecuteNonQueryCore();
@@ -185,6 +197,7 @@ public class fakeDbCommand : DbCommand
 
     public override object? ExecuteScalar()
     {
+        _log.Record("ExecuteScalar");
         EnforceAsyncOnly(nameof(ExecuteScalar));
         SyncExecuteCount++;
         return ExecuteScalarCore();
@@ -397,6 +410,7 @@ public class fakeDbCommand : DbCommand
 
     protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior)
     {
+        _log.Record($"ExecuteReader({behavior})");
         EnforceAsyncOnly(nameof(ExecuteDbDataReader));
         SyncExecuteCount++;
         return ExecuteDbDataReaderCore(behavior);
@@ -479,21 +493,23 @@ public class fakeDbCommand : DbCommand
     public override Task<int> ExecuteNonQueryAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        _log.Record("ExecuteNonQueryAsync");
         AsyncExecuteCount++;
 
         var gate = FakeConnection?.ExecuteGate;
         if (gate != null)
         {
             FakeConnection!.SignalExecuteGateEntered();
-            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
+            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteNonQueryCore() : _log.Unlogged(ExecuteNonQuery));
         }
 
-        return Task.FromResult(BlockSynchronousExecution ? ExecuteNonQueryCore() : ExecuteNonQuery());
+        return Task.FromResult(BlockSynchronousExecution ? ExecuteNonQueryCore() : _log.Unlogged(ExecuteNonQuery));
     }
 
     public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        _log.Record("ExecuteScalarAsync");
         AsyncExecuteCount++;
 
         object? RunScalar()
@@ -503,7 +519,7 @@ public class fakeDbCommand : DbCommand
                 throw asyncOnlyEx;
             }
 
-            return BlockSynchronousExecution ? ExecuteScalarCore() : ExecuteScalar();
+            return BlockSynchronousExecution ? ExecuteScalarCore() : _log.Unlogged(ExecuteScalar);
         }
 
         // The async-only-scalar-failure check must happen after the gate wait (not before it),
@@ -531,16 +547,17 @@ public class fakeDbCommand : DbCommand
         CommandBehavior behavior, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        _log.Record($"ExecuteReaderAsync({behavior})");
         AsyncExecuteCount++;
 
         var gate = FakeConnection?.ExecuteGate;
         if (gate != null)
         {
             FakeConnection!.SignalExecuteGateEntered();
-            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
+            return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : _log.Unlogged(() => ExecuteDbDataReader(behavior)));
         }
 
-        return Task.FromResult(BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : ExecuteDbDataReader(behavior));
+        return Task.FromResult(BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : _log.Unlogged(() => ExecuteDbDataReader(behavior)));
     }
 
     /// <summary>
@@ -555,12 +572,14 @@ public class fakeDbCommand : DbCommand
 
     public override Task PrepareAsync(CancellationToken ct)
     {
-        Prepare();
+        _log.Record("PrepareAsync");
+        _log.Unlogged(Prepare);
         return Task.CompletedTask;
     }
 
     protected override DbParameter CreateDbParameter()
     {
+        _log.Record("CreateParameter");
         // Like a real provider's command, the parameter is the provider's own type, so a factory's
         // parameter-metadata emulation (Npgsql, Informix, ...) applies here too.
         return (Connection as fakeDbConnection)?.FactoryReference?.CreateParameter() ?? new fakeDbParameter();
@@ -568,8 +587,20 @@ public class fakeDbCommand : DbCommand
 
     protected override void Dispose(bool disposing)
     {
+        if (disposing)
+        {
+            _log.Record("Dispose");
+        }
+
         WasDisposed = true;
         base.Dispose(disposing);
+    }
+
+    public override ValueTask DisposeAsync()
+    {
+        _log.Record("DisposeAsync");
+        _log.Unlogged(Dispose);
+        return ValueTask.CompletedTask;
     }
 
     /// <summary>
