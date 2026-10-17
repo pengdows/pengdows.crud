@@ -614,9 +614,9 @@ internal static class DatabaseDetectionService
                      !string.IsNullOrWhiteSpace(database) &&
                      (database.Contains('/') || database.Contains('\\') || database.EndsWith(".fdb")));
             }
-            catch
+            catch (ArgumentException)
             {
-                // Heuristic only - don't fail on parse errors
+                // The builder refused the connection string text; this embedded-or-server guess is only a heuristic, so assume a server.
             }
         }
 

@@ -320,7 +320,7 @@ internal class DuckDbDialect : SqlDialect
         }
         catch
         {
-            // Ignore; if pragma also fails, return null
+            // Product detection is a probe: any failure of the PRAGMA means this is not DuckDB (an unreachable server fails later, on open), so return null.
         }
 
         return null;

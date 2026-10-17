@@ -941,7 +941,8 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
                 catch
                 {
-                    // Ignore failures — provider may reject certain values in some states.
+                    // Copying one provider property is best effort: a provider may reject a value (or throw from its getter or setter)
+                    // in some states, and the property keeps the target's own default, so the remaining properties still copy.
                 }
             }
         };

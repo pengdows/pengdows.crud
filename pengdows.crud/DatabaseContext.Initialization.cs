@@ -1853,9 +1853,9 @@ public partial class DatabaseContext
                 return processName;
             }
         }
-        catch
+        catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
         {
-            // ignore process inspection failures and fall back to the library name
+            // Process.ProcessName is documented to throw these when the process cannot be inspected; fall back to the library name.
         }
 
         return DefaultApplicationName;
@@ -1927,9 +1927,9 @@ public partial class DatabaseContext
                 return string.IsNullOrWhiteSpace(appName) ? null : appName;
             }
         }
-        catch
+        catch (ArgumentException)
         {
-            // ignore parse errors - no application name available
+            // The builder refused the connection string text: no application name can be read from it.
         }
 
         return null;
@@ -2452,9 +2452,9 @@ public partial class DatabaseContext
                 return csb[ConnectionStringHelper.DataSourceKey]?.ToString();
             }
         }
-        catch
+        catch (ArgumentException)
         {
-            // A malformed connection string yields no data source; the caller treats null as unknown.
+            // Not key=value text the builder can parse (a bare path or ":memory:"): the raw text is the data source.
         }
 
         return connectionString;

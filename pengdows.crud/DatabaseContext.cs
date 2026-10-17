@@ -582,18 +582,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         DisposePersistentConnections();
 
-        try
-        {
-            _connectionOpenGate?.Dispose();
-        }
-        catch
-        {
-            // Disposing the open gate is best effort: a gate that fails to dispose must not stop the context finishing its own disposal.
-        }
-        finally
-        {
-            _connectionOpenGate = null;
-        }
+        _connectionOpenGate?.Dispose(); // SemaphoreSlim.Dispose does not throw
+        _connectionOpenGate = null;
 
         // BP-110 (3.0 CORE-026): if a governor timed out draining, a lease may still be
         // genuinely outstanding — do not dispose data sources that outstanding work may depend
@@ -626,18 +616,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
         await DisposePersistentConnectionsAsync().ConfigureAwait(false);
 
-        try
-        {
-            _connectionOpenGate?.Dispose();
-        }
-        catch
-        {
-            // Disposing the open gate is best effort: a gate that fails to dispose must not stop the context finishing its own disposal.
-        }
-        finally
-        {
-            _connectionOpenGate = null;
-        }
+        _connectionOpenGate?.Dispose(); // SemaphoreSlim.Dispose does not throw
+        _connectionOpenGate = null;
 
         // See DisposeManaged's sync counterpart for why this is conditional.
         if (await DisposePoolGovernorsAsync().ConfigureAwait(false) && !_sharedResourceDisposalDeferred)

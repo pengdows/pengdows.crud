@@ -1029,37 +1029,43 @@ comment. Each comment says "ignore" with a reason of varying strength.
 **The todo, for each of the comments below:** throw (make the catch rethrow, or remove it), then run the tests to see
 what happens, and either put in a better comment, a more narrow catch, or otherwise decide what to do. Record the
 decision and the test that pinned it next to the item. When all are decided, add a hygiene test that fails on any new
-comment-only or empty catch that has no stated reason, so the list cannot grow back. (Done 2026-10-17: `Catch001_EveryCommentOnlyCatchStatesAReason`; it also found seven catches the list missed, now commented.)
+comment-only or empty catch that has no stated reason, so the list cannot grow back. (Done 2026-10-17, with a throw experiment on every catch: 34 comment-only catches were found, 28 unit tests went red, 11 catches were unpinned and are now pinned by `CatchBlockPinningTests`, narrowed, removed, or recorded as a verification gap;  `Catch001_EveryCommentOnlyCatchStatesAReason`; it also found seven catches the list missed, now commented.)
 
 Line numbers drift: re-locate each by its comment text.
 
 | Strength of the reason today | Where (file:line at 2026-10-17) | Comment today | Decision |
 |---|---|---|---|
-| none | `DatabaseContext.cs:589` | `ignore` | [x] Reason written in the comment; pinned by `Catch001_EveryCommentOnlyCatchStatesAReason`. |
-| none | `DatabaseContext.cs:633` | `ignore` | [x] Reason written in the comment; pinned by `Catch001_EveryCommentOnlyCatchStatesAReason`. |
-| none | `dialects/FirebirdDialect.cs:465` | `ignored` | [x] Reason written in the comment; pinned by `Catch001_EveryCommentOnlyCatchStatesAReason`. |
-| none | `DatabaseContext.Initialization.cs:918` | `/* ignore */` | [x] Reason written in the comment; pinned by `Catch001_EveryCommentOnlyCatchStatesAReason`. |
-| none | `SqlContainer.cs:2482` | `/* ignore */` | [x] Reason written in the comment; pinned by `Catch001_EveryCommentOnlyCatchStatesAReason`. |
-| none | `dialects/PostgreSqlDialect.cs:969` | `/* ignore */` | [x] Reason written in the comment; pinned by `Catch001_EveryCommentOnlyCatchStatesAReason`. |
-| vague | `SqlContainer.cs:942` | Ignore failures: provider may reject certain values in some states. | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| wrong (a test double) | `BaseTableGateway.Core.cs:403` | Ignore fallback property access failures (e.g., strict mocks). Production code must not swallow a failure for a mock; remove with the Moq removal | [x] Removed: the catch only served mocks; both unit suites stayed green (11975 each) without it. |
-| narrow cause, broad catch | `dialects/DuckDbDialect.cs:321` | Ignore; if pragma also fails, return null | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| narrow cause, broad catch | `dialects/FirebirdDialect.cs:542` | ignore and try monitor table next | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| narrow cause, broad catch | `dialects/FirebirdDialect.cs:559` | ignore and fall through | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| narrow cause, broad catch | `internal/DatabaseDetectionService.cs:617` | Heuristic only - don't fail on parse errors | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| narrow cause, broad catch | `types/converters/CidrConverter.cs:143` | Fall through to return false (a TryParse-style method) | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `internal/MetricsCollector.cs:454` | Metrics notification is instrumentation, not execution: it must never turn a successful command into an apparent failure | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `internal/UniqueConnectionStringRegistry.cs:153` | Best-effort diagnostic: a broken logging sink must not stop registration for the remaining keys | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `TypeCoercionHelper.cs:726` | Swallow logging failures to avoid breaking enum parse fallbacks | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `TypeCoercionHelper.cs:738` | Ignore logging failures in debug-only fallbacks | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `infrastructure/PoolGovernorConcurrencyGate.cs:374` (`ThreadInterruptedException`) | Interrupted again while leaving: finish leaving first | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned, waived | `wrappers/TrackedReader.cs:916` | Provider rejected Connection=null after execution: swallowed by design (`REVIEW-POLICY-WAIVER`) | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `dialects/PostgreSqlDialect.cs:205` (`ArgumentException`) | Non-Npgsql parameters and old provider versions use normal inference | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `dialects/SqlDialect.cs:2222` | Ignore provider-specific reset failures; pooled parameters should remain usable | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `dialects/SqlDialect.cs:2248` | Ignore providers that don't support ResetDbType | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `dialects/SqlDialect.cs:3114` | Schema may not be available for all connections; fall back to runtime version string | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `DatabaseContext.Initialization.cs:1856` | Ignore process inspection failures and fall back to the library name | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
-| reasoned | `DatabaseContext.Initialization.cs:1930` | Ignore parse errors: no application name available | [x] Kept as written (a reason is stated); no throw experiment run beyond the hygiene pin. |
+| none | `DatabaseContext.cs:589` | `ignore` | [x] Removed (both copies): `SemaphoreSlim.Dispose` does not throw. Suites green. |
+| none | `DatabaseContext.cs:633` | `ignore` | [x] Removed with :589. |
+| none | `dialects/FirebirdDialect.cs:465` | `ignored` | [x] Kept broad, reason sharpened: detection probe, any failure = not this product. Pinned by the Firebird detection tests (throw experiment red). |
+| none | `DatabaseContext.Initialization.cs:918` | `/* ignore */` | [x] Kept broad: cleanup on a failure path must not mask the original exception. No unit test reaches it (verification gap). |
+| none | `SqlContainer.cs:2482` | `/* ignore */` | [x] Kept broad: provider-defined refusals of `Connection = null`. No unit test reaches it (verification gap). |
+| none | `dialects/PostgreSqlDialect.cs:969` | `/* ignore */` | [x] Kept; cosmetic test-connection normalisation. Throw experiment: `PostgreSqlDialect_AdditionalBranches_AreCovered` red. |
+| vague | `SqlContainer.cs:942` | Ignore failures: provider may reject certain values in some states. | [x] Kept broad, comment rewritten: provider property getters/setters throw provider-defined types. No unit test reaches it (verification gap). |
+| wrong (a test double) | `BaseTableGateway.Core.cs:403` | Ignore fallback property access failures (e.g., strict mocks). Production code must not swallow a failure for a mock; remove with the Moq removal | [x] Removed earlier (suites green without it). |
+| narrow cause, broad catch | `dialects/DuckDbDialect.cs:321` | Ignore; if pragma also fails, return null | [x] Kept broad, reason sharpened (probe). Pinned by `GetProductNameAsync_Should_Return_Null_When_Both_Queries_Fail`. |
+| narrow cause, broad catch | `dialects/FirebirdDialect.cs:542` | ignore and try monitor table next | [x] Kept: engine query failure falls through to the monitor table. Pinned by `..WhenEngineQueryThrows_FallsBackToMonitor`. |
+| narrow cause, broad catch | `dialects/FirebirdDialect.cs:559` | ignore and fall through | [x] Kept, reason sharpened. Pinned by `..WhenBothQueriesFail_ReturnsEmptyString`. |
+| narrow cause, broad catch | `internal/DatabaseDetectionService.cs:617` | Heuristic only - don't fail on parse errors | [x] Narrowed to `ArgumentException`; suites green. |
+| narrow cause, broad catch | `types/converters/CidrConverter.cs:143` | Fall through to return false (a TryParse-style method) | [x] Narrowed to `InvalidCastException`/`TargetInvocationException`; `CidrConverter_TryConvert_NpgsqlShim_InvalidNetmaskType_ReturnsFalse` pins it. |
+| reasoned | `internal/MetricsCollector.cs:454` | Metrics notification is instrumentation, not execution: it must never turn a successful command into an apparent failure | [x] Kept: pinned by `CommandSucceeded_MetricsChangedSubscriberThrows_DoesNotPropagate` (red under throw). |
+| reasoned | `internal/UniqueConnectionStringRegistry.cs:153` | Best-effort diagnostic: a broken logging sink must not stop registration for the remaining keys | [x] Kept: pinned by `DuplicateConnectionString_NotEnforced_LoggerThrows_ConstructionStillSucceeds`. |
+| reasoned | `TypeCoercionHelper.cs:726` | Swallow logging failures to avoid breaking enum parse fallbacks | [x] Kept: now pinned by `CatchBlockPinningTests.EnumFailureWarning_BrokenLoggingSink_DoesNotBreakTheRead` (was unpinned). |
+| reasoned | `TypeCoercionHelper.cs:738` | Ignore logging failures in debug-only fallbacks | [x] Kept: now pinned by `CatchBlockPinningTests.BadJsonPayload_BrokenLoggingSink_StillThrowsTheJsonException` (was unpinned). |
+| reasoned | `infrastructure/PoolGovernorConcurrencyGate.cs:374` (`ThreadInterruptedException`) | Interrupted again while leaving: finish leaving first | [x] Kept: pinned by three `PoolGovernorConcurrencyGateBlockingWaitBoundaryTests` (red under throw). |
+| reasoned, waived | `wrappers/TrackedReader.cs:916` | Provider rejected Connection=null after execution: swallowed by design (`REVIEW-POLICY-WAIVER`) | [x] Kept (waiver): pinned by the Snowflake compatibility tests. |
+| reasoned | `dialects/PostgreSqlDialect.cs:205` (`ArgumentException`) | Non-Npgsql parameters and old provider versions use normal inference | [x] Kept (already narrow, `ArgumentException`); pinned by `PostgreSqlDialect_AdditionalBranches_AreCovered`. |
+| reasoned | `dialects/SqlDialect.cs:2222` | Ignore provider-specific reset failures; pooled parameters should remain usable | [x] Kept: pinned by `CreateDbParameter_ProviderPropertyThatRefusesReset_IsSkipped_OthersStillReset`. |
+| reasoned | `dialects/SqlDialect.cs:2248` | Ignore providers that don't support ResetDbType | [x] Kept: a throw experiment made `Firebird_AppendPaging_UsesOffsetFetch` red. |
+| reasoned | `dialects/SqlDialect.cs:3114` | Schema may not be available for all connections; fall back to runtime version string | [x] Kept: a throw experiment made `IDataSourceInformation_ExposesParsedVersion` red. |
+| reasoned | `DatabaseContext.Initialization.cs:1856` | Ignore process inspection failures and fall back to the library name | [x] Narrowed to `InvalidOperationException`/`NotSupportedException`/`Win32Exception` (the documented `ProcessName` failures). Unreachable in unit tests (needs a null entry assembly): verification gap. |
+| reasoned | `DatabaseContext.Initialization.cs:1930` | Ignore parse errors: no application name available | [x] Narrowed to `ArgumentException`; pinned by `MalformedConnectionString_HasNoApplicationName`. |
+
+Found by the hygiene test and the throw experiment, not on the original list: `DatabaseContext.Initialization.cs` `TryGetDataSourcePath`
+(narrowed to `ArgumentException`; its old comment was wrong, it returns the raw text, and `NonKeyValueConnectionString_IsItsOwnDataSource`
+pins that), `SqlContainer.cs` parameter-owner removal (already narrow), `TrackedConnection.cs` `DetachStateChangeHandler`
+(`ObjectDisposedException`, pinned by `DisposedConnectionRefusesStateChangeAccessTests`), and seven in `TrackedReader.cs` (MySql.Data
+null-refs and type-name probing; the MySql tests and `TrackedReaderBranchTests` go red under a throw).
 
 ## Batch Operations
 
