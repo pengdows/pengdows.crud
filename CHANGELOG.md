@@ -29,6 +29,16 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
 - `ClampPoolsToServerConnectionLimit` and `ResourceConnectionHeadroom` can opt a context into provider-supported
   server connection-ceiling discovery and pool sizing. They are off by default for 2.x compatibility.
 - An Aurora PostgreSQL cluster is detected as `AuroraPostgreSql` (reported as `PostgreSql` before).
+- Single-row upserts are atomic against a concurrent insert of the same key (proven on live databases: 16 callers on
+  one new key failed on PostgreSQL 5/16, SQL Server 1/16, Oracle 5/16, Db2 9/16 and Firebird 15/16 before). PostgreSQL
+  uses `INSERT ... ON CONFLICT` for a single row, as batch upserts already did; SQL Server's `MERGE` takes
+  `WITH (HOLDLOCK)`; Oracle, Db2 and Firebird retry the statement once on a unique violation (the row exists by then).
+  The generated SQL for a single-row upsert on PostgreSQL 15+ and SQL Server changes shape.
+- An upsert whose conflict key has a `NULL` component is refused with `InvalidOperationException` naming the column.
+  It could never match, so it inserted again: a silent duplicate on SQLite, PostgreSQL and MySQL, a unique violation
+  on SQL Server.
+- A throwing connection dispose callback no longer leaks the governor permit (`PoolSaturatedException` for later callers).
+- SingleStore error 1997 ("the outcome is unknown") is an `AmbiguousResultException`.
 
 ### Added
 - **New in 2.0.6: nine databases**, the first databases added in 2.0 (2.0.0 to 2.0.5 supported the same fourteen), each
