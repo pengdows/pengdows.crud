@@ -815,12 +815,14 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     // What the emulated provider reports (confirmed against the real drivers, DEC-009):
     // Microsoft.Data.Sqlite always "main", DuckDB.NET its data source, the rest the named database
     // or "".
-    public override string Database => EmulatedProduct switch
+    public override string Database => _changedDatabase ?? EmulatedProduct switch
     {
         SupportedDatabase.Sqlite => "main",
         SupportedDatabase.DuckDB => GetConnectionStringValue(new[] { "Data Source", "DataSource" }, string.Empty)!,
         _ => GetConnectionStringValue(new[] { "Database", "Initial Catalog" }, string.Empty)!
     };
+
+    private string? _changedDatabase;
 
     private readonly OperationLog _log = new();
 
@@ -1017,10 +1019,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override void ChangeDatabase(string databaseName)
     {
-        // Refused, as it always was: to use another database, open another context. The attempt is still logged, so a test of a
-        // wrapper can see that the call reached the connection.
+        // As a real provider does: the connection now reports that database. (pengdows.crud does not use this; its tracked
+        // connection refuses it, because another database means another context.)
         _log.Record($"ChangeDatabase({databaseName})");
-        throw new NotSupportedException();
+        _changedDatabase = databaseName;
     }
 
     protected override void Dispose(bool disposing)

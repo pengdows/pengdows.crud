@@ -40,7 +40,7 @@ public class FakeDbOperationLogTests
 
         connection.Open();
         await connection.OpenAsync();
-        Assert.Throws<NotSupportedException>(() => connection.ChangeDatabase("other"));
+        connection.ChangeDatabase("other");
         connection.BeginTransaction(IsolationLevel.ReadCommitted).Dispose();
         await using (await connection.BeginTransactionAsync(IsolationLevel.Serializable))
         {
@@ -70,6 +70,24 @@ public class FakeDbOperationLogTests
 
         Assert.Contains("BeginTransactionAsync(ReadCommitted)", connection.Operations);
         Assert.DoesNotContain("BeginTransaction(ReadCommitted)", connection.Operations);
+    }
+
+    // Real providers change the connection's database; the fake does too. (pengdows.crud itself does not: its tracked
+    // connection refuses ChangeDatabase, because another database means another context.)
+    [Fact]
+    public void ChangeDatabase_ChangesTheReportedDatabase()
+    {
+        var connection = new fakeDbConnection
+        {
+            EmulatedProduct = SupportedDatabase.PostgreSql,
+            ConnectionString = "Host=h;Database=first;EmulatedProduct=PostgreSql"
+        };
+        connection.Open();
+        Assert.Equal("first", connection.Database);
+
+        connection.ChangeDatabase("second");
+
+        Assert.Equal("second", connection.Database);
     }
 
     [Fact]
