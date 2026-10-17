@@ -7104,6 +7104,19 @@ call in order, `SetNonQueryResultForCommand(text, n)` and `SetScalarResultForCom
 text every time, and `SetDefaultNonQueryResult(n)` is what a non-query returns when nothing else answers (1 unless
 set). A connection's own queue is consulted first, then the factory's.
 
+**Unique keys.** `factory.DataStore.DefineUniqueKey("table", "col", ...)` (with `EnableDataPersistence`) makes a duplicate
+INSERT raise the violation the *emulated product's provider* raises (SQLSTATE 23505 on PostgreSQL, error 2627 on SQL Server,
+1062 on MySQL, ORA-00001 on Oracle, and so on for every `SupportedDatabase`), so the dialect's classification, the
+`UniqueConstraintViolationException` translation and the upsert retry run end to end rather than being fed a canned
+exception. `INSERT ... ON CONFLICT` and `ON DUPLICATE KEY UPDATE` update the existing row instead (atomic, as the real
+statements are). It is a model, not an engine: `MERGE` is **not** modelled, so the MERGE-versus-concurrent-insert race is
+still shown only against a real database (`ConcurrentUpsertTests` in `pengdows.crud.IntegrationTests`).
+
+**Concurrency and stress.** The factory is safe to call from many threads (staged connections are handed out exactly once).
+The 200-worker, pool-of-40 boundary runs on fakeDb with execute gates (`FakeDbPoolBoundaryStressTests`): hold 40 commands in
+flight, assert every other caller gets `PoolSaturatedException`, peak connections never exceed 40, and the pool recovers when
+the gates open. A real server's own connection limit, process kill and network loss remain integration-only.
+
 Narrower still: `SetAsyncOnlyScalarFailure(text, ex)` fires only for `ExecuteScalarAsync`, not the
 sync overload for the same text — proving a sync entry point never accidentally routes through
 async. `SetPersistentScalarException(ex)` fires on every scalar call until cleared;

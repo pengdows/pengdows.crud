@@ -2409,3 +2409,12 @@ Existing third-party retry libraries (such as Polly or manual retry loops) are u
   - `CommandTimeoutException` $\to$ Retryable
   - `UniqueConstraintViolationException` $\to$ Non-transient, fails fast without retry
   - `ForeignKeyViolationException` $\to$ Non-transient, fails fast without retry
+
+## fakeDb gaps from the 2.0.6 external audit (F1-F4, decided 2026-10-17)
+
+| Gap | Decision |
+|---|---|
+| F1 factory-level canned results | Done: `EnqueueNonQueryResult`, `EnqueueScalarResult`, `SetNonQueryResultForCommand`, `SetScalarResultForCommand`, `SetDefaultNonQueryResult` on `fakeDbFactory` (`FakeDbFactoryResultsTests`). |
+| F2 keyed constraints | Done: `FakeDataStore.DefineUniqueKey`, provider-shaped violations for every `SupportedDatabase`, atomic `ON CONFLICT`/`ON DUPLICATE KEY`; `MERGE` deliberately unmodelled and documented as such (`FakeDbUniqueConstraintTests`). Positional `?` markers now resolve in the store. |
+| F3 virtual time | Not done, on purpose. The governor's `TimeProvider` seam drives deadlines and metrics, but the waits themselves (the hand-built waiter queue in `PoolGovernorConcurrencyGate`, `SemaphoreSlim` timeouts) run on OS timers, so a virtual clock would mean reworking the waiter queue and its interrupt/cancellation handling in a release branch, for a test convenience. Timeout behaviour is pinned with real, short timeouts (`PoolGovernorDeadlineTests`). Revisit with 3.0. |
+| F4 stress via gates | Done: `FakeDbPoolBoundaryStressTests` (200 workers, pool of 40). It found a real fakeDb bug, the factory's `CreateConnection` was not thread-safe (staged connections lost, duplicated, or a `NullReferenceException`); fixed, pinned by `FakeDbFactoryConcurrencyTests`. |

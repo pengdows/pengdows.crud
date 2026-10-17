@@ -205,3 +205,7 @@ pengdows.crud.fakeDb.fakeDbFactory.EnqueueScalarResult(object? value) -> void
 pengdows.crud.fakeDb.fakeDbFactory.SetNonQueryResultForCommand(string! commandText, int value) -> void
 pengdows.crud.fakeDb.fakeDbFactory.SetScalarResultForCommand(string! commandText, object? value) -> void
 pengdows.crud.fakeDb.fakeDbFactory.SetDefaultNonQueryResult(int value) -> void
+pengdows.crud.fakeDb.FakeDataStore.DefineUniqueKey(string! table, params string![]! columns) -> void
+pengdows.crud.fakeDb.FakeDataStore.ErrorShape.get -> pengdows.crud.enums.SupportedDatabase
+pengdows.crud.fakeDb.FakeDataStore.ErrorShape.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.DataStore.get -> pengdows.crud.fakeDb.FakeDataStore!

@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using pengdows.crud.enums;
 
 #endregion
 
@@ -38,6 +39,66 @@ public class FakeDataStore
     /// understood, not just tolerated.
     /// </summary>
     public bool StrictMode { get; set; }
+
+    private readonly ConcurrentDictionary<string, string[]> _uniqueKeys = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// The product whose provider-shaped violation a duplicate key raises (set by <see cref="fakeDbFactory"/> from the product
+    /// it emulates). <see cref="SupportedDatabase.Unknown"/> raises a SQLSTATE 23505 error.
+    /// </summary>
+    public SupportedDatabase ErrorShape { get; set; }
+
+    /// <summary>
+    /// Declares a unique key on <paramref name="table"/>. An INSERT whose key columns equal an existing row's raises the
+    /// emulated product's unique violation; <c>INSERT ... ON CONFLICT</c> and <c>ON DUPLICATE KEY UPDATE</c> update the
+    /// existing row instead, atomically. This is a model, not an engine: <c>MERGE</c> is not modelled, so the
+    /// MERGE-versus-concurrent-insert race still needs a real database.
+    /// </summary>
+    public void DefineUniqueKey(string table, params string[] columns)
+    {
+        ArgumentNullException.ThrowIfNull(table);
+        ArgumentNullException.ThrowIfNull(columns);
+        if (columns.Length == 0)
+        {
+            throw new ArgumentException("A unique key needs at least one column.", nameof(columns));
+        }
+
+        _uniqueKeys[CleanIdentifier(table)] = columns.Select(CleanIdentifier).ToArray();
+    }
+
+    private static object? ColumnValue(Dictionary<string, object?> row, string column)
+    {
+        foreach (var pair in row)
+        {
+            if (string.Equals(pair.Key, column, StringComparison.OrdinalIgnoreCase))
+            {
+                return pair.Value;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool SameKey(Dictionary<string, object?> a, Dictionary<string, object?> b, string[] key)
+    {
+        foreach (var column in key)
+        {
+            var left = ColumnValue(a, column);
+            var right = ColumnValue(b, column);
+            if (left == null || right == null)
+            {
+                return false;
+            }
+
+            if (!string.Equals(Convert.ToString(left, CultureInfo.InvariantCulture),
+                    Convert.ToString(right, CultureInfo.InvariantCulture), StringComparison.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 
     public void Clear()
     {
@@ -251,6 +312,8 @@ public class FakeDataStore
         var trailingClause = Regex.Match(afterValues,
             @"\s+(ON\s+CONFLICT|ON\s+DUPLICATE\s+KEY|RETURNING|OUTPUT)\b",
             RegexOptions.IgnoreCase);
+        var upsert = trailingClause.Success &&
+                     trailingClause.Groups[1].Value.StartsWith("ON", StringComparison.OrdinalIgnoreCase);
         if (trailingClause.Success)
         {
             afterValues = afterValues.Substring(0, trailingClause.Index);
@@ -259,9 +322,10 @@ public class FakeDataStore
         var valueRowMatches = Regex.Matches(afterValues, @"\(([^)]+)\)");
 
         var rowsInserted = 0;
+        var positional = 0;
         foreach (Match rowMatch in valueRowMatches)
         {
-            var values = ParseValues(rowMatch.Groups[1].Value, parameters);
+            var values = ParseValues(rowMatch.Groups[1].Value, parameters, ref positional);
             var rowData = new Dictionary<string, object?>();
 
             // Auto-assign ID when the table has no explicit Id column
@@ -300,7 +364,24 @@ public class FakeDataStore
 
             lock (_lockObject)
             {
-                _tables[table].Add(rowData);
+                var rows = _tables[table];
+                if (_uniqueKeys.TryGetValue(table, out var key) &&
+                    rows.Find(existing => SameKey(existing, rowData, key)) is { } duplicate)
+                {
+                    if (!upsert)
+                    {
+                        throw FakeDbConstraintErrors.UniqueViolation(ErrorShape, table, table + "_" + string.Join("_", key));
+                    }
+
+                    foreach (var pair in rowData)
+                    {
+                        duplicate[pair.Key] = pair.Value;
+                    }
+                }
+                else
+                {
+                    rows.Add(rowData);
+                }
             }
             rowsInserted++;
         }
@@ -529,7 +610,7 @@ public class FakeDataStore
         return cleaned;
     }
 
-    private List<object?> ParseValues(string valuesPart, DbParameterCollection? parameters)
+    private List<object?> ParseValues(string valuesPart, DbParameterCollection? parameters, ref int positional)
     {
         var values = new List<object?>();
         var parts = valuesPart.Split(',');
@@ -539,7 +620,20 @@ public class FakeDataStore
             var trimmed = part.Trim();
 
             // Handle parameters
-            if (trimmed.StartsWith("@") || trimmed.StartsWith("?"))
+            if (trimmed == "?")
+            {
+                // Positional marker (Access, Informix, HANA): the Nth marker is the Nth parameter.
+                object? positionalValue = null;
+                if (parameters != null && positional < parameters.Count)
+                {
+                    var raw = parameters[positional].Value;
+                    positionalValue = raw == DBNull.Value ? null : raw;
+                }
+
+                positional++;
+                values.Add(positionalValue);
+            }
+            else if (trimmed.StartsWith("@") || trimmed.StartsWith("?"))
             {
                 var paramValue = GetParameterValue(trimmed, parameters);
                 values.Add(paramValue);

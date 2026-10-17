@@ -103,6 +103,23 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     // Shared data store across all connections from this factory
     private readonly FakeDataStore _sharedDataStore = new();
 
+    /// <summary>
+    /// The data store every connection this factory creates shares (used when <see cref="EnableDataPersistence"/> is on). Declare
+    /// unique keys on it to have duplicates refused with the emulated product's violation.
+    /// </summary>
+    public FakeDataStore DataStore
+    {
+        get
+        {
+            if (_sharedDataStore.ErrorShape == SupportedDatabase.Unknown)
+            {
+                _sharedDataStore.ErrorShape = _pretendToBe;
+            }
+
+            return _sharedDataStore;
+        }
+    }
+
     private readonly Dictionary<string, Exception> _sharedCommandFailures =
         new(StringComparer.OrdinalIgnoreCase);
 
@@ -228,10 +245,18 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             return null!;
         }
 
-        if (_connections.Count > 0)
+        fakeDbConnection? pre = null;
+        lock (_connections)
         {
-            var pre = _connections[0];
-            _connections.RemoveAt(0);
+            if (_connections.Count > 0)
+            {
+                pre = _connections[0];
+                _connections.RemoveAt(0);
+            }
+        }
+
+        if (pre != null)
+        {
             if (pre.EmulatedProduct == SupportedDatabase.Unknown)
             {
                 pre.EmulatedProduct = _pretendToBe;
@@ -248,11 +273,15 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
                 pre.SetServerVersion(ServerVersion);
             }
 
-            _createdConnections.Add(pre);
+            lock (_connections)
+            {
+                _createdConnections.Add(pre);
+            }
+
             return pre;
         }
 
-        var c = new fakeDbConnection(_sharedDataStore);
+        var c = new fakeDbConnection(DataStore);
         c.EmulatedProduct = _pretendToBe;
         c.RaiseStateChangeEvents = RaiseConnectionStateChangeEvents;
         c.ThrowOnStateChangeAccessAfterDispose = ThrowOnStateChangeAccessAfterDispose;
@@ -310,7 +339,11 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
             c.SetServerVersion(ServerVersion);
         }
 
-        _createdConnections.Add(c);
+        lock (_connections)
+        {
+            _createdConnections.Add(c);
+        }
+
         return c;
     }
 
@@ -396,10 +429,17 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     {
         var conn = (fakeDbConnection)CreateConnection();
         // Staged, not handed out: it is recorded when a caller's CreateConnection takes it.
-        _createdConnections.Remove(conn);
+        lock (_connections)
+        {
+            _createdConnections.Remove(conn);
+        }
+
         conn.EnqueueReaderResult(rows.Select(static row =>
             row.ToDictionary(static pair => pair.Key, static pair => (object?)pair.Value)));
-        _connections.Insert(0, conn);
+        lock (_connections)
+        {
+            _connections.Insert(0, conn);
+        }
     }
 
     public override DbParameter CreateParameter()
