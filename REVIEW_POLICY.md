@@ -58,7 +58,7 @@ These are not checklist items — they are the lens through which every finding 
 
 * Any new behavior or bug fix **must include unit tests**.
 * Any change affecting DB behavior, SQL generation, transactions, pooling, or dialects **must include integration coverage**.
-* No skipped tests.
+* Capability skips only: a test may skip solely because the database lacks the feature under test, and each such skip is attributed `[SKIP:<Product>]`. Any other skip, and any silent early `return` standing in for one, is a blocker.
 * **Block if** behavior changed but tests did not change.
 
 ### B. Security invariants
@@ -109,6 +109,8 @@ Resource leaks are architecture violations, not just bugs. The entire pool gover
 
 These rules are not stylistic preferences. They exist because violations create conditions where correctness defects become invisible in diffs, debugging sessions, and code review. They are therefore treated as correctness safeguards and enforced as P0 blockers.
 
+* **No mocking framework, ever.** Tests use real objects over `pengdows.crud.fakeDb` or hand-written scripted stubs (`tools/test-stub-generator`). A package reference to Moq, NSubstitute, FakeItEasy or similar is a blocker; `NoMockingFrameworkTests` fails the build on one.
+* **Empty catch blocks and comment-only catch blocks need a stated reason.** An empty catch must say, in a comment, what exception is expected and why swallowing it is correct; otherwise narrow it, log it or rethrow (CATCH-001 in `docs/FUTURE_WORK.md`).
 * **TransactionScope is forbidden** — use `BeginTransaction`.
 * No string interpolation for SQL values.
 * No unquoted identifiers in custom SQL — use `WrapObjectName`.
@@ -221,6 +223,7 @@ Hidden cost violations are P1 unless they affect a known hot path or introduce b
 * Unit tests for behavior changes.
 * Integration tests for DB-facing changes.
 * Regression tests for bug fixes.
+* Any change to an upsert, merge or other idempotent write needs a concurrent same-key test per affected database family, run against the real database: a single-threaded test cannot show a race.
 * Tests should primarily verify observable behavior, not internal implementation. Tests that assert internal method calls or internal structure instead of observable outcomes are fragile and should be flagged.
 * **Adversarial and boundary inputs are required** for any test touching string handling, identifier generation, SQL building, or type mapping.
   * Make no assumptions about input size or content. Where a developer puts `"foo"`, a user will put `"supercalifragilisticexpialidocious"` — or a 64KB string, a null, a reserved word in one or more dialects, a string containing a parameter marker, a Unicode edge case, or a value at the boundary of the underlying type.
