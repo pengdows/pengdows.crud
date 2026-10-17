@@ -109,11 +109,12 @@ public class AuditClaimsTests
     }
 
     [Fact]
-    public void I2_AnUnmappedProfile_ThrowsNotSupportedException()
+    public void I2_AnUnmappedProfile_ThrowsTransactionModeNotSupported_ANotSupportedException()
     {
         var resolver = SqlServerResolver(rcsi: false, snapshot: true);
 
-        Assert.Throws<NotSupportedException>(() => resolver.ResolveWithDetail((IsolationProfile)999));
+        var ex = Assert.Throws<TransactionModeNotSupportedException>(() => resolver.ResolveWithDetail((IsolationProfile)999));
+        Assert.IsAssignableFrom<NotSupportedException>(ex);
     }
 
     // ---- G-05 / G-10: which upserts can reveal a stale [Version] --------------------------------------------------

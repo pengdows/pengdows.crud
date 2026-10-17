@@ -132,11 +132,12 @@ internal sealed class IsolationResolver : IIsolationResolver
         _ => Array.Empty<IsolationLevel>()
     };
 
+    /// <exception cref="TransactionModeNotSupportedException">The product has no mapping for <paramref name="profile"/>, or maps it to a level it does not support.</exception>
     public IsolationResolution ResolveWithDetail(IsolationProfile profile)
     {
         if (!_profileMap.TryGetValue(profile, out var level))
         {
-            throw new NotSupportedException($"Profile {profile} not supported for {_product}");
+            throw new TransactionModeNotSupportedException($"Profile {profile} not supported for {_product}");
         }
 
         // A mapped level the dialect says falls short of the profile (SQL Server's ReadCommitted for
@@ -151,7 +152,12 @@ internal sealed class IsolationResolver : IIsolationResolver
             degraded = true;
         }
 
-        Validate(level);
+        if (!_supportedLevels.Contains(level))
+        {
+            throw new TransactionModeNotSupportedException(
+                $"IsolationProfile.{profile} maps to {level}, which {_product} does not support (RCSI: {_rcsi}).");
+        }
+
         return new IsolationResolution(profile, level, degraded);
     }
 
