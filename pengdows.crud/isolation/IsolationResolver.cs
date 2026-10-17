@@ -139,20 +139,9 @@ internal sealed class IsolationResolver : IIsolationResolver
             throw new NotSupportedException($"Profile {profile} not supported for {_product}");
         }
 
-        var originalLevel = level;
-        var degraded = false;
-
         // A mapped level the dialect says falls short of the profile (SQL Server's ReadCommitted for
         // SafeNonBlockingReads when snapshot isolation is off).
-        if (_dialect.IsDegradedForProfile(profile, level))
-        {
-            degraded = true;
-        }
-
-        if (level != originalLevel)
-        {
-            degraded = true;
-        }
+        var degraded = _dialect.IsDegradedForProfile(profile, level);
 
         // StrictConsistency's entire purpose is a Serializable-equivalent guarantee.
         // Any product whose mapping falls short of Serializable has degraded the
