@@ -31,6 +31,8 @@ internal partial class ScriptedDatabaseContext
 
     public bool IsDisposed => DisposeCount + DisposeAsyncCount > 0;
 
+    public string ConnectionString { get; set; } = "";
+
     /// <summary>Thrown by Dispose when set (after it is counted).</summary>
     public Exception? DisposeException { get; set; }
 

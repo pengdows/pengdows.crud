@@ -7,7 +7,6 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
 using System.Threading.Tasks;
-using Moq;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
@@ -683,7 +682,7 @@ public class PostgreSqlDialectTests
         var connection = factory.CreateConnection();
         connection.ConnectionString = "Host=localhost;MaxAutoPrepare=0;AutoPrepareMinUsages=0;Multiplexing=true";
 
-        var context = new Mock<IDatabaseContext>(MockBehavior.Strict).Object;
+        var context = new ScriptedDatabaseContext();
 
         dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
@@ -704,7 +703,7 @@ public class PostgreSqlDialectTests
             ConnectionString = original
         };
 
-        var context = new Mock<IDatabaseContext>(MockBehavior.Strict).Object;
+        var context = new ScriptedDatabaseContext();
 
         dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
@@ -780,33 +779,6 @@ public class PostgreSqlDialectTests
 
         // Flag must start as false
         Assert.False(dialect.SessionSettingsBakedIntoDataSource);
-    }
-
-    private static (Mock<IDbConnection> Connection, Mock<IDbCommand> Command) CreateSettingsConnection(
-        params (string Name, string Value)[] rows)
-    {
-        var table = new DataTable();
-        table.Columns.Add("name", typeof(string));
-        table.Columns.Add("setting", typeof(string));
-
-        foreach (var (name, value) in rows)
-        {
-            table.Rows.Add(name, value);
-        }
-
-        var reader = table.CreateDataReader();
-
-        var commandMock = new Mock<IDbCommand>(MockBehavior.Strict);
-        commandMock.SetupProperty(c => c.CommandText);
-        commandMock.Setup(c => c.ExecuteReader()).Returns(reader);
-        commandMock.Setup(c => c.Dispose());
-
-        var connectionMock = new Mock<IDbConnection>(MockBehavior.Strict);
-        connectionMock.Setup(c => c.CreateCommand()).Returns(commandMock.Object);
-        connectionMock.SetupProperty(c => c.ConnectionString);
-        connectionMock.Setup(c => c.Dispose());
-
-        return (connectionMock, commandMock);
     }
 
     // Test helper classes

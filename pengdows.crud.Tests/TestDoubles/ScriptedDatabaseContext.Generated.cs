@@ -31,7 +31,6 @@ internal partial class ScriptedDatabaseContext : global::pengdows.crud.IDatabase
     global::pengdows.crud.enums.DbMode global::pengdows.crud.IDatabaseContext.ConnectionMode { get => throw Unscripted("ConnectionMode"); }
     global::System.Guid global::pengdows.crud.IDatabaseContext.RootId { get => throw Unscripted("RootId"); }
     global::pengdows.crud.enums.ReadWriteMode global::pengdows.crud.IDatabaseContext.ReadWriteMode { get => throw Unscripted("ReadWriteMode"); }
-    string global::pengdows.crud.IDatabaseContext.ConnectionString { get => throw Unscripted("ConnectionString"); }
     string global::pengdows.crud.IDatabaseContext.Name { get => throw Unscripted("Name"); }
     global::System.Data.Common.DbDataSource global::pengdows.crud.IDatabaseContext.DataSource { get => throw Unscripted("DataSource"); }
     global::pengdows.crud.IDataSourceInformation global::pengdows.crud.IDatabaseContext.DataSourceInfo { get => throw Unscripted("DataSourceInfo"); }
