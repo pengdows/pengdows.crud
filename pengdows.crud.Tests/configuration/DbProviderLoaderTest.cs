@@ -9,7 +9,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Moq;
+using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.configuration;
 using Xunit;
 
@@ -34,8 +34,8 @@ public class DbProviderLoaderTests
     [Fact]
     public void Constructor_NullConfiguration_Throws()
     {
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        Assert.Throws<ArgumentNullException>(() => new DbProviderLoader(null!, logger.Object));
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        Assert.Throws<ArgumentNullException>(() => new DbProviderLoader(null!, logger));
     }
 
     [Fact]
@@ -58,8 +58,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
         var services = new ServiceCollection();
 
         loader.LoadAndRegisterProviders(services);
@@ -83,8 +83,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
@@ -101,8 +101,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
@@ -120,8 +120,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
         var services = new ServiceCollection();
 
         loader.LoadAndRegisterProviders(services);
@@ -144,8 +144,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
         var services = new ServiceCollection();
 
         DbProviderFactories.RegisterFactory(providerName, SqliteFactory.Instance);
@@ -169,8 +169,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
@@ -185,8 +185,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
 
         // ensure assembly load doesn't hide missing provider
         _ = SqliteFactory.Instance;
@@ -225,8 +225,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
@@ -244,8 +244,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
@@ -262,8 +262,8 @@ public class DbProviderLoaderTests
             })
             .Build();
 
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
 
         Assert.Throws<InvalidOperationException>(() => loader.LoadAndRegisterProviders(new ServiceCollection()));
     }
@@ -272,8 +272,8 @@ public class DbProviderLoaderTests
     public void LoadProviderFactory_AssemblyPath_UsesLoadedAssemblyCache_OnSecondCall()
     {
         var config = new ConfigurationBuilder().Build();
-        var logger = new Mock<ILogger<DbProviderLoader>>();
-        var loader = new DbProviderLoader(config, logger.Object);
+        var logger = NullLogger<DbProviderLoader>.Instance;
+        var loader = new DbProviderLoader(config, logger);
         var method = typeof(DbProviderLoader).GetMethod("LoadProviderFactory",
             BindingFlags.NonPublic | BindingFlags.Instance);
         Assert.NotNull(method);
