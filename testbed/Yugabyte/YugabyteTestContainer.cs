@@ -32,7 +32,7 @@ public class YugabyteTestContainer : TestContainer
 
     public YugabyteTestContainer(string? image = null)
     {
-        _image = image ?? "yugabytedb/yugabyte:2025.2.5.2-b5";
+        _image = image ?? TestbedImageMatrix.Latest("YugabyteDB");
         var builder = new ContainerBuilder()
             .WithImage(_image)
             .WithPortBinding(_port, true)

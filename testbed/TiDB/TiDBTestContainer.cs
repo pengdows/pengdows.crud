@@ -25,7 +25,7 @@ public class TiDBTestContainer : TestContainer
 
     public TiDBTestContainer(string? image = null)
     {
-        _image = image ?? "pingcap/tidb:v8.5.7";
+        _image = image ?? TestbedImageMatrix.Latest("TiDB");
         var builder = new ContainerBuilder()
             .WithImage(_image)
             .WithPortBinding(_port, true)

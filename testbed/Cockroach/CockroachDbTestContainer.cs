@@ -18,9 +18,9 @@ public class CockroachDbTestContainer : TestContainer
     // tables, even if they run concurrently.
     private readonly string _database = "crud_test_" + TestContainerReuse.NewSuffix();
 
-    public CockroachDbTestContainer(string image = "cockroachdb/cockroach:v25.1.0")
+    public CockroachDbTestContainer(string? image = null)
     {
-        _image = image;
+        _image = image ?? TestbedImageMatrix.Latest("CockroachDB");
     }
 
     public override async Task StartAsync()

@@ -26,7 +26,7 @@ public class MySqlTestContainer : TestContainer
 
     public MySqlTestContainer(string? image = null)
     {
-        _image = image ?? "mysql:8.4.11";
+        _image = image ?? TestbedImageMatrix.Latest("MySQL");
         var builder = new ContainerBuilder()
             .WithImage(_image)
             .WithEnvironment("MYSQL_ROOT_PASSWORD", _password)

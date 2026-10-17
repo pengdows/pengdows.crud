@@ -57,7 +57,7 @@ public class PostgreSqlTestContainer : TestContainer
     public PostgreSqlTestContainer(string? image = null, int? port = null, bool useAdminPasswordEnvVar = false)
     {
         _port = port ?? _port;
-        _image = image ?? "postgres:16.4";
+        _image = image ?? TestbedImageMatrix.Latest("PostgreSQL");
 
         var builder = new ContainerBuilder()
             .WithImage(_image)

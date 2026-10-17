@@ -20,7 +20,7 @@ public class OracleTestContainer : TestContainer
 
     public OracleTestContainer(string? requestedImage = null)
     {
-        var image = requestedImage ?? Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? "gvenzl/oracle-free:23.26.2-full-faststart";
+        var image = requestedImage ?? Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? TestbedImageMatrix.Latest("Oracle");
         var isXe = image.Contains("xe", StringComparison.OrdinalIgnoreCase);
         _sid = isXe ? "XEPDB1" : "FREEPDB1";
         var passwordEnvVar = image.StartsWith("oracle/database:", StringComparison.OrdinalIgnoreCase) ? "ORACLE_PWD" : "ORACLE_PASSWORD";

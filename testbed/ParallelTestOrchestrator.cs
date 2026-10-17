@@ -621,6 +621,18 @@ public static class TestbedImageMatrix
         ["Db2"] = [new("11.5.8.0", "ibmcom/db2:11.5.8.0"), new("11.5.0.0a", "ibmcom/db2:11.5.0.0a")]
     };
 
+    /// <summary>
+    /// The image the all-types integration matrix runs on for <paramref name="provider"/>: the first, newest entry of
+    /// its list. The older entries feed only the testbed's per-version checks. Unlike <see cref="Get"/> it ignores the
+    /// TESTBED_&lt;PROVIDER&gt;_IMAGES override, which chooses images for a testbed run.
+    /// </summary>
+    public static string Latest(string provider)
+    {
+        return Defaults.TryGetValue(provider, out var versions) && versions.Length > 0
+            ? versions[0].Image
+            : throw new ArgumentException($"No image list for provider '{provider}'.", nameof(provider));
+    }
+
     public static IReadOnlyList<ImageVersion> Get(string provider)
     {
         var key = provider.Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant();

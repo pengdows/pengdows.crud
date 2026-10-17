@@ -118,7 +118,7 @@ Two thresholds matter for each database:
 | CockroachDB | ~22.x | latest | PostgreSQL 13-compatible wire protocol; version not user-controlled in the same way |
 | YugabyteDB | 2.x | latest | PostgreSQL 11+ compatible; MERGE intentionally disabled (throws `0A000`) |
 | Snowflake | service | service | Cloud service — version managed by Snowflake; no minimum to configure |
-| TiDB | not recorded | not recorded | Runs on `MySqlDialect`; the integration suite covers v7.5.7 and v8.5.7 (`TestbedImageMatrix`). `READ ONLY` transactions are a no-op unless `tidb_enable_noop_functions` is set |
+| TiDB | not recorded | not recorded | Runs on `MySqlDialect`; the testbed's per-version checks cover v7.5.7 and v8.5.7 (`TestbedImageMatrix`), and the all-types integration matrix runs on the newest, v8.5.7. `READ ONLY` transactions are a no-op unless `tidb_enable_noop_functions` is set |
 | Aurora MySQL / Aurora PostgreSQL | service | service | AWS-managed; same floor and recommendation as the MySQL / PostgreSQL row for the engine version the cluster runs |
 | SingleStore | not recorded | not recorded | Detected by `SHOW VARIABLES LIKE 'memsql_version'`, runs on `MySqlDialect`; suite runs `ghcr.io/singlestore-labs/singlestoredb-dev` |
 | Db2 (LUW) | not recorded | not recorded | The dialect has no version gate; the suite covers 11.5.0.0a and 11.5.8.0 (`ibmcom/db2`) |

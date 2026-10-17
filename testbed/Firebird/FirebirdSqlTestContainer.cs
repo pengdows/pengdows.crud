@@ -36,7 +36,7 @@ public class FirebirdSqlTestContainer : TestContainer
         // FIREBIRD_DATABASE
         //-u SYSDBA
         _container = new ContainerBuilder()
-            .WithImage(image ?? "firebirdsql/firebird:5.0.2")
+            .WithImage(image ?? TestbedImageMatrix.Latest("Firebird"))
             .WithPortBinding(3050, true)
             .WithEnvironment("ISC_PASSWORD", _password)
             .WithEnvironment("FIREBIRD_ROOT_PASSWORD", _password)

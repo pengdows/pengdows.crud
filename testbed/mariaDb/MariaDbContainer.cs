@@ -26,7 +26,7 @@ public class MariaDbContainer : TestContainer
 
     public MariaDbContainer(string? image = null)
     {
-        _image = image ?? "mariadb:11.4.12";
+        _image = image ?? TestbedImageMatrix.Latest("MariaDB");
         var builder = new ContainerBuilder()
             .WithImage(_image)
             .WithEnvironment("MARIADB_ROOT_PASSWORD", _password)

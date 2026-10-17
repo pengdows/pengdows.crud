@@ -25,7 +25,7 @@ public class Db2TestContainer : TestContainer
     public Db2TestContainer(string? image = null)
     {
         _container = new ContainerBuilder()
-            .WithImage(image ?? "ibmcom/db2:11.5.8.0")
+            .WithImage(image ?? TestbedImageMatrix.Latest("Db2"))
             .WithPrivileged(true)
             .WithEnvironment("LICENSE", "accept")
             .WithEnvironment("DB2INST1_PASSWORD", _password)
