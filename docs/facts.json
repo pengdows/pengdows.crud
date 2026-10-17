@@ -1,0 +1,419 @@
+{
+  "generatedBy": "tools/record-integration-run.py",
+  "integration": {
+    "Access": {
+      "net10.0": {
+        "pass": 144,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-12 19:07Z",
+        "commit": "e0137a99",
+        "dirtyTree": true
+      },
+      "net8.0": {
+        "pass": 144,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-12 19:05Z",
+        "commit": "e0137a99",
+        "dirtyTree": true
+      }
+    },
+    "AuroraMySql": {
+      "net10.0": {
+        "pass": 144,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-13 19:35Z",
+        "commit": "6a127448",
+        "dirtyTree": true
+      },
+      "net8.0": {
+        "pass": 144,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-12 15:25Z",
+        "commit": "0d031db1",
+        "dirtyTree": false
+      }
+    },
+    "AuroraPostgreSql": {
+      "net10.0": {
+        "pass": 144,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-13 19:30Z",
+        "commit": "6a127448",
+        "dirtyTree": true
+      },
+      "net8.0": {
+        "pass": 144,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-12 15:21Z",
+        "commit": "0d031db1",
+        "dirtyTree": false
+      }
+    },
+    "CockroachDb": {
+      "net10.0": {
+        "pass": 165,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:14Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 165,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:55Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "Db2": {
+      "net10.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:05Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:45Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "DuckDB": {
+      "net10.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:18Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:58Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "Firebird": {
+      "net10.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:08Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:49Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "FlatFile": {
+      "net10.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:20Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:01Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "Informix": {
+      "net10.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:20Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:01Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "InterBase": {
+      "net10.0": {
+        "pass": 147,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 11:55Z",
+        "commit": "5f813c36",
+        "dirtyTree": true
+      },
+      "net8.0": {
+        "pass": 147,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 11:33Z",
+        "commit": "5f813c36",
+        "dirtyTree": true
+      }
+    },
+    "MariaDb": {
+      "net10.0": {
+        "pass": 159,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:19Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 159,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:59Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "MySql": {
+      "net10.0": {
+        "pass": 159,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:18Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 159,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:59Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "Oracle": {
+      "net10.0": {
+        "pass": 153,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:16Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 153,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:57Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "PostgreSql": {
+      "net10.0": {
+        "pass": 169,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:19Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 169,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:00Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "SapHana": {
+      "net10.0": {
+        "pass": 147,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 11:38Z",
+        "commit": "5f813c36",
+        "dirtyTree": true
+      },
+      "net8.0": {
+        "pass": 147,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 11:16Z",
+        "commit": "5f813c36",
+        "dirtyTree": true
+      }
+    },
+    "SingleStore": {
+      "net10.0": {
+        "pass": 159,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:17Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 159,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:57Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "Snowflake": {
+      "net10.0": {
+        "pass": 146,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-12 15:45Z",
+        "commit": "0d031db1",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 146,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-12 14:58Z",
+        "commit": "0d031db1",
+        "dirtyTree": false
+      }
+    },
+    "Spanner": {
+      "net10.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:20Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:00Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "SqlServer": {
+      "net10.0": {
+        "pass": 156,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:13Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 156,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:53Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "Sqlite": {
+      "net10.0": {
+        "pass": 153,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:20Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 153,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:00Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "SybaseASE": {
+      "net10.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:15Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 152,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:55Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "TiDb": {
+      "net10.0": {
+        "pass": 159,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:20Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 159,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:00Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    },
+    "YugabyteDb": {
+      "net10.0": {
+        "pass": 169,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 21:10Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      },
+      "net8.0": {
+        "pass": 169,
+        "fail": 0,
+        "skip": 0,
+        "runUtc": "2026-10-17 20:51Z",
+        "commit": "fb83f22f",
+        "dirtyTree": false
+      }
+    }
+  }
+}

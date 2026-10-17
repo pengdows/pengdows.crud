@@ -95,4 +95,15 @@ public sealed class AuditDocumentationTests
         Assert.Contains("READ_COMMITTED_SNAPSHOT", text, StringComparison.Ordinal);
         Assert.Contains("statement-level MVCC", text, StringComparison.Ordinal);
     }
+
+    // G-08: a blocking acquire parks its thread for up to the acquire timeout; what was and was not measured is stated.
+    [Fact]
+    public void G08_ThePoolingGuide_SaysABlockingWaitHoldsItsThreadAndWhatWasMeasured()
+    {
+        var text = Read("docs/connection-pooling.md");
+
+        Assert.Contains("holds its thread", text, StringComparison.Ordinal);
+        Assert.Contains("PoolAcquireTimeout", text, StringComparison.Ordinal);
+        Assert.Contains("not measured against real I/O", text, StringComparison.Ordinal);
+    }
 }

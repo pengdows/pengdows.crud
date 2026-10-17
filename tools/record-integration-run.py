@@ -10,11 +10,16 @@ predates the newest commit touching anything but docs/ and benchmarks/ is ignore
 Run it right after the integration run, from the commit the results are for:
 
     python3 tools/record-integration-run.py [--results TestResults/integration] [--doc docs/integration-status.md]
+                                            [--facts docs/facts.json]
+
+It also writes docs/facts.json: the same cells as JSON (pass/fail/skip, run time, commit, dirty-tree flag per database
+and framework), so FactsJsonTests can hold the two in step and any quoted figure can be traced to a run.
 
 Opt-in databases (Snowflake, SAP HANA, InterBase, Access, Aurora) get a row only once they have run.
 """
 import argparse
 import datetime
+import json
 import pathlib
 import re
 import subprocess
@@ -111,6 +116,20 @@ def render(cells):
     return "\n".join(out) + "\n"
 
 
+def render_facts(cells):
+    """The same cells as docs/integration-status.md, as JSON, so a figure quoted elsewhere can be traced to a run and a commit."""
+    integration = {}
+    for (db, tfm), (pas, fail, skip, written, commit) in sorted(cells.items()):
+        integration.setdefault(db, {})[tfm] = {
+            "pass": pas, "fail": fail, "skip": skip,
+            "runUtc": written + "Z",
+            "commit": commit.rstrip("+"),
+            "dirtyTree": commit.endswith("+"),
+        }
+    facts = {"generatedBy": "tools/record-integration-run.py", "integration": integration}
+    return json.dumps(facts, indent=2) + "\n"
+
+
 def write_doc(doc, text):
     """UTF-8 with LF endings whatever the host: the doc is committed that way (a Windows default is cp1252/CRLF)."""
     with open(doc, "w", encoding="utf-8", newline="\n") as f:
@@ -121,6 +140,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", default="TestResults/integration")
     ap.add_argument("--doc", default="docs/integration-status.md")
+    ap.add_argument("--facts", default="docs/facts.json")
     args = ap.parse_args()
     results, doc = pathlib.Path(args.results), pathlib.Path(args.doc)
     if not results.is_dir():
@@ -140,6 +160,7 @@ def main():
             cells[key] = (pas, fail, skip, written, label)
             updated += 1
     write_doc(doc, render(cells))
+    write_doc(pathlib.Path(args.facts), render_facts(cells))
     print(f"{doc}: {updated} cell(s) updated against {label}")
     if stale:
         print(f"skipped {len(stale)} result(s) older than the last code change ({cutoff}Z): " + ", ".join(sorted(stale)))
