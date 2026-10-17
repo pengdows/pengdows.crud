@@ -203,37 +203,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     valueReadExpr = Expression.TryCatch(finalEnumExpr, Expression.Catch(typeof(Exception), fallback));
                 }
             }
-            else if ((Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.Inet))
-            {
-                // Npgsql's GetValue() returns IPAddress for inet columns, dropping the netmask; read
-                // NpgsqlInet instead.
-                // Whether the column is an Npgsql inet is known now, from the schema: not asked again on every row.
-                valueReadExpr = NpgsqlTypedValue(NpgsqlTypedFieldReader.Inet, reader, i, readerParam, targetType) ??
-                                ColumnConversion.Build(
-                                    NpgsqlColumnRead(NpgsqlTypedFieldReader.Inet, reader, i, readerParam, ordinalExpr),
-                                    typeof(object), targetType, coercionOptions);
-            }
-            else if (fieldType == typeof(DateTime) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(DateTimeOffset)
-                     && coercionOptions?.ReadsOffsetTimestampsSpecially == true)
-            {
-                // Snowflake.Data reports TIMESTAMP_LTZ/TZ as DateTime but GetValue returns the exact
-                // DateTimeOffset, while GetDateTime gives local wall time or throws (TYPE-002); ODP.NET 21
-                // returns only the wall time of a TIMESTAMP WITH TIME ZONE, read with its GetDateTimeOffset.
-                // A value that is a DateTime converts as before.
-                var rawValue = Expression.Call(OffsetTimestampFieldReader.ReadMethod,
-                    Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr,
-                    Expression.Constant(coercionOptions.OffsetTimestampDataTypeName, typeof(string)));
-                valueReadExpr = ColumnConversion.Build(rawValue, typeof(object), targetType, coercionOptions);
-            }
-            else if (fieldType == typeof(object) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(Guid))
-            {
-                // A column the provider can't return (Npgsql on Spanner's uuid) is read from its bytes.
-                // One reader per plan column learns the refusal once (PERF-010).
-                var guidReader = new ProviderValueFieldReader.GuidColumnReader(coercionOptions?.GuidBytesBigEndian ?? false);
-                var rawValue = Expression.Call(Expression.Constant(guidReader), ProviderValueFieldReader.GuidColumnReader.ReadMethod,
-                    Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = ColumnConversion.Build(rawValue, typeof(object), targetType, coercionOptions);
-            }
             else if (fieldType == typeof(string) && ProviderValueFieldReader.IsReadableArray(targetType) &&
                      (coercionOptions?.ReadsCollectionLiterals ?? false))
             {
@@ -271,41 +240,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                         Expression.Assign(Expression.Property(entityVar, property), arrayValue))));
                 continue;
             }
-            else if (fieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
-            {
-                // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).
-                var readDouble = typeof(NumericFieldReader).GetMethod(nameof(NumericFieldReader.ReadDouble))!;
-                var rawValue = Expression.Call(readDouble, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = ColumnConversion.Build(rawValue, typeof(double), targetType, coercionOptions);
-            }
-            else if (fieldType == typeof(string) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(byte[]))
-            {
-                // FirebirdClient reports BINARY/VARBINARY as string but returns byte[] (TYPE-002): read
-                // the value, which converts as before when it really is text.
-                var getValue = GetValueMethod;
-                var rawValue = Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), getValue, ordinalExpr);
-                valueReadExpr = ColumnConversion.Build(rawValue, typeof(object), targetType, coercionOptions);
-            }
-            else if (fieldType == typeof(long) &&
-                     (Nullable.GetUnderlyingType(targetType) ?? targetType) is var wideTarget &&
-                     (wideTarget == typeof(decimal) || wideTarget == typeof(double)))
-            {
-                // A column reported as Int64 may hold more (Snowflake.Data, see below); typed for the
-                // common decimal/double properties so an ordinary BIGINT doesn't box.
-                var readTyped = typeof(WideIntegerFieldReader).GetMethod(wideTarget == typeof(decimal)
-                    ? nameof(WideIntegerFieldReader.ReadDecimal)
-                    : nameof(WideIntegerFieldReader.ReadDouble))!;
-                var rawValue = Expression.Call(readTyped, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = ColumnConversion.Build(rawValue, wideTarget, targetType, coercionOptions);
-            }
-            else if (fieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
-            {
-                // A column reported as Int64 may hold more (Snowflake.Data reports every scale-0
-                // NUMBER as Int64 and overflows beyond it); read it as BigInteger when it does.
-                var readWide = typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.Read))!;
-                var rawValue = Expression.Call(readWide, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = ColumnConversion.Build(rawValue, typeof(object), targetType, coercionOptions);
-            }
             else if (fieldType == typeof(string) && targetType == typeof(string))
             {
                 // One GetValue per string column; its DBNull result is the null check. IsDBNull and
@@ -324,20 +258,10 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 expressions.Add(stringAssignment);
                 continue;
             }
-            else if ((Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.PostgreSqlInterval))
+            else if (ColumnQuirkReads.TryBuild(Expression.Convert(readerParam, typeof(IDataRecord)), i, fieldType, targetType,
+                         coercionOptions, ColumnQuirkReads.NpgsqlTypedFor(reader, i, targetType)) is { } quirk)
             {
-                // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
-                // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
-                valueReadExpr = NpgsqlTypedValue(NpgsqlTypedFieldReader.Interval, reader, i, readerParam, targetType) ??
-                                ColumnConversion.Build(
-                                    NpgsqlColumnRead(NpgsqlTypedFieldReader.Interval, reader, i, readerParam, ordinalExpr),
-                                    typeof(object), targetType, coercionOptions);
-            }
-            else if (ProviderTypedConversions.TryBuild(fieldType, targetType,
-                         Expression.Convert(readerParam, typeof(IDataRecord)), i) is { } providerTyped)
-            {
-                // The provider's own value type into the portable value, one typed expression (no boxing, no coercer).
-                valueReadExpr = providerTyped.Type == targetType ? providerTyped : Expression.Convert(providerTyped, targetType);
+                valueReadExpr = quirk;
             }
             else
             {
@@ -433,28 +357,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         var block = Expression.Block(new[] { entityVar, ordinalVar }, body, entityVar);
         return Expression.Lambda<Func<TReader, TEntity>>(block, readerParam).Compile();
     }
-
-    // The whole Npgsql read as one typed expression (no boxing), when the column is that Npgsql type and the shape is
-    // one the reader knows; null otherwise, and the general conversion applies. Decided once per plan.
-    private static Expression? NpgsqlTypedValue(NpgsqlTypedFieldReader typed, IDataRecord schemaReader, int ordinal,
-        Expression readerParam, Type targetType)
-    {
-        if (!typed.AppliesTo(schemaReader, ordinal))
-        {
-            return null;
-        }
-
-        var value = typed.BuildTypedValue(Expression.Convert(readerParam, typeof(IDataRecord)), ordinal);
-        return value == null ? null : value.Type == targetType ? value : Expression.Convert(value, targetType);
-    }
-
-    // The Npgsql typed read for a column that is that type, else the plain GetValue; decided once per plan.
-    private static Expression NpgsqlColumnRead(NpgsqlTypedFieldReader typed, IDataRecord schemaReader, int ordinal,
-        Expression readerParam, Expression ordinalExpr) =>
-        typed.AppliesTo(schemaReader, ordinal)
-            ? Expression.Call(Expression.Constant(typed), NpgsqlTypedFieldReader.ReadTypedMethod,
-                Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)
-            : Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), GetValueMethod, ordinalExpr);
 
     private static readonly MethodInfo GetValueMethod = ReaderGetters.GetValue;
 
