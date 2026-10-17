@@ -5,6 +5,7 @@
 //          and no [Id] surrogate.
 // =============================================================================
 
+using pengdows.crud.dialects;
 using System;
 using System.Data;
 using System.Threading;
@@ -377,8 +378,11 @@ public class PrimaryKeyTableGatewayTests
     [Fact]
     public void BuildUpsert_Merge_BumpsVersion_ForDialectWithoutTargetAlias_QualifiesCurrentValueWithTargetAlias()
     {
-        using var ctx = MakeContext(SupportedDatabase.PostgreSql);
-        Assert.True(ctx.GetDialect().SupportsMerge, "Test assumes fakeDb's emulated PostgreSQL version satisfies SupportsMerge (>=15).");
+        // DuckDB: MERGE with no target alias on the SET target (PostgreSQL 15+'s single-row upsert is ON CONFLICT: G-01).
+        using var ctx = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB",
+            new fakeDbFactory(SupportedDatabase.DuckDB) { ServerVersion = "1.4.2" });
+        Assert.True(ctx.GetDialect().SupportsMerge, "Test assumes fakeDb's emulated DuckDB version satisfies SupportsMerge.");
+        Assert.False(ctx.GetDialect().UpsertPrefersOnConflict());
         Assert.False(ctx.GetDialect().MergeUpdateRequiresTargetAlias);
 
         var gw = new PrimaryKeyTableGateway<VersionedPkEntity>(ctx);
@@ -915,10 +919,9 @@ public class PrimaryKeyTableGatewayTests
     [Fact]
     public async Task SharedGateway_TwoPostgreSqlVersions_GeneratesCorrectSqlPerContext()
     {
-        // PostgreSQL 15+ supports MERGE in addition to ON CONFLICT; BuildUpsert (PK gateway)
-        // prefers MERGE when the dialect supports it (checked before SupportsInsertOnConflict),
-        // so these two contexts must produce genuinely different SQL statement shapes from the
-        // SAME PrimaryKeyTableGateway<> instance. If GetPkTemplatesForDialect's cache were keyed
+        // PostgreSQL 15+ supports MERGE in addition to ON CONFLICT, but its dialect prefers the atomic ON CONFLICT
+        // for a single row (audit G-01), so the two contexts differ only in what the dialect version reports. They
+        // must still each build from their own dialect on the SAME PrimaryKeyTableGateway<> instance. If GetPkTemplatesForDialect's cache were keyed
         // by the SupportedDatabase enum (or otherwise shared across dialect instances) instead of
         // the dialect instance, the second call below would incorrectly reuse the first context's
         // cached UpsertUpdateFragment, producing a MERGE statement with a dangling EXCLUDED
@@ -938,8 +941,10 @@ public class PrimaryKeyTableGatewayTests
         Assert.Contains("EXCLUDED", oldSql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MERGE", oldSql, StringComparison.OrdinalIgnoreCase);
 
-        Assert.Contains("MERGE", newSql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(" = s.", newSql, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("EXCLUDED", newSql, StringComparison.OrdinalIgnoreCase);
+        // Both versions now take the atomic ON CONFLICT form for a single row (audit G-01); each statement is built
+        // from its own context's dialect, with no MERGE alias artifacts from the other context.
+        Assert.Contains("ON CONFLICT", newSql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("EXCLUDED", newSql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MERGE", newSql, StringComparison.OrdinalIgnoreCase);
     }
 }

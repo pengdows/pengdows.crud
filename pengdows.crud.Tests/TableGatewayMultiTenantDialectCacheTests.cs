@@ -92,10 +92,9 @@ public class TableGatewayMultiTenantDialectCacheTests
     [Fact]
     public async Task SharedGateway_TwoPostgreSqlVersions_GeneratesCorrectSqlPerContext()
     {
-        // PostgreSQL 15+ supports MERGE in addition to ON CONFLICT; BuildUpsert prefers MERGE
-        // when the dialect supports it (checked before SupportsInsertOnConflict), so these two
-        // contexts must produce genuinely different SQL statement shapes from the SAME
-        // TableGateway<,> instance - exactly the multitenancy pattern in this repo's CLAUDE.md
+        // PostgreSQL 15+ supports MERGE in addition to ON CONFLICT, but its dialect prefers the atomic ON CONFLICT
+        // for a single row (audit G-01), so these two contexts differ only in what the dialect version reports and
+        // must each build from their own dialect on the SAME TableGateway<,> instance - exactly the multitenancy pattern in this repo's CLAUDE.md
         // (gateway.Method(entity, tenantCtx)). If the per-dialect template cache were keyed by
         // the SupportedDatabase enum (or otherwise shared across instances) instead of the
         // dialect instance, the second call below would incorrectly reuse the first context's
@@ -115,9 +114,11 @@ public class TableGatewayMultiTenantDialectCacheTests
         Assert.Contains("EXCLUDED", oldSql, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("MERGE", oldSql, StringComparison.OrdinalIgnoreCase);
 
-        Assert.Contains("MERGE", newSql, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(" = s.", newSql, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("EXCLUDED", newSql, StringComparison.OrdinalIgnoreCase);
+        // Both versions now take the atomic ON CONFLICT form for a single row (audit G-01); each statement is built
+        // from its own context's dialect, with no MERGE alias artifacts from the other context.
+        Assert.Contains("ON CONFLICT", newSql, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("EXCLUDED", newSql, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("MERGE", newSql, StringComparison.OrdinalIgnoreCase);
     }
 
     [Table("widgets")]

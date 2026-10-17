@@ -1451,6 +1451,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <inheritdoc cref="IInternalSqlDialect.MergeUpsertReportsSkippedVersionRow"/>
     public virtual bool MergeUpsertReportsSkippedVersionRow => true;
 
+    /// <inheritdoc cref="IInternalSqlDialect.UpsertPrefersOnConflict"/>
+    public virtual bool UpsertPrefersOnConflict => false;
+
+    /// <inheritdoc cref="IInternalSqlDialect.MergeTargetLockHint"/>
+    public virtual string? MergeTargetLockHint => null;
+
     /// <inheritdoc cref="IInternalSqlDialect.PreservesEmptyBinary"/>
     public virtual bool PreservesEmptyBinary => true;
 

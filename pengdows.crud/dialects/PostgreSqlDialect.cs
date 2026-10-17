@@ -454,6 +454,7 @@ internal class PostgreSqlDialect : SqlDialect
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsOnConflictWhere => true; // Supports WHERE predicate on DO UPDATE (9.5+)
     public override bool SupportsMerge => DatabaseType != SupportedDatabase.CockroachDb && IsVersionAtLeast(15);
+    public override bool UpsertPrefersOnConflict => true;
 
     // Identity columns and OVERRIDING SYSTEM VALUE arrived in PostgreSQL 10. YugabyteDB (YSQL,
     // PG 11+) supports the clause and inherits this; CockroachDbDialect overrides it to false

@@ -110,7 +110,7 @@ public partial class TableGateway<TEntity, TRowID>
             throw new NotSupportedException($"Upsert not supported for {ctx.Product}");
         }
 
-        if (ctx.DataSourceInfo.SupportsMerge)
+        if (ctx.DataSourceInfo.SupportsMerge && !GetDialect(ctx).UpsertPrefersOnConflict())
         {
             return BuildUpsertMerge(entity, ctx);
         }
@@ -374,7 +374,7 @@ public partial class TableGateway<TEntity, TRowID>
             var sc = ctx.CreateSqlContainer();
             sc.Query.Append("MERGE INTO ")
                 .Append(BuildWrappedTableName(dialect))
-                .Append(" t ")
+                .Append(dialect.MergeTargetLockHint() is { } lockHint ? " WITH (" + lockHint + ") t " : " t ")
                 .Append(mergeSource)
                 .Append(" ON ")
                 .Append(onClause)

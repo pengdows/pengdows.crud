@@ -79,7 +79,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             }
         }
 
-        if (ctx.DataSourceInfo.SupportsMerge)
+        if (ctx.DataSourceInfo.SupportsMerge && !GetDialect(ctx).UpsertPrefersOnConflict())
         {
             return BuildPkUpsertMerge(entity, ctx);
         }
@@ -353,7 +353,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             var sc = context.CreateSqlContainer();
             sc.Query.Append("MERGE INTO ")
                 .Append(BuildWrappedTableName(dialect))
-                .Append(" t ")
+                .Append(dialect.MergeTargetLockHint() is { } lockHint ? " WITH (" + lockHint + ") t " : " t ")
                 .Append(mergeSource)
                 .Append(" ON ")
                 .Append(onClause)

@@ -188,7 +188,7 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
         var insertValues = string.Join(", ", new[] { $"s.{wrappedId}", $"s.{wrappedName}", $"s.{wrappedVersion}" });
         var updateSet = BuildMergeUpdateSet(context, dialect);
         // UpsertLiteEntity has a [Version] column → WHEN MATCHED arm includes version guard.
-        var expected = $"MERGE INTO {table} t USING (VALUES ({values})) AS s ({srcColumns}) ON " +
+        var expected = $"MERGE INTO {table} WITH (HOLDLOCK) t USING (VALUES ({values})) AS s ({srcColumns}) ON " +
                        $"t.{wrappedId} = s.{wrappedId} WHEN MATCHED AND t.{wrappedVersion} = s.{wrappedVersion} THEN UPDATE SET {updateSet} " +
                        $"WHEN NOT MATCHED THEN INSERT ({srcColumns}) VALUES ({insertValues});";
         Assert.Equal(expected, sql);
@@ -236,9 +236,12 @@ public class BuildUpsertSqlGenerationTests : SqlLiteContextTestBase
     [Fact]
     public void BuildUpsert_Merge_BumpsVersion_ForDialectWithoutTargetAlias_QualifiesCurrentValueWithTargetAlias()
     {
-        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
-        var context = new DatabaseContext("Data Source=test;EmulatedProduct=PostgreSql", factory);
-        Assert.True(context.GetDialect().SupportsMerge, "Test assumes fakeDb's emulated PostgreSQL version satisfies SupportsMerge (>=15).");
+        // DuckDB: MERGE with no target alias on the SET target. (PostgreSQL 15+ also lacks the alias but its single-row
+        // upsert is INSERT ... ON CONFLICT, which is atomic where its MERGE is not: audit G-01.)
+        var factory = new fakeDbFactory(SupportedDatabase.DuckDB) { ServerVersion = "1.4.2" };
+        var context = new DatabaseContext("Data Source=test;EmulatedProduct=DuckDB", factory);
+        Assert.True(context.GetDialect().SupportsMerge, "Test assumes fakeDb's emulated DuckDB version satisfies SupportsMerge.");
+        Assert.False(context.GetDialect().UpsertPrefersOnConflict());
         Assert.False(context.GetDialect().MergeUpdateRequiresTargetAlias);
 
         TypeMap.Register<TestEntity>();

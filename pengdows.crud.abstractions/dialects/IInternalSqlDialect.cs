@@ -62,6 +62,20 @@ internal interface IInternalSqlDialect : ISqlDialect
     bool MergeUpsertReportsSkippedVersionRow => true;
 
     /// <summary>
+    /// True when a single-row upsert uses INSERT ... ON CONFLICT even though MERGE is available. PostgreSQL's MERGE is
+    /// not atomic against a concurrent insert of the same key (a unique violation, or "tuple concurrently updated"),
+    /// while ON CONFLICT is, and batch upserts already use it, so single-row and batch take the same form.
+    /// </summary>
+    bool UpsertPrefersOnConflict => false;
+
+    /// <summary>
+    /// A table hint that serializes a MERGE upsert's target, or null when the database needs none. SQL Server's MERGE
+    /// takes no lock on the key it is about to insert, so two sessions on one new key both take WHEN NOT MATCHED and
+    /// one fails with a unique violation; <c>HOLDLOCK</c> makes the match-then-insert atomic.
+    /// </summary>
+    string? MergeTargetLockHint => null;
+
+    /// <summary>
     /// False when a zero-length binary value does not read back as zero-length: Sybase ASE stores
     /// it as the single byte 0x00 (as it stores '' as a single blank).
     /// </summary>

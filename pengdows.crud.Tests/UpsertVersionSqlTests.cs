@@ -78,14 +78,13 @@ public class UpsertVersionSqlTests
 
     public static TheoryData<SupportedDatabase> MergeDialects() => new()
     {
-        SupportedDatabase.PostgreSql, SupportedDatabase.SqlServer, SupportedDatabase.Oracle,
-        SupportedDatabase.Db2, SupportedDatabase.Snowflake
+        SupportedDatabase.SqlServer, SupportedDatabase.Oracle, SupportedDatabase.Db2, SupportedDatabase.Snowflake
     };
 
     public static TheoryData<SupportedDatabase> OnConflictDialects() => new()
     {
-        SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb, SupportedDatabase.Sqlite,
-        SupportedDatabase.DuckDB
+        SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb, SupportedDatabase.YugabyteDb,
+        SupportedDatabase.Sqlite, SupportedDatabase.DuckDB
     };
 
     [Theory]
@@ -142,7 +141,6 @@ public class UpsertVersionSqlTests
 
     [Theory]
     [InlineData(SupportedDatabase.SqlServer)]
-    [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.Db2)]
     [InlineData(SupportedDatabase.Snowflake)]
     public void AnsiMerge_KeepsWhenMatchedAndVersionCheck(SupportedDatabase db)

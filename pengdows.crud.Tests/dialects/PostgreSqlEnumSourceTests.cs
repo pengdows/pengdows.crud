@@ -65,26 +65,32 @@ public sealed class PostgreSqlEnumSourceTests
         Assert.Contains("FROM (VALUES (@b0, @b1), (@b2, @b3)) AS s(", sql);
     }
 
+    // A single-row upsert on PostgreSQL 15+ is INSERT ... ON CONFLICT (audit G-01), which inserts straight into the typed
+    // column: no VALUES source to type, so the enum needs no typed MERGE source.
     [Fact]
-    public async Task MergeUpsert_EnumByName_UsesATypedSource()
+    public async Task SingleRowUpsert_EnumByName_IsAnInsertOnConflict()
     {
         await using var context = Context(SupportedDatabase.PostgreSql, "16.4");
         var gateway = new TableGateway<EnumRow, int>(context);
 
         var sql = gateway.BuildUpsert(new EnumRow { Id = 1, V = Mood.ok }).Query.ToString();
 
-        Assert.StartsWith("MERGE INTO", sql);
-        Assert.Contains("USING (SELECT \"id\", \"v\" FROM \"type_rt\" WHERE FALSE UNION ALL SELECT @i0, @i1) AS s (\"id\", \"v\")", sql);
+        Assert.StartsWith("INSERT INTO", sql);
+        Assert.Contains("ON CONFLICT", sql);
+        Assert.DoesNotContain("MERGE", sql);
+        Assert.DoesNotContain("USING", sql);
     }
 
     [Fact]
-    public async Task MergeUpsert_WithoutAnEnumByName_KeepsValues()
+    public async Task SingleRowUpsert_WithoutAnEnumByName_IsAnInsertOnConflict()
     {
         await using var context = Context(SupportedDatabase.PostgreSql, "16.4");
         var gateway = new TableGateway<PlainRow, int>(context);
 
         var sql = gateway.BuildUpsert(new PlainRow { Id = 1, V = "x" }).Query.ToString();
 
-        Assert.Contains("USING (VALUES (@i0, @i1)) AS s (\"id\", \"v\")", sql);
+        Assert.StartsWith("INSERT INTO", sql);
+        Assert.Contains("ON CONFLICT", sql);
+        Assert.DoesNotContain("MERGE", sql);
     }
 }

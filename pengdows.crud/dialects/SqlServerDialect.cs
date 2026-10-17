@@ -430,6 +430,7 @@ internal class SqlServerDialect : SqlDialect
 
     // Version-specific overrides
     public override bool SupportsMerge => IsVersionAtLeast(10);
+    public override string? MergeTargetLockHint => "HOLDLOCK";
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
     public override bool SupportsSavepoints => true;
 

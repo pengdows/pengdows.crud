@@ -219,6 +219,23 @@ internal static class InternalSqlDialectExtensions
     }
 
     /// <summary>
+    /// See <see cref="IInternalSqlDialect.UpsertPrefersOnConflict"/>; false for a dialect that isn't an internal one
+    /// (e.g. a test double).
+    /// </summary>
+    internal static bool UpsertPrefersOnConflict(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect && internalDialect.UpsertPrefersOnConflict;
+    }
+
+    /// <summary>
+    /// See <see cref="IInternalSqlDialect.MergeTargetLockHint"/>; null for a dialect that isn't an internal one.
+    /// </summary>
+    internal static string? MergeTargetLockHint(this ISqlDialect dialect)
+    {
+        return (dialect as IInternalSqlDialect)?.MergeTargetLockHint;
+    }
+
+    /// <summary>
     /// See <see cref="IInternalSqlDialect.PreservesEmptyBinary"/>; true for a dialect that isn't an
     /// internal one (e.g. a test double).
     /// </summary>
