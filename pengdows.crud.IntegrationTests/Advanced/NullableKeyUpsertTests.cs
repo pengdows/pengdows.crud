@@ -39,6 +39,13 @@ public class NullableKeyUpsertTests : DatabaseTestBase
                 return;
             }
 
+            if (provider == SupportedDatabase.Db2)
+            {
+                // SQL0542N: a column of a primary or unique key cannot contain nulls, so a NULL key cannot exist.
+                Output.WriteLine($"{provider}: capability - a unique key cannot contain a nullable column");
+                return;
+            }
+
             await RecreateTableAsync(provider, context);
             var gateway = new PrimaryKeyTableGateway<NullableKeyRow>(context);
 
@@ -57,6 +64,13 @@ public class NullableKeyUpsertTests : DatabaseTestBase
             if (!SupportsUpsert(context))
             {
                 Output.WriteLine($"{provider}: capability - upsert not supported");
+                return;
+            }
+
+            if (provider == SupportedDatabase.Db2)
+            {
+                // SQL0542N: a column of a primary or unique key cannot contain nulls, so a NULL key cannot exist.
+                Output.WriteLine($"{provider}: capability - a unique key cannot contain a nullable column");
                 return;
             }
 
@@ -89,8 +103,19 @@ public class NullableKeyUpsertTests : DatabaseTestBase
         var bigInt = IntegrationObjectNameHelper.BigIntType(provider);
         var intType = IntegrationObjectNameHelper.IntType(provider);
 
+        // Nullable is every database's default (Firebird rejects an explicit NULL). The key needs a unique index the engine
+        // allows: SingleStore's must contain the shard key, and Spanner has no UNIQUE constraint (its ON CONFLICT target has
+        // to be the primary key, whose columns cannot be null there).
+        var bNull = provider == SupportedDatabase.Spanner ? " NOT NULL" : "";
+        var key = provider switch
+        {
+            SupportedDatabase.Spanner => $"PRIMARY KEY ({a}, {b})",
+            SupportedDatabase.SingleStore => $"UNIQUE ({a}, {b}), SHARD KEY ({a})",
+            _ => $"UNIQUE ({a}, {b})"
+        };
+
         await using var sc = context.CreateSqlContainer(
-            $"CREATE TABLE {table} ({a} {bigInt} NOT NULL, {b} {bigInt} NULL, {value} {intType} NOT NULL, UNIQUE ({a}, {b}))");
+            $"CREATE TABLE {table} ({a} {bigInt} NOT NULL, {b} {bigInt}{bNull}, {value} {intType} NOT NULL, {key})");
         await sc.ExecuteNonQueryAsync();
     }
 }

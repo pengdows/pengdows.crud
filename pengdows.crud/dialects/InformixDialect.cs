@@ -473,6 +473,10 @@ internal sealed class InformixDialect : SqlDialect
     // SQLSTATE 23000 alone is not enough: Informix reports 23000 for every integrity violation
     // (check -530, not null -391, foreign key -691/-692; confirmed live), so it only decides when
     // no Informix error code is available (none, or only the exception's HRESULT).
+    // Its upsert is a MERGE with no serialization hint, so two callers on one new key can both insert and one gets a unique
+    // violation (-268): re-run it once and it matches (audit G-01, proven live: 1 of 16 callers).
+    public override bool UpsertRetriesOnUniqueViolation => true;
+
     public override bool IsUniqueViolation(DbException ex) =>
         TryGetProviderErrorCode(ex) is { } code && code != ex.HResult
             ? pengdows.crud.exceptions.translators.DbExceptionTranslationSupport.Magnitude(code) is 268 or 239

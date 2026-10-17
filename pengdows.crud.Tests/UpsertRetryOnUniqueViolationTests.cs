@@ -15,8 +15,8 @@ namespace pengdows.crud.Tests;
 
 /// <summary>
 /// A MERGE (or Firebird's UPDATE OR INSERT) is not atomic against a concurrent insert of the same key: two callers on
-/// one new key both take the insert branch and one fails with a unique violation. Proven on live Oracle, Db2 and
-/// Firebird (ConcurrentUpsertTests, 16 callers: Oracle 5/16, Db2 9/16, Firebird 15/16). Re-running the statement is
+/// one new key both take the insert branch and one fails with a unique violation. Proven on live Oracle, Db2,
+/// Firebird and Informix (ConcurrentUpsertTests, 16 callers: Oracle 5/16, Db2 9/16, Firebird 15/16, Informix 1/16). Re-running the statement is
 /// the fix there: the row now exists, so it matches. Databases whose upsert is already atomic (PostgreSQL's ON
 /// CONFLICT, SQL Server's HOLDLOCK MERGE) do not retry: a unique violation there is a different unique index.
 /// </summary>
@@ -56,6 +56,8 @@ public class UpsertRetryOnUniqueViolationTests
         SupportedDatabase.Db2 => new ProviderDbException("SQL0803N  One or more values in the INSERT statement", -803, "23505"),
         SupportedDatabase.Firebird => new ProviderDbException(
             "violation of PRIMARY or UNIQUE KEY constraint \"INTEG_2\" on table \"retry_rows\"", 335544665),
+        SupportedDatabase.Informix => new ProviderDbException(
+            "ERROR [23000] [Informix][Informix ODBC Driver][Informix]Unique constraint violated.", -268, "23000"),
         SupportedDatabase.PostgreSql => new ProviderDbException("duplicate key value violates unique constraint", 0, "23505"),
         SupportedDatabase.SqlServer => new ProviderDbException("Violation of PRIMARY KEY constraint", 2627),
         _ => throw new NotSupportedException(db.ToString())
@@ -89,6 +91,7 @@ public class UpsertRetryOnUniqueViolationTests
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Db2)]
     [InlineData(SupportedDatabase.Firebird)]
+    [InlineData(SupportedDatabase.Informix)]
     public async Task SingleRowUpsert_UniqueViolationOnTheFirstAttempt_IsRetriedOnce(SupportedDatabase db)
     {
         var (context, connection) = Create(db);
@@ -106,6 +109,7 @@ public class UpsertRetryOnUniqueViolationTests
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Db2)]
     [InlineData(SupportedDatabase.Firebird)]
+    [InlineData(SupportedDatabase.Informix)]
     public async Task PrimaryKeyGatewayUpsert_UniqueViolationOnTheFirstAttempt_IsRetriedOnce(SupportedDatabase db)
     {
         var (context, connection) = Create(db);
@@ -123,6 +127,7 @@ public class UpsertRetryOnUniqueViolationTests
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Db2)]
     [InlineData(SupportedDatabase.Firebird)]
+    [InlineData(SupportedDatabase.Informix)]
     public async Task SingleRowUpsert_APersistentUniqueViolation_IsRethrownAfterOneRetry(SupportedDatabase db)
     {
         var (context, connection) = Create(db);
@@ -142,6 +147,7 @@ public class UpsertRetryOnUniqueViolationTests
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.Db2)]
     [InlineData(SupportedDatabase.Firebird)]
+    [InlineData(SupportedDatabase.Informix)]
     public async Task BatchUpsert_UniqueViolationOnAContainer_IsRetriedOnce(SupportedDatabase db)
     {
         var (context, connection) = Create(db);
