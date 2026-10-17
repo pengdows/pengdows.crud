@@ -2,57 +2,48 @@ namespace pengdows.stormgate.Tests;
 
 public class StormGateTests
 {
-    private readonly Mock<DbDataSource> _mockDataSource = new();
+    private readonly ScriptedDataSource _dataSource = new();
     private readonly TimeSpan _timeout = TimeSpan.FromMilliseconds(50);
 
     [Fact]
     public void Constructor_ValidatesArguments()
     {
         Assert.Throws<ArgumentNullException>(() => new StormGate(null!, 1, _timeout));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new StormGate(_mockDataSource.Object, 0, _timeout));
-        Assert.Throws<ArgumentOutOfRangeException>(() => new StormGate(_mockDataSource.Object, 1, TimeSpan.FromTicks(-1)));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new StormGate(_dataSource, 0, _timeout));
+        Assert.Throws<ArgumentOutOfRangeException>(() => new StormGate(_dataSource, 1, TimeSpan.FromTicks(-1)));
     }
 
     [Fact]
     public async Task OpenAsync_LogsOnTimeout()
     {
         // Arrange
-        var mockLogger = new Mock<ILogger>();
-        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout, mockLogger.Object);
+        var logger = new RecordingLogger();
+        using var gate = new StormGate(_dataSource, 1, _timeout, logger);
 
         // Take the only permit
-        var mockConn = new Mock<DbConnection>();
-        _mockDataSource.Protected().Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(mockConn.Object);
+        _dataSource.Returns(new fakeDbConnection());
         await gate.OpenAsync();
 
         // Act & Assert
         await Assert.ThrowsAsync<TimeoutException>(() => gate.OpenAsync());
 
-        mockLogger.Verify(l => l.Log(
-            LogLevel.Warning,
-            It.IsAny<EventId>(),
-            It.Is<It.IsAnyType>((v, t) => v.ToString()!.Contains("saturation")),
-            null,
-            It.IsAny<Func<It.IsAnyType, Exception?, string>>()), Times.Once);
+        Assert.Single(logger.Entries, e => e.Level == LogLevel.Warning && e.Message.Contains("saturation"));
     }
 
     [Fact]
     public async Task OpenAsync_UsesSemaphore()
     {
         // Arrange
-        var mockConn = new Mock<DbConnection>();
-        _mockDataSource.Protected().Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(mockConn.Object);
+        _dataSource.Returns(new fakeDbConnection());
 
-        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var gate = new StormGate(_dataSource, 1, _timeout);
 
         // Act
         using var conn1 = await gate.OpenAsync();
 
         // Assert
         Assert.NotNull(conn1);
-        _mockDataSource.Protected().Verify("OpenDbConnectionAsync", Times.Once(), ItExpr.IsAny<CancellationToken>());
+        Assert.Equal(1, _dataSource.OpenCount);
 
         // Try to open another one, it should timeout
         await Assert.ThrowsAsync<TimeoutException>(() => gate.OpenAsync());
@@ -62,17 +53,15 @@ public class StormGateTests
     public async Task OpenAsync_ReleasesSemaphoreOnCatch()
     {
         // Arrange
-        _mockDataSource.Protected().Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ThrowsAsync(new InvalidOperationException("BOOM"));
+        _dataSource.Throws(new InvalidOperationException("BOOM"));
 
-        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var gate = new StormGate(_dataSource, 1, _timeout);
 
         // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(() => gate.OpenAsync());
 
         // Should be able to try again (not timed out)
-        _mockDataSource.Protected().Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(new Mock<DbConnection>().Object);
+        _dataSource.Returns(new fakeDbConnection());
 
         using var conn1 = await gate.OpenAsync();
         Assert.NotNull(conn1);
@@ -82,11 +71,9 @@ public class StormGateTests
     public async Task OpenAsync_ReleasesOnConnectionDispose()
     {
         // Arrange
-        var mockConn = new Mock<DbConnection>();
-        _mockDataSource.Protected().Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(mockConn.Object);
+        _dataSource.Returns(new fakeDbConnection());
 
-        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var gate = new StormGate(_dataSource, 1, _timeout);
 
         // Act
         var conn1 = await gate.OpenAsync();
@@ -101,11 +88,9 @@ public class StormGateTests
     public async Task OpenAsync_ReleasesOnConnectionClose()
     {
         // Arrange
-        var mockConn = new Mock<DbConnection>();
-        _mockDataSource.Protected().Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(mockConn.Object);
+        _dataSource.Returns(new fakeDbConnection());
 
-        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var gate = new StormGate(_dataSource, 1, _timeout);
 
         // Act
         var conn1 = await gate.OpenAsync();
@@ -176,7 +161,7 @@ public class StormGateTests
     public async Task OpenAsync_ThrowsIfDisposed()
     {
         // Arrange
-        var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var gate = new StormGate(_dataSource, 1, _timeout);
         gate.Dispose();
 
         // Act & Assert
@@ -261,12 +246,9 @@ public class StormGateTests
     [Fact]
     public async Task Dispose_WithActiveLease_DoesNotBreakLeaseDisposal()
     {
-        var mockConn = new Mock<DbConnection>();
-        _mockDataSource.Protected()
-            .Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(mockConn.Object);
+        _dataSource.Returns(new fakeDbConnection());
 
-        var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        var gate = new StormGate(_dataSource, 1, _timeout);
         var conn = await gate.OpenAsync();
 
         gate.Dispose();
@@ -325,24 +307,14 @@ public class StormGateTests
     [Fact]
     public async Task OpenAsync_WhenProviderOpenIsCanceled_DoesNotLogError()
     {
-        var mockLogger = new Mock<ILogger>();
+        var logger = new RecordingLogger();
+        _dataSource.Throws(new OperationCanceledException("canceled by provider"));
 
-        _mockDataSource.Protected()
-            .Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ThrowsAsync(new OperationCanceledException("canceled by provider"));
-
-        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout, mockLogger.Object);
+        using var gate = new StormGate(_dataSource, 1, _timeout, logger);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => gate.OpenAsync());
 
-        mockLogger.Verify(
-            l => l.Log(
-                LogLevel.Error,
-                It.IsAny<EventId>(),
-                It.IsAny<It.IsAnyType>(),
-                It.IsAny<OperationCanceledException>(),
-                It.IsAny<Func<It.IsAnyType, Exception?, string>>()),
-            Times.Never);
+        Assert.DoesNotContain(logger.Entries, e => e.Level == LogLevel.Error && e.Exception is OperationCanceledException);
     }
 
     private class TestDataSource : DbDataSource
@@ -369,7 +341,7 @@ public class StormGateTests
 
     private class TestDataSourceResolverFactory : DbProviderFactory
     {
-        public override DbConnection CreateConnection() => new Mock<DbConnection>().Object;
+        public override DbConnection CreateConnection() => new fakeDbConnection();
         public override DbConnectionStringBuilder CreateConnectionStringBuilder() => new DbConnectionStringBuilder();
     }
 
@@ -385,11 +357,9 @@ public class StormGateTests
         // support.
         var innerConnection = new SavepointCapableFakeConnection();
         innerConnection.Open();
-        _mockDataSource.Protected()
-            .Setup<ValueTask<DbConnection>>("OpenDbConnectionAsync", ItExpr.IsAny<CancellationToken>())
-            .ReturnsAsync(innerConnection);
+        _dataSource.Returns(innerConnection);
 
-        using var gate = new StormGate(_mockDataSource.Object, 1, _timeout);
+        using var gate = new StormGate(_dataSource, 1, _timeout);
         using var permitConnection = await gate.OpenAsync();
         using var tx = permitConnection.BeginTransaction();
 
