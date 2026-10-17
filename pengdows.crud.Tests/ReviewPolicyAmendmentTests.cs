@@ -45,6 +45,7 @@ public sealed class ReviewPolicyAmendmentTests
         var text = Policy();
         Assert.Contains("empty catch", text, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("stated reason", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("Policy4F_NoUnbracedControlFlow", text, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -99,4 +99,27 @@ public class LibrarySourceAuditTests
 
         Assert.True(offenders.Count == 0, "Catch blocks with no stated reason: " + string.Join(", ", offenders));
     }
+
+    // Review policy 4F: braces are required on every control-flow block, and one statement per line (`if (x) return;` hides the
+    // return from a diff). Multi-line conditions are not scanned, only the one-line form and an unbraced else.
+    [Fact]
+    public void Policy4F_NoUnbracedControlFlow()
+    {
+        var oneLine = new Regex(@"^\s*(?:if|else\s+if|while|for|foreach)\s*\(.*\)\s*[^{\s/].*;\s*(?://.*)?$");
+        var bareElse = new Regex(@"^\s*else\s+[^{i\s/][^{]*;\s*(?://.*)?$");
+        var offenders = new List<string>();
+        foreach (var file in LibrarySources())
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (oneLine.IsMatch(lines[i]) || bareElse.IsMatch(lines[i]))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0, "Unbraced control flow: " + string.Join(", ", offenders));
+    }
 }
