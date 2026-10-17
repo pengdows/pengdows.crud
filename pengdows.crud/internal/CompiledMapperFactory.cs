@@ -102,30 +102,68 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 
                 // Invalid JSON is not swallowed (DEC-008): the JsonException reaches the gateway,
                 // which reports a DataMappingException naming the column (TYPE-008).
+
+                if (!targetType.IsValueType)
+                {
+                    // A reference-type target (JsonDocument, a [Json] POCO) keeps its null guard: read the text once, its
+                    // DBNull is the null check, and the text is the one GetValue result (a string or anything convertible).
+                    var jsonStored = Expression.Variable(typeof(object), "value");
+                    var jsonText = Expression.Call(
+                        typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.JsonTextOrNullLiteral),
+                            BindingFlags.NonPublic | BindingFlags.Static)!,
+                        Expression.Call(SingleReadColumns.StringFromValueMethod, jsonStored,
+                            Expression.Constant(coercionOptions, typeof(TypeCoercionOptions))));
+                    var jsonValue = (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.JsonValue)
+                        ? (Expression)Expression.Convert(Expression.New(
+                            typeof(types.valueobjects.JsonValue).GetConstructor(new[] { typeof(string) })!, jsonText), targetType)
+                        : Expression.Call(ResolveJsonDeserializeMethod(targetType), jsonText,
+                            Expression.Constant(column.JsonSerializerOptions));
+                    expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                    expressions.Add(Expression.Block(
+                        new[] { jsonStored },
+                        Expression.Assign(jsonStored, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
+                        Expression.IfThen(
+                            Expression.Not(Expression.TypeIs(jsonStored, typeof(DBNull))),
+                            Expression.Assign(Expression.Property(entityVar, property), jsonValue))));
+                    continue;
+                }
             }
             else if (fieldType == typeof(byte[]))
             {
+                // A binary column is one GetValue whatever it is read into; DBNull is the null check; then the
+                // conversion the target needs (a GUID in the dialect's byte order, or the registered coercion).
+                // No catch-all here (COR-004): a value that isn't a Guid (InvalidValueException) is a conversion
+                // failure the gateway reports naming the column; anything else surfaces as itself.
+                var valueObj = Expression.Variable(typeof(object), "value");
+                Expression bytes = Expression.Call(SingleReadColumns.BytesFromValueMethod, valueObj,
+                    Expression.Constant(coercionOptions, typeof(TypeCoercionOptions)));
+                Expression converted;
                 if (targetType == typeof(Guid) || targetType == typeof(Guid?))
                 {
-                    // In the dialect's Guid byte order (SqlDialect.StoresGuidBytesBigEndian, TYPE-002).
-                    var readGuidMethod = typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.ReadGuidFromBytes),
-                        new[] { typeof(IDataRecord), typeof(int), typeof(bool) })!;
-                    valueReadExpr = Expression.Call(readGuidMethod, readerParam, ordinalExpr,
+                    converted = Expression.Call(GuidFromBytesMethod, bytes,
                         Expression.Constant(coercionOptions?.GuidBytesBigEndian ?? false));
                     if (targetType == typeof(Guid?))
                     {
-                        valueReadExpr = Expression.Convert(valueReadExpr, typeof(Guid?));
+                        converted = Expression.Convert(converted, typeof(Guid?));
                     }
+                }
+                else if (targetType == typeof(byte[]))
+                {
+                    converted = bytes;
                 }
                 else
                 {
-                    var readBytesMethod = typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.ReadBytes))!;
-                    var call = Expression.Call(readBytesMethod, readerParam, ordinalExpr);
-                    valueReadExpr = BuildConversionExpression(call, fieldType, targetType, coercionOptions);
+                    converted = BuildConversionExpression(bytes, fieldType, targetType, coercionOptions);
                 }
 
-                // No catch-all here (COR-004): a value that isn't a Guid (InvalidValueException) is a
-                // conversion failure the gateway reports naming the column; anything else surfaces as itself.
+                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                expressions.Add(Expression.Block(
+                    new[] { valueObj },
+                    Expression.Assign(valueObj, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
+                    Expression.IfThen(
+                        Expression.Not(Expression.TypeIs(valueObj, typeof(DBNull))),
+                        Expression.Assign(Expression.Property(entityVar, property), converted))));
+                continue;
             }
             else if (column.IsEnum)
             {
@@ -154,6 +192,11 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     ? Expression.Convert(enumReadExpr, targetType)
                     : enumReadExpr;
 
+                // A non-nullable enum is a value type like any other: no IsDBNull guard, so a NULL fails loudly
+                // (the typed getter throws) instead of silently leaving the property at its default. A nullable
+                // enum keeps the guard and takes NULL as null.
+                skipNullGuard = targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null;
+
                 if (enumMode == EnumParseFailureMode.Throw)
                 {
                     valueReadExpr = finalEnumExpr;
@@ -178,9 +221,11 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 // Npgsql's GetValue() returns IPAddress for inet columns, dropping the netmask; read
                 // NpgsqlInet instead.
-                var readInet = typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!;
-                var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Inet), readInet, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+                // Whether the column is an Npgsql inet is known now, from the schema: not asked again on every row.
+                valueReadExpr = NpgsqlTypedValue(NpgsqlTypedFieldReader.Inet, reader, i, readerParam, targetType) ??
+                                BuildConversionExpression(
+                                    NpgsqlColumnRead(NpgsqlTypedFieldReader.Inet, reader, i, readerParam, ordinalExpr),
+                                    typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(DateTime) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(DateTimeOffset)
                      && coercionOptions?.ReadsOffsetTimestampsSpecially == true)
@@ -207,15 +252,38 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                      (coercionOptions?.ReadsCollectionLiterals ?? false))
             {
                 // Informix returns LIST/SET/MULTISET as literal text; parse it, typed.
-                var readLiteral = ProviderValueFieldReader.ReadCollectionLiteralDefinition.MakeGenericMethod(targetType.GetElementType()!);
-                valueReadExpr = Expression.Call(readLiteral, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                // One GetValue, which is also the null check (null for NULL).
+                var literal = Expression.Variable(targetType, "literal");
+                var readLiteral = ProviderValueFieldReader.ReadCollectionLiteralOrNullDefinition.MakeGenericMethod(targetType.GetElementType()!);
+                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                expressions.Add(Expression.Block(
+                    new[] { literal },
+                    Expression.Assign(literal, Expression.Call(readLiteral, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)),
+                    Expression.IfThen(
+                        Expression.NotEqual(literal, Expression.Constant(null, targetType)),
+                        Expression.Assign(Expression.Property(entityVar, property), literal))));
+                continue;
             }
             else if (ProviderValueFieldReader.IsReadableArray(targetType) && ProviderValueFieldReader.IsArrayColumn(fieldType))
             {
-                // Typed: Npgsql refuses some arrays as non-nullable elements (Spanner reports System.Array)
-                // and InterBase returns its declared bounds (Int32[*]).
-                valueReadExpr = ProviderValueFieldReader.BindArrayRead(targetType.GetElementType()!,
+                // The array reader's one GetValue is also the null check (null for NULL), so there is no IsDBNull call
+                // and the provider quirks it learns once per column (Spanner refusing GetValue) are kept.
+                var arrayValue = Expression.Variable(targetType, "array");
+                Expression arrayRead = ProviderValueFieldReader.BindArrayReadOrNull(targetType.GetElementType()!,
                     Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
+                if (arrayRead.Type != targetType)
+                {
+                    arrayRead = Expression.Convert(arrayRead, targetType);
+                }
+
+                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                expressions.Add(Expression.Block(
+                    new[] { arrayValue },
+                    Expression.Assign(arrayValue, arrayRead),
+                    Expression.IfThen(
+                        Expression.NotEqual(arrayValue, Expression.Constant(null, targetType)),
+                        Expression.Assign(Expression.Property(entityVar, property), arrayValue))));
+                continue;
             }
             else if (fieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
             {
@@ -264,7 +332,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     Expression.IfThen(
                         Expression.Not(Expression.TypeIs(valueObj, typeof(DBNull))),
                         Expression.Assign(Expression.Property(entityVar, property),
-                            Expression.Call(StringFromValueMethod, valueObj,
+                            Expression.Call(SingleReadColumns.StringFromValueMethod, valueObj,
                                 Expression.Constant(coercionOptions, typeof(TypeCoercionOptions))))));
                 expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
                 expressions.Add(stringAssignment);
@@ -274,55 +342,75 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             {
                 // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
                 // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
-                var readInterval = typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!;
-                var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Interval), readInterval, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+                valueReadExpr = NpgsqlTypedValue(NpgsqlTypedFieldReader.Interval, reader, i, readerParam, targetType) ??
+                                BuildConversionExpression(
+                                    NpgsqlColumnRead(NpgsqlTypedFieldReader.Interval, reader, i, readerParam, ordinalExpr),
+                                    typeof(object), targetType, coercionOptions);
+            }
+            else if (ProviderTypedConversions.TryBuild(fieldType, targetType,
+                         Expression.Convert(readerParam, typeof(IDataRecord)), i) is { } providerTyped)
+            {
+                // The provider's own value type into the portable value, one typed expression (no boxing, no coercer).
+                valueReadExpr = providerTyped.Type == targetType ? providerTyped : Expression.Convert(providerTyped, targetType);
             }
             else
             {
                 // OPTIMIZATION: For most common primitive types where source and target match,
                 // bypass BuildConversionExpression's potential boxing/Coerce paths.
                 var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
-                // Typed for any target: a uint column into a long property converts the uint; the boxed
-                // GetValue result was unboxed as long and threw (COR-008).
-                var rawValue = ReadColumn(readerParam, fieldType, ordinalExpr);
-                if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(fieldType))
+
+                // The value conversion for whatever read produced <raw>.
+                Expression ConvertRead(Expression raw)
                 {
-                    // DuckDB returns BLOBs as UnmanagedMemoryStream instances backed by the
-                    // active reader. Do not let that reader-bound stream escape the mapper;
-                    // copy it while it is valid.
-                    valueReadExpr = Expression.Convert(
-                        Expression.Call(
-                            typeof(ProviderStreamMaterializer).GetMethod(nameof(ProviderStreamMaterializer.Materialize))!,
-                            Expression.Convert(rawValue, typeof(object))),
-                        targetType);
-                }
-                else if (fieldType == underlyingTarget && rawValue.Type == fieldType)
-                {
-                    // Fast path: reader returned the native type — no unboxing needed.
-                    if (underlyingTarget == typeof(DateTime))
+                    if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(fieldType))
                     {
-                        // Inlined NormalizeDateTime
-                        valueReadExpr = Expression.Call(NormalizeDateTimeMethod, rawValue);
-                    }
-                    else
-                    {
-                        valueReadExpr = rawValue;
+                        // DuckDB returns BLOBs as UnmanagedMemoryStream instances backed by the
+                        // active reader. Do not let that reader-bound stream escape the mapper;
+                        // copy it while it is valid.
+                        return Expression.Convert(
+                            Expression.Call(
+                                typeof(ProviderStreamMaterializer).GetMethod(nameof(ProviderStreamMaterializer.Materialize))!,
+                                Expression.Convert(raw, typeof(object))),
+                            targetType);
                     }
 
-                    if (targetType != underlyingTarget)
+                    if (fieldType == underlyingTarget && raw.Type == fieldType)
                     {
-                        valueReadExpr = Expression.Convert(valueReadExpr, targetType);
+                        // Fast path: reader returned the native type — no unboxing needed.
+                        Expression native = underlyingTarget == typeof(DateTime)
+                            ? Expression.Call(NormalizeDateTimeMethod, raw) // Inlined NormalizeDateTime
+                            : raw;
+                        return targetType != underlyingTarget ? Expression.Convert(native, targetType) : native;
                     }
+
+                    // Either the type doesn't match the target (needs coercion), or GetReaderMethod fell back to
+                    // GetValue() which returns System.Object (e.g. DateTimeOffset — no IDataRecord.GetDateTimeOffset
+                    // exists). BuildConversionExpression handles the unboxing + any type conversion.
+                    return BuildConversionExpression(raw, fieldType, targetType, coercionOptions);
                 }
-                else
+
+                if (!(targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null) && !fieldType.IsValueType)
                 {
-                    // Either the type doesn't match the target (needs coercion), or
-                    // GetReaderMethod fell back to GetValue() which returns System.Object
-                    // (e.g. DateTimeOffset — no IDataRecord.GetDateTimeOffset exists).
-                    // BuildConversionExpression handles the unboxing + any type conversion.
-                    valueReadExpr = BuildConversionExpression(rawValue, fieldType, targetType, coercionOptions);
+                    // A reference-type column read into a target that keeps its null guard (BitArray, char[], a spatial
+                    // value, text into an array or a TextReader): one GetValue, whose DBNull is the null check.
+                    var stored = Expression.Variable(typeof(object), "value");
+                    Expression raw = fieldType == typeof(string)
+                        ? Expression.Call(SingleReadColumns.StringFromValueMethod, stored,
+                            Expression.Constant(coercionOptions, typeof(TypeCoercionOptions)))
+                        : fieldType == typeof(object) ? stored : Expression.Convert(stored, fieldType);
+                    expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                    expressions.Add(Expression.Block(
+                        new[] { stored },
+                        Expression.Assign(stored, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
+                        Expression.IfThen(
+                            Expression.Not(Expression.TypeIs(stored, typeof(DBNull))),
+                            Expression.Assign(Expression.Property(entityVar, property), ConvertRead(raw)))));
+                    continue;
                 }
+
+                // Typed for any target: a uint column into a long property converts the uint; the boxed
+                // GetValue result was unboxed as long and threw (COR-008).
+                valueReadExpr = ConvertRead(ReadColumn(readerParam, fieldType, ordinalExpr));
 
                 // Non-nullable value types: skip the IsDBNull guard. The caller's schema
                 // should guarantee no NULLs for these columns; if the DB does return NULL,
@@ -330,6 +418,10 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // rather than silently leaving the property at default(T).
                 skipNullGuard = targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null;
             }
+
+            // A non-nullable value type has no IsDBNull guard whatever read it takes: a NULL fails loudly (the typed
+            // read throws) instead of silently leaving the property at its default.
+            skipNullGuard |= targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null;
 
             // No per-column try-catch: the whole body's catch tags a conversion failure with this column's
             // ordinal (ColumnReadException); any other exception passes through unchanged.
@@ -356,15 +448,32 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
         return Expression.Lambda<Func<TReader, TEntity>>(block, readerParam).Compile();
     }
 
+    // The whole Npgsql read as one typed expression (no boxing), when the column is that Npgsql type and the shape is
+    // one the reader knows; null otherwise, and the general conversion applies. Decided once per plan.
+    private static Expression? NpgsqlTypedValue(NpgsqlTypedFieldReader typed, IDataRecord schemaReader, int ordinal,
+        Expression readerParam, Type targetType)
+    {
+        if (!typed.AppliesTo(schemaReader, ordinal))
+        {
+            return null;
+        }
+
+        var value = typed.BuildTypedValue(Expression.Convert(readerParam, typeof(IDataRecord)), ordinal);
+        return value == null ? null : value.Type == targetType ? value : Expression.Convert(value, targetType);
+    }
+
+    // The Npgsql typed read for a column that is that type, else the plain GetValue; decided once per plan.
+    private static Expression NpgsqlColumnRead(NpgsqlTypedFieldReader typed, IDataRecord schemaReader, int ordinal,
+        Expression readerParam, Expression ordinalExpr) =>
+        typed.AppliesTo(schemaReader, ordinal)
+            ? Expression.Call(Expression.Constant(typed), NpgsqlTypedFieldReader.ReadTypedMethod,
+                Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)
+            : Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), GetValueMethod, ordinalExpr);
+
     private static readonly MethodInfo GetValueMethod = ReaderGetters.GetValue;
 
-    private static readonly MethodInfo StringFromValueMethod =
-        typeof(CompiledMapperFactory<TEntity>).GetMethod(nameof(StringFromValue), BindingFlags.NonPublic | BindingFlags.Static)!;
-
-    // A string column's value: the string itself, or anything else a provider returns converted the
-    // usual way (never dropped).
-    private static string StringFromValue(object value, TypeCoercionOptions? options) =>
-        value as string ?? (string)TypeCoercionHelper.Coerce(value, value.GetType(), typeof(string), options)!;
+    private static readonly MethodInfo GuidFromBytesMethod = typeof(TypeCoercionHelper).GetMethod(
+        nameof(TypeCoercionHelper.GuidFromBinary), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static readonly ConstructorInfo ColumnReadExceptionCtor =
         typeof(ColumnReadException).GetConstructor(new[] { typeof(int), typeof(Exception) })!;
@@ -543,6 +652,12 @@ internal static class EnumMappingCache
 
     public static TEnum ValidateEnumValue<TEnum>(TEnum value) where TEnum : struct, Enum
     {
+        // A defined member is the usual case: no dictionary lookup.
+        if (EnumFastPath.IsDefined(value))
+        {
+            return value;
+        }
+
         if (Cache<TEnum>.Defined.ContainsKey(value))
         {
             return value;

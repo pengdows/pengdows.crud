@@ -354,9 +354,20 @@ internal class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, IInterna
 
     public decimal GetDecimal(int i)
     {
-        if (_reportsOutOfRangeDecimalAsNull && _reader.GetValue(i) is null)
+        if (_reportsOutOfRangeDecimalAsNull)
         {
-            throw OutOfRangeDecimal(i);
+            // The driver reports an out-of-range decimal as a null GetValue; a value it did return is the decimal, so
+            // it is not read a second time.
+            var stored = _reader.GetValue(i);
+            if (stored is null)
+            {
+                throw OutOfRangeDecimal(i);
+            }
+
+            if (stored is decimal whole)
+            {
+                return whole;
+            }
         }
 
         return _reader.GetDecimal(i);

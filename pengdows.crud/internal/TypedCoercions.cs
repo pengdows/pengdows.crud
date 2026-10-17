@@ -19,7 +19,8 @@ internal static class TypedCoercions
         [(typeof(string), typeof(DateTime))] = Method(nameof(DateTimeFromText)),
         [(typeof(string), typeof(DateTimeOffset))] = Method(nameof(DateTimeOffsetFromText)),
         [(typeof(string), typeof(DateOnly))] = Method(nameof(DateOnlyFromText)),
-        [(typeof(string), typeof(TimeOnly))] = Method(nameof(TimeOnlyFromText))
+        [(typeof(string), typeof(TimeOnly))] = Method(nameof(TimeOnlyFromText)),
+        [(typeof(string), typeof(char))] = Method(nameof(CharFromText))
     };
 
     public static MethodInfo? Find(Type source, Type target) => Methods.GetValueOrDefault((source, target));
@@ -31,6 +32,7 @@ internal static class TypedCoercions
     private static DateOnly DateOnlyFromDateTime(DateTime value, TypeCoercionOptions options) =>
         DateOnly.FromDateTime(value);
 
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     private static DateTimeOffset DateTimeOffsetFromDateTime(DateTime value, TypeCoercionOptions options) =>
         TypeCoercionHelper.DateTimeOffsetFromDateTime(value, options);
 
@@ -42,6 +44,12 @@ internal static class TypedCoercions
         value >= TimeSpan.Zero && value.Ticks < TimeSpan.TicksPerDay
             ? TimeOnly.FromTimeSpan(value)
             : (TimeOnly)TypeCoercionHelper.Coerce(value, typeof(TimeSpan), typeof(TimeOnly), options)!;
+
+    // A one-character text column is the char itself; anything else is the full conversion's to decide.
+    private static char CharFromText(string value, TypeCoercionOptions options) =>
+        value.Length == 1
+            ? value[0]
+            : (char)TypeCoercionHelper.Coerce(value, typeof(string), typeof(char), options)!;
 
     private static DateTime DateTimeFromText(string value, TypeCoercionOptions options) =>
         string.IsNullOrWhiteSpace(value)

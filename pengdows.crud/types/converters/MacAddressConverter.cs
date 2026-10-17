@@ -16,6 +16,7 @@
 // =============================================================================
 
 using System.Net.NetworkInformation;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.valueobjects;
@@ -123,14 +124,11 @@ internal sealed class MacAddressConverter : AdvancedTypeConverter<MacAddress>
 
         var type = value.GetType();
         // By shape (an Address property of PhysicalAddress), not by type name (DRY-010).
-        if (type.GetProperty("Address")?.PropertyType == typeof(PhysicalAddress))
+        if (ProviderMembers.Getter<PhysicalAddress?>(type, "Address") is { } getAddress &&
+            getAddress(value) is { } address)
         {
-            var addressProp = type.GetProperty("Address");
-            if (addressProp?.GetValue(value) is PhysicalAddress address)
-            {
-                result = new MacAddress(address);
-                return true;
-            }
+            result = new MacAddress(address);
+            return true;
         }
 
         result = default!;

@@ -16,6 +16,7 @@
 // =============================================================================
 
 using System.Net;
+using pengdows.crud.@internal;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -93,13 +94,14 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
         return DatabaseTraits.For(provider).BindsNpgsqlValueTypes ? CreateNpgsqlCidr(value) : value;
     }
 
-    private static object CreateNpgsqlCidr(Cidr value)
-    {
-        var type = Type.GetType("NpgsqlTypes.NpgsqlCidr, Npgsql");
-        var constructor = type?.GetConstructor(new[] { typeof(IPAddress), typeof(byte) });
-        return constructor?.Invoke(new object[] { value.Network, value.PrefixLength })
-            ?? value.ToString();
-    }
+    // NpgsqlTypes.NpgsqlCidr(IPAddress, byte), found by name and compiled once.
+    private static readonly Lazy<Func<IPAddress, byte, object>?> NpgsqlCidrCtor = new(() =>
+        Type.GetType("NpgsqlTypes.NpgsqlCidr, Npgsql") is { } type
+            ? ProviderMembers.Constructor<IPAddress, byte>(type)
+            : null);
+
+    private static object CreateNpgsqlCidr(Cidr value) =>
+        NpgsqlCidrCtor.Value?.Invoke(value.Network, value.PrefixLength) ?? value.ToString();
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Cidr result)
     {
@@ -126,24 +128,21 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
         var type = value.GetType();
         // By shape (an Address property, as NpgsqlInet/NpgsqlCidr and similar provider types have), not
         // by type name: the coercion this replaced matched by shape, and Npgsql 8 added NpgsqlCidr (DRY-010).
-        if (type.GetProperty("Address")?.PropertyType == typeof(IPAddress))
+        if (ProviderAddress.Of(type) is { } shape)
         {
-            var addressProp = type.GetProperty("Address");
-            var netmaskProp = type.GetProperty("Netmask");
-            var addressValue = addressProp?.GetValue(value) as IPAddress;
-            var maskValue = netmaskProp?.GetValue(value);
-            if (addressValue != null && maskValue != null)
+            try
             {
-                try
+                var addressValue = shape.Address(value);
+                var prefix = shape.Prefix?.Invoke(value);
+                if (addressValue != null && prefix != null)
                 {
-                    var prefix = Convert.ToByte(maskValue, System.Globalization.CultureInfo.InvariantCulture);
-                    result = new Cidr(addressValue, prefix);
+                    result = new Cidr(addressValue, prefix.Value);
                     return true;
                 }
-                catch
-                {
-                    // Fall through to return false
-                }
+            }
+            catch
+            {
+                // Fall through to return false
             }
         }
 

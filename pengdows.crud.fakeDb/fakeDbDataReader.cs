@@ -333,7 +333,8 @@ public class fakeDbDataReader : DbDataReader
             return new fakeDbProviderDecimal(providerDecimal);
         }
 
-        return row[keys[i]];
+        // A NULL cell is DBNull.Value, as every ADO.NET provider returns it, never a CLR null.
+        return row[keys[i]] ?? DBNull.Value;
     }
 
     /// <summary>

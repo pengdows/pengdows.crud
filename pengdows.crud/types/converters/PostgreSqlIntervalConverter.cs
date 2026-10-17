@@ -96,9 +96,10 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
     // NpgsqlTypes.NpgsqlInterval(int months, int days, long time) — resolved by name so pengdows.crud
     // takes no dependency on Npgsql. It is the only Npgsql write type that keeps months; a string
     // is rejected for NpgsqlDbType.Interval, and TimeSpan cannot represent months.
-    private static readonly Lazy<ConstructorInfo?> NpgsqlIntervalCtor = new(() =>
-        Type.GetType("NpgsqlTypes.NpgsqlInterval, Npgsql", throwOnError: false)
-            ?.GetConstructor(new[] { typeof(int), typeof(int), typeof(long) }));
+    private static readonly Lazy<Func<int, int, long, object>?> NpgsqlIntervalCtor = new(() =>
+        Type.GetType("NpgsqlTypes.NpgsqlInterval, Npgsql", throwOnError: false) is { } type
+            ? ProviderMembers.Constructor<int, int, long>(type)
+            : null);
 
     private static readonly Regex VerbosePartRegex = new(
         @"(?<value>[+-]?\d+(?:\.\d+)?)\s*(?<unit>years?|mons?|months?|days?|hours?|hrs?|minutes?|mins?|seconds?|secs?|microseconds?|usecs?|us)\b",
@@ -120,7 +121,7 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
         var ctor = NpgsqlIntervalCtor.Value;
         if (ctor != null)
         {
-            return ctor.Invoke(new object[] { value.Months, value.Days, value.Microseconds });
+            return ctor(value.Months, value.Days, value.Microseconds);
         }
 
         // Npgsql not loaded (no Npgsql connection is possible): fall back to ISO 8601 text.
@@ -150,26 +151,17 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
                             // Npgsql's full-fidelity interval (months, days, microseconds), read by
                             // NpgsqlTypedFieldReader.Interval so months and the stored days/time split survive.
                             result = new PostgreSqlInterval(
-                                Convert.ToInt32(type.GetProperty("Months")!.GetValue(value), CultureInfo.InvariantCulture),
-                                Convert.ToInt32(type.GetProperty("Days")!.GetValue(value), CultureInfo.InvariantCulture),
-                                Convert.ToInt64(type.GetProperty("Time")!.GetValue(value), CultureInfo.InvariantCulture));
+                                ProviderMembers.Getter<int>(type, "Months")!(value),
+                                ProviderMembers.Getter<int>(type, "Days")!(value),
+                                ProviderMembers.Getter<long>(type, "Time")!(value));
                             return true;
                         }
 
                         if (type.FullName?.Contains("NpgsqlTimeSpan", StringComparison.OrdinalIgnoreCase) == true)
                         {
-                            var monthsProp = type.GetProperty("Months");
-                            var daysProp = type.GetProperty("Days");
-                            var ticksProp = type.GetProperty("Ticks");
-                            var months = monthsProp != null
-                                ? Convert.ToInt32(monthsProp.GetValue(value), CultureInfo.InvariantCulture)
-                                : 0;
-                            var days = daysProp != null
-                                ? Convert.ToInt32(daysProp.GetValue(value), CultureInfo.InvariantCulture)
-                                : 0;
-                            var ticks = ticksProp != null
-                                ? Convert.ToInt64(ticksProp.GetValue(value), CultureInfo.InvariantCulture)
-                                : 0L;
+                            var months = ProviderMembers.Getter<int>(type, "Months") is { } getMonths ? getMonths(value) : 0;
+                            var days = ProviderMembers.Getter<int>(type, "Days") is { } getDays ? getDays(value) : 0;
+                            var ticks = ProviderMembers.Getter<long>(type, "Ticks") is { } getTicks ? getTicks(value) : 0L;
                             var microseconds = ticks / 10;
                             result = new PostgreSqlInterval(months, days, microseconds);
                             return true;

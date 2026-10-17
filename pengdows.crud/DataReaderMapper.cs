@@ -86,10 +86,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
     // Cache capacity limits to prevent unbounded memory growth with varied query shapes.
     // These are bounded LRU caches that evict least-recently-used entries when capacity is exceeded.
     private const int MaxPlanCacheSize = 128;
-    private const int MaxSetterCacheSize = 512;
     private const int MaxPropertyLookupCacheSize = 64;
 
-    private static readonly BoundedCache<SetterCacheKey, Delegate> _setterCache = new(MaxSetterCacheSize);
     private static readonly BoundedCache<PlanCacheKey, object> _planCache = new(MaxPlanCacheSize);
 
     private static readonly BoundedCache<PropertyLookupCacheKey, IReadOnlyDictionary<string, PropertyInfo>>
@@ -155,6 +153,23 @@ public sealed class DataReaderMapper : IDataReaderMapper
         where T : class, new()
     {
         return StreamInternalAsync<T>(reader, options, cancellationToken);
+    }
+
+    /// <summary>
+    /// Resolves this reader's mapping plan once (shape inspection and plan-cache lookup) and returns the per-row
+    /// mapper it runs, so a caller that maps many rows of one result set pays that resolution once. This is the
+    /// DataReaderMapper path for arbitrary POCOs; entities mapped by a TableGateway use CompiledMapperFactory.
+    /// </summary>
+    internal static Func<DbDataReader, T> ResolveRowMapper<T>(DbDataReader reader, IMapperOptions options)
+        where T : class, new()
+    {
+        ArgumentNullException.ThrowIfNull(reader);
+        options ??= MapperOptions.Default;
+
+        var shape = BuildSchemaShape(reader, options);
+        var planKey = new PlanCacheKey(typeof(T), shape, options.ColumnsOnly, options.EnumMode);
+        var plan = GetPlan<T>(planKey, reader, options);
+        return CompileRowMapper(plan.Columns, options.Strict);
     }
 
     internal static ValueTask<List<T>> LoadObjectsFromDataReaderAsync<T>(
@@ -393,52 +408,46 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static T MapSingleRow<T>(DbDataReader rdr, MapperPlan<T> plan, IMapperOptions options)
         where T : class, new()
     {
-        var obj = Factory<T>.Create();
-        for (var i = 0; i < plan.Ordinals.Length; i++)
+        return plan.RowMapper(rdr, options.Strict);
+    }
+
+    // A column that fails to read or convert: Strict raises a DataMappingException naming the column and property
+    // (the cause kept); otherwise the failure is logged and the property keeps its default (the row's other columns
+    // are still mapped). Called from the catch around each column in the compiled row body.
+    private static void HandleColumnFailure(Exception ex, bool strict, DbDataReader rdr, int ordinal,
+        PropertyInfo property)
+    {
+        if (strict)
         {
-            var ordinal = plan.Ordinals[i];
-            try
-            {
-                // Inside the try: a provider can fail on the null check itself (TYPE-005).
-                if (!plan.SkipNullCheck[i] && rdr.IsDBNull(ordinal))
-                {
-                    continue;
-                }
-
-                plan.Setters[i](obj, rdr);
-            }
-            catch (Exception ex)
-            {
-                if (options.Strict)
-                {
-                    throw new DataMappingException(
-                        $"Failed to map column '{rdr.GetName(ordinal)}' to property '{plan.Properties[i].Name}'.",
-                        SupportedDatabase.Unknown,
-                        ex);
-                }
-
-                TypeCoercionHelper.Logger.LogWarning(
-                    ex,
-                    "Failed to map column '{Column}' to property '{Property}'.",
-                    rdr.GetName(ordinal),
-                    plan.Properties[i].Name);
-            }
+            throw new DataMappingException(
+                $"Failed to map column '{rdr.GetName(ordinal)}' to property '{property.Name}'.",
+                SupportedDatabase.Unknown,
+                ex);
         }
 
-        return obj;
+        TypeCoercionHelper.Logger.LogWarning(
+            ex,
+            "Failed to map column '{Column}' to property '{Property}'.",
+            rdr.GetName(ordinal),
+            property.Name);
     }
+
+    private static readonly MethodInfo _handleColumnFailureMethod =
+        typeof(DataReaderMapper).GetMethod(nameof(HandleColumnFailure), BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo _isDbNullMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.IsDBNull))!;
+
+    private static readonly MethodInfo _guidFromBinaryMethod = typeof(TypeCoercionHelper).GetMethod(
+        nameof(TypeCoercionHelper.GuidFromBinary), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options,
         Func<int, Type?>? unresolved = null, TypeCoercionOptions? coercion = null,
         Func<IDataRecord, int, Type, object>? unresolvedReader = null)
+        where T : class, new()
     {
         var type = typeof(T);
         var propertyLookup = GetPropertyLookup(type, options);
-
-        var ordinals = new List<int>();
-        var setters = new List<Action<T, DbDataReader>>();
-        var properties = new List<PropertyInfo>();
-        var skipNullChecks = new List<bool>();
+        var columns = new List<ColumnBinding<T>>();
 
         for (var i = 0; i < reader.FieldCount; i++)
         {
@@ -451,26 +460,91 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
             if (propertyLookup.TryGetValue(name, out var prop))
             {
-                ordinals.Add(i);
                 var fieldType = ResolveFieldType(reader, i, unresolved);
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
-                setters.Add(IsUnresolved(i, unresolved)
-                    ? CreateUnresolvedSetter<T>(prop, fieldType, options.EnumMode, i, coercion, unresolvedReader)
-                    : GetOrCreateSetter<T>(prop, fieldType, requiresCoercion, options.EnumMode, i, coercion));
-                properties.Add(prop);
+                // An Npgsql inet or interval column is read as Npgsql's own type, which the schema says once, here.
+                var npgsqlTyped = (Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType) switch
+                {
+                    var t when t == typeof(types.valueobjects.Inet) => NpgsqlTypedFieldReader.Inet.AppliesTo(reader, i),
+                    var t when t == typeof(types.valueobjects.PostgreSqlInterval) => NpgsqlTypedFieldReader.Interval.AppliesTo(reader, i),
+                    _ => false
+                };
+                var key = new SetterCacheKey(typeof(T), prop, fieldType, requiresCoercion, options.EnumMode, i, coercion, npgsqlTyped);
+                var isUnresolved = IsUnresolved(i, unresolved);
                 // Non-nullable value types cannot hold null at the .NET level. Skip the IsDBNull
                 // guard for these columns — if the DB returns NULL for a non-nullable property,
                 // the typed getter throws (DataMappingException when Strict; otherwise logged).
                 var propType = prop.PropertyType;
-                skipNullChecks.Add(propType.IsValueType && Nullable.GetUnderlyingType(propType) == null);
+                var skipNullCheck = propType.IsValueType && Nullable.GetUnderlyingType(propType) == null;
+                columns.Add(new ColumnBinding<T>(
+                    key,
+                    isUnresolved
+                        ? CreateUnresolvedSetter<T>(prop, fieldType, options.EnumMode, i, coercion, unresolvedReader)
+                        : null,
+                    skipNullCheck));
             }
         }
 
-        return new MapperPlan<T>(
-            ordinals.ToArray(),
-            properties.ToArray(),
-            setters.ToArray(),
-            skipNullChecks.ToArray());
+        var bindings = columns.ToArray();
+        return new MapperPlan<T>(bindings, CompileRowMapper<T>(bindings));
+    }
+
+    /// <summary>
+    /// Compiles the whole row into one body (a new instance, then each mapped column read in place), so mapping a
+    /// row makes no delegate call per column. <paramref name="fixedStrict"/> bakes Strict in; without it the
+    /// compiled delegate takes it as an argument so one cached plan serves strict and lenient callers.
+    /// </summary>
+    private static Func<DbDataReader, bool, T> CompileRowMapper<T>(ColumnBinding<T>[] columns)
+        where T : class, new()
+    {
+        var reader = Expression.Parameter(typeof(DbDataReader), "reader");
+        var strict = Expression.Parameter(typeof(bool), "strict");
+        var body = BuildRowBody(columns, reader, strict);
+        return Expression.Lambda<Func<DbDataReader, bool, T>>(body, reader, strict).Compile();
+    }
+
+    private static Func<DbDataReader, T> CompileRowMapper<T>(ColumnBinding<T>[] columns, bool strict)
+        where T : class, new()
+    {
+        var reader = Expression.Parameter(typeof(DbDataReader), "reader");
+        var body = BuildRowBody(columns, reader, Expression.Constant(strict));
+        return Expression.Lambda<Func<DbDataReader, T>>(body, reader).Compile();
+    }
+
+    private static Expression BuildRowBody<T>(ColumnBinding<T>[] columns, ParameterExpression reader,
+        Expression strict) where T : class, new()
+    {
+        var obj = Expression.Variable(typeof(T), "obj");
+        var steps = new List<Expression> { Expression.Assign(obj, Expression.New(typeof(T))) };
+
+        foreach (var column in columns)
+        {
+            var key = column.Key;
+            var handlesNull = column.UnresolvedSetter != null; // its closure checks IsDBNull itself
+            Expression set = column.UnresolvedSetter != null
+                ? Expression.Invoke(Expression.Constant(column.UnresolvedSetter), obj, reader)
+                : BuildSetterBody<T>(key, obj, reader, out handlesNull);
+            if (!column.SkipNullCheck && !handlesNull)
+            {
+                // Inside the try: a provider can fail on the null check itself (TYPE-005).
+                set = Expression.IfThen(
+                    Expression.Not(Expression.Call(reader, _isDbNullMethod, Expression.Constant(key.Ordinal))),
+                    set);
+            }
+
+            var failure = Expression.Parameter(typeof(Exception), "ex");
+            steps.Add(Expression.TryCatch(
+                Expression.Block(typeof(void), set),
+                Expression.Catch(
+                    failure,
+                    Expression.Block(
+                        typeof(void),
+                        Expression.Call(_handleColumnFailureMethod, failure, strict, reader,
+                            Expression.Constant(key.Ordinal), Expression.Constant(key.Property))))));
+        }
+
+        steps.Add(obj);
+        return Expression.Block(typeof(T), new[] { obj }, steps);
     }
 
     /// <summary>
@@ -502,37 +576,110 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return new RecordsetShape(names, types, fieldCount);
     }
 
-    private static Action<T, DbDataReader> GetOrCreateSetter<T>(
-        PropertyInfo prop,
-        Type fieldType,
-        bool requiresCoercion,
-        EnumParseFailureMode enumMode,
-        int ordinal,
-        TypeCoercionOptions? coercion)
+    // The expression that reads this column and assigns it to the property of objParam, for composing into the row body.
+    // handlesNull: the expression reads the value once and treats DBNull as "leave the property alone" itself, so the
+    // row body adds no IsDBNull call of its own.
+    internal static Expression BuildSetterBody<T>(SetterCacheKey key, ParameterExpression objParam,
+        ParameterExpression readerParam, out bool handlesNull)
     {
-        var key = new SetterCacheKey(typeof(T), prop, fieldType, requiresCoercion, enumMode, ordinal, coercion);
-        return (Action<T, DbDataReader>)_setterCache.GetOrAdd(key, static k => CompileSetter<T>(k));
-    }
-
-    private static Action<T, DbDataReader> CompileSetter<T>(SetterCacheKey key)
-    {
-        var objParam = Expression.Parameter(typeof(T), "target");
-        var readerParam = Expression.Parameter(typeof(DbDataReader), "reader");
-
+        handlesNull = false;
         var propertyAccess = Expression.Property(objParam, key.Property);
         var targetType = key.Property.PropertyType;
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        if (SingleReadColumns.Applies(key.FieldType, targetType))
+        {
+            // One GetValue; DBNull is the null check (BuildPlan skips the separate IsDBNull for this column).
+            var value = Expression.Variable(typeof(object), "value");
+            var getValue = Expression.Call(readerParam, typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!,
+                Expression.Constant(key.Ordinal));
+            var convert = targetType == typeof(string)
+                ? SingleReadColumns.StringFromValueMethod
+                : SingleReadColumns.BytesFromValueMethod;
+            var body = Expression.Block(
+                new[] { value },
+                Expression.Assign(value, getValue),
+                Expression.IfThen(
+                    Expression.Not(Expression.TypeIs(value, typeof(DBNull))),
+                    Expression.Assign(propertyAccess,
+                        Expression.Call(convert, value, Expression.Constant(key.Coercion, typeof(TypeCoercionOptions))))));
+            handlesNull = true;
+            return body;
+        }
+
+        if (key.FieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
+        {
+            // A binary column into a Guid: one GetValue, then the dialect's byte order and the exact 16-byte rule.
+            var bytesValue = Expression.Variable(typeof(object), "value");
+            var readBinary = Expression.Call(readerParam, typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!,
+                Expression.Constant(key.Ordinal));
+            Expression guid = Expression.Call(_guidFromBinaryMethod,
+                Expression.Call(SingleReadColumns.BytesFromValueMethod, bytesValue,
+                    Expression.Constant(key.Coercion, typeof(TypeCoercionOptions))),
+                Expression.Constant(key.Coercion?.GuidBytesBigEndian ?? false));
+            if (targetType != underlyingTarget)
+            {
+                guid = Expression.Convert(guid, targetType);
+            }
+
+            handlesNull = true;
+            return Expression.Block(
+                new[] { bytesValue },
+                Expression.Assign(bytesValue, readBinary),
+                Expression.IfThen(
+                    Expression.Not(Expression.TypeIs(bytesValue, typeof(DBNull))),
+                    Expression.Assign(propertyAccess, guid)));
+        }
+
+        if (ProviderValueFieldReader.IsReadableArray(targetType) && ProviderValueFieldReader.IsArrayColumn(key.FieldType))
+        {
+            // The array reader's one GetValue is also the null check (null for NULL): no IsDBNull call, and the
+            // provider quirks it learns once per column (Spanner refusing GetValue) are kept.
+            var arrayValue = Expression.Variable(targetType, "array");
+            Expression arrayRead = ProviderValueFieldReader.BindArrayReadOrNull(targetType.GetElementType()!,
+                Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
+            if (arrayRead.Type != targetType)
+            {
+                arrayRead = Expression.Convert(arrayRead, targetType);
+            }
+
+            handlesNull = true;
+            return Expression.Block(
+                new[] { arrayValue },
+                Expression.Assign(arrayValue, arrayRead),
+                Expression.IfThen(
+                    Expression.NotEqual(arrayValue, Expression.Constant(null, targetType)),
+                    Expression.Assign(propertyAccess, arrayValue)));
+        }
+
+        if (ProviderTypedConversions.TryBuild(key.FieldType, targetType,
+                Expression.Convert(readerParam, typeof(IDataRecord)), key.Ordinal) is { } providerTyped)
+        {
+            // The provider's own value type into the portable value, one typed expression (no boxing, no coercer).
+            return Expression.Assign(propertyAccess,
+                providerTyped.Type == targetType ? providerTyped : Expression.Convert(providerTyped, targetType));
+        }
 
         Expression valueExpression;
         if (underlyingTarget == typeof(types.valueobjects.Inet))
         {
             // Npgsql's GetValue() returns IPAddress for inet columns, dropping the netmask; read
             // NpgsqlInet instead.
-            var readInet = typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!;
-            var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Inet), readInet, Expression.Convert(readerParam, typeof(IDataRecord)),
-                Expression.Constant(key.Ordinal));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            var typedInet = key.NpgsqlTyped
+                ? NpgsqlTypedFieldReader.Inet.BuildTypedValue(Expression.Convert(readerParam, typeof(IDataRecord)), key.Ordinal)
+                : null;
+            if (typedInet != null)
+            {
+                valueExpression = typedInet.Type == targetType ? typedInet : Expression.Convert(typedInet, targetType);
+            }
+            else
+            {
+                var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Inet),
+                    typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!,
+                    Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
+                var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
+                valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            }
         }
         else if (key.FieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset) &&
                  (key.Coercion?.ReadsOffsetTimestampsSpecially ?? false))
@@ -559,9 +706,17 @@ public sealed class DataReaderMapper : IDataReaderMapper
                  (key.Coercion?.ReadsCollectionLiterals ?? false))
         {
             // Informix returns LIST/SET/MULTISET as literal text; parse it, typed.
-            var readLiteral = ProviderValueFieldReader.ReadCollectionLiteralDefinition.MakeGenericMethod(targetType.GetElementType()!);
-            valueExpression = Expression.Call(readLiteral, Expression.Convert(readerParam, typeof(IDataRecord)),
-                Expression.Constant(key.Ordinal));
+            // One GetValue, which is also the null check (null for NULL).
+            var literal = Expression.Variable(targetType, "literal");
+            var readLiteral = ProviderValueFieldReader.ReadCollectionLiteralOrNullDefinition.MakeGenericMethod(targetType.GetElementType()!);
+            handlesNull = true;
+            return Expression.Block(
+                new[] { literal },
+                Expression.Assign(literal, Expression.Call(readLiteral, Expression.Convert(readerParam, typeof(IDataRecord)),
+                    Expression.Constant(key.Ordinal))),
+                Expression.IfThen(
+                    Expression.NotEqual(literal, Expression.Constant(null, targetType)),
+                    Expression.Assign(propertyAccess, literal)));
         }
         else if (ProviderValueFieldReader.IsReadableArray(targetType) &&
                  ProviderValueFieldReader.IsArrayColumn(key.FieldType))
@@ -592,11 +747,21 @@ public sealed class DataReaderMapper : IDataReaderMapper
         {
             // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
             // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
-            var readInterval = typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!;
-            var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Interval), readInterval, Expression.Convert(readerParam, typeof(IDataRecord)),
-                Expression.Constant(key.Ordinal));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            var typedInterval = key.NpgsqlTyped
+                ? NpgsqlTypedFieldReader.Interval.BuildTypedValue(Expression.Convert(readerParam, typeof(IDataRecord)), key.Ordinal)
+                : null;
+            if (typedInterval != null)
+            {
+                valueExpression = typedInterval.Type == targetType ? typedInterval : Expression.Convert(typedInterval, targetType);
+            }
+            else
+            {
+                var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Interval),
+                    typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!,
+                    Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
+                var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
+                valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            }
         }
         else if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(key.FieldType))
         {
@@ -607,17 +772,52 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var materialize = typeof(ProviderStreamMaterializer).GetMethod(nameof(ProviderStreamMaterializer.Materialize))!;
             valueExpression = Expression.Convert(Expression.Call(materialize, rawValue), targetType);
         }
+        else if (underlyingTarget.IsEnum && EnumFastPath.Reads(key.FieldType))
+        {
+            // An integer column into an enum: a defined member is converted with no boxing; any other value is
+            // converted by the full conversion (the same one used when the column is not an integer), so its
+            // rules and failure modes are unchanged.
+            var integer = Expression.Convert(
+                Expression.Call(readerParam, TypedGetter(key.FieldType) ??
+                                             _getFieldValueGenericMethod.MakeGenericMethod(key.FieldType),
+                    Expression.Constant(key.Ordinal)),
+                typeof(long));
+            var fullConversion = TypeCoercionHelper.ResolveCoercer(key.FieldType, targetType, key.EnumMode, key.Coercion);
+            var resolve = (targetType == underlyingTarget ? EnumFastPath.ResolveMethod : EnumFastPath.ResolveNullableMethod)
+                .MakeGenericMethod(underlyingTarget);
+            valueExpression = Expression.Call(resolve, integer, Expression.Constant(fullConversion));
+        }
         else if (key.RequiresCoercion)
         {
             if (!TryBuildDirectReadExpression(key, readerParam, targetType, underlyingTarget, out valueExpression))
             {
-                // Fallback: GetValue() returns boxed object; coercer returns boxed result; then unbox.
+                // Fallback: one GetValue (DBNull is the null check), the coercer's boxed result, then unbox.
                 var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
-                var rawValue = Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal));
+                var stored = Expression.Variable(typeof(object), "value");
                 var coercer = TypeCoercionHelper.ResolveCoercer(key.FieldType, targetType, key.EnumMode, key.Coercion);
-                var invokeCoercer = Expression.Invoke(Expression.Constant(coercer), rawValue);
-                valueExpression = Expression.Convert(invokeCoercer, targetType);
+                handlesNull = true;
+                return Expression.Block(
+                    new[] { stored },
+                    Expression.Assign(stored, Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal))),
+                    Expression.IfThen(
+                        Expression.Not(Expression.TypeIs(stored, typeof(DBNull))),
+                        Expression.Assign(propertyAccess,
+                            Expression.Convert(Expression.Invoke(Expression.Constant(coercer), stored), targetType))));
             }
+        }
+        else if (!key.FieldType.IsValueType && key.FieldType != typeof(string) && !targetType.IsValueType)
+        {
+            // A reference-type column read into a reference-type property (BitArray, char[], a spatial value): one
+            // GetValue, whose DBNull is the null check.
+            var stored = Expression.Variable(typeof(object), "value");
+            handlesNull = true;
+            return Expression.Block(
+                new[] { stored },
+                Expression.Assign(stored, Expression.Call(readerParam,
+                    typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!, Expression.Constant(key.Ordinal))),
+                Expression.IfThen(
+                    Expression.Not(Expression.TypeIs(stored, typeof(DBNull))),
+                    Expression.Assign(propertyAccess, Expression.Convert(stored, targetType))));
         }
         else
         {
@@ -670,9 +870,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             }
         }
 
-        var assignment = Expression.Assign(propertyAccess, valueExpression);
-        var lambda = Expression.Lambda<Action<T, DbDataReader>>(assignment, objParam, readerParam);
-        return lambda.Compile();
+        return Expression.Assign(propertyAccess, valueExpression);
     }
 
     // The typed getter for the column's type, as the gateway reads it. Not Int64 (Informix.Net.Core's
@@ -756,22 +954,23 @@ public sealed class DataReaderMapper : IDataReaderMapper
         };
     }
 
-    private readonly record struct SetterCacheKey(
+    internal readonly record struct SetterCacheKey(
         Type TargetType,
         PropertyInfo Property,
         Type FieldType,
         bool RequiresCoercion,
         EnumParseFailureMode EnumMode,
         int Ordinal,
-        TypeCoercionOptions? Coercion);
+        TypeCoercionOptions? Coercion,
+        bool NpgsqlTyped = false);
 
     private readonly record struct PropertyLookupCacheKey(Type Type, bool ColumnsOnly);
 
-    private sealed record MapperPlan<T>(
-        int[] Ordinals,
-        PropertyInfo[] Properties,
-        Action<T, DbDataReader>[] Setters,
-        bool[] SkipNullCheck);
+    // What one result-set column needs to be read into its property (and whether the dialect reads it itself).
+    private sealed record ColumnBinding<T>(SetterCacheKey Key, Action<T, DbDataReader>? UnresolvedSetter,
+        bool SkipNullCheck);
+
+    private sealed record MapperPlan<T>(ColumnBinding<T>[] Columns, Func<DbDataReader, bool, T> RowMapper);
 
     private static IReadOnlyDictionary<string, PropertyInfo> GetPropertyLookup(Type type, IMapperOptions options)
     {

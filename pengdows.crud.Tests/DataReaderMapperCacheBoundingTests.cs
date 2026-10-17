@@ -170,22 +170,6 @@ public class DataReaderMapperCacheBoundingTests
         Assert.NotNull(clearMethod);
     }
 
-    [Fact]
-    public void SetterCache_IsBounded()
-    {
-        // Verify the setter cache is also bounded
-        var setterCacheField =
-            typeof(DataReaderMapper).GetField("_setterCache", BindingFlags.Static | BindingFlags.NonPublic);
-        Assert.NotNull(setterCacheField);
-
-        var setterCache = setterCacheField!.GetValue(null);
-        Assert.NotNull(setterCache);
-
-        // Check if it's a BoundedCache by looking for the Clear method
-        var clearMethod = setterCache!.GetType().GetMethod("Clear");
-        Assert.NotNull(clearMethod);
-    }
-
     private static int GetPlanCacheCount()
     {
         var cacheField = typeof(DataReaderMapper).GetField("_planCache", BindingFlags.Static | BindingFlags.NonPublic);

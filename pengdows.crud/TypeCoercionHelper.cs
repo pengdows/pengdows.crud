@@ -840,6 +840,7 @@ internal static class TypeCoercionHelper
     /// A DateTime as a DateTimeOffset under <paramref name="options"/>' time policy, as
     /// <see cref="CoerceDateTimeOffset"/> converts it, without boxing (DRY-003).
     /// </summary>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     internal static DateTimeOffset DateTimeOffsetFromDateTime(DateTime dt, TypeCoercionOptions options) =>
         options.TimePolicy == TimeMappingPolicy.ForceUtcDateTime
             ? new DateTimeOffset(ConvertToUtc(dt), TimeSpan.Zero)
@@ -889,6 +890,7 @@ internal static class TypeCoercionHelper
         };
     }
 
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     private static DateTimeOffset CreateFlexibleOffset(DateTime dt)
     {
         if (dt.Kind == DateTimeKind.Utc)
@@ -1213,6 +1215,13 @@ internal static class TypeCoercionHelper
     /// </summary>
     private static exceptions.InvalidValueException NotAGuid(long length) =>
         new($"Binary column holds {length.ToString(CultureInfo.InvariantCulture)} bytes; a GUID needs exactly 16.");
+
+    /// <summary>
+    /// A GUID from a binary value already read (one GetValue), in the given byte order. Exactly 16 bytes, as
+    /// <see cref="ReadGuidFromBytes(IDataRecord, int, bool)"/> requires (COR-003).
+    /// </summary>
+    internal static Guid GuidFromBinary(byte[] bytes, bool bigEndian) =>
+        bytes.Length == 16 ? new Guid(bytes, bigEndian) : throw NotAGuid(bytes.Length);
 
     public static Guid ReadGuidFromBytes(IDataRecord reader, int ordinal, bool bigEndian)
     {

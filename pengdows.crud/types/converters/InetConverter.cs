@@ -15,6 +15,7 @@
 // =============================================================================
 
 using System.Net;
+using pengdows.crud.@internal;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -92,13 +93,18 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
         return DatabaseTraits.For(provider).BindsNpgsqlValueTypes ? CreateNpgsqlInet(value) : value;
     }
 
+    // NpgsqlTypes.NpgsqlInet(IPAddress, byte), found by name and compiled once.
+    private static readonly Lazy<Func<IPAddress, byte, object>?> NpgsqlInetCtor = new(() =>
+        Type.GetType("NpgsqlTypes.NpgsqlInet, Npgsql") is { } type
+            ? ProviderMembers.Constructor<IPAddress, byte>(type)
+            : null);
+
     private static object CreateNpgsqlInet(Inet value)
     {
-        var type = Type.GetType("NpgsqlTypes.NpgsqlInet, Npgsql");
-        var constructor = type?.GetConstructor(new[] { typeof(IPAddress), typeof(byte) });
-        return constructor?.Invoke(new object[] { value.Address, value.PrefixLength ??
-            (byte)(value.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128) })
-            ?? value.ToString();
+        var ctor = NpgsqlInetCtor.Value;
+        return ctor?.Invoke(value.Address, value.PrefixLength ??
+                                         (byte)(value.Address.AddressFamily == System.Net.Sockets.AddressFamily.InterNetwork ? 32 : 128))
+               ?? value.ToString();
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Inet result)
@@ -132,21 +138,14 @@ internal sealed class InetConverter : AdvancedTypeConverter<Inet>
         var type = value.GetType();
         // By shape (an Address property, as NpgsqlInet/NpgsqlCidr and similar provider types have), not
         // by type name: the coercion this replaced matched by shape, and Npgsql 8 added NpgsqlCidr (DRY-010).
-        if (type.GetProperty("Address")?.PropertyType == typeof(IPAddress))
+        if (ProviderAddress.Of(type) is { } shape)
         {
-            var addressProp = type.GetProperty("Address");
-            var netmaskProp = type.GetProperty("Netmask");
-            var addressValue = addressProp?.GetValue(value) as IPAddress;
-            var maskValue = netmaskProp?.GetValue(value);
-            byte? prefix = null;
-            if (maskValue != null)
-            {
-                prefix = Convert.ToByte(maskValue, System.Globalization.CultureInfo.InvariantCulture);
-            }
+            var addressValue = shape.Address(value);
+            var prefix = shape.Prefix?.Invoke(value);
 
             if (addressValue != null)
             {
-                if (maskValue == null && value.ToString() is { } providerText && providerText.Contains('/'))
+                if (prefix == null && value.ToString() is { } providerText && providerText.Contains('/'))
                 {
                     result = Inet.Parse(providerText);
                     return true;

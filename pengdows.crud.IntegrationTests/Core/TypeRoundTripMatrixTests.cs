@@ -18,6 +18,8 @@ namespace pengdows.crud.IntegrationTests.Core;
 /// the write must replace: UpdateAsync, both UpsertAsync branches, BatchCreateAsync and
 /// BatchUpdateAsync; NULL itself is read back and (for reference types) written. Every failure on a
 /// database is collected and reported together, so one run shows the whole picture.
+/// Runs on one image per database, <c>TestbedImageMatrix.Latest</c> (the newest); older versions get the testbed's
+/// lighter per-version checks, not this matrix.
 /// </summary>
 [Collection("IntegrationTests")]
 public class TypeRoundTripMatrixTests : DatabaseTestBase

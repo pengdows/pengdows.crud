@@ -85,6 +85,25 @@ internal static class ProviderValueFieldReader
         return ToArray<T>(value);
     }
 
+    /// <summary>
+    /// <see cref="ReadArray{T}"/> for a column whose NULL leaves the property alone: the one GetValue is also the null
+    /// check, so the caller adds no IsDBNull call. Null when the column is NULL.
+    /// </summary>
+    public static T[]? ReadArrayOrNull<T>(IDataRecord record, int ordinal)
+    {
+        object value;
+        try
+        {
+            value = record.GetValue(ordinal);
+        }
+        catch (InvalidCastException) when (TryReadNullableElementArray(record, ordinal, typeof(T), out var array))
+        {
+            value = array;
+        }
+
+        return value is DBNull ? null : ToArray<T>(value);
+    }
+
     private static T[] ToArray<T>(object value)
     {
         if (value is T[] typed)
@@ -122,6 +141,19 @@ internal static class ProviderValueFieldReader
         CollectionLiteralFormat.Parse<T>(record.GetString(ordinal));
 
     /// <summary>
+    /// <see cref="ReadCollectionLiteral{T}"/> with the one GetValue also the null check (null for NULL), so the caller
+    /// adds no IsDBNull call.
+    /// </summary>
+    public static T[]? ReadCollectionLiteralOrNull<T>(IDataRecord record, int ordinal)
+    {
+        var stored = record.GetValue(ordinal);
+        return stored is DBNull ? null : CollectionLiteralFormat.Parse<T>(SingleReadColumns.StringFromValue(stored, null));
+    }
+
+    internal static readonly MethodInfo ReadCollectionLiteralOrNullDefinition =
+        typeof(ProviderValueFieldReader).GetMethod(nameof(ReadCollectionLiteralOrNull))!;
+
+    /// <summary>
     /// A value-type array column of one read plan (PERF-010). Npgsql on Spanner refuses GetValue for
     /// these even with no null elements (confirmed live), so after the first refusal the plan reads
     /// nullable elements directly instead of throwing and catching on every row.
@@ -151,6 +183,31 @@ internal static class ProviderValueFieldReader
             }
 
             return ToArray<T>(value);
+        }
+
+        /// <summary>As <see cref="Read"/>, with the one GetValue also the null check: null when the column is NULL.</summary>
+        public T[]? ReadOrNull(IDataRecord record, int ordinal)
+        {
+            var reader = record as DbDataReader ?? (record as IInternalTrackedReader)?.InnerReader;
+            if (_readNullable && reader != null)
+            {
+                // Once the provider has refused GetValue, the typed read can't report NULL itself.
+                return reader.IsDBNull(ordinal) ? null : ReadNullableElements(reader, ordinal);
+            }
+
+            object value;
+            try
+            {
+                value = record.GetValue(ordinal);
+            }
+            catch (InvalidCastException) when (reader != null)
+            {
+                var array = ReadNullableElements(reader, ordinal);
+                _readNullable = true;
+                return array;
+            }
+
+            return value is DBNull ? null : ToArray<T>(value);
         }
 
         private static T[] ReadNullableElements(DbDataReader reader, int ordinal)
@@ -187,6 +244,22 @@ internal static class ProviderValueFieldReader
 
         return Expression.Call(ReadArrayDefinition.MakeGenericMethod(elementType), record, ordinal);
     }
+
+    /// <summary><see cref="BindArrayRead"/> for a column read once, null for NULL (no separate IsDBNull call).</summary>
+    internal static Expression BindArrayReadOrNull(Type elementType, Expression record, Expression ordinal)
+    {
+        if (elementType.IsValueType && Nullable.GetUnderlyingType(elementType) == null)
+        {
+            var readerType = typeof(ValueArrayColumnReader<>).MakeGenericType(elementType);
+            var instance = Activator.CreateInstance(readerType)!;
+            return Expression.Call(Expression.Constant(instance), readerType.GetMethod("ReadOrNull")!, record, ordinal);
+        }
+
+        return Expression.Call(ReadArrayOrNullDefinition.MakeGenericMethod(elementType), record, ordinal);
+    }
+
+    internal static readonly MethodInfo ReadArrayOrNullDefinition =
+        typeof(ProviderValueFieldReader).GetMethod(nameof(ReadArrayOrNull))!;
 
     internal static readonly MethodInfo ReadCollectionLiteralDefinition =
         typeof(ProviderValueFieldReader).GetMethod(nameof(ReadCollectionLiteral))!;

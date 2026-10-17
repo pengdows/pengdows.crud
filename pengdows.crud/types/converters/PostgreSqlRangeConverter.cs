@@ -20,6 +20,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Reflection;
+using pengdows.crud.@internal;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -122,8 +123,7 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
         // Npgsql can't write range text into a range column (PostgreSQL rejects text there), so
         // send NpgsqlRange<T> when Npgsql is loaded, found by name since pengdows.crud takes no
         // Npgsql dependency. Range text is only the fallback.
-        var providerType = NpgsqlRangeType;
-        if (providerType == null)
+        if (NpgsqlRangeType == null)
         {
             return value.ToCanonicalText();
         }
@@ -131,33 +131,89 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
         if (value.IsEmptyRange)
         {
             // NpgsqlRange<T>.Empty is a static field.
-            return providerType.GetField("Empty", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
-                   ?? providerType.GetProperty("Empty", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
-                   ?? value.ToCanonicalText();
+            return NpgsqlEmptyRange ?? value.ToCanonicalText();
         }
 
-        var constructor = providerType.GetConstructor(new[]
-        {
-            typeof(T), typeof(bool), typeof(bool), typeof(T), typeof(bool), typeof(bool)
-        });
-        if (constructor == null)
+        if (NpgsqlRangeCtor == null)
         {
             return value.ToCanonicalText();
         }
 
-        return constructor.Invoke(new object[]
-        {
+        return NpgsqlRangeCtor(
             ToProviderBound(value.Lower ?? default(T)),
             value.IsLowerInclusive,
             !value.HasLowerBound,
             ToProviderBound(value.Upper ?? default(T)),
             value.IsUpperInclusive,
-            !value.HasUpperBound
-        });
+            !value.HasUpperBound);
     }
 
     private static readonly Type? NpgsqlRangeType =
         Type.GetType("NpgsqlTypes.NpgsqlRange`1, Npgsql", throwOnError: false)?.MakeGenericType(typeof(T));
+
+    // Resolved once: the constructor as a compiled delegate (no GetConstructor, Invoke or argument array per value),
+    // and the static Empty member.
+    private static readonly Func<T, bool, bool, T, bool, bool, object>? NpgsqlRangeCtor =
+        NpgsqlRangeType == null ? null : ProviderMembers.Constructor<T, bool, bool, T, bool, bool>(NpgsqlRangeType);
+
+    private static readonly object? NpgsqlEmptyRange = NpgsqlRangeType == null
+        ? null
+        : NpgsqlRangeType.GetField("Empty", BindingFlags.Public | BindingFlags.Static)?.GetValue(null)
+          ?? NpgsqlRangeType.GetProperty("Empty", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+
+    // Accessors for a provider range type, compiled once per type. A range type whose element differs from T
+    // (daterange as NpgsqlRange<DateTime>, tstzrange as UTC NpgsqlRange<DateTime>) is read boxed and coerced.
+    private sealed class ProviderRange
+    {
+        public Func<object, bool>? IsEmpty;
+        public Func<object, bool>? LowerInfinite;
+        public Func<object, bool>? UpperInfinite;
+        public Func<object, bool>? LowerInclusive;
+        public Func<object, bool>? UpperInclusive;
+        public Func<object, T>? LowerTyped;
+        public Func<object, T>? UpperTyped;
+        public Func<object, object?>? LowerBoxed;
+        public Func<object, object?>? UpperBoxed;
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, ProviderRange> ProviderRanges = new();
+
+    private static ProviderRange AccessorsFor(Type type) => ProviderRanges.GetOrAdd(type, static t =>
+    {
+        var elementIsT = t.IsGenericType && t.GetGenericArguments()[0] == typeof(T);
+        return new ProviderRange
+        {
+            IsEmpty = ProviderMembers.Getter<bool>(t, "IsEmpty"),
+            LowerInfinite = ProviderMembers.Getter<bool>(t, "LowerBoundInfinite"),
+            UpperInfinite = ProviderMembers.Getter<bool>(t, "UpperBoundInfinite"),
+            LowerInclusive = ProviderMembers.Getter<bool>(t, "LowerBoundIsInclusive"),
+            UpperInclusive = ProviderMembers.Getter<bool>(t, "UpperBoundIsInclusive"),
+            LowerTyped = elementIsT ? ProviderMembers.Getter<T>(t, "LowerBound") : ConvertedBound(t, "LowerBound"),
+            UpperTyped = elementIsT ? ProviderMembers.Getter<T>(t, "UpperBound") : ConvertedBound(t, "UpperBound"),
+            LowerBoxed = ProviderMembers.Getter<object?>(t, "LowerBound"),
+            UpperBoxed = ProviderMembers.Getter<object?>(t, "UpperBound")
+        };
+    });
+
+    // A bound whose element type differs from T but has a typed coercion to it (DateTime into DateTimeOffset, as
+    // tstzrange needs) is converted without boxing the bound or the result. No typed coercion: null, and the bound
+    // is read boxed and coerced.
+    private static Func<object, T>? ConvertedBound(Type owner, string member)
+    {
+        var element = owner.IsGenericType ? owner.GetGenericArguments()[0] : null;
+        var coercion = element == null ? null : TypedCoercions.Find(element, typeof(T));
+        var property = owner.GetProperty(member, BindingFlags.Public | BindingFlags.Instance);
+        if (coercion == null || property == null || property.PropertyType != element)
+        {
+            return null;
+        }
+
+        var instance = System.Linq.Expressions.Expression.Parameter(typeof(object), "instance");
+        var call = System.Linq.Expressions.Expression.Call(coercion,
+            System.Linq.Expressions.Expression.Property(System.Linq.Expressions.Expression.Convert(instance, owner), property),
+            System.Linq.Expressions.Expression.Constant(TypeCoercionOptions.Default, typeof(TypeCoercionOptions)));
+        return System.Linq.Expressions.Expression.Lambda<Func<object, T>>(call, instance).Compile();
+    }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Range<T> result)
     {
@@ -178,30 +234,23 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
             var type = value.GetType();
             if (type.FullName?.StartsWith("NpgsqlTypes.NpgsqlRange", StringComparison.Ordinal) == true)
             {
-                if (type.GetProperty("IsEmpty")?.GetValue(value) is true)
+                var accessors = AccessorsFor(type);
+                if (accessors.IsEmpty?.Invoke(value) is true)
                 {
                     result = Range<T>.Empty;
                     return true;
                 }
 
-                var lowerProp = type.GetProperty("LowerBound");
-                var upperProp = type.GetProperty("UpperBound");
-                var lowerInclusiveProp = type.GetProperty("LowerBoundIsInclusive");
-                var upperInclusiveProp = type.GetProperty("UpperBoundIsInclusive");
-                var lowerInfiniteProp = type.GetProperty("LowerBoundInfinite");
-                var upperInfiniteProp = type.GetProperty("UpperBoundInfinite");
-
-                // Npgsql's element type can differ from the property's (daterange as
-                // NpgsqlRange<DateTime>, tstzrange as UTC NpgsqlRange<DateTime>), so each bound is
-                // coerced rather than unboxed.
-                var lower = lowerInfiniteProp != null && (bool)lowerInfiniteProp.GetValue(value)!
+                // Npgsql's element type can differ from the property's (daterange as NpgsqlRange<DateTime>,
+                // tstzrange as UTC NpgsqlRange<DateTime>), so such a bound is coerced rather than unboxed.
+                var lower = accessors.LowerInfinite?.Invoke(value) is true
                     ? default
-                    : CoerceBound(lowerProp?.GetValue(value));
-                var upper = upperInfiniteProp != null && (bool)upperInfiniteProp.GetValue(value)!
+                    : accessors.LowerTyped != null ? accessors.LowerTyped(value) : CoerceBound(accessors.LowerBoxed?.Invoke(value));
+                var upper = accessors.UpperInfinite?.Invoke(value) is true
                     ? default
-                    : CoerceBound(upperProp?.GetValue(value));
-                var lowerInclusive = (bool?)lowerInclusiveProp?.GetValue(value) ?? true;
-                var upperInclusive = (bool?)upperInclusiveProp?.GetValue(value) ?? false;
+                    : accessors.UpperTyped != null ? accessors.UpperTyped(value) : CoerceBound(accessors.UpperBoxed?.Invoke(value));
+                var lowerInclusive = accessors.LowerInclusive?.Invoke(value) ?? true;
+                var upperInclusive = accessors.UpperInclusive?.Invoke(value) ?? false;
                 result = new Range<T>(lower, upper, lowerInclusive, upperInclusive);
                 return true;
             }

@@ -53,6 +53,18 @@ public readonly struct Cidr : IEquatable<Cidr>
         Network = Canonicalize(network, prefixLength);
     }
 
+    private Cidr(IPAddress network, byte prefixLength, bool _)
+    {
+        Network = network;
+        PrefixLength = prefixLength;
+    }
+
+    /// <summary>
+    /// Wraps a value the database already holds as a canonical network, skipping the validation and the
+    /// copy the public constructor makes (PostgreSQL refuses a cidr with host bits set).
+    /// </summary>
+    internal static Cidr FromProvider(IPAddress network, byte prefixLength) => new(network, prefixLength, true);
+
     public IPAddress Network { get; }
     public byte PrefixLength { get; }
 

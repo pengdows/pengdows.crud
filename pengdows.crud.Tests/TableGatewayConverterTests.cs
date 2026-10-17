@@ -97,7 +97,7 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
     }
 
     [Fact]
-    public void MapReaderToObject_ByteArray_UsesGetBytes()
+    public void MapReaderToObject_ByteArray_ReadsTheValueInOneCall_WithoutGetBytes()
     {
         var helper = new TableGateway<ByteArrayEntity, int>(Context);
         var bytes = new byte[] { 1, 2, 3, 4 };
@@ -107,20 +107,21 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
         var entity = helper.MapReaderToObject(reader);
 
         Assert.Equal(bytes, entity.Data);
-        Assert.True(reader.BytesReadCount > 0);
+        // One GetValue, converted by the registry's byte[] coercion; no length query and copy through GetBytes.
+        Assert.Equal(0, reader.BytesReadCount);
     }
 
     // COR-004: the byte[] branch caught every exception and replaced it with an InvalidValueException
     // carrying no inner exception; a provider failure now surfaces as itself, as for every other column.
     [Fact]
-    public void MapReaderToObject_ByteArray_GetBytesFailure_SurfacesTheProviderError()
+    public void MapReaderToObject_ByteArray_ReadFailure_SurfacesTheProviderError()
     {
         var helper = new TableGateway<ByteArrayEntity, int>(Context);
         using var reader = CreateThrowingReader(new byte[] { 1, 2, 3 });
         reader.Read();
 
         var ex = Assert.Throws<InvalidOperationException>(() => helper.MapReaderToObject(reader));
-        Assert.Equal("GetBytes failed.", ex.Message);
+        Assert.Equal("GetValue failed.", ex.Message);
     }
 
     // ...and a binary value that isn't a Guid is a mapping failure naming the column, with the cause kept.
@@ -389,7 +390,7 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
             return _inner.GetString(i);
         }
 
-        public object GetValue(int i)
+        public virtual object GetValue(int i)
         {
             return _inner.GetValue(i);
         }
@@ -429,6 +430,16 @@ public class TableGatewayConverterTests : SqlLiteContextTestBase
     {
         public ThrowingTrackedReader(IDataReader inner) : base(inner)
         {
+        }
+
+        public override object GetValue(int i)
+        {
+            if (i == 1)
+            {
+                throw new InvalidOperationException("GetValue failed.");
+            }
+
+            return base.GetValue(i);
         }
 
         public override long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length)

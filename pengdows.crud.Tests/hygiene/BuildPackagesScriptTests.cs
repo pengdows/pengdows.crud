@@ -33,27 +33,31 @@ public class BuildPackagesScriptTests
         Assert.DoesNotContain("testbed", contents, StringComparison.OrdinalIgnoreCase);
     }
 
+    // The pinned tag for each database lives once, as the first entry of its TestbedImageMatrix list; the container's
+    // default is TestbedImageMatrix.Latest (IntegrationImageDefaultGuardTests), so the tag is pinned there and not
+    // repeated in the container.
     [Fact]
     public void TestbedDatabaseImages_AreExplicitlyPinned()
     {
         var root = GetRepoRoot();
-        var expected = new Dictionary<string, string>
-        {
-            ["testbed/Db2/Db2TestContainer.cs"] = "ibmcom/db2:11.5.8.0",
-            ["testbed/MySQL/MySqlTestContainer.cs"] = "mysql:8.4.11",
-            ["testbed/mariaDb/MariaDbContainer.cs"] = "mariadb:11.4.12",
-            ["testbed/PostgreSQL/PostgreSqlTestContainer.cs"] = "postgres:16.4",
-            ["testbed/TiDB/TiDBTestContainer.cs"] = "pingcap/tidb:v8.5.7",
-            ["testbed/Yugabyte/YugabyteTestContainer.cs"] = "yugabytedb/yugabyte:2025.2.5.2-b5",
-            ["testbed/Firebird/FirebirdSqlTestContainer.cs"] = "firebirdsql/firebird:5.0.2",
-            ["testbed/SqlServer/SqlServerTestContainer.cs"] = "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04",
-            ["testbed/Oracle/OracleTestContainer.cs"] = "gvenzl/oracle-free:23.26.2-full-faststart"
-        };
+        var matrix = File.ReadAllText(Path.Combine(root, "testbed/ParallelTestOrchestrator.cs"));
+        string[] pinned =
+        [
+            "ibmcom/db2:11.5.8.0",
+            "mysql:8.4.11",
+            "mariadb:11.4.12",
+            "postgres:16.4",
+            "pingcap/tidb:v8.5.7",
+            "yugabytedb/yugabyte:2025.2.5.2-b5",
+            "firebirdsql/firebird:5.0.2",
+            "mcr.microsoft.com/mssql/server:2025-CU9-ubuntu-22.04",
+            "gvenzl/oracle-free:23.26.2-full-faststart",
+            "cockroachdb/cockroach:v25.1.0"
+        ];
 
-        foreach (var (relativePath, image) in expected)
+        foreach (var image in pinned)
         {
-            var contents = File.ReadAllText(Path.Combine(root, relativePath));
-            Assert.Contains(image, contents, StringComparison.Ordinal);
+            Assert.Contains(image, matrix, StringComparison.Ordinal);
         }
     }
 

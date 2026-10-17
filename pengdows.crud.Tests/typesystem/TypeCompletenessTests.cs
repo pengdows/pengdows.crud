@@ -32,14 +32,14 @@ public class TypeCompletenessTests
         Happy = 2
     }
 
-    private sealed record Sample(string Label, Type Clr, DbType DbType, Func<object> Value);
+    internal sealed record Sample(string Label, Type Clr, DbType DbType, Func<object> Value);
 
     // POINT(1 2), little-endian WKB.
     private static readonly byte[] PointWkb = Convert.FromHexString("0101000000000000000000F03F0000000000000040");
 
     private static readonly DateTime At = new DateTime(2026, 10, 5, 13, 45, 30, DateTimeKind.Utc).AddTicks(1234567);
 
-    private static IEnumerable<Sample> Samples()
+    internal static IEnumerable<Sample> Samples()
     {
         Sample S<T>(string label, DbType type, Func<T> value) where T : notnull => new(label, typeof(T), type, () => value());
 
@@ -150,10 +150,10 @@ public class TypeCompletenessTests
                                         "(GEOGRAPHY is always 4326)"
     };
 
-    private static IEnumerable<SupportedDatabase> Products() =>
+    internal static IEnumerable<SupportedDatabase> Products() =>
         Enum.GetValues<SupportedDatabase>().Where(p => p != SupportedDatabase.Unknown);
 
-    private static string Canonical(object? value) => value switch
+    internal static string Canonical(object? value) => value switch
     {
         Stream stream => "Stream:" + Convert.ToHexString(ReadAll(stream)),
         TextReader reader => "Text:\"" + reader.ReadToEnd() + "\"",
@@ -185,7 +185,7 @@ public class TypeCompletenessTests
     }
 
     // What happens to a sample on a database: "ok", or what went wrong.
-    private static string Outcome(Sample sample, SqlDialect dialect)
+    internal static string Outcome(Sample sample, SqlDialect dialect)
     {
         var expected = Canonical(sample.Value());
         object? bound;
