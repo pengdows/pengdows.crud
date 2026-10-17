@@ -30,24 +30,18 @@ internal partial class ScriptedDatabaseContext : global::pengdows.crud.IDatabase
     string global::pengdows.crud.IDatabaseContext.GenerateRandomName(int length, int parameterNameMaxLength) => throw Unscripted("GenerateRandomName");
     global::pengdows.crud.enums.DbMode global::pengdows.crud.IDatabaseContext.ConnectionMode { get => throw Unscripted("ConnectionMode"); }
     global::System.Guid global::pengdows.crud.IDatabaseContext.RootId { get => throw Unscripted("RootId"); }
-    global::pengdows.crud.enums.ReadWriteMode global::pengdows.crud.IDatabaseContext.ReadWriteMode { get => throw Unscripted("ReadWriteMode"); }
     string global::pengdows.crud.IDatabaseContext.Name { get => throw Unscripted("Name"); }
     global::System.Data.Common.DbDataSource global::pengdows.crud.IDatabaseContext.DataSource { get => throw Unscripted("DataSource"); }
-    global::pengdows.crud.IDataSourceInformation global::pengdows.crud.IDatabaseContext.DataSourceInfo { get => throw Unscripted("DataSourceInfo"); }
     global::System.TimeSpan? global::pengdows.crud.IDatabaseContext.ModeLockTimeout { get => throw Unscripted("ModeLockTimeout"); }
     global::pengdows.crud.enums.ProcWrappingStyle global::pengdows.crud.IDatabaseContext.ProcWrappingStyle { get => throw Unscripted("ProcWrappingStyle"); }
-    int global::pengdows.crud.IDatabaseContext.MaxParameterLimit { get => throw Unscripted("MaxParameterLimit"); }
     int global::pengdows.crud.IDatabaseContext.MaxOutputParameters { get => throw Unscripted("MaxOutputParameters"); }
     long global::pengdows.crud.IDatabaseContext.NumberOfOpenConnections { get => throw Unscripted("NumberOfOpenConnections"); }
     global::pengdows.crud.metrics.DatabaseMetrics global::pengdows.crud.IDatabaseContext.Metrics { get => throw Unscripted("Metrics"); }
-    global::pengdows.crud.enums.SupportedDatabase global::pengdows.crud.IDatabaseContext.Product { get => throw Unscripted("Product"); }
     long global::pengdows.crud.IDatabaseContext.PeakOpenConnections { get => throw Unscripted("PeakOpenConnections"); }
-    global::pengdows.crud.enums.CommandPrepareMode global::pengdows.crud.IDatabaseContext.PrepareMode { get => throw Unscripted("PrepareMode"); }
     bool global::pengdows.crud.IDatabaseContext.SupportsInsertReturning { get => throw Unscripted("SupportsInsertReturning"); }
     string global::pengdows.crud.IDatabaseContext.QuotePrefix { get => throw Unscripted("QuotePrefix"); }
     string global::pengdows.crud.IDatabaseContext.QuoteSuffix { get => throw Unscripted("QuoteSuffix"); }
     string global::pengdows.crud.IDatabaseContext.CompositeIdentifierSeparator { get => throw Unscripted("CompositeIdentifierSeparator"); }
-    bool global::pengdows.crud.IDatabaseContext.IsReadOnlyConnection { get => throw Unscripted("IsReadOnlyConnection"); }
     bool global::pengdows.crud.IDatabaseContext.RCSIEnabled { get => throw Unscripted("RCSIEnabled"); }
     bool global::pengdows.crud.IDatabaseContext.SnapshotIsolationEnabled { get => throw Unscripted("SnapshotIsolationEnabled"); }
     event global::System.EventHandler<global::pengdows.crud.metrics.DatabaseMetrics> global::pengdows.crud.IDatabaseContext.MetricsUpdated { add => throw Unscripted("MetricsUpdated"); remove => throw Unscripted("MetricsUpdated"); }

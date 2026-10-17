@@ -63,16 +63,14 @@ public class TypeConverterAndTenantResolutionEdgeCaseTests
     [Fact]
     public void TenantContextRegistry_CatchesDisposeFailures_OnInvalidateAndShutdown()
     {
-        var context = new Mock<IDatabaseContext>();
-        context.Setup(c => c.Dispose()).Throws(new InvalidOperationException("dispose-fail"));
-        context.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        var context = new ScriptedDatabaseContext { DisposeException = new InvalidOperationException("dispose-fail") };
 
         using var services = BuildTenantServices();
 
         var registryForInvalidate = new TenantContextRegistry(
             services,
             new StaticTenantResolver(),
-            new FixedContextFactory(context.Object),
+            new FixedContextFactory(context),
             NullLoggerFactory.Instance);
 
         _ = registryForInvalidate.GetContext("tenant-a");
@@ -82,7 +80,7 @@ public class TypeConverterAndTenantResolutionEdgeCaseTests
         var registryForDispose = new TenantContextRegistry(
             services,
             new StaticTenantResolver(),
-            new FixedContextFactory(context.Object),
+            new FixedContextFactory(context),
             NullLoggerFactory.Instance);
 
         _ = registryForDispose.GetContext("tenant-b");

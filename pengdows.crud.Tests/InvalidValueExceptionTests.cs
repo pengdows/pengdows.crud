@@ -1,9 +1,9 @@
 using System;
 using System.Data.Common;
-using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.exceptions;
+using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
 
@@ -18,16 +18,13 @@ public class InvalidValueExceptionTests
             new fakeDbFactory(SupportedDatabase.Sqlite));
         var helper = new TableGateway<ThrowingEntity, int>(context);
 
-        var reader = new Mock<DbDataReader>();
-        reader.Setup(r => r.FieldCount).Returns(1);
-        reader.Setup(r => r.Read()).Returns(true);
-        reader.Setup(r => r.GetName(0)).Returns("Name");
-        reader.Setup(r => r.GetFieldType(0)).Returns(typeof(string));
-        reader.Setup(r => r.IsDBNull(0)).Returns(false);
-        reader.Setup(r => r.GetValue(0)).Returns("foo");
+        var reader = new fakeDbDataReader(new System.Collections.Generic.List<System.Collections.Generic.Dictionary<string, object>>
+        {
+            new() { ["Name"] = "foo" }
+        });
 
-        var tracked = new TrackedReader(reader.Object, TestDoubles.Connection(),
-            TestDoubles.Disposable(), false);
+        var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        Assert.True(tracked.Read());
 
         // After compiled mapper optimization, exceptions bubble up directly (not wrapped)
         // This is actually cleaner for debugging - the original exception is preserved

@@ -3,7 +3,6 @@ using System.Data;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
@@ -83,14 +82,12 @@ public sealed class TransactionAndDistributedLockerEdgeCaseTests
     [Fact]
     public void TransactionContext_ResolveCreationParameters_RequiresInternalConnectionProvider()
     {
-        var context = new Mock<IDatabaseContext>();
-        context.SetupGet(c => c.IsReadOnlyConnection).Returns(false);
-        context.SetupGet(c => c.Product).Returns(SupportedDatabase.Sqlite);
+        var context = new ScriptedDatabaseContext { IsReadOnlyConnection = false, Product = SupportedDatabase.Sqlite };
 
         var ex = Assert.Throws<TargetInvocationException>(() =>
             ResolveCreationParametersMethod.Invoke(null, new object?[]
             {
-                context.Object,
+                context,
                 IsolationLevel.ReadCommitted,
                 null
             }));

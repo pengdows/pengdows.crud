@@ -34,6 +34,14 @@ internal partial class ScriptedDatabaseContext
     public string ConnectionString { get; set; } = "";
 
     public pengdows.crud.dialects.ISqlDialect Dialect { get; set; } = null!;
+    public bool IsReadOnlyConnection { get; set; }
+    public pengdows.crud.enums.SupportedDatabase Product { get; set; }
+    public pengdows.crud.enums.ReadWriteMode ReadWriteMode { get; set; } = pengdows.crud.enums.ReadWriteMode.ReadWrite;
+    public IDataSourceInformation DataSourceInfo { get; set; } = null!;
+    public bool SupportsNamedParameters { get; set; }
+    public int MaxParameterLimit { get; set; }
+    public string DatabaseProductName { get; set; } = "";
+    public pengdows.crud.enums.CommandPrepareMode PrepareMode { get; set; }
 
     /// <summary>Thrown by Dispose when set (after it is counted).</summary>
     public Exception? DisposeException { get; set; }
@@ -194,7 +202,34 @@ internal partial class ScriptedTableGateway<TEntity, TRowID>
 }
 
 /// <summary>A scripted database context that also exposes a type map, as the library's own contexts do.</summary>
-internal sealed class ScriptedTypeMapDatabaseContext : ScriptedDatabaseContext, pengdows.crud.@internal.ITypeMapAccessor
+internal class ScriptedTypeMapDatabaseContext : ScriptedDatabaseContext, pengdows.crud.@internal.ITypeMapAccessor
 {
     public ITypeMapRegistry TypeMapRegistry { get; set; } = null!;
+}
+
+/// <summary>A scripted context that is also a dialect provider, as the library's own contexts are.</summary>
+internal sealed class ScriptedDialectProviderDatabaseContext : ScriptedDatabaseContext, pengdows.crud.dialects.ISqlDialectProvider
+{
+}
+
+/// <summary>A scripted type-mapped context that also carries the identity the library's contexts have.</summary>
+internal sealed class ScriptedIdentityDatabaseContext : ScriptedTypeMapDatabaseContext, IContextIdentity
+{
+    public Guid RootId { get; set; } = Guid.NewGuid();
+}
+
+/// <summary>An <see cref="IAuditValueResolver"/> that returns fixed values and counts how often it is asked.</summary>
+internal sealed class CountingAuditValueResolver : IAuditValueResolver
+{
+    private readonly IAuditValues _values;
+
+    public CountingAuditValueResolver(IAuditValues values) => _values = values;
+
+    public int ResolveCount { get; private set; }
+
+    public IAuditValues Resolve()
+    {
+        ResolveCount++;
+        return _values;
+    }
 }

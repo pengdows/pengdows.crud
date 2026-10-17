@@ -5,7 +5,6 @@
 // =============================================================================
 
 using System;
-using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -25,13 +24,11 @@ public class InternalComponentsAndTranslatorEdgeCaseTests
     // =========================================================================
 
     [Fact]
-    public void AssertIsReadConnection_WriteOnlyMockContext_Throws()
+    public void AssertIsReadConnection_WriteOnlyContext_Throws()
     {
-        var mockCtx = new Mock<IDatabaseContext>();
-        mockCtx.Setup(c => c.ReadWriteMode).Returns(ReadWriteMode.WriteOnly);
-        mockCtx.Setup(c => c.IsReadOnlyConnection).Returns(false);
+        var ctx = new ScriptedDatabaseContext { ReadWriteMode = ReadWriteMode.WriteOnly, IsReadOnlyConnection = false };
 
-        Assert.Throws<InvalidOperationException>(() => mockCtx.Object.AssertIsReadConnection());
+        Assert.Throws<InvalidOperationException>(() => ctx.AssertIsReadConnection());
     }
 
     [Fact]
