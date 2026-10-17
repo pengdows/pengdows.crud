@@ -24,11 +24,6 @@ internal static class SingleReadColumns
     internal static readonly MethodInfo BytesFromValueMethod =
         typeof(SingleReadColumns).GetMethod(nameof(BytesFromValue), BindingFlags.Public | BindingFlags.Static)!;
 
-    /// <summary>True when a column of <paramref name="fieldType"/> read into <paramref name="targetType"/> takes one reader call.</summary>
-    internal static bool Applies(Type fieldType, Type targetType) =>
-        (fieldType == typeof(string) && targetType == typeof(string)) ||
-        (fieldType == typeof(byte[]) && targetType == typeof(byte[]));
-
     public static string StringFromValue(object value, TypeCoercionOptions? options) =>
         value as string ?? (string)TypeCoercionHelper.Coerce(value, value.GetType(), typeof(string), options)!;
 

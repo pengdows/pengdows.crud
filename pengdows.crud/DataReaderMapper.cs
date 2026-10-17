@@ -428,9 +428,6 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static readonly MethodInfo _isDbNullMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.IsDBNull))!;
 
-    private static readonly MethodInfo _guidFromBinaryMethod = typeof(TypeCoercionHelper).GetMethod(
-        nameof(TypeCoercionHelper.GuidFromBinary), BindingFlags.NonPublic | BindingFlags.Static)!;
-
     private static MapperPlan<T> BuildPlan<T>(DbDataReader reader, IMapperOptions options,
         Func<int, Type?>? unresolved = null, TypeCoercionOptions? coercion = null,
         Func<IDataRecord, int, Type, object>? unresolvedReader = null)
@@ -573,69 +570,12 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var targetType = key.Property.PropertyType;
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
-        if (SingleReadColumns.Applies(key.FieldType, targetType))
+        if (ColumnStatementReads.TryBuild(readerParam, key.Ordinal, key.FieldType, targetType, key.Coercion,
+                propertyAccess) is { } statement)
         {
-            // One GetValue; DBNull is the null check (BuildPlan skips the separate IsDBNull for this column).
-            var value = Expression.Variable(typeof(object), "value");
-            var getValue = Expression.Call(readerParam, typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!,
-                Expression.Constant(key.Ordinal));
-            var convert = targetType == typeof(string)
-                ? SingleReadColumns.StringFromValueMethod
-                : SingleReadColumns.BytesFromValueMethod;
-            var body = Expression.Block(
-                new[] { value },
-                Expression.Assign(value, getValue),
-                Expression.IfThen(
-                    Expression.Not(Expression.TypeIs(value, typeof(DBNull))),
-                    Expression.Assign(propertyAccess,
-                        Expression.Call(convert, value, Expression.Constant(key.Coercion, typeof(TypeCoercionOptions))))));
+            // Its one GetValue is also the null check (BuildRowBody adds no IsDBNull for this column).
             handlesNull = true;
-            return body;
-        }
-
-        if (key.FieldType == typeof(byte[]) && underlyingTarget == typeof(Guid))
-        {
-            // A binary column into a Guid: one GetValue, then the dialect's byte order and the exact 16-byte rule.
-            var bytesValue = Expression.Variable(typeof(object), "value");
-            var readBinary = Expression.Call(readerParam, typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!,
-                Expression.Constant(key.Ordinal));
-            Expression guid = Expression.Call(_guidFromBinaryMethod,
-                Expression.Call(SingleReadColumns.BytesFromValueMethod, bytesValue,
-                    Expression.Constant(key.Coercion, typeof(TypeCoercionOptions))),
-                Expression.Constant(key.Coercion?.GuidBytesBigEndian ?? false));
-            if (targetType != underlyingTarget)
-            {
-                guid = Expression.Convert(guid, targetType);
-            }
-
-            handlesNull = true;
-            return Expression.Block(
-                new[] { bytesValue },
-                Expression.Assign(bytesValue, readBinary),
-                Expression.IfThen(
-                    Expression.Not(Expression.TypeIs(bytesValue, typeof(DBNull))),
-                    Expression.Assign(propertyAccess, guid)));
-        }
-
-        if (ProviderValueFieldReader.IsReadableArray(targetType) && ProviderValueFieldReader.IsArrayColumn(key.FieldType))
-        {
-            // The array reader's one GetValue is also the null check (null for NULL): no IsDBNull call, and the
-            // provider quirks it learns once per column (Spanner refusing GetValue) are kept.
-            var arrayValue = Expression.Variable(targetType, "array");
-            Expression arrayRead = ProviderValueFieldReader.BindArrayReadOrNull(targetType.GetElementType()!,
-                Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
-            if (arrayRead.Type != targetType)
-            {
-                arrayRead = Expression.Convert(arrayRead, targetType);
-            }
-
-            handlesNull = true;
-            return Expression.Block(
-                new[] { arrayValue },
-                Expression.Assign(arrayValue, arrayRead),
-                Expression.IfThen(
-                    Expression.NotEqual(arrayValue, Expression.Constant(null, targetType)),
-                    Expression.Assign(propertyAccess, arrayValue)));
+            return statement;
         }
 
         if (ColumnQuirkReads.TryBuild(Expression.Convert(readerParam, typeof(IDataRecord)), key.Ordinal, key.FieldType,
@@ -645,31 +585,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         }
 
         Expression valueExpression;
-        if (key.FieldType == typeof(string) && ProviderValueFieldReader.IsReadableArray(targetType) &&
-                 (key.Coercion?.ReadsCollectionLiterals ?? false))
-        {
-            // Informix returns LIST/SET/MULTISET as literal text; parse it, typed.
-            // One GetValue, which is also the null check (null for NULL).
-            var literal = Expression.Variable(targetType, "literal");
-            var readLiteral = ProviderValueFieldReader.ReadCollectionLiteralOrNullDefinition.MakeGenericMethod(targetType.GetElementType()!);
-            handlesNull = true;
-            return Expression.Block(
-                new[] { literal },
-                Expression.Assign(literal, Expression.Call(readLiteral, Expression.Convert(readerParam, typeof(IDataRecord)),
-                    Expression.Constant(key.Ordinal))),
-                Expression.IfThen(
-                    Expression.NotEqual(literal, Expression.Constant(null, targetType)),
-                    Expression.Assign(propertyAccess, literal)));
-        }
-        else if (ProviderValueFieldReader.IsReadableArray(targetType) &&
-                 ProviderValueFieldReader.IsArrayColumn(key.FieldType))
-        {
-            // Typed: Npgsql refuses some arrays as non-nullable elements (Spanner) and InterBase returns
-            // its declared bounds (Int32[*]).
-            valueExpression = ProviderValueFieldReader.BindArrayRead(targetType.GetElementType()!,
-                Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
-        }
-        else if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(key.FieldType))
+        if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(key.FieldType))
         {
             // DuckDB returns BLOBs as UnmanagedMemoryStream instances backed by the active reader;
             // copy them while the reader is valid instead of assigning the provider stream.

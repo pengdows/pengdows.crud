@@ -114,41 +114,11 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     continue;
                 }
             }
-            else if (fieldType == typeof(byte[]))
+            else if (ColumnStatementReads.TryBuild(readerParam, i, fieldType, targetType, coercionOptions,
+                         Expression.Property(entityVar, property)) is { } statement)
             {
-                // A binary column is one GetValue whatever it is read into; DBNull is the null check; then the
-                // conversion the target needs (a GUID in the dialect's byte order, or the registered coercion).
-                // No catch-all here (COR-004): a value that isn't a Guid (InvalidValueException) is a conversion
-                // failure the gateway reports naming the column; anything else surfaces as itself.
-                var valueObj = Expression.Variable(typeof(object), "value");
-                Expression bytes = Expression.Call(SingleReadColumns.BytesFromValueMethod, valueObj,
-                    Expression.Constant(coercionOptions, typeof(TypeCoercionOptions)));
-                Expression converted;
-                if (targetType == typeof(Guid) || targetType == typeof(Guid?))
-                {
-                    converted = Expression.Call(GuidFromBytesMethod, bytes,
-                        Expression.Constant(coercionOptions?.GuidBytesBigEndian ?? false));
-                    if (targetType == typeof(Guid?))
-                    {
-                        converted = Expression.Convert(converted, typeof(Guid?));
-                    }
-                }
-                else if (targetType == typeof(byte[]))
-                {
-                    converted = bytes;
-                }
-                else
-                {
-                    converted = ColumnConversion.Build(bytes, fieldType, targetType, coercionOptions);
-                }
-
                 expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
-                expressions.Add(Expression.Block(
-                    new[] { valueObj },
-                    Expression.Assign(valueObj, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
-                    Expression.IfThen(
-                        Expression.Not(Expression.TypeIs(valueObj, typeof(DBNull))),
-                        Expression.Assign(Expression.Property(entityVar, property), converted))));
+                expressions.Add(statement);
                 continue;
             }
             else if (column.IsEnum)
@@ -202,61 +172,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 
                     valueReadExpr = Expression.TryCatch(finalEnumExpr, Expression.Catch(typeof(Exception), fallback));
                 }
-            }
-            else if (fieldType == typeof(string) && ProviderValueFieldReader.IsReadableArray(targetType) &&
-                     (coercionOptions?.ReadsCollectionLiterals ?? false))
-            {
-                // Informix returns LIST/SET/MULTISET as literal text; parse it, typed.
-                // One GetValue, which is also the null check (null for NULL).
-                var literal = Expression.Variable(targetType, "literal");
-                var readLiteral = ProviderValueFieldReader.ReadCollectionLiteralOrNullDefinition.MakeGenericMethod(targetType.GetElementType()!);
-                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
-                expressions.Add(Expression.Block(
-                    new[] { literal },
-                    Expression.Assign(literal, Expression.Call(readLiteral, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr)),
-                    Expression.IfThen(
-                        Expression.NotEqual(literal, Expression.Constant(null, targetType)),
-                        Expression.Assign(Expression.Property(entityVar, property), literal))));
-                continue;
-            }
-            else if (ProviderValueFieldReader.IsReadableArray(targetType) && ProviderValueFieldReader.IsArrayColumn(fieldType))
-            {
-                // The array reader's one GetValue is also the null check (null for NULL), so there is no IsDBNull call
-                // and the provider quirks it learns once per column (Spanner refusing GetValue) are kept.
-                var arrayValue = Expression.Variable(targetType, "array");
-                Expression arrayRead = ProviderValueFieldReader.BindArrayReadOrNull(targetType.GetElementType()!,
-                    Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                if (arrayRead.Type != targetType)
-                {
-                    arrayRead = Expression.Convert(arrayRead, targetType);
-                }
-
-                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
-                expressions.Add(Expression.Block(
-                    new[] { arrayValue },
-                    Expression.Assign(arrayValue, arrayRead),
-                    Expression.IfThen(
-                        Expression.NotEqual(arrayValue, Expression.Constant(null, targetType)),
-                        Expression.Assign(Expression.Property(entityVar, property), arrayValue))));
-                continue;
-            }
-            else if (fieldType == typeof(string) && targetType == typeof(string))
-            {
-                // One GetValue per string column; its DBNull result is the null check. IsDBNull and
-                // then GetString cost a second round of driver work per column on some providers
-                // (Npgsql: ~0.12 µs each, measured 2026-10-04); never slower on any provider measured.
-                var valueObj = Expression.Variable(typeof(object), "value");
-                var stringAssignment = Expression.Block(
-                    new[] { valueObj },
-                    Expression.Assign(valueObj, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
-                    Expression.IfThen(
-                        Expression.Not(Expression.TypeIs(valueObj, typeof(DBNull))),
-                        Expression.Assign(Expression.Property(entityVar, property),
-                            Expression.Call(SingleReadColumns.StringFromValueMethod, valueObj,
-                                Expression.Constant(coercionOptions, typeof(TypeCoercionOptions))))));
-                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
-                expressions.Add(stringAssignment);
-                continue;
             }
             else if (ColumnQuirkReads.TryBuild(Expression.Convert(readerParam, typeof(IDataRecord)), i, fieldType, targetType,
                          coercionOptions, ColumnQuirkReads.NpgsqlTypedFor(reader, i, targetType)) is { } quirk)
@@ -359,9 +274,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
     }
 
     private static readonly MethodInfo GetValueMethod = ReaderGetters.GetValue;
-
-    private static readonly MethodInfo GuidFromBytesMethod = typeof(TypeCoercionHelper).GetMethod(
-        nameof(TypeCoercionHelper.GuidFromBinary), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static readonly ConstructorInfo ColumnReadExceptionCtor =
         typeof(ColumnReadException).GetConstructor(new[] { typeof(int), typeof(Exception) })!;
