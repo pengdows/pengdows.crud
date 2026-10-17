@@ -103,7 +103,7 @@ public partial class TableGateway<TEntity, TRowID>
         }
 
         var ctx = context ?? _context;
-        _ = ResolveUpsertKey();
+        RejectNullUpsertKey(entity, ResolveUpsertKey());
 
         if (ctx.DataSourceInfo.IsUsingFallbackDialect)
         {

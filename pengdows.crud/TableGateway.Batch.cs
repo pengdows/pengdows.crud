@@ -342,8 +342,12 @@ public partial class TableGateway<TEntity, TRowID>
 
         var ctx = context ?? _context;
 
-        // Validate upsert key exists and is usable (PK preferred, writable Id fallback).
-        _ = ResolveUpsertKey();
+        // Validate upsert key exists and is usable (PK preferred, writable Id fallback), and that no entity's key has a NULL.
+        var upsertKey = ResolveUpsertKey();
+        foreach (var entity in entities)
+        {
+            RejectNullUpsertKey(entity, upsertKey);
+        }
 
         // For databases that support multi-row upsert via ON CONFLICT or ON DUPLICATE KEY
         var dialect = GetDialect(ctx);

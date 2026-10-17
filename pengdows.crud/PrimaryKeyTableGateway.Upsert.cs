@@ -55,6 +55,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
+        RejectNullUpsertKey(entity, _tableInfo.PrimaryKeys);
 
         // A database with no upsert statement (InterBase) is refused before the pure-key check below,
         // which would otherwise blame the entity's columns (HARN-011).
@@ -161,6 +162,10 @@ public partial class PrimaryKeyTableGateway<TEntity>
         }
 
         var ctx = context ?? _context;
+        foreach (var entity in entities)
+        {
+            RejectNullUpsertKey(entity, _tableInfo.PrimaryKeys);
+        }
 
         if (ctx.DataSourceInfo.SupportsInsertOnConflict || ctx.DataSourceInfo.SupportsOnDuplicateKey)
         {

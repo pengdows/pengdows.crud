@@ -22,6 +22,26 @@ namespace pengdows.crud;
 public abstract partial class BaseTableGateway<TEntity>
 {
     /// <summary>
+    /// Refuses an upsert whose conflict key has a NULL component. A NULL never matches in the key, whichever form the
+    /// database uses (MERGE's ON t.k = s.k, ON CONFLICT, ON DUPLICATE KEY), so the row would be inserted again: a silent
+    /// duplicate where the unique index allows NULLs (SQLite, PostgreSQL, MySQL) or a unique violation where it does not
+    /// (SQL Server). Proven live, audit G-06.
+    /// </summary>
+    private protected void RejectNullUpsertKey(TEntity entity, IReadOnlyList<IColumnInfo> keyColumns)
+    {
+        for (var i = 0; i < keyColumns.Count; i++)
+        {
+            var column = keyColumns[i];
+            if (column.MakeParameterValueFromField(entity) is null or DBNull)
+            {
+                throw new InvalidOperationException(
+                    $"Cannot upsert {typeof(TEntity).Name}: key column '{column.Name}' is NULL. A NULL never matches in an " +
+                    "upsert's conflict key, so the row would be inserted again instead of updated.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Runs an upsert statement. Where the dialect's upsert is not atomic against a concurrent insert of the same key
     /// (<see cref="IInternalSqlDialect.UpsertRetriesOnUniqueViolation"/>), a unique violation is retried once: the row
     /// exists by then, so the statement matches. A second violation is a different unique index and is thrown.
