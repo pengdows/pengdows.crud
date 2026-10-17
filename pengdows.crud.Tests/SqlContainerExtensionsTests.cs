@@ -4,7 +4,6 @@ using System;
 using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
-using Moq;
 using pengdows.crud.wrappers;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -96,21 +95,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ExecuteNonQueryAsync_WithMockContainer_FallsBackToInterfaceMethod()
-    {
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteNonQueryAsync(CommandType.Text))
-            .Returns(new ValueTask<int>(1));
-        mockContainer.Setup(x => x.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<int>(1));
-
-        var result = await mockContainer.Object.ExecuteNonQueryAsync(CommandType.Text, CancellationToken.None);
-
-        Assert.Equal(1, result);
-        mockContainer.Verify(x => x.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
     public async Task ExecuteNonQueryAsync_WithCancelledToken_ThrowsOperationCancelledException()
     {
         using var container = Context.CreateSqlContainer("SELECT SLEEP(10)");
@@ -130,23 +114,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         // fakeDb doesn't return actual query results; OrNull returns null for no rows
         var result = await container.ExecuteScalarOrNullAsync<int?>(CommandType.Text, cts.Token);
         Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task ExecuteScalarOrNullAsync_WithMockContainer_FallsBackToInterfaceMethod()
-    {
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteScalarOrNullAsync<string>(CommandType.Text))
-            .Returns(new ValueTask<string?>("test"));
-        mockContainer.Setup(x => x.ExecuteScalarOrNullAsync<string>(CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<string?>("test"));
-
-        var result =
-            await mockContainer.Object.ExecuteScalarOrNullAsync<string>(CommandType.Text, CancellationToken.None);
-
-        Assert.Equal("test", result);
-        mockContainer.Verify(x => x.ExecuteScalarOrNullAsync<string>(CommandType.Text, It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     [Fact]
@@ -171,22 +138,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         Assert.NotNull(reader);
         Assert.False(await reader.ReadAsync()); // fakeDb returns no rows
         // Can't read GetInt32(0) since there are no rows
-    }
-
-    [Fact]
-    public async Task ExecuteReaderAsync_WithMockContainer_FallsBackToInterfaceMethod()
-    {
-        var mockReader = new Mock<ITrackedReader>();
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteReaderAsync(CommandType.Text))
-            .Returns(new ValueTask<ITrackedReader>(mockReader.Object));
-        mockContainer.Setup(x => x.ExecuteReaderAsync(CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<ITrackedReader>(mockReader.Object));
-
-        var result = await mockContainer.Object.ExecuteReaderAsync(CommandType.Text, CancellationToken.None);
-
-        Assert.Equal(mockReader.Object, result);
-        mockContainer.Verify(x => x.ExecuteReaderAsync(CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -228,20 +179,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         using var reader = await container.ExecuteReaderSingleRowAsync(cts.Token);
 
         Assert.NotNull(reader);
-    }
-
-    [Fact]
-    public async Task ExecuteReaderSingleRowAsync_WithMockContainer_FallsBackToExecuteReaderAsync()
-    {
-        var mockReader = new Mock<ITrackedReader>();
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteReaderAsync(CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<ITrackedReader>(mockReader.Object));
-
-        var result = await mockContainer.Object.ExecuteReaderSingleRowAsync(CancellationToken.None);
-
-        Assert.Equal(mockReader.Object, result);
-        mockContainer.Verify(x => x.ExecuteReaderAsync(CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -288,23 +225,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
                 container, ExecutionType.Write));
     }
 
-    [Fact]
-    public async Task ExecuteScalarRequiredAsync_WithExecutionType_Mock_FallsBackToInterfaceMethod()
-    {
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteScalarRequiredAsync<int>(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<int>(42));
-
-        var result = await SqlContainerExtensions.ExecuteScalarRequiredAsync<int>(
-            mockContainer.Object, ExecutionType.Read);
-
-        Assert.Equal(42, result);
-        mockContainer.Verify(x => x.ExecuteScalarRequiredAsync<int>(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
     // ── Static-syntax calls to hit the shadowed extension methods ─────────
     // The interface declares the same signatures, so normal dot-syntax
     // resolves to the interface method.  Only explicit static invocation
@@ -322,20 +242,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task StaticCall_ExecuteNonQueryAsync_Mock_FallsBackToInterfaceMethod()
-    {
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<int>(7));
-
-        var result = await SqlContainerExtensions.ExecuteNonQueryAsync(
-            mockContainer.Object, CommandType.Text, CancellationToken.None);
-
-        Assert.Equal(7, result);
-        mockContainer.Verify(x => x.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
     public async Task StaticCall_ExecuteScalarOrNullAsync_Concrete_UsesConcretePath()
     {
         using var container = Context.CreateSqlContainer("SELECT 42");
@@ -343,19 +249,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         // fakeDb scalar path returns null when no reader results are queued.
         var result = await container.ExecuteScalarOrNullAsync<int?>();
         Assert.Null(result);
-    }
-
-    [Fact]
-    public async Task StaticCall_ExecuteScalarOrNullAsync_Mock_FallsBackToInterfaceMethod()
-    {
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteScalarOrNullAsync<string>(CommandType.Text))
-            .Returns(new ValueTask<string?>("hello"));
-
-        var result = await mockContainer.Object.ExecuteScalarOrNullAsync<string>(CommandType.Text);
-
-        Assert.Equal("hello", result);
-        mockContainer.Verify(x => x.ExecuteScalarOrNullAsync<string>(CommandType.Text), Times.Once);
     }
 
     [Fact]
@@ -370,38 +263,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task StaticCall_ExecuteReaderAsync_Mock_FallsBackToInterfaceMethod()
-    {
-        var mockReader = new Mock<ITrackedReader>();
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteReaderAsync(CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<ITrackedReader>(mockReader.Object));
-
-        var result = await SqlContainerExtensions.ExecuteReaderAsync(
-            mockContainer.Object, CommandType.Text, CancellationToken.None);
-
-        Assert.Equal(mockReader.Object, result);
-        mockContainer.Verify(x => x.ExecuteReaderAsync(CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
-    }
-
-    [Fact]
-    public async Task ExecuteScalarOrNullAsync_WithExecutionType_Mock_FallsBackToInterfaceMethod()
-    {
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteScalarOrNullAsync<int>(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<int>(123));
-
-        var result = await SqlContainerExtensions.ExecuteScalarOrNullAsync<int>(
-            mockContainer.Object, ExecutionType.Read, CommandType.Text, CancellationToken.None);
-
-        Assert.Equal(123, result);
-        mockContainer.Verify(x => x.ExecuteScalarOrNullAsync<int>(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Fact]
     public async Task ExecuteScalarOrNullAsync_WithExecutionType_Concrete_UsesConcretePath()
     {
         using var container = Context.CreateSqlContainer("SELECT 1");
@@ -413,24 +274,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task ExecuteReaderAsync_WithExecutionType_Mock_FallsBackToInterfaceMethod()
-    {
-        var mockReader = new Mock<ITrackedReader>();
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteReaderAsync(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<ITrackedReader>(mockReader.Object));
-
-        var result = await SqlContainerExtensions.ExecuteReaderAsync(
-            mockContainer.Object, ExecutionType.Read, CommandType.Text, CancellationToken.None);
-
-        Assert.Equal(mockReader.Object, result);
-        mockContainer.Verify(x => x.ExecuteReaderAsync(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()),
-            Times.Once);
-    }
-
-    [Fact]
     public async Task ExecuteReaderAsync_WithExecutionType_Concrete_UsesConcrete()
     {
         using var container = Context.CreateSqlContainer("SELECT 1");
@@ -439,23 +282,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
             container, ExecutionType.Read, CommandType.Text, CancellationToken.None);
 
         Assert.NotNull(reader);
-    }
-
-    [Fact]
-    public async Task ExecuteReaderSingleRowAsync_WithExecutionType_Mock_FallsBackToExecuteReaderAsync()
-    {
-        var mockReader = new Mock<ITrackedReader>();
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.ExecuteReaderAsync(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<ITrackedReader>(mockReader.Object));
-
-        var result = await SqlContainerExtensions.ExecuteReaderSingleRowAsync(
-            mockContainer.Object, ExecutionType.Read, CancellationToken.None);
-
-        Assert.Equal(mockReader.Object, result);
-        mockContainer.Verify(x =>
-            x.ExecuteReaderAsync(ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()), Times.Once);
     }
 
     [Fact]
@@ -479,24 +305,6 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
             container, ExecutionType.Read, CommandType.Text, CancellationToken.None);
 
         Assert.True(result.Status == ScalarStatus.None || result.HasValue);
-    }
-
-    [Fact]
-    public async Task TryExecuteScalarAsync_WithExecutionType_Mock_FallsBackToInterfaceMethod()
-    {
-        // Covers SqlContainerExtensions line 156 (ISqlContainer fallback path)
-        var mockContainer = new Mock<ISqlContainer>();
-        mockContainer.Setup(x => x.TryExecuteScalarAsync<int>(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()))
-            .Returns(new ValueTask<ScalarResult<int>>(new ScalarResult<int>(ScalarStatus.None, default)));
-
-        var result = await SqlContainerExtensions.TryExecuteScalarAsync<int>(
-            mockContainer.Object, ExecutionType.Read, CommandType.Text, CancellationToken.None);
-
-        Assert.Equal(ScalarStatus.None, result.Status);
-        mockContainer.Verify(x => x.TryExecuteScalarAsync<int>(
-                ExecutionType.Read, CommandType.Text, It.IsAny<CancellationToken>()),
-            Times.Once);
     }
 
     // ── AppendName / AppendEquals / AppendAnd / AppendWhere / AppendParam ──
@@ -648,5 +456,116 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         Assert.Contains(" = ", sql);
         Assert.Contains(container.MakeParameterName(pStatus), sql);
         Assert.Contains(container.MakeParameterName(pType), sql);
+    }
+
+    // ── The extension methods on an ISqlContainer that is not the library's SqlContainer ──────────────────────────────
+    // The interface declares the same signatures, so dot-syntax resolves to the interface method; only a static call
+    // routes through SqlContainerExtensions. A container that is not the concrete SqlContainer takes the fallback: the
+    // call goes straight to the interface member. ScriptedSqlContainer is a hand-written implementer that records it.
+
+    [Fact]
+    public async Task StaticCall_ExecuteNonQueryAsync_OnAnotherImplementer_FallsBackToTheInterfaceMember()
+    {
+        var container = new ScriptedSqlContainer { NonQueryResult = 7 };
+
+        var result = await SqlContainerExtensions.ExecuteNonQueryAsync(container, CommandType.Text, CancellationToken.None);
+
+        Assert.Equal(7, result);
+        Assert.Equal(new[] { "ExecuteNonQueryAsync(Text, none)" }, container.Calls);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarRequiredAsync_WithExecutionType_OnAnotherImplementer_FallsBackToTheInterfaceMember()
+    {
+        var container = new ScriptedSqlContainer { ScalarResult = 42 };
+
+        var result = await SqlContainerExtensions.ExecuteScalarRequiredAsync<int>(container, ExecutionType.Read);
+
+        Assert.Equal(42, result);
+        Assert.Equal(new[] { "ExecuteScalarRequiredAsync(Read, Text, none)" }, container.Calls);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarOrNullAsync_WithExecutionType_OnAnotherImplementer_FallsBackToTheInterfaceMember()
+    {
+        var container = new ScriptedSqlContainer { ScalarResult = 123 };
+
+        var result = await SqlContainerExtensions.ExecuteScalarOrNullAsync<int>(
+            container, ExecutionType.Read, CommandType.Text, CancellationToken.None);
+
+        Assert.Equal(123, result);
+        Assert.Equal(new[] { "ExecuteScalarOrNullAsync(Read, Text, none)" }, container.Calls);
+    }
+
+    [Fact]
+    public async Task ExecuteScalarOrNullAsync_WithExecutionType_OnAnotherImplementer_ReturnsNullForNoValue()
+    {
+        var container = new ScriptedSqlContainer();
+
+        var result = await SqlContainerExtensions.ExecuteScalarOrNullAsync<string>(container, ExecutionType.Write);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task TryExecuteScalarAsync_WithExecutionType_OnAnotherImplementer_FallsBackToTheInterfaceMember()
+    {
+        var container = new ScriptedSqlContainer { ScalarResult = 5 };
+
+        var result = await SqlContainerExtensions.TryExecuteScalarAsync<int>(container, ExecutionType.Read);
+
+        Assert.Equal(ScalarStatus.Value, result.Status);
+        Assert.Equal(5, result.Value);
+        Assert.Equal(new[] { "TryExecuteScalarAsync(Read, Text, none)" }, container.Calls);
+    }
+
+    [Fact]
+    public async Task StaticCall_ExecuteReaderAsync_OnAnotherImplementer_FallsBackToTheInterfaceMember()
+    {
+        using var reader = TestDoubles.Reader();
+        var container = new ScriptedSqlContainer { ReaderResult = reader };
+
+        var result = await SqlContainerExtensions.ExecuteReaderAsync(container, CommandType.Text, CancellationToken.None);
+
+        Assert.Same(reader, result);
+        Assert.Equal(new[] { "ExecuteReaderAsync(Text, none)" }, container.Calls);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderAsync_WithExecutionType_OnAnotherImplementer_FallsBackToTheInterfaceMember()
+    {
+        using var reader = TestDoubles.Reader();
+        var container = new ScriptedSqlContainer { ReaderResult = reader };
+
+        var result = await SqlContainerExtensions.ExecuteReaderAsync(
+            container, ExecutionType.Read, CommandType.Text, CancellationToken.None);
+
+        Assert.Same(reader, result);
+        Assert.Equal(new[] { "ExecuteReaderAsync(Read, Text, none)" }, container.Calls);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderSingleRowAsync_OnAnotherImplementer_FallsBackToExecuteReaderAsync()
+    {
+        using var reader = TestDoubles.Reader();
+        var container = new ScriptedSqlContainer { ReaderResult = reader };
+
+        var result = await SqlContainerExtensions.ExecuteReaderSingleRowAsync(container, CancellationToken.None);
+
+        Assert.Same(reader, result);
+        Assert.Equal(new[] { "ExecuteReaderAsync(Text, none)" }, container.Calls);
+    }
+
+    [Fact]
+    public async Task ExecuteReaderSingleRowAsync_WithExecutionType_OnAnotherImplementer_FallsBackToExecuteReaderAsync()
+    {
+        using var reader = TestDoubles.Reader();
+        var container = new ScriptedSqlContainer { ReaderResult = reader };
+
+        var result = await SqlContainerExtensions.ExecuteReaderSingleRowAsync(
+            container, ExecutionType.Read, CancellationToken.None);
+
+        Assert.Same(reader, result);
+        Assert.Equal(new[] { "ExecuteReaderAsync(Read, Text, none)" }, container.Calls);
     }
 }
