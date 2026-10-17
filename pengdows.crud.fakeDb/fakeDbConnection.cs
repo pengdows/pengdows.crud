@@ -41,6 +41,13 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private string _serverVersion = "1.0";
 
     /// <summary>
+    /// When set, every GetSchema overload throws it: a provider that does not implement GetSchema at all, or one that
+    /// refuses a collection (Microsoft.Data.Sqlite: ArgumentException "The requested collection is not defined"). Null, the
+    /// default, leaves GetSchema as it was.
+    /// </summary>
+    public Exception? SchemaException { get; set; }
+
+    /// <summary>
     /// Overrides the table GetSchema()/GetSchema(string) return, bypassing the embedded
     /// per-SupportedDatabase XML resource lookup entirely — lets a test fabricate an arbitrary
     /// schema (e.g. a specific DataSourceProductName/Version pair) that doesn't correspond to any
@@ -1286,6 +1293,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
     public override DataTable GetSchema()
     {
+        if (SchemaException != null)
+        {
+            throw SchemaException;
+        }
+
         if (_emulatedProduct.HasValue && ProductsWithoutSchemaSupport.Contains(_emulatedProduct.Value))
         {
             throw new NotSupportedException("Specified method is not supported.");
@@ -1328,8 +1340,23 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         return _schemaTable;
     }
 
+    public override DataTable GetSchema(string collectionName, string?[] restrictionValues)
+    {
+        if (SchemaException != null)
+        {
+            throw SchemaException;
+        }
+
+        return base.GetSchema(collectionName, restrictionValues);
+    }
+
     public override DataTable GetSchema(string meta)
     {
+        if (SchemaException != null)
+        {
+            throw SchemaException;
+        }
+
         if (_emulatedProduct.HasValue && ProductsWithoutSchemaSupport.Contains(_emulatedProduct.Value))
         {
             throw new NotSupportedException("Specified method is not supported.");

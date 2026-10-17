@@ -4,7 +4,6 @@ using System;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -37,10 +36,8 @@ public class SqliteDataSourceInformationTests
             inner.SetScalarExecuteException(new InvalidOperationException("no version"));
         }
 
-        var tracked = new Mock<ITrackedConnection>();
-        tracked.Setup(c => c.GetSchema(It.IsAny<string>())).Throws(new NotSupportedException());
-        tracked.Setup(c => c.CreateCommand()).Returns(() => inner.CreateCommand());
-        return tracked.Object;
+        inner.SchemaException = new NotSupportedException();
+        return new TrackedConnection(inner);
     }
 
     private static DataRow Row(DataTable table)
@@ -55,10 +52,9 @@ public class SqliteDataSourceInformationTests
         var inner = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite };
         var provided = DataSourceInformation.BuildEmptySchema("SQLite", "9.9.9", "@", "@{0}", 128, ".", ".", true);
         inner.SchemaTable = provided;
-        var tracked = new Mock<ITrackedConnection>();
-        tracked.Setup(c => c.GetSchema(It.IsAny<string>())).Returns(() => inner.GetSchema("DataSourceInformation"));
+        var tracked = new TrackedConnection(inner);
 
-        var table = NewDialect().GetDataSourceInformationSchema(tracked.Object);
+        var table = NewDialect().GetDataSourceInformationSchema(tracked);
 
         Assert.Equal("9.9.9", Row(table)["DataSourceProductVersion"]);
     }
@@ -130,9 +126,7 @@ public class SqliteDataSourceInformationTests
         inner.SetScalarResultForCommand(MaxVariableNumberSql, maxVariableNumber);
         inner.SetScalarResultForCommand(FunctionsSql, functionMask);
 
-        var tracked = new Mock<ITrackedConnection>();
-        tracked.Setup(c => c.CreateCommand()).Returns(() => inner.CreateCommand());
-        return tracked.Object;
+        return new TrackedConnection(inner);
     }
 
     [Fact]
@@ -168,11 +162,11 @@ public class SqliteDataSourceInformationTests
         inner.Open();
         inner.SetScalarResultForCommand("PRAGMA journal_mode", "memory");
         inner.SetScalarExecuteException(null);
-        var tracked = new Mock<ITrackedConnection>();
-        tracked.Setup(c => c.CreateCommand()).Throws(new NotSupportedException("no pragma table functions"));
+        inner.SetCustomCommandBehavior(() => throw new NotSupportedException("no pragma table functions"));
+        var tracked = new TrackedConnection(inner);
         var dialect = NewDialect();
 
-        var ex = Record.Exception(() => dialect.ObserveDatabaseInitialization(tracked.Object));
+        var ex = Record.Exception(() => dialect.ObserveDatabaseInitialization(tracked));
 
         Assert.Null(ex);
         Assert.Equal(999, dialect.MaxParameterLimit);
@@ -196,10 +190,8 @@ public class SqliteDataSourceInformationTests
         inner.ConnectionString = "Data Source=:memory:;EmulatedProduct=Sqlite";
         inner.Open();
         inner.SetScalarResultForCommand("SELECT sqlite_version()", "3.50.4");
-        var tracked = new Mock<ITrackedConnection>();
-        tracked.Setup(c => c.GetSchema(It.IsAny<string>())).Throws(failure);
-        tracked.Setup(c => c.CreateCommand()).Returns(() => inner.CreateCommand());
-        return tracked.Object;
+        inner.SchemaException = failure;
+        return new TrackedConnection(inner);
     }
 
     [Theory]

@@ -190,3 +190,6 @@ readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedNonQueryCommands -> Syste
 readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedReaderBehaviors -> System.Collections.Generic.List<System.Data.CommandBehavior>!
 readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedReaderCommands -> System.Collections.Generic.List<pengdows.crud.fakeDb.CapturedCommand!>!
 readonly pengdows.crud.fakeDb.fakeDbConnection.ExecutedScalarTexts -> System.Collections.Generic.List<string!>!
+pengdows.crud.fakeDb.fakeDbConnection.SchemaException.get -> System.Exception?
+pengdows.crud.fakeDb.fakeDbConnection.SchemaException.set -> void
+override pengdows.crud.fakeDb.fakeDbConnection.GetSchema(string! collectionName, string?[]! restrictionValues) -> System.Data.DataTable!
