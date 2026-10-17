@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using Moq;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -57,7 +56,7 @@ public sealed class GatewayReadAllocationTests
     {
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite));
         var gateway = new TableGateway<T, int>(context);
-        TrackedReader Open() => new(new fakeDbDataReader(rows), new Mock<ITrackedConnection>().Object,
+        TrackedReader Open() => new(new fakeDbDataReader(rows), TestDoubles.Connection(),
             TestDoubles.Disposable(), false);
 
         var warm = Open();
@@ -145,7 +144,7 @@ public sealed class GatewayReadAllocationTests
             var context = new DatabaseContext("Data Source=test;EmulatedProduct=Sqlite", new fakeDbFactory(SupportedDatabase.Sqlite));
             var gateway = new TableGateway<BoolValue, int>(context);
             var reader = new TrackedReader(new fakeDbDataReader(new[] { new Dictionary<string, object> { ["id"] = 1, ["v"] = value } }),
-                new Mock<ITrackedConnection>().Object, TestDoubles.Disposable(), false);
+                TestDoubles.Connection(), TestDoubles.Disposable(), false);
             reader.Read();
 
             Assert.Equal(expected, gateway.MapReaderToObject(reader).V);
@@ -164,7 +163,7 @@ public sealed class GatewayReadAllocationTests
             new Dictionary<string, object> { ["id"] = 1, ["v"] = "a" },
             new Dictionary<string, object> { ["id"] = 2, ["v"] = DBNull.Value }
         });
-        var reader = new TrackedReader(fake, new Mock<ITrackedConnection>().Object, TestDoubles.Disposable(), false);
+        var reader = new TrackedReader(fake, TestDoubles.Connection(), TestDoubles.Disposable(), false);
 
         reader.Read();
         Assert.Equal("a", gateway.MapReaderToObject(reader).V);

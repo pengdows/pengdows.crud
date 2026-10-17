@@ -3,7 +3,6 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Runtime.CompilerServices;
-using Moq;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -133,7 +132,7 @@ public class TypedValueReadAllocationTests
     }
 
     private static TrackedReader OpenConverting(ConvertingReader reader) =>
-        new(reader, new Mock<ITrackedConnection>().Object, TestDoubles.Disposable(), false);
+        new(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
 
     // Bytes per mapped row, the least of three passes of 2000 rows: a one-off allocation on this
     // thread while the full suite runs (a tier-up, another test's static init) inflates one pass,
@@ -314,7 +313,7 @@ public class TypedValueReadAllocationTests
     }
 
     private static TrackedReader Open(int rows, bool refusesTypedReads = false) =>
-        new(new BoxingReader(rows, refusesTypedReads), new Mock<ITrackedConnection>().Object, TestDoubles.Disposable(), false);
+        new(new BoxingReader(rows, refusesTypedReads), TestDoubles.Connection(), TestDoubles.Disposable(), false);
 
     private static TableGateway<T, int> Gateway<T>() where T : class, new() =>
         new(new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", new fakeDbFactory(SupportedDatabase.SqlServer)));

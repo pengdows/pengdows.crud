@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using Moq;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
@@ -33,7 +32,7 @@ public sealed class DataReaderMapperAllocationTests
 
     private static async Task<long> AllocatedPerRowOnceAsync<T>(List<Dictionary<string, object>> rows) where T : class, new()
     {
-        TrackedReader Open() => new(new fakeDbDataReader(rows), new Mock<ITrackedConnection>().Object,
+        TrackedReader Open() => new(new fakeDbDataReader(rows), TestDoubles.Connection(),
             TestDoubles.Disposable(), false);
 
         await DataReaderMapper.LoadAsync<T>(Open(), MapperOptions.Default);
@@ -97,7 +96,7 @@ public sealed class DataReaderMapperAllocationTests
     public async Task BinaryColumnOfTheWrongLengthIntoGuid_FailsAsOnTheGateway()
     {
         var rows = new List<Dictionary<string, object>> { new() { ["V"] = new byte[15] } };
-        await using var reader = new TrackedReader(new fakeDbDataReader(rows), new Mock<ITrackedConnection>().Object,
+        await using var reader = new TrackedReader(new fakeDbDataReader(rows), TestDoubles.Connection(),
             TestDoubles.Disposable(), false);
 
         var error = await Assert.ThrowsAsync<pengdows.crud.exceptions.DataMappingException>(
