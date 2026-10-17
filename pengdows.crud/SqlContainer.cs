@@ -2481,7 +2481,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 }
                 catch
                 {
-                    /* ignore */
+                    // Some providers refuse Connection = null on a command that already ran; the command is being returned and its other state is cleared anyway.
                 }
 
                 cmd.Dispose();

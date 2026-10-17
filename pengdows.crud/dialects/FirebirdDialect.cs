@@ -464,7 +464,7 @@ internal class FirebirdDialect : SqlDialect
             }
             catch
             {
-                // ignored
+                // The database-info probe is a detection heuristic: any failure means this is not Firebird, so detection moves on.
             }
         }
 
@@ -558,7 +558,7 @@ internal class FirebirdDialect : SqlDialect
         }
         catch
         {
-            // ignore and fall through
+            // The monitor table can be unavailable (permissions, old engine); no version string is returned and the caller uses the provider-reported one.
         }
 
         // Both attempts failed (engine threw and monitor had no data)

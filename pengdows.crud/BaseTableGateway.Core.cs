@@ -395,16 +395,7 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
 
     private static int ResolveReaderPlanCacheSize(IDatabaseContext context)
     {
-        int? configured = null;
-        try
-        {
-            configured = context.ReaderPlanCacheSize;
-        }
-        catch
-        {
-            // Ignore fallback property access failures (e.g., strict mocks).
-        }
-
+        var configured = context.ReaderPlanCacheSize;
         if (configured is int size && size > 0)
         {
             return size;

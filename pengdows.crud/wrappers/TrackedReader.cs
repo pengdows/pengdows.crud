@@ -501,6 +501,7 @@ internal sealed class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, I
             }
             catch
             {
+                // Type-name probing is best effort: when the provider cannot report it, fall through to the generic value path.
             }
 
             if (UnreadableValue(i, ex) is { } unreadable)
@@ -773,6 +774,7 @@ internal sealed class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, I
             }
             catch
             {
+                // Type-name probing is best effort: when the provider cannot report it, fall through to the generic value path.
             }
 
             if (UnreadableValue(i, ex) is { } unreadable)
@@ -806,6 +808,7 @@ internal sealed class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, I
                 }
                 catch
                 {
+                    // Type-name probing is best effort: when the provider cannot report it, fall through to the generic value path.
                 }
             }
 
@@ -830,6 +833,7 @@ internal sealed class TrackedReader : SafeAsyncDisposableBase, ITrackedReader, I
             }
             catch
             {
+                // Type-name probing is best effort: when the provider cannot report it, fall through to the generic value path.
             }
 
             // A type the provider has no handler for (an extension type Npgsql can't read) is reported

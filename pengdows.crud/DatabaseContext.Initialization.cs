@@ -917,7 +917,7 @@ public partial class DatabaseContext
             }
             catch
             {
-                /* ignore */
+                // The original initialization failure is already logged and rethrown; a failure to dispose the init connection must not mask it.
             }
 
             throw;
@@ -2454,6 +2454,7 @@ public partial class DatabaseContext
         }
         catch
         {
+            // A malformed connection string yields no data source; the caller treats null as unknown.
         }
 
         return connectionString;

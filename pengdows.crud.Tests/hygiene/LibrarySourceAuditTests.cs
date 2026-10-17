@@ -56,4 +56,47 @@ public class LibrarySourceAuditTests
 
         Assert.True(offenders.Count == 0, "One-line empty catches: " + string.Join(", ", offenders));
     }
+
+    // CATCH-001: a catch whose whole body is a comment (or nothing) must say why swallowing is correct: at least five words,
+    // so "ignore" and "/* ignore */" fail and the list cannot grow back.
+    [Fact]
+    public void Catch001_EveryCommentOnlyCatchStatesAReason()
+    {
+        var catchOpen = new Regex(@"^\s*catch\b[^{]*$");
+        var offenders = new List<string>();
+        foreach (var file in LibrarySources())
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i + 2 < lines.Length; i++)
+            {
+                if (!catchOpen.IsMatch(lines[i]) || lines[i + 1].Trim() != "{")
+                {
+                    continue;
+                }
+
+                var body = new List<string>();
+                var j = i + 2;
+                while (j < lines.Length && lines[j].Trim() != "}")
+                {
+                    body.Add(lines[j].Trim());
+                    j++;
+                }
+
+                var code = body.Where(l => l.Length > 0 && !l.StartsWith("//", StringComparison.Ordinal) && !l.StartsWith("/*", StringComparison.Ordinal)).ToList();
+                if (code.Count > 0)
+                {
+                    continue;
+                }
+
+                var words = string.Join(" ", body).Replace("//", " ").Replace("/*", " ").Replace("*/", " ")
+                    .Split(' ', StringSplitOptions.RemoveEmptyEntries).Length;
+                if (words < 5)
+                {
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0, "Catch blocks with no stated reason: " + string.Join(", ", offenders));
+    }
 }

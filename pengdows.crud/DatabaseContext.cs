@@ -588,7 +588,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         catch
         {
-            // ignore
+            // Disposing the open gate is best effort: a gate that fails to dispose must not stop the context finishing its own disposal.
         }
         finally
         {
@@ -632,7 +632,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         }
         catch
         {
-            // ignore
+            // Disposing the open gate is best effort: a gate that fails to dispose must not stop the context finishing its own disposal.
         }
         finally
         {

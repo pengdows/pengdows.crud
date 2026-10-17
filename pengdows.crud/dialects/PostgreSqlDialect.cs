@@ -968,7 +968,7 @@ internal class PostgreSqlDialect : SqlDialect
         }
         catch
         {
-            /* ignore */
+            // Lower-casing the test connection string is cosmetic; leaving it unchanged keeps the connection usable.
         }
     }
 

@@ -810,6 +810,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
         catch (ObjectDisposedException)
         {
+            // Already disposed by the provider, so there is nothing left to detach.
         }
     }
 
