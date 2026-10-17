@@ -594,7 +594,7 @@ await using var txn = await Context.BeginTransactionAsync(IsolationProfile.SafeN
 **Isolation rules:**
 - A write transaction with neither a level nor a profile defaults to `ReadCommitted`; only a read-only `BeginTransaction` uses the `SafeNonBlockingReads` mapping (it logs a warning if degraded).
 - Isolation fails up, never down: an unsupported explicit `IsolationLevel` runs as the weakest supported level at least as strong, and throws `InvalidOperationException` if none exists (e.g. `Serializable` on TiDB/Snowflake/SingleStore).
-- An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee: `StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile, `SafeNonBlockingReads` on SQL Server without snapshot isolation.
+- An `IsolationProfile` throws `TransactionModeNotSupportedException` rather than run below its guarantee: `StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile, `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT.
 - Savepoints (`SavepointAsync`/`RollbackToSavepointAsync`/`ReleaseSavepointAsync`) throw `NotSupportedException` where the dialect lacks the capability.
 
 **Resource Safety:**

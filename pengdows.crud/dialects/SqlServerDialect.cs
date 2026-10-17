@@ -798,9 +798,11 @@ internal class SqlServerDialect : SqlDialect
             [IsolationProfile.FastWithRisks] = IsolationLevel.ReadUncommitted
         };
 
-    // SafeNonBlockingReads' guarantee needs Snapshot; ReadCommitted (snapshot isolation off) falls short.
-    internal override bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level) =>
-        profile == IsolationProfile.SafeNonBlockingReads && level == IsolationLevel.ReadCommitted;
+    // SafeNonBlockingReads' guarantee needs row versioning: Snapshot, or ReadCommitted with READ_COMMITTED_SNAPSHOT on (readers
+    // read versions, never block on writers, never see dirty data: the same statement-level MVCC the profile accepts as
+    // ReadCommitted on Oracle and MySQL). Plain locking ReadCommitted falls short.
+    internal override bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level, bool readCommittedSnapshot) =>
+        profile == IsolationProfile.SafeNonBlockingReads && level == IsolationLevel.ReadCommitted && !readCommittedSnapshot;
 
     // ---- Instance-free traits (REV-039): exception translator, value formats, type mappings ----
 

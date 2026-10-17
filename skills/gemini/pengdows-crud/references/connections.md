@@ -164,7 +164,7 @@ public enum IsolationProfile
 ```
 
 A profile never runs below its guarantee: `BeginTransaction(profile)` throws `TransactionModeNotSupportedException` when the database can't meet it
-(`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation).
+(`StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT).
 A write transaction with neither a level nor a profile defaults to `ReadCommitted`; only a read-only transaction uses the `SafeNonBlockingReads` mapping.
 
 Usage:

@@ -15,6 +15,9 @@ Binary compatible with 2.0.5 (package validation against 2.0.5 for `pengdows.cru
 and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/release-notes-2.0.6.md).
 
 ### Changed (behavior a 2.0.5 user can notice)
+- SQL Server: `IsolationProfile.SafeNonBlockingReads` now also resolves, as ReadCommitted, when `READ_COMMITTED_SNAPSHOT`
+  is on and snapshot isolation is off (it used to throw `TransactionModeNotSupportedException`). Snapshot isolation on still
+  gives Snapshot; neither on still throws.
 - Reads that returned a wrong value now fail loudly with `DataMappingException` naming the column: invalid or blank
   `[Json]`, blank text into a number, Guid, date or bool, a binary Guid that is not 16 bytes, an undefined enum
   value, a fractional number read into an integer.

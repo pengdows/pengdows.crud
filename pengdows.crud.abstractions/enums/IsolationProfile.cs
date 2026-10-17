@@ -5,7 +5,7 @@ public enum IsolationProfile
     /// <summary>
     /// MVCC snapshot-style, avoids blocking, no dirty reads. Beginning a transaction with this
     /// profile throws TransactionModeNotSupportedException where it cannot be guaranteed (SQL Server
-    /// without snapshot isolation enabled, PostgreSQL, YugabyteDB).
+    /// with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT enabled, PostgreSQL, YugabyteDB).
     /// </summary>
     SafeNonBlockingReads, // MVCC snapshot-style, avoids blocking, no dirty reads
 

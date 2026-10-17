@@ -90,7 +90,7 @@ SqlServer snapshot=False rcsi=False
   atLeast Serializable: Serializable
 SqlServer snapshot=False rcsi=True
   levels: ReadUncommitted,ReadCommitted,RepeatableRead,Serializable
-  SafeNonBlockingReads: ReadCommitted degraded=True | tx throws TransactionModeNotSupportedException
+  SafeNonBlockingReads: ReadCommitted degraded=False | tx ReadCommitted
   StrictConsistency: Serializable degraded=False | tx Serializable
   FastWithRisks: ReadUncommitted degraded=False | tx ReadUncommitted
   atLeast ReadUncommitted: ReadUncommitted

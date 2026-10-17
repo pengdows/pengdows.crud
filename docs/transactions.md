@@ -113,7 +113,7 @@ await tx.ReleaseSavepointAsync("checkpoint1", ct);
 Isolation **fails up, never down**:
 
 - **Explicit `IsolationLevel`:** used as-is if the database supports it; otherwise the weakest supported level that is at least as strong is used (ReadUncommitted < ReadCommitted < RepeatableRead < Serializable; Snapshot sits above ReadCommitted and is satisfied only by Snapshot or Serializable; RepeatableRead is satisfied only by Serializable). For example, `ReadCommitted` on CockroachDB or DuckDB runs as `Serializable`. If nothing at or above the requested level exists (e.g. `Serializable` on TiDB, Snowflake, SingleStore, Access or FlatFile), `BeginTransaction` throws `InvalidOperationException`.
-- **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, SingleStore, Access, or FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation enabled. On PostgreSQL/YugabyteDB `SafeNonBlockingReads` runs as `RepeatableRead` (an MVCC snapshot: non-blocking, no non-repeatable reads).
+- **`IsolationProfile`:** throws `TransactionModeNotSupportedException` (a `NotSupportedException`) rather than run below the profile's guarantee — e.g. `StrictConsistency` on TiDB, Snowflake, SingleStore, Access, or FlatFile; `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT enabled. On PostgreSQL/YugabyteDB `SafeNonBlockingReads` runs as `RepeatableRead` (an MVCC snapshot: non-blocking, no non-repeatable reads).
 - **Read-only `BeginTransaction` with no level and no profile** (`ExecutionType.Read`, `isolationLevel: null`): uses the `SafeNonBlockingReads` mapping and logs a warning if that mapping is degraded — it never throws for that.
 - **Write `BeginTransaction` with no level:** `ReadCommitted` if supported, else `Serializable`.
 
@@ -121,11 +121,11 @@ Isolation **fails up, never down**:
 
 Read from each dialect's `GetSupportedIsolationLevels`, `GetIsolationProfileMapping` and `SupportsSavepoints`/`SavepointCapabilities` (RU = ReadUncommitted, RC = ReadCommitted, RR = RepeatableRead, Ser = Serializable, Snap = Snapshot). "throws" means the profile's guarantee cannot be met, so an `IsolationProfile` request throws `TransactionModeNotSupportedException`. Savepoint columns: `C` create, `R` rollback-to, `Rel` release.
 
-**SQL Server needs snapshot isolation for `SafeNonBlockingReads`.** `ALLOW_SNAPSHOT_ISOLATION` must be on; `READ_COMMITTED_SNAPSHOT` (RCSI) alone is not enough. The resolver does not count RCSI: with snapshot isolation off, `SafeNonBlockingReads` throws `TransactionModeNotSupportedException` whatever RCSI says, and with it on the profile resolves to Snapshot. A consumer that uses the profile on SQL Server (pengdows.hangfire does) has to enable snapshot isolation on the database; pinned by `AuditClaimsTests`.
+**SQL Server needs row versioning for `SafeNonBlockingReads`:** `ALLOW_SNAPSHOT_ISOLATION` or `READ_COMMITTED_SNAPSHOT` (RCSI). With snapshot isolation on the profile resolves to Snapshot. With only RCSI on it resolves to ReadCommitted, which then reads row versions: readers never block on writers and never see dirty data, the same statement-level MVCC the profile already accepts as ReadCommitted on Oracle and MySQL (it is not a transaction-wide snapshot; use Snapshot or `RepeatableRead` for that). With neither, `SafeNonBlockingReads` throws `TransactionModeNotSupportedException`. A consumer that uses the profile on SQL Server (pengdows.hangfire does) has to enable one of the two on the database; pinned by `AuditClaimsTests`.
 
 | Database | Supported levels | SafeNonBlockingReads / StrictConsistency / FastWithRisks | Savepoints |
 |---|---|---|---|
-| SQL Server | RU, RC, RR, Ser, plus Snap when `ALLOW_SNAPSHOT_ISOLATION` is on | Snap, or RC (throws) when snapshot isolation is off / Ser / RU | C, R (no release) |
+| SQL Server | RU, RC, RR, Ser, plus Snap when `ALLOW_SNAPSHOT_ISOLATION` is on | Snap when snapshot isolation is on, RC when only RCSI is on, else RC (throws) / Ser / RU | C, R (no release) |
 | PostgreSQL (Aurora PostgreSQL, Citus, TimescaleDB), YugabyteDB | RC, RR, Ser | RR / Ser / RC | C, R, Rel |
 | CockroachDB | Ser | Ser / Ser / Ser | C, R, Rel |
 | Spanner | RR, Ser | RR / Ser / RR | none |

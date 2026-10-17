@@ -87,12 +87,12 @@ public sealed class AuditDocumentationTests
 
     // I1: the resolver never lets RCSI satisfy SafeNonBlockingReads; SQL Server needs snapshot isolation.
     [Fact]
-    public void I1_SqlServerNeedsSnapshotIsolation_NotRcsiAlone()
+    public void I1_SqlServerNeedsRowVersioning_SnapshotIsolationOrRcsi()
     {
         var text = Read("docs/transactions.md");
 
         Assert.Contains("ALLOW_SNAPSHOT_ISOLATION", text, StringComparison.Ordinal);
-        Assert.Contains("RCSI", text, StringComparison.Ordinal);
-        Assert.Contains("not enough", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("READ_COMMITTED_SNAPSHOT", text, StringComparison.Ordinal);
+        Assert.Contains("statement-level MVCC", text, StringComparison.Ordinal);
     }
 }

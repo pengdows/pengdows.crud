@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.attributes;
@@ -35,12 +36,10 @@ public class AuditClaimsTests
         return new IsolationResolver(dialect, rcsi, snapshot);
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void I1_SqlServerWithoutSnapshotIsolation_RefusesSafeNonBlockingReads_WhateverRcsiSays(bool rcsi)
+    [Fact]
+    public void I1_SqlServerWithNeitherSnapshotIsolationNorRcsi_RefusesSafeNonBlockingReads()
     {
-        var resolver = SqlServerResolver(rcsi, snapshot: false);
+        var resolver = SqlServerResolver(rcsi: false, snapshot: false);
 
         var detail = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
 
@@ -49,13 +48,27 @@ public class AuditClaimsTests
             () => resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
     }
 
+    // RCSI makes READ COMMITTED read row versions: readers do not block on writers and never see dirty data. That is the same
+    // statement-level MVCC the profile already accepts as ReadCommitted on Oracle and MySQL, so it satisfies the profile.
     [Fact]
-    public void I1_RcsiDoesNotChangeAnyProfileOrLevelDecision()
+    public void I1_SqlServerWithRcsi_AcceptsSafeNonBlockingReads_AsReadCommitted()
+    {
+        var resolver = SqlServerResolver(rcsi: true, snapshot: false);
+
+        var detail = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
+
+        Assert.False(detail.Degraded);
+        Assert.Equal(IsolationLevel.ReadCommitted, detail.Level);
+        Assert.Equal(IsolationLevel.ReadCommitted, resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
+    }
+
+    [Fact]
+    public void I1_RcsiChangesOnlySafeNonBlockingReads()
     {
         var withRcsi = SqlServerResolver(rcsi: true, snapshot: false);
         var withoutRcsi = SqlServerResolver(rcsi: false, snapshot: false);
 
-        foreach (var profile in Enum.GetValues<IsolationProfile>())
+        foreach (var profile in Enum.GetValues<IsolationProfile>().Where(p => p != IsolationProfile.SafeNonBlockingReads))
         {
             Assert.Equal(withoutRcsi.ResolveWithDetail(profile), withRcsi.ResolveWithDetail(profile));
         }

@@ -889,7 +889,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// True when <paramref name="level"/> falls short of <paramref name="profile"/>'s guarantee on this
     /// database even though it is the mapped level (SQL Server: ReadCommitted for SafeNonBlockingReads).
     /// </summary>
-    internal virtual bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level) => false;
+    internal virtual bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level, bool readCommittedSnapshot) => false;
 
     /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>
     public virtual bool RendersColumnArgument(IColumnInfo column) => column.IsJsonType;

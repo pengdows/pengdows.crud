@@ -87,14 +87,14 @@ public class IsolationResolverTests
     }
 
     [Fact]
-    public void ResolveWithDetail_SqlServer_RcsiEnabledSignalsSnapshotFallback()
+    public void ResolveWithDetail_SqlServer_RcsiEnabled_SatisfiesTheProfileAsReadCommitted()
     {
         var resolver = new IsolationResolver(pengdows.crud.Tests.isolation.IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), true, false);
 
         var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolution.Level);
-        Assert.True(resolution.Degraded);
+        Assert.False(resolution.Degraded);
     }
 
     [Fact]

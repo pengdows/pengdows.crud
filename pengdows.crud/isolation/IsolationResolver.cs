@@ -141,7 +141,7 @@ internal sealed class IsolationResolver : IIsolationResolver
 
         // A mapped level the dialect says falls short of the profile (SQL Server's ReadCommitted for
         // SafeNonBlockingReads when snapshot isolation is off).
-        var degraded = _dialect.IsDegradedForProfile(profile, level);
+        var degraded = _dialect.IsDegradedForProfile(profile, level, _rcsi);
 
         // StrictConsistency's entire purpose is a Serializable-equivalent guarantee.
         // Any product whose mapping falls short of Serializable has degraded the

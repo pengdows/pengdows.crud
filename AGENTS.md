@@ -344,7 +344,7 @@ Transactions are **operation-scoped** — create inside methods, never store as 
 using var txn = ctx.BeginTransaction();
 // or with portable isolation profile (throws TransactionModeNotSupportedException if the
 // database can't guarantee it, e.g. SafeNonBlockingReads on SQL Server
-// without snapshot isolation):
+// with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT):
 using var txn = ctx.BeginTransaction(IsolationProfile.StrictConsistency);
 
 await txn.SavepointAsync("checkpoint1");
@@ -354,7 +354,7 @@ txn.Commit();
 
 **Isolation never silently weakens ("fails up"):**
 - Explicit `IsolationLevel`: used as-is if supported; otherwise the weakest supported level that is at least as strong (e.g. `ReadCommitted` on CockroachDB/DuckDB → `Serializable`). Throws `InvalidOperationException` if nothing at or above it exists (e.g. `Serializable` on TiDB/Snowflake/SingleStore).
-- `IsolationProfile`: throws `TransactionModeNotSupportedException` rather than run below the profile's guarantee — `StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server without snapshot isolation.
+- `IsolationProfile`: throws `TransactionModeNotSupportedException` rather than run below the profile's guarantee — `StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT.
 - Read-only `BeginTransaction(executionType: ExecutionType.Read)` with no level/profile: uses the `SafeNonBlockingReads` mapping and only logs a warning if it is degraded.
 - Savepoints on a dialect without savepoint support throw `NotSupportedException`.
 
