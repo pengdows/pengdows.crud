@@ -21,7 +21,7 @@ public sealed class TrackedReaderSizeTests
     {
         var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["id"] = 1 } });
         var connection = new Mock<ITrackedConnection>().Object;
-        var locker = Mock.Of<IAsyncDisposable>();
+        var locker = TestDoubles.Disposable();
         // One profile, as a dialect hands every reader of it.
         var profile = new ReaderDialectProfile(null, null, null, TypeCoercionOptions.Default);
         TrackedReader Create() => new(reader, connection, locker, false, profile);

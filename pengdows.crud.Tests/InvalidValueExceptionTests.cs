@@ -27,7 +27,7 @@ public class InvalidValueExceptionTests
         reader.Setup(r => r.GetValue(0)).Returns("foo");
 
         var tracked = new TrackedReader(reader.Object, new Mock<ITrackedConnection>().Object,
-            Mock.Of<IAsyncDisposable>(), false);
+            TestDoubles.Disposable(), false);
 
         // After compiled mapper optimization, exceptions bubble up directly (not wrapped)
         // This is actually cleaner for debugging - the original exception is preserved

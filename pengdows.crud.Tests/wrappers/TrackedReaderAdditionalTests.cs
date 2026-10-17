@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using Moq;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -22,7 +21,7 @@ public class TrackedReaderAdditionalTests
         using var reader = new fakeDbDataReader(new[] { row });
         reader.Read();
 
-        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
+        var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
 
         var bytes = new byte[4];
         var chars = new char[3];
@@ -40,7 +39,7 @@ public class TrackedReaderAdditionalTests
         var row = new Dictionary<string, object> { ["Field"] = "value" };
         using var reader = new fakeDbDataReader(new[] { row });
 
-        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
+        var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
 
         // Test that Close doesn't throw
         tracked.Close();
@@ -55,7 +54,7 @@ public class TrackedReaderAdditionalTests
         var row = new Dictionary<string, object> { ["Field"] = "value" };
         using var reader = new fakeDbDataReader(new[] { row });
 
-        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
+        var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
 
         // Test that GetData forwards to the underlying reader without throwing
         // Most databases don't actually use GetData for nested readers

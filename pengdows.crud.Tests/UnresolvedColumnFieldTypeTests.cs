@@ -65,7 +65,7 @@ public sealed class UnresolvedColumnFieldTypeTests
     }
 
     private static TrackedReader Track(RefusingReader reader) =>
-        new(reader, new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
+        new(reader, new Mock<ITrackedConnection>().Object, TestDoubles.Disposable(), false);
 
     [Fact]
     public async Task DataReaderMapper_TrackedReader_CachedPlanCall_AsksTheRefusedColumnOnce()

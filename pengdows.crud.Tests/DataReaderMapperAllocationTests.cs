@@ -34,7 +34,7 @@ public sealed class DataReaderMapperAllocationTests
     private static async Task<long> AllocatedPerRowOnceAsync<T>(List<Dictionary<string, object>> rows) where T : class, new()
     {
         TrackedReader Open() => new(new fakeDbDataReader(rows), new Mock<ITrackedConnection>().Object,
-            Mock.Of<IAsyncDisposable>(), false);
+            TestDoubles.Disposable(), false);
 
         await DataReaderMapper.LoadAsync<T>(Open(), MapperOptions.Default);
         var before = GC.GetAllocatedBytesForCurrentThread();
@@ -98,7 +98,7 @@ public sealed class DataReaderMapperAllocationTests
     {
         var rows = new List<Dictionary<string, object>> { new() { ["V"] = new byte[15] } };
         await using var reader = new TrackedReader(new fakeDbDataReader(rows), new Mock<ITrackedConnection>().Object,
-            Mock.Of<IAsyncDisposable>(), false);
+            TestDoubles.Disposable(), false);
 
         var error = await Assert.ThrowsAsync<pengdows.crud.exceptions.DataMappingException>(
             () => DataReaderMapper.LoadAsync<GuidValue>(reader, new MapperOptions(Strict: true)).AsTask());

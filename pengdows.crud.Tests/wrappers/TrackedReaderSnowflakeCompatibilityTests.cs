@@ -4,7 +4,6 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
-using Moq;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -18,8 +17,8 @@ namespace pengdows.crud.Tests.wrappers
         {
             var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
             var command = new Snowflake.Data.Client.ThrowingSnowflakeDbCommand();
-            await using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(),
-                Mock.Of<IAsyncDisposable>(), false, command: command);
+            await using var tracked = new TrackedReader(reader, TestDoubles.Connection(),
+                TestDoubles.Disposable(), false, command: command);
 
             Assert.True(await tracked.ReadAsync());
             Assert.False(await tracked.ReadAsync());
@@ -31,8 +30,8 @@ namespace pengdows.crud.Tests.wrappers
             // No `using` on reader — TrackedReader takes ownership and disposes it.
             var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
             var command = new Snowflake.Data.Client.ThrowingSnowflakeDbCommand();
-            using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(),
-                Mock.Of<IAsyncDisposable>(), false, command: command);
+            using var tracked = new TrackedReader(reader, TestDoubles.Connection(),
+                TestDoubles.Disposable(), false, command: command);
 
             Assert.True(tracked.Read());
             Assert.False(tracked.Read());

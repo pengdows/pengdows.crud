@@ -1,6 +1,5 @@
 using System;
 using System.Data;
-using Moq;
 using pengdows.crud.types.coercion;
 using Xunit;
 

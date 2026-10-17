@@ -40,7 +40,7 @@ public sealed class RecordsetPlanConcurrencyTests
     private static Score Map(TableGateway<Score, int> gateway, Dictionary<string, object> row)
     {
         var reader = new TrackedReader(new fakeDbDataReader(new[] { row }), new Mock<ITrackedConnection>().Object,
-            Mock.Of<IAsyncDisposable>(), false);
+            TestDoubles.Disposable(), false);
         reader.Read();
         return gateway.MapReaderToObject(reader);
     }

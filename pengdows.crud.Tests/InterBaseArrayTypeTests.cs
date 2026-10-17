@@ -129,7 +129,7 @@ public sealed class InterBaseArrayTypeTests
         TrackedReader Open() => new(new fakeDbDataReader(rows)
             {
                 ReportedFieldTypes = new Dictionary<string, Type> { ["nums"] = typeof(Array) }
-            }, new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
+            }, new Mock<ITrackedConnection>().Object, TestDoubles.Disposable(), false);
 
         var warm = Open();
         while (warm.Read())

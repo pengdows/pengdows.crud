@@ -4,7 +4,6 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading.Tasks;
-using Moq;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -17,8 +16,8 @@ namespace pengdows.crud.Tests.wrappers
         public async Task ReadAsync_WhenMySqlDataReaderDisposeAsyncHitsKnownNullReference_ReturnsFalse()
         {
             var reader = new MySql.Data.MySqlClient.ThrowingMySqlDataReader();
-            await using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(),
-                Mock.Of<IAsyncDisposable>(), false);
+            await using var tracked = new TrackedReader(reader, TestDoubles.Connection(),
+                TestDoubles.Disposable(), false);
 
             Assert.True(await tracked.ReadAsync());
             Assert.False(await tracked.ReadAsync());
@@ -29,8 +28,8 @@ namespace pengdows.crud.Tests.wrappers
         {
             var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
             var command = new MySql.Data.MySqlClient.ThrowingMySqlDataCommand();
-            await using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(),
-                Mock.Of<IAsyncDisposable>(), false, command: command);
+            await using var tracked = new TrackedReader(reader, TestDoubles.Connection(),
+                TestDoubles.Disposable(), false, command: command);
 
             Assert.True(await tracked.ReadAsync());
             Assert.False(await tracked.ReadAsync());
@@ -41,8 +40,8 @@ namespace pengdows.crud.Tests.wrappers
         {
             using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
             var command = new MySql.Data.MySqlClient.ThrowingMySqlDataCommand();
-            using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(),
-                Mock.Of<IAsyncDisposable>(), false, command: command);
+            using var tracked = new TrackedReader(reader, TestDoubles.Connection(),
+                TestDoubles.Disposable(), false, command: command);
 
             Assert.True(tracked.Read());
             Assert.False(tracked.Read());
