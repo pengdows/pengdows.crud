@@ -200,3 +200,8 @@ pengdows.crud.fakeDb.fakeDbTransaction.Operations.get -> System.Collections.Gene
 override pengdows.crud.fakeDb.fakeDbCommand.DisposeAsync() -> System.Threading.Tasks.ValueTask
 override pengdows.crud.fakeDb.fakeDbTransaction.DisposeAsync() -> System.Threading.Tasks.ValueTask
 override pengdows.crud.fakeDb.fakeDbConnection.BeginDbTransactionAsync(System.Data.IsolationLevel isolationLevel, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Data.Common.DbTransaction!>
+pengdows.crud.fakeDb.fakeDbFactory.EnqueueNonQueryResult(int value) -> void
+pengdows.crud.fakeDb.fakeDbFactory.EnqueueScalarResult(object? value) -> void
+pengdows.crud.fakeDb.fakeDbFactory.SetNonQueryResultForCommand(string! commandText, int value) -> void
+pengdows.crud.fakeDb.fakeDbFactory.SetScalarResultForCommand(string! commandText, object? value) -> void
+pengdows.crud.fakeDb.fakeDbFactory.SetDefaultNonQueryResult(int value) -> void

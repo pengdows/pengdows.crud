@@ -185,6 +185,20 @@ public class fakeDbCommand : DbCommand
             return conn.NonQueryResults.Dequeue();
         }
 
+        var factory = conn?.FactoryReference;
+        if (factory != null)
+        {
+            if (!string.IsNullOrEmpty(CommandText) && factory.TryGetSharedNonQueryForCommand(CommandText, out var keyed))
+            {
+                return keyed;
+            }
+
+            if (factory.TryDequeueSharedNonQueryResult(out var shared))
+            {
+                return shared;
+            }
+        }
+
         // Use data persistence if enabled
         if (conn != null && conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
         {
@@ -192,7 +206,7 @@ public class fakeDbCommand : DbCommand
             return result;
         }
 
-        return 1;
+        return factory?.DefaultNonQueryResult ?? 1;
     }
 
     public override object? ExecuteScalar()
@@ -249,6 +263,12 @@ public class fakeDbCommand : DbCommand
                 conn.ScalarResultsByCommand.TryGetValue(CommandText, out var commandResult))
             {
                 return commandResult;
+            }
+
+            if (!string.IsNullOrEmpty(CommandText) && conn.FactoryReference is { } keyedFactory &&
+                keyedFactory.TryGetSharedScalarForCommand(CommandText, out var sharedKeyed))
+            {
+                return sharedKeyed;
             }
 
             // If this is any kind of version query and the test queued a scalar (even null/empty), prefer the queued value
@@ -312,6 +332,11 @@ public class fakeDbCommand : DbCommand
             if (conn.ScalarResults.Count > 0)
             {
                 return conn.ScalarResults.Dequeue();
+            }
+
+            if (conn.FactoryReference is { } queuedFactory && queuedFactory.TryDequeueSharedScalarResult(out var sharedScalar))
+            {
+                return sharedScalar;
             }
 
             // Use data persistence if enabled

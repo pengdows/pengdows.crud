@@ -4,6 +4,7 @@ using System;
 using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
+using System.Threading;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
@@ -334,6 +335,50 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     {
         _globalTransactionRollbackException = exception;
     }
+
+    private readonly System.Collections.Concurrent.ConcurrentQueue<int> _sharedNonQueryResults = new();
+    private readonly System.Collections.Concurrent.ConcurrentQueue<object?> _sharedScalarResults = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _sharedNonQueryByCommand = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, object?> _sharedScalarByCommand = new();
+    private int _defaultNonQueryResult = 1;
+
+    /// <summary>
+    /// Queues a rows-affected value for the next non-query on any connection this factory creates, in order. A connection's own
+    /// queue is consulted first; this one answers when that is empty.
+    /// </summary>
+    public void EnqueueNonQueryResult(int value) => _sharedNonQueryResults.Enqueue(value);
+
+    /// <summary>Queues a scalar for the next scalar execution on any connection this factory creates, in order.</summary>
+    public void EnqueueScalarResult(object? value) => _sharedScalarResults.Enqueue(value);
+
+    /// <summary>Answers every non-query whose text is exactly <paramref name="commandText"/> with <paramref name="value"/>.</summary>
+    public void SetNonQueryResultForCommand(string commandText, int value)
+    {
+        ArgumentNullException.ThrowIfNull(commandText);
+        _sharedNonQueryByCommand[commandText] = value;
+    }
+
+    /// <summary>Answers every scalar whose text is exactly <paramref name="commandText"/> with <paramref name="value"/>.</summary>
+    public void SetScalarResultForCommand(string commandText, object? value)
+    {
+        ArgumentNullException.ThrowIfNull(commandText);
+        _sharedScalarByCommand[commandText] = value;
+    }
+
+    /// <summary>The rows-affected value a non-query returns when nothing queued or keyed answers it (1 unless set).</summary>
+    public void SetDefaultNonQueryResult(int value) => Volatile.Write(ref _defaultNonQueryResult, value);
+
+    internal bool TryDequeueSharedNonQueryResult(out int value) => _sharedNonQueryResults.TryDequeue(out value);
+
+    internal bool TryDequeueSharedScalarResult(out object? value) => _sharedScalarResults.TryDequeue(out value);
+
+    internal bool TryGetSharedNonQueryForCommand(string commandText, out int value) =>
+        _sharedNonQueryByCommand.TryGetValue(commandText, out value);
+
+    internal bool TryGetSharedScalarForCommand(string commandText, out object? value) =>
+        _sharedScalarByCommand.TryGetValue(commandText, out value);
+
+    internal int DefaultNonQueryResult => Volatile.Read(ref _defaultNonQueryResult);
 
     public void SetCommandFailure(string commandText, Exception exception)
     {

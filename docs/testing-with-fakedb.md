@@ -177,6 +177,12 @@ Assert.Contains(factory.CreatedConnections, c => c.ExecutedNonQueryTexts.Contain
 (`SetCommandFailure` on the *factory* applies to every connection it creates; the same method on a
 `fakeDbConnection` instance scopes to just that one connection and is checked first.)
 
+A context opens its own connections, so a test can rarely script the one it will get. Canned results set on the
+*factory* reach every connection it creates: `EnqueueNonQueryResult(n)` and `EnqueueScalarResult(v)` answer the next
+call in order, `SetNonQueryResultForCommand(text, n)` and `SetScalarResultForCommand(text, v)` answer an exact command
+text every time, and `SetDefaultNonQueryResult(n)` is what a non-query returns when nothing else answers (1 unless
+set). A connection's own queue is consulted first, then the factory's.
+
 Narrower still: `SetAsyncOnlyScalarFailure(text, ex)` fires only for `ExecuteScalarAsync`, not the
 sync overload for the same text — proving a sync entry point never accidentally routes through
 async. `SetPersistentScalarException(ex)` fires on every scalar call until cleared;
