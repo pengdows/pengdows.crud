@@ -31,11 +31,29 @@ internal partial class ScriptedDatabaseContext
 
     public bool IsDisposed => DisposeCount + DisposeAsyncCount > 0;
 
-    public void Dispose() => DisposeCount++;
+    /// <summary>Thrown by Dispose when set (after it is counted).</summary>
+    public Exception? DisposeException { get; set; }
+
+    /// <summary>Thrown by DisposeAsync when set (after it is counted).</summary>
+    public Exception? DisposeAsyncException { get; set; }
+
+    public void Dispose()
+    {
+        DisposeCount++;
+        if (DisposeException != null)
+        {
+            throw DisposeException;
+        }
+    }
 
     public ValueTask DisposeAsync()
     {
         DisposeAsyncCount++;
+        if (DisposeAsyncException != null)
+        {
+            throw DisposeAsyncException;
+        }
+
         return ValueTask.CompletedTask;
     }
 }
