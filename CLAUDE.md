@@ -716,7 +716,7 @@ var results = await helper.LoadListAsync(sc);
 - **NEVER** commit code without corresponding tests
 
 ### Testing Infrastructure
-- Framework: xUnit; mocks: Moq. Name files `*Tests.cs` and mirror source namespaces.
+- Framework: xUnit. **No mocking framework, ever** (no Moq, NSubstitute, FakeItEasy or `DispatchProxy` fakes): the test provider is `pengdows.crud.fakeDb`, and anything it cannot do is added to fakeDb, with its own tests. A test that needs an implementer of a library interface that is not the library's own class uses a hand-written stub (`tools/test-stub-generator` writes throwing ones); `NoMockingFrameworkTests` fails the build on a violation. Name files `*Tests.cs` and mirror source namespaces.
 - Prefer `pengdows.crud.fakeDb` for unit tests; avoid real DBs. Use `testbed/` for integration via Testcontainers.
 - Coverage artifacts live in `TestResults/`; CI publishes Cobertura from `TestResults/**/coverage*.cobertura.xml`.
 - The entire unit-test suite currently finishes in under 30 seconds; if a run approaches three minutes, terminate it and investigate for locking/hanging issues.
