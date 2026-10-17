@@ -712,7 +712,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
 
         LocalState.Reset();
-        _onDispose?.Invoke(_connection);
+        InvokeOnDispose();
         try
         {
             _connection.Dispose();
@@ -753,7 +753,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
 
         LocalState.Reset();
-        _onDispose?.Invoke(_connection);
+        InvokeOnDispose();
         try
         {
             await _connection.DisposeAsync().ConfigureAwait(false);
@@ -766,14 +766,31 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             {
                 _connection?.Dispose();
             }
-            catch
+            catch (Exception fallback)
             {
-                // Connection is already disposed or in invalid state, ignore
+                // Already disposed or in an invalid state; the failure is logged, not rethrown.
+                _logger.LogError(fallback, "Synchronous fallback dispose of the connection also failed.");
             }
         }
+        finally
+        {
+            DetachMetricsHandler();
+            ReleaseSlot();
+        }
+    }
 
-        DetachMetricsHandler();
-        ReleaseSlot();
+    // The owner's callback must not decide whether the governor permit comes back: a throw here skipped the
+    // connection's own dispose and ReleaseSlot, leaking the permit until every later caller saw PoolSaturatedException.
+    private void InvokeOnDispose()
+    {
+        try
+        {
+            _onDispose?.Invoke(_connection);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in the connection's dispose callback.");
+        }
     }
 
     private void DetachMetricsHandler()
