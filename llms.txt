@@ -88,6 +88,11 @@ The boundary is important and honest: a genuinely hung command remains live and 
 closed underneath. Its shared connection is deferred until the holder releases it or the command's
 timeout/cancellation policy ends it. That is an active operation, not an ordinary forgotten lease.
 
+The other edge is a lease that is abandoned without being disposed. There is no finalizer or GC backstop: a connection, reader
+or transaction that is never disposed keeps its governor permit, and later callers wait for a slot and then get
+`PoolSaturatedException` with nothing to heal it. The cleanup guarantee holds for what the library hands out and the caller
+disposes (`using` / `await using`); it does not extend to a lease the caller drops.
+
 | Choose | When it is the strongest fit | What you give up or must accept |
 |---|---|---|
 | **EF Core** | The domain is naturally modeled as tracked entities; LINQ queries, migrations, conventions, and rapid application development are more valuable than exact SQL control. | Change tracking and LINQ translation become part of the execution model; provider-specific SQL and high-contention behavior still need investigation. |

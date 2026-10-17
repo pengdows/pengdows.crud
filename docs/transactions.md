@@ -121,6 +121,8 @@ Isolation **fails up, never down**:
 
 Read from each dialect's `GetSupportedIsolationLevels`, `GetIsolationProfileMapping` and `SupportsSavepoints`/`SavepointCapabilities` (RU = ReadUncommitted, RC = ReadCommitted, RR = RepeatableRead, Ser = Serializable, Snap = Snapshot). "throws" means the profile's guarantee cannot be met, so an `IsolationProfile` request throws `TransactionModeNotSupportedException`. Savepoint columns: `C` create, `R` rollback-to, `Rel` release.
 
+**SQL Server needs snapshot isolation for `SafeNonBlockingReads`.** `ALLOW_SNAPSHOT_ISOLATION` must be on; `READ_COMMITTED_SNAPSHOT` (RCSI) alone is not enough. The resolver does not count RCSI: with snapshot isolation off, `SafeNonBlockingReads` throws `TransactionModeNotSupportedException` whatever RCSI says, and with it on the profile resolves to Snapshot. A consumer that uses the profile on SQL Server (pengdows.hangfire does) has to enable snapshot isolation on the database; pinned by `AuditClaimsTests`.
+
 | Database | Supported levels | SafeNonBlockingReads / StrictConsistency / FastWithRisks | Savepoints |
 |---|---|---|---|
 | SQL Server | RU, RC, RR, Ser, plus Snap when `ALLOW_SNAPSHOT_ISOLATION` is on | Snap, or RC (throws) when snapshot isolation is off / Ser / RU | C, R (no release) |

@@ -115,8 +115,16 @@ public interface IDatabaseContextConfiguration
     /// How long to wait for a governor permit before throwing <c>PoolSaturatedException</c>.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The default is 5 s. It also decides whether a spike is survived: a caller that waits this long for a slot without being
+    /// served gets <c>PoolSaturatedException</c>, so a burst of slow calls against a small pool turns most of its calls away at
+    /// 5 s and none at 30 s (measured in <c>docs/connection-governance-investigation-2026-10.md</c>). Raise it for
+    /// workloads with slow calls or bursts; changing the default is a separate decision.
+    /// </para>
+    /// <para>
     /// Should be set lower than the ADO.NET connection timeout so the library surfaces a
-    /// meaningful error before the driver does.
+    /// meaningful error before the driver does. See <c>docs/connection-pooling.md</c>.
+    /// </para>
     /// </remarks>
     TimeSpan PoolAcquireTimeout { get; set; }
 

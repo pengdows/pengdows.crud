@@ -62,6 +62,7 @@ This is a compact, high-signal guide for maintainers and AI assistants. It captu
 
 - **DatabaseContext is orchestration, not state.** Mostly immutable configuration + atomic metrics; avoid adding shared mutable state (ProcWrappingStyle is a rare exception).
 - **TransactionContext pins a single connection for its lifetime.** Its user lock serializes operations on that connection (the connection is requested with `isShared=false`, so no redundant second lock is layered on in ephemeral modes); in SingleConnection mode it also holds the context's single-connection transaction gate until commit/rollback.
+- **A lease the caller drops keeps its permit: there is no finalizer.** A connection, reader or transaction that is never disposed holds its governor permit until it is disposed; later callers wait for a slot and get `PoolSaturatedException`, and nothing in the library reclaims it (no `~Type()` anywhere, pinned by `LibrarySourceAuditTests`). Cleanup is guaranteed for completed and governed paths and for what the caller disposes. Adding a backstop would be a deliberate change that also changes `TrackedConnectionSlotLifetimeTests.AbandonedConnection_KeepsItsPermit_UntilDisposed`.
 - **SqlContainer owns SQL + parameters; it does not track entity state.**
 - **Dialect selection is immutable post-initialization.**
 - **MySQL upserts depend on the `incoming` alias when the server supports it.**

@@ -40,7 +40,9 @@ public class Order { ... }
 ```
 
 Required on every entity class used with any gateway. `name` is required and cannot be empty
-(`SqlGenerationException` if it is); `schema` is optional (`null` = provider default schema).
+(`SqlGenerationException` if it is); `schema` is optional (`null` = provider default schema). On a database whose dialect has
+no namespaces (`SupportsNamespaces` is false) the schema qualifier is dropped and the plain table name is used, so one entity
+maps on every database.
 `Inherited = false` — an entity that derives from another mapped class still needs its own
 `[Table]`.
 
@@ -148,6 +150,12 @@ library's `RowVersion` value type — anything else throws `SqlGenerationExcepti
 rather than a numeric counter the library increments itself: they are compared in the WHERE clause
 and never incremented. Mark such a column `[NonInsertable]`/`[NonUpdateable]` too, since the
 database assigns it; see `docs/advanced-types.md`.
+
+An opaque version is compared in an UPDATE's WHERE clause, but **`UpsertAsync` does not detect a stale opaque version**: the upsert
+statement carries no version guard for a database-generated token, so zero rows affected is not read as a conflict. A numeric
+version is guarded in an upsert where the database can report the skipped row (PostgreSQL, SQL Server, Oracle, SQLite and the
+other `MERGE`/`ON CONFLICT ... WHERE` forms); the MySQL family and Firebird cannot, with either kind. Use `UpdateAsync` where a
+stale version must be refused.
 
 - **CREATE:** if the numeric version is null/zero, the library sets it to `1` before INSERT.
   (Opaque `byte[]`/`RowVersion` versions are simply whatever the database assigns — there's nothing
