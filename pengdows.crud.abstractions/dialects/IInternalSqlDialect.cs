@@ -76,6 +76,14 @@ internal interface IInternalSqlDialect : ISqlDialect
     string? MergeTargetLockHint => null;
 
     /// <summary>
+    /// True when a unique violation from an upsert statement is retried once. A MERGE (or Firebird's UPDATE OR INSERT)
+    /// with no serialization hint is not atomic against a concurrent insert of the same key: both callers take the
+    /// insert branch and one fails with a unique violation. Re-running the statement is the fix there, since the row
+    /// now exists and it matches. A violation that persists is a different unique index and is thrown.
+    /// </summary>
+    bool UpsertRetriesOnUniqueViolation => false;
+
+    /// <summary>
     /// False when a zero-length binary value does not read back as zero-length: Sybase ASE stores
     /// it as the single byte 0x00 (as it stores '' as a single blank).
     /// </summary>

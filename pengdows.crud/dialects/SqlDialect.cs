@@ -1457,6 +1457,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// <inheritdoc cref="IInternalSqlDialect.MergeTargetLockHint"/>
     public virtual string? MergeTargetLockHint => null;
 
+    /// <inheritdoc cref="IInternalSqlDialect.UpsertRetriesOnUniqueViolation"/>
+    public virtual bool UpsertRetriesOnUniqueViolation => false;
+
     /// <inheritdoc cref="IInternalSqlDialect.PreservesEmptyBinary"/>
     public virtual bool PreservesEmptyBinary => true;
 

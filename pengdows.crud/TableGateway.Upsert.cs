@@ -62,7 +62,7 @@ public partial class TableGateway<TEntity, TRowID>
             // BuildUpsert creates a dynamic container - proper disposal required to avoid resource leaks
             // Use async disposal for async operations
             await using var sc = BuildUpsert(entity, ctx);
-            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            var rowsAffected = await ExecuteUpsertAsync(sc, ctx, cancellationToken).ConfigureAwait(false);
 
             // Optimistic concurrency: throw only when the dialect enforced a version predicate in the SQL.
             // MERGE dialects (e.g. SQL Server/Oracle/Snowflake) skip the matched update on a version

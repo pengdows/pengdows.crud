@@ -651,6 +651,10 @@ internal class OracleDialect : SqlDialect
         return base.PrepareParameterValue(value, dbType);
     }
 
+    // Its upsert is a MERGE (UPDATE OR INSERT on Firebird) with no serialization hint, so two callers on one new key
+    // can both insert and one gets a unique violation: re-run it once and it matches (audit G-01, proven live).
+    public override bool UpsertRetriesOnUniqueViolation => true;
+
     public override bool IsUniqueViolation(DbException ex) =>
         TryGetProviderErrorCode(ex) == 1;
 

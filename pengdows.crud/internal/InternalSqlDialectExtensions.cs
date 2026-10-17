@@ -236,6 +236,15 @@ internal static class InternalSqlDialectExtensions
     }
 
     /// <summary>
+    /// See <see cref="IInternalSqlDialect.UpsertRetriesOnUniqueViolation"/>; false for a dialect that isn't an internal
+    /// one (e.g. a test double).
+    /// </summary>
+    internal static bool UpsertRetriesOnUniqueViolation(this ISqlDialect dialect)
+    {
+        return dialect is IInternalSqlDialect internalDialect && internalDialect.UpsertRetriesOnUniqueViolation;
+    }
+
+    /// <summary>
     /// See <see cref="IInternalSqlDialect.PreservesEmptyBinary"/>; true for a dialect that isn't an
     /// internal one (e.g. a test double).
     /// </summary>

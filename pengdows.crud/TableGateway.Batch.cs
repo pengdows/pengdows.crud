@@ -404,7 +404,8 @@ public partial class TableGateway<TEntity, TRowID>
         // every container after it if execution aborts partway through the batch.
         var auditSnapshots = SnapshotBatchAuditFields(entities);
         return await ExecuteBatchAsync(entities, BuildBatchUpsert(entities, ctx), auditSnapshots,
-            BatchUpsertCanDetectVersionConflict(ctx) ? BatchCheck.UpsertGuard : BatchCheck.None, ctx, cancellationToken).ConfigureAwait(false);
+            BatchUpsertCanDetectVersionConflict(ctx) ? BatchCheck.UpsertGuard : BatchCheck.None, ctx, cancellationToken,
+            isUpsert: true).ConfigureAwait(false);
     }
 
     /// <summary>

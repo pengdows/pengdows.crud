@@ -28,7 +28,10 @@ public class ConcurrentUpsertTests : DatabaseTestBase
     private const string TableName = "concurrent_upsert_rows";
     private const int Workers = 16;
     private const int Rounds = 5;
-    private const int MaxTransientAttempts = 5;
+    // Engines with snapshot isolation (Firebird, CockroachDB, YugabyteDB) abort a loser as a transient conflict, which the
+    // library surfaces for the caller to retry (2.0.x has no retry context). With N callers racing one key at least one
+    // wins each round, so N attempts always suffice.
+    private const int MaxTransientAttempts = Workers;
 
     private static long _nextKey = 9_000_000;
 

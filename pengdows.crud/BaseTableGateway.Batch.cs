@@ -93,7 +93,7 @@ public abstract partial class BaseTableGateway<TEntity>
     /// </summary>
     private protected async ValueTask<int> ExecuteBatchAsync(IReadOnlyList<TEntity> entities,
         IReadOnlyList<ISqlContainer> containers, AuditFieldSnapshot[]? snapshots, BatchCheck check,
-        IDatabaseContext ctx, CancellationToken cancellationToken)
+        IDatabaseContext ctx, CancellationToken cancellationToken, bool isUpsert = false)
     {
         var total = 0;
         var completedContainers = 0;
@@ -103,7 +103,9 @@ public abstract partial class BaseTableGateway<TEntity>
             {
                 await using var owned = sc;
                 cancellationToken.ThrowIfCancellationRequested();
-                var affected = await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+                var affected = isUpsert
+                    ? await ExecuteUpsertAsync(owned, ctx, cancellationToken).ConfigureAwait(false)
+                    : await owned.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
                 if (check != BatchCheck.None && _batchContainerEntities.TryGetValue(sc, out var chunkEntities))
                 {
                     // A guarded upsert that skips a stale row reports it as not affected; an UPDATE's

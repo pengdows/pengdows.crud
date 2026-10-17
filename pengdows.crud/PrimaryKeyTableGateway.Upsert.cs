@@ -116,7 +116,7 @@ public partial class PrimaryKeyTableGateway<TEntity>
             await EnsureDeclaredTypesAsync(ctx, cancellationToken).ConfigureAwait(false); // TYPE-020
             var dialect = GetDialect(ctx);
             await using var sc = BuildUpsert(entity, ctx);
-            var rowsAffected = await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+            var rowsAffected = await ExecuteUpsertAsync(sc, ctx, cancellationToken).ConfigureAwait(false);
 
             if (rowsAffected == 0)
             {
@@ -225,7 +225,8 @@ public partial class PrimaryKeyTableGateway<TEntity>
 
         var auditSnapshots = SnapshotBatchAuditFields(entities);
         return await ExecuteBatchAsync(entities, BuildBatchUpsert(entities, ctx), auditSnapshots,
-            BatchUpsertCanDetectVersionConflict(ctx) ? BatchCheck.UpsertGuard : BatchCheck.None, ctx, cancellationToken).ConfigureAwait(false);
+            BatchUpsertCanDetectVersionConflict(ctx) ? BatchCheck.UpsertGuard : BatchCheck.None, ctx, cancellationToken,
+            isUpsert: true).ConfigureAwait(false);
     }
 
     // =========================================================================

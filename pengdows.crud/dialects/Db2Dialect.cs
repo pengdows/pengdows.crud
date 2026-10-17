@@ -232,6 +232,10 @@ internal sealed class Db2Dialect : SqlDialect
     // the driver's message shape has neither "ERROR [nnnnn]" nor "SQLSTATE=nnnnn"). Matches
     // Db2ExceptionTranslator's own numeric fallback so this dialect classification and that
     // translator can't silently disagree (architecture-cleanup: previously SqlState-only here).
+    // Its upsert is a MERGE (UPDATE OR INSERT on Firebird) with no serialization hint, so two callers on one new key
+    // can both insert and one gets a unique violation: re-run it once and it matches (audit G-01, proven live).
+    public override bool UpsertRetriesOnUniqueViolation => true;
+
     public override bool IsUniqueViolation(DbException ex) =>
         HasSqlState(ex, "23505") ||
         TryGetProviderErrorMagnitude(ex) is 803;

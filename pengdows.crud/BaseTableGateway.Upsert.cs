@@ -9,7 +9,9 @@
 //   gateway passes its conflict key and its templates' fragments.
 // =============================================================================
 
+using System.Data;
 using pengdows.crud.dialects;
+using pengdows.crud.exceptions;
 using pengdows.crud.@internal;
 
 namespace pengdows.crud;
@@ -19,6 +21,24 @@ namespace pengdows.crud;
 /// </summary>
 public abstract partial class BaseTableGateway<TEntity>
 {
+    /// <summary>
+    /// Runs an upsert statement. Where the dialect's upsert is not atomic against a concurrent insert of the same key
+    /// (<see cref="IInternalSqlDialect.UpsertRetriesOnUniqueViolation"/>), a unique violation is retried once: the row
+    /// exists by then, so the statement matches. A second violation is a different unique index and is thrown.
+    /// </summary>
+    private protected async ValueTask<int> ExecuteUpsertAsync(ISqlContainer sc, IDatabaseContext ctx,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        }
+        catch (UniqueConstraintViolationException) when (GetDialect(ctx).UpsertRetriesOnUniqueViolation())
+        {
+            return await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
+        }
+    }
+
     /// <summary>Sets an entity's audit fields and starts its version before an insert or upsert.</summary>
     private protected void PrepareForInsertOrUpsert(TEntity e)
     {
