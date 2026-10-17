@@ -40,7 +40,6 @@ internal partial class ScriptedDatabaseContext : global::pengdows.crud.IDatabase
     int global::pengdows.crud.IDatabaseContext.MaxOutputParameters { get => throw Unscripted("MaxOutputParameters"); }
     long global::pengdows.crud.IDatabaseContext.NumberOfOpenConnections { get => throw Unscripted("NumberOfOpenConnections"); }
     global::pengdows.crud.metrics.DatabaseMetrics global::pengdows.crud.IDatabaseContext.Metrics { get => throw Unscripted("Metrics"); }
-    global::pengdows.crud.dialects.ISqlDialect global::pengdows.crud.IDatabaseContext.Dialect { get => throw Unscripted("Dialect"); }
     global::pengdows.crud.enums.SupportedDatabase global::pengdows.crud.IDatabaseContext.Product { get => throw Unscripted("Product"); }
     long global::pengdows.crud.IDatabaseContext.PeakOpenConnections { get => throw Unscripted("PeakOpenConnections"); }
     global::pengdows.crud.enums.CommandPrepareMode global::pengdows.crud.IDatabaseContext.PrepareMode { get => throw Unscripted("PrepareMode"); }

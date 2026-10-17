@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Moq;
 using pengdows.crud.infrastructure;
 using pengdows.crud.threading;
 using pengdows.crud.Tests.Logging;
@@ -24,10 +23,9 @@ public sealed class SqlContainerLockReleaseTests
     {
         var logs = new ListLoggerProvider();
         using var loggerFactory = new LoggerFactory(new[] { logs });
-        var locker = new Mock<ILockerAsync>();
-        locker.Setup(l => l.DisposeAsync()).Throws(new ObjectDisposedException("gate"));
+        var locker = new ScriptedLocker { DisposeAsyncException = new ObjectDisposedException("gate") };
 
-        await SqlContainer.ReleaseLockBestEffortAsync(locker.Object, loggerFactory.CreateLogger("test"), "context lock");
+        await SqlContainer.ReleaseLockBestEffortAsync(locker, loggerFactory.CreateLogger("test"), "context lock");
 
         Assert.Contains(logs.Entries, e => e.Level == LogLevel.Warning && e.Exception is ObjectDisposedException);
     }
@@ -35,12 +33,11 @@ public sealed class SqlContainerLockReleaseTests
     [Fact]
     public async Task ReleaseLockBestEffort_ReleasesTheLock()
     {
-        var locker = new Mock<ILockerAsync>();
-        locker.Setup(l => l.DisposeAsync()).Returns(ValueTask.CompletedTask);
+        var locker = new ScriptedLocker();
 
-        await SqlContainer.ReleaseLockBestEffortAsync(locker.Object, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "gate");
+        await SqlContainer.ReleaseLockBestEffortAsync(locker, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, "gate");
 
-        locker.Verify(l => l.DisposeAsync(), Times.Once);
+        Assert.Equal(1, locker.DisposeAsyncCount);
     }
 
     [Fact]

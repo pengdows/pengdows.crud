@@ -1,7 +1,6 @@
 using System;
 using System.Data;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.@internal;
@@ -22,20 +21,8 @@ public class BinaryReadDriftTests
     private static readonly byte[] Wkb = Convert.FromHexString("0101000000000000000000F03F0000000000000040");
 
     // Reports more bytes than it delivers.
-    private static IDataRecord ShortRecord(byte[] delivered, long reported)
-    {
-        var record = new Mock<IDataRecord>();
-        record.Setup(r => r.GetBytes(0, 0, null, 0, 0)).Returns(reported);
-        record.Setup(r => r.GetBytes(0, It.IsAny<long>(), It.IsNotNull<byte[]>(), It.IsAny<int>(), It.IsAny<int>()))
-            .Returns((int _, long offset, byte[] buffer, int at, int length) =>
-            {
-                var available = Math.Max(0, delivered.Length - (int)offset);
-                var count = Math.Min(available, length);
-                Array.Copy(delivered, offset, buffer, at, count);
-                return count;
-            });
-        return record.Object;
-    }
+    private static IDataRecord ShortRecord(byte[] delivered, long reported) =>
+        new ScriptedDataRecord { BytesDelivered = delivered, BytesReported = reported };
 
     [Fact]
     public void ShortBinaryRead_KeepsOnlyTheDeliveredBytes()
@@ -51,14 +38,16 @@ public class BinaryReadDriftTests
     [Fact]
     public void GuidFromWrongLengthBinary_FailsLikeEveryGuidRead()
     {
-        var record = new Mock<IDataRecord>();
-        record.Setup(r => r.IsDBNull(0)).Returns(false);
-        record.Setup(r => r.GetValue(0)).Throws<InvalidCastException>();
-        record.Setup(r => r.GetBytes(0, 0, null, 0, 0)).Returns(15);
+        var record = new ScriptedDataRecord
+        {
+            IsNull = false,
+            ValueException = new InvalidCastException(),
+            BytesReported = 15
+        };
 
         Assert.Throws<pengdows.crud.exceptions.InvalidValueException>(() =>
-            new ProviderValueFieldReader.GuidColumnReader(false).Read(record.Object, 0));
+            new ProviderValueFieldReader.GuidColumnReader(false).Read(record, 0));
         Assert.Throws<pengdows.crud.exceptions.InvalidValueException>(() =>
-            TypeCoercionHelper.ReadGuidFromBytes(record.Object, 0, false));
+            TypeCoercionHelper.ReadGuidFromBytes(record, 0, false));
     }
 }

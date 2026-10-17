@@ -13,7 +13,6 @@ internal partial class ScriptedColumnInfo : global::pengdows.crud.IColumnInfo
     private static NotSupportedException Unscripted(string member) => new($"ScriptedColumnInfo does not script {member}.");
 
     object global::pengdows.crud.IColumnInfo.MakeParameterValueFromField<T>(T objectToCreate) => throw Unscripted("MakeParameterValueFromField");
-    global::System.Reflection.PropertyInfo global::pengdows.crud.IColumnInfo.PropertyInfo { get => throw Unscripted("PropertyInfo"); }
     bool global::pengdows.crud.IColumnInfo.IsId { get => throw Unscripted("IsId"); }
     global::System.Data.DbType global::pengdows.crud.IColumnInfo.DbType { get => throw Unscripted("DbType"); }
     bool global::pengdows.crud.IColumnInfo.IsNonUpdateable { get => throw Unscripted("IsNonUpdateable"); }

@@ -33,6 +33,8 @@ internal partial class ScriptedDatabaseContext
 
     public string ConnectionString { get; set; } = "";
 
+    public pengdows.crud.dialects.ISqlDialect Dialect { get; set; } = null!;
+
     /// <summary>Thrown by Dispose when set (after it is counted).</summary>
     public Exception? DisposeException { get; set; }
 
@@ -78,6 +80,62 @@ internal partial class ScriptedColumnInfo
 {
     public string Name { get; set; } = "";
     public bool IsJsonType { get; set; }
+    public System.Reflection.PropertyInfo PropertyInfo { get; set; } = null!;
+}
+
+internal partial class ScriptedTableInfo
+{
+    public System.Collections.Generic.IReadOnlyDictionary<string, IColumnInfo> Columns { get; set; } =
+        new System.Collections.Generic.Dictionary<string, IColumnInfo>();
+}
+
+internal partial class ScriptedLocker
+{
+    public int DisposeAsyncCount { get; private set; }
+
+    /// <summary>Thrown by DisposeAsync when set (after it is counted).</summary>
+    public Exception? DisposeAsyncException { get; set; }
+
+    public ValueTask DisposeAsync()
+    {
+        DisposeAsyncCount++;
+        if (DisposeAsyncException != null)
+        {
+            throw DisposeAsyncException;
+        }
+
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// A record for the binary-read tests: it reports <see cref="BytesReported"/> bytes from <c>GetBytes(.., null, ..)</c> and
+/// delivers <see cref="BytesDelivered"/> (fewer, when a provider's reported length is wrong); <c>GetValue</c> throws
+/// <see cref="ValueException"/> when set.
+/// </summary>
+internal partial class ScriptedDataRecord
+{
+    public bool IsNull { get; set; }
+    public long BytesReported { get; set; }
+    public byte[] BytesDelivered { get; set; } = Array.Empty<byte>();
+    public Exception? ValueException { get; set; }
+
+    public bool IsDBNull(int i) => IsNull;
+
+    public object GetValue(int i) => ValueException != null ? throw ValueException : DBNull.Value;
+
+    public long GetBytes(int i, long fieldOffset, byte[]? buffer, int bufferoffset, int length)
+    {
+        if (buffer == null)
+        {
+            return BytesReported;
+        }
+
+        var available = Math.Max(0, BytesDelivered.Length - (int)fieldOffset);
+        var count = Math.Min(available, length);
+        Array.Copy(BytesDelivered, fieldOffset, buffer, bufferoffset, count);
+        return count;
+    }
 }
 
 internal partial class ScriptedInternalSqlDialect
@@ -133,4 +191,10 @@ internal partial class ScriptedTableGateway<TEntity, TRowID>
     public ValueTask<int> BatchUpsertAsync(System.Collections.Generic.IReadOnlyList<TEntity> entities,
         IDatabaseContext? context = null, System.Threading.CancellationToken cancellationToken = default) =>
         Batch("BatchUpsert", entities, context, cancellationToken);
+}
+
+/// <summary>A scripted database context that also exposes a type map, as the library's own contexts do.</summary>
+internal sealed class ScriptedTypeMapDatabaseContext : ScriptedDatabaseContext, pengdows.crud.@internal.ITypeMapAccessor
+{
+    public ITypeMapRegistry TypeMapRegistry { get; set; } = null!;
 }
