@@ -39,6 +39,34 @@ public class MySqlTranslatorTests
         Assert.IsType<ForeignKeyViolationException>(result);
     }
 
+    // Live (SingleStore 9.1.1, ConcurrentUpsertTests): two concurrent overlapping multi-row INSERT ... ON DUPLICATE KEY
+    // UPDATE statements deadlock until the engine kills both at its lock-wait timeout, and the kill lands in the commit
+    // phase: error 1997 / HY000, "the outcome is unknown ... Please check if it succeeded". Not a failure to retry
+    // blindly, and not a plain failure: the write may have been applied (AmbiguousResultException, as CockroachDB's 40003).
+    [Theory]
+    [InlineData(SupportedDatabase.SingleStore)]
+    [InlineData(SupportedDatabase.MySql)]
+    public void Error1997_WithAnUnknownOutcome_MapsTo_AmbiguousResultException(SupportedDatabase database)
+    {
+        var raw = new NumberedDbException(1997,
+            "Attempted to interrupt transaction execution, but the outcome is unknown because the transaction was already in its commit phase. Please check if it succeeded");
+
+        var result = _translator.Translate(TestDialect(database), raw, DbOperationKind.Insert);
+
+        Assert.IsType<AmbiguousResultException>(result);
+        Assert.False(result.IsTransient);
+    }
+
+    [Fact]
+    public void Error1997_WithoutAnUnknownOutcome_IsNotAmbiguous()
+    {
+        var raw = new NumberedDbException(1997, "some other failure");
+
+        var result = _translator.Translate(TestDialect(SupportedDatabase.SingleStore), raw, DbOperationKind.Insert);
+
+        Assert.IsNotType<AmbiguousResultException>(result);
+    }
+
     [Fact]
     public void Error1048_MapsTo_NotNullViolationException()
     {

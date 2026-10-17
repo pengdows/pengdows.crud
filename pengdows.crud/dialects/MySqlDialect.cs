@@ -749,6 +749,15 @@ internal class MySqlDialect : SqlDialect
         var errorCode = TryGetProviderErrorCode(ex);
         var sqlState = TryGetProviderSqlState(ex);
 
+        // 1997 / HY000 (SingleStore, live): its engine killed a statement (lock-wait timeout) that was already in its
+        // commit phase, "the outcome is unknown ... Please check if it succeeded". The write may have been applied, so it
+        // is neither a plain failure nor safe to retry blindly. The message is required: the code alone is not specific.
+        if (errorCode == 1997 && ex.Message.Contains("outcome is unknown", StringComparison.OrdinalIgnoreCase))
+        {
+            category = DbErrorCategory.AmbiguousResult;
+            return true;
+        }
+
         if (errorCode == 1213)
         {
             category = DbErrorCategory.Deadlock;
