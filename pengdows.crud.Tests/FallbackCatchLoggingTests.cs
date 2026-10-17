@@ -4,7 +4,6 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -115,10 +114,11 @@ public sealed class FallbackCatchLoggingTests
         using var _ = factory;
         var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.Sqlite,
             new fakeDbFactory(SupportedDatabase.Sqlite), logger);
-        var connection = new Mock<ITrackedConnection>();
-        connection.Setup(c => c.CreateCommand()).Throws(new InvalidOperationException("probe failed"));
+        var inner = new fakeDbConnection { EmulatedProduct = SupportedDatabase.Sqlite };
+        inner.SetCustomCommandBehavior(() => throw new InvalidOperationException("probe failed"));
+        var connection = new TrackedConnection(inner);
 
-        Assert.Null(await ((SqlDialect)dialect).GetProductNameAsync(connection.Object));
+        Assert.Null(await ((SqlDialect)dialect).GetProductNameAsync(connection));
         AssertLoggedAtDebug(logs);
     }
 
@@ -129,12 +129,12 @@ public sealed class FallbackCatchLoggingTests
         using var _ = factory;
         var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.SqlServer,
             new fakeDbFactory(SupportedDatabase.SqlServer), logger);
-        var connection = new Mock<IDbConnection>();
-        connection.Setup(c => c.CreateCommand()).Throws(new InvalidOperationException("probe failed"));
+        var connection = new fakeDbConnection { EmulatedProduct = SupportedDatabase.SqlServer };
+        connection.SetCustomCommandBehavior(() => throw new InvalidOperationException("probe failed"));
         var probe = dialect.GetType().GetMethod("TryGetCompatibilityLevel",
             BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic)!;
 
-        Assert.Null(probe.Invoke(probe.IsStatic ? null : dialect, new object[] { connection.Object }));
+        Assert.Null(probe.Invoke(probe.IsStatic ? null : dialect, new object[] { connection }));
         AssertLoggedAtDebug(logs);
     }
 }

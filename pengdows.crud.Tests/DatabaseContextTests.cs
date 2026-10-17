@@ -167,15 +167,13 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public async Task CloseAndDisposeConnectionAsync_WithAsyncDisposable_DisposesCorrectly(SupportedDatabase product)
     {
-        var mockTracked = new Mock<ITrackedConnection>();
-        mockTracked.As<IAsyncDisposable>().Setup(d => d.DisposeAsync())
-            .Returns(ValueTask.CompletedTask).Verifiable();
+        var tracked = TestDoubles.Connection();
 
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        await context.CloseAndDisposeConnectionAsync(mockTracked.Object);
+        await context.CloseAndDisposeConnectionAsync(tracked);
 
-        mockTracked.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
+        Assert.True(tracked.IsDisposed);
     }
 
     [Fact]

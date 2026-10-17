@@ -22,6 +22,17 @@ internal static class TestDoubles
 
     /// <summary>An <see cref="IAsyncDisposable"/> that does nothing and counts being disposed.</summary>
     public static CountingAsyncDisposable Disposable() => new();
+
+    /// <summary>A real column description (not JSON, not an enum) named <c>col1</c>, from a registered entity.</summary>
+    public static IColumnInfo Column() =>
+        new TypeMapRegistry().GetTableInfo<OneColumn>().Columns["col1"];
+
+    [attributes.Table("test_doubles_one_column")]
+    private sealed class OneColumn
+    {
+        [attributes.Id] [attributes.Column("id", System.Data.DbType.Int32)] public int Id { get; set; }
+        [attributes.Column("col1", System.Data.DbType.String)] public string Col1 { get; set; } = "";
+    }
 }
 
 /// <summary>An <see cref="IAsyncDisposable"/> that records how many times it was disposed.</summary>

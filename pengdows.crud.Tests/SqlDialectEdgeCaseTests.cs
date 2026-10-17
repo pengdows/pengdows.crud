@@ -5,7 +5,6 @@ using System.Data.Common;
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -116,11 +115,8 @@ public class SqlDialectEdgeCaseTests
     {
         using var ctx = CreateDuckDbContext();
         var dialect = ctx.GetDialect();
-        var mockCol = new Mock<IColumnInfo>();
-        mockCol.SetupGet(c => c.Name).Returns("col1");
-        mockCol.SetupGet(c => c.IsJsonType).Returns(false);
         Assert.Throws<ArgumentNullException>(() =>
-            dialect.RenderMergeSource(new[] { mockCol.Object }, null!));
+            dialect.RenderMergeSource(new[] { TestDoubles.Column() }, null!));
     }
 
     [Fact]
@@ -128,11 +124,8 @@ public class SqlDialectEdgeCaseTests
     {
         using var ctx = CreateDuckDbContext();
         var dialect = ctx.GetDialect();
-        var mockCol = new Mock<IColumnInfo>();
-        mockCol.SetupGet(c => c.Name).Returns("col1");
-        mockCol.SetupGet(c => c.IsJsonType).Returns(false);
         Assert.Throws<ArgumentException>(() =>
-            dialect.RenderMergeSource(new[] { mockCol.Object }, new[] { "p0", "p1" }));
+            dialect.RenderMergeSource(new[] { TestDoubles.Column() }, new[] { "p0", "p1" }));
     }
 
     // =========================================================================
@@ -498,8 +491,7 @@ public class SqlDialectEdgeCaseTests
     {
         using var ctx = CreateSqliteContext();
         var dialect = GetSqlDialect(ctx);
-        var mockConn = new Mock<ITrackedConnection>();
-        var result = dialect.IsSnapshotIsolationOn(mockConn.Object);
+        var result = dialect.IsSnapshotIsolationOn(TestDoubles.Connection());
         Assert.False(result);
     }
 
