@@ -10,7 +10,6 @@ using System;
 using System.Data;
 using System.Data.Common;
 using System.Threading;
-using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -30,12 +29,12 @@ public class InternalExtensionThrowPathTests
     [Fact]
     public void CreateCommand_NonSqlContainerISqlContainer_Throws()
     {
-        // Create a mock ISqlContainer that is NOT a SqlContainer
-        var mockContainer = new Mock<ISqlContainer>();
-        var mockConnection = new Mock<ITrackedConnection>();
+        // An ISqlContainer that is NOT a SqlContainer
+        var mockContainer = new ScriptedSqlContainer();
+        var mockConnection = new ScriptedTrackedConnection();
 
         var ex = Assert.Throws<InvalidOperationException>(
-            () => mockContainer.Object.CreateCommand(mockConnection.Object));
+            () => mockContainer.CreateCommand(mockConnection));
 
         Assert.Contains("SqlContainer", ex.Message);
     }
@@ -49,38 +48,37 @@ public class InternalExtensionThrowPathTests
     public void GetConnection_NonProviderContext_Throws()
     {
         // IDatabaseContext that does NOT implement IInternalConnectionProvider
-        var mockCtx = new Mock<IDatabaseContext>();
-        mockCtx.Setup(c => c.ReadWriteMode).Returns(ReadWriteMode.ReadWrite);
+        var mockCtx = new ScriptedDatabaseContext();
 
         Assert.Throws<InvalidOperationException>(
-            () => mockCtx.Object.GetConnection(ExecutionType.Read));
+            () => mockCtx.GetConnection(ExecutionType.Read));
     }
 
     [Fact]
     public void GetLock_NonProviderContext_Throws()
     {
-        var mockCtx = new Mock<IDatabaseContext>();
+        var mockCtx = new ScriptedDatabaseContext();
 
         Assert.Throws<InvalidOperationException>(
-            () => mockCtx.Object.GetLock());
+            () => mockCtx.GetLock());
     }
 
     [Fact]
     public void CloseAndDisposeConnection_NonProviderContext_Throws()
     {
-        var mockCtx = new Mock<IDatabaseContext>();
+        var mockCtx = new ScriptedDatabaseContext();
 
         Assert.Throws<InvalidOperationException>(
-            () => mockCtx.Object.CloseAndDisposeConnection(null));
+            () => mockCtx.CloseAndDisposeConnection(null));
     }
 
     [Fact]
     public async System.Threading.Tasks.Task CloseAndDisposeConnectionAsync_NonProviderContext_Throws()
     {
-        var mockCtx = new Mock<IDatabaseContext>();
+        var mockCtx = new ScriptedDatabaseContext();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await mockCtx.Object.CloseAndDisposeConnectionAsync(null));
+            async () => await mockCtx.CloseAndDisposeConnectionAsync(null));
     }
 
     // =========================================================================
@@ -91,33 +89,33 @@ public class InternalExtensionThrowPathTests
     [Fact]
     public void ApplyConnectionSettings_NonInternalDialect_Throws()
     {
-        // Create a mock ISqlDialect that does NOT implement IInternalSqlDialect
-        var mockDialect = new Mock<ISqlDialect>();
-        var mockCtx = new Mock<IDatabaseContext>();
-        var mockConn = new Mock<IDbConnection>();
+        // An ISqlDialect that does NOT implement IInternalSqlDialect
+        var mockDialect = new ScriptedSqlDialect();
+        var mockCtx = new ScriptedDatabaseContext();
+        var mockConn = new fakeDbConnection();
 
         Assert.Throws<InvalidOperationException>(
-            () => mockDialect.Object.ApplyConnectionSettings(mockConn.Object, mockCtx.Object, false));
+            () => mockDialect.ApplyConnectionSettings(mockConn, mockCtx, false));
     }
 
     [Fact]
     public void ShouldDisablePrepareOn_NonInternalDialect_Throws()
     {
-        var mockDialect = new Mock<ISqlDialect>();
+        var mockDialect = new ScriptedSqlDialect();
         var ex = new Exception("test");
 
         Assert.Throws<InvalidOperationException>(
-            () => mockDialect.Object.ShouldDisablePrepareOn(ex));
+            () => mockDialect.ShouldDisablePrepareOn(ex));
     }
 
     [Fact]
     public void TryEnterReadOnlyTransaction_NonInternalDialect_Throws()
     {
-        var mockDialect = new Mock<ISqlDialect>();
-        var mockTx = new Mock<ITransactionContext>();
+        var mockDialect = new ScriptedSqlDialect();
+        var mockTx = new ScriptedTransactionContext();
 
         Assert.Throws<InvalidOperationException>(
-            () => mockDialect.Object.TryEnterReadOnlyTransaction(mockTx.Object));
+            () => mockDialect.TryEnterReadOnlyTransaction(mockTx));
     }
 
     // =========================================================================

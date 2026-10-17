@@ -3,7 +3,6 @@ using System.Data;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 using pengdows.crud.attributes;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -220,37 +219,27 @@ public class FlatFileDialectTests
     [Fact]
     public void TryEnterReadOnlyTransaction_ExecutesSetTransactionReadOnly()
     {
-        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
-        container.Setup(c => c.ExecuteNonQueryAsync(CommandType.Text)).ReturnsAsync(0).Verifiable();
-        container.Setup(c => c.Dispose()).Verifiable();
-        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
-        transaction.Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
-            .Returns(container.Object)
-            .Verifiable();
+        var container = new ScriptedSqlContainer();
+        var transaction = new ScriptedTransactionContext { ContainerFactory = _ => container };
 
-        Dialect().TryEnterReadOnlyTransaction(transaction.Object);
+        Dialect().TryEnterReadOnlyTransaction(transaction);
 
-        container.Verify();
-        transaction.Verify();
+        Assert.Equal(new[] { "SET TRANSACTION READ ONLY" }, transaction.RequestedSql);
+        Assert.Equal(new[] { "ExecuteNonQueryAsync(Text, none)" }, container.Calls);
+        Assert.True(container.IsDisposed);
     }
 
     [Fact]
     public async Task TryEnterReadOnlyTransactionAsync_ExecutesSetTransactionReadOnly()
     {
-        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
-        container.Setup(c => c.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(0)
-            .Verifiable();
-        container.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
-        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
-        transaction.Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
-            .Returns(container.Object)
-            .Verifiable();
+        var container = new ScriptedSqlContainer();
+        var transaction = new ScriptedTransactionContext { ContainerFactory = _ => container };
 
-        await Dialect().TryEnterReadOnlyTransactionAsync(transaction.Object, CancellationToken.None);
+        await Dialect().TryEnterReadOnlyTransactionAsync(transaction, CancellationToken.None);
 
-        container.Verify();
-        transaction.Verify();
+        Assert.Equal(new[] { "SET TRANSACTION READ ONLY" }, transaction.RequestedSql);
+        Assert.Equal(new[] { "ExecuteNonQueryAsync(Text, none)" }, container.Calls);
+        Assert.True(container.IsDisposed);
     }
 
     // pengdows.sql/SqlLexer.cs tokenizes ":name" as a NamedParameter and

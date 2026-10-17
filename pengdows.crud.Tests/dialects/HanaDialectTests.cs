@@ -423,43 +423,28 @@ public class HanaDialectTests
         // same TryExecuteReadOnlySql shared helper Oracle/Informix use for their own identical
         // mechanism.
         var dialect = CreateDialect();
-        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
-        container.Setup(c => c.ExecuteNonQueryAsync(CommandType.Text)).ReturnsAsync(0).Verifiable();
-        container.Setup(c => c.Dispose()).Verifiable();
+        var container = new ScriptedSqlContainer();
+        var transaction = new ScriptedTransactionContext { ContainerFactory = _ => container };
 
-        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
-        transaction
-            .Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
-            .Returns(container.Object)
-            .Verifiable();
+        dialect.TryEnterReadOnlyTransaction(transaction);
 
-        dialect.TryEnterReadOnlyTransaction(transaction.Object);
-
-        container.Verify();
-        transaction.Verify();
+        Assert.Equal(new[] { "SET TRANSACTION READ ONLY" }, transaction.RequestedSql);
+        Assert.Equal(new[] { "ExecuteNonQueryAsync(Text, none)" }, container.Calls);
+        Assert.True(container.IsDisposed);
     }
 
     [Fact]
     public async Task TryEnterReadOnlyTransactionAsync_ExecutesSetTransactionReadOnly()
     {
         var dialect = CreateDialect();
-        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
-        container
-            .Setup(c => c.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(0)
-            .Verifiable();
-        container.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask).Verifiable();
+        var container = new ScriptedSqlContainer();
+        var transaction = new ScriptedTransactionContext { ContainerFactory = _ => container };
 
-        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
-        transaction
-            .Setup(t => t.CreateSqlContainer("SET TRANSACTION READ ONLY"))
-            .Returns(container.Object)
-            .Verifiable();
+        await dialect.TryEnterReadOnlyTransactionAsync(transaction, CancellationToken.None);
 
-        await dialect.TryEnterReadOnlyTransactionAsync(transaction.Object, CancellationToken.None);
-
-        container.Verify();
-        transaction.Verify();
+        Assert.Equal(new[] { "SET TRANSACTION READ ONLY" }, transaction.RequestedSql);
+        Assert.Equal(new[] { "ExecuteNonQueryAsync(Text, none)" }, container.Calls);
+        Assert.True(container.IsDisposed);
     }
 
     private sealed class NativeErrorDbException : DbException
