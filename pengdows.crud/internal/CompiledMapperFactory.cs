@@ -16,20 +16,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 {
     private static readonly MethodInfo IsDbNullMethod = typeof(IDataRecord).GetMethod(nameof(IDataRecord.IsDBNull))!;
 
-    private static readonly MethodInfo CoerceMethod = typeof(TypeCoercionHelper).GetMethod(
-        nameof(TypeCoercionHelper.Coerce),
-        BindingFlags.Public | BindingFlags.Static,
-        null,
-        new[] { typeof(object), typeof(Type), typeof(Type), typeof(TypeCoercionOptions) },
-        null)!;
-
-    private static readonly MethodInfo NormalizeDateTimeMethod = typeof(TypeCoercionHelper).GetMethod(
-        nameof(TypeCoercionHelper.NormalizeDateTime),
-        BindingFlags.NonPublic | BindingFlags.Static,
-        null,
-        new[] { typeof(DateTime) },
-        null)!;
-
     public static Func<TReader, TEntity> Create<TReader>(
         TReader reader,
         IReadOnlyDictionary<string, IColumnInfo> columnsByName,
@@ -153,7 +139,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 }
                 else
                 {
-                    converted = BuildConversionExpression(bytes, fieldType, targetType, coercionOptions);
+                    converted = ColumnConversion.Build(bytes, fieldType, targetType, coercionOptions);
                 }
 
                 expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
@@ -182,7 +168,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     // Typed like any other column: an unsigned column read through GetValue was unboxed as the
                     // enum's underlying type and failed (REV-072, as COR-008 for other properties).
                     var rawValue = ReadColumn(readerParam, fieldType, ordinalExpr);
-                    var convertedValue = BuildConversionExpression(rawValue, fieldType, underlyingTarget, coercionOptions);
+                    var convertedValue = ColumnConversion.Build(rawValue, fieldType, underlyingTarget, coercionOptions);
 
                     var mapperMethod = typeof(EnumMappingCache).GetMethod(nameof(EnumMappingCache.ValidateEnumValue))!.MakeGenericMethod(underlyingTarget);
                     enumReadExpr = Expression.Call(mapperMethod, convertedValue);
@@ -223,7 +209,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // NpgsqlInet instead.
                 // Whether the column is an Npgsql inet is known now, from the schema: not asked again on every row.
                 valueReadExpr = NpgsqlTypedValue(NpgsqlTypedFieldReader.Inet, reader, i, readerParam, targetType) ??
-                                BuildConversionExpression(
+                                ColumnConversion.Build(
                                     NpgsqlColumnRead(NpgsqlTypedFieldReader.Inet, reader, i, readerParam, ordinalExpr),
                                     typeof(object), targetType, coercionOptions);
             }
@@ -237,7 +223,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var rawValue = Expression.Call(OffsetTimestampFieldReader.ReadMethod,
                     Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr,
                     Expression.Constant(coercionOptions.OffsetTimestampDataTypeName, typeof(string)));
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+                valueReadExpr = ColumnConversion.Build(rawValue, typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(object) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(Guid))
             {
@@ -246,7 +232,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var guidReader = new ProviderValueFieldReader.GuidColumnReader(coercionOptions?.GuidBytesBigEndian ?? false);
                 var rawValue = Expression.Call(Expression.Constant(guidReader), ProviderValueFieldReader.GuidColumnReader.ReadMethod,
                     Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+                valueReadExpr = ColumnConversion.Build(rawValue, typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(string) && ProviderValueFieldReader.IsReadableArray(targetType) &&
                      (coercionOptions?.ReadsCollectionLiterals ?? false))
@@ -290,7 +276,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).
                 var readDouble = typeof(NumericFieldReader).GetMethod(nameof(NumericFieldReader.ReadDouble))!;
                 var rawValue = Expression.Call(readDouble, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(double), targetType, coercionOptions);
+                valueReadExpr = ColumnConversion.Build(rawValue, typeof(double), targetType, coercionOptions);
             }
             else if (fieldType == typeof(string) && (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(byte[]))
             {
@@ -298,7 +284,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // the value, which converts as before when it really is text.
                 var getValue = GetValueMethod;
                 var rawValue = Expression.Call(Expression.Convert(readerParam, typeof(IDataRecord)), getValue, ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+                valueReadExpr = ColumnConversion.Build(rawValue, typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(long) &&
                      (Nullable.GetUnderlyingType(targetType) ?? targetType) is var wideTarget &&
@@ -310,7 +296,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     ? nameof(WideIntegerFieldReader.ReadDecimal)
                     : nameof(WideIntegerFieldReader.ReadDouble))!;
                 var rawValue = Expression.Call(readTyped, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, wideTarget, targetType, coercionOptions);
+                valueReadExpr = ColumnConversion.Build(rawValue, wideTarget, targetType, coercionOptions);
             }
             else if (fieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
             {
@@ -318,7 +304,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // NUMBER as Int64 and overflows beyond it); read it as BigInteger when it does.
                 var readWide = typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.Read))!;
                 var rawValue = Expression.Call(readWide, Expression.Convert(readerParam, typeof(IDataRecord)), ordinalExpr);
-                valueReadExpr = BuildConversionExpression(rawValue, typeof(object), targetType, coercionOptions);
+                valueReadExpr = ColumnConversion.Build(rawValue, typeof(object), targetType, coercionOptions);
             }
             else if (fieldType == typeof(string) && targetType == typeof(string))
             {
@@ -343,7 +329,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months
                 // and renormalizes days/time; read the full-fidelity NpgsqlInterval instead.
                 valueReadExpr = NpgsqlTypedValue(NpgsqlTypedFieldReader.Interval, reader, i, readerParam, targetType) ??
-                                BuildConversionExpression(
+                                ColumnConversion.Build(
                                     NpgsqlColumnRead(NpgsqlTypedFieldReader.Interval, reader, i, readerParam, ordinalExpr),
                                     typeof(object), targetType, coercionOptions);
             }
@@ -378,7 +364,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     {
                         // Fast path: reader returned the native type — no unboxing needed.
                         Expression native = underlyingTarget == typeof(DateTime)
-                            ? Expression.Call(NormalizeDateTimeMethod, raw) // Inlined NormalizeDateTime
+                            ? Expression.Call(ColumnConversion.NormalizeDateTime, raw) // Inlined NormalizeDateTime
                             : raw;
                         return targetType != underlyingTarget ? Expression.Convert(native, targetType) : native;
                     }
@@ -386,7 +372,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     // Either the type doesn't match the target (needs coercion), or GetReaderMethod fell back to
                     // GetValue() which returns System.Object (e.g. DateTimeOffset — no IDataRecord.GetDateTimeOffset
                     // exists). BuildConversionExpression handles the unboxing + any type conversion.
-                    return BuildConversionExpression(raw, fieldType, targetType, coercionOptions);
+                    return ColumnConversion.Build(raw, fieldType, targetType, coercionOptions);
                 }
 
                 if (!(targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null) && !fieldType.IsValueType)
@@ -515,60 +501,6 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 
     private static MethodInfo GetReaderMethod(Type fieldType) =>
         ReaderGetters.TypedGetter(typeof(IDataRecord), fieldType) ?? ReaderGetters.GetValue;
-
-    private static Expression BuildConversionExpression(Expression value, Type sourceType, Type targetType,
-        TypeCoercionOptions? coercionOptions)
-    {
-        var underlyingTargetType = Nullable.GetUnderlyingType(targetType) ?? targetType;
-
-        if (sourceType == underlyingTargetType)
-        {
-            var result = value.Type != sourceType ? Expression.Convert(value, sourceType) : value;
-
-            // Normalize DateTime: treat Unspecified as UTC, convert Local to UTC.
-            // Many drivers (Snowflake TIMESTAMP_NTZ, SQL Server datetime, MySQL, Oracle)
-            // return DateTimeKind.Unspecified for timezone-naive columns that store UTC values.
-            // Without this, calling .ToUniversalTime() on the entity property would incorrectly
-            // apply the host's local timezone offset (e.g. UTC-6 → +6 hour drift).
-            if (underlyingTargetType == typeof(DateTime))
-            {
-                result = Expression.Call(NormalizeDateTimeMethod, result);
-            }
-
-            return targetType != underlyingTargetType
-                ? Expression.Convert(result, targetType)
-                : result;
-        }
-
-        // Numeric columns into numeric, enum and bool properties, as DataReaderMapper reads them.
-        if (NumericExpressions.Handles(sourceType, underlyingTargetType))
-        {
-            var converted = NumericExpressions.Convert(value, sourceType, underlyingTargetType);
-            return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
-        }
-
-        // Date and time conversions TypeCoercionHelper.Coerce would make, without boxing the value or
-        // its result (PERF-021): DateTime into DateOnly, TimeSpan into TimeOnly, timestamp text (SQLite)
-        // into DateTime/DateTimeOffset/DateOnly.
-        if (TypedCoercions.Find(sourceType, underlyingTargetType) is { } typedCoercion)
-        {
-            var typedSource = value.Type != sourceType ? Expression.Convert(value, sourceType) : value;
-            var converted = Expression.Call(typedCoercion, typedSource,
-                Expression.Constant(coercionOptions ?? TypeCoercionOptions.Default, typeof(TypeCoercionOptions)));
-            return targetType != underlyingTargetType ? Expression.Convert(converted, targetType) : converted;
-        }
-
-        // Fallback: TypeCoercionHelper.Coerce(object, fieldType, targetType)
-        var boxedValue = Expression.Convert(value, typeof(object));
-        var coerceCall = Expression.Call(
-            CoerceMethod,
-            boxedValue,
-            Expression.Constant(sourceType),
-            Expression.Constant(targetType),
-            Expression.Constant(coercionOptions, typeof(TypeCoercionOptions)));
-
-        return Expression.Convert(coerceCall, targetType);
-    }
 
 }
 

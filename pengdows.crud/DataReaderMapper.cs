@@ -95,15 +95,6 @@ public sealed class DataReaderMapper : IDataReaderMapper
 
     private static readonly MethodInfo _getFieldValueGenericMethod = ReaderGetters.GetFieldValueDefinition;
 
-    // NormalizeDateTime: treats Unspecified as UTC, converts Local to UTC, as every read path does.
-    private static readonly MethodInfo _normalizeDateTimeMethod =
-        typeof(TypeCoercionHelper).GetMethod(
-            nameof(TypeCoercionHelper.NormalizeDateTime),
-            BindingFlags.NonPublic | BindingFlags.Static,
-            null,
-            new[] { typeof(DateTime) },
-            null)!;
-
     internal DataReaderMapper()
     {
     }
@@ -677,8 +668,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Inet),
                     typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!,
                     Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
-                var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-                valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+                valueExpression = ColumnConversion.Build(rawValue, typeof(object), targetType, key.Coercion);
             }
         }
         else if (key.FieldType == typeof(DateTime) && underlyingTarget == typeof(DateTimeOffset) &&
@@ -689,8 +679,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var rawValue = Expression.Call(OffsetTimestampFieldReader.ReadMethod,
                 Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal),
                 Expression.Constant(key.Coercion!.OffsetTimestampDataTypeName, typeof(string)));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            valueExpression = ColumnConversion.Build(rawValue, typeof(object), targetType, key.Coercion);
         }
         else if (key.FieldType == typeof(object) && underlyingTarget == typeof(Guid))
         {
@@ -699,8 +688,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var guidReader = new ProviderValueFieldReader.GuidColumnReader(key.Coercion?.GuidBytesBigEndian ?? false);
             var rawValue = Expression.Call(Expression.Constant(guidReader), ProviderValueFieldReader.GuidColumnReader.ReadMethod,
                 Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            valueExpression = ColumnConversion.Build(rawValue, typeof(object), targetType, key.Coercion);
         }
         else if (key.FieldType == typeof(string) && ProviderValueFieldReader.IsReadableArray(targetType) &&
                  (key.Coercion?.ReadsCollectionLiterals ?? false))
@@ -740,8 +728,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             var readWide = typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.Read))!;
             var rawValue = Expression.Call(readWide, Expression.Convert(readerParam, typeof(IDataRecord)),
                 Expression.Constant(key.Ordinal));
-            var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-            valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+            valueExpression = ColumnConversion.Build(rawValue, typeof(object), targetType, key.Coercion);
         }
         else if (underlyingTarget == typeof(types.valueobjects.PostgreSqlInterval))
         {
@@ -759,8 +746,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var rawValue = Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Interval),
                     typeof(NpgsqlTypedFieldReader).GetMethod(nameof(NpgsqlTypedFieldReader.Read))!,
                     Expression.Convert(readerParam, typeof(IDataRecord)), Expression.Constant(key.Ordinal));
-                var coercer = TypeCoercionHelper.ResolveCoercer(typeof(object), targetType, key.EnumMode, key.Coercion);
-                valueExpression = Expression.Convert(Expression.Invoke(Expression.Constant(coercer), rawValue), targetType);
+                valueExpression = ColumnConversion.Build(rawValue, typeof(object), targetType, key.Coercion);
             }
         }
         else if (underlyingTarget == typeof(Stream) && typeof(Stream).IsAssignableFrom(key.FieldType))
@@ -850,7 +836,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
             if (underlyingTarget == typeof(DateTime) && key.FieldType == typeof(DateTime))
             {
                 // Unspecified reads as UTC, as on the gateway (DRY-003).
-                Expression normalized = Expression.Call(_normalizeDateTimeMethod, rawValue);
+                Expression normalized = Expression.Call(ColumnConversion.NormalizeDateTime, rawValue);
                 valueExpression = targetType != underlyingTarget ? Expression.Convert(normalized, targetType) : normalized;
             }
             else if (targetType == key.FieldType)
