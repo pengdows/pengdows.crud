@@ -1,0 +1,59 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Xunit;
+
+namespace pengdows.crud.Tests;
+
+/// <summary>
+/// Source-tree claims of the external audit of 2.0.6 (G-03, review policy 4B), pinned so a change is deliberate.
+/// </summary>
+public class LibrarySourceAuditTests
+{
+    private static IEnumerable<string> LibrarySources()
+    {
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        var library = Path.Combine(root, "pengdows.crud");
+        return Directory.EnumerateFiles(library, "*.cs", SearchOption.AllDirectories)
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") &&
+                        !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"));
+    }
+
+    // G-03: no finalizer or GC backstop anywhere in the library, so an undisposed connection, reader or transaction keeps
+    // its governor permit. If a backstop is added, TrackedConnectionSlotLifetimeTests.AbandonedConnection_* must change on
+    // purpose too, and docs/core-invariants.md must say so.
+    [Fact]
+    public void G03_TheLibraryDeclaresNoFinalizer()
+    {
+        var finalizer = new Regex(@"^\s*(?:public |internal |protected |private )?~[A-Z]\w*\s*\(\s*\)", RegexOptions.Multiline);
+
+        var offenders = LibrarySources().Where(f => finalizer.IsMatch(File.ReadAllText(f))).ToList();
+
+        Assert.True(offenders.Count == 0, "Finalizers: " + string.Join(", ", offenders));
+    }
+
+    // Review policy 4B: a swallowed failure is a security defect. The audit's claim, verified: no one-line empty catch
+    // ("catch { }") in the library. Catch blocks whose body is only a comment do exist (about thirty, mostly cleanup that must
+    // not throw); whether each is justified is a review decision, so they are not pinned here.
+    [Fact]
+    public void Policy4B_NoOneLineEmptyCatch()
+    {
+        var oneLine = new Regex(@"catch\s*(?:\([^)]*\))?\s*\{[ \t]*\}");
+        var offenders = new List<string>();
+        foreach (var file in LibrarySources())
+        {
+            var lines = File.ReadAllLines(file);
+            for (var i = 0; i < lines.Length; i++)
+            {
+                if (oneLine.IsMatch(lines[i]))
+                {
+                    offenders.Add($"{Path.GetFileName(file)}:{i + 1}");
+                }
+            }
+        }
+
+        Assert.True(offenders.Count == 0, "One-line empty catches: " + string.Join(", ", offenders));
+    }
+}
