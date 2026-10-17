@@ -3,7 +3,6 @@ using System.Data;
 using System.Linq;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.strategies.connection;
@@ -29,11 +28,13 @@ public sealed class PreventDatabaseUnloadDetectionFailureTests
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext(new pengdows.crud.configuration.DatabaseContextConfiguration { ConnectionString = "Data Source=:memory:" }, factory, loggerFactory);
         var strategy = new PreventDatabaseUnloadConnectionStrategy(context);
-        var connection = new Mock<ITrackedConnection>();
-        connection.SetupGet(c => c.State).Returns(ConnectionState.Closed);
-        connection.Setup(c => c.Open()).Throws(new InvalidOperationException("detection open failed"));
+        var connection = new ScriptedTrackedConnection
+        {
+            State = ConnectionState.Closed,
+            OpenException = new InvalidOperationException("detection open failed")
+        };
 
-        var (dialect, dataSourceInfo) = strategy.HandleDialectDetection(connection.Object, factory,
+        var (dialect, dataSourceInfo) = strategy.HandleDialectDetection(connection, factory,
             NullLoggerFactory.Instance);
 
         Assert.Null(dialect);

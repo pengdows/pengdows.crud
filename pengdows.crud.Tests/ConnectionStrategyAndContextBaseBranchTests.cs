@@ -7,7 +7,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -27,25 +26,31 @@ public class ConnectionStrategyAndContextBaseBranchTests
     [Fact]
     public void ContextBase_DefaultLoggerResolverAndForwarders_AreExercised()
     {
-        var dialect = new Mock<ISqlDialect>();
-        dialect.Setup(d => d.GenerateParameterName()).Returns("p42");
+        // The base class forwards to its dialect, whose parameter names come from one shared counter: a name of the form
+        // p<n>, and a different one each call.
+        var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.Sqlite,
+            new fakeDbFactory(SupportedDatabase.Sqlite), NullLogger.Instance);
 
-        var context = new ContextBaseHarness(dialect.Object);
+        var context = new ContextBaseHarness(dialect);
 
         Assert.Null(context.ResolveLoggerForTest());
-        Assert.Equal("p42", context.GenerateParameterName());
+        var first = context.GenerateParameterName();
+        var second = context.GenerateParameterName();
+        Assert.Matches(@"^p\d+$", first);
+        Assert.NotEqual(first, second);
         Assert.Equal(0, context.MaxOutputParameters);
     }
 
     [Fact]
     public async Task StandardConnectionStrategy_ReleaseNonPersistentConnectionAsync_DisposesNonAsyncConnection()
     {
-        var tracked = new Mock<ITrackedConnection>();
+        var tracked = new ScriptedTrackedConnection();
 
-        var result = StandardConnectionStrategy.ReleaseNonPersistentConnectionAsync(tracked.Object, null);
+        var result = StandardConnectionStrategy.ReleaseNonPersistentConnectionAsync(tracked, null);
         await result;
 
-        tracked.Verify(c => c.Dispose(), Times.Once);
+        Assert.Equal(1, tracked.DisposeCount);
+        Assert.Equal(0, tracked.DisposeAsyncCount);
     }
 
     [Fact]

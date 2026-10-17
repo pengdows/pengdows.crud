@@ -3,7 +3,6 @@ using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -44,17 +43,13 @@ public sealed class BestEffortDisposalLoggingTests
         return (context, factory, logs, loggerFactory);
     }
 
-    private static Mock<ITrackedConnection> ThrowingSentinel(ConnectionState state)
+    private static ScriptedAsyncTrackedConnection ThrowingSentinel(ConnectionState state) => new()
     {
-        var sentinel = new Mock<ITrackedConnection>();
-        sentinel.SetupGet(c => c.State).Returns(state);
-        sentinel.SetupGet(c => c.ConnectionString).Returns(FirebirdCs);
-        // ITrackedConnection redeclares Dispose, so the interface callers use must be set up directly.
-        sentinel.Setup(c => c.Dispose()).Throws(new InvalidOperationException("sentinel dispose failed"));
-        sentinel.As<IDisposable>().Setup(c => c.Dispose()).Throws(new InvalidOperationException("sentinel dispose failed"));
-        sentinel.As<IAsyncDisposable>().Setup(c => c.DisposeAsync()).Throws(new InvalidOperationException("sentinel dispose failed"));
-        return sentinel;
-    }
+        State = state,
+        ConnectionString = FirebirdCs,
+        DisposeException = new InvalidOperationException("sentinel dispose failed"),
+        DisposeAsyncException = new InvalidOperationException("sentinel dispose failed")
+    };
 
     private static void AssertLoggedFailure(ListLoggerProvider logs, string exceptionMessage)
     {
@@ -112,7 +107,7 @@ public sealed class BestEffortDisposalLoggingTests
         var (context, _, logs, loggerFactory) = CreateFirebird();
         using var _ = loggerFactory;
         using var __ = context;
-        context.RegisterSentinel(ThrowingSentinel(ConnectionState.Open).Object, ExecutionType.Write);
+        context.RegisterSentinel(ThrowingSentinel(ConnectionState.Open), ExecutionType.Write);
 
         Assert.True(context.SuspendSentinelsForDdl());
 
@@ -124,7 +119,7 @@ public sealed class BestEffortDisposalLoggingTests
     {
         var (context, _, logs, loggerFactory) = CreateFirebird();
         using var _ = loggerFactory;
-        context.RegisterSentinel(ThrowingSentinel(ConnectionState.Open).Object, ExecutionType.Write);
+        context.RegisterSentinel(ThrowingSentinel(ConnectionState.Open), ExecutionType.Write);
 
         context.Dispose();
 
@@ -136,7 +131,7 @@ public sealed class BestEffortDisposalLoggingTests
     {
         var (context, _, logs, loggerFactory) = CreateFirebird();
         using var _ = loggerFactory;
-        context.RegisterSentinel(ThrowingSentinel(ConnectionState.Open).Object, ExecutionType.Write);
+        context.RegisterSentinel(ThrowingSentinel(ConnectionState.Open), ExecutionType.Write);
 
         await context.DisposeAsync();
 
@@ -150,7 +145,7 @@ public sealed class BestEffortDisposalLoggingTests
         using var _ = loggerFactory;
         await using var __ = context;
         var broken = ThrowingSentinel(ConnectionState.Broken);
-        context.RegisterSentinel(broken.Object, ExecutionType.Write);
+        context.RegisterSentinel(broken, ExecutionType.Write);
 
         await using (var sc = context.CreateSqlContainer("SELECT 1"))
         {
@@ -158,6 +153,6 @@ public sealed class BestEffortDisposalLoggingTests
         }
 
         AssertLoggedFailure(logs, "sentinel dispose failed");
-        Assert.DoesNotContain(context.GetSentinelSnapshot(), s => ReferenceEquals(s.Connection, broken.Object));
+        Assert.DoesNotContain(context.GetSentinelSnapshot(), s => ReferenceEquals(s.Connection, broken));
     }
 }

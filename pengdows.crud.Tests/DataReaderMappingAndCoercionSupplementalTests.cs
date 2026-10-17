@@ -5,7 +5,6 @@ using System.Data;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using Moq;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.configuration;
@@ -475,9 +474,11 @@ public class DataReaderMappingAndCoercionSupplementalTests
         // Arrange
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:", factory);
-        var throwingConnection = new Mock<ITrackedConnection>();
-        throwingConnection.Setup(c => c.Dispose()).Throws(new InvalidOperationException("dispose-fail"));
-        SetPrivateField(context, "_connection", throwingConnection.Object);
+        var throwingConnection = new ScriptedTrackedConnection
+        {
+            DisposeException = new InvalidOperationException("dispose-fail")
+        };
+        SetPrivateField(context, "_connection", throwingConnection);
 
         // Act
         var ex = Record.Exception(() => context.Dispose());
