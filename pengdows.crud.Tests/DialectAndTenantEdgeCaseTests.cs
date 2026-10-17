@@ -811,17 +811,17 @@ public class DialectAndTenantEdgeCaseTests
         Assert.Null(ex);
     }
 
-    // Uses a Moq-backed IDatabaseContext instead of StubContextFactory's real DatabaseContext —
+    // Uses a scripted IDatabaseContext instead of StubContextFactory's real DatabaseContext —
     // the race under test is purely in the registry's own ConcurrentDictionary/cap-check logic,
     // not in DatabaseContext construction, so a cheap fake keeps this stress test fast.
-    private class FastMockContextFactory : IDatabaseContextFactory
+    private class FastScriptedContextFactory : IDatabaseContextFactory
     {
         public IDatabaseContext Create(
             IDatabaseContextConfiguration configuration,
             DbProviderFactory factory,
             ILoggerFactory loggerFactory)
         {
-            return new Moq.Mock<IDatabaseContext>().Object;
+            return new ScriptedDatabaseContext();
         }
     }
 
@@ -838,7 +838,7 @@ public class DialectAndTenantEdgeCaseTests
             using var registry = new TenantContextRegistry(
                 sp,
                 new StubTenantResolver(),
-                new FastMockContextFactory(),
+                new FastScriptedContextFactory(),
                 NullLoggerFactory.Instance,
                 maxTenantCount: cap);
 

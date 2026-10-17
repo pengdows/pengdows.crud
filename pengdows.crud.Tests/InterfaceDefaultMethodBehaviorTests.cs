@@ -118,7 +118,7 @@ public class InterfaceDefaultMethodBehaviorTests
     public void IInternalSqlDialect_RenderMergeSource_JsonColumn_CallsRenderJsonArgument()
     {
         // Verify the JSON-column branch of the RenderMergeSource default implementation.
-        // Uses a fakeDb context to get a real dialect instance (avoids Moq extension-method limitation).
+        // Uses a fakeDb context to get a real dialect instance (a real dialect, not a stub).
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var context = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory);
         ISqlDialect dialect = context.GetDialect();
