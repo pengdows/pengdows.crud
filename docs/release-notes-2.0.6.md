@@ -364,7 +364,9 @@ every CLR type and every database, whether the value round-trips and why not whe
   (RCSI) is on and snapshot isolation is off; 2.0.5 threw `TransactionModeNotSupportedException`. With RCSI, readers read row
   versions, so they never block on writers and never see dirty data: the same statement-level MVCC the profile already
   accepts as ReadCommitted on Oracle and MySQL. It is not a transaction-wide snapshot. Snapshot isolation on still gives
-  Snapshot; with neither on, the profile still throws.
+  Snapshot; with neither on, the profile still throws. Verified on a live SQL Server (`SqlServerRcsiProfileTests`): with RCSI on,
+  a reader does not block on an uncommitted writer and reads the old row; with neither on, the profile is refused and a plain
+  ReadCommitted reader does block.
 - One refusal contract: an `IsolationProfile` that cannot be met (no mapping, a mapped level the database lacks, or a mapping
   weaker than the profile guarantees) always throws `TransactionModeNotSupportedException`, which derives from
   `NotSupportedException`, so a handler written for the earlier bare `NotSupportedException` still catches it. An explicit
