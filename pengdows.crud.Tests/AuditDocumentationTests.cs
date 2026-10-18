@@ -223,4 +223,18 @@ public sealed class AuditDocumentationTests
         Assert.Contains("internal-only", row, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("benchmarks", row, StringComparison.OrdinalIgnoreCase);
     }
+
+    // DuckDB.NET 1.5.6.1 (the release with our interval fixes) was validated with the workarounds in place; the finding is recorded.
+    [Fact]
+    public void DuckDbDriverCompatibility_IsRecordedWithTheVerifiedVersions()
+    {
+        var supported = Read("docs/supported-databases.md");
+        var section = supported.Substring(supported.IndexOf("### DuckDB driver compatibility", StringComparison.Ordinal));
+
+        Assert.Contains("1.5.6.1", section, StringComparison.Ordinal);
+        Assert.Contains("1.5.6", section, StringComparison.Ordinal);
+        Assert.Contains("TimeOnly", section, StringComparison.Ordinal);
+        Assert.Contains("INTERVAL", section, StringComparison.Ordinal);
+        Assert.Contains("BitArray", section, StringComparison.Ordinal);
+    }
 }

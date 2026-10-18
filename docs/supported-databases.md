@@ -220,3 +220,23 @@ pengdows.crud enforces read-only intent at multiple levels where supported by th
 > **Dual Enforcement:** For PostgreSQL, the intent is baked into the connection string (forcing the driver level) AND re-asserted via SQL on every lease, providing maximum security against "dirty" connections in a shared pool. SQLite and DuckDB rely on the connection-string parameter alone: it is applied when the database file is opened, which is stronger than a session flag any caller could reset.
 
 > **Oracle read-only transactions are snapshots.** `SET TRANSACTION READ ONLY` reads the whole transaction as of its start, and Oracle refuses that read for a table whose DDL is newer than the snapshot, which can include a table created a few seconds earlier (ORA-01466 "table definition has changed"). pengdows.crud raises it as a retryable `SerializationConflictException`; end the transaction and start a new one, as for ORA-08177.
+
+### DuckDB driver compatibility
+
+Verified 2026-10-18 against the full DuckDB integration suite on net8.0 and net10.0 (152 of 152 each): **DuckDB.NET 1.5.6 and
+1.5.6.1**. pengdows.crud works around a few DuckDB.NET behaviors, and the workarounds stay correct on both versions. DuckDB.NET 1.5.5
+and older are covered by the connection-close gate (`CommandBehavior.CloseConnection` is not used, because those releases close the
+database before releasing the reader).
+
+| DuckDB.NET behavior | 1.5.6 | 1.5.6.1 | What pengdows.crud does |
+|---|---|---|---|
+| Reading a negative `INTERVAL` as a `TimeSpan` | throws | works | Reads the interval from its months, days and microseconds; correct on both. |
+| Reading an interval with months | `+1 month` throws, `-1 month` silently reads as zero | both throw | Months are read from the parts, never through `TimeSpan`. |
+| Binding a negative `TimeSpan` | `OverflowException` | works | An interval is sent as DuckDB's own interval text with a string `DbType`; correct on both. |
+| Binding a `TimeSpan` for a `TIME` column inside a `MERGE` source | works (sent as text) | **fails**: sent as an `INTERVAL`, which DuckDB cannot cast to `TIME` | A `TimeSpan` within one day written to a `TIME` column is sent as a `TimeOnly`, which binds as a `TIME` on every release (found while validating 1.5.6.1). |
+| Binding a `BitArray` | fails (sent as its `ToString()`) | fails | A `BIT` value is sent as DuckDB's bit string. |
+
+Interval handling above was fixed in DuckDB.NET by changes we contributed (Giorgi/DuckDB.NET#359 and #360); the workarounds remain
+for older releases and for the cases still open. Code that bypasses the gateways, for example a hand-written `SELECT` read through
+the driver, gets the driver's own behavior.
+

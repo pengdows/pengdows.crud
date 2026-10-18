@@ -18,6 +18,10 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
 - Measured: on a WAL file the SingleWriter writer turnstile (`EnableSingleWriterFairness`, on by default) keeps write latency bounded under
   continuous readers (slowest write about 38 ms against 0.9 to 3.9 s with it off) at the cost of read throughput; see
   [docs/connection-pooling.md](docs/connection-pooling.md). The default is unchanged.
+- DuckDB: validated on DuckDB.NET 1.5.6.1 (the release carrying our negative-interval and `TimeSpan` binding fixes), which the
+  tests and testbed now use. It exposed one change: that release sends a `TimeSpan` as an `INTERVAL` even for a `TIME` column,
+  which DuckDB cannot cast to `TIME` in a `MERGE` source, so a `TimeSpan` within a day written to a `TIME` column is now bound as a
+  `TimeOnly` (correct on 1.5.6 and 1.5.6.1). See [docs/supported-databases.md](docs/supported-databases.md).
 - The refusal of `SafeNonBlockingReads` on SQL Server now says what to enable (`ALLOW_SNAPSHOT_ISOLATION` or
   `READ_COMMITTED_SNAPSHOT`); both settings are read once when the context is created, so restart after changing either.
 - Isolation profile refusals are one type: a profile with no mapping, or mapped to a level the database lacks, now throws
