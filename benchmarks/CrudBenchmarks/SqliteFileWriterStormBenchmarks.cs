@@ -42,6 +42,7 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
     private const string FrameworkQueue = "DapperWriterQueue";
     private const string FrameworkPengdows = "Pengdows";
     private const string FrameworkPengdowsDefaults = "PengdowsDefaults";
+    private const string FrameworkPengdowsFairnessOff = "PengdowsFairnessOff";
 
     /// <summary>10 is a deliberately narrow stress setting, 5000 a sane one; read both rows together.</summary>
     [Params(10, 5000)] public int BusyTimeoutMs { get; set; }
@@ -59,6 +60,7 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
     private WriterQueueArm _queue = null!;
     private DatabaseContext _pengdows = null!;
     private DatabaseContext _pengdowsDefaults = null!;
+    private DatabaseContext _pengdowsFairnessOff = null!;
 
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _issues = new();
     private readonly LatencyLog _transactionLatency = new();
@@ -102,6 +104,16 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
             PoolAcquireTimeout = TimeSpan.FromMinutes(5),
             MaxQueuedWrites = Math.Max(StormConcurrency, MixedWriters) + 8
         }, SqliteFactory.Instance, null, typeMap);
+        // SQLITE-008: the same context as above with the writer turnstile off, to see what fairness costs readers on a WAL file.
+        _pengdowsFairnessOff = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = _database.PengdowsConnectionString(BusyTimeoutMs),
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            PoolAcquireTimeout = TimeSpan.FromMinutes(5),
+            MaxQueuedWrites = Math.Max(StormConcurrency, MixedWriters) + 8,
+            EnableSingleWriterFairness = false
+        }, SqliteFactory.Instance, null, typeMap);
         _pengdowsDefaults = new DatabaseContext(new DatabaseContextConfiguration
         {
             ConnectionString = _database.PengdowsConnectionString(BusyTimeoutMs),
@@ -109,10 +121,10 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
             ReadWriteMode = ReadWriteMode.ReadWrite
         }, SqliteFactory.Instance, null, typeMap);
 
-        if (_pengdows.ConnectionMode != DbMode.SingleWriter)
+        if (_pengdows.ConnectionMode != DbMode.SingleWriter || _pengdowsFairnessOff.ConnectionMode != DbMode.SingleWriter)
         {
             throw new InvalidOperationException(
-                $"The pengdows arm must run in SingleWriter; it is in {_pengdows.ConnectionMode}.");
+                $"The pengdows arms must run in SingleWriter; they are in {_pengdows.ConnectionMode} and {_pengdowsFairnessOff.ConnectionMode}.");
         }
 
         await Task.CompletedTask;
@@ -132,6 +144,7 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
 
         WriteSidecar();
 
+        _pengdowsFairnessOff?.Dispose();
         _pengdowsDefaults?.Dispose();
         _pengdows?.Dispose();
         _queue?.DisposeAsync().AsTask().GetAwaiter().GetResult();
@@ -416,11 +429,16 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
             PerOperationReadAsync);
 
     [Benchmark, CorrectnessIdentity(FrameworkPengdows, ScenarioMixed)]
-    public Task Mixed_Pengdows() =>
-        RunMixedAsync(FrameworkPengdows,
+    public Task Mixed_Pengdows() => MixedPengdowsAsync(_pengdows, FrameworkPengdows);
+
+    [Benchmark, CorrectnessIdentity(FrameworkPengdowsFairnessOff, ScenarioMixed)]
+    public Task Mixed_Pengdows_FairnessOff() => MixedPengdowsAsync(_pengdowsFairnessOff, FrameworkPengdowsFairnessOff);
+
+    private Task MixedPengdowsAsync(DatabaseContext context, string framework) =>
+        RunMixedAsync(framework,
             async (writer, n) =>
             {
-                await using var container = _pengdows.CreateSqlContainer();
+                await using var container = context.CreateSqlContainer();
                 container.Query.Append("UPDATE stress_test SET value = ");
                 container.Query.Append(container.MakeParameterName("v"));
                 container.Query.Append(" WHERE id = ");
@@ -431,7 +449,7 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
             },
             async i =>
             {
-                await using var container = _pengdows.CreateSqlContainer();
+                await using var container = context.CreateSqlContainer();
                 container.Query.Append("SELECT value FROM stress_test WHERE id = ");
                 container.Query.Append(container.MakeParameterName("id"));
                 container.AddParameterWithValue("id", DbType.Int32, RowFor(i));
