@@ -84,7 +84,8 @@ internal sealed class IsolationResolver : IIsolationResolver
         {
             throw new TransactionModeNotSupportedException(
                 $"IsolationProfile.{profile} cannot be guaranteed on {_product}: the strongest mapping available is " +
-                $"{resolution.Level}, which is weaker than the profile requires.");
+                $"{resolution.Level}, which is weaker than the profile requires." +
+                (_dialect.EnableHintForProfile(profile) is { } hint ? " " + hint : string.Empty));
         }
 
         return resolution.Level;

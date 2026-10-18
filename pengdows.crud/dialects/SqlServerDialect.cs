@@ -804,6 +804,11 @@ internal class SqlServerDialect : SqlDialect
     internal override bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level, bool readCommittedSnapshot) =>
         profile == IsolationProfile.SafeNonBlockingReads && level == IsolationLevel.ReadCommitted && !readCommittedSnapshot;
 
+    internal override string? EnableHintForProfile(IsolationProfile profile) =>
+        profile == IsolationProfile.SafeNonBlockingReads
+            ? "Enable ALLOW_SNAPSHOT_ISOLATION or READ_COMMITTED_SNAPSHOT on the database."
+            : null;
+
     // ---- Instance-free traits (REV-039): exception translator, value formats, type mappings ----
 
     // SqlParameter property names, set by reflection (no SqlClient reference).

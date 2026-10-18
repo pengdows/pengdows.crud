@@ -2433,3 +2433,19 @@ Examined 2026-10-17: the Guid helpers (`GuidFromBytes`, `GuidFromBinary`, `TryDe
 `GuidFromBytes` is public. Merging them buys little at the risk of a semver-locked surface; the larger duplicates (date and
 JSON helpers, `ConvertWithCache`/`CompileConverter`) are a 3.0 item.
 
+## Left out of 2.0.6, for 3.0
+
+Decided 2026-10-18, each considered during the 2.0.6 external audit and kept out of 2.0.x on purpose (2.x takes only what is
+semver-safe, correct and measured). Revisit for 3.0; none is a known defect.
+
+| Item | What it is | Why it is not in 2.0.6 | 3.0 direction |
+|---|---|---|---|
+| Virtual time (fakeDb F3) | A controllable clock so pool acquire and lock timeouts run instantly in tests | The governor's `TimeProvider` seam drives deadlines and metrics, but the waits (`PoolGovernorConcurrencyGate`, `SemaphoreSlim`) run on OS timers; a virtual clock means reworking the waiter queue and its interrupt and cancellation handling | Drive the waits from the `TimeProvider`, with the existing boundary tests as the safety net |
+| Coercion registry, stage 2 | One `(source, target)` registry behind `TypeCoercionHelper` and the converters; merge the Guid, date and JSON helper families | The Guid helpers are thin with different failure semantics and `GuidFromBytes` is public (semver-locked); the larger duplicates need a failing test before any deletion | Single registry, public helpers removed or delegating, `HydrationMatrixTests` (65 types x 23 databases) as the net |
+| GC backstop | A finalizer that frees the slot of an undisposed connection, reader or transaction | It hides the caller's bug, frees slots only when the GC runs (late under load), and a finalizer taxes every connection object; `G03_TheLibraryDeclaresNoFinalizer` and `AbandonedConnection_KeepsItsPermit_UntilDisposed` pin today's behavior | Prefer leak detection through metrics and logging; if a backstop is ever added it must change those tests on purpose |
+| PoolAcquireTimeout default | Whether the 5 s default should change | Configurable per context and documented where it is declared and in the pooling guide; a new default changes 2.x behavior | Reconsider with the retry context |
+| Unspecified DateTime kind option | A per-column option for `timestamp without time zone` columns that hold local time | Adds public API and cuts against the UTC-everywhere stance (`docs/utc-and-time.md`); the convention is documented | Only if a consumer needs it |
+| MERGE model in fakeDb | Modelling `MERGE` (non-atomic) beside `ON CONFLICT` (atomic) with a hook between the check and the insert | Heavy parsing of generated `MERGE` text for a test convenience; `ConcurrentUpsertTests` already proves the race on real databases | Only if fakeDb needs to reproduce it offline |
+| CI-recorded provenance | A CI job that records each run's commit and clean-tree flag | CI does not run the Docker database suites; `tools/record-integration-run.py` writes `docs/integration-status.md` and `docs/facts.json` locally | A scheduled integration run that commits both files |
+| Stricter upsert guarantees | A configurable retry count, or a lock, around upserts on Oracle, Db2, Firebird and Informix (one bounded retry today; a competing delete between the failure and the retry can still lose) | An application-level decision: not every database has an advisory lock like `DBMS_LOCK` (the portable form is a lock row with a unique constraint), and a lock costs every upsert a round trip | The 3.0 retry context |
+

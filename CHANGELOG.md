@@ -15,6 +15,8 @@ Binary compatible with 2.0.5 (package validation against 2.0.5 for `pengdows.cru
 and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/release-notes-2.0.6.md).
 
 ### Changed (behavior a 2.0.5 user can notice)
+- The refusal of `SafeNonBlockingReads` on SQL Server now says what to enable (`ALLOW_SNAPSHOT_ISOLATION` or
+  `READ_COMMITTED_SNAPSHOT`); both settings are read once when the context is created, so restart after changing either.
 - Isolation profile refusals are one type: a profile with no mapping, or mapped to a level the database lacks, now throws
   `TransactionModeNotSupportedException` (a `NotSupportedException`, so existing handlers still catch it) instead of a bare
   `NotSupportedException` or `InvalidOperationException`. An explicit native level nothing satisfies still throws

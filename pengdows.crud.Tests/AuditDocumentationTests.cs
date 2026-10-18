@@ -127,4 +127,31 @@ public sealed class AuditDocumentationTests
         Assert.Contains("Coercion registry, stage 2", future, StringComparison.Ordinal);
         Assert.Contains("homegrown mocking library", future, StringComparison.Ordinal);
     }
+
+    // Decided 2026-10-18: snapshot isolation and RCSI are read once when the context is created (documented, not re-detected),
+    // and the other audit items that were left out of 2.0.6 are kept in one place for 3.0.
+    [Fact]
+    public void TheTransactionsGuide_SaysSnapshotAndRcsiAreReadOnceAtStartup()
+    {
+        var text = Read("docs/transactions.md");
+
+        Assert.Contains("read once when the context is created", text, StringComparison.Ordinal);
+        Assert.Contains("restart", text, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void FutureWork_KeepsEveryItemLeftOutOf206_ForThirtyOh()
+    {
+        var text = Read("docs/FUTURE_WORK.md");
+        var section = text.Substring(text.IndexOf("## Left out of 2.0.6, for 3.0", StringComparison.Ordinal));
+
+        foreach (var item in new[]
+                 {
+                     "Virtual time", "Coercion registry", "GC backstop", "PoolAcquireTimeout default", "Unspecified DateTime",
+                     "MERGE model", "CI-recorded provenance", "Stricter upsert"
+                 })
+        {
+            Assert.Contains(item, section, StringComparison.Ordinal);
+        }
+    }
 }

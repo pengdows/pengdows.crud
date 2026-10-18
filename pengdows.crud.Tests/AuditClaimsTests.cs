@@ -51,6 +51,18 @@ public class AuditClaimsTests
     // RCSI makes READ COMMITTED read row versions: readers do not block on writers and never see dirty data. That is the same
     // statement-level MVCC the profile already accepts as ReadCommitted on Oracle and MySQL, so it satisfies the profile.
     [Fact]
+    public void I1_TheRefusalSaysWhatToEnable()
+    {
+        var resolver = SqlServerResolver(rcsi: false, snapshot: false);
+
+        var ex = Assert.Throws<TransactionModeNotSupportedException>(
+            () => resolver.ResolveForTransaction(IsolationProfile.SafeNonBlockingReads));
+
+        Assert.Contains("ALLOW_SNAPSHOT_ISOLATION", ex.Message, StringComparison.Ordinal);
+        Assert.Contains("READ_COMMITTED_SNAPSHOT", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void I1_SqlServerWithRcsi_AcceptsSafeNonBlockingReads_AsReadCommitted()
     {
         var resolver = SqlServerResolver(rcsi: true, snapshot: false);

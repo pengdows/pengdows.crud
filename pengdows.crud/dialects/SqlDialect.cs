@@ -891,6 +891,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool IsDegradedForProfile(IsolationProfile profile, IsolationLevel level, bool readCommittedSnapshot) => false;
 
+    /// <summary>
+    /// What an operator can enable so that <paramref name="profile"/> can be guaranteed on this database, appended to the
+    /// refusal message; null when there is nothing to enable.
+    /// </summary>
+    internal virtual string? EnableHintForProfile(IsolationProfile profile) => null;
+
     /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>
     public virtual bool RendersColumnArgument(IColumnInfo column) => column.IsJsonType;
 
