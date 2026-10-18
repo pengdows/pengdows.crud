@@ -104,7 +104,9 @@ public sealed class AuditDocumentationTests
 
         Assert.Contains("holds its thread", text, StringComparison.Ordinal);
         Assert.Contains("PoolAcquireTimeout", text, StringComparison.Ordinal);
-        Assert.Contains("not measured against real I/O", text, StringComparison.Ordinal);
+        Assert.Contains("PostgreSqlSyncWaiterStarvationTests", text, StringComparison.Ordinal);
+        Assert.Contains("about 0.9 to 1.0 s", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("not measured against real I/O", text, StringComparison.Ordinal);
     }
 
     // The 2.0.6 fixes are documented where a reader looks: the changelog, the release notes and the future-work tracker.
