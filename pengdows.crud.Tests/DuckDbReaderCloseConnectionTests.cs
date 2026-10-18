@@ -86,14 +86,15 @@ public sealed class DuckDbReaderCloseConnectionTests
         Assert.Equal(expected, pengdows.crud.dialects.DuckDbDialect.ProviderHasCloseConnectionBug(name));
     }
 
-    // Against the real provider: the tests reference DuckDB.NET 1.5.6, the first release with the fix
+    // Against the real provider: the tests reference DuckDB.NET 1.5.6.1. 1.5.6 is the first release with the fix
     // (CONFIRMED by decompiling the 1.5.6 package: Close() disposes the result enumerator before
-    // command.CloseConnection(); assembly version 1.5.6.0), so pengdows asks for CloseConnection again.
+    // command.CloseConnection(); assembly version 1.5.6.0), and 1.5.6.1 keeps it, so pengdows asks for
+    // CloseConnection again for every release from 1.5.6 on.
     [Fact]
-    public void RealDuckDbNet156_UsesCloseConnection()
+    public void RealDuckDbNet_FromTheFixedReleaseOn_UsesCloseConnection()
     {
         var factory = DuckDB.NET.Data.DuckDBClientFactory.Instance;
-        Assert.Equal(new System.Version(1, 5, 6, 0), factory.GetType().Assembly.GetName().Version);
+        Assert.True(factory.GetType().Assembly.GetName().Version >= new System.Version(1, 5, 6, 0));
 
         var dialect = new pengdows.crud.dialects.DuckDbDialect(factory,
             Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
