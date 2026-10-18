@@ -154,4 +154,18 @@ public sealed class AuditDocumentationTests
             Assert.Contains(item, section, StringComparison.Ordinal);
         }
     }
+
+    // The 2026-10-18 benchmark results are recorded where a reader looks, with what they show.
+    [Fact]
+    public void TheReleaseNotes_RecordTheUpsertAndEqualFootingBenchmarks()
+    {
+        var notes = Read("docs/release-notes-2.0.6.md");
+        var section = notes.Substring(notes.IndexOf("## Performance", StringComparison.Ordinal));
+
+        Assert.Contains("PostgreSqlUpsertBenchmarks", section, StringComparison.Ordinal);
+        Assert.Contains("SqlServerUpsertBenchmarks", section, StringComparison.Ordinal);
+        Assert.Contains("HOLDLOCK", section, StringComparison.Ordinal);
+        Assert.Contains("SqlServerEqualFootingBenchmarks", section, StringComparison.Ordinal);
+        Assert.Contains("PostgreSqlEqualFootingBenchmarks", section, StringComparison.Ordinal);
+    }
 }

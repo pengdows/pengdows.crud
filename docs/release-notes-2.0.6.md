@@ -450,6 +450,43 @@ New in fakeDb since the table above (each is pinned by tests in `pengdows.crud.T
   fakeDb; pengdows.crud itself refuses it), `OverstatedLengthColumns` (a provider that reports more bytes than it
   delivers), `SetFailOnDispose` (a connection whose cleanup throws), and positional `?` markers in the data store.
 
+## Performance
+
+Measured 2026-10-18 on one machine (AMD Ryzen 9 5950X, .NET 8.0.31, Testcontainers databases), after the audit fixes. Cells swing
+a few percent from run to run, so read these as "no measurable difference", not as exact figures.
+
+**Single-row upsert** (`PostgreSqlUpsertBenchmarks`, `SqlServerUpsertBenchmarks`; each arm opens its own pooled connection per
+call; a setup check requires the arms to produce the same row):
+
+| Database | Arm | Update (existing key) | Insert (new key) | Allocated |
+|---|---|---|---|---|
+| PostgreSQL 16 | pengdows `UpsertAsync` (`INSERT ... ON CONFLICT`) | 312.4 us | 307.0 us | 5.38 KB |
+| PostgreSQL 16 | hand-written `ON CONFLICT` | 312.2 us | 295.6 us | 3.65 KB |
+| PostgreSQL 16 | hand-written 2.0.5 `MERGE` | 314.1 us | 301.2 us | 3.89 KB |
+| SQL Server 2022 | pengdows `UpsertAsync` (`MERGE ... WITH (HOLDLOCK)`) | 460.8 us | 466.1 us | 8.2 KB |
+| SQL Server 2022 | hand-written `MERGE` with `HOLDLOCK` | 443.4 us | 444.6 us | 5.64 KB |
+| SQL Server 2022 | hand-written 2.0.5 `MERGE`, no hint | 445.3 us | 452.0 us | 5.64 KB |
+
+The statement-shape change that makes a single-row upsert atomic costs nothing measurable when there is no contention: on
+PostgreSQL `ON CONFLICT` and the old `MERGE` are within about 1 to 2% of each other, and on SQL Server `HOLDLOCK` is within 0.5% (update)
+and 1.6% (insert) of the unhinted `MERGE`. pengdows is 0 to 4% over the hand-written statement, with the extra allocation being
+the gateway building the statement per call.
+
+**CRUD against Dapper and EF** (`PostgreSqlEqualFootingBenchmarks`, `SqlServerEqualFootingBenchmarks`, 1, 10 and 100 records):
+
+| Database | pengdows / Dapper (mean) | EF / pengdows |
+|---|---|---|
+| PostgreSQL 16 | 0.967 to 1.061 | 1.20 to 1.71 |
+| SQL Server 2022 | 0.984 to 1.060 | 1.21 to 1.69 |
+
+pengdows is at parity with Dapper on both databases, within run-to-run noise. Two cells that looked like gaps earlier are noise:
+PostgreSQL Update at 100 rows (1.144 in an earlier run, 0.990 here) and ReadList at 100 rows (0.972, then 1.061). EF is 20 to 70% slower
+than pengdows everywhere.
+
+**Synchronous callers parked behind an asynchronous slot holder** (real PostgreSQL, `PostgreSqlSyncWaiterStarvationTests`): the
+holder's release is delayed by about 0.9 to 1.0 s once synchronous callers are parked, regardless of how many (64 to 1,000); see
+[connection-pooling.md](connection-pooling.md).
+
 ## Tests, review policy and provenance
 
 - ADO.NET provider behaviour is never mocked: connections, commands, readers, transactions, parameters, factories, data
