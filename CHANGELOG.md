@@ -78,8 +78,8 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
     provider raises (SQLSTATE, vendor number and message per `SupportedDatabase`); `INSERT ... ON CONFLICT` and
     `ON DUPLICATE KEY UPDATE` update the existing row. `MERGE` is not modelled, so the MERGE race still needs a real database;
   - `fakeDbFactory.DataStore`, an ordered `Operations` log on connection, command and transaction, `SchemaException`,
-    `ChangeDatabase` (fakeDb allows it; pengdows.crud refuses it), `OverstatedLengthColumns`, and positional `?` markers in
-    the data store.
+    `ChangeDatabase` (fakeDb allows it; pengdows.crud refuses it), `OverstatedLengthColumns`, `SetFailOnDispose` (a
+    connection whose cleanup throws), and positional `?` markers in the data store.
 - `docs/facts.json`, the machine-readable form of `docs/integration-status.md` (pass/fail/skip, run time, commit and
   dirty-tree flag per database and framework), written by `tools/record-integration-run.py`.
 

@@ -911,14 +911,9 @@ public partial class DatabaseContext
         {
             _logger.LogError(ex, "Failed to initialize DatabaseContext: {Message}", ex.Message);
             // Ensure no leaked connection if we're bailing
-            try
-            {
-                initConn?.Dispose();
-            }
-            catch
-            {
-                // The original initialization failure is already logged and rethrown; a failure to dispose the init connection must not mask it.
-            }
+            // TrackedConnection.Dispose does not throw (it logs a provider dispose that fails), so this cannot mask the
+            // failure being rethrown below; FailedInitialization_ADisposeThatThrows_DoesNotMaskTheOriginalFailure pins it.
+            initConn?.Dispose();
 
             throw;
         }
@@ -1844,21 +1839,27 @@ public partial class DatabaseContext
             return entryAssemblyName;
         }
 
-        try
+        return ReadProcessName(static () =>
         {
             using var process = Process.GetCurrentProcess();
-            var processName = process.ProcessName?.Trim();
-            if (!string.IsNullOrWhiteSpace(processName))
-            {
-                return processName;
-            }
+            return process.ProcessName;
+        }) ?? DefaultApplicationName;
+    }
+
+    // The process name, or null when it is blank or the process cannot be inspected (the reader is a parameter so a test can
+    // make it fail: the real one only runs when there is no entry assembly).
+    private static string? ReadProcessName(Func<string?> readName)
+    {
+        try
+        {
+            var name = readName()?.Trim();
+            return string.IsNullOrWhiteSpace(name) ? null : name;
         }
         catch (Exception ex) when (ex is InvalidOperationException or NotSupportedException or System.ComponentModel.Win32Exception)
         {
             // Process.ProcessName is documented to throw these when the process cannot be inspected; fall back to the library name.
+            return null;
         }
-
-        return DefaultApplicationName;
     }
 
     private bool CanAutoGenerateApplicationName(string connectionString)

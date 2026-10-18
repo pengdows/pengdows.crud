@@ -446,7 +446,7 @@ New in fakeDb since the table above (each is pinned by tests in `pengdows.crud.T
   connection limit, process kill and network loss remain integration-only.
 - An ordered `Operations` log on connection, command and transaction, `SchemaException`, `ChangeDatabase` (allowed in
   fakeDb; pengdows.crud itself refuses it), `OverstatedLengthColumns` (a provider that reports more bytes than it
-  delivers), and positional `?` markers in the data store.
+  delivers), `SetFailOnDispose` (a connection whose cleanup throws), and positional `?` markers in the data store.
 
 ## Tests, review policy and provenance
 

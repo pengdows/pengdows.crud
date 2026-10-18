@@ -1046,6 +1046,11 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             base.Dispose(disposing);
             _disposedForEvents = true;
         }
+
+        if (disposing && _disposeFailureException != null)
+        {
+            throw _disposeFailureException;
+        }
     }
 
     public override async ValueTask DisposeAsync()
@@ -1250,6 +1255,17 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     public void SetFailOnClose(Exception? exception)
     {
         _closeFailureException = exception;
+    }
+
+    private Exception? _disposeFailureException;
+
+    /// <summary>
+    /// Makes <c>Dispose</c> throw <paramref name="exception"/> after the connection has been closed and disposed, as a provider
+    /// whose cleanup fails does. Unlike <see cref="SetFailOnClose"/>, whose failure Dispose swallows.
+    /// </summary>
+    public void SetFailOnDispose(Exception? exception)
+    {
+        _disposeFailureException = exception;
     }
 
     protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
