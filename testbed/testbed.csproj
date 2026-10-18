@@ -18,6 +18,7 @@
         <PackageReference Include="DuckDB.NET.Data.Full" Version="1.5.6"/>
         <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.3"/>
         <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2"/>
+        <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
         <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.5"/>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4"/>
         <PackageReference Include="MySql.Data" Version="9.3.0"/>
