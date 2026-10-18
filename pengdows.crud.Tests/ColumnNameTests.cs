@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using Moq;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -125,20 +126,17 @@ public class ColumnNameTests
     [Fact]
     public void Resolver_OtherTableInfo_ScansTheColumns()
     {
-        var column = new ScriptedColumnInfo
-        {
-            Name = "customer_id",
-            PropertyInfo = typeof(Order).GetProperty(nameof(Order.CustomerId))!
-        };
-        var tableInfo = new ScriptedTableInfo
-        {
-            Columns = new System.Collections.Generic.Dictionary<string, IColumnInfo> { ["customer_id"] = column }
-        };
+        var column = new Mock<IColumnInfo>();
+        column.SetupGet(c => c.Name).Returns("customer_id");
+        column.SetupGet(c => c.PropertyInfo).Returns(typeof(Order).GetProperty(nameof(Order.CustomerId))!);
+        var tableInfo = new Mock<ITableInfo>();
+        tableInfo.SetupGet(t => t.Columns)
+            .Returns(new System.Collections.Generic.Dictionary<string, IColumnInfo> { ["customer_id"] = column.Object });
 
         Assert.Equal("customer_id",
-            pengdows.crud.@internal.ColumnNameResolver.Resolve(tableInfo, typeof(Order), nameof(Order.CustomerId)));
+            pengdows.crud.@internal.ColumnNameResolver.Resolve(tableInfo.Object, typeof(Order), nameof(Order.CustomerId)));
         Assert.Throws<ArgumentException>(() =>
-            pengdows.crud.@internal.ColumnNameResolver.Resolve(tableInfo, typeof(Order), nameof(Order.Id)));
+            pengdows.crud.@internal.ColumnNameResolver.Resolve(tableInfo.Object, typeof(Order), nameof(Order.Id)));
     }
 
     [Fact]

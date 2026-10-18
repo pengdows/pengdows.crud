@@ -10,6 +10,7 @@ using System;
 using System.Data;
 using System.Data.Common;
 using System.Threading;
+using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -34,10 +35,10 @@ public class CoveragePush_InternalExtensionThrowPathsTests
     [Fact]
     public async System.Threading.Tasks.Task CloseAndDisposeConnectionAsync_NonProviderContext_Throws()
     {
-        var ctx = new ScriptedDatabaseContext();
+        var mockCtx = new Mock<IDatabaseContext>();
 
         await Assert.ThrowsAsync<InvalidOperationException>(
-            async () => await ctx.CloseAndDisposeConnectionAsync(null));
+            async () => await mockCtx.Object.CloseAndDisposeConnectionAsync(null));
     }
 
     // =========================================================================

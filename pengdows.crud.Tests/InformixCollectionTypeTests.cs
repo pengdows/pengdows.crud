@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Linq;
 using System.Threading.Tasks;
+using Moq;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
@@ -143,7 +144,7 @@ public sealed class InformixCollectionTypeTests
         var rows = Enumerable.Range(0, 400).Select(i => new Dictionary<string, object> { ["id"] = i, ["nums"] = nums(i) }).ToList();
         var gateway = new TableGateway<NumsOnly, int>(new DatabaseContext("Server=x;Database=d;EmulatedProduct=Informix",
             new fakeDbFactory(SupportedDatabase.Informix)));
-        TrackedReader Open() => new(new fakeDbDataReader(rows), TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        TrackedReader Open() => new(new fakeDbDataReader(rows), new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
 
         var warm = Open();
         while (warm.Read())

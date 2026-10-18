@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using Moq;
 using pengdows.crud.@internal;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -112,7 +113,7 @@ public class MergeUpsertCapabilityTests
     [Fact]
     public void NonInternalDialect_DefaultsToAnsiMergeWithoutPureKeyUpsert()
     {
-        ISqlDialect dialect = new ScriptedSqlDialect();
+        var dialect = new Mock<ISqlDialect>().Object;
 
         Assert.True(dialect.EmitsAnsiMergeSyntax());
         Assert.False(dialect.SupportsPureKeyUpsert());

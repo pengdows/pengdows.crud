@@ -209,3 +209,5 @@ pengdows.crud.fakeDb.FakeDataStore.DefineUniqueKey(string! table, params string!
 pengdows.crud.fakeDb.FakeDataStore.ErrorShape.get -> pengdows.crud.enums.SupportedDatabase
 pengdows.crud.fakeDb.FakeDataStore.ErrorShape.set -> void
 pengdows.crud.fakeDb.fakeDbFactory.DataStore.get -> pengdows.crud.fakeDb.FakeDataStore!
+pengdows.crud.fakeDb.fakeDbDataReader.OverstatedLengthColumns.get -> System.Collections.Generic.IDictionary<string!, int>?
+pengdows.crud.fakeDb.fakeDbDataReader.OverstatedLengthColumns.set -> void

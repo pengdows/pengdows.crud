@@ -5,6 +5,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -100,16 +101,14 @@ public class SqlContainerParameterOrderTests : SqlLiteContextTestBase
             new FakeTrackedConnection(new fakeDbConnection(), new DataTable(), new Dictionary<string, object>());
         dialect.DetectDatabaseInfo(dummyConn);
         var dsi = new DataSourceInformation(dialect);
-        var ctx = new ScriptedDialectProviderDatabaseContext
-        {
-            DataSourceInfo = dsi,
-            SupportsNamedParameters = false,
-            MaxParameterLimit = 100,
-            DatabaseProductName = dsi.DatabaseProductName,
-            Dialect = dialect
-        };
+        var ctx = new Mock<IDatabaseContext>();
+        ctx.SetupGet(c => c.DataSourceInfo).Returns(dsi);
+        ctx.SetupGet(c => c.SupportsNamedParameters).Returns(false);
+        ctx.SetupGet(c => c.MaxParameterLimit).Returns(100);
+        ctx.SetupGet(c => c.DatabaseProductName).Returns(dsi.DatabaseProductName);
+        ctx.As<ISqlDialectProvider>().SetupGet(p => p.Dialect).Returns(dialect);
 
-        using var container = SqlContainer.CreateForDialect(ctx, dialect, "SELECT {P}b, {P}a");
+        using var container = SqlContainer.CreateForDialect(ctx.Object, dialect, "SELECT {P}b, {P}a");
         // Leave {P} placeholders — the execution path renders them via RenderParams
         var pA = dialect.CreateDbParameter("a", DbType.Int32, 1);
         pA.ParameterName = "a";

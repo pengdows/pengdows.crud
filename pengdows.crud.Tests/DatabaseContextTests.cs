@@ -8,6 +8,7 @@ using System.Data.Common;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading.Tasks;
+using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -166,13 +167,15 @@ public class DatabaseContextTests
     [MemberData(nameof(AllSupportedProviders))]
     public async Task CloseAndDisposeConnectionAsync_WithAsyncDisposable_DisposesCorrectly(SupportedDatabase product)
     {
-        var tracked = TestDoubles.Connection();
+        var mockTracked = new Mock<ITrackedConnection>();
+        mockTracked.As<IAsyncDisposable>().Setup(d => d.DisposeAsync())
+            .Returns(ValueTask.CompletedTask).Verifiable();
 
         var factory = new fakeDbFactory(product);
         var context = new DatabaseContext($"Data Source=test;EmulatedProduct={product}", factory);
-        await context.CloseAndDisposeConnectionAsync(tracked);
+        await context.CloseAndDisposeConnectionAsync(mockTracked.Object);
 
-        Assert.True(tracked.IsDisposed);
+        mockTracked.As<IAsyncDisposable>().Verify(d => d.DisposeAsync(), Times.Once);
     }
 
     [Fact]

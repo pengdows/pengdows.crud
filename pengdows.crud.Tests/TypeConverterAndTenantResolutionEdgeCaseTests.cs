@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -62,14 +63,16 @@ public class TypeConverterAndTenantResolutionEdgeCaseTests
     [Fact]
     public void TenantContextRegistry_CatchesDisposeFailures_OnInvalidateAndShutdown()
     {
-        var context = new ScriptedDatabaseContext { DisposeException = new InvalidOperationException("dispose-fail") };
+        var context = new Mock<IDatabaseContext>();
+        context.Setup(c => c.Dispose()).Throws(new InvalidOperationException("dispose-fail"));
+        context.Setup(c => c.DisposeAsync()).Returns(ValueTask.CompletedTask);
 
         using var services = BuildTenantServices();
 
         var registryForInvalidate = new TenantContextRegistry(
             services,
             new StaticTenantResolver(),
-            new FixedContextFactory(context),
+            new FixedContextFactory(context.Object),
             NullLoggerFactory.Instance);
 
         _ = registryForInvalidate.GetContext("tenant-a");
@@ -79,7 +82,7 @@ public class TypeConverterAndTenantResolutionEdgeCaseTests
         var registryForDispose = new TenantContextRegistry(
             services,
             new StaticTenantResolver(),
-            new FixedContextFactory(context),
+            new FixedContextFactory(context.Object),
             NullLoggerFactory.Instance);
 
         _ = registryForDispose.GetContext("tenant-b");

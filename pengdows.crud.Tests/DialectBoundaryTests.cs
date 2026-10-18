@@ -3,6 +3,7 @@ using System.Data;
 using System.Data.Common;
 using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -152,10 +153,11 @@ namespace pengdows.crud.Tests
             Assert.Throws<ArgumentException>(() => dialect.RenderMergeSource(Array.Empty<IColumnInfo>(), new[] { "p0" }));
             Assert.Throws<ArgumentNullException>(() => dialect.RenderMergeOnClause(null!));
 
-            var context = new ScriptedDatabaseContext { ConnectionString = "Data Source=oracle-test" };
+            var context = new Mock<IDatabaseContext>();
+            context.SetupGet(c => c.ConnectionString).Returns("Data Source=oracle-test");
 
             var connection = new OracleThrowingConnection();
-            dialect.ApplyConnectionSettings(connection, context, false);
+            dialect.ApplyConnectionSettings(connection, context.Object, false);
             Assert.Equal("Data Source=oracle-test", connection.ConnectionString);
         }
 
@@ -164,27 +166,29 @@ namespace pengdows.crud.Tests
         {
             var dialect = new TestablePostgreSqlDialect(new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
 
-            var jsonColumn = new ScriptedColumnInfo { Name = "payload", IsJsonType = true };
+            var jsonColumn = new Mock<IColumnInfo>();
+            jsonColumn.SetupGet(c => c.Name).Returns("payload");
+            jsonColumn.SetupGet(c => c.IsJsonType).Returns(true);
 
             var okParameter = new FakeNpgsqlParameter { ParameterName = "p0" };
-            dialect.TryMarkJsonParameter(okParameter, jsonColumn);
+            dialect.TryMarkJsonParameter(okParameter, jsonColumn.Object);
             Assert.Equal(FakeNpgsqlDbType.Jsonb, okParameter.NpgsqlDbType);
             Assert.Equal("jsonb", okParameter.DataTypeName);
 
             var throwingParameter = new ThrowingMetadataParameter { ParameterName = "p1" };
-            dialect.TryMarkJsonParameter(throwingParameter, jsonColumn);
+            dialect.TryMarkJsonParameter(throwingParameter, jsonColumn.Object);
 
             var dto = new DateTimeOffset(2025, 1, 1, 12, 0, 0, TimeSpan.FromHours(3));
             var prepared = dialect.PrepareParameterValue(dto, DbType.DateTimeOffset);
             Assert.Equal(dto.UtcDateTime, prepared);
 
             var npgsqlConnection = new Npgsql.FakeConnection { ConnectionString = "Host=localhost;" };
-            dialect.ConfigureProviderSpecificSettings(npgsqlConnection, new ScriptedDatabaseContext(), false);
+            dialect.ConfigureProviderSpecificSettings(npgsqlConnection, Mock.Of<IDatabaseContext>(), false);
 
             var throwingConnection = new TestConnection();
             typeof(TestConnection).GetField("_connectionString", BindingFlags.NonPublic | BindingFlags.Instance)!
                 .SetValue(throwingConnection, "MIXED=CASE");
-            dialect.ConfigureProviderSpecificSettings(throwingConnection, new ScriptedDatabaseContext(), false);
+            dialect.ConfigureProviderSpecificSettings(throwingConnection, Mock.Of<IDatabaseContext>(), false);
 
             dialect.InvokeSetNpgsqlParameterType(okParameter, "Jsonb", "jsonb");
             dialect.InvokeSetNpgsqlParameterType(new ThrowingMetadataParameter { ParameterName = "p2" }, "Jsonb", "jsonb");

@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.tenant;
@@ -88,8 +89,8 @@ public sealed class TenantContextEventFailureTests
     {
         var logs = new ListLoggerProvider();
         var loggerFactory = new LoggerFactory(new[] { logs });
-        var registry = new TenantContextRegistry(new ServiceCollection().BuildServiceProvider(), new ScriptedTenantConnectionResolver(),
-            new ScriptedDatabaseContextFactory(), loggerFactory);
+        var registry = new TenantContextRegistry(Mock.Of<IServiceProvider>(), Mock.Of<ITenantConnectionResolver>(),
+            Mock.Of<IDatabaseContextFactory>(), loggerFactory);
         var contexts = (ConcurrentDictionary<string, TenantContextRegistry.TenantContextEntry>)typeof(TenantContextRegistry)
             .GetField("_contexts", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(registry)!;
@@ -113,7 +114,7 @@ public sealed class TenantContextEventFailureTests
     [Fact]
     public async Task ContextRemovedHandlerThrows_OnInvalidate_IsLoggedNotUnhandled()
     {
-        var (registry, logs, loggerFactory) = RegistryWithEntry(new ScriptedDatabaseContext());
+        var (registry, logs, loggerFactory) = RegistryWithEntry(Mock.Of<IDatabaseContext>());
         using var _ = loggerFactory;
         registry.ContextRemoved += _ => throw new InvalidOperationException("removed handler");
 
@@ -128,12 +129,10 @@ public sealed class TenantContextEventFailureTests
     [InlineData(true)]
     public async Task Shutdown_ContextDisposeThrows_ContextRemovedStillRaised(bool viaAsync)
     {
-        var context = new ScriptedDatabaseContext
-        {
-            DisposeException = new InvalidOperationException("dispose failed"),
-            DisposeAsyncException = new InvalidOperationException("dispose failed")
-        };
-        var (registry, logs, loggerFactory) = RegistryWithEntry(context);
+        var context = new Mock<IDatabaseContext>();
+        context.Setup(c => c.Dispose()).Throws(new InvalidOperationException("dispose failed"));
+        context.Setup(c => c.DisposeAsync()).Throws(new InvalidOperationException("dispose failed"));
+        var (registry, logs, loggerFactory) = RegistryWithEntry(context.Object);
         using var _ = loggerFactory;
         var removed = new ConcurrentBag<IDatabaseContext>();
         registry.ContextRemoved += c => removed.Add(c);
@@ -147,7 +146,7 @@ public sealed class TenantContextEventFailureTests
             registry.Dispose();
         }
 
-        Assert.True(await EventuallyAsync(() => removed.Contains(context)),
+        Assert.True(await EventuallyAsync(() => removed.Contains(context.Object)),
             "ContextRemoved was skipped because the context's dispose threw.");
         Assert.Contains(logs.Entries, e => e.Exception?.Message == "dispose failed");
     }
@@ -157,7 +156,7 @@ public sealed class TenantContextEventFailureTests
     [InlineData(true)]
     public async Task Shutdown_ContextRemovedHandlerThrows_IsLoggedAsAHandlerFailure(bool viaAsync)
     {
-        var (registry, logs, loggerFactory) = RegistryWithEntry(new ScriptedDatabaseContext());
+        var (registry, logs, loggerFactory) = RegistryWithEntry(Mock.Of<IDatabaseContext>());
         using var _ = loggerFactory;
         registry.ContextRemoved += _ => throw new InvalidOperationException("removed handler");
 

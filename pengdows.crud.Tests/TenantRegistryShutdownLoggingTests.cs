@@ -4,7 +4,7 @@ using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.DependencyInjection;
+using Moq;
 using pengdows.crud.tenant;
 using pengdows.crud.Tests.Logging;
 using Xunit;
@@ -24,9 +24,9 @@ public sealed class TenantRegistryShutdownLoggingTests
         var logs = new ListLoggerProvider();
         var loggerFactory = new LoggerFactory(new[] { logs });
         var registry = new TenantContextRegistry(
-            new ServiceCollection().BuildServiceProvider(),
-            new ScriptedTenantConnectionResolver(),
-            new ScriptedDatabaseContextFactory(),
+            Mock.Of<IServiceProvider>(),
+            Mock.Of<ITenantConnectionResolver>(),
+            Mock.Of<IDatabaseContextFactory>(),
             loggerFactory);
 
         var contexts = (ConcurrentDictionary<string, TenantContextRegistry.TenantContextEntry>)typeof(TenantContextRegistry)

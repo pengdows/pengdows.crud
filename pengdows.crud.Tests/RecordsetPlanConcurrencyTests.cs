@@ -4,6 +4,7 @@ using System.Data;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -38,8 +39,8 @@ public sealed class RecordsetPlanConcurrencyTests
 
     private static Score Map(TableGateway<Score, int> gateway, Dictionary<string, object> row)
     {
-        var reader = new TrackedReader(new fakeDbDataReader(new[] { row }), TestDoubles.Connection(),
-            TestDoubles.Disposable(), false);
+        var reader = new TrackedReader(new fakeDbDataReader(new[] { row }), new Mock<ITrackedConnection>().Object,
+            Mock.Of<IAsyncDisposable>(), false);
         reader.Read();
         return gateway.MapReaderToObject(reader);
     }

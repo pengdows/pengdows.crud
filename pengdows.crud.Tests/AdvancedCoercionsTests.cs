@@ -4,6 +4,7 @@ using System.Data.Common;
 using System.IO;
 using System.Net;
 using System.Net.NetworkInformation;
+using Moq;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.valueobjects;
 using Xunit;

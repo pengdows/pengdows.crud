@@ -14,6 +14,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
+using Moq;
 using Xunit;
 
 #endregion
@@ -682,7 +683,7 @@ public class PostgreSqlDialectTests
         var connection = factory.CreateConnection();
         connection.ConnectionString = "Host=localhost;MaxAutoPrepare=0;AutoPrepareMinUsages=0;Multiplexing=true";
 
-        var context = new ScriptedDatabaseContext();
+        var context = new Mock<IDatabaseContext>(MockBehavior.Strict).Object;
 
         dialect.ConfigureProviderSpecificSettings(connection, context, false);
 
@@ -703,7 +704,7 @@ public class PostgreSqlDialectTests
             ConnectionString = original
         };
 
-        var context = new ScriptedDatabaseContext();
+        var context = new Mock<IDatabaseContext>(MockBehavior.Strict).Object;
 
         dialect.ConfigureProviderSpecificSettings(connection, context, false);
 

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using Moq;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -64,7 +65,7 @@ public sealed class UnresolvedColumnFieldTypeTests
     }
 
     private static TrackedReader Track(RefusingReader reader) =>
-        new(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        new(reader, new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
 
     [Fact]
     public async Task DataReaderMapper_TrackedReader_CachedPlanCall_AsksTheRefusedColumnOnce()

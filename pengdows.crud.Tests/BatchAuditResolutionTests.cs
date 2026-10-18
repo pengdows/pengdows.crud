@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using Moq;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
@@ -50,10 +51,12 @@ public class BatchAuditResolutionTests
         return new DatabaseContext($"Host=localhost;EmulatedProduct={db}", factory);
     }
 
-    private static (CountingAuditValueResolver resolver, IAuditValues values) MakeResolver(string userId)
+    private static (Mock<IAuditValueResolver> mock, IAuditValues values) MakeMockResolver(string userId)
     {
         var values = new AuditValues { UserId = userId, UtcNow = FixedUtcNow };
-        return (new CountingAuditValueResolver(values), values);
+        var mock = new Mock<IAuditValueResolver>();
+        mock.Setup(r => r.Resolve()).Returns(values);
+        return (mock, values);
     }
 
     private static List<AuditBatchEntity> MakeEntities(int count)
@@ -72,21 +75,21 @@ public class BatchAuditResolutionTests
     [Fact]
     public void BuildBatchCreate_CallsResolveOnce_ForMultipleEntities()
     {
-        var (resolver, _) = MakeResolver("batch-user");
+        var (mock, _) = MakeMockResolver("batch-user");
         var ctx = CreateContext(SupportedDatabase.Sqlite);
-        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, resolver);
+        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, mock.Object);
 
         gateway.BuildBatchCreate(MakeEntities(5), ctx);
 
-        Assert.Equal(1, resolver.ResolveCount);
+        mock.Verify(r => r.Resolve(), Times.Once());
     }
 
     [Fact]
     public void BuildBatchCreate_AllEntitiesGetSameAuditValues()
     {
-        var (resolver, values) = MakeResolver("batch-user");
+        var (mock, values) = MakeMockResolver("batch-user");
         var ctx = CreateContext(SupportedDatabase.Sqlite);
-        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, resolver);
+        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, mock.Object);
         var entities = MakeEntities(4);
 
         gateway.BuildBatchCreate(entities, ctx);
@@ -103,13 +106,13 @@ public class BatchAuditResolutionTests
     [Fact]
     public void BuildBatchCreate_SingleEntity_StillCallsResolveOnce()
     {
-        var (resolver, _) = MakeResolver("single-user");
+        var (mock, _) = MakeMockResolver("single-user");
         var ctx = CreateContext(SupportedDatabase.Sqlite);
-        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, resolver);
+        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, mock.Object);
 
         gateway.BuildBatchCreate(MakeEntities(1), ctx);
 
-        Assert.Equal(1, resolver.ResolveCount);
+        mock.Verify(r => r.Resolve(), Times.Once());
     }
 
     // ─── BuildBatchUpsert — ON CONFLICT path (PostgreSQL / CockroachDB) ───────
@@ -117,21 +120,21 @@ public class BatchAuditResolutionTests
     [Fact]
     public void BuildBatchUpsert_PostgreSql_CallsResolveOnce_ForMultipleEntities()
     {
-        var (resolver, _) = MakeResolver("batch-user");
+        var (mock, _) = MakeMockResolver("batch-user");
         var ctx = CreateContext(SupportedDatabase.PostgreSql);
-        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, resolver);
+        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, mock.Object);
 
         gateway.BuildBatchUpsert(MakeEntities(5), ctx);
 
-        Assert.Equal(1, resolver.ResolveCount);
+        mock.Verify(r => r.Resolve(), Times.Once());
     }
 
     [Fact]
     public void BuildBatchUpsert_PostgreSql_AllEntitiesGetSameAuditValues()
     {
-        var (resolver, _) = MakeResolver("pg-user");
+        var (mock, _) = MakeMockResolver("pg-user");
         var ctx = CreateContext(SupportedDatabase.PostgreSql);
-        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, resolver);
+        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, mock.Object);
         var entities = MakeEntities(3);
 
         gateway.BuildBatchUpsert(entities, ctx);
@@ -148,21 +151,21 @@ public class BatchAuditResolutionTests
     [Fact]
     public void BuildBatchUpsert_MySql_CallsResolveOnce_ForMultipleEntities()
     {
-        var (resolver, _) = MakeResolver("batch-user");
+        var (mock, _) = MakeMockResolver("batch-user");
         var ctx = CreateContext(SupportedDatabase.MySql);
-        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, resolver);
+        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, mock.Object);
 
         gateway.BuildBatchUpsert(MakeEntities(5), ctx);
 
-        Assert.Equal(1, resolver.ResolveCount);
+        mock.Verify(r => r.Resolve(), Times.Once());
     }
 
     [Fact]
     public void BuildBatchUpsert_MySql_AllEntitiesGetSameAuditValues()
     {
-        var (resolver, _) = MakeResolver("mysql-user");
+        var (mock, _) = MakeMockResolver("mysql-user");
         var ctx = CreateContext(SupportedDatabase.MySql);
-        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, resolver);
+        var gateway = new TableGateway<AuditBatchEntity, int>(ctx, mock.Object);
         var entities = MakeEntities(3);
 
         gateway.BuildBatchUpsert(entities, ctx);

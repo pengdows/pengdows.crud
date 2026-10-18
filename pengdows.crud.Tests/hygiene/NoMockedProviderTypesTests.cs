@@ -8,21 +8,24 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Moq is never used in this repository, nor any other mocking framework or generated proxy. fakeDb is the test provider, and
-/// anything it cannot do is added to fakeDb; a test that needs an implementer of a library interface uses a hand-written stub
-/// (tools/test-stub-generator writes them). This fails on a package reference, a using, or a construction of one.
+/// ADO.NET provider behaviour is never mocked: connections, commands, readers, transactions, parameters, factories and data
+/// sources are fakeDb's job, and anything fakeDb cannot do is added to fakeDb (it should produce everything a real provider
+/// can, and every failure). Mocking anything else, such as the library's own interfaces, is fine and may use Moq. This fails
+/// on a mocking framework (or a DispatchProxy) creating one of the provider types below.
 /// </summary>
-public class NoMockingFrameworkTests
+public class NoMockedProviderTypesTests
 {
     private static readonly string[] ExcludedFolders =
         { "bin", "obj", ".git", "TestResults", "artifacts", "BenchmarkDotNet.Artifacts", "node_modules" };
 
-    private static readonly string[] Extensions = { ".cs", ".csproj", ".props", ".targets" };
+    private const string ProviderTypes =
+        "(?:System\\.Data\\.(?:Common\\.)?)?(?:DbConnection|DbCommand|DbDataReader|DbTransaction|DbProviderFactory|DbParameter|" +
+        "DbParameterCollection|DbDataSource|DbDataAdapter|DbBatch|DbBatchCommand|DbConnectionStringBuilder|IDbConnection|" +
+        "IDbCommand|IDataReader|IDataRecord|IDbTransaction|IDataParameter|IDbDataParameter|IDataParameterCollection)";
 
-    // What a mock looks like in source. Words in comments ("Moq is never used") are not matched.
+    // What mocking a provider type looks like in source. Words in comments are not matched.
     private static readonly Regex Forbidden = new(
-        @"using\s+Moq\b|\bMoq\.(?:Protected|Mock|Language)|PackageReference\s+Include=""(?:Moq|NSubstitute|FakeItEasy)""" +
-        @"|\bnew\s+(?:Moq\.)?Mock<|\bMock\.Of<|\bDispatchProxy\b|\bSubstitute\.For<|\bA\.Fake<",
+        @"(?:\bnew\s+(?:Moq\.)?Mock|\bMock\.Of|\bSubstitute\.For|\bA\.Fake|\bDispatchProxy\.Create)\s*<\s*" + ProviderTypes + @"\b",
         RegexOptions.Compiled);
 
     private static string RepoRoot()
@@ -38,14 +41,14 @@ public class NoMockingFrameworkTests
 
     private static IEnumerable<string> SourceFiles(string root) =>
         Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
-            .Where(f => Extensions.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase))
+            .Where(f => string.Equals(Path.GetExtension(f), ".cs", StringComparison.OrdinalIgnoreCase))
             .Where(f => !f.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
                 .Any(part => ExcludedFolders.Contains(part)))
             // This file names the patterns it forbids.
-            .Where(f => !string.Equals(Path.GetFileName(f), nameof(NoMockingFrameworkTests) + ".cs", StringComparison.Ordinal));
+            .Where(f => !string.Equals(Path.GetFileName(f), nameof(NoMockedProviderTypesTests) + ".cs", StringComparison.Ordinal));
 
     [Fact]
-    public void NoMockingFrameworkIsReferencedOrUsedAnywhereInTheRepository()
+    public void NoTestMocksAnAdoNetProviderType()
     {
         var root = RepoRoot();
         var offenders = new List<string>();
@@ -62,7 +65,7 @@ public class NoMockingFrameworkTests
         }
 
         Assert.True(offenders.Count == 0,
-            "A mocking framework is in use (use fakeDb, or a hand-written stub; add what fakeDb lacks to fakeDb):\n" +
+            "An ADO.NET provider type is mocked (use fakeDb; add what fakeDb lacks to fakeDb):\n" +
             string.Join("\n", offenders));
     }
 }

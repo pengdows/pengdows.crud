@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Data;
 using Microsoft.Extensions.Logging.Abstractions;
 using pengdows.crud.dialects;
@@ -20,9 +21,16 @@ public class BinaryReadDriftTests
 {
     private static readonly byte[] Wkb = Convert.FromHexString("0101000000000000000000F03F0000000000000040");
 
-    // Reports more bytes than it delivers.
-    private static IDataRecord ShortRecord(byte[] delivered, long reported) =>
-        new ScriptedDataRecord { BytesDelivered = delivered, BytesReported = reported };
+    // A provider that reports more bytes than it delivers.
+    private static IDataRecord ShortRecord(byte[] delivered, int extraReported)
+    {
+        var reader = new fakeDbDataReader(new List<Dictionary<string, object>> { new() { ["value"] = delivered } })
+        {
+            OverstatedLengthColumns = new Dictionary<string, int> { ["value"] = extraReported }
+        };
+        Assert.True(reader.Read());
+        return reader;
+    }
 
     [Fact]
     public void ShortBinaryRead_KeepsOnlyTheDeliveredBytes()
@@ -30,7 +38,7 @@ public class BinaryReadDriftTests
         var dialect = (SqlDialect)SqlDialectFactory.CreateDialectForType(SupportedDatabase.PostgreSql,
             new fakeDbFactory(SupportedDatabase.PostgreSql), NullLogger.Instance);
 
-        var geometry = (Geometry)dialect.ReadUnresolvedColumn(ShortRecord(Wkb, Wkb.Length + 4), 0, typeof(Geometry));
+        var geometry = (Geometry)dialect.ReadUnresolvedColumn(ShortRecord(Wkb, 4), 0, typeof(Geometry));
 
         Assert.Equal(Convert.ToHexString(Wkb), Convert.ToHexString(geometry.WellKnownBinary.Span));
     }
@@ -38,12 +46,13 @@ public class BinaryReadDriftTests
     [Fact]
     public void GuidFromWrongLengthBinary_FailsLikeEveryGuidRead()
     {
-        var record = new ScriptedDataRecord
+        // GetValue throws InvalidCastException (a column the provider has no handler for) and the binary value is 15 bytes.
+        var reader = new fakeDbDataReader(new List<Dictionary<string, object>> { new() { ["value"] = new byte[15] } })
         {
-            IsNull = false,
-            ValueException = new InvalidCastException(),
-            BytesReported = 15
+            HandlerlessColumns = new Dictionary<string, string> { ["value"] = "public.guid15" }
         };
+        Assert.True(reader.Read());
+        IDataRecord record = reader;
 
         Assert.Throws<pengdows.crud.exceptions.InvalidValueException>(() =>
             new ProviderValueFieldReader.GuidColumnReader(false).Read(record, 0));

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
 using Xunit;
+using Moq;
 using pengdows.crud.types.coercion;
 using pengdows.crud.types.valueobjects;
 

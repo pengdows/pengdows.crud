@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
-using System.Collections.Generic;
+using Moq;
 using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
@@ -57,14 +57,15 @@ public class SemVerCompatibilityDefaultMemberTests
     [Fact]
     public void ADialectThatIsNotAnInternalOne_FallsBackToTheAnsiDefaults()
     {
-        ISqlDialect dialect = new ScriptedSqlDialect { WrapObjectNameFunc = n => "\"" + n + "\"" };
+        var dialect = new Mock<ISqlDialect> { CallBase = true };
+        dialect.Setup(d => d.WrapObjectName(It.IsAny<string>())).Returns<string>(n => "\"" + n + "\"");
 
-        Assert.True(dialect.IsClientServerDatabase());
-        Assert.False(dialect.IsEmbeddedSingleWriterEngine());
-        Assert.Equal(InMemoryKind.None, dialect.DetectInMemoryKind("Data Source=:memory:"));
-        Assert.True(dialect.SupportsSemicolonStatementSeparator());
-        Assert.True(dialect.PreservesTrailingWhitespace);
-        Assert.Equal("RELEASE SAVEPOINT \"sp1\"", dialect.GetReleaseSavepointSql("sp1"));
+        Assert.True(dialect.Object.IsClientServerDatabase());
+        Assert.False(dialect.Object.IsEmbeddedSingleWriterEngine());
+        Assert.Equal(InMemoryKind.None, dialect.Object.DetectInMemoryKind("Data Source=:memory:"));
+        Assert.True(dialect.Object.SupportsSemicolonStatementSeparator());
+        Assert.True(dialect.Object.PreservesTrailingWhitespace);
+        Assert.Equal("RELEASE SAVEPOINT \"sp1\"", dialect.Object.GetReleaseSavepointSql("sp1"));
     }
 
     [Theory]
@@ -74,18 +75,20 @@ public class SemVerCompatibilityDefaultMemberTests
     public void ADialectThatIsNotAnInternalOne_SupportsPaging_FollowsThePagingSyntaxFlags(bool offsetFetch, bool limitOffset,
         bool expected)
     {
-        ISqlDialect dialect = new ScriptedSqlDialect { SupportsOffsetFetch = offsetFetch, SupportsLimitOffset = limitOffset };
+        var dialect = new Mock<ISqlDialect> { CallBase = true };
+        dialect.SetupGet(d => d.SupportsOffsetFetch).Returns(offsetFetch);
+        dialect.SetupGet(d => d.SupportsLimitOffset).Returns(limitOffset);
 
-        Assert.Equal(expected, dialect.SupportsPaging());
+        Assert.Equal(expected, dialect.Object.SupportsPaging());
     }
 
     [Fact]
     public void ADialectThatIsNotAnInternalOne_ResolvesBestToStandardAndHonorsAnExplicitMode()
     {
-        ISqlDialect dialect = new ScriptedSqlDialect();
+        var dialect = new Mock<ISqlDialect> { CallBase = true };
 
-        Assert.Equal(DbMode.Standard, dialect.CoerceConnectionMode(DbMode.Best, null, false).Mode);
-        Assert.Equal(DbMode.SingleWriter, dialect.CoerceConnectionMode(DbMode.SingleWriter, null, false).Mode);
+        Assert.Equal(DbMode.Standard, dialect.Object.CoerceConnectionMode(DbMode.Best, null, false).Mode);
+        Assert.Equal(DbMode.SingleWriter, dialect.Object.CoerceConnectionMode(DbMode.SingleWriter, null, false).Mode);
     }
 
     [Theory]
@@ -94,17 +97,18 @@ public class SemVerCompatibilityDefaultMemberTests
     public void ISqlDialect_SavepointCapabilities_Default_FollowsSupportsSavepoints(bool supports,
         SavepointCapabilities expected)
     {
-        ISqlDialect dialect = new ScriptedSqlDialect { SupportsSavepoints = supports };
+        var dialect = new Mock<ISqlDialect> { CallBase = true };
+        dialect.SetupGet(d => d.SupportsSavepoints).Returns(supports);
 
-        Assert.Equal(expected, dialect.SavepointCapabilities);
+        Assert.Equal(expected, dialect.Object.SavepointCapabilities);
     }
 
     [Fact]
     public async Task ITransactionContext_ReleaseSavepointAsync_Default_ThrowsNotSupported()
     {
-        ITransactionContext txn = new ScriptedTransactionContext();
+        var txn = new Mock<ITransactionContext> { CallBase = true };
 
-        await Assert.ThrowsAsync<NotSupportedException>(async () => await txn.ReleaseSavepointAsync("sp1"));
+        await Assert.ThrowsAsync<NotSupportedException>(async () => await txn.Object.ReleaseSavepointAsync("sp1"));
     }
 
     [Theory]
@@ -113,15 +117,16 @@ public class SemVerCompatibilityDefaultMemberTests
     public void IDataSourceInformation_ParsedVersion_Default_ParsesProductVersion(string productVersion,
         string? expected)
     {
-        IDataSourceInformation info = new ScriptedDataSourceInformation { DatabaseProductVersion = productVersion };
+        var info = new Mock<IDataSourceInformation> { CallBase = true };
+        info.SetupGet(i => i.DatabaseProductVersion).Returns(productVersion);
 
-        Assert.Equal(expected == null ? null : Version.Parse(expected), info.ParsedVersion);
+        Assert.Equal(expected == null ? null : Version.Parse(expected), info.Object.ParsedVersion);
     }
 
     [Fact]
     public void IDatabaseContextConfiguration_NewMembers_Default_ReturnDefaultsAndAcceptOnlyDefaults()
     {
-        IDatabaseContextConfiguration config = new ScriptedDatabaseContextConfiguration();
+        var config = new Mock<IDatabaseContextConfiguration> { CallBase = true }.Object;
 
         Assert.Null(config.SessionInitializationFailureMode);
         Assert.Null(config.MaxQueuedReads);
@@ -141,7 +146,7 @@ public class SemVerCompatibilityDefaultMemberTests
     [Fact]
     public void ITableGateway_AuditCreationPolicy_Default_PreservesAndAcceptsOnlyDefault()
     {
-        ITableGateway<SemVerEntity, int> gateway = new ScriptedTableGateway<SemVerEntity, int>();
+        var gateway = new Mock<ITableGateway<SemVerEntity, int>> { CallBase = true }.Object;
         // init-only: invoke the default init accessor directly, as an object initializer would.
         var init = typeof(ITableGateway<SemVerEntity, int>).GetProperty("AuditCreationPolicy")!.SetMethod!;
 
@@ -155,7 +160,7 @@ public class SemVerCompatibilityDefaultMemberTests
     [Fact]
     public void ITableGateway_ColumnName_Default_IsNotSupported()
     {
-        ITableGateway<SemVerEntity, int> gateway = new ScriptedTableGateway<SemVerEntity, int>();
+        var gateway = new Mock<ITableGateway<SemVerEntity, int>> { CallBase = true }.Object;
 
         Assert.Throws<NotSupportedException>(() => gateway.ColumnName("Id"));
     }
@@ -163,7 +168,7 @@ public class SemVerCompatibilityDefaultMemberTests
     [Fact]
     public void IPrimaryKeyTableGateway_ColumnName_Default_IsNotSupported()
     {
-        IPrimaryKeyTableGateway<SemVerEntity> gateway = new ScriptedPrimaryKeyTableGateway<SemVerEntity>();
+        var gateway = new Mock<IPrimaryKeyTableGateway<SemVerEntity>> { CallBase = true }.Object;
 
         Assert.Throws<NotSupportedException>(() => gateway.ColumnName("Id"));
     }
@@ -171,7 +176,7 @@ public class SemVerCompatibilityDefaultMemberTests
     [Fact]
     public void IPrimaryKeyTableGateway_AuditCreationPolicy_Default_PreservesAndAcceptsOnlyDefault()
     {
-        IPrimaryKeyTableGateway<SemVerEntity> gateway = new ScriptedPrimaryKeyTableGateway<SemVerEntity>();
+        var gateway = new Mock<IPrimaryKeyTableGateway<SemVerEntity>> { CallBase = true }.Object;
         // init-only: invoke the default init accessor directly, as an object initializer would.
         var init = typeof(IPrimaryKeyTableGateway<SemVerEntity>).GetProperty("AuditCreationPolicy")!.SetMethod!;
 
@@ -185,25 +190,22 @@ public class SemVerCompatibilityDefaultMemberTests
     [Fact]
     public async Task ITenantContextRegistry_AcquireLease_Default_WrapsGetContextWithoutDisposingIt()
     {
-        var context = new ScriptedDatabaseContext();
-        ITenantContextRegistry registry = new ScriptedTenantContextRegistry
-        {
-            ContextFactory = tenant => tenant == "t1" ? context : throw new KeyNotFoundException(tenant)
-        };
+        var context = new Mock<IDatabaseContext>();
+        var registry = new Mock<ITenantContextRegistry> { CallBase = true };
+        registry.Setup(r => r.GetContext("t1")).Returns(context.Object);
 
-        using (var lease = registry.AcquireLease("t1"))
+        using (var lease = registry.Object.AcquireLease("t1"))
         {
-            Assert.Same(context, lease.Context);
+            Assert.Same(context.Object, lease.Context);
         }
 
-        await using (var asyncLease = registry.AcquireLease("t1"))
+        await using (var asyncLease = registry.Object.AcquireLease("t1"))
         {
-            Assert.Same(context, asyncLease.Context);
+            Assert.Same(context.Object, asyncLease.Context);
         }
 
-        Assert.False(context.IsDisposed);
-        Assert.Equal(0, context.DisposeCount);
-        Assert.Equal(0, context.DisposeAsyncCount);
+        context.Verify(c => c.Dispose(), Times.Never);
+        context.Verify(c => c.DisposeAsync(), Times.Never);
     }
 
     [pengdows.crud.attributes.Table("semver_entity")]

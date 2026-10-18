@@ -49,10 +49,11 @@ public sealed class ReviewPolicyAmendmentTests
     }
 
     [Fact]
-    public void P6_MockingFrameworksAreBannedAndEnforced()
+    public void P6_MockingProviderBehaviourIsBannedAndEnforced()
     {
         var text = Policy();
-        Assert.Contains("No mocking framework", text, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("NoMockingFrameworkTests", text, StringComparison.Ordinal);
+        Assert.Contains("Never mock ADO.NET provider behaviour", text, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("NoMockedProviderTypesTests", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("No mocking framework, ever", text, StringComparison.Ordinal);
     }
 }

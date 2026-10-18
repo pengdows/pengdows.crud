@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Moq;
 using pengdows.crud.fakeDb;
 using pengdows.crud.wrappers;
 using Xunit;
@@ -19,8 +20,8 @@ public sealed class TrackedReaderSizeTests
     public void ATrackedReaderObject_IsNoLargerThanTheCeiling()
     {
         var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["id"] = 1 } });
-        var connection = TestDoubles.Connection();
-        var locker = TestDoubles.Disposable();
+        var connection = new Mock<ITrackedConnection>().Object;
+        var locker = Mock.Of<IAsyncDisposable>();
         // One profile, as a dialect hands every reader of it.
         var profile = new ReaderDialectProfile(null, null, null, TypeCoercionOptions.Default);
         TrackedReader Create() => new(reader, connection, locker, false, profile);

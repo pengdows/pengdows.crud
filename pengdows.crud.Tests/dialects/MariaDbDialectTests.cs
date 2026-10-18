@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
+using Moq;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -209,27 +210,50 @@ public class MariaDbDialectTests
     public void TryEnterReadOnlyTransaction_ExecutesReadOnlyCommand()
     {
         var dialect = CreateDialect();
-        var container = new ScriptedSqlContainer();
-        var transaction = new ScriptedTransactionContext { ContainerFactory = _ => container };
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container
+            .Setup(c => c.ExecuteNonQueryAsync(CommandType.Text))
+            .ReturnsAsync(0)
+            .Verifiable();
+        container
+            .Setup(c => c.Dispose())
+            .Verifiable();
 
-        dialect.TryEnterReadOnlyTransaction(transaction);
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction
+            .Setup(t => t.CreateSqlContainer("SET SESSION tx_read_only = 1;"))
+            .Returns(container.Object)
+            .Verifiable();
 
-        Assert.Equal(new[] { "SET SESSION tx_read_only = 1;" }, transaction.RequestedSql);
-        Assert.Equal(new[] { "ExecuteNonQueryAsync(Text, none)" }, container.Calls);
-        Assert.True(container.IsDisposed);
+        dialect.TryEnterReadOnlyTransaction(transaction.Object);
+
+        container.Verify();
+        transaction.Verify();
     }
 
     [Fact]
     public async Task TryEnterReadOnlyTransactionAsync_ExecutesReadOnlyCommand()
     {
         var dialect = CreateDialect();
-        var container = new ScriptedSqlContainer();
-        var transaction = new ScriptedTransactionContext { ContainerFactory = _ => container };
+        var container = new Mock<ISqlContainer>(MockBehavior.Strict);
+        container
+            .Setup(c => c.ExecuteNonQueryAsync(CommandType.Text, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(0)
+            .Verifiable();
+        container
+            .Setup(c => c.DisposeAsync())
+            .Returns(ValueTask.CompletedTask)
+            .Verifiable();
 
-        await dialect.TryEnterReadOnlyTransactionAsync(transaction, CancellationToken.None);
+        var transaction = new Mock<ITransactionContext>(MockBehavior.Strict);
+        transaction
+            .Setup(t => t.CreateSqlContainer("SET SESSION tx_read_only = 1;"))
+            .Returns(container.Object)
+            .Verifiable();
 
-        Assert.Equal(new[] { "SET SESSION tx_read_only = 1;" }, transaction.RequestedSql);
-        Assert.Equal(new[] { "ExecuteNonQueryAsync(Text, none)" }, container.Calls);
-        Assert.True(container.IsDisposed);
+        await dialect.TryEnterReadOnlyTransactionAsync(transaction.Object, CancellationToken.None);
+
+        container.Verify();
+        transaction.Verify();
     }
 }

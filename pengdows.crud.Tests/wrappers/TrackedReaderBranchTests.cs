@@ -5,6 +5,7 @@ using System.Data.Common;
 using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
+using Moq;
 using pengdows.crud.@internal;
 using pengdows.crud.fakeDb;
 using pengdows.crud.metrics;
@@ -19,7 +20,7 @@ public class TrackedReaderBranchTests
     public void Read_WhenDisposeThrows_PropagatesDisposeFailure()
     {
         var reader = new ReadFalseDisposeThrowReader();
-        var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
         var ex = Assert.Throws<InvalidOperationException>(() => tracked.Read());
         Assert.Equal("dispose failed", ex.Message);
@@ -29,7 +30,7 @@ public class TrackedReaderBranchTests
     public void GetValue_WhenTimestampFallbackAvailable_ReturnsDateTime()
     {
         using var reader = new ThrowingValueReader("timestamp without time zone", throwOnDataTypeName: false);
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
         var value = tracked.GetValue(0);
 
@@ -40,7 +41,7 @@ public class TrackedReaderBranchTests
     public void GetValue_WhenFallbackPathFails_RethrowsOriginalException()
     {
         using var reader = new ThrowingValueReader("timestamp without time zone", throwOnDataTypeName: true);
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
         var ex = Assert.Throws<InvalidOperationException>(() => tracked.GetValue(0));
         Assert.Contains("GetValue failed", ex.Message);
@@ -50,7 +51,7 @@ public class TrackedReaderBranchTests
     public void GetDateTime_WhenTimestampFallbackAvailable_ReturnsDateTime()
     {
         using var reader = new ThrowingDateTimeReader("timestamp without time zone", throwOnDataTypeName: false);
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
         var value = tracked.GetDateTime(0);
 
@@ -61,7 +62,7 @@ public class TrackedReaderBranchTests
     public void GetDateTime_WhenFallbackPathFails_RethrowsOriginalException()
     {
         using var reader = new ThrowingDateTimeReader("timestamp without time zone", throwOnDataTypeName: true);
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
         var ex = Assert.Throws<InvalidOperationException>(() => tracked.GetDateTime(0));
         Assert.Contains("GetDateTime failed", ex.Message);
@@ -75,7 +76,7 @@ public class TrackedReaderBranchTests
             throwOnGetFieldType: false,
             typeName: "timestamp without time zone",
             throwOnDataTypeName: false);
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
         var type = tracked.GetFieldType(0);
 
@@ -90,7 +91,7 @@ public class TrackedReaderBranchTests
             throwOnGetFieldType: true,
             typeName: "timestamp",
             throwOnDataTypeName: false);
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
         var type = tracked.GetFieldType(0);
 
@@ -105,7 +106,7 @@ public class TrackedReaderBranchTests
             throwOnGetFieldType: true,
             typeName: "timestamp",
             throwOnDataTypeName: true);
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false);
 
         var ex = Assert.Throws<InvalidOperationException>(() => tracked.GetFieldType(0));
         Assert.Contains("GetFieldType failed", ex.Message);
@@ -116,7 +117,7 @@ public class TrackedReaderBranchTests
     {
         var locker = new AsyncOnlyLocker();
         using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), locker, false);
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), locker, false);
 
         tracked.Dispose();
 
@@ -127,7 +128,7 @@ public class TrackedReaderBranchTests
     public void Dispose_WithNullLocker_DoesNotThrow()
     {
         using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
-        var tracked = new TrackedReader(reader, TestDoubles.Connection(), null!, false);
+        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), null!, false);
 
         tracked.Dispose();
     }
@@ -137,7 +138,7 @@ public class TrackedReaderBranchTests
     {
         using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
         var contextLocker = new SpyLocker();
-        var tracked = new TrackedReader(reader, TestDoubles.Connection(), new ThrowingDisposeLocker(), false,
+        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), new ThrowingDisposeLocker(), false,
             contextLocker: contextLocker);
 
         Assert.Throws<InvalidOperationException>(() => tracked.Dispose());
@@ -150,7 +151,7 @@ public class TrackedReaderBranchTests
     {
         using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
         var contextLocker = new SpyLocker();
-        var tracked = new TrackedReader(reader, TestDoubles.Connection(), new ThrowingDisposeLocker(), false,
+        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), new ThrowingDisposeLocker(), false,
             contextLocker: contextLocker);
 
         await Assert.ThrowsAsync<InvalidOperationException>(() => tracked.DisposeAsync().AsTask());
@@ -163,7 +164,7 @@ public class TrackedReaderBranchTests
     {
         using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
         var command = new ThrowingDbCommand();
-        var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false,
+        var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false,
             command: command);
 
         var ex = Assert.Throws<InvalidOperationException>(() => tracked.Dispose());
@@ -175,7 +176,7 @@ public class TrackedReaderBranchTests
     {
         using var reader = new fakeDbDataReader(new[] { new Dictionary<string, object> { ["Value"] = 1 } });
         var command = new ThrowingDbCommand();
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false,
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false,
             command: command);
 
         Assert.True(tracked.Read());
@@ -189,7 +190,7 @@ public class TrackedReaderBranchTests
     {
         var metrics = new MetricsCollector(MetricsOptions.Default);
         using var reader = new RecordsAffectedReader();
-        using var tracked = new TrackedReader(reader, TestDoubles.Connection(), TestDoubles.Disposable(), false,
+        using var tracked = new TrackedReader(reader, Mock.Of<ITrackedConnection>(), Mock.Of<IAsyncDisposable>(), false,
             metricsCollector: metrics);
 
         Assert.True(tracked.Read());

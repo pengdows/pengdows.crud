@@ -397,6 +397,14 @@ public class fakeDbDataReader : DbDataReader
     public IDictionary<string, string>? HandlerlessColumns { get; set; }
 
     /// <summary>
+    /// Binary columns (name → extra bytes) whose length query reports that many bytes more than the value holds, as a
+    /// provider that overstates a value's size does: <see cref="GetBytes"/> with a null buffer returns the stored length plus
+    /// the extra, while copying delivers only the stored bytes. Lets a test prove its caller keeps the delivered bytes, not
+    /// the reported length.
+    /// </summary>
+    public IDictionary<string, int>? OverstatedLengthColumns { get; set; }
+
+    /// <summary>
     /// Columns holding a <see cref="double"/> beyond <see cref="decimal"/>'s range that emulate ODP.NET
     /// on a NUMBER/FLOAT column (confirmed live, Oracle 23ai): <see cref="GetFieldType"/> reports
     /// <see cref="decimal"/>, <see cref="GetValue"/> and <see cref="GetDecimal"/> throw
@@ -670,7 +678,9 @@ public class fakeDbDataReader : DbDataReader
         // When buffer is null, return the total available length (standard .NET GetBytes convention).
         if (buffer == null)
         {
-            return available;
+            return OverstatedLengthColumns != null && OverstatedLengthColumns.TryGetValue(GetName(ordinal), out var extra)
+                ? available + extra
+                : available;
         }
 
         var toCopy = (int)Math.Min(length, available);

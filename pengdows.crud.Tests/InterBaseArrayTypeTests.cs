@@ -9,6 +9,7 @@ using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.wrappers;
+using Moq;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -128,7 +129,7 @@ public sealed class InterBaseArrayTypeTests
         TrackedReader Open() => new(new fakeDbDataReader(rows)
             {
                 ReportedFieldTypes = new Dictionary<string, Type> { ["nums"] = typeof(Array) }
-            }, TestDoubles.Connection(), TestDoubles.Disposable(), false);
+            }, new Mock<ITrackedConnection>().Object, Mock.Of<IAsyncDisposable>(), false);
 
         var warm = Open();
         while (warm.Read())

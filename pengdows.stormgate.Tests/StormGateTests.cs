@@ -2,8 +2,27 @@ namespace pengdows.stormgate.Tests;
 
 public class StormGateTests
 {
-    private readonly ScriptedDataSource _dataSource = new();
+    private readonly fakeDbFactory _factory = new(pengdows.crud.enums.SupportedDatabase.Sqlite);
+    private readonly FakeDbDataSource _dataSource;
     private readonly TimeSpan _timeout = TimeSpan.FromMilliseconds(50);
+
+    public StormGateTests()
+    {
+        _dataSource = new FakeDbDataSource("Data Source=test", _factory);
+    }
+
+    // The next open hands out this connection / fails with this exception; once staged ones are spent, a new fakeDb connection.
+    private void NextOpenReturns(fakeDbConnection connection) => _factory.Connections.Add(connection);
+
+    private void NextOpenThrows(Exception failure)
+    {
+        var connection = new fakeDbConnection();
+        connection.SetCustomFailureException(failure);
+        connection.SetFailOnOpen();
+        _factory.Connections.Add(connection);
+    }
+
+    private int OpenCount => _factory.CreatedConnections.Count;
 
     [Fact]
     public void Constructor_ValidatesArguments()
@@ -21,7 +40,7 @@ public class StormGateTests
         using var gate = new StormGate(_dataSource, 1, _timeout, logger);
 
         // Take the only permit
-        _dataSource.Returns(new fakeDbConnection());
+        NextOpenReturns(new fakeDbConnection());
         // Held for the whole test: a dropped gated connection can be finalized, which releases its permit.
         using var heldConnection = await gate.OpenAsync();
 
@@ -35,7 +54,7 @@ public class StormGateTests
     public async Task OpenAsync_UsesSemaphore()
     {
         // Arrange
-        _dataSource.Returns(new fakeDbConnection());
+        NextOpenReturns(new fakeDbConnection());
 
         using var gate = new StormGate(_dataSource, 1, _timeout);
 
@@ -44,7 +63,7 @@ public class StormGateTests
 
         // Assert
         Assert.NotNull(conn1);
-        Assert.Equal(1, _dataSource.OpenCount);
+        Assert.Equal(1, OpenCount);
 
         // Try to open another one, it should timeout
         await Assert.ThrowsAsync<TimeoutException>(() => gate.OpenAsync());
@@ -54,7 +73,7 @@ public class StormGateTests
     public async Task OpenAsync_ReleasesSemaphoreOnCatch()
     {
         // Arrange
-        _dataSource.Throws(new InvalidOperationException("BOOM"));
+        NextOpenThrows(new InvalidOperationException("BOOM"));
 
         using var gate = new StormGate(_dataSource, 1, _timeout);
 
@@ -62,7 +81,7 @@ public class StormGateTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => gate.OpenAsync());
 
         // Should be able to try again (not timed out)
-        _dataSource.Returns(new fakeDbConnection());
+        NextOpenReturns(new fakeDbConnection());
 
         using var conn1 = await gate.OpenAsync();
         Assert.NotNull(conn1);
@@ -72,7 +91,7 @@ public class StormGateTests
     public async Task OpenAsync_ReleasesOnConnectionDispose()
     {
         // Arrange
-        _dataSource.Returns(new fakeDbConnection());
+        NextOpenReturns(new fakeDbConnection());
 
         using var gate = new StormGate(_dataSource, 1, _timeout);
 
@@ -89,7 +108,7 @@ public class StormGateTests
     public async Task OpenAsync_ReleasesOnConnectionClose()
     {
         // Arrange
-        _dataSource.Returns(new fakeDbConnection());
+        NextOpenReturns(new fakeDbConnection());
 
         using var gate = new StormGate(_dataSource, 1, _timeout);
 
@@ -247,7 +266,7 @@ public class StormGateTests
     [Fact]
     public async Task Dispose_WithActiveLease_DoesNotBreakLeaseDisposal()
     {
-        _dataSource.Returns(new fakeDbConnection());
+        NextOpenReturns(new fakeDbConnection());
 
         var gate = new StormGate(_dataSource, 1, _timeout);
         var conn = await gate.OpenAsync();
@@ -309,7 +328,7 @@ public class StormGateTests
     public async Task OpenAsync_WhenProviderOpenIsCanceled_DoesNotLogError()
     {
         var logger = new RecordingLogger();
-        _dataSource.Throws(new OperationCanceledException("canceled by provider"));
+        NextOpenThrows(new OperationCanceledException("canceled by provider"));
 
         using var gate = new StormGate(_dataSource, 1, _timeout, logger);
 
@@ -358,7 +377,7 @@ public class StormGateTests
         // support.
         var innerConnection = new SavepointCapableFakeConnection();
         innerConnection.Open();
-        _dataSource.Returns(innerConnection);
+        NextOpenReturns(innerConnection);
 
         using var gate = new StormGate(_dataSource, 1, _timeout);
         using var permitConnection = await gate.OpenAsync();

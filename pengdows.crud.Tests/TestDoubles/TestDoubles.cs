@@ -7,8 +7,8 @@ using pengdows.crud.wrappers;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// Real objects for the places a test needs an argument but not behaviour from it. Moq is never used in this repository:
-/// fakeDb is the test provider, and anything it cannot do is added to fakeDb, not mocked.
+/// Real objects for the places a test needs an argument but not behaviour from it. Provider-shaped ones run on
+/// fakeDb, which is also where anything a provider can do or fail with is added, never mocked.
 /// </summary>
 internal static class TestDoubles
 {
