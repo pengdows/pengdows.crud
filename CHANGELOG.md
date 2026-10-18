@@ -39,7 +39,9 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
 - Single-row upserts are atomic against a concurrent insert of the same key (proven on live databases: 16 callers on
   one new key failed on PostgreSQL 5/16, SQL Server 1/16, Oracle 5/16, Db2 9/16 and Firebird 15/16 before). PostgreSQL
   uses `INSERT ... ON CONFLICT` for a single row, as batch upserts already did; SQL Server's `MERGE` takes
-  `WITH (HOLDLOCK)`; Oracle, Db2 and Firebird retry the statement once on a unique violation (the row exists by then).
+  `WITH (HOLDLOCK)`; Oracle, Db2, Firebird and Informix retry the statement once on a unique violation (the row exists by then). That
+  retry is not full atomicity (a competing delete between the failure and the retry can still lose); a stricter guarantee is the
+  application's decision (its own lock or retry policy).
   The generated SQL for a single-row upsert on PostgreSQL 15+ and SQL Server changes shape.
 - An upsert whose conflict key has a `NULL` component is refused with `InvalidOperationException` naming the column.
   It could never match, so it inserted again: a silent duplicate on SQLite, PostgreSQL and MySQL, a unique violation
