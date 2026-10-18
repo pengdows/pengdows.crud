@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Linq;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -167,5 +168,33 @@ public sealed class AuditDocumentationTests
         Assert.Contains("HOLDLOCK", section, StringComparison.Ordinal);
         Assert.Contains("SqlServerEqualFootingBenchmarks", section, StringComparison.Ordinal);
         Assert.Contains("PostgreSqlEqualFootingBenchmarks", section, StringComparison.Ordinal);
+    }
+
+    // Decided 2026-10-18: 2.0.6 is the last 2.0 release, so every open design item is a 3.0 item, none "next round" or "decide".
+    [Theory]
+    [InlineData("SESSION-001")]
+    [InlineData("SQLITE-006")]
+    [InlineData("SQLITE-007")]
+    [InlineData("POISON-001")]
+    [InlineData("POOL-001")]
+    [InlineData("POOL-002")]
+    [InlineData("POOL-003")]
+    [InlineData("VAR-002")]
+    public void EveryOpenDesignItem_IsMarkedForThirtyOh(string id)
+    {
+        var text = Read("docs/FUTURE_WORK.md");
+        var row = text.Split('\n').First(l => l.StartsWith("| " + id + " |", StringComparison.Ordinal));
+
+        Assert.Contains("3.0", row.Substring(row.LastIndexOf("**", StringComparison.Ordinal) + 1), StringComparison.Ordinal);
+        Assert.DoesNotContain("next round |", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("Open (decide)", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("Open, needs a setting", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("Open, maintainer decision", row, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void FutureWork_SaysThisIsTheLastTwoOhRelease()
+    {
+        Assert.Contains("2.0.6 is the last 2.0 release", Read("docs/FUTURE_WORK.md"), StringComparison.Ordinal);
     }
 }
