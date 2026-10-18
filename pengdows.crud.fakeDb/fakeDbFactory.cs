@@ -104,6 +104,12 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     private readonly FakeDataStore _sharedDataStore = new();
 
     /// <summary>
+    /// Runs on every connection this factory creates itself (not on connections a test staged in <see cref="Connections"/>), before
+    /// it is handed out, so a test can script what each new connection answers however many the code under test opens.
+    /// </summary>
+    public Action<fakeDbConnection>? ConnectionInitializer { get; set; }
+
+    /// <summary>
     /// The data store every connection this factory creates shares (used when <see cref="EnableDataPersistence"/> is on). Declare
     /// unique keys on it to have duplicates refused with the emulated product's violation.
     /// </summary>
@@ -338,6 +344,8 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
         {
             c.SetServerVersion(ServerVersion);
         }
+
+        ConnectionInitializer?.Invoke(c);
 
         lock (_connections)
         {

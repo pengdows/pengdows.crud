@@ -183,6 +183,9 @@ call in order, `SetNonQueryResultForCommand(text, n)` and `SetScalarResultForCom
 text every time, and `SetDefaultNonQueryResult(n)` is what a non-query returns when nothing else answers (1 unless
 set). A connection's own queue is consulted first, then the factory's.
 
+`fakeDbFactory.ConnectionInitializer` runs on every connection the factory creates itself (not on ones a test staged in `Connections`),
+so a test can script what each new connection answers without guessing how many a context will open.
+
 **Unique keys.** `factory.DataStore.DefineUniqueKey("table", "col", ...)` (with `EnableDataPersistence`) makes a duplicate
 INSERT raise the violation the *emulated product's provider* raises (SQLSTATE 23505 on PostgreSQL, error 2627 on SQL Server,
 1062 on MySQL, ORA-00001 on Oracle, and so on for every `SupportedDatabase`), so the dialect's classification, the

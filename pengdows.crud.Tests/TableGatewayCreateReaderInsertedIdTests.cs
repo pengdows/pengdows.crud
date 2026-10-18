@@ -56,10 +56,10 @@ public class TableGatewayCreateReaderInsertedIdTests
         factory.SetIdPopulationResult(0, rowsAffected: 1);
 
         // Pre-seed every connection so the INSERT reader command reports LastInsertedId.
-        foreach (var conn in factory.Connections)
+        factory.ConfigureConnections(conn =>
         {
             conn.NextCommandLastInsertedId = lastInsertedId;
-        }
+        });
 
         var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance, isMySqlConnector: true);
         var context = new DatabaseContext("Data Source=test;EmulatedProduct=MySql", factory, typeMap, dialect);

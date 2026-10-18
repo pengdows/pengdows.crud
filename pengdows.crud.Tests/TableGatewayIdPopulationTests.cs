@@ -46,6 +46,24 @@ public class TableGatewayIdPopulationTests
         Assert.Equal(42, entity.Id); // Verify ID was populated by PopulateGeneratedIdAsync
     }
 
+    // HARN-012: the setup scripts every connection the factory creates, not a fixed handful, so an extra initialization step or
+    // a test that creates more rows than the old seven pre-seeded connections still sees the scripted id.
+    [Fact]
+    public async Task SetIdPopulationResult_ServesMoreOperationsThanAFixedNumberOfConnections()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
+        factory.SetIdPopulationResult(42, 1);
+        await using var context = new DatabaseContext("test", factory, _typeMap);
+        var helper = new TableGateway<TestEntityWithAutoId, int>(context);
+
+        for (var i = 0; i < 20; i++)
+        {
+            var entity = new TestEntityWithAutoId { Name = "Test Entity " + i };
+            Assert.True(await helper.CreateAsync(entity));
+            Assert.Equal(42, entity.Id);
+        }
+    }
+
     [Fact]
     public async Task CreateAsync_Should_Not_Populate_Id_For_Writable_Id_Column()
     {

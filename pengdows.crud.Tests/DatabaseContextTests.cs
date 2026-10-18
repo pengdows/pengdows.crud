@@ -350,13 +350,13 @@ public class DatabaseContextTests
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetIdPopulationResult(null);
 
-        foreach (var connection in factory.Connections)
+        factory.ConfigureConnections(connection =>
         {
             connection.ScalarResultsByCommand[
                 "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = 1;
             connection.ScalarResultsByCommand[
                 "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 1;
-        }
+        });
 
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
 
@@ -370,13 +370,13 @@ public class DatabaseContextTests
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetIdPopulationResult(null);
 
-        foreach (var connection in factory.Connections)
+        factory.ConfigureConnections(connection =>
         {
             connection.ScalarResultsByCommand[
                 "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = 1;
             connection.ScalarResultsByCommand[
                 "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
-        }
+        });
 
         using var context = new DatabaseContext("Data Source=test;EmulatedProduct=SqlServer", factory);
 

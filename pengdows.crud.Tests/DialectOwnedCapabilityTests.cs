@@ -35,13 +35,13 @@ public sealed class DialectOwnedCapabilityTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         factory.SetIdPopulationResult(null);
-        foreach (var connection in factory.Connections)
+        factory.ConfigureConnections(connection =>
         {
             connection.ScalarResultsByCommand[
                 "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = rcsi;
             connection.ScalarResultsByCommand[
                 "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = snapshot;
-        }
+        });
 
         return factory;
     }

@@ -99,4 +99,48 @@ public sealed class FakeDbFactoryResultsTests
 
         Assert.Equal(11, await sc.ExecuteNonQueryAsync());
     }
+
+    [Fact]
+    public void ConnectionInitializer_ConfiguresEveryConnectionTheFactoryCreates_HoweverManyThereAre()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql)
+        {
+            ConnectionInitializer = connection =>
+            {
+                connection.EnqueueNonQueryResult(5);
+                connection.ScalarResultsByCommand["SELECT custom()"] = "configured";
+            }
+        };
+
+        for (var i = 0; i < 25; i++)
+        {
+            var connection = factory.CreateConnection();
+            connection.Open();
+            var update = connection.CreateCommand();
+            update.CommandText = "UPDATE t SET a = 1";
+            var select = connection.CreateCommand();
+            select.CommandText = "SELECT custom()";
+
+            Assert.Equal(5, update.ExecuteNonQuery());
+            Assert.Equal("configured", select.ExecuteScalar());
+        }
+    }
+
+    [Fact]
+    public void ConnectionInitializer_DoesNotTouchConnectionsTheTestStagedItself()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.PostgreSql) { ConnectionInitializer = c => c.EnqueueNonQueryResult(5) };
+        var staged = new fakeDbConnection();
+        staged.EnqueueNonQueryResult(8);
+        factory.Connections.Add(staged);
+
+        var connection = factory.CreateConnection();
+        connection.Open();
+        var update = connection.CreateCommand();
+        update.CommandText = "UPDATE t SET a = 1";
+
+        Assert.Same(staged, connection);
+        Assert.Equal(8, update.ExecuteNonQuery());
+        Assert.Equal(1, update.ExecuteNonQuery());
+    }
 }

@@ -86,7 +86,7 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
     `ON DUPLICATE KEY UPDATE` update the existing row. `MERGE` is not modelled, so the MERGE race still needs a real database;
   - `fakeDbFactory.DataStore`, an ordered `Operations` log on connection, command and transaction, `SchemaException`,
     `ChangeDatabase` (fakeDb allows it; pengdows.crud refuses it), `OverstatedLengthColumns`, `SetFailOnDispose` (a
-    connection whose cleanup throws), and positional `?` markers in the data store.
+    connection whose cleanup throws), `ConnectionInitializer` (scripts every connection the factory creates), and positional `?` markers in the data store.
 - Measured on a real PostgreSQL: synchronous callers parked behind an asynchronous slot holder delay its release by about
   0.9 to 1.0 s (the thread-pool injection delay, not growing from 64 to 1,000 callers); see
   [docs/connection-pooling.md](docs/connection-pooling.md) (`PostgreSqlSyncWaiterStarvationTests`).

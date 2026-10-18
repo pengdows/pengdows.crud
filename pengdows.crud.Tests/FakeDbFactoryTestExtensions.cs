@@ -10,6 +10,20 @@ namespace pengdows.crud.Tests;
 
 internal static class fakeDbFactoryTestExtensions
 {
+    /// <summary>
+    /// Adds <paramref name="configure"/> to what every connection the factory creates is scripted with, after anything already
+    /// scripted (for example by <see cref="SetIdPopulationResult"/>), so a test layers its own setup on top.
+    /// </summary>
+    public static void ConfigureConnections(this fakeDbFactory factory, Action<fakeDbConnection> configure)
+    {
+        var existing = factory.ConnectionInitializer;
+        factory.ConnectionInitializer = connection =>
+        {
+            existing?.Invoke(connection);
+            configure(connection);
+        };
+    }
+
     public static void SetNonQueryResult(this fakeDbFactory factory, int value)
     {
         // Seed multiple connections to cover init + ops under various strategies
@@ -106,16 +120,13 @@ internal static class fakeDbFactoryTestExtensions
     {
         factory.Connections.Clear();
 
-        // Primary connection + 6 fallbacks to cover Standard mode (new connection per op)
-        for (var i = 0; i < 7; i++)
-        {
-            factory.Connections.Add(MakeIdPopulationConnection(factory.EnableDataPersistence, generatedId, rowsAffected));
-        }
+        // Every connection the factory creates is scripted, however many the context opens (initialization, one per operation in
+        // Standard mode, the persistent one otherwise): no fixed number of pre-seeded connections to run out of (HARN-012).
+        factory.ConnectionInitializer = connection => ScriptIdPopulation(connection, factory.EnableDataPersistence, generatedId, rowsAffected);
     }
 
-    private static fakeDbConnection MakeIdPopulationConnection(bool enableDataPersistence, object? generatedId, int rowsAffected)
+    private static void ScriptIdPopulation(fakeDbConnection c, bool enableDataPersistence, object? generatedId, int rowsAffected)
     {
-        var c = new fakeDbConnection();
         c.EnableDataPersistence = enableDataPersistence;
 
         // Database detection / version queries (initialization phase)
@@ -139,7 +150,5 @@ internal static class fakeDbFactoryTestExtensions
         c.EnqueueReaderResult(MakeScalarReaderRow(generatedId));
         c.SetDefaultScalarOnce(generatedId);
         c.EnqueueScalarResult(generatedId);
-
-        return c;
     }
 }
