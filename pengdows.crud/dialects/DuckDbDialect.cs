@@ -457,6 +457,14 @@ internal class DuckDbDialect : SqlDialect
             return parameter;
         }
 
+        // A TIME column: DuckDB.NET 1.5.6.1 binds a TimeSpan as an INTERVAL whatever its DbType says, and DuckDB can't cast
+        // INTERVAL to TIME where it can't infer the type (a MERGE source). A TimeOnly binds as a TIME on every release.
+        if (type == DbType.Time && parameter.Value is TimeSpan clock && IsTimeOfDay(clock))
+        {
+            parameter.Value = TimeOnly.FromTimeSpan(clock);
+            return parameter;
+        }
+
         // DuckDB specific parameter handling
         if (type == DbType.Boolean && value is bool boolValue)
         {
@@ -468,11 +476,24 @@ internal class DuckDbDialect : SqlDialect
         return parameter;
     }
 
-    // A TimeSpan reassigned through SetParameterValue gets the text CreateDbParameter binds.
-    public override object? PrepareParameterValue(object? value, DbType dbType) =>
-        value is TimeSpan interval && dbType is DbType.Object or DbType.String
-            ? IntervalText(interval)
-            : base.PrepareParameterValue(value, dbType);
+    private static bool IsTimeOfDay(TimeSpan value) => value >= TimeSpan.Zero && value < TimeSpan.FromDays(1);
+
+    // A TimeSpan reassigned through SetParameterValue gets the text (an interval) or the TimeOnly (a time of day) that
+    // CreateDbParameter binds.
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        if (value is TimeSpan interval && dbType is DbType.Object or DbType.String)
+        {
+            return IntervalText(interval);
+        }
+
+        if (value is TimeSpan clock && dbType == DbType.Time && IsTimeOfDay(clock))
+        {
+            return TimeOnly.FromTimeSpan(clock);
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
 
     internal override DbType? DbTypeForReassignedValue(object? newValue, object? preparedValue) =>
         newValue is TimeSpan && preparedValue is string ? DbType.String : null;

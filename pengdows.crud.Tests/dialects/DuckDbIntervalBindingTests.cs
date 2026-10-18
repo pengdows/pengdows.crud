@@ -36,12 +36,40 @@ public sealed class DuckDbIntervalBindingTests
         Assert.Equal(expected, dialect.PrepareParameterValue(TimeSpan.FromTicks(ticks), DbType.Object));
     }
 
-    [Fact]
-    public void TimeColumn_TimeSpanStaysATime()
+    // DuckDB.NET 1.5.6.1 (which carries our interval fixes) binds a TimeSpan as an INTERVAL whatever its DbType says, and DuckDB
+    // can't cast INTERVAL to TIME in a MERGE source. A TimeOnly binds as a TIME on every release, so a TimeSpan within one day
+    // written to a TIME column is sent as one.
+    [Theory]
+    [InlineData(0L)]
+    [InlineData(4 * TimeSpan.TicksPerHour + 5 * TimeSpan.TicksPerMinute + 6 * TimeSpan.TicksPerSecond)]
+    [InlineData(TimeSpan.TicksPerDay - 10)]
+    public void TimeColumn_TimeSpanWithinADay_BindsAsATimeOnly(long ticks)
     {
-        var p = Dialect().CreateDbParameter("v", DbType.Time, new TimeSpan(4, 5, 6));
+        var dialect = Dialect();
+
+        var p = dialect.CreateDbParameter("v", DbType.Time, TimeSpan.FromTicks(ticks));
 
         Assert.Equal(DbType.Time, p.DbType);
+        Assert.Equal(TimeOnly.FromTimeSpan(TimeSpan.FromTicks(ticks)), Assert.IsType<TimeOnly>(p.Value));
+        Assert.Equal(TimeOnly.FromTimeSpan(TimeSpan.FromTicks(ticks)), dialect.PrepareParameterValue(TimeSpan.FromTicks(ticks), DbType.Time));
+    }
+
+    [Theory]
+    [InlineData(-1L)]
+    [InlineData(TimeSpan.TicksPerDay)]
+    [InlineData(TimeSpan.TicksPerDay + 1)]
+    public void TimeColumn_TimeSpanOutsideADay_IsLeftAlone(long ticks)
+    {
+        var p = Dialect().CreateDbParameter("v", DbType.Time, TimeSpan.FromTicks(ticks));
+
         Assert.IsType<TimeSpan>(p.Value);
+    }
+
+    [Fact]
+    public void TimeColumn_TimeOnlyStaysATimeOnly()
+    {
+        var p = Dialect().CreateDbParameter("v", DbType.Time, new TimeOnly(4, 5, 6));
+
+        Assert.IsType<TimeOnly>(p.Value);
     }
 }
