@@ -383,8 +383,15 @@ public class PerformanceOptimizationBenchmarks
     {
         public bool Equals(string? x, string? y)
         {
-            if (ReferenceEquals(x, y)) return true;
-            if (x == null || y == null) return false;
+            if (ReferenceEquals(x, y))
+            {
+                return true;
+            }
+
+            if (x == null || y == null)
+            {
+                return false;
+            }
 
             var xSpan = NormalizedSpan(x);
             var ySpan = NormalizedSpan(y);
@@ -427,8 +434,15 @@ public class PerformanceOptimizationBenchmarks
     {
         public bool Equals(string? x, string? y)
         {
-            if (ReferenceEquals(x, y)) return true;
-            if (x == null || y == null) return false;
+            if (ReferenceEquals(x, y))
+            {
+                return true;
+            }
+
+            if (x == null || y == null)
+            {
+                return false;
+            }
 
             var xSpan = NormalizedSpan(x);
             var ySpan = NormalizedSpan(y);

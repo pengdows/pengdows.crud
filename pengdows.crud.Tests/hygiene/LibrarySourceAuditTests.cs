@@ -122,4 +122,19 @@ public class LibrarySourceAuditTests
 
         Assert.True(offenders.Count == 0, "Unbraced control flow: " + string.Join(", ", offenders));
     }
+
+    // Review policy 4F, enforced by the compiler as well as by the scan above: the analyzer reports a missing brace in the build
+    // (IDE0011), so an unbraced block of any shape fails it, multi-line conditions included.
+    [Fact]
+    public void Policy4F_TheBuildRequiresBraces()
+    {
+        var root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        var editorConfig = File.ReadAllText(Path.Combine(root, ".editorconfig"));
+        var props = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
+
+        Assert.Matches(new Regex(@"(?m)^\s*root\s*=\s*true"), editorConfig);
+        Assert.Matches(new Regex(@"(?m)^\s*dotnet_diagnostic\.IDE0011\.severity\s*=\s*(?:warning|error)"), editorConfig);
+        Assert.Matches(new Regex(@"(?m)^\s*csharp_prefer_braces\s*=\s*true:(?:warning|error)"), editorConfig);
+        Assert.Contains("<EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>", props, StringComparison.Ordinal);
+    }
 }

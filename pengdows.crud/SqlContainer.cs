@@ -337,7 +337,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
                 // Scan to end of identifier: [A-Za-z_][A-Za-z0-9_]*
                 var nameEnd = nameStart + 1;
                 while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
+                {
                     nameEnd++;
+                }
 
                 sb ??= new SqlQueryBuilder(sql.Length + 32);
                 sb.Append(span[cursor..matchStart]); // literal text before {P}NAME
@@ -351,10 +353,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             if (sb == null)
+            {
                 return sql; // no placeholders found — return original without allocation
+            }
 
             if (cursor < sql.Length)
+            {
                 sb.Append(span[cursor..]);
+            }
 
             return sb.ToString();
         }
@@ -403,7 +409,9 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
 
                 var nameEnd = nameStart + 1;
                 while (nameEnd < sql.Length && IsIdentContinue(sql[nameEnd]))
+                {
                     nameEnd++;
+                }
 
                 sb ??= new SqlQueryBuilder(sql.Length + 32);
                 sb.Append(span[cursor..matchStart]);
@@ -434,10 +442,14 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
             }
 
             if (sb == null)
+            {
                 return sql;
+            }
 
             if (cursor < sql.Length)
+            {
                 sb.Append(span[cursor..]);
+            }
 
             return sb.ToString();
         }

@@ -670,7 +670,11 @@ public class BrokenMappingBenchmarks : IDisposable
             // EF doesn't support ExecuteScalarOrNullAsync directly from raw SQL easily,
             // so we use a connection-level approach via the context
             var conn = _efContext.Database.GetDbConnection();
-            if (conn.State != ConnectionState.Open) await conn.OpenAsync();
+            if (conn.State != ConnectionState.Open)
+            {
+                await conn.OpenAsync();
+            }
+
             await using var cmd = conn.CreateCommand();
             cmd.CommandText = sql;
             var p = cmd.CreateParameter();
@@ -846,7 +850,10 @@ public class BrokenMappingBenchmarks : IDisposable
             container.Query.Append(sql);
             container.AddParameterWithValue("id", DbType.Int32, id);
             var entity = await _pengdowsHelper.LoadSingleAsync(container);
-            if (entity != null) results.Add(entity);
+            if (entity != null)
+            {
+                results.Add(entity);
+            }
         }
 
         return results;
@@ -862,7 +869,10 @@ public class BrokenMappingBenchmarks : IDisposable
             {
                 var sql = BuildSelectSingleSql(param => $"@{param}");
                 var entity = await _dapperConnection.QuerySingleOrDefaultAsync<DapperWeirdEntity>(sql, new { id });
-                if (entity != null) results.Add(entity);
+                if (entity != null)
+                {
+                    results.Add(entity);
+                }
             }
             catch (Exception ex)
             {
@@ -886,7 +896,10 @@ public class BrokenMappingBenchmarks : IDisposable
                     .FromSqlRaw(sql, new SqliteParameter("id", id))
                     .AsNoTracking()
                     .FirstOrDefaultAsync();
-                if (entity != null) results.Add(entity);
+                if (entity != null)
+                {
+                    results.Add(entity);
+                }
             }
             catch (Exception ex)
             {

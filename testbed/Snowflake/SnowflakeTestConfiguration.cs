@@ -69,11 +69,30 @@ public sealed class SnowflakeTestConfiguration
             : timestamp.ToString(CultureInfo.InvariantCulture);
 
         var missing = new List<string>();
-        if (string.IsNullOrWhiteSpace(account)) missing.Add("SNOWFLAKE_ACCOUNT");
-        if (string.IsNullOrWhiteSpace(user)) missing.Add("SNOWFLAKE_USER");
-        if (string.IsNullOrWhiteSpace(password)) missing.Add("SNOWFLAKE_PASSWORD");
-        if (string.IsNullOrWhiteSpace(warehouse)) missing.Add("SNOWFLAKE_WAREHOUSE");
-        if (!createDatabase && string.IsNullOrWhiteSpace(baseDatabase)) missing.Add("SNOWFLAKE_DATABASE");
+        if (string.IsNullOrWhiteSpace(account))
+        {
+            missing.Add("SNOWFLAKE_ACCOUNT");
+        }
+
+        if (string.IsNullOrWhiteSpace(user))
+        {
+            missing.Add("SNOWFLAKE_USER");
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            missing.Add("SNOWFLAKE_PASSWORD");
+        }
+
+        if (string.IsNullOrWhiteSpace(warehouse))
+        {
+            missing.Add("SNOWFLAKE_WAREHOUSE");
+        }
+
+        if (!createDatabase && string.IsNullOrWhiteSpace(baseDatabase))
+        {
+            missing.Add("SNOWFLAKE_DATABASE");
+        }
 
         if (missing.Count > 0)
         {

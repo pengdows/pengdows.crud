@@ -185,7 +185,11 @@ public class RenderParamsPerformanceTests : SqlLiteContextTestBase
         container!.Query.Append("INSERT INTO data VALUES (");
         for (int i = 0; i < 50; i++)
         {
-            if (i > 0) container.Query.Append(", ");
+            if (i > 0)
+            {
+                container.Query.Append(", ");
+            }
+
             container.Query.Append($"{{P}}p{i}");
         }
 

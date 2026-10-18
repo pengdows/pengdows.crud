@@ -46,8 +46,15 @@ public sealed class PengdowsTelemetryService(
             // callbacks arriving after the observer may have been disposed.
             if (registry != null)
             {
-                if (onCreated != null) registry.ContextCreated -= onCreated;
-                if (onRemoved != null) registry.ContextRemoved -= onRemoved;
+                if (onCreated != null)
+                {
+                    registry.ContextCreated -= onCreated;
+                }
+
+                if (onRemoved != null)
+                {
+                    registry.ContextRemoved -= onRemoved;
+                }
             }
         }
     }

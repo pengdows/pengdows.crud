@@ -95,9 +95,13 @@ public class TableGatewayBatchTests : IAsyncLifetime
         foreach (var ctx in new[] { _sqliteContext, _pgContext, _mysqlContext, _sqlServerContext, _snowflakeContext, _oracleContext })
         {
             if (ctx is IAsyncDisposable asyncDisp)
+            {
                 await asyncDisp.DisposeAsync();
+            }
             else if (ctx is IDisposable disp)
+            {
                 disp.Dispose();
+            }
         }
     }
 

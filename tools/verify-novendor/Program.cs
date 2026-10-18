@@ -103,7 +103,10 @@ static class V
                 lower.Contains(@"\testbed\") || lower.Contains(@"/testbed/") ||
                 lower.Contains(@"\benchmarks\") || lower.Contains(@"/benchmarks/") ||
                 lower.Contains("crudbenchmarks") ||
-                lower.Contains("testbed")) continue;
+                lower.Contains("testbed"))
+            {
+                continue;
+            }
 
             try
             {
@@ -116,7 +119,9 @@ static class V
                 {
                     var name = ar.Name ?? "";
                     if (forbidden.Any(f => name.StartsWith(f, StringComparison.OrdinalIgnoreCase)))
+                    {
                         badFinds.Add($"{Path.GetFileName(file)}: AssemblyRef → {name}");
+                    }
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -137,7 +142,9 @@ static class V
                 {
                     var ns = tr.Namespace ?? "";
                     if (forbidden.Any(f => ns.StartsWith(f, StringComparison.OrdinalIgnoreCase)))
+                    {
                         badFinds.Add($"{Path.GetFileName(file)}: TypeRef → {ns}.{tr.Name}");
+                    }
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -146,7 +153,9 @@ static class V
                 {
                     var ns = ca.AttributeType.Namespace ?? "";
                     if (forbidden.Any(f => ns.StartsWith(f, StringComparison.OrdinalIgnoreCase)))
+                    {
                         badFinds.Add($"{Path.GetFileName(file)}: Attr → {ns}.{ca.AttributeType.Name}");
+                    }
                 }
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -168,7 +177,9 @@ static class V
                     var dt = mr.DeclaringType;
                     var ns = dt?.Namespace ?? "";
                     if (forbidden.Any(f => ns.StartsWith(f, StringComparison.OrdinalIgnoreCase)))
+                    {
                         badFinds.Add($"{Path.GetFileName(file)}: MemberRef → {ns}.{dt?.Name}::{mr.Name}");
+                    }
                 }
             }
             catch (OperationCanceledException)
@@ -188,7 +199,11 @@ static class V
         }
 
         Console.Error.WriteLine("❌ Forbidden provider references found:");
-        foreach (var b in badFinds.Distinct()) Console.Error.WriteLine("  " + b);
+        foreach (var b in badFinds.Distinct())
+        {
+            Console.Error.WriteLine("  " + b);
+        }
+
         return 1;
     }
 }

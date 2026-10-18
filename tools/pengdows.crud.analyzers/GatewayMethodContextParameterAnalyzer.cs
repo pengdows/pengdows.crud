@@ -210,7 +210,11 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
             }
 
             var left = binary.Left;
-            while (left is ParenthesizedExpressionSyntax p) left = p.Expression;
+            while (left is ParenthesizedExpressionSyntax p)
+            {
+                left = p.Expression;
+            }
+
             if (left is PostfixUnaryExpressionSyntax p2 && p2.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression))
             {
                 left = p2.Operand;
@@ -222,7 +226,11 @@ public sealed class GatewayMethodContextParameterAnalyzer : DiagnosticAnalyzer
             }
 
             var right = binary.Right;
-            while (right is ParenthesizedExpressionSyntax p) right = p.Expression;
+            while (right is ParenthesizedExpressionSyntax p)
+            {
+                right = p.Expression;
+            }
+
             if (right is PostfixUnaryExpressionSyntax p3 && p3.IsKind(Microsoft.CodeAnalysis.CSharp.SyntaxKind.SuppressNullableWarningExpression))
             {
                 right = p3.Operand;

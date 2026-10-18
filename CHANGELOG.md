@@ -91,6 +91,8 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
 ### Fixed
 - `pengdows.crud.fakeDb`: `fakeDbFactory.CreateConnection` is safe to call from many threads. Staged connections used to be
   lost, handed out twice, or throw a `NullReferenceException` under concurrent opens (found by the 200-worker pool test).
+- The build now requires braces on every control-flow block (`.editorconfig` IDE0011 under `EnforceCodeStyleInBuild`); about
+  120 unbraced blocks across the repository were braced with `dotnet format`, with no behavior change.
 - Review policy and tests: unbraced control flow, empty or reasonless catch blocks and mocked ADO.NET provider types now
   fail the unit tests (`Policy4F_NoUnbracedControlFlow`, `Catch001_EveryCommentOnlyCatchStatesAReason`,
   `NoMockedProviderTypesTests`). Catch blocks that swallowed a failure were each throw-tested: two were removed, five narrowed,

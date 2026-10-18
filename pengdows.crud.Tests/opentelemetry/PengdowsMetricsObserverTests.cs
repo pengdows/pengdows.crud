@@ -372,7 +372,9 @@ public class PengdowsMetricsObserverTests
             .BuildServiceProvider();
 
         foreach (var svc in sp.GetServices<IHostedService>())
+        {
             await svc.StartAsync(CancellationToken.None);
+        }
 
         using var ctx = new DatabaseContext(MakeConfig("created-tenant"), factory);
         fakeRegistry.SimulateContextCreated(ctx);
@@ -381,7 +383,9 @@ public class PengdowsMetricsObserverTests
         Assert.True(observer.IsTracking(ctx));
 
         foreach (var svc in sp.GetServices<IHostedService>().Reverse())
+        {
             await svc.StopAsync(CancellationToken.None);
+        }
     }
 
     // ── TelemetryService subscribes to ITenantContextRegistry.ContextRemoved ─
@@ -401,7 +405,9 @@ public class PengdowsMetricsObserverTests
             .BuildServiceProvider();
 
         foreach (var svc in sp.GetServices<IHostedService>())
+        {
             await svc.StartAsync(CancellationToken.None);
+        }
 
         using var ctx = new DatabaseContext(MakeConfig("removed-tenant"), factory);
         fakeRegistry.SimulateContextCreated(ctx);
@@ -413,7 +419,9 @@ public class PengdowsMetricsObserverTests
         Assert.False(observer.IsTracking(ctx));
 
         foreach (var svc in sp.GetServices<IHostedService>().Reverse())
+        {
             await svc.StopAsync(CancellationToken.None);
+        }
     }
 
     // ── TelemetryService unsubscribes from registry on stop ──────────────
@@ -433,9 +441,14 @@ public class PengdowsMetricsObserverTests
             .BuildServiceProvider();
 
         foreach (var svc in sp.GetServices<IHostedService>())
+        {
             await svc.StartAsync(CancellationToken.None);
+        }
+
         foreach (var svc in sp.GetServices<IHostedService>().Reverse())
+        {
             await svc.StopAsync(CancellationToken.None);
+        }
 
         // After stop, ContextCreated must no longer reach the observer
         using var ctx = new DatabaseContext(MakeConfig("after-stop-tenant"), factory);

@@ -3109,7 +3109,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
             {
                 var schema = connection.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
                 if (schema.Rows.Count > 0)
+                {
                     schemaProductVersion = schema.Rows[0].Field<string>("DataSourceProductVersion");
+                }
             }
             catch
             {

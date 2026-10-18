@@ -303,7 +303,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             var map = new Dictionary<string, object>(row.Count);
             foreach (var kvp in row)
+            {
                 map[kvp.Key] = kvp.Value!;
+            }
+
             yield return map;
         }
     }
@@ -630,7 +633,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
                 {
                     var clone = new Dictionary<string, object>(row.Count);
                     foreach (var kvp in row)
+                    {
                         clone[kvp.Key] = kvp.Value;
+                    }
+
                     clonedRows.Add(clone);
                 }
 
@@ -665,7 +671,10 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         {
             var newRow = new Dictionary<string, object?>(row.Count);
             foreach (var kvp in row)
+            {
                 newRow[kvp.Key] = kvp.Value;
+            }
+
             return newRow;
         }));
         EnqueueMultiResultReader(converted);

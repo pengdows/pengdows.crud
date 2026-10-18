@@ -277,7 +277,9 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
             do
             {
                 while (await reader.ReadAsync())
+                {
                     _customerIds.Add(reader.GetInt32(0));
+                }
             } while (await reader.NextResultAsync());
         }
 
@@ -304,7 +306,11 @@ internal sealed class IndexedViewEnvironment : IAsyncDisposable
             sb.Append("INSERT INTO dbo.Orders (customer_id, total_amount, order_date) VALUES ");
             for (var i = batch; i < batchEnd; i++)
             {
-                if (i > batch) sb.Append(',');
+                if (i > batch)
+                {
+                    sb.Append(',');
+                }
+
                 var (cid, amt, days) = orderRows[i];
                 sb.Append($"({cid},{amt},DATEADD(day,-{days},GETUTCDATE()))");
             }

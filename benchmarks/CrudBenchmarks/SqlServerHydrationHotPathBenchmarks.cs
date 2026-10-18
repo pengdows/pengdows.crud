@@ -104,7 +104,11 @@ public class SqlServerHydrationHotPathBenchmarks : IDisposable
                     "INSERT INTO hydration_benchmark (name, email, age, salary, is_active, created_at, score) VALUES ");
                 for (var i = start; i <= end; i++)
                 {
-                    if (i > start) sb.Append(',');
+                    if (i > start)
+                    {
+                        sb.Append(',');
+                    }
+
                     var active = (i % 2 == 0) ? "1" : "0";
                     sb.Append(
                         $"(N'Entity {i}', N'entity{i}@example.com', {20 + (i % 50)}, {50_000.0 + i * 10.0}, {active}, N'{now}', {i * 1.25})");

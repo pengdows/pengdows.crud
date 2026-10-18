@@ -498,8 +498,11 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         if (Interlocked.Exchange(ref _wasOpened, 1) == 0)
         {
             if (_onFirstOpen != null)
+            {
                 _onFirstOpen.Invoke(this);
+            }
             else if (_onFirstOpenAsync != null)
+            {
                 // Invariant: callers that register an async-only handler must never call
                 // the synchronous Open() path (e.g. must use OpenAsync). Violating this
                 // would block a thread-pool thread via GetAwaiter().GetResult() and risk
@@ -507,6 +510,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
                 throw new InvalidOperationException(
                     "A synchronous Open() was called on a TrackedConnection that has only an " +
                     "async first-open handler registered. Use OpenAsync() instead.");
+            }
         }
     }
 
@@ -518,9 +522,13 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
 
         if (_onFirstOpenAsync != null)
+        {
             await _onFirstOpenAsync(this, cancellationToken).ConfigureAwait(false);
+        }
         else
+        {
             _onFirstOpen?.Invoke(this);
+        }
     }
 
     // An exception filter: reports the failure without catching it, so the stack is untouched.

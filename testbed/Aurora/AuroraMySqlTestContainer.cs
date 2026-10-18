@@ -24,7 +24,11 @@ public sealed class AuroraMySqlTestContainer : TestContainer
 
     protected override async ValueTask DisposeAsyncCore()
     {
-        if (!_created) return;
+        if (!_created)
+        {
+            return;
+        }
+
         try
         {
             await using var conn = new MySqlConnection(_config.AdminConnectionString);

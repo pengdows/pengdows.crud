@@ -373,12 +373,14 @@ public partial class TableGateway<TEntity, TRowID> :
         // 4b. ReaderInsertedId plan (MySqlConnector): see ExecuteReaderInsertedIdAsync.
         // No multi-statement support required.
         if (plan == GeneratedKeyPlan.ReaderInsertedId && _idColumn != null && !_idColumn.IsIdWritable)
-            return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded, cancellationToken).ConfigureAwait(false);
+            {
+                return await ExecuteReaderInsertedIdAsync(entity, ctx, dialect, writeSucceeded, cancellationToken).ConfigureAwait(false);
+            }
 
-        // 5. Default path, including SessionScopedFunction (Informix, SAP HANA, Access): INSERT, then the
-        // session-scoped id query. A last-id function reports the id only on the connection that ran
-        // the INSERT, so both share one pinned connection (GEN-001, CORE-016).
-        {
+            // 5. Default path, including SessionScopedFunction (Informix, SAP HANA, Access): INSERT, then the
+            // session-scoped id query. A last-id function reports the id only on the connection that ran
+            // the INSERT, so both share one pinned connection (GEN-001, CORE-016).
+            {
             var needsId = _idColumn != null && !_idColumn.IsIdWritable;
             await using var idLease = needsId
                 ? await AcquireGeneratedIdLeaseAsync(ctx, cancellationToken).ConfigureAwait(false)
@@ -454,14 +456,21 @@ public partial class TableGateway<TEntity, TRowID> :
             writeSucceeded[0] = true;
 
             if (reader is IInternalTrackedReader internalReader)
+            {
                 generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
+            }
         }
 
         if (generatedId is not null && generatedId != DBNull.Value)
+        {
             SetColumnValue(_idColumn!, entity,
                 TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn!.PropertyInfo.PropertyType));
+        }
         else
+        {
             await PopulateGeneratedIdAsync(entity, ctx, cancellationToken, idLease).ConfigureAwait(false);
+        }
+
         return true;
     }
 

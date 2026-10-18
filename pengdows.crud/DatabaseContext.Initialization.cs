@@ -2652,7 +2652,9 @@ public partial class DatabaseContext
     {
         var method = factoryType.GetMethod("CreateDataSource", new[] { parameterType });
         if (method == null || method.DeclaringType == typeof(DbProviderFactory))
+        {
             return null;
+        }
 
         return method;
     }

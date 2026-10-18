@@ -1,0 +1,8 @@
+# Review policy 4F: braces are required on every control-flow block. The build reports a missing brace (IDE0011) and
+# WarningsAsErrors turns it into a build error. Nothing else is configured here on purpose: every other style rule stays at its
+# default (not reported).
+root = true
+
+[*.cs]
+csharp_prefer_braces = true:warning
+dotnet_diagnostic.IDE0011.severity = warning

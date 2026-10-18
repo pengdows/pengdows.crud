@@ -148,9 +148,11 @@ public class TypeSystemCharacterizationTests
         object[] numbers = { 1, 1L, (short)1, (byte)1, 1.0, 1.5, 1.5f, 1m, 2.7m, "1", "2.7", true, long.MaxValue, ulong.MaxValue };
         Type[] numericTargets = { typeof(int), typeof(long), typeof(short), typeof(byte), typeof(double), typeof(float), typeof(decimal), typeof(bool), typeof(ulong), typeof(int?) };
         foreach (var raw in numbers)
-        foreach (var target in numericTargets)
+        {
+            foreach (var target in numericTargets)
         {
             yield return (raw, target);
+        }
         }
 
         foreach (var raw in new object[] { "Sad", "2", 2, 2L, "sad", "Nope", 9 })
@@ -175,9 +177,11 @@ public class TypeSystemCharacterizationTests
         };
         Type[] temporalTargets = { typeof(DateTime), typeof(DateTimeOffset), typeof(DateOnly), typeof(TimeOnly), typeof(TimeSpan), typeof(string) };
         foreach (var raw in temporals)
-        foreach (var target in temporalTargets)
+        {
+            foreach (var target in temporalTargets)
         {
             yield return (raw, target);
+        }
         }
 
         foreach (var raw in new object[] { "abc", new[] { 'a', 'b' }, new byte[] { 104, 105 }, 'z' })

@@ -172,9 +172,16 @@ internal static class SqlServerBenchmarkValidation
     /// </summary>
     private static string StripBrackets(string? value)
     {
-        if (string.IsNullOrEmpty(value)) return string.Empty;
+        if (string.IsNullOrEmpty(value))
+        {
+            return string.Empty;
+        }
+
         if (value.Length >= 2 && value[0] == '[' && value[^1] == ']')
+        {
             return value[1..^1];
+        }
+
         return value;
     }
 

@@ -229,9 +229,13 @@ public class TypeHydrationTests : DatabaseTestBase
 
         // SQLite stores decimal as REAL (double) — assert with tolerance
         if (provider == SupportedDatabase.Sqlite)
+        {
             Assert.Equal((double)9_876.54321m, (double)r.ColDecimal, 6);
+        }
         else
+        {
             Assert.Equal(9_876.54321m, r.ColDecimal);
+        }
 
         Assert.True(r.ColBool);
         Assert.True(r.ColBoolNull);
@@ -254,12 +258,18 @@ public class TypeHydrationTests : DatabaseTestBase
     {
         // Oracle coerces empty string '' to NULL for VARCHAR2/NVARCHAR2 columns
         if (provider == SupportedDatabase.Oracle)
+        {
             Assert.True(string.IsNullOrEmpty(r.ColString));
+        }
         // Capability: Sybase ASE stores '' as a single blank (PreservesTrailingWhitespace = false).
         else if (!preservesTrailingWhitespace)
+        {
             Assert.Equal("", r.ColString?.TrimEnd());
+        }
         else
+        {
             Assert.Equal("", r.ColString);
+        }
 
         Assert.Null(r.ColStringNull);
         Assert.Equal((short)0, r.ColShort);
@@ -299,9 +309,13 @@ public class TypeHydrationTests : DatabaseTestBase
 
         // SQLite stores decimal as REAL (double) — assert with tolerance
         if (provider == SupportedDatabase.Sqlite)
+        {
             Assert.Equal((double)(-99_999_999.99999999m), (double)r.ColDecimal, 6);
+        }
         else
+        {
             Assert.Equal(-99_999_999.99999999m, r.ColDecimal);
+        }
 
         Assert.True(r.ColBool);
         Assert.False(r.ColBoolNull);

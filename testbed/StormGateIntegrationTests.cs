@@ -34,7 +34,10 @@ public static class StormGateIntegrationTests
             // forces Microsoft.Data.Sqlite to actually close its cached native connections before
             // the delete is attempted.
             SqliteConnection.ClearAllPools();
-            if (File.Exists(dbPath)) File.Delete(dbPath);
+            if (File.Exists(dbPath))
+            {
+                File.Delete(dbPath);
+            }
         }
     }
 
@@ -80,10 +83,14 @@ public static class StormGateIntegrationTests
         Console.WriteLine($"    Max observed concurrency: {maxObserved}");
 
         if (maxObserved > maxConcurrent)
+        {
             throw new Exception($"Observed concurrency {maxObserved} exceeded limit {maxConcurrent}");
+        }
 
         if (completedTasks != totalTasks)
+        {
             throw new Exception($"Only {completedTasks}/{totalTasks} tasks completed");
+        }
     }
 
     private static async Task RunTimeoutTest(string connectionString)

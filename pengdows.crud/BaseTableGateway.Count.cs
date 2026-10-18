@@ -91,9 +91,13 @@ public abstract partial class BaseTableGateway<TEntity>
         sc.Query.Append(sc.MakeParameterName(p));
 
         if (andWhereNull != null)
+        {
             sc.Query.Append(" AND ").Append(WrapCallerColumnReference(dialect, andWhereNull)).Append(" IS NULL");
+        }
         else if (andWhereNotNull != null)
+        {
             sc.Query.Append(" AND ").Append(WrapCallerColumnReference(dialect, andWhereNotNull)).Append(" IS NOT NULL");
+        }
 
         return await sc.ExecuteScalarOrNullAsync<long?>() ?? 0;
     }

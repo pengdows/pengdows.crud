@@ -176,7 +176,9 @@ public class DuckDbEfCoreEqualFootingBenchmarks : IAsyncDisposable
         var optionsBuilder = new DbContextOptionsBuilder<DuckDbBenchContext>()
             .UseDuckDB(connection, contextOwnsConnection: true);
         if (useStormGate)
+        {
             optionsBuilder.UseStormGate(_interceptor);
+        }
 
         var options = optionsBuilder.Options;
         return new DuckDbBenchContext(options);
@@ -190,7 +192,9 @@ public class DuckDbEfCoreEqualFootingBenchmarks : IAsyncDisposable
             try
             {
                 if (File.Exists(path))
+                {
                     File.Delete(path);
+                }
             }
             catch (IOException)
             {

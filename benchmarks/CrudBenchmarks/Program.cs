@@ -175,21 +175,34 @@ public class Program
         {
             var statistics = summary[benchmarkCase]?.ResultStatistics;
             if (statistics?.Percentiles == null)
+            {
                 return "NA";
+            }
 
             var nanoseconds = statistics.Percentiles.Percentile(_percentile);
             var timeUnit = style.TimeUnit ?? TimeUnit.GetBestTimeUnit(nanoseconds);
             double divisor;
             if (timeUnit == TimeUnit.Nanosecond)
+            {
                 divisor = 1.0;
+            }
             else if (timeUnit == TimeUnit.Microsecond)
+            {
                 divisor = 1_000.0;
+            }
             else if (timeUnit == TimeUnit.Millisecond)
+            {
                 divisor = 1_000_000.0;
+            }
             else if (timeUnit == TimeUnit.Second)
+            {
                 divisor = 1_000_000_000.0;
+            }
             else
+            {
                 divisor = 1.0;
+            }
+
             return (nanoseconds / divisor).ToString("N2");
         }
 

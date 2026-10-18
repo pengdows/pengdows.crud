@@ -41,10 +41,26 @@ public sealed class AuroraTestConfiguration
         var database = getEnv(prefix + "DATABASE");
         var sslMode = getEnv(prefix + "SSL_MODE");
         var missing = new List<string>();
-        if (string.IsNullOrWhiteSpace(host)) missing.Add(prefix + "HOST");
-        if (string.IsNullOrWhiteSpace(user)) missing.Add(prefix + "USER");
-        if (string.IsNullOrWhiteSpace(password)) missing.Add(prefix + "PASSWORD");
-        if (string.IsNullOrWhiteSpace(database)) missing.Add(prefix + "DATABASE");
+        if (string.IsNullOrWhiteSpace(host))
+        {
+            missing.Add(prefix + "HOST");
+        }
+
+        if (string.IsNullOrWhiteSpace(user))
+        {
+            missing.Add(prefix + "USER");
+        }
+
+        if (string.IsNullOrWhiteSpace(password))
+        {
+            missing.Add(prefix + "PASSWORD");
+        }
+
+        if (string.IsNullOrWhiteSpace(database))
+        {
+            missing.Add(prefix + "DATABASE");
+        }
+
         if (missing.Count > 0)
         {
             throw new InvalidOperationException(

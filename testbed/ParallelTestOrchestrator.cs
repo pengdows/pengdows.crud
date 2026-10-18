@@ -318,7 +318,9 @@ public class ParallelTestOrchestrator
             foreach (var version in TestbedImageMatrix.Get(provider))
             {
                 if (versions is { Count: > 0 } && !versions.Contains(version.Label) && !versions.Contains(version.Image))
+                {
                     continue;
+                }
 
                 var image = version.Image;
                 var container = new Lazy<ITestContainer>(() => containerFactory(image));
@@ -378,24 +380,32 @@ public class ParallelTestOrchestrator
         AddLocal("Informix", () => new InformixTestContainer(), (db, sp) => new InformixTestProvider(db, sp), 20);
 
         if (_includeSnowflake)
+        {
             AddLocal("Snowflake", () => new SnowflakeTestContainer(), (db, sp) => new SnowflakeTestProvider(db, sp), 5);
+        }
 
         // Weight 300: CONFIRMED live to take several minutes even with the image already pulled
         // locally — by far the slowest of any database here (compare Db2's 60s weight, itself the
         // previous high-water mark). Single pinned image internally, like Sybase/Informix.
         if (_includeSapHana)
+        {
             AddLocal("SAP HANA", () => new HanaTestContainer(), (db, sp) => new HanaTestProvider(db, sp), 300);
+        }
 
         // Weight 5: connecting to an already-running, externally-managed container (see
         // InterBaseTestContainer.cs's class remarks) — no image pull/first-boot cost like every
         // other database here, just a connection retry loop.
         if (_includeInterBase)
+        {
             AddLocal("InterBase", () => new InterBaseTestContainer(), (db, sp) => new InterBaseTestProvider(db, sp), 5);
+        }
 
         // Weight 5: no Docker image at all — just a local .accdb file create (ADOX) and a
         // handful of OLE DB round trips, similar cost shape to InterBase's connection-only case.
         if (_includeAccess)
+        {
             AddLocal("Access", () => new AccessTestContainer(), (db, sp) => new AccessTestProvider(db, sp), 5);
+        }
 
         if (_includeAurora)
         {
@@ -411,9 +421,14 @@ public class ParallelTestOrchestrator
                            string.Equals(Key(n), Key(c.DatabaseProvider), StringComparison.OrdinalIgnoreCase));
 
         if (only is { Count: > 0 })
+        {
             configurations = configurations.Where(c => Named(only, c)).ToList();
+        }
+
         if (exclude is { Count: > 0 })
+        {
             configurations = configurations.Where(c => !Named(exclude, c)).ToList();
+        }
 
         return configurations;
     }
@@ -462,7 +477,10 @@ public class ParallelTestOrchestrator
         {
             Console.WriteLine("\nFAILURES:");
             foreach (var f in results.Where(r => !r.Success && !r.ContainerStartTimeout))
+            {
                 Console.WriteLine($"  {f.ContainerName}: {f.Error}");
+            }
+
             Console.WriteLine();
         }
 
@@ -470,7 +488,10 @@ public class ParallelTestOrchestrator
         {
             Console.WriteLine("\nUNAVAILABLE (container startup timed out — not a test failure):");
             foreach (var f in results.Where(r => r.ContainerStartTimeout))
+            {
                 Console.WriteLine($"  {f.ContainerName}: {f.Error}");
+            }
+
             Console.WriteLine();
         }
 

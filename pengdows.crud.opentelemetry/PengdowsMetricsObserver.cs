@@ -383,7 +383,9 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     public void Track(IDatabaseContext context)
     {
         if (!_contexts.TryAdd(context.RootId, context))
+        {
             return;
+        }
 
         _lastSnapshots[context.RootId] = context.Metrics;
         context.MetricsUpdated += HandleMetricsUpdated;
@@ -392,7 +394,9 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     public void Untrack(IDatabaseContext context)
     {
         if (!_contexts.TryRemove(context.RootId, out _))
+        {
             return;
+        }
 
         _lastSnapshots.TryRemove(context.RootId, out _);
         context.MetricsUpdated -= HandleMetricsUpdated;
@@ -404,10 +408,14 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     private void HandleMetricsUpdated(object? sender, DatabaseMetrics e)
     {
         if (sender is not IDatabaseContext context)
+        {
             return;
+        }
 
         if (!_lastSnapshots.TryGetValue(context.RootId, out var last))
+        {
             return;
+        }
 
         var tags = new TagList
         {
@@ -462,7 +470,9 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
         foreach (var kv in _lastSnapshots)
         {
             if (!_contexts.TryGetValue(kv.Key, out var context))
+            {
                 continue;
+            }
 
             if (context.IsDisposed)
             {

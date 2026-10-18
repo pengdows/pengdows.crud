@@ -91,7 +91,9 @@ internal sealed class OrderedDictionary<TKey, TValue> :
         _comparer = comparer ?? EqualityComparer<TKey>.Default;
 
         if (capacity <= 0)
+        {
             return; // fully lazy
+        }
 
         if (capacity <= SmallCapacity)
         {
@@ -246,7 +248,9 @@ internal sealed class OrderedDictionary<TKey, TValue> :
             if (e.HashCode == hashCode && comparer.Equals(e.Key, key))
             {
                 for (var j = i; j < _count - 1; j++)
+                {
                     _entries[j] = _entries[j + 1];
+                }
 
                 _entries[_count - 1] = default!;
                 _count--;
@@ -276,7 +280,9 @@ internal sealed class OrderedDictionary<TKey, TValue> :
     public bool Remove(TKey key, out TValue value)
     {
         if (TryGetValue(key, out value))
+        {
             return Remove(key);
+        }
 
         return false;
     }
@@ -405,7 +411,9 @@ internal sealed class OrderedDictionary<TKey, TValue> :
                 var i = iPlus1 - 1;
                 ref var e = ref _entries[i];
                 if (e.HashCode == hashCode && comparer.Equals(e.Key, key))
+                {
                     return ref e.Value;
+                }
 
                 iPlus1 = e.Next;
             }
@@ -418,7 +426,9 @@ internal sealed class OrderedDictionary<TKey, TValue> :
         {
             ref var e = ref _entries[i];
             if (e.HashCode == hashCode && comparer.Equals(e.Key, key))
+            {
                 return ref e.Value;
+            }
         }
 
         return ref Unsafe.NullRef<TValue>();
@@ -429,7 +439,9 @@ internal sealed class OrderedDictionary<TKey, TValue> :
         ArgumentNullException.ThrowIfNull(key);
 
         if (_entries.Length == 0)
+        {
             _entries = new Entry[InitialSmallCapacity];
+        }
 
         var comparer = _comparer;
         var hashCode = (uint)comparer.GetHashCode(key);
@@ -443,9 +455,14 @@ internal sealed class OrderedDictionary<TKey, TValue> :
                 if (e.HashCode == hashCode && comparer.Equals(e.Key, key))
                 {
                     if (behavior == InsertionBehavior.ThrowOnExisting)
+                    {
                         ThrowAddingDuplicateWithKeyArgumentException(key);
+                    }
+
                     if (behavior == InsertionBehavior.NoneIfExists)
+                    {
                         return false;
+                    }
 
                     e.Value = value;
                     _version = unchecked(_version + 1);
@@ -494,9 +511,14 @@ internal sealed class OrderedDictionary<TKey, TValue> :
             if (e.HashCode == hashCode && comparer.Equals(e.Key, key))
             {
                 if (behavior == InsertionBehavior.ThrowOnExisting)
+                {
                     ThrowAddingDuplicateWithKeyArgumentException(key);
+                }
+
                 if (behavior == InsertionBehavior.NoneIfExists)
+                {
                     return false;
+                }
 
                 e.Value = value;
                 _version = unchecked(_version + 1);

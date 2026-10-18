@@ -134,7 +134,11 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         var now = DateTime.UtcNow.ToString("O");
         for (var i = 1; i <= SeedRows; i++)
         {
-            if (i > 1) sb.Append(',');
+            if (i > 1)
+            {
+                sb.Append(',');
+            }
+
             var active = (i % 2 == 0) ? "true" : "false";
             sb.Append(
                 $"('Person {i}', {20 + (i % 50)}, {30000.0 + i * 100.0}, {active}, '{now}')");
@@ -430,7 +434,10 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         _aggregateSc?.Dispose();
         _pengdowsContext?.Dispose();
         _dapperDataSource?.Dispose();
-        if (_container != null) await _container.DisposeAsync();
+        if (_container != null)
+        {
+            await _container.DisposeAsync();
+        }
     }
 
     public void Dispose() => GlobalCleanup().GetAwaiter().GetResult();
@@ -987,7 +994,11 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         }
         catch
         {
-            if (conn != null) await conn.DisposeAsync();
+            if (conn != null)
+            {
+                await conn.DisposeAsync();
+            }
+
             throw;
         }
     }
