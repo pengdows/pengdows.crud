@@ -240,8 +240,8 @@
     i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
     i3 = DateTimeOffset DateTimeOffset:2026-10-05T01:02:03.0000000-05:00
     i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
-    i5 = Time TimeSpan:01:02:03
-    i6 = Time TimeSpan:01:02:03
+    i5 = Time TimeOnly:01:02:03.0000000
+    i6 = Time TimeOnly:01:02:03.0000000
   Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES ($i0, $i1, $i2, $i3, $i4, $i5, $i6)
     i0 = Int32 Int32:0
     i1 = String "["a"]"

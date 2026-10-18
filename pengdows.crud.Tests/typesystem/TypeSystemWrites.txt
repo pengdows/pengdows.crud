@@ -494,8 +494,8 @@
   DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
-  TimeOnly: Time TimeSpan:13:45:30.1234567
-  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
+  TimeOnly: Time TimeOnly:13:45:30.1234567
+  TimeSpan as Time: Time TimeOnly:13:45:30.1234567
   TimeSpan as Object: String "2 days 00:00:00.000000"
   byte[]: Binary 0x0102FF
   enum as String: String Mood:Sad
