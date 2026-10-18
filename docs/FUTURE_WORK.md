@@ -2418,3 +2418,18 @@ Existing third-party retry libraries (such as Polly or manual retry loops) are u
 | F2 keyed constraints | Done: `FakeDataStore.DefineUniqueKey`, provider-shaped violations for every `SupportedDatabase`, atomic `ON CONFLICT`/`ON DUPLICATE KEY`; `MERGE` deliberately unmodelled and documented as such (`FakeDbUniqueConstraintTests`). Positional `?` markers now resolve in the store. |
 | F3 virtual time | Not done, on purpose. The governor's `TimeProvider` seam drives deadlines and metrics, but the waits themselves (the hand-built waiter queue in `PoolGovernorConcurrencyGate`, `SemaphoreSlim` timeouts) run on OS timers, so a virtual clock would mean reworking the waiter queue and its interrupt/cancellation handling in a release branch, for a test convenience. Timeout behaviour is pinned with real, short timeouts (`PoolGovernorDeadlineTests`). Revisit with 3.0. |
 | F4 stress via gates | Done: `FakeDbPoolBoundaryStressTests` (200 workers, pool of 40). It found a real fakeDb bug, the factory's `CreateConnection` was not thread-safe (staged connections lost, duplicated, or a `NullReferenceException`); fixed, pinned by `FakeDbFactoryConcurrencyTests`. |
+
+### Test doubles (decided 2026-10-18)
+
+ADO.NET provider behaviour is never mocked; fakeDb produces it (and its failures), and a gap is added to fakeDb. Everything
+else may use Moq. An earlier pass removed Moq everywhere and replaced it with generated stubs (`tools/test-stub-generator`,
+`Scripted*` doubles); that was effectively a homegrown mocking library, so it was deleted and the non-provider tests went
+back to Moq. The guard is `NoMockedProviderTypesTests`. `TestDoubles.cs` (real objects over fakeDb) stays.
+
+### Coercion registry, stage 2 (declined for 2.0.6)
+
+Examined 2026-10-17: the Guid helpers (`GuidFromBytes`, `GuidFromBinary`, `TryDecodeGuidBytes`) are thin entry points over
+`new Guid(span, bigEndian)` with different failure semantics (decline, throw `InvalidValueException`, public delegate), and
+`GuidFromBytes` is public. Merging them buys little at the risk of a semver-locked surface; the larger duplicates (date and
+JSON helpers, `ConvertWithCache`/`CompileConverter`) are a 3.0 item.
+

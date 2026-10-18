@@ -106,4 +106,23 @@ public sealed class AuditDocumentationTests
         Assert.Contains("PoolAcquireTimeout", text, StringComparison.Ordinal);
         Assert.Contains("not measured against real I/O", text, StringComparison.Ordinal);
     }
+
+    // The 2.0.6 fixes are documented where a reader looks: the changelog, the release notes and the future-work tracker.
+    [Fact]
+    public void TheAuditFixes_AreInTheChangelogAndReleaseNotes()
+    {
+        var changelog = Read("CHANGELOG.md");
+        var notes = Read("docs/release-notes-2.0.6.md");
+        var future = Read("docs/FUTURE_WORK.md");
+
+        Assert.Contains("DefineUniqueKey", changelog, StringComparison.Ordinal);
+        Assert.Contains("docs/facts.json", changelog, StringComparison.Ordinal);
+        Assert.Contains("READ_COMMITTED_SNAPSHOT", changelog, StringComparison.Ordinal);
+        Assert.Contains("fakeDbFactory.CreateConnection", changelog, StringComparison.Ordinal);
+        Assert.Contains("## Isolation profiles", notes, StringComparison.Ordinal);
+        Assert.Contains("FakeDbPoolBoundaryStressTests", notes, StringComparison.Ordinal);
+        Assert.Contains("NoMockedProviderTypesTests", notes, StringComparison.Ordinal);
+        Assert.Contains("Coercion registry, stage 2", future, StringComparison.Ordinal);
+        Assert.Contains("homegrown mocking library", future, StringComparison.Ordinal);
+    }
 }

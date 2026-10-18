@@ -358,6 +358,18 @@ every CLR type and every database, whether the value round-trips and why not whe
 - Firebird `NONE`-charset text with non-Latin characters reads back correctly when another driver in
   the process has registered .NET code pages (DRY-020).
 
+## Isolation profiles
+
+- SQL Server: `IsolationProfile.SafeNonBlockingReads` now also resolves, as ReadCommitted, when `READ_COMMITTED_SNAPSHOT`
+  (RCSI) is on and snapshot isolation is off; 2.0.5 threw `TransactionModeNotSupportedException`. With RCSI, readers read row
+  versions, so they never block on writers and never see dirty data: the same statement-level MVCC the profile already
+  accepts as ReadCommitted on Oracle and MySQL. It is not a transaction-wide snapshot. Snapshot isolation on still gives
+  Snapshot; with neither on, the profile still throws.
+- One refusal contract: an `IsolationProfile` that cannot be met (no mapping, a mapped level the database lacks, or a mapping
+  weaker than the profile guarantees) always throws `TransactionModeNotSupportedException`, which derives from
+  `NotSupportedException`, so a handler written for the earlier bare `NotSupportedException` still catches it. An explicit
+  native level that nothing at or above satisfies still throws `InvalidOperationException`.
+
 ## SQLite
 
 - **A connection a caller changed no longer carries the change to the next operation.** Microsoft.Data.Sqlite's pool
@@ -417,3 +429,33 @@ passed on 2.0.5 and fails now was relying on behavior no real provider has.
 | A column holding a `fakeDbInterval` (new) | — | reports `TimeSpan` and data type `Interval`; `GetValue` converts as DuckDB.NET 1.5.6 does (throws for negatives and months ≥ 1, drops negative months); `GetProviderSpecificValue` returns the stored parts | DuckDB.NET 1.5.6 on `INTERVAL` |
 | `OffsetDroppedByGetValueColumns` (new) | — | the column reports `DateTime` and data type `TimeStampTZ`; `GetValue` returns the wall time with no offset, `GetDateTimeOffset` the value | ODP.NET 3.21 on `TIMESTAMP WITH TIME ZONE` |
 | `GetProviderSpecificValue` / `GetProviderSpecificFieldType` | .NET's default (`GetValue`) | the stored value for a provider-specific type (`fakeDbInterval`), otherwise unchanged | each provider's own value type |
+
+New in fakeDb since the table above (each is pinned by tests in `pengdows.crud.Tests`):
+
+- Factory-level canned results: `EnqueueNonQueryResult`, `EnqueueScalarResult`, `SetNonQueryResultForCommand`,
+  `SetScalarResultForCommand` and `SetDefaultNonQueryResult` reach every connection the factory creates; a connection's own
+  queue is consulted first. A context opens its own connections, so this is how a test scripts them.
+- A unique-key model: `fakeDbFactory.DataStore.DefineUniqueKey("table", "col")` makes a duplicate INSERT raise the violation
+  the emulated product's provider raises, so a dialect's classification, the `UniqueConstraintViolationException`
+  translation and the upsert retry run end to end. `INSERT ... ON CONFLICT` and `ON DUPLICATE KEY UPDATE` update the
+  existing row (atomically, as the real statements do). `MERGE` is not modelled: the MERGE-versus-concurrent-insert race is
+  shown only by `ConcurrentUpsertTests` against real databases.
+- `fakeDbFactory.CreateConnection` is thread-safe. The 200-worker, pool-of-40 boundary now runs on fakeDb with execute
+  gates (`FakeDbPoolBoundaryStressTests`): 40 commands held in flight, every other caller refused with
+  `PoolSaturatedException`, peak connections never above 40, recovery when the gates open. A real server's own
+  connection limit, process kill and network loss remain integration-only.
+- An ordered `Operations` log on connection, command and transaction, `SchemaException`, `ChangeDatabase` (allowed in
+  fakeDb; pengdows.crud itself refuses it), `OverstatedLengthColumns` (a provider that reports more bytes than it
+  delivers), and positional `?` markers in the data store.
+
+## Tests, review policy and provenance
+
+- ADO.NET provider behaviour is never mocked: connections, commands, readers, transactions, parameters, factories, data
+  sources and their failures belong to fakeDb. Mocking the library's own interfaces is fine (Moq). `NoMockedProviderTypesTests`
+  enforces it. See `REVIEW_POLICY.md` for the amendments: capability skips only, a concurrent same-key test for any upsert or
+  merge change, a stated reason for every empty or comment-only catch, braced control flow.
+- `docs/facts.json` records, for each database and framework, the last run's counts, time, commit and whether the tree was
+  clean, next to `docs/integration-status.md`.
+- Considered and not done in 2.0.6: virtual time for pool acquire timeouts (the waiter queue waits on OS timers; real, short
+  timeouts pin the behaviour) and one registry for every coercion rule (the Guid and date helpers are thin and have different
+  failure semantics; 3.0). Both are recorded in `docs/FUTURE_WORK.md`.

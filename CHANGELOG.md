@@ -71,8 +71,25 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
   writer queue, governed), storm and poison runs, DuckDB writer arms.
 - Public API analyzers and package/API compatibility guards now protect the shipped 2.0.5 surface; new public members
   are declared explicitly in the unshipped API baselines.
+- `pengdows.crud.fakeDb` can now produce more of what a real provider does and fails with:
+  - canned results on the factory (`EnqueueNonQueryResult`, `EnqueueScalarResult`, `SetNonQueryResultForCommand`,
+    `SetScalarResultForCommand`, `SetDefaultNonQueryResult`) that reach every connection it creates;
+  - `FakeDataStore.DefineUniqueKey`, which makes a duplicate INSERT raise the unique violation the emulated product's
+    provider raises (SQLSTATE, vendor number and message per `SupportedDatabase`); `INSERT ... ON CONFLICT` and
+    `ON DUPLICATE KEY UPDATE` update the existing row. `MERGE` is not modelled, so the MERGE race still needs a real database;
+  - `fakeDbFactory.DataStore`, an ordered `Operations` log on connection, command and transaction, `SchemaException`,
+    `ChangeDatabase` (fakeDb allows it; pengdows.crud refuses it), `OverstatedLengthColumns`, and positional `?` markers in
+    the data store.
+- `docs/facts.json`, the machine-readable form of `docs/integration-status.md` (pass/fail/skip, run time, commit and
+  dirty-tree flag per database and framework), written by `tools/record-integration-run.py`.
 
 ### Fixed
+- `pengdows.crud.fakeDb`: `fakeDbFactory.CreateConnection` is safe to call from many threads. Staged connections used to be
+  lost, handed out twice, or throw a `NullReferenceException` under concurrent opens (found by the 200-worker pool test).
+- Review policy and tests: unbraced control flow, empty or reasonless catch blocks and mocked ADO.NET provider types now
+  fail the unit tests (`Policy4F_NoUnbracedControlFlow`, `Catch001_EveryCommentOnlyCatchStatesAReason`,
+  `NoMockedProviderTypesTests`). Catch blocks that swallowed a failure were each throw-tested: two were removed, five narrowed,
+  the rest pinned or given a stated reason.
 - Writes and reads that failed on several databases now work, including Oracle spatial, PostgreSQL-family enums,
   Snowflake vectors, SAP HANA arrays/spatial values, Informix LOBs and intervals, Sybase high-precision temporal
   values, DuckDB negative intervals, TiDB BIT-safe upserts and SQLite extreme decimals.
