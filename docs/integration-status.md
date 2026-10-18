@@ -20,7 +20,7 @@ that was run for the release is green. Access runs only on Windows.
 | MariaDb | 159 pass, 0 fail, 0 skip · 2026-10-18 10:13Z · 94b0adbe | 159 pass, 0 fail, 0 skip · 2026-10-18 10:33Z · 94b0adbe |
 | Firebird | 152 pass, 0 fail, 0 skip · 2026-10-18 10:02Z · 94b0adbe | 152 pass, 0 fail, 0 skip · 2026-10-18 10:22Z · 94b0adbe |
 | CockroachDb | 165 pass, 0 fail, 0 skip · 2026-10-18 10:08Z · 94b0adbe | 165 pass, 0 fail, 0 skip · 2026-10-18 10:28Z · 94b0adbe |
-| DuckDB | 152 pass, 0 fail, 0 skip · 2026-10-18 10:12Z · 94b0adbe | 152 pass, 0 fail, 0 skip · 2026-10-18 10:31Z · 94b0adbe |
+| DuckDB | 152 pass, 0 fail, 0 skip · 2026-10-18 13:35Z · 4cc2c964 | 152 pass, 0 fail, 0 skip · 2026-10-18 13:36Z · 4cc2c964 |
 | Oracle | 153 pass, 0 fail, 0 skip · 2026-10-18 10:10Z · 94b0adbe | 153 pass, 0 fail, 0 skip · 2026-10-18 10:30Z · 94b0adbe |
 | YugabyteDb | 169 pass, 0 fail, 0 skip · 2026-10-18 10:04Z · 94b0adbe | 169 pass, 0 fail, 0 skip · 2026-10-18 10:24Z · 94b0adbe |
 | TiDb | 159 pass, 0 fail, 0 skip · 2026-10-18 10:14Z · 94b0adbe | 159 pass, 0 fail, 0 skip · 2026-10-18 10:34Z · 94b0adbe |
