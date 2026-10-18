@@ -104,6 +104,22 @@ Enabling `EnableSingleWriterFairness` (`SingleWriter` mode only) installs a turn
 
 However, the protection is **not retroactive**: readers that were already queued on the semaphore *before* the writer grabbed the turnstile are not displaced and will run first. Under a sustained high-read burst a writer may therefore still wait for a short pre-queued cohort to drain before getting its slot. Starvation is reduced, not eliminated.
 
+**Measured on a WAL file (2026-10-18, `SqliteFileWriterStormBenchmarks.Mixed_Pengdows` against `Mixed_Pengdows_FairnessOff`: 20 writers, 16 continuously looping readers, 400 single-row commits):**
+
+| | Fairness on (default) | `EnableSingleWriterFairness = false` |
+|---|---|---|
+| Reads completed during the run | about 325 | 11,000 to 13,800 |
+| Read P99 | about 2.0 ms | 0.34 to 0.38 ms |
+| Write latency P50 / P99 | 0.45 ms / about 2.1 ms | 1.3 ms / 5.2 to 5.3 ms |
+| Slowest single write | about 38 ms | 945 ms (busy_timeout 5000) to 3,919 ms (busy_timeout 10) |
+| Whole run | about 60 ms | 80 to 84 ms |
+
+The turnstile does earn its place on a WAL file. Without it, continuously looping readers push write latency up 2.5 to 3 times and
+one write stalled for nearly 4 seconds; with it, writers stay bounded and readers are held while a writer waits (read P99 about
+2 ms instead of 0.35 ms). A read-dominated WAL workload that can tolerate occasional multi-second write stalls can set
+`EnableSingleWriterFairness = false` and gets about 35 times the read throughput; the default stays on, and we keep the default on
+for 2.0.6.
+
 To observe this in production, watch `PoolStatisticsSnapshot.TotalTurnstileTimeouts`. If the value climbs, consider reducing `MaxConcurrentReads` or increasing `PoolAcquireTimeout` to give writers more room.
 
 ## Pinned connections keep permits

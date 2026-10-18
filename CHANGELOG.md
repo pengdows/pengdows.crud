@@ -15,6 +15,9 @@ Binary compatible with 2.0.5 (package validation against 2.0.5 for `pengdows.cru
 and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/release-notes-2.0.6.md).
 
 ### Changed (behavior a 2.0.5 user can notice)
+- Measured: on a WAL file the SingleWriter writer turnstile (`EnableSingleWriterFairness`, on by default) keeps write latency bounded under
+  continuous readers (slowest write about 38 ms against 0.9 to 3.9 s with it off) at the cost of read throughput; see
+  [docs/connection-pooling.md](docs/connection-pooling.md). The default is unchanged.
 - The refusal of `SafeNonBlockingReads` on SQL Server now says what to enable (`ALLOW_SNAPSHOT_ISOLATION` or
   `READ_COMMITTED_SNAPSHOT`); both settings are read once when the context is created, so restart after changing either.
 - Isolation profile refusals are one type: a profile with no mapping, or mapped to a level the database lacks, now throws

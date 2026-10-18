@@ -197,4 +197,30 @@ public sealed class AuditDocumentationTests
     {
         Assert.Contains("2.0.6 is the last 2.0 release", Read("docs/FUTURE_WORK.md"), StringComparison.Ordinal);
     }
+
+    // SQLITE-008, measured 2026-10-18: the writer turnstile stays on by default on a WAL file; the cost and the trade are written down.
+    [Fact]
+    public void TheWriterTurnstileDecision_IsRecordedWithItsMeasurements()
+    {
+        var guide = Read("docs/connection-pooling.md");
+        var future = Read("docs/FUTURE_WORK.md");
+        var row = future.Split('\n').First(l => l.StartsWith("| SQLITE-008 |", StringComparison.Ordinal));
+
+        Assert.Contains("Mixed_Pengdows_FairnessOff", row, StringComparison.Ordinal);
+        Assert.Contains("Decided 2026-10-18", row, StringComparison.Ordinal);
+        Assert.DoesNotContain("Open, maintainer decision", row, StringComparison.Ordinal);
+        Assert.Contains("keep the default on", guide, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("write latency", guide, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("EnableSingleWriterFairness = false", guide, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PoolOneHundredOne_SaysTheInternalOnlyVariantWasDeclined()
+    {
+        var future = Read("docs/FUTURE_WORK.md");
+        var row = future.Split('\n').First(l => l.StartsWith("| POOL-001 |", StringComparison.Ordinal));
+
+        Assert.Contains("internal-only", row, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("benchmarks", row, StringComparison.OrdinalIgnoreCase);
+    }
 }
