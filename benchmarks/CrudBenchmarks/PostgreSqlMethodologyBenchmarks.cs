@@ -67,6 +67,8 @@ public class PostgreSqlMethodologyBenchmarks
     private IContainer _container = null!;
     private string _connStr = null!;
     private NpgsqlDataSource _dapperDataSource = null!;
+    // Dapper maps is_active/created_at only with underscore matching on; without it the Dapper arm skipped two columns.
+    private bool _originalMatchNamesWithUnderscores;
     private DatabaseContext _pengdowsContext = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
     private DbContextOptions<EfPgBenchContext> _efOptions = null!;
@@ -83,6 +85,9 @@ public class PostgreSqlMethodologyBenchmarks
     [GlobalSetup]
     public async Task GlobalSetup()
     {
+        _originalMatchNamesWithUnderscores = DefaultTypeMap.MatchNamesWithUnderscores;
+        DefaultTypeMap.MatchNamesWithUnderscores = true;
+
         var cpuset = Environment.GetEnvironmentVariable(CpusetVariable);
         var netemMs = Environment.GetEnvironmentVariable(NetemVariable);
 
@@ -218,6 +223,7 @@ public class PostgreSqlMethodologyBenchmarks
         }
         finally
         {
+            DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
             await _pengdowsContext.DisposeAsync();
             await _dapperDataSource.DisposeAsync();
             await _container.DisposeAsync();

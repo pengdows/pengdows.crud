@@ -47,6 +47,10 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     // so all three frameworks operate from identical Npgsql auto-prepare configuration.
     private DbDataSource _dapperDataSource = null!;
 
+    // Dapper maps is_active/created_at only with underscore matching on. Until 2026-10-19 this class never set it, so
+    // its Dapper arms hydrated four of the six columns while pengdows hydrated all six.
+    private bool _originalMatchNamesWithUnderscores;
+
     // pengdows.crud
     private DatabaseContext _pengdowsContext = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
@@ -88,6 +92,9 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     [GlobalSetup]
     public async Task GlobalSetup()
     {
+        _originalMatchNamesWithUnderscores = DefaultTypeMap.MatchNamesWithUnderscores;
+        DefaultTypeMap.MatchNamesWithUnderscores = true;
+
         _container = new ContainerBuilder()
             .WithImage("postgres:16-alpine")
             .WithEnvironment("POSTGRES_PASSWORD", "bench")
@@ -425,6 +432,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
+        DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
         _readSingleSc?.Dispose();
         _readListSc?.Dispose();
         _filteredQuerySc?.Dispose();

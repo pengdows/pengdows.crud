@@ -38,6 +38,28 @@ public class BenchmarkFairnessTests
             $"Session settings benchmark variants found in: {string.Join(", ", offenders)}");
     }
 
+    // Dapper matches a column to a property by name, so is_active and created_at stay unmapped (left at their defaults)
+    // unless MatchNamesWithUnderscores is on. A Dapper arm that skips two of six columns does less work per row than the
+    // pengdows arm it is compared with. Found 2026-10-19: the PostgreSQL equal-footing and methodology classes never set it.
+    [Fact]
+    public void DapperArms_ThatReadSnakeCaseColumns_MapEveryColumn()
+    {
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(GetBenchmarksDirectory(), "*.cs", SearchOption.TopDirectoryOnly))
+        {
+            var text = File.ReadAllText(file);
+            if (text.Contains("<DapperBenchEntity>", StringComparison.Ordinal) &&
+                text.Contains("is_active", StringComparison.Ordinal) &&
+                !text.Contains("DefaultTypeMap.MatchNamesWithUnderscores = true", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            $"Dapper arms that leave snake_case columns unmapped: {string.Join(", ", offenders)}");
+    }
+
     [Fact]
     public void Benchmarks_DoNotContainIndexedViewHints()
     {
