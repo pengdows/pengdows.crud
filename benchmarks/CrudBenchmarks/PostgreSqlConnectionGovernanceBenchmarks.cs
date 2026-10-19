@@ -89,7 +89,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private const int PgMaxConnections = ServerMaxConnections;
     internal static readonly TimeSpan StormGateAcquireTimeout = TimeSpan.FromSeconds(30);
     internal static readonly TimeSpan PatientPoolAcquireTimeout = StormGateAcquireTimeout;
-    private const int StormGatePermits = 20;   // well under server limit; tasks queue, not crash
+    internal const int StormGatePermits = 20;   // well under server limit; tasks queue, not crash
     internal const int StormParallelism = 1000;     // 40x the server limit
     private const int Parallelism = StormParallelism;
     internal const int StormOperationsPerRun = 5000;
@@ -190,6 +190,9 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     [GlobalSetup]
     public async Task GlobalSetup()
     {
+        // The previous case may have been an uncontrolled storm; let its TIME_WAIT sockets drain before starting a container.
+        await TimeWaitDrain.WaitForHostAsync("GOV");
+
         _container = new ContainerBuilder()
             .WithImage("postgres:15-alpine")
             .WithEnvironment("POSTGRES_PASSWORD", PgPassword)
@@ -693,13 +696,13 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
 
     // ── Nested types ──────────────────────────────────────────────────────────
 
-    private class GovItem
+    internal sealed class GovItem
     {
         public int Id { get; set; }
         public int Val { get; set; }
     }
 
-    private class GovEfDbContext : DbContext
+    internal sealed class GovEfDbContext : DbContext
     {
         public GovEfDbContext(DbContextOptions<GovEfDbContext> options) : base(options) { }
 
@@ -728,7 +731,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         public int Val { get; set; }
     }
 
-    private class GovEfItem
+    internal sealed class GovEfItem
     {
         public int Id { get; set; }
         public int Val { get; set; }

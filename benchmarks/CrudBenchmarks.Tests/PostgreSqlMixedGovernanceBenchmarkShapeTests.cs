@@ -23,10 +23,26 @@ public class PostgreSqlMixedGovernanceBenchmarkShapeTests
         Assert.Equal(new object[] { 50, 90 }, readPercent.Values);
     }
 
+    [Fact]
+    public void TheStorm_RunsJustAboveTheServersLimit_AndFortyTimesOverIt()
+    {
+        var callers = typeof(PostgreSqlMixedGovernanceBenchmarks)
+            .GetProperty(nameof(PostgreSqlMixedGovernanceBenchmarks.Callers))!
+            .GetCustomAttribute<ParamsAttribute>()!;
+
+        Assert.Equal(new object[] { 50, 1000 }, callers.Values);
+    }
+
+    // The arms the pool-protection argument compares against: Dapper and EF with nothing in front of the provider pool,
+    // and the same two behind StormGate (20 permits, 30 s), on the same mixed read/write load.
     [Theory]
     [InlineData("Pengdows_Governed")]
     [InlineData("Pengdows_Governed11")]
     [InlineData("Pengdows_Clamped")]
+    [InlineData("Dapper_Uncontrolled")]
+    [InlineData("Dapper_StormGate")]
+    [InlineData("EF_Uncontrolled")]
+    [InlineData("EF_StormGate")]
     public void EveryArm_IsABenchmark(string method)
     {
         var info = typeof(PostgreSqlMixedGovernanceBenchmarks).GetMethod(method);
