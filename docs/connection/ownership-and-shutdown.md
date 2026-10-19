@@ -3,7 +3,8 @@
 This doc states, precisely, what each object in the library owns, what happens when it's
 disposed, and what exception a caller gets for using something after it's gone. It complements
 `docs/connection-pooling.md` (the admission-control mechanics) and
-`docs/architecture.md` (the broader lifecycle/locking model) rather than replacing them.
+`docs/architecture.md` (the broader lifecycle/locking model) rather than replacing them. What ownership guarantees
+when something fails, path by path with the test for each, is in [release-guarantees.md](release-guarantees.md).
 
 ## What each object owns
 

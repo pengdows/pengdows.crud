@@ -214,3 +214,5 @@ pengdows.crud.fakeDb.fakeDbDataReader.OverstatedLengthColumns.set -> void
 pengdows.crud.fakeDb.fakeDbConnection.SetFailOnDispose(System.Exception? exception) -> void
 pengdows.crud.fakeDb.fakeDbFactory.ConnectionInitializer.get -> System.Action<pengdows.crud.fakeDb.fakeDbConnection!>?
 pengdows.crud.fakeDb.fakeDbFactory.ConnectionInitializer.set -> void
+pengdows.crud.fakeDb.fakeDbDataReader.FailOnClose.get -> System.Exception?
+pengdows.crud.fakeDb.fakeDbDataReader.FailOnClose.set -> void

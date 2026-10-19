@@ -379,6 +379,10 @@ for the comparison methodology and limitations.
   close/drain/dispose lifecycle, `DatabaseContext`'s exact shutdown sequence, and which operations
   throw `ObjectDisposedException` after disposal (connection-touching operations and
   `BeginTransaction` do; `CreateSqlContainer` itself does not — executing the container does).
+- [`docs/connection/release-guarantees.md`](docs/connection/release-guarantees.md) — what connection
+  ownership guarantees when something fails: every failure path (open, execute, close/dispose throwing,
+  cancellation, readers and streams, transactions, governor and context disposal) with the unit test that
+  proves the slot comes back and the provider connection is disposed, and what is not guaranteed.
 - [`docs/connection/multitenancy.md`](docs/connection/multitenancy.md) — the multi-tenancy
   getting-started guide: `AddMultiTenancy` configuration shape, DI registration, request-time
   resolution with a singleton gateway, a fully custom `ITenantConnectionResolver` setup for a

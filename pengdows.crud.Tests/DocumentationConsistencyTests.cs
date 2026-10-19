@@ -287,6 +287,33 @@ public sealed class DocumentationConsistencyTests
         Assert.Contains("| PKCS-001 |", text);
     }
 
+    // The release-guarantee page is only worth something if every test it cites exists: a renamed or deleted test
+    // must fail here, not leave the doc claiming coverage that is gone.
+    [Fact]
+    public void ReleaseGuarantees_EveryCitedTestExists_AndThePageIsIndexed()
+    {
+        var root = FindRepositoryRoot();
+        var doc = File.ReadAllText(Path.Combine(root, "docs", "connection", "release-guarantees.md"));
+        var types = typeof(DocumentationConsistencyTests).Assembly.GetTypes();
+
+        var citations = doc.Split('\n')
+            .Where(line => line.StartsWith('|'))
+            .SelectMany(line => Regex.Matches(line, @"`([A-Za-z_]\w*)\.([A-Za-z_]\w*)`").Cast<Match>())
+            .Select(m => (Type: m.Groups[1].Value, Method: m.Groups[2].Value))
+            .ToList();
+
+        Assert.True(citations.Count >= 20, $"expected the table to cite its tests, found {citations.Count}");
+        foreach (var (typeName, method) in citations)
+        {
+            var type = types.FirstOrDefault(t => t.Name == typeName);
+            Assert.True(type != null, $"release-guarantees.md cites a test class that does not exist: {typeName}");
+            Assert.True(type!.GetMethods().Any(m => m.Name == method),
+                $"release-guarantees.md cites a test that does not exist: {typeName}.{method}");
+        }
+
+        Assert.Contains("docs/connection/release-guarantees.md", File.ReadAllText(Path.Combine(root, "llms.txt")));
+    }
+
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(AppContext.BaseDirectory);

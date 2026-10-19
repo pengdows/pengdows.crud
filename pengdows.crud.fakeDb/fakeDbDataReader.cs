@@ -985,9 +985,21 @@ public class fakeDbDataReader : DbDataReader
         return CurrentRows.GetEnumerator();
     }
 
+    /// <summary>
+    /// When set, <see cref="Close"/> (and so Dispose/DisposeAsync) throws this once after marking the reader closed —
+    /// simulating a provider whose close fails, e.g. Npgsql draining the rest of a result set over a dropped connection.
+    /// </summary>
+    public Exception? FailOnClose { get; set; }
+
     public override void Close()
     {
         _isClosed = true;
+        var failure = FailOnClose;
+        if (failure != null)
+        {
+            FailOnClose = null;
+            throw failure;
+        }
     }
 
     protected override DbDataReader GetDbDataReader(int ordinal)

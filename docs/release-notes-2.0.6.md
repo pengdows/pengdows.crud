@@ -203,6 +203,11 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
 
 ## Metrics
 
+- `NumberOfOpenConnections` and the connection metrics come back down when a provider's `Close` throws.
+  2.0.5 already disposed such a connection and released its pool slot, but the close was never reported,
+  so the count stayed one too high for good after each failure. See
+  [connection/release-guarantees.md](connection/release-guarantees.md) for every failure path and its test.
+
 - `RowsAffectedTotal` counts each write's rows once; 2.0.5 counted them twice, so the total halves
   for the same workload (COR-001).
 
@@ -448,7 +453,7 @@ New in fakeDb since the table above (each is pinned by tests in `pengdows.crud.T
   connection limit, process kill and network loss remain integration-only.
 - An ordered `Operations` log on connection, command and transaction, `SchemaException`, `ChangeDatabase` (allowed in
   fakeDb; pengdows.crud itself refuses it), `OverstatedLengthColumns` (a provider that reports more bytes than it
-  delivers), `SetFailOnDispose` (a connection whose cleanup throws), `ConnectionInitializer` (scripts every connection the factory creates, however many a context opens), and positional `?` markers in the data store.
+  delivers), `SetFailOnDispose` (a connection whose cleanup throws), `fakeDbDataReader.FailOnClose` (a reader whose close throws), `ConnectionInitializer` (scripts every connection the factory creates, however many a context opens), and positional `?` markers in the data store.
 
 ## Performance
 

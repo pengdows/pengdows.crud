@@ -292,6 +292,11 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
     // own handlers themselves when it didn't; drivers that do report it are not counted twice.
     private int _driverReportedStateChange;
 
+    // 1 while an Open has been reported to pengdows' handlers and no Close/Broken has followed it — the same rule the
+    // context's open-connection count uses. A provider whose Close throws never reports the close, so disposal reports
+    // it (ReportCloseIfStillCountedOpen); otherwise NumberOfOpenConnections stays one too high for good.
+    private int _countedOpen;
+
     // Runs the context's handler, then metrics, then notes that the driver reported the transition:
     // the order the three separate subscriptions ran in.
     private void OnConnectionStateChange(object? sender, StateChangeEventArgs args)
@@ -302,7 +307,46 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             HandleMetricsStateChange(sender, args);
         }
 
+        NoteCountedTransition(args);
         Interlocked.Exchange(ref _driverReportedStateChange, 1);
+    }
+
+    private void NoteCountedTransition(StateChangeEventArgs args)
+    {
+        switch (args.CurrentState)
+        {
+            case ConnectionState.Open:
+                Interlocked.Exchange(ref _countedOpen, 1);
+                break;
+            case ConnectionState.Closed when args.OriginalState != ConnectionState.Broken:
+            case ConnectionState.Broken:
+                Interlocked.Exchange(ref _countedOpen, 0);
+                break;
+        }
+    }
+
+    // Runs once the connection is disposed: a connection pengdows counted as open, whose close the provider never
+    // reported (its Close threw), is reported closed here so the open count and connection metrics come back down.
+    private void ReportCloseIfStillCountedOpen()
+    {
+        if (Interlocked.Exchange(ref _countedOpen, 0) == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var args = new StateChangeEventArgs(ConnectionState.Open, ConnectionState.Closed);
+            _onStateChange?.Invoke(_connection, args);
+            if (_metricsCollector != null)
+            {
+                HandleMetricsStateChange(_connection, args);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while reporting the close of connection {Name}.", GetName());
+        }
     }
 
     private void ResetDriverReportedStateChange()
@@ -323,6 +367,8 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         {
             HandleMetricsStateChange(_connection, args);
         }
+
+        NoteCountedTransition(args);
     }
 
     private void HandleMetricsStateChange(object? sender, StateChangeEventArgs args)
@@ -731,6 +777,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
         finally
         {
+            ReportCloseIfStillCountedOpen();
             DetachMetricsHandler();
             ReleaseSlot();
         }
@@ -782,6 +829,7 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
         finally
         {
+            ReportCloseIfStillCountedOpen();
             DetachMetricsHandler();
             ReleaseSlot();
         }

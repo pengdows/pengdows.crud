@@ -90,7 +90,7 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
     `ON DUPLICATE KEY UPDATE` update the existing row. `MERGE` is not modelled, so the MERGE race still needs a real database;
   - `fakeDbFactory.DataStore`, an ordered `Operations` log on connection, command and transaction, `SchemaException`,
     `ChangeDatabase` (fakeDb allows it; pengdows.crud refuses it), `OverstatedLengthColumns`, `SetFailOnDispose` (a
-    connection whose cleanup throws), `ConnectionInitializer` (scripts every connection the factory creates), and positional `?` markers in the data store.
+    connection whose cleanup throws), `fakeDbDataReader.FailOnClose` (a reader whose close throws), `ConnectionInitializer` (scripts every connection the factory creates), and positional `?` markers in the data store.
 - Measured on a real PostgreSQL: synchronous callers parked behind an asynchronous slot holder delay its release by about
   0.9 to 1.0 s (the thread-pool injection delay, not growing from 64 to 1,000 callers); see
   [docs/connection-pooling.md](docs/connection-pooling.md) (`PostgreSqlSyncWaiterStarvationTests`).
@@ -98,6 +98,10 @@ and `pengdows.crud.fakeDb`). Full detail: [docs/release-notes-2.0.6.md](docs/rel
   dirty-tree flag per database and framework), written by `tools/record-integration-run.py`.
 
 ### Fixed
+- `NumberOfOpenConnections` and the connection metrics come back down when a provider's `Close` throws. The connection was
+  already disposed and its pool slot released, but the close was never reported, so the count stayed one too high for good
+  after each such failure. Every failure path and the test that proves the release is listed in
+  [docs/connection/release-guarantees.md](docs/connection/release-guarantees.md).
 - `pengdows.crud.fakeDb`: `fakeDbFactory.CreateConnection` is safe to call from many threads. Staged connections used to be
   lost, handed out twice, or throw a `NullReferenceException` under concurrent opens (found by the 200-worker pool test).
 - The build now requires braces on every control-flow block (`.editorconfig` IDE0011 under `EnforceCodeStyleInBuild`); about

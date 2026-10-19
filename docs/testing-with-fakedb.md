@@ -82,7 +82,9 @@ Exception)` (the reader yields N rows successfully, then throws on the next `Rea
 token** passed into `ReadAsync` — proving genuine cancellation propagation through your code, not a
 canned `OperationCanceledException`). `EnqueueMultiResultReader(IEnumerable<IEnumerable<Dictionary<string, object?>>>)`
 builds one reader whose `NextResult()` advances through each set, for compound statements like
-`INSERT` followed by `SELECT LAST_INSERT_ID()`.
+`INSERT` followed by `SELECT LAST_INSERT_ID()`. A reader built directly can also fail while closing:
+set `FailOnClose` on a `fakeDbDataReader` and its `Close`/`Dispose`/`DisposeAsync` throws that exception once
+(after marking the reader closed), as Npgsql does when draining the rest of a result set over a dropped connection.
 
 For scalar results keyed by the exact SQL rather than a queue:
 
