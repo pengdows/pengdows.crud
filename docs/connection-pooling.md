@@ -96,6 +96,18 @@ The split is static: it divides the server's usable connections between the read
 - **The default wait decides whether a spike is survived.** The failures above are callers that waited `PoolAcquireTimeout` (5 s) for a slot and were turned away with `PoolSaturatedException`; the server refused nothing. A batch can serve about `2 x 17 x slots` calls per two 5 s windows, so with 11 slots a 1,500-call burst loses most of its calls and with a 30 s wait it loses none. Turning the clamp on without sizing the wait is a trap.
 - **No server refusal.** Every pengdows arm above kept the server from refusing a single connection. Dapper and EF without any gate failed 57% to 72% of fast calls and 95.9% of slow calls against the same server and left about 34,000 sockets in TIME_WAIT on the host; behind a gate of 20 permits and a 30 s wait they failed none.
 
+**With reads and writes mixed** (2026-10-19, same server, 1,500 calls of 300 ms; `benchmarks/CrudBenchmarks/results/postgres-mixed-storm-run-2026-10-19.md`), the split's cost depends on the mix, and over-sized pools without the clamp are not protected:
+
+| Configuration | Half reads: failed, time per batch | 90% reads: failed, time per batch | 90% reads, 1,000 callers: P99 |
+|---|---|---|---|
+| Clamp on, 20 per role requested (11 + 11 given) | 0, 21.1 s | 0, 37.0 s | 27.4 s |
+| No clamp, 20 + 20 (40 possible against 22) | 46 to 50% refused by the server, 11.4 s | 6 to 11% refused, 20.5 s | 15.1 s |
+| Dapper or EF behind StormGate, 20 permits | 0, 22.6 s | 0, 22.6 s | 15.1 s |
+| Dapper or EF on the provider's default pool | 95 to 97% refused, under 1 s | 95 to 97% refused, under 1 s | (3% succeed) |
+
+- **The clamp, or pool sizes that fit together, is what protects the server.** Each role's governor bounds that role; nothing bounds the sum unless the clamp divides it.
+- **A balanced mix gets more from the split than a single gate does** (22 connections against 20 permits), and a read-heavy mix gets less: its 11 reader slots are the bottleneck.
+
 A context that cannot tell the clamp which role it uses (a real mix that shifts over time) pays the split. The planned remedy, tracked as POOL-003 in `docs/FUTURE_WORK.md` and not part of 2.0.6, is a per-server ceiling shared by every context that points at the same server: each role keeps the size you configured, and callers wait at the ceiling instead of being divided in advance. It engages only when the configured pools together exceed the server's budget, so a server that allows far more than the pools ask for (SQL Server's unlimited default with two pools of 100) is unaffected.
 
 ## Writer-fairness turnstile limitations

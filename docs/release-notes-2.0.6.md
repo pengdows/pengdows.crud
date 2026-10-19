@@ -481,12 +481,26 @@ the gateway building the statement per call.
 
 | Database | pengdows / Dapper (mean) | EF / pengdows |
 |---|---|---|
-| PostgreSQL 16 | 0.967 to 1.061 | 1.20 to 1.71 |
+| PostgreSQL 16 (2026-10-19) | 0.940 to 1.067 | 1.20 to 1.70 |
 | SQL Server 2022 | 0.984 to 1.060 | 1.21 to 1.69 |
 
-pengdows is at parity with Dapper on both databases, within run-to-run noise. Two cells that looked like gaps earlier are noise:
-PostgreSQL Update at 100 rows (1.144 in an earlier run, 0.990 here) and ReadList at 100 rows (0.972, then 1.061). EF is 20 to 70% slower
-than pengdows everywhere.
+pengdows is at parity with Dapper on both databases, within run-to-run noise. EF is 20 to 70% slower than pengdows everywhere.
+The PostgreSQL row is the 2026-10-19 rerun: until then that benchmark's Dapper arms left two of the six columns unmapped (Dapper's
+`MatchNamesWithUnderscores` was never set), so earlier PostgreSQL read ratios flattered Dapper. With every column mapped, ReadList at
+100 rows is 0.996 (1.061 before).
+
+**Large result sets** (`PostgreSqlRowScalingBenchmarks`, `SqlServerRowScalingBenchmarks`, 1 to 10,000 rows; full tables in
+`benchmarks/CrudBenchmarks/results/row-scaling-2026-10-19.md`): up to 1,000 rows pengdows and Dapper are level (within about 4%). From
+1,000 to 10,000 rows each extra row costs Dapper 135 to 145 ns more, and pengdows allocates about 213 bytes per row against Dapper's 284 to
+309 and EF's 404 to 531. A 10,000-row query takes pengdows 0.77 to 0.86 of Dapper's time and 25 to 31% less memory, with up to half
+the Gen2 collections.
+
+**A connection storm with reads and writes** (`PostgreSqlMixedGovernanceBenchmarks`, PostgreSQL with 22 usable connections, 1,500 calls
+of 300 ms from 50 or 1,000 callers; `benchmarks/CrudBenchmarks/results/postgres-mixed-storm-run-2026-10-19.md`): Dapper and EF on the
+provider's default pool lost 95 to 97% of calls to server refusals, at 50 callers as at 1,000. Behind StormGate (20 permits) they lost
+none, and so did pengdows with `ClampPoolsToServerConnectionLimit`; pengdows with 20 reader and 20 writer slots and no clamp (40
+connections possible against 22) lost 6 to 50%. The clamp's static split finished a half-read mix 7 to 8% sooner than StormGate and a 90%-read
+mix 64% later (P99 27.4 s against 15.1 s at 1,000 callers), the cost described in [connection-pooling.md](connection-pooling.md).
 
 **Synchronous callers parked behind an asynchronous slot holder** (real PostgreSQL, `PostgreSqlSyncWaiterStarvationTests`): the
 holder's release is delayed by about 0.9 to 1.0 s once synchronous callers are parked, regardless of how many (64 to 1,000); see

@@ -3470,7 +3470,8 @@ Measured, not projected — see `benchmarks/CrudBenchmarks/results/` for the und
 
 | Scenario | Result | Source |
 |----------|--------|--------|
-| PostgreSQL equal-footing CRUD (identical Npgsql auto-prepare config for all three frameworks), 1–100 records | pengdows.crud within roughly 0–10% of Dapper's mean time across read/filter/aggregate/create/update/delete scenarios (`P÷D` ≈ 0.94–1.10); EF Core ~1.1–1.6x slower than pengdows.crud; pengdows.crud allocates ~2x Dapper's heap, EF Core 8–10x pengdows.crud's | `postgres-run-2026-03-15-after-fix.md` |
+| PostgreSQL equal-footing CRUD (identical Npgsql auto-prepare config for all three frameworks, every column mapped), 1–100 records | pengdows.crud within about 7% of Dapper's mean time across read/filter/aggregate/create/update/delete scenarios (`P÷D` 0.940–1.067); EF Core 1.20–1.70x slower than pengdows.crud. Runs before 2026-10-19 left two Dapper columns unmapped | `PostgreSqlEqualFootingBenchmarks-20261019-101454`, `row-scaling-2026-10-19.md` |
+| Reads of 1 to 10,000 rows, PostgreSQL and SQL Server | Level with Dapper up to 1,000 rows; at 10,000 rows 0.77–0.86 of Dapper's time, about 213 bytes per row against Dapper's 284–309 | `row-scaling-2026-10-19.md` |
 
 Other benchmark suites (e.g. `HydrationHotPathBenchmarks.cs`, `SQLiteWriteContentionBenchmarks.cs`, `SqlServerEqualFootingBenchmarks.cs`) live in `benchmarks/CrudBenchmarks/`, but no results for them are checked in on this branch — run them yourself before quoting numbers.
 

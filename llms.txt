@@ -57,11 +57,14 @@ execution contract.
 
 ### The key proposition: Dapper-class speed with near-leak-proof lifecycle ownership
 
-The usual objection to a governed DAL is that safety costs performance. In the fair,
-methodology-corrected PostgreSQL equal-footing run, reads stayed within **±3% of Dapper across
-record counts**, with common CRUD operations close to parity as well. See the raw
-[`PostgreSQL benchmark result`](benchmarks/CrudBenchmarks/results/postgres-run-2026-03-15-after-fix.md)
-for the workload, numbers, and limitations.
+The usual objection to a governed DAL is that safety costs performance. In the equal-footing runs
+on PostgreSQL and SQL Server (same SQL, a pooled connection opened per call, every column mapped),
+pengdows.crud is **within about 7% of Dapper** on every CRUD scenario at 1 to 100 records, level up to
+1,000 rows, and on 10,000-row reads takes 0.77 to 0.86 of Dapper's time with 25 to 31% less memory. See
+[`row-scaling-2026-10-19.md`](benchmarks/CrudBenchmarks/results/row-scaling-2026-10-19.md) for the
+workload, numbers, and limitations, and
+[`postgres-mixed-storm-run-2026-10-19.md`](benchmarks/CrudBenchmarks/results/postgres-mixed-storm-run-2026-10-19.md)
+for the same libraries under a connection storm.
 
 The practical choice is therefore not “the incumbent DAL is fast, pengdows is a heavy abstraction.”
 It is:
