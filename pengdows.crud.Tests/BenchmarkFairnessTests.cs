@@ -60,6 +60,46 @@ public class BenchmarkFairnessTests
             $"Dapper arms that leave snake_case columns unmapped: {string.Join(", ", offenders)}");
     }
 
+    // BenchmarkDotNet runs each case from a generated directory it deletes afterwards, so a sidecar written to a relative
+    // "BenchmarkDotNet.Artifacts/results" path is lost (PostgreSqlMixedGovernanceBenchmarks' were, 2026-10-19).
+    // Program.Main sets CRUD_BENCH_ARTIFACTS_DIR to an absolute path; every sidecar writer must use it.
+    [Fact]
+    public void SidecarWriters_UseTheDurableArtifactsDirectory()
+    {
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(GetBenchmarksDirectory(), "*.cs", SearchOption.TopDirectoryOnly))
+        {
+            // Runs in the host process after BenchmarkDotNet finishes, from the project directory, which survives.
+            if (Path.GetFileName(file) == "CrossFrameworkRatioWriter.cs")
+            {
+                continue;
+            }
+
+            var text = File.ReadAllText(file);
+            if (text.Contains("Path.Combine(\"BenchmarkDotNet.Artifacts\", \"results\")", StringComparison.Ordinal) &&
+                !text.Contains("CRUD_BENCH_ARTIFACTS_DIR", StringComparison.Ordinal))
+            {
+                offenders.Add(Path.GetFileName(file));
+            }
+        }
+
+        Assert.True(offenders.Count == 0,
+            $"Sidecars written where BenchmarkDotNet deletes them: {string.Join(", ", offenders)}");
+    }
+
+    // Dapper's QueryAsync already buffers into a List<T>; ToList() copies it again, a cost the pengdows and EF arms do not
+    // pay. Negligible at 100 rows, an extra 80 KB array copy at 10,000, so the row-scaling arms take Dapper's list as is.
+    [Theory]
+    [InlineData("PostgreSqlRowScalingBenchmarks.cs")]
+    [InlineData("SqlServerRowScalingBenchmarks.cs")]
+    public void RowScalingDapperArms_DoNotCopyDappersBufferedList(string fileName)
+    {
+        var text = LoadBenchmarkText(fileName);
+
+        AssertAllAbsent(fileName, text, new[] { "rows.ToList()" });
+        AssertAllPresent(fileName, text, new[] { "rows.AsList()" });
+    }
+
     [Fact]
     public void Benchmarks_DoNotContainIndexedViewHints()
     {

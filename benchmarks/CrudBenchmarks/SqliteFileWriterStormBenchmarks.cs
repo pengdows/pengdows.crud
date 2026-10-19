@@ -364,7 +364,9 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
             {
                 await gate.Task;
                 var i = reader;
-                while (!_writersDone)
+                // do/while: a reader the thread pool schedules late still reads once, so a short run cannot finish its
+                // writes before any reader started and report no reads at all (seen in the unit test's 15-write run).
+                do
                 {
                     var stopwatch = Stopwatch.StartNew();
                     try
@@ -378,7 +380,7 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
                     {
                         MarkInvalid(ScenarioMixed, framework, $"Read exception: {ex.GetType().Name}");
                     }
-                }
+                } while (!_writersDone);
             });
         }
 

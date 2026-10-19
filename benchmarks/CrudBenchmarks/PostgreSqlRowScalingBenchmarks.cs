@@ -164,7 +164,7 @@ public class PostgreSqlRowScalingBenchmarks : IDisposable
         await using var conn = await _dapperDataSource.OpenConnectionAsync();
         var rows = await conn.QueryAsync<DapperBenchEntity>(ReadListSql,
             new { Age = RowScalingSeed.ReadListMinAgeExclusive, Limit = RecordCount });
-        return rows.ToList();
+        return rows.AsList();
     }
 
     [Benchmark]
@@ -199,7 +199,7 @@ public class PostgreSqlRowScalingBenchmarks : IDisposable
             MaxAge = RowScalingSeed.FilteredMaxAge,
             Limit = RecordCount
         });
-        return rows.ToList();
+        return rows.AsList();
     }
 
     [Benchmark]

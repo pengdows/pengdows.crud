@@ -303,7 +303,9 @@ public class PostgreSqlMixedGovernanceBenchmarks : IAsyncDisposable
 
         Console.Write(latency);
 
-        var directory = Path.Combine("BenchmarkDotNet.Artifacts", "results");
+        // The case runs from a directory BenchmarkDotNet deletes; Program.Main sets CRUD_BENCH_ARTIFACTS_DIR to a durable one.
+        var directory = Environment.GetEnvironmentVariable("CRUD_BENCH_ARTIFACTS_DIR")
+                        ?? Path.Combine("BenchmarkDotNet.Artifacts", "results");
         Directory.CreateDirectory(directory);
         await File.WriteAllTextAsync(Path.Combine(directory,
             $"PostgreSqlMixedGovernanceBenchmarks-{Environment.ProcessId}-read{ReadPercent}-callers{Callers}.md"), sb.ToString());

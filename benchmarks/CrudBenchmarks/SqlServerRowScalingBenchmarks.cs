@@ -169,7 +169,7 @@ public class SqlServerRowScalingBenchmarks : IDisposable
         await conn.OpenAsync();
         var rows = await conn.QueryAsync<DapperBenchEntity>(ReadListSql,
             new { Age = RowScalingSeed.ReadListMinAgeExclusive, Limit = RecordCount });
-        return rows.ToList();
+        return rows.AsList();
     }
 
     [Benchmark]
@@ -205,7 +205,7 @@ public class SqlServerRowScalingBenchmarks : IDisposable
             MaxAge = RowScalingSeed.FilteredMaxAge,
             Limit = RecordCount
         });
-        return rows.ToList();
+        return rows.AsList();
     }
 
     [Benchmark]
