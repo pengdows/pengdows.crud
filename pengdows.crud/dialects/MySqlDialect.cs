@@ -262,7 +262,7 @@ internal class MySqlDialect : SqlDialect
     // MySQL's dedicated 1295, so the prepare-fallback path can't recognise it (3.0 f92350b,
     // confirmed live there against singlestoredb-dev).
     public override bool PrepareStatements => _isMySqlConnector && DatabaseType != SupportedDatabase.SingleStore;
-    public override bool SupportsReadOnlyTransactions => true;
+    public override bool SupportsReadOnlyTransactions => EnforcesReadOnlyTransactions;
 
     // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.
     // Retrying after exhaustion only compounds the problem.
@@ -439,7 +439,7 @@ internal class MySqlDialect : SqlDialect
             {
                 var version = ProductInfo.ParsedVersion;
                 var useLegacyModes = version == null ||
-                                     _flavor == SupportedDatabase.MariaDb ||
+                                     DatabaseType == SupportedDatabase.MariaDb ||
                                      version < MySqlLegacyModeDeprecationThreshold;
 
                 var flags = useLegacyModes

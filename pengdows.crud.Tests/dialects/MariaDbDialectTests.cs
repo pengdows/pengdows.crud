@@ -207,6 +207,26 @@ public class MariaDbDialectTests
     }
 
     [Fact]
+    public async Task SessionSettings_ForMariaDb10_11_KeepZeroDateProtection()
+    {
+        var d = CreateDialect();
+        var factory = new fakeDbFactory(SupportedDatabase.MariaDb);
+        var connection = factory.CreateConnection();
+        var schema = DataSourceInformation.BuildEmptySchema(
+            "MariaDB", "10.11.0", "@p[0-9]+", "@{0}", 64, @"@\w+", @"@\w+", true);
+        using var tracked = new FakeTrackedConnection(connection, schema, new Dictionary<string, object>
+        {
+            ["SELECT VERSION()"] = "10.11.0-MariaDB"
+        });
+        await d.DetectDatabaseInfoAsync(tracked);
+
+        var settings = d.GetFinalSessionSettings(readOnly: false);
+
+        Assert.Contains("NO_ZERO_DATE", settings, StringComparison.Ordinal);
+        Assert.Contains("NO_ZERO_IN_DATE", settings, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void TryEnterReadOnlyTransaction_ExecutesReadOnlyCommand()
     {
         var dialect = CreateDialect();

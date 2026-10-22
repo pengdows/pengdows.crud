@@ -23,7 +23,6 @@ public class SupportsReadOnlyTransactionsTests
     [InlineData(SupportedDatabase.Firebird)]
     [InlineData(SupportedDatabase.CockroachDb)]
     [InlineData(SupportedDatabase.YugabyteDb)]
-    [InlineData(SupportedDatabase.TiDb)]
     public void SupportsReadOnlyTransactions_IsTrue(SupportedDatabase db)
     {
         Assert.True(Create(db).SupportsReadOnlyTransactions);
@@ -34,6 +33,8 @@ public class SupportsReadOnlyTransactionsTests
     [InlineData(SupportedDatabase.Oracle)]
     [InlineData(SupportedDatabase.DuckDB)]
     [InlineData(SupportedDatabase.Snowflake)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.SingleStore)]
     public void SupportsReadOnlyTransactions_IsFalse(SupportedDatabase db)
     {
         Assert.False(Create(db).SupportsReadOnlyTransactions);
