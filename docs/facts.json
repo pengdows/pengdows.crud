@@ -201,11 +201,11 @@
     },
     "MySql": {
       "net10.0": {
-        "pass": 158,
-        "fail": 1,
+        "pass": 159,
+        "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-23 00:10Z",
-        "commit": "6d44c081",
+        "runUtc": "2026-10-23 14:27Z",
+        "commit": "af80775a",
         "dirtyTree": true
       },
       "net8.0": {
@@ -240,8 +240,8 @@
         "pass": 169,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-22 12:06Z",
-        "commit": "6d44c081",
+        "runUtc": "2026-10-23 14:28Z",
+        "commit": "af80775a",
         "dirtyTree": true
       },
       "net8.0": {
@@ -330,8 +330,8 @@
         "pass": 156,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-22 12:08Z",
-        "commit": "6d44c081",
+        "runUtc": "2026-10-23 14:29Z",
+        "commit": "af80775a",
         "dirtyTree": true
       },
       "net8.0": {
@@ -348,8 +348,8 @@
         "pass": 153,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-22 12:14Z",
-        "commit": "6d44c081",
+        "runUtc": "2026-10-23 14:28Z",
+        "commit": "af80775a",
         "dirtyTree": true
       },
       "net8.0": {

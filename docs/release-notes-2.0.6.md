@@ -208,9 +208,17 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
 
 ## Metrics
 
-- `NumberOfOpenConnections` and the connection metrics come back down when a provider's `Close` throws.
-  2.0.5 already disposed such a connection and released its pool slot, but the close was never reported,
-  so the count stayed one too high for good after each failure. See
+- Connection counts are pengdows **leases**, not provider events. `NumberOfOpenConnections` (and
+  `DatabaseMetrics.ConnectionsCurrent`) is the connections the context has handed out and not yet disposed, opened or
+  not, plus each PreventDatabaseUnload sentinel or SingleConnection's shared connection; `PeakOpenConnections` is the
+  most held at one time; `ConnectionsOpened`/`ConnectionsClosed` are leases acquired/released; `AvgConnectionHoldMs`
+  and `LongLivedConnections` measure how long a lease is held. 2.0.5 counted the provider's `StateChange` events,
+  which drivers report inconsistently (Snowflake.Data raises none, MySql.Data raises `Open → Open`, a `Close` that
+  throws reports nothing), so the counts could drift or stick one too high. The names are unchanged; what they no
+  longer claim is a count of the provider's physical connections. Visible differences from 2.0.5: a connection
+  handed out but not yet opened counts; closing a connection without disposing it does not end its lease; the
+  context's construction probe is not counted; a pool with no size limit still counts its leases. Open and close
+  durations (`AvgConnectionOpenMs`/`AvgConnectionCloseMs`) are still measured around the provider calls. See
   [connection/release-guarantees.md](connection/release-guarantees.md) for every failure path and its test.
 
 - `RowsAffectedTotal` counts each write's rows once; 2.0.5 counted them twice, so the total halves

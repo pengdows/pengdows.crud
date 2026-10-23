@@ -15,20 +15,22 @@ namespace pengdows.crud.Tests;
 public class FactoryCreateConnectionTests
 {
     [Fact]
-    public void OpenThenClose_UpdatesConnectionCount()
+    public void OpenThenClose_LeaseCountsUntilDisposal()
     {
+        // The count is the lease, not the provider's state: closing the connection does not end it.
         var factory = new BreakableDbFactory();
         var context = new DatabaseContext("Data Source=test;", factory);
         var tracked = (TrackedConnection)context.GetConnection(ExecutionType.Read);
         tracked.Open();
         Assert.Equal(1, context.NumberOfOpenConnections);
         tracked.Close();
-        Assert.Equal(0, context.NumberOfOpenConnections);
+        Assert.Equal(1, context.NumberOfOpenConnections);
         tracked.Dispose();
+        Assert.Equal(0, context.NumberOfOpenConnections);
     }
 
     [Fact]
-    public void BrokenThenClosed_DoesNotDoubleDecrement()
+    public void BrokenThenClosed_ReleasesTheLeaseOnceOnDisposal()
     {
         var factory = new BreakableDbFactory();
         var context = new DatabaseContext("Data Source=test;", factory);
@@ -38,11 +40,12 @@ public class FactoryCreateConnectionTests
 
         var inner = GetInnerConnection(tracked);
         inner.Break();
-        Assert.Equal(0, context.NumberOfOpenConnections);
+        Assert.Equal(1, context.NumberOfOpenConnections);
 
         tracked.Close();
-        Assert.Equal(0, context.NumberOfOpenConnections);
         tracked.Dispose();
+        tracked.Dispose();
+        Assert.Equal(0, context.NumberOfOpenConnections);
     }
 
     private static BreakableDbConnection GetInnerConnection(TrackedConnection tracked)

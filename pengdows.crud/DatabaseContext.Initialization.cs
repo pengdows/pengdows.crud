@@ -263,27 +263,6 @@ public partial class DatabaseContext
             _readerDataSource = dataSource;
             _dataSourceProvided = dataSource != null;
             _disposeHandler = conn => { _logger.LogDebug("Connection disposed."); };
-            _stateChangeHandler = (sender, args) =>
-            {
-                switch (args.CurrentState)
-                {
-                    case ConnectionState.Open:
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug("Opening connection: {Name}", Name);
-                        }
-                        UpdateMaxConnectionCount(Interlocked.Increment(ref _connectionCount));
-                        break;
-                    case ConnectionState.Closed when args.OriginalState != ConnectionState.Broken:
-                    case ConnectionState.Broken:
-                        if (_logger.IsEnabled(LogLevel.Debug))
-                        {
-                            _logger.LogDebug("Closed or broken connection: {Name}", Name);
-                        }
-                        Interlocked.Decrement(ref _connectionCount);
-                        break;
-                }
-            };
             // ExecuteSessionSettings/ExecuteSessionSettingsAsync handle their own exceptions
             // internally (log + return, or throw ConnectionException when FailClosed is
             // configured). No outer try-catch needed here for the sync handlers.
@@ -536,10 +515,6 @@ public partial class DatabaseContext
                 }
 
                 initialConnection = null;
-
-                // Reset counters to "fresh" state after initialization probe
-                Interlocked.Exchange(ref _connectionCount, 0);
-                Interlocked.Exchange(ref _peakOpenConnections, 0);
             }
 
             _isolationResolver = new IsolationResolver(_dialect, RCSIEnabled, SnapshotIsolationEnabled);
@@ -992,6 +967,12 @@ public partial class DatabaseContext
         {
             _readerGovernor = null;
             _writerGovernor = null;
+            // SingleConnection admits nothing, but its shared connection is still one lease.
+            if (PersistentConnection is TrackedConnection shared)
+            {
+                shared.AttachSlot(AcquirePersistentLease());
+            }
+
             return;
         }
 
@@ -1976,10 +1957,13 @@ public partial class DatabaseContext
         bool ownsTurnstile = false,
         int? maxQueueDepth = null)
     {
+        var leaseMetrics = LeaseMetricsFor(label);
         if (disabled || !maxSlots.HasValue)
         {
+            // Unlimited admission, but leases are still counted.
             return new PoolGovernor(label, poolKey, 0, _poolAcquireTimeout,
-                disabled: true, trackMetrics: trackMetrics);
+                disabled: true, trackMetrics: trackMetrics,
+                leaseMetrics: leaseMetrics, onLeaseAcquired: OnLeaseAcquired);
         }
 
         if (maxSlots.Value == 0)
@@ -1999,8 +1983,40 @@ public partial class DatabaseContext
             turnstile: turnstile,
             holdTurnstile: holdTurnstile,
             ownsTurnstile: ownsTurnstile,
-            maxQueueDepth: maxQueueDepth);
+            maxQueueDepth: maxQueueDepth,
+            leaseMetrics: leaseMetrics,
+            onLeaseAcquired: OnLeaseAcquired);
     }
+
+    /// <summary>
+    /// One tracking-only lease for a persistent connection that holds no admission slot (SingleConnection's
+    /// shared connection, or a sentinel whose pool has no governor slot to give), so it is reported while it
+    /// lives and released when the connection is disposed.
+    /// </summary>
+    private PoolSlot AcquirePersistentLease()
+    {
+        var governor = Volatile.Read(ref _persistentLeaseGovernor);
+        if (governor == null)
+        {
+            var label = _isWriteConnection ? PoolLabel.Writer : PoolLabel.Reader;
+            var created = new PoolGovernor(label, ComputePoolKeyHash(_connectionString), 0, _poolAcquireTimeout,
+                disabled: true, trackMetrics: _metricsCollector != null,
+                leaseMetrics: LeaseMetricsFor(label), onLeaseAcquired: OnLeaseAcquired);
+            governor = Interlocked.CompareExchange(ref _persistentLeaseGovernor, created, null) ?? created;
+            if (!ReferenceEquals(governor, created))
+            {
+                created.Dispose();
+            }
+        }
+
+        return governor.Acquire();
+    }
+
+    private MetricsCollector? LeaseMetricsFor(PoolLabel label) =>
+        label == PoolLabel.Reader ? _readerMetricsCollector : _writerMetricsCollector;
+
+    // Raises the simultaneous-lease peak; called by every governor as it hands out a lease.
+    private void OnLeaseAcquired() => UpdateMaxConnectionCount(NumberOfOpenConnections);
 
     private static int? ResolveSharedMax(int? writerMax, int? readerMax)
     {
@@ -2472,6 +2488,7 @@ public partial class DatabaseContext
         _writerGovernor = null;
         _readerGovernor?.Dispose();
         _readerGovernor = null;
+        Interlocked.Exchange(ref _persistentLeaseGovernor, null)?.Dispose();
     }
 
     private DbMode CoerceMode(DbMode requested, SupportedDatabase product, DatabaseTopology topology)

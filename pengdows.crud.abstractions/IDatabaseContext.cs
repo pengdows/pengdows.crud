@@ -77,8 +77,10 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     int MaxOutputParameters { get; }
 
     /// <summary>
-    /// Current number of open connections. Usually 0 when idle in DbMode.Standard/SingleWriter,
-    /// and 1 when idle in DbMode.SingleConnection/PreventDatabaseUnload (the persistent connection).
+    /// Connection leases currently held: connections the context has handed out and not yet disposed, whether or
+    /// not they are open, plus each PreventDatabaseUnload sentinel or SingleConnection's shared connection. Usually 0
+    /// when idle in DbMode.Standard/SingleWriter and 1 in DbMode.SingleConnection/PreventDatabaseUnload. Counted by
+    /// pengdows.crud, not from the provider's connection-state events, and not a count of physical connections.
     /// </summary>
     long NumberOfOpenConnections { get; }
 
@@ -122,7 +124,7 @@ public interface IDatabaseContext : ISafeAsyncDisposableBase
     SupportedDatabase Product { get; }
 
     /// <summary>
-    /// Peak observed number of concurrently open connections. Used for tuning.
+    /// Most connection leases held at the same time (see <see cref="NumberOfOpenConnections"/>). Used for tuning.
     /// </summary>
     long PeakOpenConnections { get; }
 

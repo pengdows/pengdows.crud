@@ -11,15 +11,18 @@ namespace pengdows.crud.Tests;
 public class PoolGovernorAdditionalTests
 {
     [Fact]
-    public void Acquire_DisabledGovernor_ReturnsDefaultSlot()
+    public void Acquire_DisabledGovernor_ReturnsATrackingSlot()
     {
+        // Disabled means unlimited admission, not untracked: the lease is counted until released.
         var governor = new PoolGovernor(PoolLabel.Reader, "hash", 1, TimeSpan.FromMilliseconds(1), true);
         var slot = governor.Acquire();
-        Assert.Equal(default, slot);
+        Assert.NotEqual(default, slot);
 
         var snapshot = governor.GetSnapshot();
         Assert.True(snapshot.Disabled);
-        Assert.Equal(0, snapshot.InUse);
+        Assert.Equal(1, snapshot.InUse);
+        slot.Dispose();
+        Assert.Equal(0, governor.GetSnapshot().InUse);
     }
 
     [Fact]

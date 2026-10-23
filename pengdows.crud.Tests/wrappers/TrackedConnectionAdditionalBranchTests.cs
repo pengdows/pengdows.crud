@@ -27,18 +27,6 @@ public class TrackedConnectionAdditionalBranchTests
     }
 
     [Fact]
-    public void HandleMetricsStateChange_WithNullCollector_DoesNotThrow()
-    {
-        using var conn = new fakeDbConnection();
-        using var tracked = new TrackedConnection(conn);
-        var method = typeof(TrackedConnection).GetMethod("HandleMetricsStateChange",
-            BindingFlags.Instance | BindingFlags.NonPublic);
-
-        method!.Invoke(tracked,
-            new object?[] { null, new StateChangeEventArgs(ConnectionState.Closed, ConnectionState.Open) });
-    }
-
-    [Fact]
     public async Task DisposeAsync_WhenUnderlyingDisposeAsyncThrows_FallsBackToSync()
     {
         using var conn = new ThrowingDisposeAsyncConnection();

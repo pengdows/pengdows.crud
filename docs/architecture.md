@@ -148,16 +148,16 @@ All shared counters use `Interlocked` for thread safety:
 
 ```csharp
 // pengdows.crud/DatabaseContext.cs
-private long _connectionCount;
 private long _totalConnectionsCreated;
 private long _totalConnectionsReused;
 private long _totalConnectionFailures;
 
-public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
+// Connection counts are pool leases, counted by the governors (Interlocked inside PoolGovernor)
+public long NumberOfOpenConnections =>
+    LeasesInUse(_readerGovernor) + LeasesInUse(_writerGovernor) + LeasesInUse(_persistentLeaseGovernor);
 
 // Increments are atomic
-Interlocked.Increment(ref _connectionCount);
-Interlocked.Decrement(ref _connectionCount);
+Interlocked.Increment(ref _totalConnectionsCreated);
 ```
 
 ### Events and Re-Entrancy

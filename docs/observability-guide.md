@@ -103,10 +103,11 @@ evidence the database is fast.
 
 ## "Are connections piling up, or leaking?"
 
-- `ConnectionsCurrent` vs. `PeakOpenConnections` — a `ConnectionsCurrent` that never returns to
-  baseline between bursts, while `PeakOpenConnections` keeps climbing, suggests something isn't
+- `ConnectionsCurrent` vs. `PeakOpenConnections` — both count pengdows connection leases (a connection
+  handed out until it is disposed), not the provider's physical connections. A `ConnectionsCurrent` that never
+  returns to baseline between bursts, while `PeakOpenConnections` keeps climbing, suggests something isn't
   disposing connections/readers/transactions promptly rather than a load spike.
-- `LongLivedConnections` — count of connections held longer than the configured threshold
+- `LongLivedConnections` — count of connection leases held longer than the configured threshold
   (`MetricsOptions.LongConnectionThreshold`) — a nonzero, growing count is a more direct signal
   than watching `ConnectionsCurrent` drift, since it's specifically counting outliers, not the
   aggregate.

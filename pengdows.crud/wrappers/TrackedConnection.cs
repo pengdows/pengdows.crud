@@ -7,8 +7,7 @@
 // - Lifecycle tracking:
 //   * WasOpened: Tracks if connection was ever opened
 //   * onFirstOpen callback: For session settings application
-//   * onStateChange callback: For metrics state tracking
-//   * onDispose callback: For connection counting
+//   * onDispose callback: Notified as the connection is disposed
 // - Two-level locking strategy:
 //   * Shared connections (persistent): RealAsyncLocker with SemaphoreSlim
 //   * Ephemeral connections (per-op): NoOpAsyncLocker, zero overhead
@@ -18,9 +17,10 @@
 //   * AttachSlot(): Associates governor slot with connection
 //   * ReleaseSlot(): Returns slot on dispose (once only)
 // - Metrics collection:
-//   * Open/close duration timing
-//   * Connection hold duration
-//   * State change tracking
+//   * Open/close duration timing, measured around the provider calls
+//   * Connection counts and hold duration come from the pool slot (the lease), not from the
+//     provider's StateChange events, which drivers report inconsistently (Snowflake raises none,
+//     MySql.Data raises Open -> Open, a Close that throws reports nothing)
 // - Extends SafeAsyncDisposableBase for proper cleanup.
 // - DisposeManaged/Async: Closes connection, invokes callbacks, releases permit.
 // =============================================================================
@@ -74,8 +74,7 @@ namespace pengdows.crud.wrappers;
 /// </para>
 /// <list type="bullet">
 ///   <item><description><b>First open:</b> onFirstOpen callback (used for session settings)</description></item>
-///   <item><description><b>State changes:</b> onStateChange callback (used for metrics)</description></item>
-///   <item><description><b>Disposal:</b> onDispose callback (used for connection counting)</description></item>
+///   <item><description><b>Disposal:</b> onDispose callback, then the pool slot (the lease) is released</description></item>
 /// </list>
 /// <para>
 /// <strong>Shared vs Ephemeral:</strong>
@@ -110,24 +109,13 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
     // Told of every failed open (the context's connection-failure counters).
     private readonly Action<Exception>? _onOpenFailed;
-    private readonly StateChangeEventHandler? _onStateChange;
     private readonly SemaphoreSlim? _semaphoreSlim;
     private static readonly TimeSpan SharedDisposeTimeout = TimeSpan.FromSeconds(5);
     private readonly TimeSpan _sharedDisposeTimeout;
 
     private int _wasOpened;
     private readonly MetricsCollector? _metricsCollector;
-    // The one StateChange handler this wrapper subscribes (see OnConnectionStateChange).
-    private readonly StateChangeEventHandler _stateHandler;
-    private long _openTimestamp;
     private readonly TimeProvider _timeProvider;
-    // TEST-014: a connection that breaks (Open -> Broken) already has its close counted by the
-    // Broken case below. DisposeConnectionSync/DisposeConnectionAsyncCore's own "not already
-    // Closed" guard treats Broken as still needing a close, so disposal calls the underlying
-    // connection's Close() again — a real ADO.NET state transition (Broken -> Closed), not a
-    // no-op, so it fires a second StateChange and would double-count the close without this
-    // flag. Reset on Open, consumed by the first Closed-or-Broken transition per open cycle.
-    private int _closeAlreadyCountedForThisOpen;
     private readonly ModeContentionStats? _modeContentionStats;
     private readonly DbMode _mode;
     private readonly TimeSpan? _modeLockTimeout;
@@ -238,7 +226,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
     internal TrackedConnection(
         DbConnection conn,
-        StateChangeEventHandler? onStateChange = null,
         Action<ITrackedConnection>? onFirstOpen = null,
         Action<DbConnection>? onDispose = null,
         ILogger<TrackedConnection>? logger = null,
@@ -258,7 +245,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         _timeProvider = MetricsClock.Resolve(timeProvider);
         _onOpenFailed = onOpenFailed;
         _connection = conn ?? throw new ArgumentNullException(nameof(conn));
-        _onStateChange = onStateChange;
         _onFirstOpen = onFirstOpen;
         _onFirstOpenAsync = onFirstOpenAsync;
         _onDispose = onDispose;
@@ -275,142 +261,15 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             _semaphoreSlim = new SemaphoreSlim(1, 1);
         }
 
-        // One subscription instead of three (REL-005): each += / -= of a separate handler built a
-        // new delegate or multicast chain on every checkout.
-        _stateHandler = OnConnectionStateChange;
-        _connection.StateChange += _stateHandler;
-
         if (slot.HasValue)
         {
             AttachSlot(slot.Value);
         }
     }
 
-    // Some drivers never raise StateChange (CONFIRMED: Snowflake.Data 4.8.0's SnowflakeDbConnection has
-    // no OnStateChange call), and pengdows counts open connections and connection metrics from that
-    // event. So Open/Close note whether the driver reported the transition, and report it to pengdows'
-    // own handlers themselves when it didn't; drivers that do report it are not counted twice.
-    private int _driverReportedStateChange;
-
-    // 1 while an Open has been reported to pengdows' handlers and no Close/Broken has followed it — the same rule the
-    // context's open-connection count uses. A provider whose Close throws never reports the close, so disposal reports
-    // it (ReportCloseIfStillCountedOpen); otherwise NumberOfOpenConnections stays one too high for good.
-    private int _countedOpen;
-
-    // Runs the context's handler, then metrics, then notes that the driver reported the transition:
-    // the order the three separate subscriptions ran in.
-    private void OnConnectionStateChange(object? sender, StateChangeEventArgs args)
-    {
-        _onStateChange?.Invoke(sender!, args);
-        if (_metricsCollector != null)
-        {
-            HandleMetricsStateChange(sender, args);
-        }
-
-        NoteCountedTransition(args);
-        Interlocked.Exchange(ref _driverReportedStateChange, 1);
-    }
-
-    private void NoteCountedTransition(StateChangeEventArgs args)
-    {
-        switch (args.CurrentState)
-        {
-            case ConnectionState.Open:
-                Interlocked.Exchange(ref _countedOpen, 1);
-                break;
-            case ConnectionState.Closed when args.OriginalState != ConnectionState.Broken:
-            case ConnectionState.Broken:
-                Interlocked.Exchange(ref _countedOpen, 0);
-                break;
-        }
-    }
-
-    // Runs once the connection is disposed: a connection pengdows counted as open, whose close the provider never
-    // reported (its Close threw), is reported closed here so the open count and connection metrics come back down.
-    private void ReportCloseIfStillCountedOpen()
-    {
-        if (Interlocked.Exchange(ref _countedOpen, 0) == 0)
-        {
-            return;
-        }
-
-        try
-        {
-            var args = new StateChangeEventArgs(ConnectionState.Open, ConnectionState.Closed);
-            _onStateChange?.Invoke(_connection, args);
-            if (_metricsCollector != null)
-            {
-                HandleMetricsStateChange(_connection, args);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error while reporting the close of connection {Name}.", GetName());
-        }
-    }
-
-    private void ResetDriverReportedStateChange()
-    {
-        Interlocked.Exchange(ref _driverReportedStateChange, 0);
-    }
-
-    private void ReportTransitionIfDriverDidNot(ConnectionState from, ConnectionState to)
-    {
-        if (Interlocked.Exchange(ref _driverReportedStateChange, 0) != 0 || _connection.State != to)
-        {
-            return;
-        }
-
-        var args = new StateChangeEventArgs(from, to);
-        _onStateChange?.Invoke(_connection, args);
-        if (_metricsCollector != null)
-        {
-            HandleMetricsStateChange(_connection, args);
-        }
-
-        NoteCountedTransition(args);
-    }
-
-    private void HandleMetricsStateChange(object? sender, StateChangeEventArgs args)
-    {
-        if (_metricsCollector == null)
-        {
-            return;
-        }
-
-        switch (args.CurrentState)
-        {
-            case ConnectionState.Open:
-                {
-                    _metricsCollector.ConnectionOpened();
-                    Interlocked.Exchange(ref _openTimestamp, _timeProvider.GetTimestamp());
-                    Interlocked.Exchange(ref _closeAlreadyCountedForThisOpen, 0);
-                    break;
-                }
-            case ConnectionState.Closed:
-            case ConnectionState.Broken:
-                {
-                    if (Interlocked.Exchange(ref _closeAlreadyCountedForThisOpen, 1) != 0)
-                    {
-                        // Already counted this open cycle's close — e.g. the connection broke
-                        // (counted then) and is now separately transitioning Broken -> Closed
-                        // during disposal. One physical open/close cycle must count as one.
-                        break;
-                    }
-
-                    var openedAt = Interlocked.Exchange(ref _openTimestamp, 0);
-                    var duration = openedAt == 0
-                        ? 0d
-                        : MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - openedAt);
-                    _metricsCollector.ConnectionClosed(duration);
-                    break;
-                }
-        }
-    }
-
     // Test convenience constructor: allow specifying a name and logger directly
     internal TrackedConnection(DbConnection conn, string name, ILogger logger)
-        : this(conn, null, null, null, logger as ILogger<TrackedConnection> ?? NullLogger<TrackedConnection>.Instance)
+        : this(conn, null, null, logger as ILogger<TrackedConnection> ?? NullLogger<TrackedConnection>.Instance)
     {
         if (!string.IsNullOrWhiteSpace(name))
         {
@@ -458,7 +317,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             startedAt = _timeProvider.GetTimestamp();
         }
 
-        ResetDriverReportedStateChange();
         try
         {
             _connection.Open();
@@ -481,7 +339,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             }
         }
 
-        ReportTransitionIfDriverDidNot(ConnectionState.Closed, ConnectionState.Open);
         TriggerFirstOpen();
     }
 
@@ -603,7 +460,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             startedAt = _timeProvider.GetTimestamp();
         }
 
-        ResetDriverReportedStateChange();
         try
         {
             await _connection.OpenAsync(cancellationToken).ConfigureAwait(false);
@@ -626,7 +482,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             }
         }
 
-        ReportTransitionIfDriverDidNot(ConnectionState.Closed, ConnectionState.Open);
         await TriggerFirstOpenAsync(cancellationToken).ConfigureAwait(false);
     }
 
@@ -777,8 +632,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
         finally
         {
-            ReportCloseIfStillCountedOpen();
-            DetachMetricsHandler();
             ReleaseSlot();
         }
     }
@@ -829,8 +682,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         }
         finally
         {
-            ReportCloseIfStillCountedOpen();
-            DetachMetricsHandler();
             ReleaseSlot();
         }
     }
@@ -846,27 +697,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in the connection's dispose callback.");
-        }
-    }
-
-    private void DetachMetricsHandler()
-    {
-        DetachStateChangeHandler(_stateHandler);
-    }
-
-    // Runs after the connection is disposed, so a close raised during Dispose is still counted. Some
-    // drivers refuse StateChange access once disposed (CONFIRMED: AdoNetCore.AseClient 0.19.2's
-    // AseConnection throws ObjectDisposedException); the disposed connection raises no more events, so
-    // there is nothing left to detach from.
-    private void DetachStateChangeHandler(StateChangeEventHandler handler)
-    {
-        try
-        {
-            _connection.StateChange -= handler;
-        }
-        catch (ObjectDisposedException)
-        {
-            // Already disposed by the provider, so there is nothing left to detach.
         }
     }
 
@@ -952,7 +782,6 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
 
         // Only the metrics collector consumes the close duration, so nothing is timed without one.
         var startedAt = _metricsCollector != null ? _timeProvider.GetTimestamp() : 0;
-        ResetDriverReportedStateChange();
         try
         {
             _connection.Close();
@@ -962,7 +791,5 @@ internal class TrackedConnection : SafeAsyncDisposableBase, ITrackedConnection, 
             _metricsCollector?.RecordConnectionCloseDuration(
                 MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - startedAt));
         }
-
-        ReportTransitionIfDriverDidNot(ConnectionState.Open, ConnectionState.Closed);
     }
 }

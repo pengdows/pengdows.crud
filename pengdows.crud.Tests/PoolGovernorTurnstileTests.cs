@@ -443,7 +443,8 @@ public sealed class PoolGovernorTurnstileTests
         var (success, slot) = await gov.TryAcquireAsync();
 
         Assert.True(success);
-        Assert.Equal(default, slot);
+        Assert.NotEqual(default, slot); // a tracking slot: counted, never blocked
+        Assert.Equal(1, gov.GetSnapshot().InUse);
     }
 
     // ── TryAcquireAsync reader touch-and-release succeeds ─────────────────
@@ -479,7 +480,8 @@ public sealed class PoolGovernorTurnstileTests
         var success = gov.TryAcquire(out var slot);
 
         Assert.True(success);
-        Assert.Equal(default, slot);
+        Assert.NotEqual(default, slot); // a tracking slot: counted, never blocked
+        Assert.Equal(1, gov.GetSnapshot().InUse);
     }
 
     // ── Queue-depth admission control must also bound the turnstile queue ──
