@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
 using pengdows.crud.fakeDb;
 using Xunit;
@@ -205,6 +206,69 @@ public class BeginTransactionAsyncTests
             .ToList();
         Assert.DoesNotContain(allExecuted,
             c => c.Contains("SET access_mode", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// Oracle before 23ai rejects "SET TRANSACTION READ ONLY;" (trailing ';'), and the failure is
+    /// only logged, so a read-intent transaction on 12.2-21c stayed writable.
+    /// </summary>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task BeginTransaction_ReadOnly_Oracle_SendsSetTransactionWithoutTerminator(bool async)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.Oracle);
+        using var context = new DatabaseContext("Data Source=test;EmulatedProduct=Oracle", factory);
+
+        await using (var tx = async
+                         ? await context.BeginTransactionAsync(executionType: ExecutionType.Read)
+                         : context.BeginTransaction(executionType: ExecutionType.Read))
+        {
+            tx.Commit();
+        }
+
+        var readOnly = factory.CreatedConnections
+            .SelectMany(c => c.ExecutedNonQueryTexts)
+            .Where(c => c.Contains("SET TRANSACTION READ ONLY", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        Assert.Single(readOnly);
+        Assert.Equal("SET TRANSACTION READ ONLY", readOnly[0].Trim());
+    }
+
+    public static TheoryData<SupportedDatabase, string, string, bool> ReadOnlyEntryStatements => new()
+    {
+        { SupportedDatabase.Oracle, "Data Source=test;EmulatedProduct=Oracle", "SET TRANSACTION READ ONLY", false },
+        { SupportedDatabase.Oracle, "Data Source=test;EmulatedProduct=Oracle", "SET TRANSACTION READ ONLY", true },
+        { SupportedDatabase.MySql, "Server=test;EmulatedProduct=MySql", "SET SESSION transaction_read_only = 1;", false },
+        { SupportedDatabase.MySql, "Server=test;EmulatedProduct=MySql", "SET SESSION transaction_read_only = 1;", true },
+        { SupportedDatabase.MariaDb, "Server=test;EmulatedProduct=MariaDb", "SET SESSION tx_read_only = 1;", false },
+        { SupportedDatabase.MariaDb, "Server=test;EmulatedProduct=MariaDb", "SET SESSION tx_read_only = 1;", true },
+    };
+
+    /// <summary>
+    /// A read-intent transaction is a promise that the database refuses writes. If the statement
+    /// that makes it read-only fails, the transaction must not be handed out as if it were.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ReadOnlyEntryStatements))]
+    public async Task BeginTransaction_ReadOnly_EntryStatementFails_ThrowsAndReleasesTheConnection(
+        SupportedDatabase product, string connectionString, string readOnlySql, bool async)
+    {
+        var factory = new fakeDbFactory(product);
+        var failure = new InvalidOperationException("ORA-00933: SQL command not properly ended");
+        factory.SetCommandFailure(readOnlySql, failure);
+        using var context = new DatabaseContext(connectionString, factory);
+
+        var ex = await Assert.ThrowsAsync<TransactionException>(async () =>
+        {
+            await using var tx = async
+                ? await context.BeginTransactionAsync(executionType: ExecutionType.Read)
+                : context.BeginTransaction(executionType: ExecutionType.Read);
+        });
+
+        Assert.Same(failure, ex.InnerException);
+        Assert.Contains("read-only", ex.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(0, context.NumberOfOpenConnections);
     }
 
     /// <summary>

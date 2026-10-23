@@ -59,8 +59,17 @@ internal class SqlServerDialect : SqlDialect
     // @@VERSION carries the build after " - " ("... 2019 (RTM-CU22) (KB...) - 15.0.4322.2 (X64)") and
     // ends with the OS version ("Windows Server 2019 Standard 10.0", "Ubuntu 22.04.4"), which the
     // base parse took (REV-052).
+    private static readonly Version AzureSqlFeatureVersion = new(16, 0);
+
     public override Version? ParseVersion(string versionString)
     {
+        // Azure SQL Database and Managed Instance always report 12.0.2000.x; they are versionless and
+        // at least SQL Server 2022 in features, so version gates must not treat them as 2014.
+        if (!string.IsNullOrEmpty(versionString) && versionString.Contains("SQL Azure", StringComparison.OrdinalIgnoreCase))
+        {
+            return AzureSqlFeatureVersion;
+        }
+
         var build = string.IsNullOrWhiteSpace(versionString) ? null : BuildToken.Match(versionString);
         if (build is { Success: true } && Version.TryParse(build.Groups[1].Value, out var version))
         {
@@ -430,6 +439,10 @@ internal class SqlServerDialect : SqlDialect
 
     // Version-specific overrides
     public override bool SupportsMerge => IsVersionAtLeast(10);
+
+    // Verified live by pengdows.hangfire's queue claims and clock reads.
+    public override string CurrentUtcTimestampExpression => "SYSUTCDATETIME()";
+    public override string? SkipLockedTableHint => " WITH (UPDLOCK, READPAST, ROWLOCK)";
     public override string? MergeTargetLockHint => "HOLDLOCK";
     public override bool SupportsJsonTypes => IsVersionAtLeast(13);
     public override bool SupportsSavepoints => true;

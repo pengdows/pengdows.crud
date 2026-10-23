@@ -304,6 +304,9 @@ internal class FirebirdDialect : SqlDialect
     }
 
     public override bool SupportsMerge => IsInitialized && ProductInfo.ParsedVersion?.Major >= 2;
+    // AT TIME ZONE needs Firebird 4.0 or later.
+    public override string CurrentUtcTimestampExpression => "CAST(CURRENT_TIMESTAMP AT TIME ZONE 'UTC' AS TIMESTAMP)";
+    public override string SelectWithoutTableSuffix => " FROM RDB$DATABASE";
 
     // The gateways upsert with UPDATE OR INSERT here, which carries no [Version] guard, so rows
     // affected never reveals a stale version.

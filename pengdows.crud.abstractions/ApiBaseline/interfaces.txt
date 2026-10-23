@@ -329,7 +329,7 @@ property pengdows.crud.IMapperOptions::ColumnsOnly : bool { get; }
 property pengdows.crud.IMapperOptions::EnumMode : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.IMapperOptions::NamePolicy : System.Func`2<string, string> { get; }
 property pengdows.crud.IMapperOptions::Strict : bool { get; }
-property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; set; }
+property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; }
 property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::EnumParseBehavior : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::WrappedTableName : string { get; }
 property pengdows.crud.ISqlContainer::CompositeIdentifierSeparator : string { get; }
@@ -340,7 +340,7 @@ property pengdows.crud.ISqlContainer::QuotePrefix : string { get; }
 property pengdows.crud.ISqlContainer::QuoteSuffix : string { get; }
 property pengdows.crud.ISqlQueryBuilder::Length : int { get; }
 property pengdows.crud.ISqlQueryBuilder::Version : int { get; }
-property pengdows.crud.ITableGateway`2<TEntity, TRowID>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; set; }
+property pengdows.crud.ITableGateway`2<TEntity, TRowID>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; }
 property pengdows.crud.ITableGateway`2<TEntity, TRowID>::EnumParseBehavior : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.ITableGateway`2<TEntity, TRowID>::WrappedTableName : string { get; }
 property pengdows.crud.ITransactionContext::IsCompleted : bool { get; }
@@ -379,6 +379,7 @@ property pengdows.crud.dialects.IDatabaseProductInfo::StandardCompliance : pengd
 property pengdows.crud.dialects.ISqlDialect::BooleanDbType : System.Data.DbType { get; }
 property pengdows.crud.dialects.ISqlDialect::CanUseModernFeatures : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::CompositeIdentifierSeparator : string { get; }
+property pengdows.crud.dialects.ISqlDialect::CurrentUtcTimestampExpression : string { get; }
 property pengdows.crud.dialects.ISqlDialect::DatabaseType : pengdows.crud.enums.SupportedDatabase { get; }
 property pengdows.crud.dialects.ISqlDialect::EnforcesConstraints : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::EnforcesForeignKeyConstraints : bool { get; }
@@ -408,6 +409,9 @@ property pengdows.crud.dialects.ISqlDialect::ReadCommittedCompatibleIsolationLev
 property pengdows.crud.dialects.ISqlDialect::RequiresMergeStatementTerminator : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::RequiresStoredProcParameterNameMatch : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SavepointCapabilities : pengdows.crud.enums.SavepointCapabilities { get; }
+property pengdows.crud.dialects.ISqlDialect::SelectWithoutTableSuffix : string { get; }
+property pengdows.crud.dialects.ISqlDialect::SkipLockedClause : string { get; }
+property pengdows.crud.dialects.ISqlDialect::SkipLockedTableHint : string { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsArrayTypes : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsBatchInsert : bool { get; }
 property pengdows.crud.dialects.ISqlDialect::SupportsBatchUpdate : bool { get; }

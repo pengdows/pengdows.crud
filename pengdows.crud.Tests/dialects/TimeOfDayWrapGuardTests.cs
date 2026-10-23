@@ -34,8 +34,6 @@ public sealed class TimeOfDayWrapGuardTests
     [InlineData(SupportedDatabase.Db2, -1)]
     [InlineData(SupportedDatabase.Db2, 24)]
     [InlineData(SupportedDatabase.Db2, 25)]
-    [InlineData(SupportedDatabase.FlatFile, -1)]
-    [InlineData(SupportedDatabase.FlatFile, 24)]
     [InlineData(SupportedDatabase.SapHana, -1)]
     [InlineData(SupportedDatabase.SapHana, 24)]
     public void TimeSpanOutsideADay_IsRejectedWhereTheDriverWouldWrapIt(SupportedDatabase database, int hours)
@@ -68,6 +66,9 @@ public sealed class TimeOfDayWrapGuardTests
     [InlineData(SupportedDatabase.MySql)]
     [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.SqlServer)]
+    // pengdows.flatfile 0.2.1-preview.6 refuses a TIME outside a day and writes nothing (pengdows/pengdows.flatfile#1);
+    // earlier releases wrote it and then failed every read of the table.
+    [InlineData(SupportedDatabase.FlatFile)]
     public void OtherDialects_AreUnchanged(SupportedDatabase database)
     {
         Assert.NotNull(Dialect(database).CreateDbParameter("t", DbType.Time, TimeSpan.FromHours(-1)));

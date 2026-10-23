@@ -369,7 +369,7 @@ internal sealed class HanaDialect : SqlDialect
     // CONFIRMED LIVE (real container): "SET TRANSACTION READ ONLY" inside an active transaction
     // is accepted (parses fine) and genuinely enforces read-only — a subsequent write fails with
     // NativeError 129 (see SqlDialect.cs's TryClassifyProviderException switch), while a read
-    // inside the same read-only transaction succeeds normally. Uses the same TryExecuteReadOnlySql
+    // inside the same read-only transaction succeeds normally. Uses the same ExecuteReadOnlySql
     // shared helper Oracle/Informix use for their own identical mechanism. Do NOT assume the
     // ANSI SET TRANSACTION READ ONLY pattern works uniformly across dialects without checking —
     // it was a flat syntax error on both Db2 and Sybase ASE this same session.

@@ -22,8 +22,14 @@ public class OracleTestContainer : TestContainer
     {
         var image = requestedImage ?? Environment.GetEnvironmentVariable("ORACLE_IMAGE") ?? TestbedImageMatrix.Latest("Oracle");
         var isXe = image.Contains("xe", StringComparison.OrdinalIgnoreCase);
-        _sid = isXe ? "XEPDB1" : "FREEPDB1";
-        var passwordEnvVar = image.StartsWith("oracle/database:", StringComparison.OrdinalIgnoreCase) ? "ORACLE_PWD" : "ORACLE_PASSWORD";
+        // Oracle's registry images (database/enterprise, e.g. 12.2.0.1 for the 12.2 floor) take DB_PASSWD
+        // and serve the PDB as ORCLPDB1.localdomain.
+        var isOracleRegistry = image.StartsWith("container-registry.oracle.com/database/enterprise", StringComparison.OrdinalIgnoreCase);
+        // Images built by Oracle's docker-images scripts (EE/SE2, e.g. a local 12.2 with AL32UTF8) serve ORCLPDB1.
+        var isOracleBuilt = image.StartsWith("oracle/database:", StringComparison.OrdinalIgnoreCase) && !isXe;
+        _sid = isOracleRegistry ? "ORCLPDB1.localdomain" : isOracleBuilt ? "ORCLPDB1" : isXe ? "XEPDB1" : "FREEPDB1";
+        var passwordEnvVar = isOracleRegistry ? "DB_PASSWD"
+            : image.StartsWith("oracle/database:", StringComparison.OrdinalIgnoreCase) ? "ORACLE_PWD" : "ORACLE_PASSWORD";
 
         Console.WriteLine($"[Oracle] Using image: {image} (SID: {_sid})");
 

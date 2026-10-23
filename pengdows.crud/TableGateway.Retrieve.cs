@@ -250,18 +250,43 @@ public partial class TableGateway<TEntity, TRowID>
             var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
             try
             {
-                sb.Append(wrappedColumnName);
-                sb.Append(SqlFragments.In);
-                for (var i = 0; i < names.Length; i++)
+                // A list longer than the dialect allows becomes "(c IN (...) OR c IN (...))".
+                var groupSize = dialect.MaxInListExpressions() is { } max && names.Length > max
+                    ? max
+                    : names.Length;
+                var grouped = groupSize < names.Length;
+                if (grouped)
                 {
-                    if (i > 0)
-                    {
-                        sb.Append(SqlFragments.Comma);
-                    }
-                    sb.Append(names[i]);
+                    sb.Append('(');
                 }
 
-                sb.Append(SqlFragments.CloseParen);
+                for (var start = 0; start < names.Length; start += groupSize)
+                {
+                    if (start > 0)
+                    {
+                        sb.Append(SqlFragments.Or);
+                    }
+
+                    sb.Append(wrappedColumnName);
+                    sb.Append(SqlFragments.In);
+                    var end = Math.Min(start + groupSize, names.Length);
+                    for (var i = start; i < end; i++)
+                    {
+                        if (i > start)
+                        {
+                            sb.Append(SqlFragments.Comma);
+                        }
+                        sb.Append(names[i]);
+                    }
+
+                    sb.Append(SqlFragments.CloseParen);
+                }
+
+                if (grouped)
+                {
+                    sb.Append(')');
+                }
+
                 inCore = sb.ToString();
                 inCache.GetOrAdd(queryKey, _ => inCore);
             }

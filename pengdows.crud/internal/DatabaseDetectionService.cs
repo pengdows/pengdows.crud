@@ -604,7 +604,9 @@ internal static class DatabaseDetectionService
 
                 var serverType = GetVal("ServerType").ToLowerInvariant();
                 var clientLib = GetVal("ClientLibrary").ToLowerInvariant();
-                var dataSource = GetVal("DataSource").ToLowerInvariant();
+                // FirebirdClient takes the server under any of these keys.
+                var dataSource = new[] { "DataSource", "Data Source", "Server", "Host" }
+                    .Select(GetVal).FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? string.Empty;
                 var database = GetVal("Database").ToLowerInvariant();
 
                 isEmbedded =

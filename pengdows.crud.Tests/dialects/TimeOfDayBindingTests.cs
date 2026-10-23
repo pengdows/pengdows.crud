@@ -93,14 +93,17 @@ public sealed class TimeOfDayBindingTests
         }
     }
 
+    // pengdows.flatfile 0.2.1-preview.5 refuses DateOnly/TimeOnly parameters ("Parameter value type 'System.DateOnly' is
+    // not supported"), while it and preview.2 store a DateTime in a DATE column and a TimeSpan in a TIME column, however
+    // the parameter is typed (confirmed live 2026-10-23). So FlatFile binds them like every other dialect.
     [Fact]
-    public void FlatFile_DateOnlyAndTimeOnly_BindNatively()
+    public void FlatFile_DateOnlyAndTimeOnly_BindAsDateTimeAndTimeSpan()
     {
         var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.FlatFile,
             new fakeDbFactory(SupportedDatabase.FlatFile), NullLogger<SqlDialect>.Instance);
 
-        Assert.Equal(new DateOnly(2026, 9, 29), dialect.CreateDbParameter("d", DbType.Date, new DateOnly(2026, 9, 29)).Value);
-        Assert.Equal(SampleTime, dialect.CreateDbParameter("t", DbType.Time, SampleTime).Value);
+        Assert.Equal(new DateTime(2026, 9, 29), dialect.CreateDbParameter("d", DbType.Date, new DateOnly(2026, 9, 29)).Value);
+        Assert.Equal(SampleTime.ToTimeSpan(), dialect.CreateDbParameter("t", DbType.Time, SampleTime).Value);
         Assert.Equal(DBNull.Value, dialect.CreateDbParameter("n", DbType.Date, (DateOnly?)null).Value);
     }
 
@@ -117,17 +120,17 @@ public sealed class TimeOfDayBindingTests
         Assert.Equal(new DateTime(2026, 9, 29), dialect.CreateDbParameter("d", dbType, new DateOnly(2026, 9, 29)).Value);
     }
 
-    // The same FlatFile validation rejects a DateTime property on a DATE column and a TimeSpan property
-    // on a TIME column, so those bind as DateOnly/TimeOnly when the column's DbType says DATE/TIME.
+    // A DateTime property on a DATE column and a TimeSpan property on a TIME column bind unchanged: both flatfile releases
+    // store them (preview.5 refuses the DateOnly/TimeOnly they used to be converted to).
     [Fact]
-    public void FlatFile_DateTimeForDate_AndTimeSpanForTime_BindAsDateOnlyAndTimeOnly()
+    public void FlatFile_DateTimeForDate_AndTimeSpanForTime_BindUnchanged()
     {
         var dialect = SqlDialectFactory.CreateDialectForType(SupportedDatabase.FlatFile,
             new fakeDbFactory(SupportedDatabase.FlatFile), NullLogger<SqlDialect>.Instance);
 
-        Assert.Equal(new DateOnly(2026, 9, 29),
+        Assert.Equal(new DateTime(2026, 9, 29),
             dialect.CreateDbParameter("d", DbType.Date, new DateTime(2026, 9, 29)).Value);
-        Assert.Equal(SampleTime, dialect.CreateDbParameter("t", DbType.Time, SampleSpan).Value);
+        Assert.Equal(SampleSpan, dialect.CreateDbParameter("t", DbType.Time, SampleSpan).Value);
         // A timestamp column keeps the full DateTime.
         Assert.Equal(new DateTime(2026, 9, 29, 13, 45, 30),
             dialect.CreateDbParameter("ts", DbType.DateTime, new DateTime(2026, 9, 29, 13, 45, 30)).Value);

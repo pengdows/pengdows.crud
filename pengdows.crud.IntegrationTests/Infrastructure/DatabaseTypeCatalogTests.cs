@@ -125,4 +125,35 @@ public class DatabaseTypeCatalogTests
             Assert.True(usable > 0, $"{provider} has no catalog entries the type matrix can run");
         }
     }
+
+    // An entry's MinVersion only means something if the matrix honours it: Oracle BOOLEAN and VECTOR
+    // (23ai) were declared on 21c and failed. SQL Server entries name the product year.
+    [Theory]
+    [InlineData(SupportedDatabase.Oracle, "BOOLEAN", "21.3.0.0", false)]
+    [InlineData(SupportedDatabase.Oracle, "BOOLEAN", "23.26.2.0", true)]
+    [InlineData(SupportedDatabase.Oracle, "VECTOR(n)", "18.4.0.0", false)]
+    [InlineData(SupportedDatabase.Oracle, "JSON", "21.3.0.0", true)]
+    [InlineData(SupportedDatabase.Oracle, "JSON", "18.4.0.0", false)]
+    [InlineData(SupportedDatabase.SqlServer, "VECTOR(n)", "16.0.4295.3", false)]
+    [InlineData(SupportedDatabase.SqlServer, "VECTOR(n)", "17.0.5005.3", true)]
+    [InlineData(SupportedDatabase.Oracle, "NUMBER", "12.2.0.1", true)]
+    public void IsAvailableOn_HonoursMinVersion(SupportedDatabase db, string canonicalName, string serverVersion,
+        bool expected)
+    {
+        var entry = DatabaseTypeCatalog.GetColumnTypes(db).First(t => t.CanonicalName == canonicalName);
+
+        Assert.Equal(expected, DatabaseTypeCatalog.IsAvailableOn(entry, db, Version.Parse(serverVersion)));
+    }
+
+    [Fact]
+    public void IsAvailableOn_UnknownServerVersionOrUnparseableMinVersion_KeepsTheEntry()
+    {
+        var oracleBoolean = DatabaseTypeCatalog.GetColumnTypes(SupportedDatabase.Oracle)
+            .First(t => t.CanonicalName == "BOOLEAN");
+        var hanaVector = DatabaseTypeCatalog.GetColumnTypes(SupportedDatabase.SapHana)
+            .First(t => t.CanonicalName == "REAL_VECTOR(n)");
+
+        Assert.True(DatabaseTypeCatalog.IsAvailableOn(oracleBoolean, SupportedDatabase.Oracle, null));
+        Assert.True(DatabaseTypeCatalog.IsAvailableOn(hanaVector, SupportedDatabase.SapHana, new Version(2, 0)));
+    }
 }

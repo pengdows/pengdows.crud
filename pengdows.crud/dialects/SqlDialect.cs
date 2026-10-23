@@ -35,6 +35,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.types.valueobjects;
+using pengdows.crud.exceptions;
 using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
@@ -295,6 +296,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// Warns rather than refuses: detection can fail on a supported server too.
     /// </summary>
     internal virtual string? DescribeUnsupportedTopology(DatabaseTopology topology) => null;
+
+    // Most expressions one IN list may hold, or null when the database sets no limit of its own.
+    internal virtual int? MaxInListExpressions => null;
 
     public virtual (DbMode Mode, string Reason) CoerceConnectionMode(DbMode requested, string? connectionString,
         bool isLocalDb)
@@ -788,6 +792,18 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     public virtual string ParameterMarker => "?";
+
+    /// <inheritdoc cref="ISqlDialect.CurrentUtcTimestampExpression"/>
+    public virtual string CurrentUtcTimestampExpression => "CURRENT_TIMESTAMP";
+
+    /// <inheritdoc cref="ISqlDialect.SelectWithoutTableSuffix"/>
+    public virtual string SelectWithoutTableSuffix => string.Empty;
+
+    /// <inheritdoc cref="ISqlDialect.SkipLockedTableHint"/>
+    public virtual string? SkipLockedTableHint => null;
+
+    /// <inheritdoc cref="ISqlDialect.SkipLockedClause"/>
+    public virtual string? SkipLockedClause => null;
 
     public virtual string ParameterMarkerAt(int ordinal)
     {
@@ -2385,7 +2401,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
             }
 
             // TYPE-003: a char bound as a string type is sent as its one-character string; some providers
-            // mishandle a raw System.Char (Microsoft.Data.Sqlite stored '~' as "", confirmed live).
+            // mishandle a raw System.Char (System.Data.SQLite 1.0.119 stores '~' as the integer 126; confirmed
+            // 2026-10-22. Microsoft.Data.Sqlite 6.0-10.0 store it correctly: its earlier "" came from the Size reset below).
             if (value is char character &&
                 type is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength)
             {
@@ -2813,7 +2830,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     /// <summary>
     /// The statement that makes a read-only transaction read-only at the database, sent when one
-    /// begins (a failure is logged, not thrown); none by default.
+    /// begins (a failure throws); none by default.
     /// </summary>
     protected virtual string? ReadOnlyTransactionSql => null;
 
@@ -2821,14 +2838,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     {
         if (ReadOnlyTransactionSql is { } sql)
         {
-            TryExecuteReadOnlySql(transaction, sql, DatabaseType.ToString());
+            ExecuteReadOnlySql(transaction, sql, DatabaseType.ToString());
         }
     }
 
     public virtual ValueTask TryEnterReadOnlyTransactionAsync(ITransactionContext transaction,
         CancellationToken cancellationToken = default) =>
         ReadOnlyTransactionSql is { } sql
-            ? TryExecuteReadOnlySqlAsync(transaction, sql, DatabaseType.ToString(), cancellationToken)
+            ? ExecuteReadOnlySqlAsync(transaction, sql, DatabaseType.ToString(), cancellationToken)
             : ValueTask.CompletedTask;
 
     /// <summary>
@@ -2842,11 +2859,11 @@ internal abstract class SqlDialect : IInternalSqlDialect
     }
 
     /// <summary>
-    /// Attempts to execute a read-only SQL statement within a transaction context.
-    /// Swallows any exceptions and logs them at Debug level.
-    /// Used by MySQL/MariaDB, Oracle, Informix, and SAP HANA to set read-only state.
+    /// Executes the statement that makes a transaction read-only at the database.
+    /// Used by MySQL/MariaDB, Oracle, Informix, SAP HANA and flat files. A failure throws: a
+    /// read-intent transaction that the database would still let write must not be handed out.
     /// </summary>
-    protected void TryExecuteReadOnlySql(ITransactionContext transaction, string sql, string dialectName)
+    protected void ExecuteReadOnlySql(ITransactionContext transaction, string sql, string dialectName)
     {
         try
         {
@@ -2859,17 +2876,16 @@ internal abstract class SqlDialect : IInternalSqlDialect
             using var sc = transaction.CreateSqlContainer(sql);
             sc.ExecuteNonQueryAsync().AsTask().GetAwaiter().GetResult();
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // The transaction runs read-write: say so (REV-051).
-            Logger.LogWarning(ex, "Failed to apply {DialectName} read-only session settings; the transaction is not read-only at the database", dialectName);
+            throw ReadOnlyEntryFailed(dialectName, ex);
         }
     }
 
     /// <summary>
-    /// Async version of <see cref="TryExecuteReadOnlySql"/>.
+    /// Async version of <see cref="ExecuteReadOnlySql"/>.
     /// </summary>
-    protected async ValueTask TryExecuteReadOnlySqlAsync(ITransactionContext transaction, string sql,
+    protected async ValueTask ExecuteReadOnlySqlAsync(ITransactionContext transaction, string sql,
         string dialectName, CancellationToken cancellationToken = default)
     {
         try
@@ -2883,11 +2899,18 @@ internal abstract class SqlDialect : IInternalSqlDialect
             await using var sc = transaction.CreateSqlContainer(sql);
             await sc.ExecuteNonQueryAsync(CommandType.Text, cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            // The transaction runs read-write: say so (REV-051).
-            Logger.LogWarning(ex, "Failed to apply {DialectName} read-only session settings; the transaction is not read-only at the database", dialectName);
+            throw ReadOnlyEntryFailed(dialectName, ex);
         }
+    }
+
+    private TransactionException ReadOnlyEntryFailed(string dialectName, Exception ex)
+    {
+        Logger.LogWarning(ex, "Failed to make the {DialectName} transaction read-only", dialectName);
+        return new TransactionException(
+            $"Could not make the transaction read-only on {dialectName}: {ex.Message}",
+            DatabaseType, ex);
     }
 
     public virtual bool IsReadCommittedSnapshotOn(ITrackedConnection connection)

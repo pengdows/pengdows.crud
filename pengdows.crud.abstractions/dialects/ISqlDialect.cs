@@ -871,4 +871,33 @@ public interface ISqlDialect
             providerErrorCode,
             sqlState);
     }
+
+    /// <summary>
+    /// A SQL expression evaluating to the server's current UTC date and time, for SQL written by hand
+    /// (e.g. <c>SYSUTCDATETIME()</c> on SQL Server, <c>UTC_TIMESTAMP(6)</c> on MySQL). Defaults to
+    /// <c>CURRENT_TIMESTAMP</c>, which is UTC only where the server's time zone is.
+    /// </summary>
+    string CurrentUtcTimestampExpression => "CURRENT_TIMESTAMP";
+
+    /// <summary>
+    /// What a <c>SELECT</c> with no table needs after its select list (<c>" FROM DUAL"</c> on Oracle,
+    /// <c>" FROM RDB$DATABASE"</c> on Firebird), with its leading space; empty where none is needed.
+    /// </summary>
+    string SelectWithoutTableSuffix => string.Empty;
+
+    /// <summary>
+    /// The table hint, placed right after the table name, that locks the rows a <c>SELECT</c> reads for
+    /// update and skips rows other sessions have locked (SQL Server:
+    /// <c>" WITH (UPDLOCK, READPAST, ROWLOCK)"</c>); null where the database uses
+    /// <see cref="SkipLockedClause"/> instead or pengdows.crud has not verified it.
+    /// </summary>
+    string? SkipLockedTableHint => null;
+
+    /// <summary>
+    /// The clause, placed after <c>ORDER BY</c> and before paging, that locks the rows a <c>SELECT</c>
+    /// reads for update and skips rows other sessions have locked (PostgreSQL:
+    /// <c>" FOR UPDATE SKIP LOCKED"</c>); null where the database uses <see cref="SkipLockedTableHint"/>
+    /// instead or pengdows.crud has not verified it.
+    /// </summary>
+    string? SkipLockedClause => null;
 }

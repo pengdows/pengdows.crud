@@ -22,8 +22,9 @@ namespace pengdows.crud.IntegrationTests.ErrorHandling;
 /// command-timeout key, paired with a query guaranteed to run longer than it:
 ///   - Npgsql (PostgreSql/CockroachDb/YugabyteDb): "CommandTimeout" (seconds) — confirmed live.
 ///   - Microsoft.Data.SqlClient (SqlServer): "Command Timeout" (seconds) — confirmed live.
-///   - MySql.Data — Oracle's Connector/NET, confirmed via testbed.csproj's package reference,
-///     NOT MySqlConnector (MySql/MariaDb/TiDb): NOT live-tested here. Confirmed via a standalone
+///   - MySql/MariaDb/TiDb: NOT live-tested here. The testbed ran these on MySql.Data, which
+///     pengdows.crud now refuses (2026-10-22); they run on MySqlConnector, whose timeout key has
+///     not been probed yet. The MySql.Data finding that follows is one reason it is refused. Confirmed via a standalone
 ///     probe that MySql.Data's async command execution (ExecuteNonQueryAsync) genuinely HANGS
 ///     against a real, healthy MySQL 9.6 server — it neither honors "Default Command Timeout"
 ///     nor completes even after the query's own real duration elapses (verified: the underlying

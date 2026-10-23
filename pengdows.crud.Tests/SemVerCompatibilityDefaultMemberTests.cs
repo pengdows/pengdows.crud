@@ -29,10 +29,12 @@ public class SemVerCompatibilityDefaultMemberTests
         { typeof(IDatabaseContextConfiguration), "get_" + nameof(IDatabaseContextConfiguration.MaxQueuedWrites) },
         { typeof(IDatabaseContextConfiguration), "set_" + nameof(IDatabaseContextConfiguration.MaxQueuedWrites) },
         { typeof(ITableGateway<SemVerEntity, int>), "get_AuditCreationPolicy" },
-        { typeof(ITableGateway<SemVerEntity, int>), "set_AuditCreationPolicy" },
         { typeof(IPrimaryKeyTableGateway<SemVerEntity>), "get_AuditCreationPolicy" },
-        { typeof(IPrimaryKeyTableGateway<SemVerEntity>), "set_AuditCreationPolicy" },
         { typeof(ITableGateway<SemVerEntity, int>), "ColumnName" },
+        { typeof(pengdows.crud.dialects.ISqlDialect), "get_CurrentUtcTimestampExpression" },
+        { typeof(pengdows.crud.dialects.ISqlDialect), "get_SelectWithoutTableSuffix" },
+        { typeof(pengdows.crud.dialects.ISqlDialect), "get_SkipLockedTableHint" },
+        { typeof(pengdows.crud.dialects.ISqlDialect), "get_SkipLockedClause" },
         { typeof(IPrimaryKeyTableGateway<SemVerEntity>), "ColumnName" },
         { typeof(ITransactionContext), nameof(ITransactionContext.ReleaseSavepointAsync) },
         { typeof(IDataSourceInformation), "get_" + nameof(IDataSourceInformation.ParsedVersion) },
@@ -144,17 +146,13 @@ public class SemVerCompatibilityDefaultMemberTests
     }
 
     [Fact]
-    public void ITableGateway_AuditCreationPolicy_Default_PreservesAndAcceptsOnlyDefault()
+    public void ITableGateway_AuditCreationPolicy_Default_IsPreserveExplicitValues_AndGetOnly()
     {
         var gateway = new Mock<ITableGateway<SemVerEntity, int>> { CallBase = true }.Object;
-        // init-only: invoke the default init accessor directly, as an object initializer would.
-        var init = typeof(ITableGateway<SemVerEntity, int>).GetProperty("AuditCreationPolicy")!.SetMethod!;
 
         Assert.Equal(AuditCreationPolicy.PreserveExplicitValues, gateway.AuditCreationPolicy);
-        init.Invoke(gateway, new object[] { AuditCreationPolicy.PreserveExplicitValues });
-        var ex = Assert.Throws<TargetInvocationException>(() =>
-            init.Invoke(gateway, new object[] { AuditCreationPolicy.Authoritative }));
-        Assert.IsType<NotSupportedException>(ex.InnerException);
+        // Get-only on the interface (set on the concrete gateway): no accessor for a proxy to implement.
+        Assert.Null(typeof(ITableGateway<SemVerEntity, int>).GetProperty("AuditCreationPolicy")!.SetMethod);
     }
 
     [Fact]
@@ -174,17 +172,13 @@ public class SemVerCompatibilityDefaultMemberTests
     }
 
     [Fact]
-    public void IPrimaryKeyTableGateway_AuditCreationPolicy_Default_PreservesAndAcceptsOnlyDefault()
+    public void IPrimaryKeyTableGateway_AuditCreationPolicy_Default_IsPreserveExplicitValues_AndGetOnly()
     {
         var gateway = new Mock<IPrimaryKeyTableGateway<SemVerEntity>> { CallBase = true }.Object;
-        // init-only: invoke the default init accessor directly, as an object initializer would.
-        var init = typeof(IPrimaryKeyTableGateway<SemVerEntity>).GetProperty("AuditCreationPolicy")!.SetMethod!;
 
         Assert.Equal(AuditCreationPolicy.PreserveExplicitValues, gateway.AuditCreationPolicy);
-        init.Invoke(gateway, new object[] { AuditCreationPolicy.PreserveExplicitValues });
-        var ex = Assert.Throws<TargetInvocationException>(() =>
-            init.Invoke(gateway, new object[] { AuditCreationPolicy.Authoritative }));
-        Assert.IsType<NotSupportedException>(ex.InnerException);
+        // Get-only on the interface (set on the concrete gateway): no accessor for a proxy to implement.
+        Assert.Null(typeof(IPrimaryKeyTableGateway<SemVerEntity>).GetProperty("AuditCreationPolicy")!.SetMethod);
     }
 
     [Fact]

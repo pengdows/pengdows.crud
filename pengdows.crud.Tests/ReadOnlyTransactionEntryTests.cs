@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using pengdows.crud.fakeDb;
 using pengdows.crud.Tests.Logging;
 using Xunit;
@@ -13,7 +14,7 @@ namespace pengdows.crud.Tests;
 /// <summary>
 /// REV-051: a read-intent transaction on Informix accepted a write (live). The dialect's
 /// "SET TRANSACTION READ ONLY" ran on a command with no Transaction, which providers reject on a
-/// connection with a pending local transaction, and the failure was swallowed at Debug level.
+/// connection with a pending local transaction, and the failure was swallowed at Debug level. A failure to enter read-only now throws.
 /// </summary>
 public sealed class ReadOnlyTransactionEntryTests
 {
@@ -48,15 +49,25 @@ public sealed class ReadOnlyTransactionEntryTests
         Assert.NotNull(command.Transaction);
     }
 
-    [Fact]
-    public async Task ReadOnlyEntryFailure_IsLoggedAsAWarning()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task ReadOnlyEntryFailure_IsLoggedAndThrown_AndReleasesTheConnection(bool async)
     {
         var (context, connection, logs) = Informix();
         await using var _ = context;
-        connection.SetCommandFailure("SET TRANSACTION READ ONLY", new InvalidOperationException("cannot set"));
+        var failure = new InvalidOperationException("cannot set");
+        connection.SetCommandFailure("SET TRANSACTION READ ONLY", failure);
 
-        await using var tx = await context.BeginTransactionAsync(executionType: ExecutionType.Read);
+        var ex = await Assert.ThrowsAsync<TransactionException>(async () =>
+        {
+            await using var tx = async
+                ? await context.BeginTransactionAsync(executionType: ExecutionType.Read)
+                : context.BeginTransaction(executionType: ExecutionType.Read);
+        });
 
-        Assert.Contains(logs.Entries, e => e.Level >= LogLevel.Warning && e.Exception?.Message == "cannot set");
+        Assert.Same(failure, ex.InnerException);
+        Assert.Contains(logs.Entries, e => e.Level >= LogLevel.Warning && e.Exception == failure);
+        Assert.Equal(0, context.NumberOfOpenConnections);
     }
 }

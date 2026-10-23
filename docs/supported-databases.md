@@ -165,6 +165,17 @@ The following features have no version gate in the dialect code but require a mi
 - **Oracle `SupportsIdentityColumns = true` is ungated** — identity columns (`GENERATED AS IDENTITY`) require Oracle 12c. Pre-12c servers will fail when inserting entities with `[Id(false)]`.
 - **SQL Server MERGE at `IsVersionAtLeast(10)` is broader than the declared "2012+" header** — SQL Server 2008 (v10) will pass the version check and receive MERGE SQL. The "2012+" comment in the source is a conservative recommendation, not enforced by the gate.
 
+## Minimum Driver Versions
+
+`DatabaseContext` refuses these drivers, or these versions of them, before it opens a connection, throwing `NotSupportedException`
+(`internal/ProviderVersionRequirements.cs`):
+
+| Driver | Minimum | Why |
+|--------|---------|-----|
+| MySqlConnector | 2.6.1 | 2.3.0 through 2.6.0 fail a prepared `INSERT ... RETURNING` executed a second time on MariaDB, whatever the parameter values ("Expected result set to have 0 columns, but it contains 1 columns"), and close the connection. pengdows.crud prepares statements on MySqlConnector, so any repeated insert hits it. 2.2.7 and older don't have the bug but are below the minimum too. Confirmed live on MariaDB 11.4.13, 2026-10-22. Every 2.x release reports assembly version 2.0.0.0, so the file version is compared. |
+| pengdows.flatfile | 0.2.1-preview.6 | Earlier releases refuse DateOnly/TimeOnly parameters and cannot compare a DateTime or TimeSpan with a DATE or TIME column, so a DATE or TIME column cannot be filtered; preview.2 to preview.5 also wrote a TIME outside a day and then failed every read of the table (pengdows/pengdows.flatfile#1). Every 0.2.1 preview reports file version 0.2.1.0, so the informational version is compared, prerelease-aware. |
+| MySql.Data | refused | Fails the ADO.NET contract pengdows.crud relies on: `StateChange` reports `Open → Open` when a connection opens, reader access before `Read` doesn't throw, parameter defaults are wrong, async commands can hang past their timeout, and it substitutes backslash-escaped literals into SQL text (BP-115) and threw reading a `BINARY(16)` Guid (COR-014). Fixes are submitted upstream (mysql/mysql-connector-net #95–#112) but not released. Use MySqlConnector. |
+
 ## Default Pool Sizes (Provider vs Practical)
 
 | SupportedDatabase | Default Max Pool Size (provider) | Practical / Recommended Max Pool Size | Key Practical Limits & Advice |

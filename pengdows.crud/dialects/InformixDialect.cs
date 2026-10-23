@@ -43,8 +43,8 @@
 //   icr.io/informix/informix-developer-database container. "SET TRANSACTION READ ONLY" issued
 //   inside an active transaction (BEGIN WORK, or a real ADO.NET conn.BeginTransaction() —
 //   both tested) is accepted, and a subsequent write then fails with "Invalid operation for a
-//   READ-ONLY transaction." Implemented via the same TryExecuteReadOnlySql/
-//   TryExecuteReadOnlySqlAsync shared helper OracleDialect uses for its own identical
+//   READ-ONLY transaction." Implemented via the same ExecuteReadOnlySql/
+//   ExecuteReadOnlySqlAsync shared helper OracleDialect uses for its own identical
 //   SET TRANSACTION READ ONLY support.
 // - ApplicationName/pool discriminator: CONFIRMED via reflection against a real, live-connected
 //   IfxConnectionStringBuilder (51 properties) that no ApplicationName-equivalent keyword

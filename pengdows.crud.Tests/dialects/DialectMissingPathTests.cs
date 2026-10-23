@@ -217,7 +217,7 @@ public class DialectMissingPathTests
 
         using var txn = ctx.BeginTransaction();
 
-        // Line 369: returns TryExecuteReadOnlySqlAsync(transaction, SetSessionReadOnlySql, ...)
+        // Line 369: returns ExecuteReadOnlySqlAsync(transaction, SetSessionReadOnlySql, ...)
         await ctx.GetDialect().TryEnterReadOnlyTransactionAsync(txn, CancellationToken.None);
 
         // Success: no exception thrown

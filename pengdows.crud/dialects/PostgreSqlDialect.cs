@@ -89,6 +89,15 @@ internal class PostgreSqlDialect : SqlDialect
 
     public override SupportedDatabase DatabaseType => _flavor;
 
+    // PostgreSQL itself (and Aurora PostgreSQL, the same engine); the PostgreSQL-protocol dialects built
+    // on this class (CockroachDB, YugabyteDB, Spanner) keep the defaults until verified there.
+    private bool IsPostgreSqlEngine => DatabaseType is SupportedDatabase.PostgreSql or SupportedDatabase.AuroraPostgreSql;
+
+    public override string CurrentUtcTimestampExpression =>
+        IsPostgreSqlEngine ? "CURRENT_TIMESTAMP AT TIME ZONE 'UTC'" : base.CurrentUtcTimestampExpression;
+
+    public override string? SkipLockedClause => IsPostgreSqlEngine ? " FOR UPDATE SKIP LOCKED" : base.SkipLockedClause;
+
     // TYPE-003, confirmed live 2026-09-30: the provider rejects DbType.SByte and the unsigned DbTypes.
     internal override bool BindsSByteAndUnsignedNatively => false;
 

@@ -258,6 +258,7 @@ public partial class DatabaseContext
             TypeMapRegistry = typeMapRegistry ?? throw new ArgumentNullException(nameof(typeMapRegistry));
             ConnectionMode = configuration.DbMode;
             _factory = factory ?? throw new ArgumentNullException(nameof(factory));
+            ProviderVersionRequirements.EnsureSupported(factory);
             _dataSource = dataSource;
             _readerDataSource = dataSource;
             _dataSourceProvided = dataSource != null;

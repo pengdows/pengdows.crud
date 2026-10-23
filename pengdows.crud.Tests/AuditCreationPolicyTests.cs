@@ -14,17 +14,28 @@ public class AuditCreationPolicyTests : SqlLiteContextTestBase
     // would let one caller change whether a resolver-supplied CreatedBy can be overridden for every
     // other caller. Set it once at construction (object initializer). Checked through the CLR's
     // IsExternalInit modreq, which is how init accessors are encoded, as on 3.0.
-    [Theory]
-    [InlineData(typeof(ITableGateway<,>))]
-    [InlineData(typeof(IPrimaryKeyTableGateway<>))]
-    [InlineData(typeof(BaseTableGateway<>))]
-    public void AuditCreationPolicy_IsInitOnly(Type gatewayType)
+    [Fact]
+    public void AuditCreationPolicy_IsInitOnly_OnTheGateway()
     {
+        var gatewayType = typeof(BaseTableGateway<>);
         var setMethod = gatewayType.GetProperty(nameof(ITableGateway<object, int>.AuditCreationPolicy))?.SetMethod
                         ?? throw new InvalidOperationException($"{gatewayType.Name}.AuditCreationPolicy has no setter.");
 
         Assert.Contains(setMethod.ReturnParameter.GetRequiredCustomModifiers(),
             m => m == typeof(System.Runtime.CompilerServices.IsExternalInit));
+    }
+
+    // The interfaces expose no setter at all: nothing a caller holding the interface can change, and
+    // nothing a proxy (DispatchProxy can't implement an init accessor) has to implement.
+    [Theory]
+    [InlineData(typeof(ITableGateway<,>))]
+    [InlineData(typeof(IPrimaryKeyTableGateway<>))]
+    public void AuditCreationPolicy_HasNoSetter_OnTheInterfaces(Type gatewayType)
+    {
+        var property = gatewayType.GetProperty(nameof(ITableGateway<object, int>.AuditCreationPolicy))
+                       ?? throw new InvalidOperationException($"{gatewayType.Name} has no AuditCreationPolicy.");
+
+        Assert.Null(property.SetMethod);
     }
 
     [Table("AuditPolicyUser")]

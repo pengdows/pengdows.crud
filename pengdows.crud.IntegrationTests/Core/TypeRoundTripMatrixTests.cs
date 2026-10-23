@@ -2,6 +2,7 @@ using System.Collections;
 using System.Data;
 using System.Reflection;
 using System.Text.Json.Nodes;
+using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using testbed;
@@ -33,13 +34,26 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
     protected override Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context) =>
         Task.CompletedTask;
 
+    private static async Task<bool> OracleSpatialInstalledAsync(IDatabaseContext context)
+    {
+        await using var probe = context.CreateSqlContainer(
+            "SELECT COUNT(*) FROM ALL_TYPES WHERE OWNER = 'MDSYS' AND TYPE_NAME = 'SDO_GEOMETRY'");
+        return await probe.ExecuteScalarRequiredAsync<long>() > 0;
+    }
+
     [SkippableFact]
     public async Task EveryCatalogType_RoundTripsThroughTheGatewayAndDataReaderMapper()
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            // A type newer than the server (Oracle BOOLEAN/VECTOR before 23ai) is not tested there,
+            // nor Oracle Spatial on images built without it (the slim XE images).
+            var serverVersion = ((pengdows.crud.dialects.SqlDialect)context.GetDialect()).ProductInfo.ParsedVersion;
+            var spatialInstalled = provider != SupportedDatabase.Oracle || await OracleSpatialInstalledAsync(context);
             var entries = DatabaseTypeCatalog.GetColumnTypes(provider)
                 .Where(e => e.ClrType != null && e.DbType != null && e.CanDeclareColumn)
+                .Where(e => DatabaseTypeCatalog.IsAvailableOn(e, provider, serverVersion))
+                .Where(e => spatialInstalled || e.Category != ColumnTypeCategory.Spatial)
                 .ToList();
             // REV-062: an empty catalog used to pass silently; every database has one now.
             Assert.True(entries.Count > 0, $"{provider}: no catalog entries with a CLR type");

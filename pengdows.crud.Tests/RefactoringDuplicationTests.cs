@@ -87,9 +87,9 @@ public class RefactoringDuplicationTests
     #region Task 2: TryEnterReadOnlyTransaction helper — base class helper
 
     [Fact]
-    public void TryExecuteReadOnlySql_OracleDialect_SwallowsExceptions()
+    public void ReadOnlyEntry_OracleDialect_IsConfigured()
     {
-        // Oracle's TryEnterReadOnlyTransaction delegates to TryExecuteReadOnlySql
+        // Oracle's TryEnterReadOnlyTransaction delegates to ExecuteReadOnlySql
         var dialect = new OracleDialect(CreateFactory(SupportedDatabase.Oracle), _logger);
         // We can't easily test the helper directly since it requires a transaction context,
         // but we verify the dialect is properly configured
@@ -97,7 +97,7 @@ public class RefactoringDuplicationTests
     }
 
     [Fact]
-    public void TryExecuteReadOnlySql_MariaDbDialect_SwallowsExceptions()
+    public void ReadOnlyEntry_MariaDbDialect_IsConfigured()
     {
         var dialect = new MariaDbDialect(CreateFactory(SupportedDatabase.MariaDb), _logger);
         Assert.Equal(SupportedDatabase.MariaDb, dialect.DatabaseType);

@@ -107,6 +107,33 @@ public sealed record ColumnTypeDescriptor(
 
 public static class DatabaseTypeCatalog
 {
+    // SQL Server catalog entries name the product year; the server reports its engine version.
+    private static readonly Dictionary<int, int> SqlServerYearToMajor = new()
+    {
+        [2016] = 13, [2017] = 14, [2019] = 15, [2022] = 16, [2025] = 17
+    };
+
+    /// <summary>
+    /// Whether <paramref name="entry"/> exists on a server reporting <paramref name="serverVersion"/>.
+    /// An unknown server version, or a MinVersion that is prose rather than a version number,
+    /// keeps the entry: only a known-too-old server drops it.
+    /// </summary>
+    public static bool IsAvailableOn(ColumnTypeDescriptor entry, SupportedDatabase product, Version? serverVersion)
+    {
+        if (entry.MinVersion is not { } minText || serverVersion is null)
+        {
+            return true;
+        }
+
+        if (product == SupportedDatabase.SqlServer && int.TryParse(minText, out var year))
+        {
+            return !SqlServerYearToMajor.TryGetValue(year, out var major) || serverVersion.Major >= major;
+        }
+
+        var normalized = minText.Contains('.') ? minText : minText + ".0";
+        return !Version.TryParse(normalized, out var min) || serverVersion >= min;
+    }
+
     public static IReadOnlyList<ColumnTypeDescriptor> GetColumnTypes(SupportedDatabase product) => product switch
     {
         SupportedDatabase.Db2 => Db2Types,

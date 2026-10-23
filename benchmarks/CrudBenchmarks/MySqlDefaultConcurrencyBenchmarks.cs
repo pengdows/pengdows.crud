@@ -21,9 +21,9 @@ namespace CrudBenchmarks;
 [Config(typeof(MySqlConcurrencyConfig))]
 public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 {
+    // pengdows.crud refuses MySql.Data (2026-10-22); MySqlConnector is the one MySQL provider it runs on.
     public enum MySqlBenchmarkProvider
     {
-        MySqlData,
         MySqlConnector
     }
 
@@ -71,7 +71,7 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
 
     private const int OperationsPerRun = 2000;
     [Params(32, 64, 128, 256)] public int Parallelism;
-    [Params(MySqlBenchmarkProvider.MySqlData, MySqlBenchmarkProvider.MySqlConnector)]
+    [Params(MySqlBenchmarkProvider.MySqlConnector)]
     public MySqlBenchmarkProvider Provider;
 
     [GlobalSetup]
@@ -79,7 +79,6 @@ public class MySqlDefaultConcurrencyBenchmarks : IAsyncDisposable
     {
         _providerFactory = Provider switch
         {
-            MySqlBenchmarkProvider.MySqlData => MySql.Data.MySqlClient.MySqlClientFactory.Instance,
             MySqlBenchmarkProvider.MySqlConnector => MySqlConnector.MySqlConnectorFactory.Instance,
             _ => throw new InvalidOperationException($"Unsupported MySQL benchmark provider: {Provider}")
         };

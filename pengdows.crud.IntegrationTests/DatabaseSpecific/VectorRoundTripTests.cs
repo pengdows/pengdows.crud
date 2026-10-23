@@ -1,9 +1,11 @@
 using System.Data;
+using pengdows.crud.@internal;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.IntegrationTests.Infrastructure;
 using Xunit;
 using Xunit.Abstractions;
+using testbed;
 
 namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 
@@ -31,8 +33,20 @@ public sealed class VectorRoundTripTests : DatabaseTestBase
     protected override IEnumerable<SupportedDatabase> GetSupportedProviders() =>
         [SupportedDatabase.SqlServer, SupportedDatabase.Oracle];
 
+    // VECTOR exists from SQL Server 2025 and Oracle 23ai.
+    private static bool HasVector(SupportedDatabase provider, IDatabaseContext context) =>
+        DatabaseTypeCatalog.IsAvailableOn(
+            DatabaseTypeCatalog.GetColumnTypes(provider).First(t => t.CanonicalName == "VECTOR(n)"),
+            provider,
+            ((pengdows.crud.dialects.SqlDialect)context.GetDialect()).ProductInfo.ParsedVersion);
+
     protected override async Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context)
     {
+        if (!HasVector(provider, context))
+        {
+            return;
+        }
+
         var vectorType = provider == SupportedDatabase.Oracle ? "VECTOR(4, FLOAT32)" : "VECTOR(4)";
         var intType = provider == SupportedDatabase.Oracle ? "NUMBER(10)" : "INT";
         await using var table = context.CreateSqlContainer(
@@ -49,6 +63,11 @@ public sealed class VectorRoundTripTests : DatabaseTestBase
     {
         await RunTestAgainstAllProvidersAsync(async (provider, context) =>
         {
+            if (!HasVector(provider, context))
+            {
+                return;
+            }
+
             var gateway = new TableGateway<VectorRow, int>(context);
             var rows = Embeddings.Select((e, i) => new VectorRow { Id = i + 1, Embedding = e }).ToList();
             rows.Add(new VectorRow { Id = 4, Embedding = null });

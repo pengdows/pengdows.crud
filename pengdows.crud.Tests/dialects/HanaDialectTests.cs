@@ -420,7 +420,7 @@ public class HanaDialectTests
         // active transaction is accepted (parses fine) and genuinely enforces read-only — a
         // subsequent write fails with NativeError 129 (see TryClassifyProviderException test
         // above), while a read inside the same read-only transaction succeeds normally. Uses the
-        // same TryExecuteReadOnlySql shared helper Oracle/Informix use for their own identical
+        // same ExecuteReadOnlySql shared helper Oracle/Informix use for their own identical
         // mechanism.
         var dialect = CreateDialect();
         var container = new Mock<ISqlContainer>(MockBehavior.Strict);

@@ -32,6 +32,7 @@ public sealed class MultiStatementPrepareTests
     [InlineData("SELECT /* outer /* nested ; */ still comment ; */ 1", false)]
     [InlineData("SELECT 1; /* c */ ;", false)]
     [InlineData("SELECT $1; SELECT 2", true)]
+    [InlineData("CREATE PROCEDURE p()\nBEGIN\n  SELECT 42;\nEND", true)]
     public void HasMultipleStatements(string sql, bool expected)
     {
         Assert.Equal(expected, SqlStatementScanner.HasMultipleStatements(sql));
@@ -41,6 +42,12 @@ public sealed class MultiStatementPrepareTests
     [InlineData(SupportedDatabase.CockroachDb, "SELECT 1; SELECT 2", 0)]
     [InlineData(SupportedDatabase.CockroachDb, "SELECT 1", 1)]
     [InlineData(SupportedDatabase.PostgreSql, "SELECT 1; SELECT 2", 1)]
+    // MySqlConnector's Prepare splits command text at ';' and prepares each piece, so a compound
+    // CREATE PROCEDURE body arrives truncated (error 1064, confirmed live on MySQL 8.4 with
+    // MySqlConnector 2.6.2; unprepared it works).
+    [InlineData(SupportedDatabase.MySql, "CREATE PROCEDURE p()\nBEGIN\n  SELECT 42;\nEND", 0)]
+    [InlineData(SupportedDatabase.MariaDb, "CREATE PROCEDURE p()\nBEGIN\n  SELECT 42;\nEND", 0)]
+    [InlineData(SupportedDatabase.MySql, "SELECT 1", 1)]
     public async Task ExecuteNonQueryAsync_PreparesUnlessTheDialectCantPrepareMultipleStatements(
         SupportedDatabase product, string sql, int expectedPrepares)
     {
@@ -51,7 +58,8 @@ public sealed class MultiStatementPrepareTests
         await using var context = new DatabaseContext(new DatabaseContextConfiguration
         {
             ConnectionString = $"Host=x;EmulatedProduct={product}",
-            DbMode = DbMode.Standard
+            DbMode = DbMode.Standard,
+            PrepareMode = CommandPrepareMode.Always
         }, factory);
 
         await using (var sc = context.CreateSqlContainer(sql))

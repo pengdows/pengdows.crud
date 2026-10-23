@@ -364,11 +364,11 @@ public class StoredProcedureTests : DatabaseTestBase
                 case SupportedDatabase.AuroraMySql:
                 case SupportedDatabase.MariaDb:
                 {
-                    // CALL `proc`() returns the body's SELECT as a result set. The body is a single
-                    // statement with no BEGIN ... END: MySqlConnector splits command text at ';', so
-                    // a compound body would arrive truncated.
+                    // CALL `proc`() returns the body's SELECT as a result set. A compound BEGIN ... END
+                    // body: MySqlConnector's Prepare splits it at ';', so pengdows.crud runs a command with
+                    // more than one statement unprepared (MySqlDialect.PreparesMultiStatementCommands).
                     var name = context.WrapObjectName("sp_pengdows_test");
-                    sc.Query.Append($"CREATE PROCEDURE {name}() SELECT 42");
+                    sc.Query.Append($"CREATE PROCEDURE {name}()\nBEGIN\n  SELECT 42;\nEND");
                     await sc.ExecuteNonQueryAsync();
                     Assert.Equal(42, await InvokeAsync(sc, "sp_pengdows_test", ExecutionType.Write));
                     await DropProcAsync(sc, $"DROP PROCEDURE {name}");

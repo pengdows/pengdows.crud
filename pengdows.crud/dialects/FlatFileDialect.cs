@@ -89,38 +89,20 @@ internal class FlatFileDialect : SqlDialect
     /// </summary>
     public override bool SupportsNamedParameters => true;
 
-    // pengdows.flatfile validates DATE/TIME columns against DateOnly/TimeOnly and rejects a midnight
-    // DateTime ("contains parts which are not specific to the DateOnly") or a TimeSpan ("Object must
-    // be of type TimeOnly"); confirmed live (TYPE-001).
-    internal override bool BindsDateOnlyAndTimeOnlyNatively => true;
+    // DATE and TIME bind as DateTime and TimeSpan, as on every other dialect: pengdows.flatfile 0.2.1-preview.2 and
+    // preview.5 store those however the parameter is typed, and preview.5 refuses DateOnly/TimeOnly parameters
+    // (confirmed live 2026-10-23; pengdows/pengdows.flatfile#1 accepts them again).
 
     // GEN-001: no IDENTITY/RETURNING/last-id function, but ISO sequences. Confirmed against
     // pengdows.flatfile 0.2.1-preview.2: VALUES (NEXT VALUE FOR "seq") returns the next value and an
     // explicit id in the INSERT overrides the column's DEFAULT NEXT VALUE FOR.
-    // CONFIRMED live 2026-09-29 (pengdows.flatfile 0.2.1-preview.2): a TimeSpan of -01:00:00 was
-    // accepted into a TIME column and then failed to read back ("not recognized as a valid
-    // TimeOnly"). TIME holds a time of day, so SqlDialect rejects such a value before binding.
-    internal override bool TimeColumnHoldsOnlyATimeOfDay => true;
+    // A TimeSpan outside a day is the driver's to refuse: 0.2.1-preview.6 refuses it and writes nothing (preview.2 to .5
+    // wrote it and then failed every read of the table; pengdows/pengdows.flatfile#1).
 
     public override GeneratedKeyPlan GetGeneratedKeyPlan() => GeneratedKeyPlan.PrefetchSequence;
 
     public override string GetSequenceNextValQuery(string sequenceName) =>
         $"VALUES (NEXT VALUE FOR {WrapObjectName(sequenceName)})";
-
-    // The same validation rejects a DateTime for a DATE column and a TimeSpan for a TIME column, so a
-    // value declared DbType.Date/Time binds as the DateOnly/TimeOnly the driver requires.
-    public override object? PrepareParameterValue(object? value, DbType dbType)
-    {
-        switch (value)
-        {
-            case DateTime dateTime when dbType == DbType.Date:
-                return DateOnly.FromDateTime(dateTime);
-            case TimeSpan span when dbType == DbType.Time && span >= TimeSpan.Zero && span.Ticks < TimeSpan.TicksPerDay:
-                return TimeOnly.FromTimeSpan(span);
-            default:
-                return base.PrepareParameterValue(value, dbType);
-        }
-    }
 
     /// <summary>
     /// See <see cref="SupportsNamedParameters"/>: <c>:name</c>, the same marker as Oracle.

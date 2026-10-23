@@ -62,6 +62,9 @@ internal class OracleDialect : SqlDialect
     // "ORA-00933: SQL command not properly ended".
     public override bool RequiresMergeStatementTerminator => false;
 
+    // ORA-01795: an IN list holds at most 1000 expressions before 23ai.
+    internal override int? MaxInListExpressions => 1000;
+
     public override string ParameterMarker => ":";
 
     public override bool SupportsNamedParameters => true;
@@ -258,6 +261,8 @@ internal class OracleDialect : SqlDialect
     }
 
     public override bool SupportsMerge => true;
+    public override string CurrentUtcTimestampExpression => "SYS_EXTRACT_UTC(SYSTIMESTAMP)";
+    public override string SelectWithoutTableSuffix => " FROM DUAL";
 
     // Oracle MERGE: "WHEN MATCHED THEN UPDATE SET ... WHERE cond"; there is no "WHEN MATCHED AND".
     public override bool MergeMatchedConditionAsUpdateWhere => true;
@@ -347,7 +352,9 @@ internal class OracleDialect : SqlDialect
         return $"{query.TrimEnd()} FETCH FIRST 1 ROWS ONLY";
     }
 
-    private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY;";
+    // No trailing ';': Oracle before 23ai rejects it in a SQL statement, and the read-only entry
+    // only logs a failure, so the transaction stayed writable.
+    private const string SetTransactionReadOnlySql = "SET TRANSACTION READ ONLY";
 
     // Oracle does not support multiple SQL statements in a single ADO.NET ExecuteNonQuery call.
     // Wrap all ALTER SESSION statements in a PL/SQL anonymous block so they execute atomically
@@ -486,7 +493,9 @@ internal class OracleDialect : SqlDialect
     // only through a custom UDT class, so the server converts. A Geometry/Geography is written as EWKT
     // text bound as a CLOB and built by SDO_GEOMETRY(wkt, srid) in a scalar subquery (ODP.NET binds by
     // position, so the marker appears once; SRID 0, pengdows' "unknown", is stored as NULL) and read
-    // as EWKT: SDO_UTIL.TO_WKTGEOMETRY plus the SRID from SDO_UTIL.TO_JSON, which needs no table alias.
+    // as EWKT: SDO_UTIL.TO_WKTGEOMETRY plus the SRID, read as the SDO_SRID attribute through a scalar
+    // subquery that gives the value the alias attribute access needs. SDO_UTIL.TO_JSON, used before,
+    // does not exist on 12.2 (ORA-00904, confirmed live on database/enterprise:12.2.0.1).
     // Oracle stores ordinates to 15 significant digits on every path (WKT and WKB alike).
     private static bool IsSpatial(IColumnInfo column)
     {
@@ -543,7 +552,28 @@ internal class OracleDialect : SqlDialect
     internal override bool DeclaredTypeIncludesScale => true;
 
     internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
-        (!forRead && IsTemporalColumn(column)) || base.NeedsDeclaredType(column, forRead);
+        (!forRead && (IsTemporalColumn(column) || IsStringColumn(column))) || base.NeedsDeclaredType(column, forRead);
+
+    // ODP.NET binds DbType.String as VARCHAR2, which Oracle converts through the database character set:
+    // on a database with a non-Unicode one (live: 12.2 enterprise image, WE8DEC) text lost every character
+    // outside it before reaching an NVARCHAR2 column. A column learned as national binds with the matching
+    // national type; other string columns keep VARCHAR2, since a national bind compared to a VARCHAR2
+    // column makes Oracle convert the column and can lose its index.
+    private static bool IsStringColumn(IColumnInfo column) =>
+        column.PropertyInfo.PropertyType == typeof(string) &&
+        column.DbType is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength;
+
+    private string? NationalTypeOf(IColumnInfo column) =>
+        !IsStringColumn(column) ? null : SplitDeclaredType(DeclaredTypeOf(column)).Name switch
+        {
+            "nvarchar2" => "NVarchar2",
+            "nchar" => "NChar",
+            "nclob" => "NClob",
+            _ => null
+        };
+
+    internal override bool MarksColumnParameter(IColumnInfo column) =>
+        NationalTypeOf(column) != null || base.MarksColumnParameter(column);
 
     // DRY-029: TIMESTAMP WITH TIME ZONE keeps the offset (WITH LOCAL TIME ZONE only the instant), and the
     // write probe above already learns every temporal column's declared type.
@@ -564,6 +594,11 @@ internal class OracleDialect : SqlDialect
     public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
     {
         base.MarkColumnParameter(parameter, column);
+        if (NationalTypeOf(column) is { } national)
+        {
+            ProviderPropertySetter.Set(parameter, "OracleDbType", national);
+        }
+
         if (parameter.Value is string literal && TemporalUnitsPerMinute(column) != null &&
             SplitDeclaredType(DeclaredTypeOf(column)).Scale is { } digits && literal.IndexOf('.') is var dot and > 0 &&
             literal.Length > dot + 1 + digits)
@@ -579,7 +614,7 @@ internal class OracleDialect : SqlDialect
     internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
         IsSpatial(column)
             ? $"CASE WHEN {columnReference} IS NULL THEN NULL ELSE 'SRID=' || " +
-              $"NVL(JSON_VALUE(SDO_UTIL.TO_JSON({columnReference}), '$.srid'), '0') || ';' || " +
+              $"NVL(TO_CHAR((SELECT v.g.SDO_SRID FROM (SELECT {columnReference} g FROM DUAL) v)), '0') || ';' || " +
               $"SDO_UTIL.TO_WKTGEOMETRY({columnReference}) END AS {wrappedName}"
             : columnReference;
 

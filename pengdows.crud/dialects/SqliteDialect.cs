@@ -157,6 +157,7 @@ internal class SqliteDialect : SqlDialect
     public override bool SupportsInsertOnConflict => true;
     public override bool SupportsOnConflictWhere => true; // DO UPDATE ... WHERE (SQLite 3.24+)
     public override bool SupportsMerge => false;
+    public override string CurrentUtcTimestampExpression => "STRFTIME('%Y-%m-%dT%H:%M:%fZ', 'now')";
     public override bool SupportsSavepoints => true;
 
     // SQLite does not enforce FK constraints by default (PRAGMA foreign_keys = ON is required).
@@ -589,8 +590,9 @@ internal class SqliteDialect : SqlDialect
             return base.CreateDbParameter(name, DbType.String, dto.UtcDateTime.ToString("o", CultureInfo.InvariantCulture));
         }
 
-        // Microsoft.Data.Sqlite stores a TimeSpan bound as DbType.Time as '' (confirmed with a real
-        // in-memory database, TYPE-001), so bind the canonical "c" text instead.
+        // System.Data.SQLite 1.0.119 throws InvalidCastException for a TimeSpan bound as DbType.Time (confirmed
+        // 2026-10-22), so bind the canonical "c" text instead. Microsoft.Data.Sqlite 6.0-10.0 bind it correctly; the
+        // '' first recorded here (TYPE-001) came from an explicit Size of 0 (dotnet/efcore#39377).
         if (value is TimeSpan span)
         {
             return base.CreateDbParameter(name, DbType.String, span.ToString("c", CultureInfo.InvariantCulture));

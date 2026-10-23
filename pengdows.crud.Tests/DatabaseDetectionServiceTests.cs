@@ -190,6 +190,18 @@ public class DatabaseDetectionServiceTests
         Assert.False(topology.IsEmbedded);
     }
 
+    // FirebirdClient takes the server under any of these keys; a server with a .fdb path is not embedded.
+    [Theory]
+    [InlineData("Data Source=dbhost;Database=/db/app.fdb")]
+    [InlineData("DataSource=dbhost;Database=/db/app.fdb")]
+    [InlineData("Server=dbhost;Database=/db/app.fdb")]
+    [InlineData("Host=dbhost;Database=/db/app.fdb")]
+    public void DetectTopology_FirebirdServerWithFilePath_NotEmbedded(string connectionString)
+    {
+        var topology = DatabaseDetectionService.DetectTopology(SupportedDatabase.Firebird, connectionString);
+        Assert.False(topology.IsEmbedded);
+    }
+
     [Fact]
     public void DetectTopology_PostgreSql_NoSpecialTopology()
     {

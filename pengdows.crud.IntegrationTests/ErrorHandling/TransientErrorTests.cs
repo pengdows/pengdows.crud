@@ -117,7 +117,7 @@ public class TransientErrorTests : DatabaseTestBase
                 or SupportedDatabase.SingleStore or SupportedDatabase.AuroraMySql =>
                 new DatabaseContext(WithBuilderKey(RemoveBuilderKeys(rawCs,
                         "Allow Public Key Retrieval", "Application Name"), "Port", "1"),
-                    MySql.Data.MySqlClient.MySqlClientFactory.Instance),
+                    MySqlConnector.MySqlConnectorFactory.Instance),
 
             SupportedDatabase.SqlServer =>
                 new DatabaseContext(ReplacePortInDataSource(rawCs, "Data Source"),

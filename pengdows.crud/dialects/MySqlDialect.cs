@@ -48,10 +48,9 @@ namespace pengdows.crud.dialects;
 /// MySQL 8.0.20+ uses the new alias syntax.
 /// </para>
 /// <para>
-/// <strong>Providers:</strong> Supports both MySqlConnector (recommended)
-/// and Oracle's MySql.Data. MySqlConnector is the preferred provider for
-/// new deployments because it supports cleaner pool separation and has shown
-/// better behavior under high-concurrency workloads.
+/// <strong>Providers:</strong> MySqlConnector 2.6.1 or later. <c>DatabaseContext</c> refuses
+/// Oracle's MySql.Data (2026-10-22; <c>ProviderVersionRequirements</c>); its workarounds and
+/// warning remain here so allowing it again is one change.
 /// </para>
 /// </remarks>
 internal class MySqlDialect : SqlDialect
@@ -187,6 +186,12 @@ internal class MySqlDialect : SqlDialect
     }
 
     public override SupportedDatabase DatabaseType => _flavor;
+
+    // MySQL, Aurora MySQL and MariaDB (verified); TiDB and SingleStore keep the default until verified.
+    public override string CurrentUtcTimestampExpression =>
+        DatabaseType is SupportedDatabase.MySql or SupportedDatabase.AuroraMySql or SupportedDatabase.MariaDb
+            ? "UTC_TIMESTAMP(6)"
+            : base.CurrentUtcTimestampExpression;
     public override string QuotePrefix => "\"";
     public override string QuoteSuffix => "\"";
     public override string ParameterMarker => "@";
@@ -262,6 +267,12 @@ internal class MySqlDialect : SqlDialect
     // MySQL's dedicated 1295, so the prepare-fallback path can't recognise it (3.0 f92350b,
     // confirmed live there against singlestoredb-dev).
     public override bool PrepareStatements => _isMySqlConnector && DatabaseType != SupportedDatabase.SingleStore;
+
+    // MySqlConnector's Prepare splits command text at ';' and prepares each piece, so a compound CREATE PROCEDURE
+    // body (BEGIN ... ; ... END) reaches the server truncated and fails with 1064, which ShouldDisablePrepareOn cannot
+    // tell from a real syntax error; unprepared it works (confirmed live, MySQL 8.4, MySqlConnector 2.6.2). A command
+    // with more than one statement therefore runs unprepared.
+    internal override bool PreparesMultiStatementCommands => false;
     public override bool SupportsReadOnlyTransactions => EnforcesReadOnlyTransactions;
 
     // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.

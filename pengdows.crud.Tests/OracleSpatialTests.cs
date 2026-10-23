@@ -17,8 +17,10 @@ namespace pengdows.crud.Tests;
 /// image; the slim image has no Spatial): the value is written as EWKT text bound as a CLOB and built
 /// by the server with SDO_GEOMETRY(wkt, srid) inside a scalar subquery (ODP.NET binds by position, so
 /// the parameter appears once), and read back as EWKT through SDO_UTIL.TO_WKTGEOMETRY plus the SRID
-/// from SDO_UTIL.TO_JSON (no table alias needed). Oracle stores ordinates to 15 significant digits on
-/// every path (WKT and WKB alike, confirmed live).
+/// read as the SDO_SRID attribute in a scalar subquery that aliases the value (attribute access needs
+/// an alias). SDO_UTIL.TO_JSON, used before, does not exist on 12.2 (ORA-00904, confirmed live on
+/// database/enterprise:12.2.0.1). Oracle stores ordinates to 15 significant digits on every path (WKT
+/// and WKB alike, confirmed live).
 /// </summary>
 public sealed class OracleSpatialTests
 {
@@ -35,7 +37,7 @@ public sealed class OracleSpatialTests
         $"NULLIF(TO_NUMBER(SUBSTR(x, 6, INSTR(x, ';') - 6)), 0)) END FROM (SELECT TO_CLOB({marker}) x FROM DUAL))";
 
     private static string Read(string column, string name) =>
-        $"CASE WHEN {column} IS NULL THEN NULL ELSE 'SRID=' || NVL(JSON_VALUE(SDO_UTIL.TO_JSON({column}), '$.srid'), '0') " +
+        $"CASE WHEN {column} IS NULL THEN NULL ELSE 'SRID=' || NVL(TO_CHAR((SELECT v.g.SDO_SRID FROM (SELECT {column} g FROM DUAL) v)), '0') " +
         $"|| ';' || SDO_UTIL.TO_WKTGEOMETRY({column}) END AS {name}";
 
     private static TableGateway<Row, int> Gateway() =>

@@ -246,7 +246,7 @@ public class IdGenerationAndDialectEdgeCaseTests
     }
 
     // =========================================================================
-    // TryExecuteReadOnlySqlAsync — via read-only transaction sessions
+    // ExecuteReadOnlySqlAsync — via read-only transaction sessions
     // =========================================================================
 
     [Fact]
@@ -259,7 +259,7 @@ public class IdGenerationAndDialectEdgeCaseTests
         };
         await using var ctx = new DatabaseContext(config, factory);
 
-        // BeginTransaction with executionType: ExecutionType.Read triggers TryExecuteReadOnlySqlAsync
+        // BeginTransaction with executionType: ExecutionType.Read triggers ExecuteReadOnlySqlAsync
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
         Assert.NotNull(tx);
         tx.Commit();
@@ -275,7 +275,7 @@ public class IdGenerationAndDialectEdgeCaseTests
         };
         await using var ctx = new DatabaseContext(config, factory);
 
-        // PostgreSQL read-only transaction triggers TryExecuteReadOnlySqlAsync
+        // PostgreSQL read-only transaction triggers ExecuteReadOnlySqlAsync
         await using var tx = ctx.BeginTransaction(executionType: ExecutionType.Read);
         Assert.NotNull(tx);
         tx.Commit();

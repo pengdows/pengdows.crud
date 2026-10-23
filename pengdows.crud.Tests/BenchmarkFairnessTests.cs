@@ -597,26 +597,22 @@ public class BenchmarkFairnessTests
         AssertAllPresent(fileName, text, new[]
         {
             "mysql:8.0",
-            "MySqlClientFactory.Instance",
+            "MySqlConnectorFactory.Instance",
             "[Params(32, 64, 128, 256)]",
             "RunConcurrentWithTimeout"
         });
     }
 
+    // pengdows.crud refuses MySql.Data (2026-10-22), so the benchmark runs MySqlConnector only.
     [Fact]
-    public void MySqlDefaultConcurrencyBenchmarks_SupportsBothMySqlProviders()
+    public void MySqlDefaultConcurrencyBenchmarks_UsesMySqlConnectorOnly()
     {
         const string fileName = "MySqlDefaultConcurrencyBenchmarks.cs";
         var text = LoadBenchmarkText(fileName);
 
-        AssertAllPresent(fileName, text, new[]
-        {
-            "enum MySqlBenchmarkProvider",
-            "[Params(MySqlBenchmarkProvider.MySqlData, MySqlBenchmarkProvider.MySqlConnector)]",
-            "MySqlConnectorFactory.Instance",
-            "MySql.Data.MySqlClient.MySqlClientFactory.Instance",
-            "Provider={Provider}"
-        });
+        AssertAllPresent(fileName, text, new[] { "MySqlConnectorFactory.Instance" });
+        Assert.DoesNotContain("MySqlClientFactory", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("MySqlBenchmarkProvider.MySqlData", text, StringComparison.Ordinal);
     }
 
     private static List<string> FindOffenders(IEnumerable<string> tokens, HashSet<string> excludedFiles)

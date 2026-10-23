@@ -2,7 +2,7 @@
 
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using MySql.Data.MySqlClient;
+using MySqlConnector;
 using pengdows.crud;
 
 #endregion
@@ -55,9 +55,9 @@ public class TiDBTestContainer : TestContainer
         // TiDB default has no password for root
         var adminConnectionString =
             $@"Server=localhost;Port={hostPort};User={_username};Database={_adminDatabase};Pooling=true;MinimumPoolSize=1;MaximumPoolSize=100;ConnectionTimeout=15;";
-        await WaitForDbToStart(MySqlClientFactory.Instance, adminConnectionString, _container);
+        await WaitForDbToStart(MySqlConnectorFactory.Instance, adminConnectionString, _container);
 
-        await using (var conn = new MySql.Data.MySqlClient.MySqlConnection(adminConnectionString))
+        await using (var conn = new MySqlConnection(adminConnectionString))
         {
             await conn.OpenAsync();
             await using var cmd = conn.CreateCommand();
@@ -77,7 +77,7 @@ public class TiDBTestContainer : TestContainer
         }
 
         return Task.FromResult<IDatabaseContext>(
-            new DatabaseContext(_connectionString, MySqlClientFactory.Instance, new TypeMapRegistry()));
+            new DatabaseContext(_connectionString, MySqlConnectorFactory.Instance, new TypeMapRegistry()));
     }
 
     protected override async ValueTask DisposeAsyncCore()
@@ -89,7 +89,7 @@ public class TiDBTestContainer : TestContainer
                 var hostPort = _container.GetMappedPublicPort(_port);
                 var adminConnectionString =
                     $@"Server=localhost;Port={hostPort};User={_username};Database={_adminDatabase};ConnectionTimeout=15;";
-                await using var conn = new MySql.Data.MySqlClient.MySqlConnection(adminConnectionString);
+                await using var conn = new MySqlConnection(adminConnectionString);
                 await conn.OpenAsync();
                 await using var cmd = conn.CreateCommand();
                 cmd.CommandText = $"DROP DATABASE IF EXISTS `{_database}`";

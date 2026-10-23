@@ -1,7 +1,7 @@
 using System.Data;
 using DotNet.Testcontainers.Builders;
 using DotNet.Testcontainers.Containers;
-using MySql.Data.MySqlClient;
+using MySqlConnector;
 using pengdows.crud.attributes;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -105,8 +105,8 @@ public class MultiTenantDialectVersionTests : IAsyncLifetime
         var typeMap = new TypeMapRegistry();
         typeMap.Register<TenantEntity>();
 
-        await using var oldContext = new DatabaseContext(_oldConnectionString!, MySqlClientFactory.Instance, typeMap);
-        await using var newContext = new DatabaseContext(_newConnectionString!, MySqlClientFactory.Instance, typeMap);
+        await using var oldContext = new DatabaseContext(_oldConnectionString!, MySqlConnectorFactory.Instance, typeMap);
+        await using var newContext = new DatabaseContext(_newConnectionString!, MySqlConnectorFactory.Instance, typeMap);
 
         await CreateTableAsync(oldContext);
         await CreateTableAsync(newContext);

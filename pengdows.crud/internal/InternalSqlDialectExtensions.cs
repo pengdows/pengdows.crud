@@ -378,6 +378,9 @@ internal static class InternalSqlDialectExtensions
             : dialect.SupportsOffsetFetch || dialect.SupportsLimitOffset;
     }
 
+    internal static int? MaxInListExpressions(this ISqlDialect dialect) =>
+        dialect is SqlDialect sqlDialect ? sqlDialect.MaxInListExpressions : null;
+
     private static IInternalSqlDialect GetInternal(ISqlDialect dialect)
     {
         if (dialect is not IInternalSqlDialect internalDialect)

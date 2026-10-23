@@ -891,7 +891,7 @@
   Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
   DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
   DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
-  DateTime as Date: Date DateOnly:2026-10-05
+  DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
   null DateTimeOffset: DateTimeOffset DBNull
   DateTime Utc as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
@@ -899,9 +899,9 @@
   text as DateTimeOffset: DateTimeOffset DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
   DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
-  DateOnly: Date DateOnly:2026-10-05
-  TimeOnly: Time TimeOnly:13:45:30.1234567
-  TimeSpan as Time: Time TimeOnly:13:45:30.1234567
+  DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
+  TimeOnly: Time TimeSpan:13:45:30.1234567
+  TimeSpan as Time: Time TimeSpan:13:45:30.1234567
   TimeSpan as Object: Object TimeSpan:2.00:00:00
   byte[]: Binary 0x0102FF
   enum as String: String Mood:Sad
