@@ -34,7 +34,7 @@ that was run for the release is green. Access runs only on Windows.
 | SapHana | 152 pass, 0 fail, 0 skip · 2026-10-23 17:52Z · 33755cb4+ | 152 pass, 0 fail, 0 skip · 2026-10-23 17:58Z · 33755cb4+ |
 | InterBase | 152 pass, 0 fail, 0 skip · 2026-10-23 17:47Z · 33755cb4+ | 152 pass, 0 fail, 0 skip · 2026-10-23 17:53Z · 33755cb4+ |
 | Access | 144 pass, 0 fail, 0 skip · 2026-10-12 19:05Z · e0137a99+ | 144 pass, 0 fail, 0 skip · 2026-10-12 19:07Z · e0137a99+ |
-| AuroraPostgreSql | 144 pass, 0 fail, 0 skip · 2026-10-12 15:21Z · 0d031db1 | 144 pass, 0 fail, 0 skip · 2026-10-13 19:30Z · 6a127448+ |
-| AuroraMySql | 144 pass, 0 fail, 0 skip · 2026-10-12 15:25Z · 0d031db1 | 144 pass, 0 fail, 0 skip · 2026-10-13 19:35Z · 6a127448+ |
+| AuroraPostgreSql | 170 pass, 0 fail, 0 skip · 2026-10-23 20:04Z · 9ad08fd9+ | 170 pass, 0 fail, 0 skip · 2026-10-23 20:14Z · 9ad08fd9+ |
+| AuroraMySql | 160 pass, 0 fail, 0 skip · 2026-10-23 18:46Z · 30c6d8ba | 160 pass, 0 fail, 0 skip · 2026-10-23 18:59Z · 30c6d8ba |
 
 Failing now: none.

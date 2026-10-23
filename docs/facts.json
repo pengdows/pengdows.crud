@@ -21,38 +21,38 @@
     },
     "AuroraMySql": {
       "net10.0": {
-        "pass": 144,
+        "pass": 160,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-13 19:35Z",
-        "commit": "6a127448",
-        "dirtyTree": true
+        "runUtc": "2026-10-23 18:59Z",
+        "commit": "30c6d8ba",
+        "dirtyTree": false
       },
       "net8.0": {
-        "pass": 144,
+        "pass": 160,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-12 15:25Z",
-        "commit": "0d031db1",
+        "runUtc": "2026-10-23 18:46Z",
+        "commit": "30c6d8ba",
         "dirtyTree": false
       }
     },
     "AuroraPostgreSql": {
       "net10.0": {
-        "pass": 144,
+        "pass": 170,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-13 19:30Z",
-        "commit": "6a127448",
+        "runUtc": "2026-10-23 20:14Z",
+        "commit": "9ad08fd9",
         "dirtyTree": true
       },
       "net8.0": {
-        "pass": 144,
+        "pass": 170,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-12 15:21Z",
-        "commit": "0d031db1",
-        "dirtyTree": false
+        "runUtc": "2026-10-23 20:04Z",
+        "commit": "9ad08fd9",
+        "dirtyTree": true
       }
     },
     "CockroachDb": {
