@@ -208,6 +208,45 @@ public class FirebirdTranslatorTests
         Assert.IsType<SerializationConflictException>(result);
     }
 
+    // FirebirdClient's FbException names the property SQLSTATE (all caps) and does not override
+    // DbException.SqlState; the live message can be the first line alone (ported from 2.0.5.1).
+    private sealed class FbShapedDbException : System.Data.Common.DbException
+    {
+        public FbShapedDbException(string sqlState, string message) : base(message) => SQLSTATE = sqlState;
+
+        // ReSharper disable once InconsistentNaming
+        public string SQLSTATE { get; }
+    }
+
+    public static TheoryData<Exception> ConcurrentUpdateConflicts => new()
+    {
+        new SqlStateDbException("40001",
+            "lock conflict on no wait transaction\nupdate conflicts with concurrent update\nconcurrent transaction number is 42"),
+        new SqliteMessageDbException(
+            "deadlock\nupdate conflicts with concurrent update\nconcurrent transaction number is 42"),
+        new FbShapedDbException("40001", "lock conflict on no wait transaction")
+    };
+
+    [Theory]
+    [MemberData(nameof(ConcurrentUpdateConflicts))]
+    public void ConcurrentUpdateConflict_Maps_TransientSerializationConflictException(Exception raw)
+    {
+        var result = _translator.Translate(TestDialect(SupportedDatabase.Firebird), raw, DbOperationKind.Update);
+
+        Assert.IsType<SerializationConflictException>(result);
+        Assert.True(result.IsTransient);
+    }
+
+    [Theory]
+    [MemberData(nameof(ConcurrentUpdateConflicts))]
+    public void ConcurrentUpdateConflict_AnalyzesAsRetryableSerializationFailure(Exception raw)
+    {
+        var info = TestDialect(SupportedDatabase.Firebird).AnalyzeException(raw);
+
+        Assert.Equal(DbErrorCategory.SerializationFailure, info.Category);
+        Assert.True(info.IsRetryable);
+    }
+
     // REV-065 (live): isc_bad_trans_handle (335544332, "invalid transaction handle (expecting
     // explicit transaction start)") arrives with an 08xxx SQLSTATE but the connection is fine; only
     // the transaction is gone, so it is not a ConnectionException.
