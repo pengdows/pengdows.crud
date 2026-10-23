@@ -64,6 +64,23 @@ public sealed class PackageAdvisoryTests
             $"{relativePath} pins Pkcs {match.Groups[1].Value}, older than {Patched}");
     }
 
+    // System.Drawing.Common 4.7.0 (GHSA-rxg9-xrhp-64gj, critical) arrives through System.Security.Permissions from the
+    // Sybase ASE and Informix drivers. Nothing here draws, but the advisory is cleared by pinning a patched version
+    // rather than suppressing it.
+    [Theory]
+    [InlineData("pengdows.crud.IntegrationTests/pengdows.crud.IntegrationTests.csproj")]
+    [InlineData("testbed/testbed.csproj")]
+    public void ProjectsThatPullInSystemDrawingCommonPinAPatchedVersion(string relativePath)
+    {
+        var text = File.ReadAllText(Path.Combine(Root(), relativePath.Replace('/', Path.DirectorySeparatorChar)));
+
+        var match = Regex.Match(text,
+            @"<PackageReference\s+Include=""System\.Drawing\.Common""\s+Version=""(\d+\.\d+\.\d+)""");
+        Assert.True(match.Success, relativePath + " does not pin System.Drawing.Common");
+        Assert.True(Version.Parse(match.Groups[1].Value) >= new Version(5, 0, 3),
+            $"{relativePath} pins System.Drawing.Common {match.Groups[1].Value}, older than the patched 5.0.3");
+    }
+
     [Fact]
     public void TheDriverMatrixProjectsThatSuppressTheAuditSuppressBothAdvisories()
     {

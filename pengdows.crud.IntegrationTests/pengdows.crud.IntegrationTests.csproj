@@ -13,6 +13,8 @@
         <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.0"/>
         <PackageReference Include="xunit" Version="2.9.3"/>
         <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
+        <!-- Transitive via System.Security.Permissions from the Sybase ASE and Informix drivers; 4.7.0 has GHSA-rxg9-xrhp-64gj. -->
+        <PackageReference Include="System.Drawing.Common" Version="9.0.21" />
         <PackageReference Include="Xunit.SkippableFact" Version="1.4.13"/>
         <PackageReference Include="xunit.runner.visualstudio" Version="3.0.2">
             <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
