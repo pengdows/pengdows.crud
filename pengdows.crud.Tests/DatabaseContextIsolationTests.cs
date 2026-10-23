@@ -196,6 +196,37 @@ public class DatabaseContextIsolationTests
             e.Message.Contains("degraded", StringComparison.OrdinalIgnoreCase));
     }
 
+    [Fact]
+    public void BeginTransaction_ReadWithNoLevel_SqlServerWithoutSnapshot_UsesDatabaseDefaultWithoutWarning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer.ToString());
+        factory.ConfigureConnections(connection =>
+        {
+            connection.ScalarResultsByCommand[
+                "SELECT is_read_committed_snapshot_on FROM sys.databases WHERE name = DB_NAME()"] = 0;
+            connection.ScalarResultsByCommand[
+                "SELECT snapshot_isolation_state FROM sys.databases WHERE name = DB_NAME()"] = 0;
+        });
+        var loggerFactory = new RecordingLoggerFactory();
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory, loggerFactory);
+
+        // No level was asked for, so nothing was promised: the database's own default applies,
+        // silently. (An explicit profile that cannot be guaranteed still throws.)
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
+
+        Assert.Equal(IsolationLevel.ReadCommitted, tx.IsolationLevel);
+        Assert.DoesNotContain(loggerFactory.Entries, e =>
+            e.Level == LogLevel.Warning &&
+            e.Message.Contains("degraded", StringComparison.OrdinalIgnoreCase));
+    }
+
     private sealed class RecordingLoggerFactory : ILoggerFactory
     {
         public List<(LogLevel Level, string Message)> Entries { get; } = new();

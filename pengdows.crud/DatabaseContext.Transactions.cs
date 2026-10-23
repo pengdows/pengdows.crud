@@ -11,9 +11,9 @@
 //     level (IsolationResolver.ResolveAtLeast); throws if none exists
 //   * BeginTransaction(IsolationProfile) throws TransactionModeNotSupportedException
 //     rather than run below the profile's guarantee (ResolveForTransaction)
-//   * Read transactions with no explicit level use SafeNonBlockingReads and log a
-//     warning if that profile degrades; write transactions default to ReadCommitted
-//     (else Serializable, else the first supported level)
+//   * Transactions with no explicit level promised nothing: reads use SafeNonBlockingReads
+//     when the product can honor it, otherwise (like writes) the default of ReadCommitted
+//     (else Serializable, else the first supported level), silently
 // - Read-only transactions (ExecutionType.Read) require a readable context.
 // - Returns TransactionContext which pins a connection for the duration.
 // - NOT compatible with TransactionScope - uses pengdows.crud's own model.
@@ -94,18 +94,10 @@ public partial class DatabaseContext
 
             if (isolationLevel is null)
             {
+                // No level was asked for, so nothing was promised. Use the non-blocking-read mapping when
+                // the product can honor it; otherwise the database's own default, silently.
                 var resolution = _isolationResolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
-                isolationLevel = resolution.Level;
-                if (resolution.Degraded)
-                {
-                    _logger.LogWarning(
-                        "Isolation profile {Profile} degraded to {Level} for {Product}; SnapshotIsolationEnabled={SnapshotEnabled}, RCSIEnabled={RcsiEnabled}.",
-                        resolution.Profile,
-                        resolution.Level,
-                        Product,
-                        SnapshotIsolationEnabled,
-                        RCSIEnabled);
-                }
+                isolationLevel = resolution.Degraded ? DefaultIsolationLevel() : resolution.Level;
             }
             else
             {
@@ -121,19 +113,7 @@ public partial class DatabaseContext
 
             if (isolationLevel is null)
             {
-                var supported = _isolationResolver.GetSupportedLevels();
-                if (supported.Contains(IsolationLevel.ReadCommitted))
-                {
-                    isolationLevel = IsolationLevel.ReadCommitted;
-                }
-                else if (supported.Contains(IsolationLevel.Serializable))
-                {
-                    isolationLevel = IsolationLevel.Serializable;
-                }
-                else
-                {
-                    isolationLevel = supported.First();
-                }
+                isolationLevel = DefaultIsolationLevel();
             }
             else
             {
@@ -142,5 +122,20 @@ public partial class DatabaseContext
         }
 
         return (ro, isolationLevel.Value);
+    }
+
+    /// <summary>
+    /// The level used when the caller asks for none: ReadCommitted, else Serializable, else the
+    /// first level the product supports.
+    /// </summary>
+    private IsolationLevel DefaultIsolationLevel()
+    {
+        var supported = _isolationResolver.GetSupportedLevels();
+        if (supported.Contains(IsolationLevel.ReadCommitted))
+        {
+            return IsolationLevel.ReadCommitted;
+        }
+
+        return supported.Contains(IsolationLevel.Serializable) ? IsolationLevel.Serializable : supported.First();
     }
 }
