@@ -14,10 +14,11 @@
 // - The version compared is the informational version without its "+commit" suffix, with SemVer
 //   prerelease ordering (every MySqlConnector 2.x reports assembly version 2.0.0.0 and every flatfile
 //   0.2.1 preview file version 0.2.1.0), else the file version.
-// - MySql.Data is refused at every version (decision 2026-10-22): it fails the ADO.NET contract
-//   pengdows.crud relies on (StateChange reports Open -> Open, reader access before Read does not
-//   throw, parameter defaults), and the fixes (mysql/mysql-connector-net #95-#115) are not released.
-//   Its workarounds stay in the dialects, so allowing it again is removing its row below.
+// - MySql.Data is allowed (decision 2026-10-23; refused 2026-10-22 to 2026-10-23). It fails parts of the
+//   ADO.NET contract (StateChange reports Open -> Open, reader access before Read does not throw,
+//   parameter defaults, async command timeouts), but connection counts come from pool leases rather than
+//   StateChange, and its one data-corrupting defect (backslash-escaped text parameters, BP-115) is worked
+//   around in the MySQL-family dialects. The Refused list below stays for a provider that corrupts data.
 // - Checked by DatabaseContext before it opens any connection. A driver with no version passes the
 //   minimums (there is nothing to compare) but not the refusals.
 // =============================================================================
@@ -30,11 +31,8 @@ namespace pengdows.crud.@internal;
 
 internal static class ProviderVersionRequirements
 {
-    private static readonly (string Assembly, string Reason)[] Refused =
-    {
-        ("MySql.Data",
-            "it fails the ADO.NET contract pengdows.crud relies on, such as StateChange and reader state; use MySqlConnector 2.6.1 or later")
-    };
+    // Drivers refused at every version. Empty: MySql.Data was refused from 2026-10-22 to 2026-10-23.
+    private static readonly (string Assembly, string Reason)[] Refused = Array.Empty<(string, string)>();
 
     private static readonly (string Assembly, string Minimum, string Reason)[] Minimums =
     {

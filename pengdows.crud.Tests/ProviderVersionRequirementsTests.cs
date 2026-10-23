@@ -46,37 +46,35 @@ public sealed class ProviderVersionRequirementsTests
         ProviderVersionRequirements.EnsureSupported(assemblyName, Version.Parse(fileVersion));
     }
 
-    // MySql.Data is refused at every version (decision 2026-10-22): it fails the ADO.NET contract that pengdows.crud
-    // relies on (connection state events, reader state, parameter defaults), with the fixes not yet released.
+    // MySql.Data is allowed again (decision 2026-10-23): connection counts come from pool leases rather than
+    // StateChange events, so its Open -> Open report no longer skews metrics, and the one data-corrupting defect
+    // (backslash-escaped text parameters, BP-115) is worked around in the MySQL-family dialects.
     [Theory]
     [InlineData("8.4.0.0")]
     [InlineData("9.3.0.0")]
     [InlineData("9.7.0.0")]
     [InlineData("26.10.0.0")]
-    public void MySqlData_IsRefused(string fileVersion)
+    public void MySqlData_IsAccepted(string fileVersion)
     {
-        var ex = Assert.Throws<NotSupportedException>(() =>
-            ProviderVersionRequirements.EnsureSupported("MySql.Data", Version.Parse(fileVersion)));
-
-        Assert.Contains("MySql.Data", ex.Message);
-        Assert.Contains("MySqlConnector", ex.Message);
+        ProviderVersionRequirements.EnsureSupported("MySql.Data", Version.Parse(fileVersion));
     }
 
     [Fact]
-    public void MySqlData_WithNoFileVersion_IsRefused()
+    public void MySqlData_WithNoFileVersion_IsAccepted()
     {
-        Assert.Throws<NotSupportedException>(() => ProviderVersionRequirements.EnsureSupported("MySql.Data", (Version?)null));
+        ProviderVersionRequirements.EnsureSupported("MySql.Data", (Version?)null);
     }
 
     [Fact]
-    public void DatabaseContext_WithMySqlData_ThrowsBeforeConnecting()
+    public void DatabaseContext_WithMySqlData_IsNotRefusedBeforeConnecting()
     {
         var factory = FactoryFromAssembly("MySql.Data", "9.7.0.0");
 
-        var ex = Assert.Throws<NotSupportedException>(() =>
-            new DatabaseContext("Server=unreachable.invalid;Database=x", factory));
+        var ex = Record.Exception(() => new DatabaseContext("Server=unreachable.invalid;Database=x", factory));
 
-        Assert.Contains("MySqlConnector", ex.Message);
+        // It may fail to connect, but never because the provider is refused.
+        Assert.False(ex is NotSupportedException && ex.Message.Contains("not supported by pengdows.crud"),
+            ex?.Message);
     }
 
     // pengdows.flatfile previews all report file version 0.2.1.0, so the informational version is compared, with

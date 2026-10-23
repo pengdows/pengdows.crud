@@ -167,14 +167,14 @@ The following features have no version gate in the dialect code but require a mi
 
 ## Minimum Driver Versions
 
-`DatabaseContext` refuses these drivers, or these versions of them, before it opens a connection, throwing `NotSupportedException`
+`DatabaseContext` refuses drivers, or versions of them, with known defects (currently only the minimums below), before it opens a connection, throwing `NotSupportedException`
 (`internal/ProviderVersionRequirements.cs`):
 
 | Driver | Minimum | Why |
 |--------|---------|-----|
 | MySqlConnector | 2.6.1 | 2.3.0 through 2.6.0 fail a prepared `INSERT ... RETURNING` executed a second time on MariaDB, whatever the parameter values ("Expected result set to have 0 columns, but it contains 1 columns"), and close the connection. pengdows.crud prepares statements on MySqlConnector, so any repeated insert hits it. 2.2.7 and older don't have the bug but are below the minimum too. Confirmed live on MariaDB 11.4.13, 2026-10-22. Every 2.x release reports assembly version 2.0.0.0, so the file version is compared. |
 | pengdows.flatfile | 0.2.1-preview.6 | Earlier releases refuse DateOnly/TimeOnly parameters and cannot compare a DateTime or TimeSpan with a DATE or TIME column, so a DATE or TIME column cannot be filtered; preview.2 to preview.5 also wrote a TIME outside a day and then failed every read of the table (pengdows/pengdows.flatfile#1). Every 0.2.1 preview reports file version 0.2.1.0, so the informational version is compared, prerelease-aware. |
-| MySql.Data | refused | Fails the ADO.NET contract pengdows.crud relies on: `StateChange` reports `Open → Open` when a connection opens, reader access before `Read` doesn't throw, parameter defaults are wrong, async commands can hang past their timeout, and it substitutes backslash-escaped literals into SQL text (BP-115) and threw reading a `BINARY(16)` Guid (COR-014). Fixes are submitted upstream (mysql/mysql-connector-net #95–#112) but not released. Use MySqlConnector. |
+| MySql.Data | none | Allowed. It fails parts of the ADO.NET contract (`StateChange` reports `Open → Open`, reader access before `Read` doesn't throw, parameter defaults are wrong, async commands can hang past their timeout, a `BINARY(16)` Guid threw reading COR-014), none of which pengdows.crud depends on any more or corrupts data. Its backslash-escaped text parameters (BP-115) are worked around by dropping `NO_BACKSLASH_ESCAPES` from the session settings. MySqlConnector remains the recommended driver (it prepares server-side). |
 
 ## Default Pool Sizes (Provider vs Practical)
 
