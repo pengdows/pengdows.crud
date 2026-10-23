@@ -140,9 +140,10 @@ public class FakeDbOperationLogTests
         var transaction = (fakeDbTransaction)connection.BeginTransaction();
 
         transaction.Commit();
-        transaction.Rollback();
-        await transaction.CommitAsync();
-        await transaction.RollbackAsync();
+        // A completed transaction refuses another completion, and the attempt is still recorded.
+        Assert.Throws<InvalidOperationException>(() => transaction.Rollback());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => transaction.CommitAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => transaction.RollbackAsync());
         transaction.Dispose();
         await transaction.DisposeAsync();
 

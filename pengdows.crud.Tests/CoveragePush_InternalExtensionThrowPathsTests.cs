@@ -66,10 +66,10 @@ public class CoveragePush_InternalExtensionThrowPathsTests
         var dialect = GetRealDialect();
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory);
-        await using var conn = ctx.GetConnection(ExecutionType.Write);
-        await conn.OpenAsync();
+        // Settings are applied to a connection before it opens (DatabaseContext does it as it creates one); an open
+        // connection refuses a new connection string, as every provider does.
+        await using var conn = factory.CreateConnection();
 
-        // ITrackedConnection extends IDbConnection — pass it directly to the extension
         var record = Record.Exception(
             () => dialect.ApplyConnectionSettings(conn, ctx, false));
         Assert.Null(record);

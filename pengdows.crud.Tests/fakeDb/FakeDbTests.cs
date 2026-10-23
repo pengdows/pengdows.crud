@@ -27,7 +27,7 @@ public class fakeDbTests
         Assert.Null(param.ParameterName);
         Assert.Null(param.SourceColumn);
         Assert.Null(param.Value);
-        Assert.Equal(DbType.Object, param.DbType);
+        Assert.Equal(new fakeDbParameter().DbType, param.DbType);
     }
 
     [Fact]
@@ -106,12 +106,14 @@ public class fakeDbTests
     [Fact]
     public async Task fakeDbCommand_CommandText_AllowsNullAsync()
     {
-        var command = new fakeDbCommand();
+        var connection = new fakeDbConnection();
+        connection.Open();
+        var command = new fakeDbCommand(connection);
         command.CommandText = null;
 
         var result = await command.ExecuteScalarAsync(CancellationToken.None);
 
-        Assert.Null(command.CommandText);
+        Assert.Equal(string.Empty, command.CommandText); // null reads back empty, as SqlClient, Npgsql and Sqlite do
         Assert.Equal(42, result);
     }
 }

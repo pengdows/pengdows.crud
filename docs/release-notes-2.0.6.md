@@ -118,6 +118,11 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
   time of day is written as text cast to the column's type, and `BLOB`/`CLOB` values (and `BYTE`/`TEXT`
   values in a MERGE) are staged in a session temp table, `pengdows_lob_stage`, and read back by key
   (WRT-006, TYPE-020, TYPE-022).
+- A NULL in a MySQL-family parameter of `DbType.Object` (every nullable spatial column, and any such parameter in
+  your own SQL) now writes on MySQL with MySqlConnector 2.5 or later. MySqlConnector 2.5 maps `DbType.Object` to
+  `MySqlDbType.Vector`, and MySQL 8.4 refuses that NULL in a prepared statement ("Incorrect arguments to
+  mysqld_stmt_execute"; confirmed live, MySQL 8.4.11, MySqlConnector 2.6.2). Just before execution the parameter's
+  type is reset, so the driver types it from the value.
 
 ## Reads that now work
 
@@ -418,6 +423,12 @@ every CLR type and every database, whether the value round-trips and why not whe
   statement per row (DEC-012, REV-083). The async gateways learn those columns' declared types once
   per table, so only a `BIT` column (or one whose type can't be read) takes that path; `BIGINT` and
   `VARBINARY` columns keep the single multi-row statement (PERF-029).
+- TiDB sends no read-only statement. It refuses `SET SESSION transaction_read_only = 1` ("function READ ONLY has only
+  noop implementation in tidb now"; live, v8.5.7) and cannot enforce read-only even with `tidb_enable_noop_functions`.
+  A read-intent transaction on TiDB now begins (with a failed read-only entry now throwing, it would have failed), and a
+  read connection's session settings no longer fail on every checkout, which logged an error each time and, under
+  `SessionInitializationFailureMode.FailClosed`, refused the connection. pengdows.crud's own read-intent guard still
+  applies.
 
 ## pengdows.crud.fakeDb
 
@@ -432,10 +443,25 @@ passed on 2.0.5 and fails now was relying on behavior no real provider has.
 | `ConnectionTimeout` default | 0 | 15, or the connection string's value | 15 on Microsoft.Data.Sqlite, Npgsql, SqlClient |
 | `Database` | the emulated product's name (e.g. `"Sqlite"`) | the connection string's `Database`/`Initial Catalog`, else `""`; `"main"` when emulating SQLite, the data source when emulating DuckDB | what each provider reports |
 | Minimum pool size above maximum | accepted | rejected with `ArgumentException` | Npgsql and SqlClient reject |
+| `fakeDbParameter.ResetDbType()` | set `DbType.Object` | restores a new parameter's `DbType` | back to the type inferred from the value (MySqlConnector 2.6.2, checked 2026-10-23) |
 | `fakeDbFactory.CreateDataSource` | .NET's default data source | .NET's default data source; `SupportsNativeDataSource = true` returns a `FakeDbDataSource` | providers without their own data source return .NET's default |
 | A column holding a `fakeDbInterval` (new) | — | reports `TimeSpan` and data type `Interval`; `GetValue` converts as DuckDB.NET 1.5.6 does (throws for negatives and months ≥ 1, drops negative months); `GetProviderSpecificValue` returns the stored parts | DuckDB.NET 1.5.6 on `INTERVAL` |
 | `OffsetDroppedByGetValueColumns` (new) | — | the column reports `DateTime` and data type `TimeStampTZ`; `GetValue` returns the wall time with no offset, `GetDateTimeOffset` the value | ODP.NET 3.21 on `TIMESTAMP WITH TIME ZONE` |
 | `GetProviderSpecificValue` / `GetProviderSpecificFieldType` | .NET's default (`GetValue`) | the stored value for a provider-specific type (`fakeDbInterval`), otherwise unchanged | each provider's own value type |
+| A new parameter's `Direction` and `Value` | `0` (no defined direction) and `DBNull.Value` | `Input` and `null` | the documented `DbParameter` defaults |
+| A new command's `CommandType` | `0` | `Text` | the documented `DbCommand` default |
+| `CommandText = null` | read back `null` | reads back `""` | SqlClient, Npgsql, Microsoft.Data.Sqlite |
+| Execute or `Prepare` with no connection, or a closed one | ran | throws `InvalidOperationException` | every provider |
+| A command whose reader is still open | could change its text or connection and run again | throws `InvalidOperationException` | every provider |
+| A command whose `Transaction` belongs to another connection | ran | throws `InvalidOperationException` | every provider |
+| `CommandBehavior.CloseConnection` | ignored | closing the reader closes the connection | documented |
+| Async execute with a canceled token, or one that fails | threw from the call | returns a canceled or faulted task | .NET's `DbCommand` |
+| `ExecuteNonQuery` of a SELECT | 1 (or the factory's default non-query result) | -1; scripted results still come first | documented |
+| Setting `ConnectionString` on an open connection | accepted | throws `InvalidOperationException` | SqlClient, Npgsql, Microsoft.Data.Sqlite |
+| `DbProviderFactories.GetFactory(connection)` | `null` | the factory that created it (`fakeDbFactory.Instance` for one constructed directly) | each provider's factory |
+| `GetSchema()` | returned `DataSourceInformation` | returns `MetaDataCollections`; `GetSchema("DataSourceInformation")` is unchanged; an unknown collection throws `ArgumentException` | documented |
+| A committed, rolled back or disposed transaction | kept its `Connection` and could complete again | `Connection` is `null`; another `Commit`/`Rollback` throws `InvalidOperationException` | every provider |
+| `Release`/`ReleaseAsync` of a savepoint | did nothing | throws `NotSupportedException`, as `Save` and `Rollback(name)` already did (`SupportsSavepoints` is false) | `DbTransaction.SupportsSavepoints` |
 
 New in fakeDb since the table above (each is pinned by tests in `pengdows.crud.Tests`):
 
@@ -454,6 +480,21 @@ New in fakeDb since the table above (each is pinned by tests in `pengdows.crud.T
 - An ordered `Operations` log on connection, command and transaction, `SchemaException`, `ChangeDatabase` (allowed in
   fakeDb; pengdows.crud itself refuses it), `OverstatedLengthColumns` (a provider that reports more bytes than it
   delivers), `SetFailOnDispose` (a connection whose cleanup throws), `fakeDbDataReader.FailOnClose` (a reader whose close throws), `ConnectionInitializer` (scripts every connection the factory creates, however many a context opens), and positional `?` markers in the data store.
+- With `EnableDataPersistence`, the data store answers SELECTs that read no table the way a database does: literals,
+  `NULL` and bound parameters, `UNION`, `ORDER BY` a column number, comments, and one result set per statement in a
+  batch. A parameter value no database type can hold throws `NotSupportedException`. In `StrictMode`, text that is not
+  SQL at all raises the emulated product's syntax error (a `DbException`); SQL the store does not model still throws
+  `NotSupportedException`.
+- fakeDb passes the ADO.NET conformance suite (`pengdows.AdoNetApiTest.conformance` 3.0.0-beta.1), run by
+  `pengdows.crud.fakeDb.Conformance.Tests`: every Required, Optional and Common test, on net8.0 (207) and net10.0 (221).
+- Conformant is the default; `fakeDbDriverQuirks` reproduces where real drivers depart from the contract, so code that
+  must survive a driver's defect can be tested against it. Each departure is a switch (`PrepareWithoutOpenConnection`,
+  `CompletedTransactionKeepsConnection`, `SavepointReleaseIsNoOp`, `NonQueryResultForSelect`, ...), set on
+  `fakeDbFactory.DriverQuirks` or one connection's `DriverQuirks`. Presets start from a driver version as the conformance
+  suite recorded it on 2026-10-23: `SqlClient()` (Microsoft.Data.SqlClient 6.0.2), `Npgsql()` (9.0.3),
+  `MySqlConnector()` (2.6.2), `MySqlData()` (9.7.0), `DuckDbNet()` (1.5.6.1), `OracleManagedDataAccess()` (23.8),
+  `SystemDataSqlite()` (1.0.119), `AseClient()` (0.19.2), `Db2()` (8.0.0.500). Run through the conformance suite, a
+  preset fails no test its driver passes; it does not yet reproduce every test its driver fails.
 
 ## Performance
 

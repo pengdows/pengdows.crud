@@ -47,7 +47,7 @@ public class OracleAndDuckDbDialectEdgeCaseTests
         using var ctx = CreateOracleContext();
         await using var sc = ctx.CreateSqlContainer("SELECT 1 FROM DUAL");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     // =========================================================================
@@ -63,7 +63,7 @@ public class OracleAndDuckDbDialectEdgeCaseTests
         // The SQL has {P}123 — since '1' is not IsIdentStart, it emits "{P}123" literally.
         await using var sc = ctx.CreateSqlContainer("SELECT {P}123 FROM DUAL");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     // =========================================================================
@@ -77,7 +77,7 @@ public class OracleAndDuckDbDialectEdgeCaseTests
         using var ctx = CreateOracleContext();
         await using var sc = ctx.CreateSqlContainer("SELECT 1 FROM DUAL WHERE x = {P}");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     // =========================================================================
@@ -97,7 +97,7 @@ public class OracleAndDuckDbDialectEdgeCaseTests
         sc.Query.Append("SELECT {P}val FROM DUAL WHERE x = {P}val");
         sc.AddParameterWithValue("val", DbType.Int32, 42);
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     // =========================================================================
@@ -114,7 +114,7 @@ public class OracleAndDuckDbDialectEdgeCaseTests
         using var ctx = CreateDuckDbContext();
         await using var sc = ctx.CreateSqlContainer("SELECT 1");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]
@@ -143,6 +143,6 @@ public class OracleAndDuckDbDialectEdgeCaseTests
         using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory);
         await using var sc = ctx.CreateSqlContainer("SELECT 1 WHERE x = {P}");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 }

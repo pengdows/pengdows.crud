@@ -375,8 +375,8 @@ public class StormGateTests
         // Inner, so callers using a StormGate-gated connection's transaction got DbTransaction's
         // base (unsupported) behavior instead of the wrapped provider transaction's real savepoint
         // support.
+        // Staged closed: the data source sets its connection string and opens it, as a real DbDataSource does.
         var innerConnection = new SavepointCapableFakeConnection();
-        innerConnection.Open();
         NextOpenReturns(innerConnection);
 
         using var gate = new StormGate(_dataSource, 1, _timeout);

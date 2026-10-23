@@ -283,6 +283,7 @@ public class DialectMissingPathTests
             "Data Source=sql-server;EmulatedProduct=SqlServer", factory);
 
         var conn = ctx.GetConnection(ExecutionType.Read);
+        conn.Open();
         try
         {
             // Lines 293-300: executes SnapshotIsolationQuery, fakeDb returns null → 0 → false
@@ -307,6 +308,7 @@ public class DialectMissingPathTests
             "Data Source=sql-server;EmulatedProduct=SqlServer", factory);
 
         var conn = ctx.GetConnection(ExecutionType.Read);
+        conn.Open();
         try
         {
             // Lines 284-288: executes RcsiQuery, fakeDb returns null → 0 → false

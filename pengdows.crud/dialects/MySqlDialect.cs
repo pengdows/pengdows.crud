@@ -273,6 +273,23 @@ internal class MySqlDialect : SqlDialect
     // tell from a real syntax error; unprepared it works (confirmed live, MySQL 8.4, MySqlConnector 2.6.2). A command
     // with more than one statement therefore runs unprepared.
     internal override bool PreparesMultiStatementCommands => false;
+
+    // MySqlConnector 2.5 and later map DbType.Object to MySqlDbType.Vector (2.4 mapped it to Null). A NULL sent that way
+    // to a prepared statement fails on MySQL 8.4 with "Incorrect arguments to mysqld_stmt_execute", whatever the column
+    // (confirmed live, MySQL 8.4.11, MySqlConnector 2.6.2; a non-null Object value and an unprepared NULL are fine), so a
+    // nullable spatial column, declared DbType.Object, could not be set to NULL. Reset, the driver infers the type from
+    // the value, as for a new parameter.
+    internal override void PrepareCommandParameters(DbCommand command)
+    {
+        foreach (DbParameter parameter in command.Parameters)
+        {
+            if (parameter.DbType == DbType.Object && Utils.IsNullOrDbNull(parameter.Value))
+            {
+                parameter.ResetDbType();
+            }
+        }
+    }
+
     public override bool SupportsReadOnlyTransactions => EnforcesReadOnlyTransactions;
 
     // Once MySQL error 1461 fires, veto ALL future prepare attempts — including ForceManualPrepare.

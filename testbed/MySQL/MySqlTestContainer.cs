@@ -45,6 +45,13 @@ public class MySqlTestContainer : TestContainer
         _container = builder.Build();
     }
 
+    /// <summary>
+    /// The real connection string for this running container (the context's own
+    /// <c>ConnectionString</c> is redacted).
+    /// </summary>
+    public string ConnectionString =>
+        _connectionString ?? throw new InvalidOperationException("Container not started yet.");
+
     public override async Task StartAsync()
     {
         if (TestContainerReuse.Enabled)

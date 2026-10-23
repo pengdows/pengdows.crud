@@ -92,7 +92,7 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
 
         var result = await container.ExecuteNonQueryAsync(CommandType.Text, cts.Token);
 
-        Assert.Equal(1, result); // fakeDb returns 1 instead of -1
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]
@@ -318,7 +318,7 @@ public class SqlContainerExtensionsTests : IAsyncLifetime
         var result = await SqlContainerExtensions.ExecuteNonQueryAsync(
             container, CommandType.Text, CancellationToken.None);
 
-        Assert.Equal(1, result);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]

@@ -171,7 +171,7 @@ public class TenantTests
         using var ctx = registry.GetContext("tenant1");
         using var sc = ctx.CreateSqlContainer("SELECT 1");
         var affected = await sc.ExecuteNonQueryAsync();
-        Assert.Equal(1, affected); // fake provider default non-query result
+        Assert.Equal(-1, affected); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]
@@ -201,7 +201,7 @@ public class TenantTests
         using var ctx = registry.GetContext("tenant-di-a");
         using var sc = ctx.CreateSqlContainer("SELECT 1");
         var affected = await sc.ExecuteNonQueryAsync();
-        Assert.Equal(1, affected);
+        Assert.Equal(-1, affected); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]
@@ -233,7 +233,7 @@ public class TenantTests
         using var ctx = registry.GetContext("tenant-retry");
         using var sc = ctx.CreateSqlContainer("SELECT 1");
         var affected = await sc.ExecuteNonQueryAsync();
-        Assert.Equal(1, affected);
+        Assert.Equal(-1, affected); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]

@@ -1,5 +1,6 @@
 using System;
 using System.Data;
+using System.Data.Common;
 using System.Threading.Tasks;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -131,7 +132,7 @@ public class fakeDbConnectionTests
         var conn = new fakeDbConnection();
         conn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}";
         conn.Open();
-        var schema = conn.GetSchema();
+        var schema = conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation);
         Assert.True(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
         Assert.True(schema.Rows[0].Field<bool>("SupportsNamedParameters"));
     }
@@ -140,7 +141,7 @@ public class fakeDbConnectionTests
     public void GetSchema_EmulatedProductNotConfigured_Throws()
     {
         var conn = new fakeDbConnection();
-        Assert.Throws<InvalidOperationException>(() => conn.GetSchema());
+        Assert.Throws<InvalidOperationException>(() => conn.GetSchema(DbMetaDataCollectionNames.DataSourceInformation));
     }
 
     // SetFailOnOpen(skipFirstOpen: true) stored the flag but never read it, so the first open failed too.

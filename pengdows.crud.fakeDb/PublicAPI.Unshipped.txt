@@ -200,6 +200,10 @@ pengdows.crud.fakeDb.fakeDbTransaction.Operations.get -> System.Collections.Gene
 override pengdows.crud.fakeDb.fakeDbCommand.DisposeAsync() -> System.Threading.Tasks.ValueTask
 override pengdows.crud.fakeDb.fakeDbTransaction.DisposeAsync() -> System.Threading.Tasks.ValueTask
 override pengdows.crud.fakeDb.fakeDbConnection.BeginDbTransactionAsync(System.Data.IsolationLevel isolationLevel, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask<System.Data.Common.DbTransaction!>
+override pengdows.crud.fakeDb.fakeDbConnection.DbProviderFactory.get -> System.Data.Common.DbProviderFactory!
+override pengdows.crud.fakeDb.fakeDbTransaction.Release(string! savepointName) -> void
+override pengdows.crud.fakeDb.fakeDbTransaction.Rollback(string! savepointName) -> void
+override pengdows.crud.fakeDb.fakeDbTransaction.Save(string! savepointName) -> void
 pengdows.crud.fakeDb.fakeDbFactory.EnqueueNonQueryResult(int value) -> void
 pengdows.crud.fakeDb.fakeDbFactory.EnqueueScalarResult(object? value) -> void
 pengdows.crud.fakeDb.fakeDbFactory.SetNonQueryResultForCommand(string! commandText, int value) -> void
@@ -216,3 +220,67 @@ pengdows.crud.fakeDb.fakeDbFactory.ConnectionInitializer.get -> System.Action<pe
 pengdows.crud.fakeDb.fakeDbFactory.ConnectionInitializer.set -> void
 pengdows.crud.fakeDb.fakeDbDataReader.FailOnClose.get -> System.Exception?
 pengdows.crud.fakeDb.fakeDbDataReader.FailOnClose.set -> void
+pengdows.crud.fakeDb.fakeDbConnection.DriverQuirks.get -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+pengdows.crud.fakeDb.fakeDbConnection.DriverQuirks.set -> void
+pengdows.crud.fakeDb.fakeDbFactory.DriverQuirks.get -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+pengdows.crud.fakeDb.fakeDbFactory.DriverQuirks.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks
+pengdows.crud.fakeDb.fakeDbDriverQuirks.fakeDbDriverQuirks() -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.HasAnyQuirk.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.NonQueryResultForSelect.get -> int?
+pengdows.crud.fakeDb.fakeDbDriverQuirks.NonQueryResultForSelect.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ReexecuteWithOpenReaderException.get -> System.Func<System.Exception!>?
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ReexecuteWithOpenReaderException.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ConnectionStringWhileOpenException.get -> System.Func<System.Exception!>?
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ConnectionStringWhileOpenException.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.UnmappableParameterValueException.get -> System.Func<object!, System.Exception?>?
+pengdows.crud.fakeDb.fakeDbDriverQuirks.UnmappableParameterValueException.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.PrepareWithoutOpenConnection.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.PrepareWithoutOpenConnection.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.NullReferenceWithoutConnection.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.NullReferenceWithoutConnection.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.AsyncNullReferenceWithoutConnection.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.AsyncNullReferenceWithoutConnection.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ScalarNullReferenceOnClosedConnection.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ScalarNullReferenceOnClosedConnection.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CommandTextChangeableWithOpenReader.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CommandTextChangeableWithOpenReader.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ConnectionChangeableWithOpenReader.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ConnectionChangeableWithOpenReader.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ReexecuteWithOpenReaderAllowed.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ReexecuteWithOpenReaderAllowed.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ForeignTransactionAccepted.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ForeignTransactionAccepted.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CloseConnectionIgnored.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CloseConnectionIgnored.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CommandTypeDefaultsToZero.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CommandTypeDefaultsToZero.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CanceledExecuteReaderAsyncRuns.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CanceledExecuteReaderAsyncRuns.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ConnectionStringSettableWhileOpen.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ConnectionStringSettableWhileOpen.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CompletedTransactionKeepsConnection.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.CompletedTransactionKeepsConnection.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.DisposedTransactionKeepsConnection.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.DisposedTransactionKeepsConnection.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.DisposedTransactionThrowsObjectDisposed.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.DisposedTransactionThrowsObjectDisposed.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.TransactionCompletesAgain.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.TransactionCompletesAgain.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.SavepointReleaseIsNoOp.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.SavepointReleaseIsNoOp.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.SavepointsWorkButUnreported.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.SavepointsWorkButUnreported.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterNameDefaultsToNull.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterNameDefaultsToNull.set -> void
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterDirectionDefaultsToZero.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.ParameterDirectionDefaultsToZero.set -> void
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.SqlClient() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.Npgsql() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.MySqlConnector() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.MySqlData() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.DuckDbNet() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.OracleManagedDataAccess() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.SystemDataSqlite() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.AseClient() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!
+static pengdows.crud.fakeDb.fakeDbDriverQuirks.Db2() -> pengdows.crud.fakeDb.fakeDbDriverQuirks!

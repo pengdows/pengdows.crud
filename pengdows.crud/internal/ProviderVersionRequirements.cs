@@ -140,12 +140,7 @@ internal static class ProviderVersionRequirements
 
             for (var i = 0; i < Math.Min(_prerelease.Length, other._prerelease.Length); i++)
             {
-                var left = _prerelease[i];
-                var right = other._prerelease[i];
-                var byIdentifier = int.TryParse(left, NumberStyles.None, CultureInfo.InvariantCulture, out var l)
-                    && int.TryParse(right, NumberStyles.None, CultureInfo.InvariantCulture, out var r)
-                        ? l.CompareTo(r)
-                        : string.CompareOrdinal(left, right);
+                var byIdentifier = CompareIdentifiers(_prerelease[i], other._prerelease[i]);
                 if (byIdentifier != 0)
                 {
                     return byIdentifier;
@@ -154,5 +149,28 @@ internal static class ProviderVersionRequirements
 
             return _prerelease.Length.CompareTo(other._prerelease.Length);
         }
+
+        // SemVer 11.4: numeric identifiers compare numerically (no leading zeros, so by length, then by
+        // digits), alphanumeric ones in ASCII order, and a numeric identifier is always the lower.
+        private static int CompareIdentifiers(string left, string right)
+        {
+            var leftNumeric = IsNumeric(left);
+            var rightNumeric = IsNumeric(right);
+            if (leftNumeric && rightNumeric)
+            {
+                var byLength = left.Length.CompareTo(right.Length);
+                return byLength != 0 ? byLength : string.CompareOrdinal(left, right);
+            }
+
+            if (leftNumeric != rightNumeric)
+            {
+                return leftNumeric ? -1 : 1;
+            }
+
+            return string.CompareOrdinal(left, right);
+        }
+
+        private static bool IsNumeric(string identifier) =>
+            identifier.Length > 0 && identifier.All(char.IsAsciiDigit);
     }
 }

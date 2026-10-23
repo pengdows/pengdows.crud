@@ -27,6 +27,12 @@ internal class FakeTrackedConnection : TrackedConnection, ITrackedConnection
     {
         _schema = schema;
 
+        // Detection runs on an open connection (DatabaseContext opens it first), and a closed one refuses commands.
+        if (connection.State == ConnectionState.Closed)
+        {
+            connection.Open();
+        }
+
         if (connection is fakeDbConnection fake && scalars.Count > 0)
         {
             var value = scalars.Values.First();

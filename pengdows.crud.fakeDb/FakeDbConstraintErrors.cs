@@ -4,8 +4,8 @@ using pengdows.crud.enums;
 namespace pengdows.crud.fakeDb;
 
 /// <summary>
-/// The unique-key violation each emulated product's provider raises: the SQLSTATE, vendor error number and message the
-/// library's dialects classify on. Provider-shaped, so internal.
+/// The unique-key violation and syntax error each emulated product's provider raises: the SQLSTATE, vendor error number
+/// and message the library's dialects classify on. Provider-shaped, so internal.
 /// </summary>
 internal static class FakeDbConstraintErrors
 {
@@ -31,6 +31,30 @@ internal static class FakeDbConstraintErrors
         };
 
         return new ProviderShapedException(message, number, sqlState, product == SupportedDatabase.Sqlite ? 2067 : 0);
+    }
+
+    /// <summary>
+    /// The syntax error the emulated product's provider raises for text that is not a statement (FakeDataStore.StrictMode).
+    /// </summary>
+    internal static DbException SyntaxError(SupportedDatabase product, string token)
+    {
+        var (message, number, sqlState) = product switch
+        {
+            SupportedDatabase.Sqlite => ($"SQLite Error 1: 'near \"{token}\": syntax error'.", 1, null),
+            SupportedDatabase.SqlServer => ($"Incorrect syntax near '{token}'.", 102, null),
+            SupportedDatabase.MySql or SupportedDatabase.MariaDb or SupportedDatabase.TiDb or SupportedDatabase.AuroraMySql
+                or SupportedDatabase.SingleStore => ($"You have an error in your SQL syntax; check the manual that corresponds to your server version for the right syntax to use near '{token}' at line 1", 1064, "42000"),
+            SupportedDatabase.Oracle => ("ORA-00900: invalid SQL statement", 900, null),
+            _ => ($"syntax error at or near \"{token}\"", 0, "42601")
+        };
+
+        return new ProviderShapedException(message, number, sqlState, product == SupportedDatabase.Sqlite ? 1 : 0);
+    }
+
+    /// <summary>A driver's own <see cref="DbException"/> with the message it raises (for a <see cref="fakeDbDriverQuirks"/> preset).</summary>
+    internal static DbException ProviderError(string message)
+    {
+        return new ProviderShapedException(message, 0, null, 0);
     }
 
     private sealed class ProviderShapedException : DbException

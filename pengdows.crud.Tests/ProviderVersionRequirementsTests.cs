@@ -85,6 +85,10 @@ public sealed class ProviderVersionRequirementsTests
     [InlineData("0.2.1-preview.2+9b7a2bab")]
     [InlineData("0.2.1-preview.5+c0b13e67")]
     [InlineData("0.2.0")]
+    // SemVer 11.4.3: a numeric identifier sorts below an alphanumeric one.
+    [InlineData("0.2.1-1")]
+    [InlineData("0.2.1-1.preview.9")]
+    [InlineData("0.2.1-preview.5.alpha")]
     public void FlatFile_BeforePreview6_Throws(string informationalVersion)
     {
         var ex = Assert.Throws<NotSupportedException>(() =>
@@ -98,6 +102,12 @@ public sealed class ProviderVersionRequirementsTests
     [InlineData("0.2.1-preview.10")]
     [InlineData("0.2.1")]
     [InlineData("0.3.0-alpha.1")]
+    // SemVer 11.4.3: an alphanumeric identifier sorts above a numeric one, even one that begins
+    // with a digit or a hyphen, which an ordinal comparison puts below "6".
+    [InlineData("0.2.1-preview.rc")]
+    [InlineData("0.2.1-preview.5a")]
+    [InlineData("0.2.1-preview.-1")]
+    [InlineData("0.2.1-preview.6.1")]
     public void FlatFile_Preview6OrLater_IsAccepted(string informationalVersion)
     {
         ProviderVersionRequirements.EnsureSupported("pengdows.flatfile", informationalVersion);

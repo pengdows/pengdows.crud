@@ -70,4 +70,31 @@ public sealed class ReadOnlyTransactionEntryTests
         Assert.Contains(logs.Entries, e => e.Level >= LogLevel.Warning && e.Exception == failure);
         Assert.Equal(0, context.NumberOfOpenConnections);
     }
+
+    // TiDB refuses "SET SESSION transaction_read_only = 1" ("function READ ONLY has only noop implementation in
+    // tidb now"; live, TiDB v8.5.7) and cannot enforce read-only even with tidb_enable_noop_functions, so it sends
+    // no statement: a read-intent transaction on TiDB began only while a failure here was swallowed.
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task TiDb_ReadIntentTransaction_SendsNoReadOnlyStatement(bool async)
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.TiDb);
+        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.TiDb });
+        var connection = new fakeDbConnection { EmulatedProduct = SupportedDatabase.TiDb };
+        connection.SetCommandFailure("SET SESSION transaction_read_only = 1;",
+            new InvalidOperationException("function READ ONLY has only noop implementation in tidb now"));
+        factory.Connections.Add(connection);
+        await using var context = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=x;Database=d;EmulatedProduct=TiDb",
+            DbMode = DbMode.Standard
+        }, factory);
+
+        await using var tx = async
+            ? await context.BeginTransactionAsync(executionType: ExecutionType.Read)
+            : context.BeginTransaction(executionType: ExecutionType.Read);
+
+        Assert.DoesNotContain(connection.CreatedCommands.Select(c => c.CommandText), t => t.Contains("transaction_read_only = 1"));
+    }
 }

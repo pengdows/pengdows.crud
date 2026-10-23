@@ -117,6 +117,15 @@ public class FakeDataStore
             return 0;
         }
 
+        ThrowIfNotSql(commandText);
+
+        // A statement that returns rows changes none: ExecuteNonQuery reports -1 for it (DbCommand.ExecuteNonQuery).
+        if (FakeConstantSelect.TryEvaluate(commandText, parameters, out _) ||
+            FakeConstantSelect.StartsWithKeyword(commandText, "SELECT"))
+        {
+            return -1;
+        }
+
         var sql = commandText.Trim().ToUpperInvariant();
 
         // Handle CREATE TABLE
@@ -160,6 +169,14 @@ public class FakeDataStore
             return null;
         }
 
+        ThrowIfNotSql(commandText);
+
+        // The first column of the first row of the first result, or null when it has no rows (DbCommand.ExecuteScalar).
+        if (FakeConstantSelect.TryEvaluate(commandText, parameters, out var constantResults))
+        {
+            return constantResults[0].Count == 0 ? null : constantResults[0][0].Values.FirstOrDefault();
+        }
+
         var sql = commandText.Trim().ToUpperInvariant();
 
         // Handle SELECT 1 and similar simple queries
@@ -196,6 +213,35 @@ public class FakeDataStore
 
     public int LastInsertId => _lastInsertId;
 
+    /// <summary>
+    /// Every result set the command produces: one per statement for a batch of constant SELECTs, otherwise the single
+    /// result <see cref="ExecuteReader"/> returns.
+    /// </summary>
+    internal List<List<Dictionary<string, object?>>> ExecuteReaderResultSets(string commandText,
+        DbParameterCollection? parameters)
+    {
+        if (!string.IsNullOrWhiteSpace(commandText))
+        {
+            ThrowIfNotSql(commandText);
+            if (FakeConstantSelect.TryEvaluate(commandText, parameters, out var resultSets))
+            {
+                return resultSets;
+            }
+        }
+
+        return [ExecuteReader(commandText, parameters).ToList()];
+    }
+
+    // In StrictMode, text that is not a statement at all fails as the database would: with the emulated product's syntax
+    // error, a DbException. SQL the store does not model still throws NotSupportedException.
+    private void ThrowIfNotSql(string commandText)
+    {
+        if (StrictMode && FakeConstantSelect.IsNotSql(commandText))
+        {
+            throw FakeDbConstraintErrors.SyntaxError(ErrorShape, FakeConstantSelect.FirstKeyword(commandText)!);
+        }
+    }
+
     public IEnumerable<Dictionary<string, object?>> ExecuteReader(string commandText,
         DbParameterCollection? parameters = null)
     {
@@ -203,6 +249,8 @@ public class FakeDataStore
         {
             return Enumerable.Empty<Dictionary<string, object?>>();
         }
+
+        ThrowIfNotSql(commandText);
 
         var sql = commandText.Trim().ToUpperInvariant();
 

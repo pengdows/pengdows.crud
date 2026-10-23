@@ -991,9 +991,17 @@ public class fakeDbDataReader : DbDataReader
     /// </summary>
     public Exception? FailOnClose { get; set; }
 
+    /// <summary>
+    /// The connection to close with this reader: set when it was executed with <see cref="CommandBehavior.CloseConnection"/>.
+    /// </summary>
+    internal DbConnection? ConnectionToClose { get; set; }
+
     public override void Close()
     {
         _isClosed = true;
+        var connection = ConnectionToClose;
+        ConnectionToClose = null;
+        connection?.Close();
         var failure = FailOnClose;
         if (failure != null)
         {

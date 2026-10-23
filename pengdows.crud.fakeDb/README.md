@@ -47,6 +47,47 @@ using var reader = await command.ExecuteReaderAsync();
 This makes `pengdows.crud.fakeDb` handy for testing any code that relies on
 `DbConnection` or `DbDataReader` without spinning up a real database.
 
+## It honors the ADO.NET contract
+
+fakeDb passes the provider-neutral ADO.NET conformance suite
+([pengdows.AdoNetApiTest.conformance](https://github.com/pengdows/pengdows.AdoNetApiTest.conformance)), run by
+`pengdows.crud.fakeDb.Conformance.Tests`, so code that works against it is not leaning on behavior no real provider
+has. In particular:
+
+- Executing or preparing a command needs an open connection, no open reader on that command, and (when one is set) that
+  connection's transaction; otherwise it throws `InvalidOperationException`, as every provider does.
+- A committed, rolled back or disposed transaction has no `Connection` and refuses another `Commit`/`Rollback`.
+- `ExecuteNonQuery` of a SELECT returns -1, `CommandBehavior.CloseConnection` closes the connection with the reader, and
+  an async execute reports cancellation and failure through its task.
+- `GetSchema()` returns `MetaDataCollections`; `GetSchema("DataSourceInformation")` returns the emulated product's
+  embedded schema.
+
+With `EnableDataPersistence`, the shared `FakeDataStore` answers a SELECT that reads no table as a database would:
+literals, `NULL`, bound parameters, `UNION`, `ORDER BY` a column number, comments, and one result set per statement in
+a batch. Set `DataStore.StrictMode` to have text that is not SQL fail with the emulated product's syntax error (a
+`DbException`) and SQL the store does not model fail with `NotSupportedException`, instead of succeeding quietly.
+
+### Reproducing a driver's defects
+
+Real drivers depart from that contract, and code that runs on them has to survive it. `fakeDbDriverQuirks` makes each
+departure a switch; start from a driver's preset or set only the one you are testing:
+
+```csharp
+var factory = new fakeDbFactory(SupportedDatabase.PostgreSql)
+{
+    // Npgsql 9.0.3: a committed transaction keeps its Connection, a disposed one throws ObjectDisposedException
+    // from it, a command runs under another connection's transaction, ...
+    DriverQuirks = fakeDbDriverQuirks.Npgsql()
+};
+
+var connection = (fakeDbConnection)factory.CreateConnection();
+connection.DriverQuirks = new fakeDbDriverQuirks { PrepareWithoutOpenConnection = true }; // just this connection
+```
+
+Presets: `SqlClient()`, `Npgsql()`, `MySqlConnector()`, `MySqlData()`, `DuckDbNet()`, `OracleManagedDataAccess()`,
+`SystemDataSqlite()`, `AseClient()` and `Db2()`, each naming the driver version it reproduces. Every switch's
+documentation names the drivers and versions that behave that way.
+
 ## What it can test
 
 ### Observe the command that actually ran

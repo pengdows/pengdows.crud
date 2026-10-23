@@ -140,11 +140,10 @@ public class InternalExtensionThrowPathTests
         var dialect = GetRealDialect();
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         using var ctx = new DatabaseContext("Data Source=:memory:;EmulatedProduct=Sqlite", factory);
-        // SQLite :memory: auto-coerces to DbMode.SingleConnection, whose GetConnection returns
-        // the already-open persistent connection.
-        await using var conn = ctx.GetConnection(ExecutionType.Write);
+        // Settings are applied to a connection before it opens (DatabaseContext does it as it creates one); an open
+        // connection refuses a new connection string, as every provider does.
+        await using var conn = factory.CreateConnection();
 
-        // ITrackedConnection extends IDbConnection — pass it directly to the extension
         var record = Record.Exception(
             () => dialect.ApplyConnectionSettings(conn, ctx, false));
         Assert.Null(record);

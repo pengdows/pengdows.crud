@@ -84,9 +84,9 @@ public class DataSourceInformationSchemaTests
         dialect.DetectDatabaseInfo(tracked);
         var info = new DataSourceInformation(dialect);
 
-        var failingConn = new ThrowingTrackedConnection((DbConnection)factory.CreateConnection());
-        failingConn.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}";
-        failingConn.Open();
+        var inner = (DbConnection)factory.CreateConnection();
+        inner.ConnectionString = $"Data Source=test;EmulatedProduct={SupportedDatabase.Unknown}";
+        var failingConn = new ThrowingTrackedConnection(inner); // opens it
 
         var schema = info.GetSchema(failingConn);
 

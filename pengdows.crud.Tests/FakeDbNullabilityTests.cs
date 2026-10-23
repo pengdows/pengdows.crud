@@ -34,11 +34,12 @@ public class fakeDbNullabilityTests
     {
         var cmd = new fakeDbCommand();
         cmd.CommandText = null;
-        Assert.Null(cmd.CommandText);
+        Assert.Equal(string.Empty, cmd.CommandText); // null reads back empty, as SqlClient, Npgsql and Sqlite do
         cmd.CommandText = "SELECT 1";
         Assert.Equal("SELECT 1", cmd.CommandText);
 
         var conn = new fakeDbConnection();
+        conn.Open();
         var cmdWithConn = new fakeDbCommand(conn);
 
         var defaultResult = await cmdWithConn.ExecuteScalarAsync(default);

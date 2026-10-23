@@ -113,7 +113,7 @@ public class TenantContextRegistryAsyncTests
         Assert.Equal(1, factory.AsyncCallCount);
         using var sc = ctx.CreateSqlContainer("SELECT 1");
         var affected = await sc.ExecuteNonQueryAsync();
-        Assert.Equal(1, affected);
+        Assert.Equal(-1, affected); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]

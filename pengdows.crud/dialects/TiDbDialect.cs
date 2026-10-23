@@ -31,6 +31,17 @@ internal class TiDbDialect : MySqlDialect
     // TiDB treats READ ONLY as a no-op unless tidb_enable_noop_functions is set (live).
     internal override bool EnforcesReadOnlyTransactions => false;
 
+    // Nor does it accept MySQL's statement for it: "SET SESSION transaction_read_only = 1" fails with "function READ
+    // ONLY has only noop implementation in tidb now" (live, TiDB v8.5.7). A read-only transaction's entry threw it, and
+    // a read connection's session settings failed on every checkout (sql_mode applied, then the error logged and the
+    // settings retried; FailClosed refused the connection). With nothing it can enforce, it sends nothing;
+    // pengdows.crud's read-intent guard still applies.
+    protected override string? ReadOnlyTransactionSql => null;
+
+    public override string GetReadOnlySessionSettings() => string.Empty;
+
+    public override string GetFinalSessionSettings(bool readOnly) => GetFinalSessionSettings(readOnly, null);
+
     internal TiDbDialect(DbProviderFactory factory, ILogger logger)
         : base(factory, logger, SupportedDatabase.TiDb)
     {

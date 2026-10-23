@@ -87,7 +87,7 @@ public class SqlContainerIntentTests
 
         var result = await container.ExecuteNonQueryAsync(ExecutionType.Read);
 
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]

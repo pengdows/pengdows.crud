@@ -27,6 +27,7 @@ public sealed class ServerConnectionLimitProbeTests
         var connection = new fakeDbConnection();
         arrange(connection);
         PostgreSqlServerConnectionLimitProbeTests.ModelRealServer(connection);
+        connection.Open(); // the probe runs on the open connection the pool hands it
         var tracked = new TrackedConnection(connection);
         return dialect.ProbeServerConnectionLimitAsync(tracked, useAsync: true);
     }
@@ -223,6 +224,7 @@ public sealed class ServerConnectionLimitProbeTests
                 ? throw new OperationCanceledException()
                 : command == MaxConnections ? 151L : 0L
         };
+        connection.Open(); // the probe runs on the open connection the pool hands it
         using var tracked = new TrackedConnection(connection);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() =>

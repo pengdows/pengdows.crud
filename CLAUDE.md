@@ -193,6 +193,9 @@ dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj --filter "FullyQualif
 dotnet test pengdows.crud.Tests/pengdows.crud.Tests.csproj -c Release \
   --collect:"XPlat Code Coverage" --results-directory TestResults --settings coverage.runsettings
 
+# fakeDb against the ADO.NET conformance suite (no Docker; CI runs it with the solution)
+dotnet test pengdows.crud.fakeDb.Conformance.Tests -c Release
+
 # Run integration suite (requires Docker)
 dotnet run -c Release -f net10.0 --project testbed
 

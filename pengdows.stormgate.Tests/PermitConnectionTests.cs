@@ -43,10 +43,6 @@ public class PermitConnectionTests
         Assert.Equal(ConnectionState.Open, conn.State);
 
         // ... and writes and calls reach it.
-        conn.ConnectionString = "Data Source=new_cs;EmulatedProduct=Sqlite";
-        Assert.Equal(_inner.ConnectionString, conn.ConnectionString);
-        Assert.Contains("new_cs", _inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
-
         conn.ChangeDatabase("new_db");
         Assert.Contains("ChangeDatabase(new_db)", _inner.Operations);
         Assert.Equal("new_db", conn.Database);
@@ -56,6 +52,12 @@ public class PermitConnectionTests
 
         conn.CreateCommand();
         Assert.Single(_inner.Operations, "CreateCommand");
+
+        // A connection string changes only while closed: an open connection refuses one, as every provider does.
+        conn.Close();
+        conn.ConnectionString = "Data Source=new_cs;EmulatedProduct=Sqlite";
+        Assert.Equal(_inner.ConnectionString, conn.ConnectionString);
+        Assert.Contains("new_cs", _inner.ConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -650,9 +652,10 @@ public class PermitConnectionTests
         Assert.Equal(IsolationLevel.Serializable, tx.IsolationLevel);
         Assert.Same(conn, tx.Connection);
         tx.Commit();
-        tx.Rollback();
-        await tx.CommitAsync();
-        await tx.RollbackAsync();
+        // A completed transaction refuses another completion; each attempt still reaches the inner transaction.
+        Assert.Throws<InvalidOperationException>(() => tx.Rollback());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.CommitAsync());
+        await Assert.ThrowsAsync<InvalidOperationException>(() => tx.RollbackAsync());
 
         Assert.Equal(new[] { "Commit", "Rollback", "CommitAsync", "RollbackAsync" }, _inner.LastTransaction!.Operations.ToArray());
     }

@@ -166,7 +166,7 @@ public class SqlContainerEdgeCaseTests : SqlLiteContextTestBase
         // which delegates to ExecuteNonQueryAsync(Write, commandType, ct).
         await using var sc = Context.CreateSqlContainer("SELECT 1");
         var result = await sc.ExecuteNonQueryAsync(CommandType.Text, CancellationToken.None);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     [Fact]
@@ -176,7 +176,7 @@ public class SqlContainerEdgeCaseTests : SqlLiteContextTestBase
         // which delegates to the 4-arg version with CancellationToken.None.
         await using var sc = Context.CreateSqlContainer("SELECT 1");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read, CommandType.Text);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     // =========================================================================
@@ -242,7 +242,7 @@ public class SqlContainerEdgeCaseTests : SqlLiteContextTestBase
         // No {P} placeholders → RenderParamsDeduplicating sb stays null → line 423
         await using var sc = oracleCtx.CreateSqlContainer("SELECT 1 FROM dual");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read, CommandType.Text);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 
     // =========================================================================
@@ -261,6 +261,6 @@ public class SqlContainerEdgeCaseTests : SqlLiteContextTestBase
         // Any SQL execution opens the connection through the serialized gate for DuckDB
         await using var sc = duckCtx.CreateSqlContainer("SELECT 1");
         var result = await sc.ExecuteNonQueryAsync(ExecutionType.Read, CommandType.Text);
-        Assert.True(result >= 0);
+        Assert.Equal(-1, result); // a SELECT changes no rows: ExecuteNonQuery returns -1 (DbCommand.ExecuteNonQuery)
     }
 }

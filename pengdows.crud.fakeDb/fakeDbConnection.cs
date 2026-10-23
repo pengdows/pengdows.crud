@@ -47,7 +47,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// </summary>
     public Exception? SchemaException { get; set; }
 
-    /// <summary>
+    /// Overrides the DataSourceInformation table GetSchema("DataSourceInformation") returns, bypassing the embedded
     /// Overrides the table GetSchema()/GetSchema(string) return, bypassing the embedded
     /// per-SupportedDatabase XML resource lookup entirely — lets a test fabricate an arbitrary
     /// schema (e.g. a specific DataSourceProductName/Version pair) that doesn't correspond to any
@@ -75,6 +75,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     private bool _isBroken;
     private bool _skipFirstFailOnOpen;
     private fakeDbFactory? _factoryRef;
+    private fakeDbFactory? _creatingFactory;
     private string? _emulatedTypeName;
     private Action? _customOpenBehavior;
     private Action? _customCommandBehavior;
@@ -557,6 +558,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// </summary>
     internal void SetFactoryReference(fakeDbFactory factory)
     {
+        _creatingFactory = factory;
         _factoryRef = factory;
     }
 
@@ -752,12 +754,37 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     /// </summary>
     public List<string> ConnectionStringHistory { get; } = new();
 
+    // The factory that created this connection, or the provider's singleton for one constructed directly, as
+    // DbConnection.DbProviderFactory (and so DbProviderFactories.GetFactory(connection)) reports it. Kept apart from
+    // FactoryReference, which ResetFailureConditions clears.
+    protected override DbProviderFactory DbProviderFactory => _creatingFactory ?? fakeDbFactory.Instance;
+
+    private fakeDbDriverQuirks? _driverQuirks;
+
+    /// <summary>
+    /// The driver defects this connection, and the commands and transactions it creates, reproduce: its own when set,
+    /// otherwise the factory's that created it (<see cref="fakeDbFactory.DriverQuirks"/>). Conformant by default.
+    /// </summary>
+    public fakeDbDriverQuirks DriverQuirks
+    {
+        get => _driverQuirks ?? _creatingFactory?.DriverQuirks ?? (_driverQuirks = new fakeDbDriverQuirks());
+        set => _driverQuirks = value;
+    }
+
     [AllowNull]
     public override string ConnectionString
     {
         get => _connectionString ?? string.Empty;
         set
         {
+            // Every provider refuses a new connection string on an open connection (SqlClient: "Not allowed to change
+            // the 'ConnectionString' property. The connection's current state is open.").
+            if (_state == ConnectionState.Open && !DriverQuirks.ConnectionStringSettableWhileOpen)
+            {
+                throw DriverQuirks.ConnectionStringWhileOpenException?.Invoke() ?? new InvalidOperationException(
+                    "Not allowed to change the 'ConnectionString' property. The connection's current state is open.");
+            }
+
             var normalized = value ?? string.Empty;
             ConnectionStringHistory.Add(normalized);
             if (EmulatedProduct is SupportedDatabase.SqlServer or SupportedDatabase.Db2)
@@ -1363,59 +1390,21 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         }
 
         command.BlockSynchronousExecution = BlockSynchronousCommandExecution;
+        if (DriverQuirks.CommandTypeDefaultsToZero)
+        {
+            command.CommandType = 0;
+        }
 
         CreatedCommands.Add(command);
         LastCreatedCommand = command;
         return command;
     }
 
+    // With no collection named, GetSchema returns MetaDataCollections, the list of collections the provider serves
+    // (DbConnection.GetSchema()).
     public override DataTable GetSchema()
     {
-        if (SchemaException != null)
-        {
-            throw SchemaException;
-        }
-
-        if (_emulatedProduct.HasValue && ProductsWithoutSchemaSupport.Contains(_emulatedProduct.Value))
-        {
-            throw new NotSupportedException("Specified method is not supported.");
-        }
-
-        if (_schemaTable != null)
-        {
-            return _schemaTable;
-        }
-
-        if (_emulatedProduct is null)
-        {
-            throw new InvalidOperationException("EmulatedProduct must be configured via connection string.");
-        }
-
-        if (_emulatedProduct == SupportedDatabase.Unknown)
-        {
-            _schemaTable = new DataTable();
-            _schemaTable.Columns.Add("DataSourceProductName", typeof(string));
-            _schemaTable.Columns.Add("DataSourceProductVersion", typeof(string));
-            _schemaTable.Columns.Add("ParameterMarkerPattern", typeof(string));
-            _schemaTable.Columns.Add("ParameterMarkerFormat", typeof(string));
-            _schemaTable.Columns.Add("ParameterNameMaxLength", typeof(int));
-            _schemaTable.Columns.Add("ParameterNamePattern", typeof(string));
-            _schemaTable.Columns.Add("ParameterNamePatternRegex", typeof(string));
-            _schemaTable.Columns.Add("SupportsNamedParameters", typeof(bool));
-            _schemaTable.Rows.Add("UnknownDb", "1", "@p[0-9]+", "@{0}", 64, "@\\w+", "@\\w+", true);
-            return _schemaTable;
-        }
-
-        var resourceName = $"pengdows.crud.fakeDb.xml.{_emulatedProduct}.schema.xml";
-
-        using var stream = typeof(fakeDbConnection).Assembly
-                               .GetManifestResourceStream(resourceName)
-                           ?? throw new FileNotFoundException($"Embedded schema not found: {resourceName}");
-
-        var table = new DataTable();
-        table.ReadXml(stream);
-        _schemaTable = table;
-        return _schemaTable;
+        return GetSchema(DbMetaDataCollectionNames.MetaDataCollections);
     }
 
     public override DataTable GetSchema(string collectionName, string?[] restrictionValues)
@@ -1440,6 +1429,17 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             throw new NotSupportedException("Specified method is not supported.");
         }
 
+        if (string.Equals(meta, DbMetaDataCollectionNames.MetaDataCollections, StringComparison.OrdinalIgnoreCase))
+        {
+            return CreateMetaDataCollections();
+        }
+
+        // Real providers refuse a collection they do not serve (SqlClient: "The requested collection (x) is not defined.").
+        if (!string.Equals(meta, DbMetaDataCollectionNames.DataSourceInformation, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ArgumentException($"The requested collection ({meta}) is not defined.", nameof(meta));
+        }
+
         if (_schemaTable != null)
         {
             return _schemaTable;
@@ -1452,7 +1452,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
 
         if (_emulatedProduct == SupportedDatabase.Unknown)
         {
-            _schemaTable = new DataTable();
+            _schemaTable = new DataTable(DbMetaDataCollectionNames.DataSourceInformation);
             _schemaTable.Columns.Add("DataSourceProductName", typeof(string));
             _schemaTable.Columns.Add("DataSourceProductVersion", typeof(string));
             _schemaTable.Columns.Add("ParameterMarkerPattern", typeof(string));
@@ -1475,5 +1475,17 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
         table.ReadXml(stream);
         _schemaTable = table;
         return _schemaTable;
+    }
+
+    // The common schema collections page's MetaDataCollections shape: the two collections fakeDb serves.
+    private static DataTable CreateMetaDataCollections()
+    {
+        var table = new DataTable(DbMetaDataCollectionNames.MetaDataCollections);
+        table.Columns.Add(DbMetaDataColumnNames.CollectionName, typeof(string));
+        table.Columns.Add(DbMetaDataColumnNames.NumberOfRestrictions, typeof(int));
+        table.Columns.Add(DbMetaDataColumnNames.NumberOfIdentifierParts, typeof(int));
+        table.Rows.Add(DbMetaDataCollectionNames.MetaDataCollections, 0, 0);
+        table.Rows.Add(DbMetaDataCollectionNames.DataSourceInformation, 0, 0);
+        return table;
     }
 }

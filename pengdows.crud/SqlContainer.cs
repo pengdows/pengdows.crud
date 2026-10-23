@@ -747,6 +747,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         AddParametersToCommand(dbCommand);
         if (_dialect is SqlDialect validatingDialect)
         {
+            validatingDialect.PrepareCommandParameters(dbCommand);
             validatingDialect.ValidateCommandParameters(dbCommand);
         }
 
@@ -1963,6 +1964,7 @@ public class SqlContainer : SafeAsyncDisposableBase, ISqlContainer, ISqlDialectP
         AddParametersToCommand(cmd);
         if (_dialect is SqlDialect validatingExecDialect)
         {
+            validatingExecDialect.PrepareCommandParameters(cmd);
             validatingExecDialect.ValidateCommandParameters(cmd);
         }
 

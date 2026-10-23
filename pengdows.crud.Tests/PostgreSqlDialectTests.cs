@@ -251,6 +251,7 @@ public class PostgreSqlDialectTests
     {
         // Arrange
         var connection = _factory.CreateConnection();
+        connection.Open();
         var trackedConnection = new TrackedConnection(connection, "test", NullLogger.Instance);
 
         // Act

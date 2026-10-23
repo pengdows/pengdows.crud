@@ -1,5 +1,6 @@
 using System.Data;
 using System.Reflection;
+using pengdows.crud.configuration;
 using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
@@ -95,7 +96,14 @@ public class ReadOnlyRefusalTranslationTests : DatabaseTestBase
         await RunTestAgainstProviderAsync(provider, async context =>
         {
             var table = await CreateTableAsync(context, provider);
-            await ExecuteAsync(context, on);
+            // TiDB refuses a prepared SET GLOBAL tidb_super_read_only = OFF while read-only ("Running in read-only
+            // mode"; live, v8.5.7), which left the server read-only for every later test: the switch runs unprepared.
+            await using var admin = new DatabaseContext(new DatabaseContextConfiguration
+            {
+                ConnectionString = Fixture.GetRawConnectionString(provider),
+                PrepareMode = CommandPrepareMode.Never
+            }, MySqlConnector.MySqlConnectorFactory.Instance);
+            await ExecuteAsync(admin, on);
             try
             {
                 await using var writer = await CreateAdditionalContextAsync(provider);
@@ -104,7 +112,7 @@ public class ReadOnlyRefusalTranslationTests : DatabaseTestBase
             }
             finally
             {
-                await ExecuteAsync(context, off);
+                await ExecuteAsync(admin, off);
             }
         });
     }

@@ -31,6 +31,12 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     public bool EnableDataPersistence { get; set; } = false;
 
     /// <summary>
+    /// The driver defects every connection, command and parameter this factory creates reproduces (a connection given its
+    /// own <see cref="fakeDbConnection.DriverQuirks"/> uses those instead). Conformant by default.
+    /// </summary>
+    public fakeDbDriverQuirks DriverQuirks { get; set; } = new();
+
+    /// <summary>
     /// When set, propagated to every <see cref="fakeDbConnection.CommandFactory"/> this factory
     /// creates (or hands back from the pre-enqueued queue) — see that property's remarks.
     /// </summary>
@@ -232,7 +238,7 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 
     public override DbCommand CreateCommand()
     {
-        return new fakeDbCommand();
+        return new fakeDbCommand(DriverQuirks);
     }
 
     public override DbConnection CreateConnection()
@@ -451,6 +457,13 @@ public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
     }
 
     public override DbParameter CreateParameter()
+    {
+        var parameter = CreateEmulatedParameter();
+        DriverQuirks.ApplyTo(parameter);
+        return parameter;
+    }
+
+    internal DbParameter CreateEmulatedParameter()
     {
         if (EmulatesOracleParameterMetadata)
         {

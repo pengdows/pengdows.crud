@@ -53,13 +53,127 @@ public class fakeDbCommand : DbCommand
     {
     }
 
-    [AllowNull] public override string CommandText { get; set; } = string.Empty;
+    // A command a factory creates with no connection: it reproduces that factory's driver quirks.
+    internal fakeDbCommand(fakeDbDriverQuirks quirks)
+    {
+        _detachedQuirks = quirks;
+        if (quirks.CommandTypeDefaultsToZero)
+        {
+            CommandType = 0;
+        }
+    }
+
+    private static readonly fakeDbDriverQuirks Conformant = new();
+    private readonly fakeDbDriverQuirks? _detachedQuirks;
+
+    // The connection's quirks, or the creating factory's while the command has no fakeDb connection.
+    private fakeDbDriverQuirks Quirks => (_connection as fakeDbConnection)?.DriverQuirks ?? _detachedQuirks ?? Conformant;
+
+    private string _commandText = string.Empty;
+    private DbConnection? _connection;
+    private fakeDbDataReader? _openReader;
+
+    // A command whose reader is still open cannot change its text or connection, or run again (every provider refuses:
+    // Microsoft.Data.Sqlite "An open reader is associated with this command. Close it before changing the CommandText
+    // property.").
+    [AllowNull]
+    public override string CommandText
+    {
+        get => _commandText;
+        set
+        {
+            if (!Quirks.CommandTextChangeableWithOpenReader)
+            {
+                ThrowIfReaderOpen();
+            }
+
+            _commandText = value ?? string.Empty;
+        }
+    }
+
     public override int CommandTimeout { get; set; }
-    public override CommandType CommandType { get; set; }
+
+    // DbCommand.CommandType: "The default is Text."
+    public override CommandType CommandType { get; set; } = CommandType.Text;
     public override bool DesignTimeVisible { get; set; }
     public override UpdateRowSource UpdatedRowSource { get; set; }
 
-    protected override DbConnection? DbConnection { get; set; }
+    protected override DbConnection? DbConnection
+    {
+        get => _connection;
+        set
+        {
+            if (!Quirks.ConnectionChangeableWithOpenReader)
+            {
+                ThrowIfReaderOpen();
+            }
+
+            _connection = value;
+        }
+    }
+
+    private void ThrowIfReaderOpen()
+    {
+        if (_openReader is { IsClosed: false })
+        {
+            throw new InvalidOperationException(
+                "An open reader is associated with this command. Close it before changing or executing the command.");
+        }
+    }
+
+    // A driver's own error for a parameter value it cannot send (fakeDbDriverQuirks.UnmappableParameterValueException).
+    private T WithDriverValueErrors<T>(Func<T> execute)
+    {
+        try
+        {
+            return execute();
+        }
+        catch (FakeConstantSelect.UnmappableValueException ex)
+        {
+            throw Quirks.UnmappableParameterValueException?.Invoke(ex.Value) ?? new NotSupportedException(ex.Message);
+        }
+    }
+
+    // Executing and preparing need an open connection, no open reader on this command and, when a transaction is set,
+    // that connection's transaction: what every provider checks before sending anything (DbCommand.ExecuteNonQuery,
+    // ExecuteScalar, ExecuteReader and Prepare all document InvalidOperationException for these).
+    private void ThrowIfCannotExecute(string operation)
+    {
+        var quirks = Quirks;
+        if (_connection == null)
+        {
+            if (quirks.NullReferenceWithoutConnection)
+            {
+                throw new NullReferenceException();
+            }
+
+            throw new InvalidOperationException($"{operation}: Connection property has not been initialized.");
+        }
+
+        if (_connection.State != ConnectionState.Open)
+        {
+            if (quirks.ScalarNullReferenceOnClosedConnection && operation == nameof(ExecuteScalar))
+            {
+                throw new NullReferenceException();
+            }
+
+            throw new InvalidOperationException(
+                $"{operation} requires an open and available Connection. The connection's current state is {_connection.State}.");
+        }
+
+        if (_openReader is { IsClosed: false } && !quirks.ReexecuteWithOpenReaderAllowed)
+        {
+            throw quirks.ReexecuteWithOpenReaderException?.Invoke() ?? new InvalidOperationException(
+                "An open reader is associated with this command. Close it before changing or executing the command.");
+        }
+
+        if (!quirks.ForeignTransactionAccepted && DbTransaction?.Connection is { } transactionConnection &&
+            !ReferenceEquals(transactionConnection, _connection))
+        {
+            throw new InvalidOperationException(
+                "The transaction is either not associated with the current connection or has been completed.");
+        }
+    }
     // One transaction, whichever way it is set: through this property, DbCommand.Transaction or
     // IDbCommand.Transaction. It was a separate field, so a transaction set through the interface
     // (as pengdows.crud does) read back null here.
@@ -88,6 +202,11 @@ public class fakeDbCommand : DbCommand
     public override void Prepare()
     {
         _log.Record("Prepare");
+        if (!Quirks.PrepareWithoutOpenConnection)
+        {
+            ThrowIfCannotExecute(nameof(Prepare));
+        }
+
         PrepareCount++;
     }
 
@@ -128,6 +247,7 @@ public class fakeDbCommand : DbCommand
 
     private int ExecuteNonQueryCore()
     {
+        ThrowIfCannotExecute(nameof(ExecuteNonQuery));
         ThrowIfShouldFail(nameof(ExecuteNonQuery));
 
         var conn = FakeConnection;
@@ -202,8 +322,14 @@ public class fakeDbCommand : DbCommand
         // Use data persistence if enabled
         if (conn != null && conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
         {
-            var result = conn.DataStore.ExecuteNonQuery(CommandText, Parameters);
-            return result;
+            var result = WithDriverValueErrors(() => conn.DataStore.ExecuteNonQuery(CommandText, Parameters));
+            return result == -1 && Quirks.NonQueryResultForSelect is { } selectResult ? selectResult : result;
+        }
+
+        // A SELECT changes no rows: ExecuteNonQuery returns -1 for it (DbCommand.ExecuteNonQuery).
+        if (FakeConstantSelect.StartsWithKeyword(CommandText, "SELECT"))
+        {
+            return Quirks.NonQueryResultForSelect ?? -1;
         }
 
         return factory?.DefaultNonQueryResult ?? 1;
@@ -219,6 +345,7 @@ public class fakeDbCommand : DbCommand
 
     private object? ExecuteScalarCore()
     {
+        ThrowIfCannotExecute(nameof(ExecuteScalar));
         ThrowIfShouldFail(nameof(ExecuteScalar));
 
         var conn = FakeConnection;
@@ -342,7 +469,7 @@ public class fakeDbCommand : DbCommand
             // Use data persistence if enabled
             if (conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
             {
-                var result = conn.DataStore.ExecuteScalar(CommandText, Parameters);
+                var result = WithDriverValueErrors(() => conn.DataStore.ExecuteScalar(CommandText, Parameters));
                 if (result != null)
                 {
                     return result;
@@ -444,10 +571,23 @@ public class fakeDbCommand : DbCommand
     // A reader executed with SequentialAccess enforces it (fakeDbDataReader.EnforceSequentialAccess).
     private DbDataReader ExecuteDbDataReaderCore(CommandBehavior behavior)
     {
+        ThrowIfCannotExecute(nameof(ExecuteReader));
         var reader = CreateReader(behavior);
-        if (reader is fakeDbDataReader fake && behavior.HasFlag(CommandBehavior.SequentialAccess))
+        if (reader is fakeDbDataReader fake)
         {
-            fake.EnforceSequentialAccess = true;
+            if (behavior.HasFlag(CommandBehavior.SequentialAccess))
+            {
+                fake.EnforceSequentialAccess = true;
+            }
+
+            // CommandBehavior.CloseConnection: "the associated Connection object is closed when the associated
+            // DataReader object is closed."
+            if (behavior.HasFlag(CommandBehavior.CloseConnection) && !Quirks.CloseConnectionIgnored)
+            {
+                fake.ConnectionToClose = _connection;
+            }
+
+            _openReader = fake;
         }
 
         return reader;
@@ -497,8 +637,8 @@ public class fakeDbCommand : DbCommand
         // Use data persistence if enabled
         if (conn != null && conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
         {
-            var results = conn.DataStore.ExecuteReader(CommandText, Parameters);
-            return new fakeDbDataReader(ConvertRows(results));
+            var resultSets = WithDriverValueErrors(() => conn.DataStore.ExecuteReaderResultSets(CommandText, Parameters));
+            return new fakeDbDataReader(resultSets.Select(ConvertRows));
         }
 
         return new fakeDbDataReader();
@@ -515,9 +655,15 @@ public class fakeDbCommand : DbCommand
     // BlockSynchronousExecution == true (opt-in): the virtual sync method throws by design, so
     // call the private *Core method directly instead — this is the path that lets a test prove
     // production code used the genuinely async overload.
+    // A canceled token gives a canceled task and a failure a faulted one, as the base DbCommand async methods do; neither
+    // throws from the call itself.
     public override Task<int> ExecuteNonQueryAsync(CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
+        if (ct.IsCancellationRequested)
+        {
+            return Task.FromCanceled<int>(ct);
+        }
+
         _log.Record("ExecuteNonQueryAsync");
         AsyncExecuteCount++;
 
@@ -528,12 +674,28 @@ public class fakeDbCommand : DbCommand
             return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteNonQueryCore() : _log.Unlogged(ExecuteNonQuery));
         }
 
-        return Task.FromResult(BlockSynchronousExecution ? ExecuteNonQueryCore() : _log.Unlogged(ExecuteNonQuery));
+        try
+        {
+            return Task.FromResult(BlockSynchronousExecution ? ExecuteNonQueryCore() : _log.Unlogged(ExecuteNonQuery));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<int>(ex);
+        }
     }
 
     public override Task<object?> ExecuteScalarAsync(CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
+        if (ct.IsCancellationRequested)
+        {
+            return Task.FromCanceled<object?>(ct);
+        }
+
+        if (_connection == null && Quirks.AsyncNullReferenceWithoutConnection)
+        {
+            return Task.FromException<object?>(new NullReferenceException());
+        }
+
         _log.Record("ExecuteScalarAsync");
         AsyncExecuteCount++;
 
@@ -571,7 +733,16 @@ public class fakeDbCommand : DbCommand
     protected override Task<DbDataReader> ExecuteDbDataReaderAsync(
         CommandBehavior behavior, CancellationToken ct)
     {
-        ct.ThrowIfCancellationRequested();
+        if (ct.IsCancellationRequested && !Quirks.CanceledExecuteReaderAsyncRuns)
+        {
+            return Task.FromCanceled<DbDataReader>(ct);
+        }
+
+        if (_connection == null && Quirks.AsyncNullReferenceWithoutConnection)
+        {
+            return Task.FromException<DbDataReader>(new NullReferenceException());
+        }
+
         _log.Record($"ExecuteReaderAsync({behavior})");
         AsyncExecuteCount++;
 
@@ -582,7 +753,14 @@ public class fakeDbCommand : DbCommand
             return ExecuteWithGateAsync(gate, ct, () => BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : _log.Unlogged(() => ExecuteDbDataReader(behavior)));
         }
 
-        return Task.FromResult(BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : _log.Unlogged(() => ExecuteDbDataReader(behavior)));
+        try
+        {
+            return Task.FromResult(BlockSynchronousExecution ? ExecuteDbDataReaderCore(behavior) : _log.Unlogged(() => ExecuteDbDataReader(behavior)));
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException<DbDataReader>(ex);
+        }
     }
 
     /// <summary>
@@ -598,7 +776,15 @@ public class fakeDbCommand : DbCommand
     public override Task PrepareAsync(CancellationToken ct)
     {
         _log.Record("PrepareAsync");
-        _log.Unlogged(Prepare);
+        try
+        {
+            _log.Unlogged(Prepare);
+        }
+        catch (Exception ex)
+        {
+            return Task.FromException(ex);
+        }
+
         return Task.CompletedTask;
     }
 
@@ -607,7 +793,9 @@ public class fakeDbCommand : DbCommand
         _log.Record("CreateParameter");
         // Like a real provider's command, the parameter is the provider's own type, so a factory's
         // parameter-metadata emulation (Npgsql, Informix, ...) applies here too.
-        return (Connection as fakeDbConnection)?.FactoryReference?.CreateParameter() ?? new fakeDbParameter();
+        var parameter = (Connection as fakeDbConnection)?.FactoryReference?.CreateEmulatedParameter() ?? new fakeDbParameter();
+        Quirks.ApplyTo(parameter);
+        return parameter;
     }
 
     protected override void Dispose(bool disposing)

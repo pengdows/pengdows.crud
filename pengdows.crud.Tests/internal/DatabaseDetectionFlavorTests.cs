@@ -19,6 +19,7 @@ public class DatabaseDetectionFlavorTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.Open(); // detection runs on the open connection DatabaseContext initializes with
         connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraMySqlProbe, "5.7.12");
 
         using var cmd = connection.CreateCommand();
@@ -33,6 +34,7 @@ public class DatabaseDetectionFlavorTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.Open(); // detection runs on the open connection DatabaseContext initializes with
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
         connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraMySqlProbe, "5.7.12");
@@ -47,6 +49,7 @@ public class DatabaseDetectionFlavorTests
     {
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.Open(); // detection runs on the open connection DatabaseContext initializes with
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
         connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.AuroraPostgreSqlProbe, "1.2.3");
@@ -77,6 +80,7 @@ public class DatabaseDetectionFlavorTests
         // existing @@aurora_version probe above.
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.Open(); // detection runs on the open connection DatabaseContext initializes with
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
         connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.SingleStoreProbe, "9.1.1");
@@ -95,6 +99,7 @@ public class DatabaseDetectionFlavorTests
         // aurora_version() so a failed aurora probe cannot corrupt the YSQL connection state.
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.Open(); // detection runs on the open connection DatabaseContext initializes with
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
         connection.SetScalarResultForCommand(
@@ -122,6 +127,7 @@ public class DatabaseDetectionFlavorTests
         // plain PostgreSql and never got SpannerDialect's overrides.
         var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
         var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.Open(); // detection runs on the open connection DatabaseContext initializes with
 
         connection.EmulatedProduct = SupportedDatabase.Unknown;
         connection.SetScalarResultForCommand(pengdows.crud.@internal.DatabaseDetectionService.SpannerProbe, 1L);
@@ -138,6 +144,7 @@ public class DatabaseDetectionFlavorTests
 
         // Simulate detection as CockroachDb
         var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.Open(); // detection runs on the open connection DatabaseContext initializes with
         connection.EmulatedProduct = SupportedDatabase.PostgreSql;
         connection.SetScalarResultForCommand("SELECT version()", "CockroachDB CCL v20.2.0");
 
@@ -162,6 +169,7 @@ public class DatabaseDetectionFlavorTests
         var dialect = new PostgreSqlDialect(factory, NullLogger<PostgreSqlDialect>.Instance, SupportedDatabase.AuroraPostgreSql);
 
         var connection = (fakeDbConnection)factory.CreateConnection();
+        connection.Open(); // detection runs on the open connection DatabaseContext initializes with
         connection.EmulatedProduct = SupportedDatabase.PostgreSql;
         connection.SetScalarResultForCommand("SELECT version()", "PostgreSQL 15.0");
 

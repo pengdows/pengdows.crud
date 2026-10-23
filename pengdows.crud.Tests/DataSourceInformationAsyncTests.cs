@@ -22,6 +22,7 @@ public class DataSourceInformationAsyncTests
             "@p[0-9]+", "@{0}", 64, "@\\w+", "@\\w+", true);
         await using (tracked)
         {
+            tracked.Close(); // the helper hands it over open; this test needs one the call would have to open
             using var cancellation = new CancellationTokenSource();
             cancellation.Cancel();
 

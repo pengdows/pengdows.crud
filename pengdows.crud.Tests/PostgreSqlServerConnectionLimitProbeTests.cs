@@ -26,6 +26,7 @@ public sealed class PostgreSqlServerConnectionLimitProbeTests
         var connection = new fakeDbConnection();
         arrange(connection);
         ModelRealServer(connection);
+        connection.Open(); // the probe runs on the open connection the pool hands it
         using var tracked = new TrackedConnection(connection);
         return await dialect.ProbeServerConnectionLimitAsync(tracked, useAsync: true);
     }
@@ -213,6 +214,7 @@ public sealed class PostgreSqlServerConnectionLimitProbeTests
                     _ => throw new InvalidOperationException($"unrecognized configuration parameter: {command}")
                 }
         };
+        connection.Open(); // the probe runs on the open connection the pool hands it
         using var tracked = new TrackedConnection(connection);
 
         await Assert.ThrowsAsync<OperationCanceledException>(() =>
