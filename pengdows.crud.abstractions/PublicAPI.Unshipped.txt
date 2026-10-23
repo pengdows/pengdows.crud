@@ -2,8 +2,10 @@
 pengdows.crud.IDataSourceInformation.ParsedVersion.get -> System.Version?
 pengdows.crud.IDatabaseContextFactory.CreateAsync(pengdows.crud.configuration.IDatabaseContextConfiguration! configuration, System.Data.Common.DbProviderFactory! factory, Microsoft.Extensions.Logging.ILoggerFactory! loggerFactory, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.IDatabaseContext!>!
 pengdows.crud.IPrimaryKeyTableGateway<TEntity>.AuditCreationPolicy.get -> pengdows.crud.enums.AuditCreationPolicy
+pengdows.crud.IPrimaryKeyTableGateway<TEntity>.AuditCreationPolicy.set -> void
 pengdows.crud.IPrimaryKeyTableGateway<TEntity>.ColumnName(string! propertyName) -> string!
 pengdows.crud.ITableGateway<TEntity, TRowID>.AuditCreationPolicy.get -> pengdows.crud.enums.AuditCreationPolicy
+pengdows.crud.ITableGateway<TEntity, TRowID>.AuditCreationPolicy.set -> void
 pengdows.crud.ITableGateway<TEntity, TRowID>.ColumnName(string! propertyName) -> string!
 pengdows.crud.ITransactionContext.ReleaseSavepointAsync(string! name) -> System.Threading.Tasks.ValueTask
 pengdows.crud.ITransactionContext.ReleaseSavepointAsync(string! name, System.Threading.CancellationToken cancellationToken) -> System.Threading.Tasks.ValueTask

@@ -8,10 +8,10 @@ using Xunit;
 namespace pengdows.crud.Tests;
 
 /// <summary>
-/// The gateway interfaces are what callers program to and fake. An init accessor on an interface
-/// property (AuditCreationPolicy, new in 2.0.6) carries modreq(IsExternalInit), which DispatchProxy
-/// can't implement: creating a proxy threw TypeLoadException ("Signature of the body and declaration
-/// in a method implementation do not match"). Found by pengdows.hangfire's test doubles of
+/// The gateway interfaces are what callers program to and fake. AuditCreationPolicy uses a normal
+/// setter so DispatchProxy can implement the interface; an init accessor carries modreq(IsExternalInit),
+/// which previously caused TypeLoadException ("Signature of the body and declaration in a method
+/// implementation do not match"). Found by pengdows.hangfire's test doubles of
 /// IDistributedLockGateway : ITableGateway&lt;,&gt;.
 /// </summary>
 public sealed class GatewayInterfaceProxyTests
