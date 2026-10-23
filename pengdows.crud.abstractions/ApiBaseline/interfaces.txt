@@ -329,7 +329,7 @@ property pengdows.crud.IMapperOptions::ColumnsOnly : bool { get; }
 property pengdows.crud.IMapperOptions::EnumMode : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.IMapperOptions::NamePolicy : System.Func`2<string, string> { get; }
 property pengdows.crud.IMapperOptions::Strict : bool { get; }
-property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; }
+property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; set; }
 property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::EnumParseBehavior : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::WrappedTableName : string { get; }
 property pengdows.crud.ISqlContainer::CompositeIdentifierSeparator : string { get; }
@@ -340,7 +340,7 @@ property pengdows.crud.ISqlContainer::QuotePrefix : string { get; }
 property pengdows.crud.ISqlContainer::QuoteSuffix : string { get; }
 property pengdows.crud.ISqlQueryBuilder::Length : int { get; }
 property pengdows.crud.ISqlQueryBuilder::Version : int { get; }
-property pengdows.crud.ITableGateway`2<TEntity, TRowID>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; }
+property pengdows.crud.ITableGateway`2<TEntity, TRowID>::AuditCreationPolicy : pengdows.crud.enums.AuditCreationPolicy { get; set; }
 property pengdows.crud.ITableGateway`2<TEntity, TRowID>::EnumParseBehavior : pengdows.crud.enums.EnumParseFailureMode { get; }
 property pengdows.crud.ITableGateway`2<TEntity, TRowID>::WrappedTableName : string { get; }
 property pengdows.crud.ITransactionContext::IsCompleted : bool { get; }

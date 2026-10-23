@@ -32,15 +32,16 @@ public class TrackedWrapperTests
     }
 
     [Fact]
-    public void TrackedConnection_OpenClose_RecordsMetrics()
+    public void TrackedConnection_OpenClose_CountsNoConnections()
     {
+        // Connection counts come from the pool lease, not from opening and closing the provider connection.
         var metrics = new MetricsCollector(MetricsOptions.Default);
         using var tracked = new TrackedConnection(new fakeDbConnection(), metricsCollector: metrics);
         tracked.Open();
         tracked.Close();
         var snapshot = metrics.CreateSnapshot();
-        Assert.Equal(1, snapshot.ConnectionsOpened);
-        Assert.Equal(1, snapshot.ConnectionsClosed);
+        Assert.Equal(0, snapshot.ConnectionsOpened);
+        Assert.Equal(0, snapshot.ConnectionsClosed);
         Assert.True(tracked.WasOpened);
     }
 

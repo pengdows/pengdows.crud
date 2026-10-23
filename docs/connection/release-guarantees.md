@@ -13,9 +13,11 @@ For every connection pengdows.crud opens for an operation, whatever the provider
 
 1. **The pool slot goes back to the governor.** The reader and writer governors end with nothing in use.
 2. **The provider connection is disposed.** Its `Dispose`/`DisposeAsync` runs, so the provider returns it to its own pool.
-3. **The open-connection count comes back down.** `NumberOfOpenConnections` and the connection metrics return to
-   zero, including when the provider's `Close` throws and never reports the close (fixed 2026-10-19; before that the
-   count stayed one too high for good after such a failure).
+3. **The open-connection count comes back down.** `NumberOfOpenConnections` and the connection metrics count pool
+   leases, so they return to zero exactly when the slot goes back (1), whatever the provider reports: a `Close` that
+   throws and never reports the close, a driver that raises no `StateChange`, or one that raises the wrong
+   transitions. (Before 2026-10-23 they counted `StateChange` events, and a throwing `Close` left them one too high
+   until 2026-10-19.)
 4. **The original failure is what you see.** A cleanup failure (close, dispose, rollback) is logged, not thrown over
    the exception that caused it. Cancellation propagates as `OperationCanceledException`, unwrapped.
 
@@ -37,6 +39,7 @@ and in `SingleWriter` mode (file SQLite, the turnstile governor).
 | The provider's `Dispose` throws | `ConnectionReleaseGuaranteeTests.ProviderDisposeThrows_AfterASuccessfulCommand_ReleasesTheSlot`, `TrackedConnectionAdditionalBranchTests.DisposeAsync_WhenUnderlyingDisposeAsyncThrows_FallsBackToSync` |
 | The provider refuses `StateChange` access once disposed (Sybase ASE) | `DisposedConnectionRefusesStateChangeAccessTests.Commands_DisposeTheirConnections_AndReleaseTheirPoolSlots` |
 | The provider never raises `StateChange` (Snowflake) | `SilentStateChangeDriverConnectionCountTests.Transaction_CountsItsConnectionOnce_WhetherOrNotTheDriverReportsIt` |
+| The provider raises no `StateChange`, or extra ones | `LeaseConnectionMetricsTests.Counts_DoNotDependOnProviderStateChange` |
 
 ### Cancellation
 

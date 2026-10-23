@@ -4,7 +4,7 @@ override pengdows.crud.types.valueobjects.HierarchyId.Equals(object? obj) -> boo
 override pengdows.crud.types.valueobjects.HierarchyId.GetHashCode() -> int
 override pengdows.crud.types.valueobjects.HierarchyId.ToString() -> string!
 pengdows.crud.BaseTableGateway<TEntity>.AuditCreationPolicy.get -> pengdows.crud.enums.AuditCreationPolicy
-pengdows.crud.BaseTableGateway<TEntity>.AuditCreationPolicy.init -> void
+pengdows.crud.BaseTableGateway<TEntity>.AuditCreationPolicy.set -> void
 pengdows.crud.BaseTableGateway<TEntity>.ColumnName(string! propertyName) -> string!
 pengdows.crud.DataReaderMapper
 pengdows.crud.DatabaseContextColumnNameExtensions

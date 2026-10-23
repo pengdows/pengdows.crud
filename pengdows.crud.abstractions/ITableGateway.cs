@@ -36,14 +36,24 @@ public interface ITableGateway<TEntity, TRowID>
     /// values on create. Defaults to <see cref="AuditCreationPolicy.PreserveExplicitValues"/>.
     /// </summary>
     /// <remarks>
-    /// Set once when the gateway is constructed, on the concrete gateway (object initializer, e.g.
+    /// Set once when the gateway is constructed (object initializer, e.g.
     /// <c>new TableGateway&lt;T, TId&gt;(ctx) { AuditCreationPolicy = ... }</c>). A gateway is a
     /// singleton shared by every caller, so a request-time setter would let one caller change the
     /// policy for all of them.
     /// </remarks>
-    // Get-only with a default: implementations compiled against 2.0.5 stay binary compatible, and the
-    // interface stays proxyable (DispatchProxy can't implement an init accessor's modreq(IsExternalInit)).
-    AuditCreationPolicy AuditCreationPolicy => AuditCreationPolicy.PreserveExplicitValues;
+    // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
+    AuditCreationPolicy AuditCreationPolicy
+    {
+        get => AuditCreationPolicy.PreserveExplicitValues;
+        set
+        {
+            if (value != AuditCreationPolicy.PreserveExplicitValues)
+            {
+                throw new NotSupportedException(
+                    $"{GetType().Name} does not support {nameof(AuditCreationPolicy)}.{value}.");
+            }
+        }
+    }
 
     /// <summary>
     /// Returns the database column name that <typeparamref name="TEntity"/>'s property

@@ -10,14 +10,14 @@ namespace pengdows.crud.metrics;
 /// Do not attempt to collapse them into a common base — it would complicate the API
 /// and gain nothing at the consumer level.
 /// </remarks>
-/// <param name="ConnectionsCurrent">Current number of open connections held by the role.</param>
-/// <param name="PeakOpenConnections">Historical maximum number of concurrently open connections observed.</param>
-/// <param name="ConnectionsOpened">Total connections opened since context creation.</param>
-/// <param name="ConnectionsClosed">Total connections closed since context creation.</param>
-/// <param name="AvgConnectionHoldMs">Exponential weighted moving average of connection hold duration in milliseconds.</param>
+/// <param name="ConnectionsCurrent">Connection leases the role currently holds. A lease is a connection the context has handed out, from acquisition until it is disposed (opened or not); it is not a count of the provider's physical connections.</param>
+/// <param name="PeakOpenConnections">Most connection leases held at the same time since context creation.</param>
+/// <param name="ConnectionsOpened">Connection leases acquired since context creation.</param>
+/// <param name="ConnectionsClosed">Connection leases released since context creation.</param>
+/// <param name="AvgConnectionHoldMs">Exponential weighted moving average of how long a connection lease is held, in milliseconds.</param>
 /// <param name="AvgConnectionOpenMs">Exponential weighted moving average of connection open duration in milliseconds.</param>
 /// <param name="AvgConnectionCloseMs">Exponential weighted moving average of connection close duration in milliseconds.</param>
-/// <param name="LongLivedConnections">Count of connections held longer than the configured threshold.</param>
+/// <param name="LongLivedConnections">Count of connection leases held longer than the configured threshold.</param>
 /// <param name="CommandsExecuted">Total commands that completed successfully.</param>
 /// <param name="CommandsFailed">Total commands that failed.</param>
 /// <param name="CommandsTimedOut">Commands that failed due to a timeout.</param>

@@ -9,7 +9,7 @@
 // - PoolSlotToken: Inner class ensuring single release via Interlocked.
 // - Usage: using var slot = await governor.AcquireAsync();
 // - Struct wrapper; each real acquisition allocates one PoolSlotToken.
-// - Null token (default struct) is valid no-op for disabled governors.
+// - Null token (default struct) is a no-op slot (no governor); disabled governors hand out tracking-only slots.
 // =============================================================================
 
 using System.Diagnostics;

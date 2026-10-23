@@ -13,10 +13,10 @@ that was run for the release is green. Access runs only on Windows.
 
 | Database | net8.0 | net10.0 |
 |---|---|---|
-| Sqlite | 153 pass, 0 fail, 0 skip · 2026-10-18 10:13Z · 94b0adbe | 153 pass, 0 fail, 0 skip · 2026-10-22 12:14Z · 6d44c081+ |
-| PostgreSql | 169 pass, 0 fail, 0 skip · 2026-10-22 10:11Z · 6d44c081+ | 169 pass, 0 fail, 0 skip · 2026-10-22 12:06Z · 6d44c081+ |
-| SqlServer | 156 pass, 0 fail, 0 skip · 2026-10-22 10:10Z · 6d44c081+ | 156 pass, 0 fail, 0 skip · 2026-10-22 12:08Z · 6d44c081+ |
-| MySql | 158 pass, 1 fail, 0 skip · 2026-10-23 00:09Z · 6d44c081+ | 158 pass, 1 fail, 0 skip · 2026-10-23 00:10Z · 6d44c081+ |
+| Sqlite | 153 pass, 0 fail, 0 skip · 2026-10-18 10:13Z · 94b0adbe | 153 pass, 0 fail, 0 skip · 2026-10-23 14:28Z · af80775a+ |
+| PostgreSql | 169 pass, 0 fail, 0 skip · 2026-10-22 10:11Z · 6d44c081+ | 169 pass, 0 fail, 0 skip · 2026-10-23 14:28Z · af80775a+ |
+| SqlServer | 156 pass, 0 fail, 0 skip · 2026-10-22 10:10Z · 6d44c081+ | 156 pass, 0 fail, 0 skip · 2026-10-23 14:29Z · af80775a+ |
+| MySql | 158 pass, 1 fail, 0 skip · 2026-10-23 00:09Z · 6d44c081+ | 159 pass, 0 fail, 0 skip · 2026-10-23 14:27Z · af80775a+ |
 | MariaDb | 159 pass, 0 fail, 0 skip · 2026-10-23 00:09Z · 6d44c081+ | 159 pass, 0 fail, 0 skip · 2026-10-23 00:10Z · 6d44c081+ |
 | Firebird | 152 pass, 0 fail, 0 skip · 2026-10-18 10:02Z · 94b0adbe | 152 pass, 0 fail, 0 skip · 2026-10-22 12:19Z · 6d44c081+ |
 | CockroachDb | 165 pass, 0 fail, 0 skip · 2026-10-18 10:08Z · 94b0adbe | 165 pass, 0 fail, 0 skip · 2026-10-18 10:28Z · 94b0adbe |
@@ -37,4 +37,4 @@ that was run for the release is green. Access runs only on Windows.
 | AuroraPostgreSql | 144 pass, 0 fail, 0 skip · 2026-10-12 15:21Z · 0d031db1 | 144 pass, 0 fail, 0 skip · 2026-10-13 19:30Z · 6a127448+ |
 | AuroraMySql | 144 pass, 0 fail, 0 skip · 2026-10-12 15:25Z · 0d031db1 | 144 pass, 0 fail, 0 skip · 2026-10-13 19:35Z · 6a127448+ |
 
-Failing now: MySql net10.0, MySql net8.0.
+Failing now: MySql net8.0.

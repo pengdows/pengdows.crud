@@ -17,7 +17,9 @@ Treat the event as an observer feed. Handlers should not call back into the same
 The current record includes:
 
 - aggregate read and write role snapshots
-- connection counts and latency averages
+- connection counts and latency averages; the counts are pengdows leases (a connection handed out until it is
+  disposed, opened or not, plus a PreventDatabaseUnload sentinel or SingleConnection's shared connection), not
+  provider `StateChange` events or physical connections
 - command counts, latency averages, and percentile estimates
 - row counts and parameter observations
 - prepared-statement cache counters

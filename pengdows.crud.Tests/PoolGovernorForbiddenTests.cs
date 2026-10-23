@@ -113,24 +113,26 @@ public sealed class PoolGovernorForbiddenTests
     // -------------------------------------------------------------------------
 
     [Fact]
-    public void Acquire_WhenDisabled_ReturnsDefaultSlot()
+    public void Acquire_WhenDisabled_ReturnsATrackingSlot()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 0,
             TimeSpan.FromMilliseconds(100), disabled: true);
 
-        // Should not throw — disabled governors are used for SingleConnection mode
+        // Should not throw or block — a disabled governor admits everything but still counts the lease
         var slot = governor.Acquire();
-        Assert.Equal(default, slot);
+        Assert.NotEqual(default, slot);
+        Assert.Equal(1, governor.GetSnapshot().InUse);
     }
 
     [Fact]
-    public async Task AcquireAsync_WhenDisabled_ReturnsDefaultSlot()
+    public async Task AcquireAsync_WhenDisabled_ReturnsATrackingSlot()
     {
         var governor = new PoolGovernor(PoolLabel.Reader, "reader-key", 0,
             TimeSpan.FromMilliseconds(100), disabled: true);
 
         var slot = await governor.AcquireAsync();
-        Assert.Equal(default, slot);
+        Assert.NotEqual(default, slot);
+        Assert.Equal(1, governor.GetSnapshot().InUse);
     }
 
     // -------------------------------------------------------------------------

@@ -17,8 +17,10 @@ namespace pengdows.crud.Tests;
 public class DatabaseMetricsTests
 {
     [Fact]
-    public void BrokenConnection_Dispose_CountsCloseExactlyOnce()
+    public void BrokenSharedConnection_LeavesTheLeaseCountsUnchanged()
     {
+        // SQLite :memory: is SingleConnection: the shared connection is one lease for the context's lifetime,
+        // so the provider breaking it, and handing it back, change no counts (they come from leases).
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
         var config = new DatabaseContextConfiguration
         {
@@ -30,15 +32,15 @@ public class DatabaseMetricsTests
         var tracked = context.GetConnection(ExecutionType.Write);
         tracked.Open();
         var underlying = (fakeDbConnection)((IInternalConnectionWrapper)tracked).UnderlyingConnection;
-        var closedBeforeBreak = context.Metrics.ConnectionsClosed;
+        var before = context.Metrics;
 
         underlying.BreakConnection();
-
-        Assert.Equal(closedBeforeBreak + 1, context.Metrics.ConnectionsClosed);
-
         context.CloseAndDisposeConnection(tracked);
 
-        Assert.Equal(closedBeforeBreak + 1, context.Metrics.ConnectionsClosed);
+        var after = context.Metrics;
+        Assert.Equal(1, after.ConnectionsCurrent);
+        Assert.Equal(before.ConnectionsOpened, after.ConnectionsOpened);
+        Assert.Equal(before.ConnectionsClosed, after.ConnectionsClosed);
     }
 
     // COR-010: open and close durations were whole milliseconds (Stopwatch.ElapsedMilliseconds), so
@@ -109,14 +111,9 @@ public class DatabaseMetricsTests
         Assert.Equal(1, metrics.RowsAffectedTotal);
     }
 
-    // CORE-022 (tracker false-positive check): a prior review claimed
-    // TrackedConnection.HandleMetricsStateChange calls MetricsCollector.ConnectionOpened()
-    // twice per Open transition, permanently doubling ConnectionsOpened/ConnectionsCurrent.
-    // Empirically this does not reproduce — MetricsCollector.ConnectionOpened() propagating to
-    // a parent collector (_parent?.ConnectionOpened()) increments two DISTINCT collector
-    // instances (role-scoped and aggregate) once each, which is correct roll-up, not
-    // same-counter duplication. This test locks in the exact (not merely nonnegative) counts
-    // per TEST-014's ask, so a real regression here fails loudly.
+    // CORE-022: one operation counts exactly one lease acquired and released. MetricsCollector.ConnectionOpened()
+    // propagating to the parent collector increments two distinct collectors (role and aggregate) once each, which
+    // is roll-up, not duplication; this locks in the exact (not merely nonnegative) counts.
     [Fact]
     public async Task Metrics_ConnectionOpenClose_CountsExactlyOncePerOperation()
     {
@@ -129,9 +126,9 @@ public class DatabaseMetricsTests
         };
         await using var context = new DatabaseContext(config, factory);
 
-        // Construction itself opens/closes exactly one connection (dialect detection).
-        Assert.Equal(1, context.Metrics.ConnectionsOpened);
-        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+        // Construction's dialect-detection connection is not a lease, so it is not counted.
+        Assert.Equal(0, context.Metrics.ConnectionsOpened);
+        Assert.Equal(0, context.Metrics.ConnectionsClosed);
         Assert.Equal(0, context.Metrics.ConnectionsCurrent);
 
         await using (var container = context.CreateSqlContainer("SELECT 1"))
@@ -139,19 +136,16 @@ public class DatabaseMetricsTests
             await container.ExecuteNonQueryAsync();
         }
 
-        // Exactly one more open/close cycle — not two (which a double-count bug would produce).
-        Assert.Equal(2, context.Metrics.ConnectionsOpened);
-        Assert.Equal(2, context.Metrics.ConnectionsClosed);
+        // Exactly one lease acquired and released — not two (which a double-count bug would produce).
+        Assert.Equal(1, context.Metrics.ConnectionsOpened);
+        Assert.Equal(1, context.Metrics.ConnectionsClosed);
         Assert.Equal(0, context.Metrics.ConnectionsCurrent);
     }
 
-    // TEST-014: a connection that fails to open must never register as opened. TrackedConnection
-    // only attaches its StateChange handler and only counts a transition INTO Open — a connection
-    // whose Open()/OpenAsync() throws before ever reaching that state must leave
-    // ConnectionsOpened/ConnectionsClosed exactly where they were, not produce an unmatched
-    // "close" for an open that never happened.
+    // A connection that fails to open still had a lease: it is acquired and released once, so the counts stay
+    // matched (one acquired, one released) and nothing is left counted as current.
     [Fact]
-    public async Task Metrics_ConnectionFailsToOpen_LeavesOpenCloseCountsUnchanged()
+    public async Task Metrics_ConnectionFailsToOpen_ReleasesItsLease()
     {
         var factory = fakeDbFactory.CreateFailingFactoryWithSkip(SupportedDatabase.SqlServer,
             ConnectionFailureMode.FailOnOpen);
@@ -163,10 +157,8 @@ public class DatabaseMetricsTests
         };
         await using var context = new DatabaseContext(config, factory);
 
-        // Construction's own dialect-detection connection is the skipped "first open" — it opens
-        // and closes normally.
-        Assert.Equal(1, context.Metrics.ConnectionsOpened);
-        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+        Assert.Equal(0, context.Metrics.ConnectionsOpened);
+        Assert.Equal(0, context.Metrics.ConnectionsClosed);
 
         await using var container = context.CreateSqlContainer("SELECT 1");
         await Assert.ThrowsAnyAsync<Exception>(() => container.ExecuteNonQueryAsync().AsTask());
@@ -176,13 +168,10 @@ public class DatabaseMetricsTests
         Assert.Equal(0, context.Metrics.ConnectionsCurrent);
     }
 
-    // TEST-014: a connection that breaks while held (as opposed to closing cleanly) must still
-    // count as exactly one close matching its one open — TrackedConnection.HandleMetricsStateChange
-    // treats ConnectionState.Broken identically to Closed for counting purposes. This proves that
-    // policy end to end rather than only at the TrackedConnection unit level, and proves disposing
-    // an already-broken connection afterward does not double-count the close.
+    // A connection that breaks while held is still leased until it is handed back; handing it back releases the
+    // lease once, and disposing it again does not release it twice.
     [Fact]
-    public void Metrics_ConnectionBreaksWhileHeld_CountsExactlyOneClose_NotZeroOrTwo()
+    public void Metrics_ConnectionBreaksWhileHeld_ReleasesExactlyOnce()
     {
         var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
         var config = new DatabaseContextConfiguration
@@ -193,28 +182,23 @@ public class DatabaseMetricsTests
         };
         using var context = new DatabaseContext(config, factory);
 
-        Assert.Equal(1, context.Metrics.ConnectionsOpened);
-        Assert.Equal(1, context.Metrics.ConnectionsClosed);
-
-        // GetConnection alone only constructs/wraps the connection (open late) — it does not
-        // open it. Open it explicitly to reach the state this test is actually about.
         var conn = context.GetConnection(ExecutionType.Write);
         conn.Open();
-        Assert.Equal(2, context.Metrics.ConnectionsOpened);
-        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+        Assert.Equal(1, context.Metrics.ConnectionsOpened);
+        Assert.Equal(0, context.Metrics.ConnectionsClosed);
         Assert.Equal(1, context.Metrics.ConnectionsCurrent);
 
         var underlying = (fakeDbConnection)((pengdows.crud.@internal.IInternalConnectionWrapper)conn).UnderlyingConnection;
         underlying.BreakConnection();
-
-        Assert.Equal(2, context.Metrics.ConnectionsOpened);
-        Assert.Equal(2, context.Metrics.ConnectionsClosed);
-        Assert.Equal(0, context.Metrics.ConnectionsCurrent);
+        Assert.Equal(0, context.Metrics.ConnectionsClosed);
+        Assert.Equal(1, context.Metrics.ConnectionsCurrent);
 
         context.CloseAndDisposeConnection(conn);
+        conn.Dispose();
 
-        // Already broken/closed — disposing it now must not record a second close.
-        Assert.Equal(2, context.Metrics.ConnectionsClosed);
+        Assert.Equal(1, context.Metrics.ConnectionsOpened);
+        Assert.Equal(1, context.Metrics.ConnectionsClosed);
+        Assert.Equal(0, context.Metrics.ConnectionsCurrent);
     }
 
     [Fact]

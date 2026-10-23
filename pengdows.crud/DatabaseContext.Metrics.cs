@@ -6,7 +6,9 @@
 // - Metrics property - Returns current DatabaseMetrics snapshot.
 // - MetricsUpdated event - Fires when metrics change (connections, queries).
 // - Tracked metrics:
-//   * Connection counts (current open, max ever open)
+//   * Connection counts are pengdows leases (a connection handed out until it is disposed), taken
+//     from the pool governors: current, peak simultaneous, acquired, released, hold duration.
+//     They do not measure the provider's physical connections.
 //   * Connection wait times and pool saturation
 //   * Transaction counts (started, committed, rolled back)
 //   * Query timing and counts
@@ -215,8 +217,12 @@ public partial class DatabaseContext
         var readSnapshot = _readerMetricsCollector?.CreateSnapshot();
         var writeSnapshot = _writerMetricsCollector?.CreateSnapshot();
 
-        var readMetrics = readSnapshot.HasValue ? CreateRoleMetrics(readSnapshot.Value) : DatabaseRoleMetrics.None;
-        var writeMetrics = writeSnapshot.HasValue ? CreateRoleMetrics(writeSnapshot.Value) : DatabaseRoleMetrics.None;
+        var readMetrics = readSnapshot.HasValue
+            ? CreateRoleMetrics(readSnapshot.Value, RoleLeases(PoolLabel.Reader))
+            : DatabaseRoleMetrics.None;
+        var writeMetrics = writeSnapshot.HasValue
+            ? CreateRoleMetrics(writeSnapshot.Value, RoleLeases(PoolLabel.Writer))
+            : DatabaseRoleMetrics.None;
         var readPool = GetPoolStatisticsSnapshot(PoolLabel.Reader);
         var writePool = GetPoolStatisticsSnapshot(PoolLabel.Writer);
         var attribution = _attributionStats.GetSnapshot();
@@ -277,11 +283,37 @@ public partial class DatabaseContext
         };
     }
 
-    private static DatabaseRoleMetrics CreateRoleMetrics(in MetricsCollector.MetricsSnapshot snapshot)
+    // A role's current and peak leases: its governor, plus the persistent lease when it belongs to that role
+    // (held for the context's lifetime, so adding its peak gives the role's simultaneous peak).
+    private (int Current, int Peak) RoleLeases(PoolLabel label)
+    {
+        long current = 0;
+        long peak = 0;
+        var governor = label == PoolLabel.Reader ? _readerGovernor : _writerGovernor;
+        if (governor != null)
+        {
+            var snapshot = governor.GetSnapshot();
+            current += snapshot.InUse;
+            peak += snapshot.PeakInUse;
+        }
+
+        var persistent = _persistentLeaseGovernor;
+        if (persistent != null && persistent.Label == label)
+        {
+            var snapshot = persistent.GetSnapshot();
+            current += snapshot.InUse;
+            peak += snapshot.PeakInUse;
+        }
+
+        return (SaturateToInt(current), SaturateToInt(peak));
+    }
+
+    private static DatabaseRoleMetrics CreateRoleMetrics(in MetricsCollector.MetricsSnapshot snapshot,
+        (int Current, int Peak) leases)
     {
         return new DatabaseRoleMetrics(
-            snapshot.ConnectionsCurrent,
-            snapshot.PeakOpenConnections,
+            leases.Current,
+            leases.Peak,
             snapshot.ConnectionsOpened,
             snapshot.ConnectionsClosed,
             snapshot.AvgConnectionHoldMs,

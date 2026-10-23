@@ -146,13 +146,15 @@ public class SemVerCompatibilityDefaultMemberTests
     }
 
     [Fact]
-    public void ITableGateway_AuditCreationPolicy_Default_IsPreserveExplicitValues_AndGetOnly()
+    public void ITableGateway_AuditCreationPolicy_Default_IsPreserveExplicitValues_AndProxyableSetter()
     {
         var gateway = new Mock<ITableGateway<SemVerEntity, int>> { CallBase = true }.Object;
 
         Assert.Equal(AuditCreationPolicy.PreserveExplicitValues, gateway.AuditCreationPolicy);
-        // Get-only on the interface (set on the concrete gateway): no accessor for a proxy to implement.
-        Assert.Null(typeof(ITableGateway<SemVerEntity, int>).GetProperty("AuditCreationPolicy")!.SetMethod);
+        // A normal setter preserves the public configuration contract and is implementable by proxies.
+        var setter = typeof(ITableGateway<SemVerEntity, int>).GetProperty("AuditCreationPolicy")!.SetMethod;
+        Assert.NotNull(setter);
+        Assert.Empty(setter!.GetParameters()[0].GetRequiredCustomModifiers());
     }
 
     [Fact]
@@ -172,13 +174,15 @@ public class SemVerCompatibilityDefaultMemberTests
     }
 
     [Fact]
-    public void IPrimaryKeyTableGateway_AuditCreationPolicy_Default_IsPreserveExplicitValues_AndGetOnly()
+    public void IPrimaryKeyTableGateway_AuditCreationPolicy_Default_IsPreserveExplicitValues_AndProxyableSetter()
     {
         var gateway = new Mock<IPrimaryKeyTableGateway<SemVerEntity>> { CallBase = true }.Object;
 
         Assert.Equal(AuditCreationPolicy.PreserveExplicitValues, gateway.AuditCreationPolicy);
-        // Get-only on the interface (set on the concrete gateway): no accessor for a proxy to implement.
-        Assert.Null(typeof(IPrimaryKeyTableGateway<SemVerEntity>).GetProperty("AuditCreationPolicy")!.SetMethod);
+        // A normal setter preserves the public configuration contract and is implementable by proxies.
+        var setter = typeof(IPrimaryKeyTableGateway<SemVerEntity>).GetProperty("AuditCreationPolicy")!.SetMethod;
+        Assert.NotNull(setter);
+        Assert.Empty(setter!.GetParameters()[0].GetRequiredCustomModifiers());
     }
 
     [Fact]

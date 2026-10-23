@@ -141,13 +141,11 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     // GetSingleConnectionTransactionGate() for details.
     private SemaphoreSlim? _singleConnectionTransactionGate;
 
-    private long _connectionCount;
     private string _connectionString = string.Empty;
     private string _readerConnectionString = string.Empty;
     private string _redactedConnectionString = string.Empty;
     private string _redactedReaderConnectionString = string.Empty;
     private Action<DbConnection> _disposeHandler = null!;
-    private StateChangeEventHandler _stateChangeHandler = null!;
     private Action<ITrackedConnection> _firstOpenHandlerRw = null!;
     private Action<ITrackedConnection> _firstOpenHandlerRo = null!;
 
@@ -160,6 +158,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private IsolationResolver _isolationResolver = null!;
     private bool _isReadConnection = true;
     private bool _isWriteConnection = true;
+    // Most leases held at one time (reader + writer + persistent), raised as each lease is acquired.
     private long _peakOpenConnections;
 
     // Additional performance counters for granular connection pool monitoring
@@ -189,6 +188,10 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private int _metricsHasActivity;
     private PoolGovernor? _readerGovernor;
     private PoolGovernor? _writerGovernor;
+
+    // Tracking-only lease for a persistent connection no admission governor hands out: SingleConnection's shared
+    // connection, or a sentinel whose pool has no governor slot to give.
+    private PoolGovernor? _persistentLeaseGovernor;
     private readonly ModeContentionStats _modeContentionStats = new();
     private readonly AttributionStats _attributionStats = new();
     private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
@@ -366,7 +369,10 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     public long PeakOpenConnections => Interlocked.Read(ref _peakOpenConnections);
 
     /// <inheritdoc/>
-    public long NumberOfOpenConnections => Interlocked.Read(ref _connectionCount);
+    public long NumberOfOpenConnections =>
+        LeasesInUse(_readerGovernor) + LeasesInUse(_writerGovernor) + LeasesInUse(_persistentLeaseGovernor);
+
+    private static long LeasesInUse(PoolGovernor? governor) => governor?.GetSnapshot().InUse ?? 0;
 
     /// <inheritdoc/>
     public int? ReaderPlanCacheSize => _readerPlanCacheSize;
@@ -696,6 +702,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         var writerGovernor = _writerGovernor;
         _readerGovernor = null;
         _writerGovernor = null;
+        Interlocked.Exchange(ref _persistentLeaseGovernor, null)?.Dispose();
 
         var writerDrained = DisposeGovernorAfterDrain(writerGovernor);
         var readerDrained = DisposeGovernorAfterDrain(readerGovernor);
@@ -708,6 +715,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         var writerGovernor = _writerGovernor;
         _readerGovernor = null;
         _writerGovernor = null;
+        Interlocked.Exchange(ref _persistentLeaseGovernor, null)?.Dispose();
 
         var writerDrained = await DisposeGovernorAfterDrainAsync(writerGovernor).ConfigureAwait(false);
         var readerDrained = await DisposeGovernorAfterDrainAsync(readerGovernor).ConfigureAwait(false);

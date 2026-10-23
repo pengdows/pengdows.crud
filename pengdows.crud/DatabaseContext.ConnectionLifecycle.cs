@@ -341,7 +341,8 @@ public partial class DatabaseContext
     private PoolSlot AcquireSentinelSlot(ExecutionType executionType)
     {
         var governor = SentinelGovernor(executionType);
-        return governor == null ? default : governor.Acquire();
+        // A sentinel with no governor slot to take is still one lease.
+        return governor == null ? AcquirePersistentLease() : governor.Acquire();
     }
 
     // The governor a sentinel's permit comes from, or null when none is taken.
@@ -900,7 +901,7 @@ public partial class DatabaseContext
     }
 
     /// <summary>
-    /// Factory method to create a new tracked connection with state change monitoring and session settings.
+    /// Factory method to create a new tracked connection with session settings; its pool slot (if any) is its lease.
     /// </summary>
     [SuppressMessage("Security", "cs/clear-text-storage-of-sensitive-information",
         Justification = "Connection strings are redacted via RedactConnectionString() before logging. " +
@@ -963,7 +964,6 @@ public partial class DatabaseContext
         var namePrefix = useReader ? _connectionNamePrefixRead : _connectionNamePrefixWrite;
         return new TrackedConnection(
             connection,
-            _stateChangeHandler,
             firstOpenHandler,
             _disposeHandler,
             null,
@@ -1095,7 +1095,7 @@ public partial class DatabaseContext
     }
 
     /// <summary>
-    /// Updates the max connection count using thread-safe compare-and-swap.
+    /// Raises the simultaneous-lease peak to <paramref name="current"/> using thread-safe compare-and-swap.
     /// </summary>
     private void UpdateMaxConnectionCount(long current)
     {

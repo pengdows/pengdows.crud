@@ -16,7 +16,9 @@ using pengdows.crud.enums;
 // - Tracks: inUse, peakInUse, queued, totalAcquired, totalSlotTimeouts, totalTurnstileTimeouts.
 //   * TotalTimeouts in snapshot = slot acquisition timeouts.
 //   * TotalTurnstileTimeouts in snapshot = turnstile acquisition timeouts.
-// - Can be disabled (returns default slots without blocking).
+// - Can be disabled: admission is unlimited (no gate), but every lease is still counted.
+// - Leases are the source of pengdows.crud's connection metrics: InUse/PeakInUse/TotalAcquired/
+//   TotalReleased here, and (when given one) the role MetricsCollector's opened/closed/hold.
 // - Slot admission goes through PoolGovernorConcurrencyGate, the only admission primitive.
 // - Turnstile fairness support (optional):
 //   * Reduces writer starvation risk under sustained reader pressure.
@@ -35,6 +37,7 @@ using pengdows.crud.enums;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using pengdows.crud.exceptions;
+using pengdows.crud.@internal;
 using pengdows.crud.metrics;
 
 namespace pengdows.crud.infrastructure;
@@ -85,6 +88,9 @@ internal sealed class PoolGovernor : IDisposable
     private long _turnstileQueued;
     private long _peakTurnstileQueued;
     private long _totalAcquired;
+    private long _totalReleased;
+    private readonly MetricsCollector? _leaseMetrics;
+    private readonly Action? _onLeaseAcquired;
     private long _totalWaits;
     private long _totalWaitTicks;
     private long _totalHoldTicks;
@@ -104,9 +110,13 @@ internal sealed class PoolGovernor : IDisposable
         bool holdTurnstile = false,
         bool ownsTurnstile = false,
         int? maxQueueDepth = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider? timeProvider = null,
+        MetricsCollector? leaseMetrics = null,
+        Action? onLeaseAcquired = null)
     {
         _label = label;
+        _leaseMetrics = leaseMetrics;
+        _onLeaseAcquired = onLeaseAcquired;
         _timeProvider = MetricsClock.Resolve(timeProvider);
         _poolKeyHash = poolKeyHash;
         _acquireTimeout = acquireTimeout;
@@ -160,6 +170,9 @@ internal sealed class PoolGovernor : IDisposable
     /// </summary>
     internal bool Forbidden => _forbidden;
 
+    /// <summary>Leases released (each slot once, however often it is disposed).</summary>
+    internal long TotalReleased => Interlocked.Read(ref _totalReleased);
+
     public PoolLabel Label => _label;
 
     /// <summary>Callers currently waiting for a slot (tracked whether or not metrics are on).</summary>
@@ -212,7 +225,8 @@ internal sealed class PoolGovernor : IDisposable
     }
 
     // Every acquire's preconditions (DRY-017: four copies): throws when the governor is closed,
-    // forbidden or not initialized; false when it is disabled, where every acquire succeeds with no slot.
+    // forbidden or not initialized; false when it is disabled, where every acquire succeeds at once with a
+    // tracking-only slot (DisabledSlot): unlimited admission, but the lease is still counted.
     private bool Gates()
     {
         ThrowIfClosed();
@@ -281,7 +295,14 @@ internal sealed class PoolGovernor : IDisposable
         }
     }
 
-    private void ReleaseAdmission() => _concurrencyGate!.Release(0);
+    // A disabled governor has no gate: its slots are counted but admit without one.
+    private void ReleaseAdmission() => _concurrencyGate?.Release(0);
+
+    private PoolSlot DisabledSlot()
+    {
+        var now = _trackMetrics || _leaseMetrics != null ? _timeProvider.GetTimestamp() : 0;
+        return OnAcquired(now, now, false);
+    }
 
     // What one acquire attempt has taken so far, so a failure anywhere can give it back: the turnstile, and the writer
     // interest registered on the shared turnstile state.
@@ -300,7 +321,7 @@ internal sealed class PoolGovernor : IDisposable
     {
         if (!Gates())
         {
-            return default;
+            return DisabledSlot();
         }
 
         var progress = new AcquireProgress();
@@ -521,7 +542,7 @@ internal sealed class PoolGovernor : IDisposable
     {
         if (!Gates())
         {
-            slot = default;
+            slot = DisabledSlot();
             return true;
         }
 
@@ -587,7 +608,7 @@ internal sealed class PoolGovernor : IDisposable
     {
         if (!Gates())
         {
-            return default;
+            return DisabledSlot();
         }
 
         var progress = new AcquireProgress();
@@ -620,7 +641,7 @@ internal sealed class PoolGovernor : IDisposable
     {
         if (!Gates())
         {
-            return (true, default);
+            return (true, DisabledSlot());
         }
 
         var waitStart = _trackMetrics ? _timeProvider.GetTimestamp() : 0;
@@ -870,6 +891,8 @@ internal sealed class PoolGovernor : IDisposable
         var inUse = Interlocked.Increment(ref _inUse);
         UpdatePeak(ref _peakInUse, inUse);
         Interlocked.Increment(ref _totalAcquired);
+        _leaseMetrics?.ConnectionOpened();
+        _onLeaseAcquired?.Invoke();
         return new PoolSlot(new PoolSlot.PoolSlotToken(this, waitStart, acquiredAt, releaseWriterTurnstileInterestOnRelease));
     }
 
@@ -898,6 +921,10 @@ internal sealed class PoolGovernor : IDisposable
         }
 
         TestOnlyBeforeInUseDecrement?.Invoke();
+        Interlocked.Increment(ref _totalReleased);
+        _leaseMetrics?.ConnectionClosed(acquiredAt > 0
+            ? MetricsCollector.ToMilliseconds(_timeProvider.GetTimestamp() - acquiredAt)
+            : 0d);
         if (Interlocked.Decrement(ref _inUse) == 0)
         {
             // Wake drain waiters. The signal is unpublished before it completes, so a waiter never
