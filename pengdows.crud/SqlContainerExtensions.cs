@@ -314,7 +314,11 @@ public static class SqlContainerExtensions
         return container;
     }
 
-    /// <summary>Appends <c> IN (</c> to the query.</summary>
+    /// <summary>
+    /// Appends <c> IN (</c> to the query. This only writes the fragment: it does not build or split an id list, so a
+    /// list written by hand must respect the dialect's own limit (Oracle before 23ai allows 1000 expressions). The
+    /// gateways' retrieve and delete paths group long lists for you.
+    /// </summary>
     public static ISqlContainer AppendIn(this ISqlContainer container)
     {
         container.Query.Append(SqlFragments.In);

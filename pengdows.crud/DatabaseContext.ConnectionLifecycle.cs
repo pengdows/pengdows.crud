@@ -342,7 +342,9 @@ public partial class DatabaseContext
     {
         var governor = SentinelGovernor(executionType);
         // A sentinel with no governor slot to take is still one lease.
-        return governor == null ? AcquirePersistentLease() : governor.Acquire();
+        return governor == null
+            ? AcquirePersistentLease(executionType == ExecutionType.Read ? PoolLabel.Reader : PoolLabel.Writer)
+            : governor.Acquire();
     }
 
     // The governor a sentinel's permit comes from, or null when none is taken.

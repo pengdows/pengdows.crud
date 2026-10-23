@@ -297,8 +297,8 @@ public partial class DatabaseContext
             peak += snapshot.PeakInUse;
         }
 
-        var persistent = _persistentLeaseGovernor;
-        if (persistent != null && persistent.Label == label)
+        var persistent = label == PoolLabel.Reader ? _persistentReaderLeases : _persistentWriterLeases;
+        if (persistent != null)
         {
             var snapshot = persistent.GetSnapshot();
             current += snapshot.InUse;

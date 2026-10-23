@@ -318,7 +318,7 @@ This is intentional design — it allows "last modified" queries without checkin
 - Without resolver + user audit fields = `InvalidOperationException` at runtime
 - Time-only audit fields (`[CreatedOn]`, `[LastUpdatedOn]`) work without resolver (uses `DateTime.UtcNow`)
 - The audit resolver ALWAYS returns UTC timestamps; DateTime, DateTimeOffset, and TimestampOffset are all supported.
-- `AuditCreationPolicy` (init-only property on every gateway, new in 2.0.6; `docs/audit-fields.md`): `PreserveExplicitValues` (default) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always overwrites them with resolver values (stops request-model binding from spoofing audit fields)
+- `AuditCreationPolicy` (set-once property on every gateway, new in 2.0.6; declared with a `set` accessor, not `init`, only so existing implementers and proxies of the 2.0.5 interfaces stay source- and binary-compatible (3.0 makes it `init`); treat it as set-once, at construction; `docs/audit-fields.md`): `PreserveExplicitValues` (default) keeps a non-default `CreatedBy`/`CreatedOn` already on the entity; `Authoritative` always overwrites them with resolver values (stops request-model binding from spoofing audit fields)
 - UTC everywhere is a correctness choice: a timestamp's truth is its instant, and UTC keeps it on databases with no time zones (`docs/utc-and-time.md`)
 
 ## Connection Management and DbMode
@@ -355,7 +355,7 @@ txn.Commit();
 **Isolation never silently weakens ("fails up"):**
 - Explicit `IsolationLevel`: used as-is if supported; otherwise the weakest supported level that is at least as strong (e.g. `ReadCommitted` on CockroachDB/DuckDB → `Serializable`). Throws `InvalidOperationException` if nothing at or above it exists (e.g. `Serializable` on TiDB/Snowflake/SingleStore).
 - `IsolationProfile`: throws `TransactionModeNotSupportedException` rather than run below the profile's guarantee — `StrictConsistency` on TiDB/Snowflake/SingleStore/Access/FlatFile; `SafeNonBlockingReads` on SQL Server with neither snapshot isolation nor READ_COMMITTED_SNAPSHOT.
-- Read-only `BeginTransaction(executionType: ExecutionType.Read)` with no level/profile: uses the `SafeNonBlockingReads` mapping and only logs a warning if it is degraded.
+- `BeginTransaction` with no level/profile asked for nothing, so it gets the database default silently: a read uses the `SafeNonBlockingReads` mapping when the engine honors it, otherwise ReadCommitted, else Serializable.
 - Savepoints on a dialect without savepoint support throw `NotSupportedException`.
 
 **CRITICAL: Do NOT use `TransactionScope`**

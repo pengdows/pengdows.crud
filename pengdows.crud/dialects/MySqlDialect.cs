@@ -48,9 +48,11 @@ namespace pengdows.crud.dialects;
 /// MySQL 8.0.20+ uses the new alias syntax.
 /// </para>
 /// <para>
-/// <strong>Providers:</strong> MySqlConnector 2.6.1 or later. <c>DatabaseContext</c> refuses
-/// Oracle's MySql.Data (2026-10-22; <c>ProviderVersionRequirements</c>); its workarounds and
-/// warning remain here so allowing it again is one change.
+/// <strong>Providers:</strong> MySqlConnector 2.6.1 or later (recommended: it prepares statements server-side)
+/// and Oracle's MySql.Data, which <c>DatabaseContext</c> accepts again (2026-10-23). MySql.Data's quirks are
+/// worked around here: it backslash-escapes text parameters, so <c>NO_BACKSLASH_ESCAPES</c> is left out of its
+/// session settings (BP-115), it does not prepare, and it appends <c>SELECT LAST_INSERT_ID()</c> as a compound
+/// statement. A warning names MySqlConnector as the preferred provider.
 /// </para>
 /// </remarks>
 internal class MySqlDialect : SqlDialect
@@ -281,8 +283,11 @@ internal class MySqlDialect : SqlDialect
     // the value, as for a new parameter.
     internal override void PrepareCommandParameters(DbCommand command)
     {
-        foreach (DbParameter parameter in command.Parameters)
+        // Indexed: DbParameterCollection's enumerator is a boxed non-generic one, an allocation per command.
+        var parameters = command.Parameters;
+        for (var i = 0; i < parameters.Count; i++)
         {
+            var parameter = parameters[i];
             if (parameter.DbType == DbType.Object && Utils.IsNullOrDbNull(parameter.Value))
             {
                 parameter.ResetDbType();

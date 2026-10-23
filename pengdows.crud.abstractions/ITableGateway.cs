@@ -39,7 +39,8 @@ public interface ITableGateway<TEntity, TRowID>
     /// Set once when the gateway is constructed (object initializer, e.g.
     /// <c>new TableGateway&lt;T, TId&gt;(ctx) { AuditCreationPolicy = ... }</c>). A gateway is a
     /// singleton shared by every caller, so a request-time setter would let one caller change the
-    /// policy for all of them.
+    /// policy for all of them. The accessor is <c>set</c>, not <c>init</c>, only so existing implementers and proxies
+    /// of the 2.0.5 interface stay compatible (3.0 makes it <c>init</c>).
     /// </remarks>
     // Default implementation keeps implementations compiled against 2.0.5 binary compatible.
     AuditCreationPolicy AuditCreationPolicy

@@ -23,6 +23,8 @@
         <PackageReference Include="FirebirdSql.Data.FirebirdClient" Version="10.3.3"/>
         <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.2"/>
         <PackageReference Include="System.Security.Cryptography.Pkcs" Version="9.0.21" />
+        <!-- Transitive via System.Security.Permissions from the Sybase ASE and Informix drivers; 4.7.0 has GHSA-rxg9-xrhp-64gj. -->
+        <PackageReference Include="System.Drawing.Common" Version="9.0.21" />
         <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.5"/>
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4"/>
         <PackageReference Include="MySqlConnector" Version="2.6.2"/>
@@ -54,11 +56,5 @@
         <PackageReference Include="pengdows.flatfile" Version="0.2.1-preview.6"/>
     </ItemGroup>
 
-    <!-- System.Drawing.Common 4.7.0 arrives transitively through the older System.Data.OleDb/Access driver kept for compatibility testing.
-         It is a test-only dependency: it is never shipped, deployed or run outside this project's tests, so the advisory
-         is suppressed here (not repo-wide) and any other advisory still fails the build. -->
-    <ItemGroup>
-        <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rxg9-xrhp-64gj"/>
-    </ItemGroup>
 
 </Project>

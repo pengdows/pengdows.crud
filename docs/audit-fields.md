@@ -78,9 +78,11 @@ for an entity with a `[Version]` column, which always takes the per-row UPDATE) 
 
 ## `AuditCreationPolicy` — the security-relevant control
 
-An init-only property on every `ITableGateway`/`IPrimaryKeyTableGateway` (set it in an object
+A set-once property on every `ITableGateway`/`IPrimaryKeyTableGateway` (set it in an object
 initializer when constructing the gateway: `new TableGateway<T, TId>(ctx) { AuditCreationPolicy = ... }`),
-default `PreserveExplicitValues`:
+default `PreserveExplicitValues`. It is declared with a `set` accessor rather than `init` only so existing
+implementers and proxies of the 2.0.5 interfaces stay compatible (3.0 makes it `init`); a gateway is a singleton shared
+by every caller, so never change it after construction:
 
 | Policy | CREATE behavior |
 |---|---|

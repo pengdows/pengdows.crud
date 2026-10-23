@@ -563,14 +563,39 @@ internal class OracleDialect : SqlDialect
         column.PropertyInfo.PropertyType == typeof(string) &&
         column.DbType is DbType.String or DbType.StringFixedLength or DbType.AnsiString or DbType.AnsiStringFixedLength;
 
-    private string? NationalTypeOf(IColumnInfo column) =>
-        !IsStringColumn(column) ? null : SplitDeclaredType(DeclaredTypeOf(column)).Name switch
+    // The national type a string column binds with, decided once per column from its learned declared type (a
+    // parameter is marked on every command, so the declared type is not split again each time). An empty string means
+    // "not national". Nothing is remembered until the declared type has been learned.
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<IColumnInfo, string> _nationalTypes = new();
+
+    private string? NationalTypeOf(IColumnInfo column)
+    {
+        if (!IsStringColumn(column))
+        {
+            return null;
+        }
+
+        if (_nationalTypes.TryGetValue(column, out var cached))
+        {
+            return cached.Length == 0 ? null : cached;
+        }
+
+        var declared = DeclaredTypeOf(column);
+        if (declared == null)
+        {
+            return null;
+        }
+
+        var national = SplitDeclaredType(declared).Name switch
         {
             "nvarchar2" => "NVarchar2",
             "nchar" => "NChar",
             "nclob" => "NClob",
             _ => null
         };
+        _nationalTypes.TryAdd(column, national ?? string.Empty);
+        return national;
+    }
 
     internal override bool MarksColumnParameter(IColumnInfo column) =>
         NationalTypeOf(column) != null || base.MarksColumnParameter(column);

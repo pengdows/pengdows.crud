@@ -85,4 +85,31 @@ public class OracleInListLimitTests
         Assert.NotEmpty(sizes);
         Assert.All(sizes, size => Assert.InRange(size, 1, OracleMaxInListExpressions));
     }
+
+    [Fact]
+    public void BuildBatchDelete_MoreIdsThanOneStatementHolds_EveryInListStaysInsideOraclesLimit()
+    {
+        using var context = OracleContext();
+        var gateway = new TableGateway<InListEntity, long>(context);
+        var ids = Enumerable.Range(1, 2500).Select(i => (long)i).ToList();
+
+        var statements = gateway.BuildBatchDelete(ids);
+        var sizes = statements.SelectMany(sc => InListSizes(sc.Query.ToString())).ToArray();
+
+        Assert.All(sizes, size => Assert.InRange(size, 1, OracleMaxInListExpressions));
+        Assert.True(sizes.Sum() >= ids.Count, $"IN lists hold {sizes.Sum()} placeholders for {ids.Count} ids");
+    }
+
+    // The raw SQL-building helper is a fragment appender, not an id-list builder: it writes " IN (" and nothing else,
+    // so a caller composing a long list by hand owns the dialect's limit. The gateways' own paths above group.
+    [Fact]
+    public void AppendIn_IsAFragmentHelper_AndDoesNotGroup()
+    {
+        using var context = OracleContext();
+        using var sc = context.CreateSqlContainer("SELECT 1 FROM \"InListEntity\" WHERE \"Id\"");
+
+        sc.AppendIn();
+
+        Assert.EndsWith(" IN (", sc.Query.ToString());
+    }
 }

@@ -970,7 +970,7 @@ public partial class DatabaseContext
             // SingleConnection admits nothing, but its shared connection is still one lease.
             if (PersistentConnection is TrackedConnection shared)
             {
-                shared.AttachSlot(AcquirePersistentLease());
+                shared.AttachSlot(AcquirePersistentLease(_isWriteConnection ? PoolLabel.Writer : PoolLabel.Reader));
             }
 
             return;
@@ -1990,26 +1990,43 @@ public partial class DatabaseContext
 
     /// <summary>
     /// One tracking-only lease for a persistent connection that holds no admission slot (SingleConnection's
-    /// shared connection, or a sentinel whose pool has no governor slot to give), so it is reported while it
-    /// lives and released when the connection is disposed.
+    /// shared connection, or a sentinel whose pool has no governor slot to give), so it is reported against
+    /// <paramref name="label"/>'s role while it lives and released when the connection is disposed.
     /// </summary>
-    private PoolSlot AcquirePersistentLease()
+    private PoolSlot AcquirePersistentLease(PoolLabel label)
     {
-        var governor = Volatile.Read(ref _persistentLeaseGovernor);
-        if (governor == null)
+        if (label == PoolLabel.Reader)
         {
-            var label = _isWriteConnection ? PoolLabel.Writer : PoolLabel.Reader;
-            var created = new PoolGovernor(label, ComputePoolKeyHash(_connectionString), 0, _poolAcquireTimeout,
-                disabled: true, trackMetrics: _metricsCollector != null,
-                leaseMetrics: LeaseMetricsFor(label), onLeaseAcquired: OnLeaseAcquired);
-            governor = Interlocked.CompareExchange(ref _persistentLeaseGovernor, created, null) ?? created;
-            if (!ReferenceEquals(governor, created))
-            {
-                created.Dispose();
-            }
+            return PersistentLeaseGovernor(ref _persistentReaderLeases, label).Acquire();
         }
 
-        return governor.Acquire();
+        return PersistentLeaseGovernor(ref _persistentWriterLeases, label).Acquire();
+    }
+
+    private PoolGovernor PersistentLeaseGovernor(ref PoolGovernor? field, PoolLabel label)
+    {
+        var governor = Volatile.Read(ref field);
+        if (governor != null)
+        {
+            return governor;
+        }
+
+        var created = new PoolGovernor(label, ComputePoolKeyHash(_connectionString), 0, _poolAcquireTimeout,
+            disabled: true, trackMetrics: _metricsCollector != null,
+            leaseMetrics: LeaseMetricsFor(label), onLeaseAcquired: OnLeaseAcquired);
+        governor = Interlocked.CompareExchange(ref field, created, null) ?? created;
+        if (!ReferenceEquals(governor, created))
+        {
+            created.Dispose();
+        }
+
+        return governor;
+    }
+
+    private void DisposePersistentLeaseGovernors()
+    {
+        Interlocked.Exchange(ref _persistentReaderLeases, null)?.Dispose();
+        Interlocked.Exchange(ref _persistentWriterLeases, null)?.Dispose();
     }
 
     private MetricsCollector? LeaseMetricsFor(PoolLabel label) =>
@@ -2488,7 +2505,7 @@ public partial class DatabaseContext
         _writerGovernor = null;
         _readerGovernor?.Dispose();
         _readerGovernor = null;
-        Interlocked.Exchange(ref _persistentLeaseGovernor, null)?.Dispose();
+        DisposePersistentLeaseGovernors();
     }
 
     private DbMode CoerceMode(DbMode requested, SupportedDatabase product, DatabaseTopology topology)

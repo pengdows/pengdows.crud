@@ -204,6 +204,31 @@ public sealed class LeaseConnectionMetricsTests
     }
 
     [Fact]
+    public void PreventDatabaseUnload_ReaderSentinelWithNoReaderGovernorSlot_IsCountedAsAReaderLease()
+    {
+        // The reader pool is forbidden (no governor slot to hand out), so its sentinel is a tracking-only lease. It
+        // belongs to the Reader role, not to the context's own (Writer) role.
+        var context = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = LocalDb,
+            ReadOnlyConnectionString = LocalDb + ";ApplicationIntent=ReadOnly",
+            DbMode = DbMode.PreventDatabaseUnload,
+            ReadWriteMode = ReadWriteMode.ReadWrite,
+            MaxConcurrentReads = 0,
+            EnableMetrics = true
+        }, new fakeDbFactory(SupportedDatabase.SqlServer));
+
+        var sentinels = context.GetSentinelSnapshot();
+        Assert.Contains(sentinels, s => s.ExecutionType == ExecutionType.Read);
+        Assert.Equal(sentinels.Count, context.NumberOfOpenConnections);
+        Assert.Equal(1, context.Metrics.Read.ConnectionsCurrent);
+        Assert.Equal(1, context.Metrics.Write.ConnectionsCurrent);
+
+        context.Dispose();
+        Assert.Equal(0, context.NumberOfOpenConnections);
+    }
+
+    [Fact]
     public void SingleConnection_SharedConnectionIsOneLease()
     {
         var context = Create(new fakeDbFactory(SupportedDatabase.Sqlite), "Data Source=:memory:;EmulatedProduct=Sqlite",

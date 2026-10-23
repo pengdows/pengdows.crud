@@ -189,9 +189,11 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private PoolGovernor? _readerGovernor;
     private PoolGovernor? _writerGovernor;
 
-    // Tracking-only lease for a persistent connection no admission governor hands out: SingleConnection's shared
-    // connection, or a sentinel whose pool has no governor slot to give.
-    private PoolGovernor? _persistentLeaseGovernor;
+    // Tracking-only leases for persistent connections no admission governor hands out: SingleConnection's shared
+    // connection, or a sentinel whose pool has no governor slot to give. One per role, so each is reported
+    // against the role it belongs to.
+    private PoolGovernor? _persistentReaderLeases;
+    private PoolGovernor? _persistentWriterLeases;
     private readonly ModeContentionStats _modeContentionStats = new();
     private readonly AttributionStats _attributionStats = new();
     private TimeSpan _poolAcquireTimeout = TimeSpan.FromSeconds(DatabaseContextConfiguration.DefaultPoolAcquireSeconds);
@@ -370,7 +372,8 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
 
     /// <inheritdoc/>
     public long NumberOfOpenConnections =>
-        LeasesInUse(_readerGovernor) + LeasesInUse(_writerGovernor) + LeasesInUse(_persistentLeaseGovernor);
+        LeasesInUse(_readerGovernor) + LeasesInUse(_writerGovernor) +
+        LeasesInUse(_persistentReaderLeases) + LeasesInUse(_persistentWriterLeases);
 
     private static long LeasesInUse(PoolGovernor? governor) => governor?.GetSnapshot().InUse ?? 0;
 
@@ -702,7 +705,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         var writerGovernor = _writerGovernor;
         _readerGovernor = null;
         _writerGovernor = null;
-        Interlocked.Exchange(ref _persistentLeaseGovernor, null)?.Dispose();
+        DisposePersistentLeaseGovernors();
 
         var writerDrained = DisposeGovernorAfterDrain(writerGovernor);
         var readerDrained = DisposeGovernorAfterDrain(readerGovernor);
@@ -715,7 +718,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
         var writerGovernor = _writerGovernor;
         _readerGovernor = null;
         _writerGovernor = null;
-        Interlocked.Exchange(ref _persistentLeaseGovernor, null)?.Dispose();
+        DisposePersistentLeaseGovernors();
 
         var writerDrained = await DisposeGovernorAfterDrainAsync(writerGovernor).ConfigureAwait(false);
         var readerDrained = await DisposeGovernorAfterDrainAsync(readerGovernor).ConfigureAwait(false);

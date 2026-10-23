@@ -131,7 +131,14 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
     public EnumParseFailureMode EnumParseBehavior { get; init; }
 
     /// <inheritdoc/>
-    public AuditCreationPolicy AuditCreationPolicy { get; set; } = AuditCreationPolicy.PreserveExplicitValues;
+    public AuditCreationPolicy AuditCreationPolicy
+    {
+        get => _auditCreationPolicy;
+        set => _auditCreationPolicy = value;
+    }
+
+    // Read on every create from any thread, set once at construction: volatile so a late write is seen everywhere.
+    private volatile AuditCreationPolicy _auditCreationPolicy = AuditCreationPolicy.PreserveExplicitValues;
 
     protected IDatabaseContext Context => _context;
 
