@@ -66,12 +66,4 @@
         <PackageReference Include="coverlet.collector" Version="6.0.4"/>
     </ItemGroup>
 
-    <!-- Microsoft.Data.SqlClient is pinned at an older version on purpose, to test pengdows.crud against it; it pulls in an older System.Security.Cryptography.Pkcs.
-         It is a test-only dependency: it is never shipped, deployed or run outside this project's tests, so the advisory
-         is suppressed here (not repo-wide) and any other advisory still fails the build. -->
-    <ItemGroup>
-        <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-2fmv-rv2c-59x7"/>
-        <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-846f-f764-76mx"/>
-    </ItemGroup>
-
 </Project>
