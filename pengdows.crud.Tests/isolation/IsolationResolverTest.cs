@@ -75,26 +75,37 @@ public class IsolationResolverTests
     }
 
     [Fact]
-    public void ResolveWithDetail_SqlServer_DegradesWhenSnapshotAndRcsiDisabled()
+    public void ResolveWithDetail_SqlServer_SnapshotAndRcsiDisabled_DefaultPolicy_Throws()
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), false, false);
 
-        var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
-
-        Assert.Equal(IsolationLevel.ReadCommitted, resolution.Level);
-        Assert.True(resolution.Degraded);
+        // Locking ReadCommitted does not give non-blocking reads: the guarantee cannot be met, so it is refused.
+        Assert.Throws<NotSupportedException>(() => resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads));
         Assert.Throws<InvalidOperationException>(() => resolver.Validate(IsolationLevel.Snapshot));
     }
 
     [Fact]
-    public void ResolveWithDetail_SqlServer_RcsiEnabledSignalsSnapshotFallback()
+    public void ResolveWithDetail_SqlServer_SnapshotAndRcsiDisabled_AllowLower_ResolvesDegraded()
+    {
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), false, false);
+
+        var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads,
+            IsolationResolutionPolicy.AllowLower);
+
+        Assert.Equal(IsolationLevel.ReadCommitted, resolution.Level);
+        Assert.True(resolution.Degraded);
+        Assert.Equal(IsolationResolutionKind.Lower, resolution.Kind);
+    }
+
+    [Fact]
+    public void ResolveWithDetail_SqlServer_RcsiEnabled_ReadCommittedMeetsTheProfile()
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(SupportedDatabase.SqlServer), true, false);
 
         var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
 
         Assert.Equal(IsolationLevel.ReadCommitted, resolution.Level);
-        Assert.True(resolution.Degraded);
+        Assert.False(resolution.Degraded);
     }
 
     [Fact]
@@ -386,15 +397,70 @@ public class IsolationResolverTests
     [Theory]
     [InlineData(SupportedDatabase.TiDb, IsolationLevel.RepeatableRead)]
     [InlineData(SupportedDatabase.Snowflake, IsolationLevel.ReadCommitted)]
-    public void ResolveWithDetail_StrictConsistency_FlagsDegradedWhenBelowSerializable(
+    [InlineData(SupportedDatabase.Access, IsolationLevel.ReadCommitted)]
+    public void ResolveWithDetail_StrictConsistency_BelowSerializable_DefaultPolicy_Throws(
+        SupportedDatabase product, IsolationLevel _)
+    {
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(product), false, false);
+
+        Assert.Throws<NotSupportedException>(() => resolver.ResolveWithDetail(IsolationProfile.StrictConsistency));
+        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.StrictConsistency));
+    }
+
+    [Theory]
+    [InlineData(SupportedDatabase.TiDb, IsolationLevel.RepeatableRead)]
+    [InlineData(SupportedDatabase.Snowflake, IsolationLevel.ReadCommitted)]
+    [InlineData(SupportedDatabase.Access, IsolationLevel.ReadCommitted)]
+    public void ResolveWithDetail_StrictConsistency_BelowSerializable_AllowLower_FlagsDegraded(
         SupportedDatabase product, IsolationLevel expectedLevel)
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(product), false, false);
 
-        var resolution = resolver.ResolveWithDetail(IsolationProfile.StrictConsistency);
+        var resolution = resolver.ResolveWithDetail(IsolationProfile.StrictConsistency,
+            IsolationResolutionPolicy.AllowLower);
 
         Assert.Equal(expectedLevel, resolution.Level);
         Assert.True(resolution.Degraded);
+        Assert.Equal(IsolationResolutionKind.Lower, resolution.Kind);
+    }
+
+    // The profiles a database can honor (what 2.0.6 pins and tests live): every combination here resolves under the
+    // default policy, never degraded. SQL Server needs snapshot isolation or RCSI for non-blocking reads.
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql)]
+    [InlineData(SupportedDatabase.SqlServer)]
+    [InlineData(SupportedDatabase.Oracle)]
+    [InlineData(SupportedDatabase.MySql)]
+    [InlineData(SupportedDatabase.MariaDb)]
+    [InlineData(SupportedDatabase.AuroraMySql)]
+    [InlineData(SupportedDatabase.AuroraPostgreSql)]
+    [InlineData(SupportedDatabase.Sqlite)]
+    [InlineData(SupportedDatabase.DuckDB)]
+    [InlineData(SupportedDatabase.Firebird)]
+    [InlineData(SupportedDatabase.CockroachDb)]
+    [InlineData(SupportedDatabase.YugabyteDb)]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.Snowflake)]
+    [InlineData(SupportedDatabase.Db2)]
+    [InlineData(SupportedDatabase.FlatFile)]
+    [InlineData(SupportedDatabase.SingleStore)]
+    [InlineData(SupportedDatabase.SybaseASE)]
+    [InlineData(SupportedDatabase.Spanner)]
+    [InlineData(SupportedDatabase.Informix)]
+    [InlineData(SupportedDatabase.SapHana)]
+    [InlineData(SupportedDatabase.InterBase)]
+    [InlineData(SupportedDatabase.Access)]
+    public void SafeNonBlockingReads_IsHonoredByEveryDatabase_UnlessItLocksReaders(SupportedDatabase product)
+    {
+        // SQL Server needs RCSI (or snapshot isolation) for non-blocking reads; every other product's mapped level
+        // reads from a snapshot.
+        var rcsi = product == SupportedDatabase.SqlServer;
+        var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(product), rcsi, false);
+
+        var resolution = resolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
+
+        Assert.False(resolution.Degraded);
+        Assert.NotEqual(IsolationResolutionKind.Lower, resolution.Kind);
     }
 
     [Fact]

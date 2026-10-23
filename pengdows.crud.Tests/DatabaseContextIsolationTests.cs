@@ -176,19 +176,47 @@ public class DatabaseContextIsolationTests
         Assert.Equal(expectedSupported, supported.Contains(level));
     }
 
-    // Regression: BeginTransaction(IsolationProfile, ...) and BeginTransactionAsync(IsolationProfile,
-    // ...) resolved via IsolationResolver.ResolveForTransaction, which returns only the final
-    // IsolationLevel — discarding the Degraded flag that ResolveWithDetail already computes (see
-    // GetSupportedIsolationLevels_ReflectsProviderCapabilities above: TiDb/Snowflake genuinely can't
-    // honor Serializable). A caller requesting IsolationProfile.StrictConsistency against TiDb or
-    // Snowflake silently got RepeatableRead/ReadCommitted instead, with no exception, no log, and no
-    // publicly reachable way to detect the gap — the one place degradation IS surfaced
-    // (ResolveTransactionParameters, just above) only covers the narrow SafeNonBlockingReads/
-    // read-only special case, not this general profile API.
+    // A profile whose guarantee the database cannot meet is refused unless the caller opts in with
+    // AllowLower ("for this case weaker is ok"); a stricter level is always acceptable.
+    [Theory]
+    [InlineData(SupportedDatabase.TiDb)]
+    [InlineData(SupportedDatabase.Snowflake)]
+    public void BeginTransaction_StrictConsistency_DegradedOnEngine_DefaultPolicy_Throws(SupportedDatabase product)
+    {
+        var factory = new fakeDbFactory(product.ToString());
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = $"Data Source=test;EmulatedProduct={product}",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory);
+
+        Assert.Throws<NotSupportedException>(() => context.BeginTransaction(IsolationProfile.StrictConsistency));
+    }
+
+    [Fact]
+    public async Task BeginTransactionAsync_StrictConsistency_DegradedOnEngine_DefaultPolicy_Throws()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.TiDb.ToString());
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=TiDb",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        await using var context = new DatabaseContext(config, factory);
+
+        await Assert.ThrowsAsync<NotSupportedException>(async () =>
+            await context.BeginTransactionAsync(IsolationProfile.StrictConsistency));
+    }
+
     [Theory]
     [InlineData(SupportedDatabase.TiDb, IsolationLevel.RepeatableRead)]
     [InlineData(SupportedDatabase.Snowflake, IsolationLevel.ReadCommitted)]
-    public void BeginTransaction_StrictConsistency_DegradedOnEngine_LogsWarning(
+    public void BeginTransaction_StrictConsistency_DegradedOnEngine_AllowLower_RunsWeakerAndLogsWarning(
         SupportedDatabase product, IsolationLevel expectedDegradedLevel)
     {
         var factory = new fakeDbFactory(product.ToString());
@@ -202,7 +230,8 @@ public class DatabaseContextIsolationTests
 
         using var context = new DatabaseContext(config, factory, loggerFactory);
 
-        using var tx = context.BeginTransaction(IsolationProfile.StrictConsistency);
+        using var tx = context.BeginTransaction(IsolationProfile.StrictConsistency,
+            policy: IsolationResolutionPolicy.AllowLower);
 
         Assert.Equal(expectedDegradedLevel, tx.IsolationLevel);
         Assert.Contains(loggerFactory.Entries, e =>
@@ -212,10 +241,9 @@ public class DatabaseContextIsolationTests
     }
 
     [Fact]
-    public async Task BeginTransactionAsync_StrictConsistency_DegradedOnEngine_LogsWarning()
+    public async Task BeginTransactionAsync_StrictConsistency_DegradedOnEngine_AllowLower_RunsWeaker()
     {
         var factory = new fakeDbFactory(SupportedDatabase.TiDb.ToString());
-        var loggerFactory = new RecordingLoggerFactory();
         var config = new DatabaseContextConfiguration
         {
             ConnectionString = "Data Source=test;EmulatedProduct=TiDb",
@@ -223,12 +251,33 @@ public class DatabaseContextIsolationTests
             ReadWriteMode = ReadWriteMode.ReadWrite
         };
 
-        await using var context = new DatabaseContext(config, factory, loggerFactory);
+        await using var context = new DatabaseContext(config, factory);
 
-        await using var tx = await context.BeginTransactionAsync(IsolationProfile.StrictConsistency);
+        await using var tx = await context.BeginTransactionAsync(IsolationProfile.StrictConsistency,
+            policy: IsolationResolutionPolicy.AllowLower);
 
         Assert.Equal(IsolationLevel.RepeatableRead, tx.IsolationLevel);
-        Assert.Contains(loggerFactory.Entries, e =>
+    }
+
+    // No level was asked for, so nothing was promised: the database's own default applies, silently.
+    [Fact]
+    public void BeginTransaction_ReadWithNoLevel_SqlServerWithoutSnapshot_UsesDatabaseDefaultWithoutWarning()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SqlServer.ToString());
+        var loggerFactory = new RecordingLoggerFactory();
+        var config = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=test;EmulatedProduct=SqlServer",
+            DbMode = DbMode.Standard,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var context = new DatabaseContext(config, factory, loggerFactory);
+
+        using var tx = context.BeginTransaction(executionType: ExecutionType.Read);
+
+        Assert.Equal(IsolationLevel.ReadCommitted, tx.IsolationLevel);
+        Assert.DoesNotContain(loggerFactory.Entries, e =>
             e.Level == LogLevel.Warning &&
             e.Message.Contains("degraded", StringComparison.OrdinalIgnoreCase));
     }

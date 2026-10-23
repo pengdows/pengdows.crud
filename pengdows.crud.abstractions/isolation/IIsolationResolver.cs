@@ -11,7 +11,8 @@ public interface IIsolationResolver
 {
     /// <summary>
     /// Maps an <see cref="IsolationProfile"/> to a concrete <see cref="IsolationLevel"/> using
-    /// <see cref="IsolationResolutionPolicy.AllowHigher"/> — isolation is never silently weakened.
+    /// <see cref="IsolationResolutionPolicy.AllowHigher"/> — isolation is never silently weakened:
+    /// a profile the database cannot honor throws <see cref="NotSupportedException"/>.
     /// </summary>
     IsolationLevel Resolve(IsolationProfile profile);
 
@@ -33,7 +34,8 @@ public interface IIsolationResolver
     /// Same as <see cref="ResolveWithDetail(IsolationProfile)"/>, permitting the substitutions
     /// <paramref name="policy"/> allows when the database's own ideal mapping isn't directly
     /// available. Throws <see cref="NotSupportedException"/> if no resolution satisfying
-    /// <paramref name="policy"/> exists.
+    /// <paramref name="policy"/> exists, including when the only resolution is weaker than the profile's
+    /// guarantee and <paramref name="policy"/> does not include <see cref="IsolationResolutionPolicy.AllowLower"/>.
     /// </summary>
     IsolationResolution ResolveWithDetail(IsolationProfile profile, IsolationResolutionPolicy policy);
 

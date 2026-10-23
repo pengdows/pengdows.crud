@@ -96,7 +96,16 @@ internal sealed class IsolationResolver : IIsolationResolver
             resolvedLevel = substitute.Value;
         }
 
-        var (kind, degraded) = ClassifyAgainstProfileGuarantee(profile, resolvedLevel);
+        var (kind, degraded) = ClassifyAgainstProfileGuarantee(profile, idealLevel, resolvedLevel);
+
+        // A profile is a minimum: stricter is always acceptable, weaker only when the caller says so.
+        if (degraded && !policy.HasFlag(IsolationResolutionPolicy.AllowLower))
+        {
+            throw new NotSupportedException(
+                $"IsolationProfile.{profile} cannot be guaranteed on {_product}: the strongest mapping available is " +
+                $"{resolvedLevel}, which is weaker than the profile requires. Pass " +
+                $"{nameof(IsolationResolutionPolicy)}.{nameof(IsolationResolutionPolicy.AllowLower)} to accept it.");
+        }
 
         Validate(resolvedLevel);
         return new IsolationResolution(profile, resolvedLevel, degraded, kind);
@@ -227,11 +236,27 @@ internal sealed class IsolationResolver : IIsolationResolver
     /// </summary>
     private (IsolationResolutionKind Kind, bool Degraded) ClassifyAgainstProfileGuarantee(
         IsolationProfile profile,
+        IsolationLevel mappedLevel,
         IsolationLevel resolvedLevel)
     {
-        var idealGuarantees = _dialect.GetIsolationGuarantees(CanonicalIdealLevel(profile));
         var resolvedGuarantees = _dialect.GetIsolationGuarantees(resolvedLevel);
 
+        // SafeNonBlockingReads promises reads that never block, not snapshot-grade repeatability, so it is not
+        // measured against a level's guarantees: the engine says whether the level it resolves to gives it. A
+        // substitute weaker than the level the dialect maps the profile to is a degradation either way.
+        if (profile == IsolationProfile.SafeNonBlockingReads)
+        {
+            var substituteIsWeaker = resolvedLevel != mappedLevel &&
+                                     Compare(_dialect.GetIsolationGuarantees(mappedLevel), resolvedGuarantees)
+                                         is IsolationLevelComparison.Lower;
+            var honored = resolvedGuarantees.HasFlag(IsolationGuarantees.NoDirtyReads) &&
+                          _dialect.ReadsAreNonBlocking(resolvedLevel, _rcsi);
+            return substituteIsWeaker || !honored
+                ? (IsolationResolutionKind.Lower, true)
+                : (resolvedLevel == mappedLevel ? IsolationResolutionKind.Exact : IsolationResolutionKind.Higher, false);
+        }
+
+        var idealGuarantees = _dialect.GetIsolationGuarantees(CanonicalIdealLevel(profile));
         return Compare(idealGuarantees, resolvedGuarantees) switch
         {
             IsolationLevelComparison.Exact => (IsolationResolutionKind.Exact, false),

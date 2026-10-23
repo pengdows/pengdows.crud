@@ -459,6 +459,15 @@ internal class SqlServerDialect : SqlDialect
                 IsolationLevel.Serializable
             };
 
+    // Snapshot reads never block; ReadCommitted does only with READ_COMMITTED_SNAPSHOT on; the locking levels above it
+    // (and ReadUncommitted, which gives up read safety) do not.
+    internal override bool ReadsAreNonBlocking(IsolationLevel level, bool readCommittedSnapshotEnabled) => level switch
+    {
+        IsolationLevel.Snapshot => true,
+        IsolationLevel.ReadCommitted => readCommittedSnapshotEnabled,
+        _ => false
+    };
+
     internal override Dictionary<IsolationProfile, IsolationLevel> GetIsolationProfileMapping(bool allowSnapshotIsolation) => new()
     {
         [IsolationProfile.SafeNonBlockingReads] = allowSnapshotIsolation

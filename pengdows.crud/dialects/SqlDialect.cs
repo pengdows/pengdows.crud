@@ -149,6 +149,14 @@ internal abstract class SqlDialect : IInternalSqlDialect
     };
 
     /// <summary>
+    /// Whether reads at <paramref name="level"/> never block on writers (and writers never block on them) on this
+    /// database: what <see cref="enums.IsolationProfile.SafeNonBlockingReads"/> promises. The default is true, since
+    /// most engines read from a snapshot at the level their profile maps to; a locking engine overrides it
+    /// (SQL Server's ReadCommitted blocks readers unless READ_COMMITTED_SNAPSHOT is on).
+    /// </summary>
+    internal virtual bool ReadsAreNonBlocking(IsolationLevel level, bool readCommittedSnapshotEnabled) => true;
+
+    /// <summary>
     /// The <see cref="IsolationGuarantees"/> a given <see cref="IsolationLevel"/> actually provides
     /// on this database. Used exclusively by <see cref="pengdows.crud.isolation.IsolationResolver"/>
     /// to compare levels as a partial order instead of by raw enum value — the authoritative source

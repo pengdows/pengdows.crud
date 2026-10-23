@@ -81,9 +81,9 @@ public partial class DatabaseContext
     /// Resolves an <see cref="IsolationProfile"/> to a concrete <see cref="IsolationLevel"/> for
     /// <see cref="BeginTransaction(IsolationProfile,ExecutionType,IsolationResolutionPolicy)"/>/
     /// <see cref="BeginTransactionAsync(IsolationProfile,ExecutionType,CancellationToken,IsolationResolutionPolicy)"/>,
-    /// logging a warning when the engine can't honor the requested profile's guarantee (e.g.
-    /// StrictConsistency resolving to something weaker than Serializable on TiDB/Snowflake) —
-    /// otherwise that downgrade would be entirely silent to the caller.
+    /// throwing <see cref="NotSupportedException"/> when the engine can't honor the profile's guarantee unless the
+    /// caller allows a weaker level (<see cref="IsolationResolutionPolicy.AllowLower"/>), in which case the
+    /// downgrade is logged as a warning.
     /// </summary>
     private IsolationLevel ResolveIsolationProfileForTransaction(IsolationProfile isolationProfile, IsolationResolutionPolicy policy)
     {
@@ -118,18 +118,11 @@ public partial class DatabaseContext
 
             if (isolationLevel is null)
             {
-                var resolution = _isolationResolver.ResolveWithDetail(IsolationProfile.SafeNonBlockingReads);
-                isolationLevel = resolution.Level;
-                if (resolution.Degraded)
-                {
-                    _logger.LogWarning(
-                        "Isolation profile {Profile} degraded to {Level} for {Product}; SnapshotIsolationEnabled={SnapshotEnabled}, RCSIEnabled={RcsiEnabled}.",
-                        resolution.Profile,
-                        resolution.Level,
-                        Product,
-                        SnapshotIsolationEnabled,
-                        RCSIEnabled);
-                }
+                // No level was asked for, so nothing was promised. Use the non-blocking-read mapping when the
+                // product can honor it; otherwise the database's own default, silently.
+                var resolution = _isolationResolver.ResolveWithDetail(
+                    IsolationProfile.SafeNonBlockingReads, IsolationResolutionPolicy.AllowLower);
+                isolationLevel = resolution.Degraded ? DefaultIsolationLevel() : resolution.Level;
             }
             else
             {
@@ -152,19 +145,7 @@ public partial class DatabaseContext
 
             if (isolationLevel is null)
             {
-                var supported = _isolationResolver.GetSupportedLevels();
-                if (supported.Contains(IsolationLevel.ReadCommitted))
-                {
-                    isolationLevel = IsolationLevel.ReadCommitted;
-                }
-                else if (supported.Contains(IsolationLevel.Serializable))
-                {
-                    isolationLevel = IsolationLevel.Serializable;
-                }
-                else
-                {
-                    isolationLevel = supported.First();
-                }
+                isolationLevel = DefaultIsolationLevel();
             }
             else
             {
@@ -174,5 +155,20 @@ public partial class DatabaseContext
         }
 
         return (ro, isolationLevel.Value);
+    }
+
+    /// <summary>
+    /// The level used when the caller asks for none: ReadCommitted, else Serializable, else the
+    /// first level the product supports.
+    /// </summary>
+    private IsolationLevel DefaultIsolationLevel()
+    {
+        var supported = _isolationResolver.GetSupportedLevels();
+        if (supported.Contains(IsolationLevel.ReadCommitted))
+        {
+            return IsolationLevel.ReadCommitted;
+        }
+
+        return supported.Contains(IsolationLevel.Serializable) ? IsolationLevel.Serializable : supported.First();
     }
 }

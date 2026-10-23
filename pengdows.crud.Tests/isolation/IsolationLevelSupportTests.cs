@@ -132,7 +132,9 @@ public class IsolationLevelSupportTests
         IsolationLevel expectedLevel)
     {
         var resolver = new IsolationResolver(IsolationTestDialectFactory.Create(database), false, false);
-        Assert.Equal(expectedLevel, resolver.Resolve(profile));
+        // A profile the database cannot fully honor (StrictConsistency on TiDB/Snowflake) resolves to its best level
+        // only when the caller accepts a weaker one.
+        Assert.Equal(expectedLevel, resolver.Resolve(profile, IsolationResolutionPolicy.AllowLower));
     }
 
     public static IEnumerable<object[]> GetProfileMappingExpectations()

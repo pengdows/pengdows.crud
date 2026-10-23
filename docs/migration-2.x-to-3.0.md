@@ -321,6 +321,17 @@ release's other removals of unreferenced public surface (`IEphemeralSecureString
 sites now throw) instead. Locked down by
 `CompleteExceptionTests.TransactionModeNotSupportedException_NoLongerExists`.
 
+**An `IsolationProfile` the database cannot honor now throws `NotSupportedException` unless the caller passes `IsolationResolutionPolicy.AllowLower`.**
+This replaces the 2.0.x `TransactionModeNotSupportedException`, with the same rule: isolation is a minimum, stricter is
+always acceptable, weaker only on request. Before this change 3.0 logged a warning and ran the weaker level (for example
+`StrictConsistency` on TiDB or Snowflake). `SafeNonBlockingReads` is now judged by whether reads at the resolved level
+block (SQL Server needs snapshot isolation or `READ_COMMITTED_SNAPSHOT`), not against snapshot-grade repeatability, so
+every other database honors it. A read transaction with no level asked for runs the database default silently when the
+profile is not honored.
+
+**Migration:** catch `NotSupportedException` where you caught `TransactionModeNotSupportedException`; add
+`IsolationResolutionPolicy.AllowLower` to the calls where a weaker level is acceptable.
+
 ### Read-only contexts fail closed on session-initialization failure by default
 
 `DatabaseContextConfiguration.SessionInitializationFailureMode` is new (see above). When left

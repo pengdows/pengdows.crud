@@ -1,3 +1,4 @@
+using System;
 using System.Data;
 using System.Linq;
 using pengdows.crud.enums;
@@ -33,7 +34,10 @@ public class NewIsolationResolverTests
         // TiDB accepts SERIALIZABLE syntax but silently maps it to REPEATABLE READ.
         // StrictConsistency uses RepeatableRead (best available) rather than advertising a level that isn't enforced.
         Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
-        Assert.Equal(IsolationLevel.RepeatableRead, resolver.Resolve(IsolationProfile.StrictConsistency));
+        // The profile's guarantee cannot be met, so it needs AllowLower (the default refuses).
+        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.RepeatableRead,
+            resolver.Resolve(IsolationProfile.StrictConsistency, IsolationResolutionPolicy.AllowLower));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
 
         var levels = resolver.GetSupportedLevels();
@@ -49,7 +53,9 @@ public class NewIsolationResolverTests
 
         // Snowflake only supports READ COMMITTED; all profiles map to it.
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.SafeNonBlockingReads));
-        Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Throws<NotSupportedException>(() => resolver.Resolve(IsolationProfile.StrictConsistency));
+        Assert.Equal(IsolationLevel.ReadCommitted,
+            resolver.Resolve(IsolationProfile.StrictConsistency, IsolationResolutionPolicy.AllowLower));
         Assert.Equal(IsolationLevel.ReadCommitted, resolver.Resolve(IsolationProfile.FastWithRisks));
 
         var levels = resolver.GetSupportedLevels();
