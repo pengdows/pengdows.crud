@@ -45,4 +45,11 @@
         <DefineConstants>$(DefineConstants);PENGDOWS_FLATFILE</DefineConstants>
     </PropertyGroup>
 
+    <!-- System.Drawing.Common 4.7.0 arrives transitively through the older System.Data.OleDb/Access driver kept for compatibility testing.
+         It is a test-only dependency: it is never shipped, deployed or run outside this project's tests, so the advisory
+         is suppressed here (not repo-wide) and any other advisory still fails the build. -->
+    <ItemGroup>
+        <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-rxg9-xrhp-64gj"/>
+    </ItemGroup>
+
 </Project>
