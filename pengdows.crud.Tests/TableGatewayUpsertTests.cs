@@ -176,6 +176,28 @@ public class TableGatewayUpsertTests
             c.Query.ToString().Contains("OVERRIDING SYSTEM VALUE", StringComparison.Ordinal)));
     }
 
+    // DuckDB 1.4+ has both MERGE and ON CONFLICT. The single-row upsert uses MERGE and the batch upsert ON CONFLICT, so
+    // each must carry its own UPDATE SET form: a MERGE-form fragment ("s." source references) in an ON CONFLICT
+    // statement is invalid SQL. (2.0.5.1 gated the batch on the same rule; 2.0.6 keeps two fragments instead.)
+    [Fact]
+    public async Task Upsert_DuckDb14_SingleRowUsesMerge_BatchUsesOnConflictWithItsOwnFragment()
+    {
+        await using var context = CreateUpsertContext(SupportedDatabase.DuckDB, "v1.4.0");
+        Assert.True(context.DataSourceInfo.SupportsMerge);
+        Assert.True(context.DataSourceInfo.SupportsInsertOnConflict);
+        var gateway = new TableGateway<ExplicitIdentityEntity, int>(context);
+
+        using var single = gateway.BuildUpsert(new ExplicitIdentityEntity { Id = 42, Value = "x" }, context);
+        var batch = gateway.BuildBatchUpsert(TwoExplicitIds, context);
+
+        Assert.Contains("MERGE INTO", single.Query.ToString(), StringComparison.Ordinal);
+        var batchSql = Assert.Single(batch).Query.ToString();
+        Assert.Contains("ON CONFLICT", batchSql, StringComparison.Ordinal);
+        Assert.Contains("EXCLUDED", batchSql, StringComparison.Ordinal);
+        Assert.DoesNotContain("MERGE", batchSql, StringComparison.Ordinal);
+        Assert.DoesNotContain("s.\"", batchSql, StringComparison.Ordinal);
+    }
+
     [Table("upsert_entities")]
     private class ConflictEntity
     {
