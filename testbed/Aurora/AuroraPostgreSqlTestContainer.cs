@@ -8,6 +8,12 @@ public sealed class AuroraPostgreSqlTestContainer : TestContainer
     private readonly AuroraTestConfiguration _config = AuroraTestConfiguration.FromEnvironment(AuroraEngine.PostgreSql);
     private bool _created;
 
+    /// <summary>
+    /// The real connection string (host, credentials, isolated schema/database) with a trailing ';',
+    /// for tests that build a second, differently-configured DatabaseContext against the same cluster.
+    /// </summary>
+    public string ConnectionString => _config.AppendableTestConnectionString;
+
     public override async Task StartAsync()
     {
         await using var conn = new NpgsqlConnection(_config.AdminConnectionString);

@@ -29,6 +29,13 @@ public sealed class AuroraTestConfiguration
     public string AdminConnectionString { get; }
     public string TestConnectionString { get; }
 
+    /// <summary>
+    /// <see cref="TestConnectionString"/> with a trailing ';', so a test can append further
+    /// connection-string options (the builders emit no trailing separator).
+    /// </summary>
+    public string AppendableTestConnectionString =>
+        TestConnectionString.EndsWith(';') ? TestConnectionString : TestConnectionString + ";";
+
     public static AuroraTestConfiguration FromEnvironment(AuroraEngine engine,
         Func<string, string?>? getEnv = null, Func<long>? utcNowMilliseconds = null)
     {

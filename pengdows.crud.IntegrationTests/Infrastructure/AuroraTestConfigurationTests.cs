@@ -29,6 +29,26 @@ public sealed class AuroraTestConfigurationTests
         Assert.Contains("SSL Mode=Require", configuration.TestConnectionString);
     }
 
+    [Theory]
+    [InlineData(AuroraEngine.PostgreSql)]
+    [InlineData(AuroraEngine.MySql)]
+    public void AppendableTestConnectionString_EndsWithSeparator_SoCallersCanAppendOptions(AuroraEngine engine)
+    {
+        var prefix = engine == AuroraEngine.PostgreSql ? "AURORA_POSTGRES_" : "AURORA_MYSQL_";
+        var values = new Dictionary<string, string?>
+        {
+            [prefix + "HOST"] = "aurora.example",
+            [prefix + "USER"] = "tester",
+            [prefix + "PASSWORD"] = "secret",
+            [prefix + "DATABASE"] = "app"
+        };
+
+        var configuration = AuroraTestConfiguration.FromEnvironment(engine, values.GetValueOrDefault, () => 1);
+
+        Assert.EndsWith(";", configuration.AppendableTestConnectionString);
+        Assert.StartsWith(configuration.TestConnectionString.TrimEnd(';'), configuration.AppendableTestConnectionString);
+    }
+
     [Fact]
     public void MySql_FromEnvironment_BuildsIsolatedDatabaseAndConnections()
     {

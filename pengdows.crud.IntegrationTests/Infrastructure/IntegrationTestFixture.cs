@@ -290,6 +290,8 @@ public class IntegrationTestFixture : IAsyncLifetime
             testbed.SingleStore.SingleStoreTestContainer s2 => s2.ConnectionString,
             testbed.MySQL.MySqlTestContainer mysql => mysql.ConnectionString,
             testbed.TiDB.TiDBTestContainer tidb => tidb.ConnectionString,
+            testbed.Aurora.AuroraPostgreSqlTestContainer auroraPg => auroraPg.ConnectionString,
+            testbed.Aurora.AuroraMySqlTestContainer auroraMy => auroraMy.ConnectionString,
             _ => throw new NotSupportedException(
                 $"GetRawConnectionString is not implemented for provider {provider} ({container.GetType().Name}).")
         };
