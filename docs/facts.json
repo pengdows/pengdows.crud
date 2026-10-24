@@ -258,17 +258,17 @@
         "pass": 152,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-23 17:58Z",
-        "commit": "33755cb4",
-        "dirtyTree": true
+        "runUtc": "2026-10-24 10:35Z",
+        "commit": "054eb79b",
+        "dirtyTree": false
       },
       "net8.0": {
         "pass": 152,
         "fail": 0,
         "skip": 0,
-        "runUtc": "2026-10-23 17:52Z",
-        "commit": "33755cb4",
-        "dirtyTree": true
+        "runUtc": "2026-10-24 10:30Z",
+        "commit": "054eb79b",
+        "dirtyTree": false
       }
     },
     "SingleStore": {
