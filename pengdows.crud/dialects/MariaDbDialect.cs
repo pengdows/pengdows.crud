@@ -97,6 +97,7 @@ internal class MariaDbDialect : MySqlDialect
         return SupportsInsertReturning ? GeneratedKeyPlan.Returning : GeneratedKeyPlan.ReaderInsertedId;
     }
 
+    [System.Obsolete("Takes a raw DbCommand, and DbCommand.Connection exposes a connection, so this member leaves the public surface in 3.0 (it becomes internal). It is only used by the library for generated keys.")]
     public override object? GetLastInsertedIdFromCommand(DbCommand? command)
     {
         var value = base.GetLastInsertedIdFromCommand(command);

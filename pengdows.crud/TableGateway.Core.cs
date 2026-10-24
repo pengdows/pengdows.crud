@@ -457,7 +457,9 @@ public partial class TableGateway<TEntity, TRowID> :
 
             if (reader is IInternalTrackedReader internalReader)
             {
+#pragma warning disable CS0618 // the member leaves the public surface in 3.0; the library still reads generated keys through it
                 generatedId = dialect.GetLastInsertedIdFromCommand(internalReader.InnerCommand);
+#pragma warning restore CS0618
             }
         }
 

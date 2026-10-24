@@ -3883,6 +3883,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// Reads the generated key from the command via provider-specific reflection.
     /// Base returns null; override in dialects where the provider exposes a LastInsertedId property.
     /// </summary>
+    [System.Obsolete("Takes a raw DbCommand, and DbCommand.Connection exposes a connection, so this member leaves the public surface in 3.0 (it becomes internal). It is only used by the library for generated keys.")]
     public virtual object? GetLastInsertedIdFromCommand(System.Data.Common.DbCommand? command)
     {
         return null;

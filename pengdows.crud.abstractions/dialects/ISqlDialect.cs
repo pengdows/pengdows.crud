@@ -646,6 +646,7 @@ public interface ISqlDialect
     /// Returns <c>null</c> when the provider does not expose this property or the command is null.
     /// Used by the <see cref="GeneratedKeyPlan.ReaderInsertedId"/> path.
     /// </summary>
+    [System.Obsolete("Takes a raw DbCommand, and DbCommand.Connection exposes a connection, so this member leaves the public surface in 3.0 (it becomes internal). It is only used by the library for generated keys.")]
     object? GetLastInsertedIdFromCommand(System.Data.Common.DbCommand? command) => null;
 
     /// <summary>
