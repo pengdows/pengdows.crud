@@ -12,6 +12,12 @@
 
 namespace pengdows.crud.exceptions;
 
+/// <remarks>
+/// Obsolete: 3.0 removes this type. An isolation profile the database cannot honor throws
+/// <see cref="NotSupportedException"/> there unless the caller passes <c>IsolationResolutionPolicy.AllowLower</c>.
+/// This type derives from <see cref="NotSupportedException"/>, so catching that base type works on 2.0.x and 3.0.
+/// </remarks>
+[Obsolete("Removed in 3.0. Catch NotSupportedException instead; an isolation profile the database cannot honor throws NotSupportedException in 3.0 unless IsolationResolutionPolicy.AllowLower is passed.")]
 public class TransactionModeNotSupportedException : NotSupportedException
 {
     public TransactionModeNotSupportedException(string message)

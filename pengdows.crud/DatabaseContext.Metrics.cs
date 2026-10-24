@@ -116,9 +116,10 @@ public partial class DatabaseContext
     public long TotalConnectionTimeoutFailures => Interlocked.Read(ref _totalConnectionTimeoutFailures);
 
     /// <summary>
-    /// Gets the connection pool efficiency ratio (reused / total created).
-    /// Returns 0 if no connections have been created.
+    /// Gets the connection pool efficiency ratio (reused / total created). Always 0: it divides an untracked counter
+    /// (<see cref="TotalConnectionsReused"/>) by the connections created. Removed in 3.0.
     /// </summary>
+    [Obsolete("Always returns 0 because it is derived from TotalConnectionsReused, which is not tracked (provider connection-pool reuse is not visible to pengdows.crud). This property will be removed in 3.0.")]
     public double ConnectionPoolEfficiency
     {
         get

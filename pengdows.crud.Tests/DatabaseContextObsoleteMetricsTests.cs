@@ -28,4 +28,20 @@ public class DatabaseContextObsoleteMetricsTests
         Assert.Contains("not tracked", obsolete.Message, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("3.0", obsolete.Message, StringComparison.Ordinal);
     }
+
+    // Derived from the counter above, so it is always 0.0 too; 3.0 removes both.
+    [Fact]
+    public void ConnectionPoolEfficiency_IsObsolete_DerivedFromAnUntrackedCounter_RemovedIn3_0()
+    {
+        var property = typeof(DatabaseContext).GetProperty(nameof(DatabaseContext.ConnectionPoolEfficiency),
+            BindingFlags.Public | BindingFlags.Instance);
+        Assert.NotNull(property);
+
+        var obsolete = property!.GetCustomAttribute<ObsoleteAttribute>();
+
+        Assert.NotNull(obsolete);
+        Assert.False(obsolete!.IsError);
+        Assert.Contains("always", obsolete.Message, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("3.0", obsolete.Message, StringComparison.Ordinal);
+    }
 }
