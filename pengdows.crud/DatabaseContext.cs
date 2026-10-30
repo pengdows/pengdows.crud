@@ -158,6 +158,9 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private IsolationResolver _isolationResolver = null!;
     private bool _isReadConnection = true;
     private bool _isWriteConnection = true;
+    // SQLite shared-cache in-memory databases use SingleWriter, but disappear when the last
+    // connection closes. Keep a read sentinel open for that topology.
+    private bool _sqliteSharedInMemory;
     // Most leases held at one time (reader + writer + persistent), raised as each lease is acquired.
     private long _peakOpenConnections;
 

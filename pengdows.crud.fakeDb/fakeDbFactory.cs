@@ -12,7 +12,7 @@ using pengdows.crud.infrastructure;
 
 namespace pengdows.crud.fakeDb;
 
-public sealed partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
+public partial class fakeDbFactory : DbProviderFactory, IFakeDbFactory
 {
     public static readonly fakeDbFactory Instance = new();
     private readonly SupportedDatabase _pretendToBe;

@@ -249,6 +249,44 @@ public class ConnectionStrategyTests
     }
 
     [Fact]
+    public void SharedInMemorySqlite_UsesSingleWriter_WithReadOnlySentinel()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=file:shared-memory?mode=memory&cache=shared;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadWrite
+        };
+
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        Assert.Equal(DbMode.SingleWriter, ctx.ConnectionMode);
+        var sentinel = Assert.Single(ctx.GetSentinelSnapshot());
+        Assert.Equal(ExecutionType.Read, sentinel.ExecutionType);
+        Assert.Same(sentinel.Connection, ctx.PersistentConnection);
+        Assert.Contains("mode=memory", sentinel.Connection.ConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SharedInMemorySqlite_ReadOnlySentinel_HoldsReaderLease()
+    {
+        var cfg = new DatabaseContextConfiguration
+        {
+            ConnectionString = "Data Source=file:shared-read-only?mode=memory&cache=shared;EmulatedProduct=Sqlite",
+            DbMode = DbMode.Best,
+            ReadWriteMode = ReadWriteMode.ReadOnly,
+            EnableMetrics = true
+        };
+
+        using var ctx = new DatabaseContext(cfg, new fakeDbFactory(SupportedDatabase.Sqlite));
+
+        var readerPool = ctx.GetPoolStatisticsSnapshot(PoolLabel.Reader);
+
+        Assert.Equal(1, readerPool.InUse);
+        Assert.Equal(1, readerPool.PeakInUse);
+    }
+
+    [Fact]
     public async Task SingleWriter_ReadAndWrite_AreEphemeralConnections()
     {
         await using var ctx = CreateContext(DbMode.SingleWriter, SupportedDatabase.Sqlite, "file.db");

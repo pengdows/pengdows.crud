@@ -53,6 +53,18 @@ public class FakeDbDriverQuirksTests
     }
 
     [Fact]
+    public void RejectNonUtcDateTimeOffsets_rejects_the_original_parameter_value()
+    {
+        var factory = Factory(new fakeDbDriverQuirks { RejectNonUtcDateTimeOffsets = true });
+        using var connection = Open(factory);
+        using var command = Command(connection);
+        var parameter = command.CreateParameter();
+
+        Assert.Throws<ArgumentException>(() => parameter.Value = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.FromHours(-8)));
+        parameter.Value = new DateTimeOffset(2026, 1, 1, 12, 0, 0, TimeSpan.Zero);
+    }
+
+    [Fact]
     public void PrepareWithoutOpenConnection_lets_Prepare_return()
     {
         var factory = Factory(new fakeDbDriverQuirks { PrepareWithoutOpenConnection = true });
@@ -145,6 +157,15 @@ public class FakeDbDriverQuirksTests
 
         using var reader = command.ExecuteReader();
         Assert.True(reader.Read());
+    }
+
+    [Fact]
+    public void EnlistTransaction_accepts_a_transaction()
+    {
+        using var connection = Open(Factory(new fakeDbDriverQuirks()));
+        using var transaction = new System.Transactions.CommittableTransaction();
+
+        connection.EnlistTransaction(transaction);
     }
 
     [Fact]
@@ -314,6 +335,32 @@ public class FakeDbDriverQuirksTests
     }
 
     [Fact]
+    public void Npgsql_preset_reports_and_allows_savepoints()
+    {
+        using var connection = Open(Factory(fakeDbDriverQuirks.Npgsql()));
+        using var transaction = connection.BeginTransaction();
+
+        Assert.True(transaction.SupportsSavepoints);
+        transaction.Save("sp");
+        transaction.Rollback("sp");
+        transaction.Release("sp");
+    }
+
+    [Fact]
+    public void A_connection_can_override_transaction_savepoint_capability()
+    {
+        var factory = Factory(new fakeDbDriverQuirks());
+        factory.Connections.Add(new SavepointCapableConnection());
+        using var connection = Open(factory);
+        using var transaction = connection.BeginTransaction();
+
+        Assert.True(transaction.SupportsSavepoints);
+        transaction.Save("sp");
+        transaction.Rollback("sp");
+        transaction.Release("sp");
+    }
+
+    [Fact]
     public void A_connection_can_have_its_own_quirks()
     {
         var factory = Factory(new fakeDbDriverQuirks());
@@ -323,6 +370,18 @@ public class FakeDbDriverQuirksTests
 
         command.Prepare();
         Assert.False(factory.DriverQuirks.PrepareWithoutOpenConnection);
+    }
+
+    private sealed class SavepointCapableConnection : fakeDbConnection
+    {
+        protected override DbTransaction BeginDbTransaction(IsolationLevel isolationLevel)
+            => new SavepointCapableTransaction(this, isolationLevel);
+    }
+
+    private sealed class SavepointCapableTransaction(fakeDbConnection connection, IsolationLevel level)
+        : fakeDbTransaction(connection, level)
+    {
+        public override bool SupportsSavepoints => true;
     }
 
     public static TheoryData<string, Func<fakeDbDriverQuirks>> Presets => new()

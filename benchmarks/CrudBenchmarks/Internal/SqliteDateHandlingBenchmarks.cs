@@ -27,7 +27,6 @@ public class SqliteDateHandlingBenchmarks : IDisposable
 {
     private const int SeedRows = 1000;
 
-    private SqliteConnection _sentinel = null!;
     private SqliteConnection _dapperConn = null!;   // dedicated always-open connection, mirrors pengdows SingleConnection mode
     private DatabaseContext _context = null!;
     private TableGateway<BenchEntity, long> _gateway = null!;
@@ -45,10 +44,10 @@ public class SqliteDateHandlingBenchmarks : IDisposable
     {
         _connectionString = "Data Source=SqliteDateHandlingBench;Mode=Memory;Cache=Shared";
 
-        _sentinel = new SqliteConnection(_connectionString);
-        _sentinel.Open();
+        using var setup = new SqliteConnection(_connectionString);
+        setup.Open();
 
-        using (var cmd = _sentinel.CreateCommand())
+        using (var cmd = setup.CreateCommand())
         {
             cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS benchmark (
@@ -58,9 +57,9 @@ public class SqliteDateHandlingBenchmarks : IDisposable
             cmd.ExecuteNonQuery();
         }
 
-        using (var tx = _sentinel.BeginTransaction())
+        using (var tx = setup.BeginTransaction())
         {
-            using var cmd = _sentinel.CreateCommand();
+            using var cmd = setup.CreateCommand();
             cmd.Transaction = tx;
             cmd.CommandText = "INSERT INTO benchmark (id, created_at) VALUES (@id, @created_at)";
             var idParam = cmd.CreateParameter();
@@ -106,7 +105,6 @@ public class SqliteDateHandlingBenchmarks : IDisposable
     {
         _context?.Dispose();
         _dapperConn?.Dispose();
-        _sentinel?.Dispose();
     }
 
     public void Dispose()
@@ -157,7 +155,7 @@ public class SqliteDateHandlingBenchmarks : IDisposable
             return _fieldTypeDump;
         }
 
-        using var cmd = _sentinel.CreateCommand();
+        using var cmd = _dapperConn.CreateCommand();
         cmd.CommandText = _dapperSql;
         var param = cmd.CreateParameter();
         param.ParameterName = "@id";

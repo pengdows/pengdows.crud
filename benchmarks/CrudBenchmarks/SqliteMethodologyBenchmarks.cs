@@ -22,8 +22,8 @@ namespace CrudBenchmarks;
 ///
 /// The PostgreSQL class's methodology jobs (CPU pinning, server GC, injected latency) are about a
 /// database in another process; SQLite runs in-process, so this class keeps one job. Every framework
-/// opens and closes its connection per operation against one shared-cache in-memory database kept
-/// alive by a sentinel connection, as <see cref="EqualFootingCrudBenchmarks"/> does.
+/// opens and closes its connection per operation against one shared-cache in-memory database. The
+/// pengdows.crud context keeps it alive with its built-in read sentinel.
 ///
 /// Opt-in: dotnet run -c Release -f net10.0 -- --include-opt-in --filter '*SqliteMethodology*'
 /// </summary>
@@ -47,7 +47,6 @@ public class SqliteMethodologyBenchmarks
         EF.CompileAsyncQuery((EfBenchContext ctx, int id) =>
             ctx.Benchmarks.AsNoTracking().FirstOrDefault(e => e.Id == id));
 
-    private SqliteConnection _sentinel = null!;
     private DatabaseContext _pengdowsContext = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
     private DbContextOptions<EfBenchContext> _efOptions = null!;
@@ -61,9 +60,9 @@ public class SqliteMethodologyBenchmarks
         _originalMatchNamesWithUnderscores = DefaultTypeMap.MatchNamesWithUnderscores;
         DefaultTypeMap.MatchNamesWithUnderscores = true;
 
-        _sentinel = new SqliteConnection(ConnStr);
-        _sentinel.Open();
-        await using (var cmd = _sentinel.CreateCommand())
+        await using var setup = new SqliteConnection(ConnStr);
+        setup.Open();
+        await using (var cmd = setup.CreateCommand())
         {
             cmd.CommandText = @"
                 DROP TABLE IF EXISTS benchmark;
@@ -77,9 +76,9 @@ public class SqliteMethodologyBenchmarks
             cmd.ExecuteNonQuery();
         }
 
-        await using (var tx = _sentinel.BeginTransaction())
+        await using (var tx = setup.BeginTransaction())
         {
-            await using var cmd = _sentinel.CreateCommand();
+            await using var cmd = setup.CreateCommand();
             cmd.Transaction = tx;
             var now = DateTime.UtcNow.ToString("O");
             for (var i = 1; i <= SeedRows; i++)
@@ -127,7 +126,6 @@ public class SqliteMethodologyBenchmarks
         DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
         await _readSingleSc.DisposeAsync();
         await _pengdowsContext.DisposeAsync();
-        await _sentinel.DisposeAsync();
     }
 
     private static int IdFor(int i) => (i % SeedRows) + 1;

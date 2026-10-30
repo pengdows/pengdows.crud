@@ -31,7 +31,7 @@
         <!-- Lets the .editorconfig rule IDE0011 (required braces, review policy 4F) report during the build. -->
         <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
         <VersionPrefix>2.0.6</VersionPrefix>
-        <Version>$(VersionPrefix)</Version>
+        <Version>$(VersionPrefix)-rc6</Version>
         <AssemblyVersion>$(VersionPrefix).0</AssemblyVersion>
         <FileVersion>$(VersionPrefix).0</FileVersion>
     </PropertyGroup>

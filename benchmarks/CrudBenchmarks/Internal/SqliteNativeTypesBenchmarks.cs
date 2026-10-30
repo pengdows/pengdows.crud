@@ -49,8 +49,6 @@ public class SqliteNativeTypesBenchmarks : IDisposable
     private static readonly string SeedGuidStr = SeedGuid.ToString("D");
     private static readonly string SeedDateStr = "2024-06-15T12:00:00.0000000Z";
 
-    // Keeps the shared-cache in-memory database alive for the benchmark run
-    private SqliteConnection _sentinel = null!;
     private DatabaseContext _ctx = null!;
 
     // One gateway per entity variant — each entity has a unique CLR type so
@@ -83,11 +81,11 @@ public class SqliteNativeTypesBenchmarks : IDisposable
     [GlobalSetup]
     public void GlobalSetup()
     {
-        _sentinel = new SqliteConnection(ConnStr);
-        _sentinel.Open();
+        using var setup = new SqliteConnection(ConnStr);
+        setup.Open();
 
         // Schema: one column per SQLite storage class, one for each variant
-        using (var cmd = _sentinel.CreateCommand())
+        using (var cmd = setup.CreateCommand())
         {
             cmd.CommandText = @"
                 CREATE TABLE IF NOT EXISTS coercion_bench (
@@ -101,9 +99,9 @@ public class SqliteNativeTypesBenchmarks : IDisposable
             cmd.ExecuteNonQuery();
         }
 
-        using (var tx = _sentinel.BeginTransaction())
+        using (var tx = setup.BeginTransaction())
         {
-            using var cmd = _sentinel.CreateCommand();
+            using var cmd = setup.CreateCommand();
             cmd.Transaction = tx;
             for (var i = 1; i <= SeedRows; i++)
             {
@@ -163,7 +161,6 @@ public class SqliteNativeTypesBenchmarks : IDisposable
     public void GlobalCleanup()
     {
         _ctx?.Dispose();
-        _sentinel?.Dispose();
     }
 
     public void Dispose() => GlobalCleanup();

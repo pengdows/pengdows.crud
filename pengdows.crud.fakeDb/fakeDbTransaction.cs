@@ -189,10 +189,13 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     public override IsolationLevel IsolationLevel { get; }
 
-    // SupportsSavepoints is false, so every savepoint method throws NotSupportedException (DbTransaction.SupportsSavepoints:
-    // "If false, the methods SaveAsync, RollbackAsync and ReleaseAsync as well as their synchronous counterparts are
-    // expected to throw NotSupportedException"), though DbTransaction.Release itself does nothing. The async methods are
-    // .NET's, which call these. The driver quirks reproduce the drivers that depart from this.
+    public override bool SupportsSavepoints => _connection.DriverQuirks.SavepointsSupported;
+
+    // SupportsSavepoints is false by default, so every savepoint method throws NotSupportedException
+    // (DbTransaction.SupportsSavepoints: "If false, the methods SaveAsync, RollbackAsync and ReleaseAsync as well as
+    // their synchronous counterparts are expected to throw NotSupportedException"). Provider-shaped test transactions
+    // may override SupportsSavepoints to exercise a driver's native savepoint path. The driver quirks reproduce the
+    // drivers that depart from the default contract.
     public override void Save(string savepointName)
     {
         _log.Record($"Save({savepointName})");
@@ -213,7 +216,7 @@ public class fakeDbTransaction : DbTransaction, IDbTransaction
 
     private void ThrowIfSavepointsUnsupported(bool allowedByQuirk)
     {
-        if (!allowedByQuirk && !_connection.DriverQuirks.SavepointsWorkButUnreported)
+        if (!allowedByQuirk && !SupportsSavepoints && !_connection.DriverQuirks.SavepointsWorkButUnreported)
         {
             throw new NotSupportedException("Savepoints are not supported.");
         }

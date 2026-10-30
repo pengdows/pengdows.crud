@@ -4,6 +4,7 @@
 override pengdows.crud.fakeDb.fakeDbCommand.ExecuteDbDataReader(System.Data.CommandBehavior behavior) -> System.Data.Common.DbDataReader!
 override pengdows.crud.fakeDb.fakeDbConnection.OnStateChange(System.Data.StateChangeEventArgs! stateChange) -> void
 override pengdows.crud.fakeDb.fakeDbConnection.StateChange -> System.Data.StateChangeEventHandler?
+override pengdows.crud.fakeDb.fakeDbConnection.EnlistTransaction(System.Transactions.Transaction? transaction) -> void
 override pengdows.crud.fakeDb.fakeDbConnectionStringBuilder.ContainsKey(string! keyword) -> bool
 override pengdows.crud.fakeDb.fakeDbDataReader.GetFieldValue<T>(int ordinal) -> T
 override pengdows.crud.fakeDb.fakeDbDataReader.GetProviderSpecificFieldType(int ordinal) -> System.Type!
@@ -13,6 +14,7 @@ override pengdows.crud.fakeDb.fakeDbFactory.CreateDataSource(string! connectionS
 override pengdows.crud.fakeDb.fakeDbTransaction.CommitAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
 override pengdows.crud.fakeDb.fakeDbTransaction.Dispose(bool disposing) -> void
 override pengdows.crud.fakeDb.fakeDbTransaction.RollbackAsync(System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task!
+override pengdows.crud.fakeDb.fakeDbTransaction.SupportsSavepoints.get -> bool
 pengdows.crud.fakeDb.CapturedCommand
 pengdows.crud.fakeDb.CapturedCommand.CapturedCommand(string! CommandText, System.Collections.Generic.IReadOnlyList<pengdows.crud.fakeDb.CapturedParameter!>! Parameters) -> void
 pengdows.crud.fakeDb.CapturedCommand.CommandText.get -> string!
@@ -83,6 +85,8 @@ pengdows.crud.fakeDb.fakeDbConnection.SetOpenGate() -> System.Threading.Tasks.Ta
 pengdows.crud.fakeDb.fakeDbConnection.SetTransactionDisposeException(System.Exception! exception) -> void
 pengdows.crud.fakeDb.fakeDbConnection.StateChangeSubscriberCount.get -> int
 pengdows.crud.fakeDb.fakeDbConnection.ThrowOnStateChangeAccessAfterDispose.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.SavepointsSupported.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.SavepointsSupported.set -> void
 pengdows.crud.fakeDb.fakeDbConnection.ThrowOnStateChangeAccessAfterDispose.set -> void
 pengdows.crud.fakeDb.fakeDbDataReader.BinaryReportedAsStringColumns.get -> System.Collections.Generic.ISet<string!>?
 pengdows.crud.fakeDb.fakeDbDataReader.BinaryReportedAsStringColumns.set -> void
@@ -234,6 +238,8 @@ pengdows.crud.fakeDb.fakeDbDriverQuirks.ReexecuteWithOpenReaderException.set -> 
 pengdows.crud.fakeDb.fakeDbDriverQuirks.ConnectionStringWhileOpenException.get -> System.Func<System.Exception!>?
 pengdows.crud.fakeDb.fakeDbDriverQuirks.ConnectionStringWhileOpenException.set -> void
 pengdows.crud.fakeDb.fakeDbDriverQuirks.UnmappableParameterValueException.get -> System.Func<object!, System.Exception?>?
+pengdows.crud.fakeDb.fakeDbDriverQuirks.RejectNonUtcDateTimeOffsets.get -> bool
+pengdows.crud.fakeDb.fakeDbDriverQuirks.RejectNonUtcDateTimeOffsets.set -> void
 pengdows.crud.fakeDb.fakeDbDriverQuirks.UnmappableParameterValueException.set -> void
 pengdows.crud.fakeDb.fakeDbDriverQuirks.PrepareWithoutOpenConnection.get -> bool
 pengdows.crud.fakeDb.fakeDbDriverQuirks.PrepareWithoutOpenConnection.set -> void

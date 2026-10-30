@@ -11,6 +11,14 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public sealed class FakeDbFactoryResultsTests
 {
+    [Fact]
+    public void FactoryCanBeInherited()
+    {
+        var factory = new DerivedFakeDbFactory();
+
+        Assert.Equal(SupportedDatabase.PostgreSql, factory.PretendToBe);
+    }
+
     private static DbCommand Command(fakeDbFactory factory, string sql)
     {
         var connection = factory.CreateConnection();
@@ -142,5 +150,10 @@ public sealed class FakeDbFactoryResultsTests
         Assert.Same(staged, connection);
         Assert.Equal(8, update.ExecuteNonQuery());
         Assert.Equal(1, update.ExecuteNonQuery());
+    }
+
+    private sealed class DerivedFakeDbFactory : fakeDbFactory
+    {
+        public DerivedFakeDbFactory() : base(SupportedDatabase.PostgreSql) { }
     }
 }

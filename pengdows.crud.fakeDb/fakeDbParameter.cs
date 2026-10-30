@@ -10,6 +10,9 @@ namespace pengdows.crud.fakeDb;
 
 public class fakeDbParameter : DbParameter, IDbDataParameter
 {
+    private object? _value;
+    internal bool RejectNonUtcDateTimeOffsets { get; set; }
+
     public override bool SourceColumnNullMapping { get; set; }
     public override DbType DbType { get; set; }
     // A new parameter is an Input with a null Value, as DbParameter.Direction and DbParameter.Value document.
@@ -19,7 +22,20 @@ public class fakeDbParameter : DbParameter, IDbDataParameter
     [AllowNull] public override string ParameterName { get; set; } = string.Empty;
 
     [AllowNull] public override string SourceColumn { get; set; } = string.Empty;
-    [AllowNull] public override object Value { get; set; } = null!;
+    [AllowNull]
+    public override object Value
+    {
+        get => _value!;
+        set
+        {
+            if (RejectNonUtcDateTimeOffsets && value is DateTimeOffset offset && offset.Offset != TimeSpan.Zero)
+            {
+                throw new ArgumentException("DateTimeOffset parameters must have offset zero.", ParameterName);
+            }
+
+            _value = value;
+        }
+    }
 
     public override int Size { get; set; }
     public override byte Precision { get; set; }

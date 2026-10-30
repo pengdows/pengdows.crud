@@ -795,6 +795,11 @@ public class fakeDbCommand : DbCommand
         // parameter-metadata emulation (Npgsql, Informix, ...) applies here too.
         var parameter = (Connection as fakeDbConnection)?.FactoryReference?.CreateEmulatedParameter() ?? new fakeDbParameter();
         Quirks.ApplyTo(parameter);
+        if (parameter is fakeDbParameter fakeParameter)
+        {
+            fakeParameter.RejectNonUtcDateTimeOffsets = Quirks.RejectNonUtcDateTimeOffsets;
+        }
+
         return parameter;
     }
 

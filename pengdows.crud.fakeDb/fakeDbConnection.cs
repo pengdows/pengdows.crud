@@ -759,6 +759,15 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
     // FactoryReference, which ResetFailureConditions clears.
     protected override DbProviderFactory DbProviderFactory => _creatingFactory ?? fakeDbFactory.Instance;
 
+    /// <summary>
+    /// Accepts an ambient transaction enlistment. fakeDb does not persist data transactionally, but accepting the
+    /// enlistment matches providers that support <see cref="DbConnection.EnlistTransaction(Transaction?)"/> and lets
+    /// callers exercise TransactionScope setup without inheriting DbConnection's NotSupportedException.
+    /// </summary>
+    public override void EnlistTransaction(System.Transactions.Transaction? transaction)
+    {
+    }
+
     private fakeDbDriverQuirks? _driverQuirks;
 
     /// <summary>

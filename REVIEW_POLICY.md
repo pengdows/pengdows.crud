@@ -192,13 +192,19 @@ Hidden cost violations are P1 unless they affect a known hot path or introduce b
 * If a change risks a specific DB family, call it out and require a targeted integration test.
 * Do not represent the same SQL concept in two different ways simultaneously — duplicate dialect code paths are a correctness and maintenance hazard.
 
-### G. Move errors left
+### G. ADO.NET `GetSchema` metadata completeness
+
+* Treat each `GetSchema` collection as a complete metadata contract. Populate the full set of applicable columns and values; do not implement only the fields needed by one current caller.
+* Prefer the database's own catalogs or metadata facilities as the source of truth so schema results remain complete, accurate, and up to date. If a provider limitation requires derived metadata, document the gap and its effect.
+* Verify collection shape and metadata values against the applicable ADO.NET contract and mature peer providers. Include regression and database integration coverage for columns, values, nullability, filtering, and provider-specific metadata as applicable.
+
+### H. Move errors left
 
 * Move errors from runtime to compile time wherever possible.
 * Prefer type safety, compiler checks, and static guarantees over runtime validation when feasible.
 * If a design choice converts a compile-time guarantee into a runtime check, flag it.
 
-### H. Comments
+### I. Comments
 
 * Code must be understandable without comments. If a comment is needed, consider renaming or decomposing first.
 * A comment is only justified to explain something the code is structurally incapable of expressing — a known bug workaround, a regulatory constraint, a non-obvious invariant.

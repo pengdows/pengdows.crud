@@ -88,6 +88,9 @@ public sealed class fakeDbDriverQuirks
     /// </summary>
     public Func<object, Exception?>? UnmappableParameterValueException { get; set; }
 
+    /// <summary>Rejects a <see cref="DateTimeOffset"/> parameter whose original offset is not zero.</summary>
+    public bool RejectNonUtcDateTimeOffsets { get; set; }
+
     // ── Connections ───────────────────────────────────────────────────────────
 
     /// <summary>An open connection accepts a new <c>ConnectionString</c>. DuckDB.NET 1.0, 1.5.6.1.</summary>
@@ -132,6 +135,11 @@ public sealed class fakeDbDriverQuirks
     /// </summary>
     public bool SavepointsWorkButUnreported { get; set; }
 
+    /// <summary>
+    /// The transaction reports savepoint support and accepts all savepoint operations. Npgsql 9.0.3.
+    /// </summary>
+    public bool SavepointsSupported { get; set; }
+
     // ── Parameters ────────────────────────────────────────────────────────────
 
     /// <summary>
@@ -150,10 +158,11 @@ public sealed class fakeDbDriverQuirks
         ConnectionChangeableWithOpenReader || ReexecuteWithOpenReaderAllowed || ReexecuteWithOpenReaderException != null ||
         ForeignTransactionAccepted || CloseConnectionIgnored || NonQueryResultForSelect != null ||
         CommandTypeDefaultsToZero || CanceledExecuteReaderAsyncRuns || UnmappableParameterValueException != null ||
+        RejectNonUtcDateTimeOffsets ||
         ConnectionStringSettableWhileOpen || ConnectionStringWhileOpenException != null ||
         CompletedTransactionKeepsConnection || DisposedTransactionKeepsConnection ||
         DisposedTransactionThrowsObjectDisposed || TransactionCompletesAgain || SavepointReleaseIsNoOp ||
-        SavepointsWorkButUnreported || ParameterNameDefaultsToNull || ParameterDirectionDefaultsToZero;
+        SavepointsWorkButUnreported || SavepointsSupported || ParameterNameDefaultsToNull || ParameterDirectionDefaultsToZero;
 
     // ── Presets: one driver version each, a new instance per call so a test can change it ──
 
@@ -181,6 +190,8 @@ public sealed class fakeDbDriverQuirks
         ForeignTransactionAccepted = true,
         CompletedTransactionKeepsConnection = true,
         DisposedTransactionThrowsObjectDisposed = true,
+        SavepointsSupported = true,
+        RejectNonUtcDateTimeOffsets = true,
         UnmappableParameterValueException = value => new InvalidCastException(
             $"Writing values of '{value.GetType().FullName}' is not supported for parameters having no NpgsqlDbType or DataTypeName. Try setting one of these values to the expected database type..")
     };

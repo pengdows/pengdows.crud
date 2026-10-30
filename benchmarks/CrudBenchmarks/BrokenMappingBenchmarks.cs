@@ -112,7 +112,6 @@ public class BrokenMappingBenchmarks : IDisposable
     private DatabaseContext _pengdowsContext = null!;
     private TableGateway<WeirdEntity, int> _pengdowsHelper = null!;
     private SqliteConnection _dapperConnection = null!;
-    private SqliteConnection _sentinelConnection = null!;
     private EfBrokenWeirdContext _efContext = null!;
     private TypeMapRegistry _typeMap = null!;
     private string _connectionString = null!;
@@ -146,10 +145,6 @@ public class BrokenMappingBenchmarks : IDisposable
     public async Task Setup()
     {
         _connectionString = "Data Source=BrokenMapping;Mode=Memory;Cache=Shared";
-
-        // Sentinel connection keeps in-memory DB alive
-        _sentinelConnection = new SqliteConnection(_connectionString);
-        _sentinelConnection.Open();
 
         // pengdows.crud
         _typeMap = new TypeMapRegistry();
@@ -187,7 +182,6 @@ public class BrokenMappingBenchmarks : IDisposable
         _pengdowsContext?.Dispose();
         _dapperConnection?.Dispose();
         _efContext?.Dispose();
-        _sentinelConnection?.Dispose();
     }
 
     private async Task CreateSchemaAsync()

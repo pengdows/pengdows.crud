@@ -17,7 +17,7 @@ namespace CrudBenchmarks;
 ///   #5 - Server (SQLite) execution time is equal across all three frameworks
 ///
 /// All three frameworks share a single SQLite in-memory database via shared cache.
-/// A sentinel connection keeps the database alive for the duration of the run.
+/// The pengdows.crud context keeps the shared-cache database alive with its built-in read sentinel.
 /// Each framework executes identical SQL against the same schema and seed data.
 ///
 /// IMPORTANT: All three frameworks open and close connections per operation,
@@ -53,9 +53,6 @@ public class EqualFootingCrudBenchmarks : IDisposable
     // bundled e_sqlite3 already defaults foreign keys to ON, so this changes the work done, not the behavior.
     private const string PragmaConnStr = ConnStr + ";Foreign Keys=True";
     private const int SeedRows = 1000;
-
-    // Sentinel keeps the shared-cache database alive
-    private SqliteConnection _sentinel = null!;
 
     // The hand-rolled equivalent of SingleWriter for the *_DapperPinnedWriter arms: one long-lived writer
     // connection, with a gate so only one write runs at a time. Dapper has nothing like this built in.
@@ -113,15 +110,16 @@ public class EqualFootingCrudBenchmarks : IDisposable
         _originalMatchNamesWithUnderscores = DefaultTypeMap.MatchNamesWithUnderscores;
         DefaultTypeMap.MatchNamesWithUnderscores = true;
 
-        // Sentinel connection — keeps the in-memory database alive
-        _sentinel = new SqliteConnection(ConnStr);
-        _sentinel.Open();
-
         _dapperWriter = new SqliteConnection(PragmaConnStr);
         _dapperWriter.Open();
 
-        // Create schema via sentinel
-        await using (var cmd = _sentinel.CreateCommand())
+        // Temporary setup connection. The pengdows.crud context installs its own shared-memory
+        // read sentinel; no benchmark-owned sentinel is needed.
+        using var setup = new SqliteConnection(ConnStr);
+        setup.Open();
+
+        // Create schema via the temporary setup connection
+        await using (var cmd = setup.CreateCommand())
         {
             cmd.CommandText = @"
                 DROP TABLE IF EXISTS benchmark;
@@ -137,9 +135,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
         }
 
         // Seed 1000 rows
-        await using (var tx = _sentinel.BeginTransaction())
+        await using (var tx = setup.BeginTransaction())
         {
-            await using var cmd = _sentinel.CreateCommand();
+            await using var cmd = setup.CreateCommand();
             cmd.Transaction = tx;
             for (var i = 1; i <= SeedRows; i++)
             {
@@ -272,7 +270,6 @@ public class EqualFootingCrudBenchmarks : IDisposable
         _aggregateSc?.Dispose();
         _pengdowsContext?.Dispose();
         _dapperWriter?.Dispose();
-        _sentinel?.Dispose();
     }
 
     public void Dispose()

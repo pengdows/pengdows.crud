@@ -13,7 +13,7 @@
 // - Connection mode detection:
 //   * Isolated :memory: -> SingleConnection mode
 //   * File mode -> SingleWriter mode
-//   * Shared-cache in-memory -> SingleWriter mode
+//   * Shared-cache in-memory -> SingleWriter mode with a read sentinel
 // - Detects System.Data.SQLite vs Microsoft.Data.Sqlite provider.
 // - RETURNING clause for getting generated IDs (SQLite 3.35+).
 // - Savepoint support for nested transaction semantics.
@@ -44,7 +44,8 @@ namespace pengdows.crud.dialects;
 /// appropriate DbMode based on connection string:
 /// </para>
 /// <list type="bullet">
-/// <item><description><c>:memory:</c> - Uses SingleConnection mode</description></item>
+/// <item><description>isolated <c>:memory:</c> - Uses SingleConnection mode</description></item>
+/// <item><description>shared-cache in-memory - Uses SingleWriter mode with a read sentinel</description></item>
 /// <item><description>File path - Uses SingleWriter mode</description></item>
 /// </list>
 /// <para>

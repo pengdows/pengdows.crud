@@ -155,8 +155,15 @@ public class fakeDbDataReader : DbDataReader
 
     public override Task<T> GetFieldValueAsync<T>(int ordinal, CancellationToken cancellationToken)
     {
+        if (cancellationToken.IsCancellationRequested)
+        {
+            return Task.FromCanceled<T>(cancellationToken);
+        }
+
         var value = GetValue(ordinal);
-        return Task.FromResult((T)Convert.ChangeType(value, typeof(T)));
+        return Task.FromResult(value is T typed
+            ? typed
+            : (T)Convert.ChangeType(value, typeof(T), CultureInfo.InvariantCulture));
     }
 
     /// <summary>

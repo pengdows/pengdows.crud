@@ -362,6 +362,11 @@ public partial class DatabaseContext
                 _dataSourceInfo = new DataSourceInformation(_dialect);
             }
 
+            // Keep the provider-specific topology decision in the dialect rather than branching
+            // on SupportedDatabase here.
+            _sqliteSharedInMemory = _dialect is SqliteDialect &&
+                                    _dialect.DetectInMemoryKind(_connectionString) == InMemoryKind.Shared;
+
             _sessionSettingsDetectionCompleted = true;
 
             Name = _dataSourceInfo.DatabaseProductName;
@@ -445,6 +450,9 @@ public partial class DatabaseContext
             {
                 InitializePoolGovernors();
             }
+
+            initialConnection = await EnsureSharedInMemorySentinelAsync(initialConnection, useAsync,
+                cancellationToken).ConfigureAwait(false);
 
             if (initialConnection != null)
             {
@@ -948,6 +956,50 @@ public partial class DatabaseContext
     private const int UnboundedQueueDepth = int.MaxValue;
 
     // useAsync: false never awaits anything incomplete, so this completes synchronously.
+    private async ValueTask<ITrackedConnection?> EnsureSharedInMemorySentinelAsync(
+        ITrackedConnection? initialConnection, bool useAsync, CancellationToken cancellationToken)
+    {
+        if (!_sqliteSharedInMemory)
+        {
+            return initialConnection;
+        }
+
+        // A read-only context's detection connection is already a read connection and can be
+        // retained directly. A read-write context needs a separate read connection so the
+        // sentinel never becomes a writer or participates in application work.
+        if (IsReadOnlyConnection && initialConnection != null)
+        {
+            if (initialConnection is TrackedConnection tracked)
+            {
+                tracked.AttachSlot(AcquireSentinelSlot(ExecutionType.Read));
+            }
+
+            RegisterSentinel(initialConnection, ExecutionType.Read);
+            return null;
+        }
+
+        var sentinel = CreateSentinelConnection(ExecutionType.Read);
+        try
+        {
+            if (useAsync)
+            {
+                await sentinel.OpenAsync(cancellationToken).ConfigureAwait(false);
+            }
+            else
+            {
+                sentinel.Open();
+            }
+
+            RegisterSentinel(sentinel, ExecutionType.Read);
+            return initialConnection;
+        }
+        catch
+        {
+            sentinel.Dispose();
+            throw;
+        }
+    }
+
     private void InitializePoolGovernors() =>
         InitializePoolGovernorsAsync(false, CancellationToken.None).AsTask().GetAwaiter().GetResult();
 

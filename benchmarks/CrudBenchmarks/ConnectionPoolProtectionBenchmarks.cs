@@ -75,7 +75,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     private TableGateway<PoolProtectEntity, int> _pengdowsHelper = null!;
     private string _connectionString = null!;
     private DbContextOptions<EfPoolProtectContext> _efOptions = null!;
-    private SqliteConnection _sentinelConnection = null!;
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
 
     [GlobalSetup]
@@ -91,10 +90,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             DefaultTimeout = 1
         };
         _connectionString = builder.ToString();
-
-        // Sentinel connection keeps the in-memory database alive
-        _sentinelConnection = new SqliteConnection(_connectionString);
-        _sentinelConnection.Open();
 
         var typeMap = new TypeMapRegistry();
         typeMap.Register<PoolProtectEntity>();
@@ -156,7 +151,6 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         }
 
         _pengdowsContext?.Dispose();
-        _sentinelConnection?.Dispose();
     }
 
     private async Task CreateSchemaAsync()

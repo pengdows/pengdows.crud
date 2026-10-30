@@ -364,6 +364,57 @@ public class SessionSettingsEnforcementTests
         }
     }
 
+    [Theory]
+    [InlineData(SupportedDatabase.PostgreSql, "Host=localhost;Database=test;EmulatedProduct=PostgreSql")]
+    [InlineData(SupportedDatabase.MySql, "Server=localhost;Database=test;EmulatedProduct=MySql")]
+    public void DatabaseContext_ReusedPhysicalConnection_ReappliesSessionSettingsPerLogicalCheckout(
+        SupportedDatabase product, string connectionString)
+    {
+        // A provider pool may return the same physical session through separate logical
+        // DbConnection objects. This is the relevant model when connection reset is disabled:
+        // the framework must establish its configured baseline at each checkout.
+        var physicalConnection = new fakeDbConnection { EmulatedProduct = product };
+        var factory = new ReusingProviderFactory(physicalConnection, product);
+
+        using var context = new DatabaseContext(connectionString, factory);
+
+        var beforeCheckouts = physicalConnection.ExecutedNonQueryTexts.Count;
+
+        using (var firstCheckout = context.GetConnection(ExecutionType.Write))
+        {
+            firstCheckout.Open();
+        }
+
+        var afterFirstCheckout = physicalConnection.ExecutedNonQueryTexts.Count;
+
+        using (var secondCheckout = context.GetConnection(ExecutionType.Write))
+        {
+            secondCheckout.Open();
+        }
+
+        var afterSecondCheckout = physicalConnection.ExecutedNonQueryTexts.Count;
+
+        Assert.True(afterFirstCheckout > beforeCheckouts);
+        Assert.True(afterSecondCheckout > afterFirstCheckout);
+    }
+
+    private sealed class ReusingProviderFactory(
+        fakeDbConnection physicalConnection, SupportedDatabase product) : DbProviderFactory
+    {
+        private readonly fakeDbFactory _inner = new(product);
+
+        public override DbConnection CreateConnection()
+        {
+            physicalConnection.EmulatedProduct = product;
+            return physicalConnection;
+        }
+
+        public override DbCommand CreateCommand() => _inner.CreateCommand();
+
+        public override DbConnectionStringBuilder? CreateConnectionStringBuilder() =>
+            _inner.CreateConnectionStringBuilder();
+    }
+
     [Fact]
     public void TrackedReader_Dispose_ClosesConnection_WhenRequested()
     {

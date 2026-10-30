@@ -84,7 +84,6 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
     private DatabaseContext _pengdowsDefaultsContext = null!;
     private string _connectionString = null!;
     private DbContextOptions<EfContentionContext> _efOptions = null!;
-    private SqliteConnection _sentinelConnection = null!;
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
 
     // WHY these two bags exist (added while investigating the ~1,055 ms mean that Dapper and
@@ -146,10 +145,6 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
             DefaultTimeout = CommandTimeoutSecondsFor(BusyTimeoutMs)
         };
         _connectionString = builder.ToString();
-
-        // Sentinel connection keeps the in-memory database alive
-        _sentinelConnection = new SqliteConnection(_connectionString);
-        _sentinelConnection.Open();
 
         var typeMap = new TypeMapRegistry();
         typeMap.Register<ContentionEntity>();
@@ -239,7 +234,6 @@ public class SQLiteWriteContentionBenchmarks : IDisposable
 
         _pengdowsDefaultsContext?.Dispose();
         _pengdowsContext?.Dispose();
-        _sentinelConnection?.Dispose();
     }
 
     private void WriteLatencySidecar()

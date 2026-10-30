@@ -181,6 +181,95 @@ against the same database**: register the same `StormGate` singleton, use it dir
 raw `StormGate.OpenAsync()` calls, and pass it to `StormGateConnectionInterceptor` for EF
 Core — both consume permits from the same underlying gate.
 
+## Hard physical connection ceilings
+
+StormGate gates the lifetime of each EF Core `DbConnection`: the interceptor acquires a
+permit when EF opens the connection and releases it when the connection closes, fails to
+open, or is disposed. A shared gate therefore gives EF Core, raw ADO.NET, and Dapper a
+deterministic limit on concurrently admitted connection lifetimes.
+
+That is different from a hard limit on the total number of physical connections visible to
+the database server. A provider pool may retain an idle physical connection after EF has
+closed its logical connection and StormGate has released its permit. StormGate does not
+rewrite provider connection strings, disable provider pooling, or change an externally
+supplied `DbDataSource`/`DbConnection`.
+
+If the database has a strict connection ceiling — especially in tests or a small
+container — configure pooling deliberately. For the clearest hard ceiling, disable the
+provider pool and let the shared StormGate budget control the live connections:
+
+```csharp
+var connectionString = new NpgsqlConnectionStringBuilder(rawConnectionString)
+{
+    Pooling = false
+}.ConnectionString;
+
+services.AddSingleton(_ => StormGate.Create(
+    NpgsqlFactory.Instance,
+    connectionString,
+    maxConcurrentOpens: 20,
+    acquireTimeout: TimeSpan.FromMinutes(5)));
+```
+
+Use that same effective connection string when configuring EF Core. If provider pooling
+remains enabled, size both the provider pool and the StormGate budget, and account for
+idle pooled connections, administrative connections, and every application replica.
+`maxConcurrentOpens` is a per-process admission budget; it is not a server-wide pool-size
+setting and StormGate does not automatically set `Pooling=false`.
+
+## Test EF Core without a database
+
+Microsoft's EF Core documentation is explicit about the trade-offs here. The original
+guidance is worth reading directly:
+
+- [Choosing a testing strategy](https://learn.microsoft.com/en-us/ef/core/testing/choosing-a-testing-strategy)
+  explains why a fake provider or SQLite cannot reliably reproduce production-provider
+  behavior, recommends coverage against the real database, and discusses the repository
+  alternative.
+- [Testing without your production database system](https://learn.microsoft.com/en-us/ef/core/testing/testing-without-the-database)
+  documents the available test-double approaches and their limitations.
+- [Testing EF Core applications](https://learn.microsoft.com/en-us/ef/core/miscellaneous/testing/sqlite)
+  summarizes the database-versus-test-double decision and calls out differences in
+  transactions, raw SQL, and provider behavior.
+
+The guidance strongly discourages the EF Core InMemory provider for general testing; this
+README does not claim that a fake ADO.NET provider replaces provider-specific integration
+tests.
+
+### What StormGate makes possible
+
+This is not a claim that stock EF Core can be made provider-accurate by swapping in its
+InMemory provider. The distinctive value of `StormGate.EntityFrameworkCore` is that it
+uses EF Core's real `DbConnectionInterceptor` lifecycle together with the ADO.NET test
+provider from [`pengdows.crud.fakeDb`](https://www.nuget.org/packages/pengdows.crud.fakeDb).
+That gives applications using a provider which accepts an externally supplied
+`DbConnection` a meaningful offline test path:
+
+```csharp
+var factory = new fakeDbFactory(SupportedDatabase.PostgreSql);
+var options = new DbContextOptionsBuilder<AppDbContext>()
+    .UseSqlite(factory.CreateConnection()!, contextOwnsConnection: false) // or your provider's external-DbConnection overload
+    .UseStormGate(interceptor)
+    .Options;
+```
+
+Here `fakeDb` supplies the ADO.NET `DbConnection`, commands, parameters, readers,
+transactions, and failure behavior; EF Core and the selected relational provider still own
+their normal connection lifecycle; and StormGate supplies connection admission control.
+The test exercises the actual EF Core connection-opening/closing path and the StormGate
+interception boundary without a database. It is materially different from evaluating LINQ
+against an in-memory collection or using EF Core's InMemory provider.
+
+This is the practical wedge into the wider [`pengdows.crud`](https://www.nuget.org/packages/pengdows.crud)
+toolkit: `fakeDb` is the reusable ADO.NET test double, while `pengdows.crud` provides the
+SQL-first database access, connection management, transactions, tenancy, and provider
+realities that EF Core deliberately leaves to its providers and application architecture.
+
+This is not a replacement for provider-specific integration tests. SQL translation,
+database locking, isolation, server limits, and dialect behavior still require the actual
+database engine. The value is that connection-lifecycle and pool-protection tests no longer
+need to start a database merely to prove that StormGate and EF Core cooperate correctly.
+
 ## Testing Without a Real Database
 
 Because `DbConnectionInterceptor` fires on `Open`/`Close`/failed-open for any `DbConnection`
@@ -226,7 +315,9 @@ for the full pattern, including simulating a physical open failure via
   this with retry/backoff or a circuit breaker at the call site.
 - **Not a substitute for the provider's own pool sizing.** This bounds concurrently open/in-use
   connection leases at the application level; it doesn't replace `Max Pool Size` or other
-  provider-level connection pool configuration.
+  provider-level connection pool configuration. For the distinction between admitted
+  connection lifetimes and total physical server connections, see
+  [Hard physical connection ceilings](#hard-physical-connection-ceilings).
 - **Not a fix for SQLite (or any single-writer file database) locking.** This is the right tool
   for a client-server database whose server enforces a connection limit; it does nothing for
   `SQLITE_BUSY`/"database is locked" errors, which come from write contention on connections
