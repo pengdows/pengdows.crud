@@ -191,6 +191,9 @@ public class DatabaseContextConfiguration : IDatabaseContextConfiguration
     public SessionInitializationFailureMode? SessionInitializationFailureMode { get; set; }
 
     /// <inheritdoc/>
+    public enums.SessionSettingsMode? SessionSettingsMode { get; set; }
+
+    /// <inheritdoc/>
     public bool EnforceUniqueConnectionString { get; set; }
 
     /// <inheritdoc/>

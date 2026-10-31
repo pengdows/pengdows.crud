@@ -757,6 +757,7 @@ public partial class DatabaseContext
     /// </summary>
     private void CacheSessionSettings()
     {
+        _dialect!.ParanoidSessionSettings = _sessionSettingsMode == SessionSettingsMode.Paranoid;
         _cachedReadWriteSessionSettings = _dialect!.GetFinalSessionSettings(readOnly: false, _sessionSettingsRwAppName);
         _cachedReadOnlySessionSettings = _dialect.GetFinalSessionSettings(readOnly: true, _sessionSettingsRoAppName);
     }
@@ -836,7 +837,8 @@ public partial class DatabaseContext
             return null;
         }
 
-        if (_dataSource != null && (readOnly ? _roSettingsBakedIntoDataSource : _rwSettingsBakedIntoDataSource))
+        if (!_dialect!.ParanoidSessionSettings
+            && _dataSource != null && (readOnly ? _roSettingsBakedIntoDataSource : _rwSettingsBakedIntoDataSource))
         {
             MarkSessionSettingsApplied(connection);
             return null;

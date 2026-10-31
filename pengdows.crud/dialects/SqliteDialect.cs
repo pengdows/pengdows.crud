@@ -244,7 +244,7 @@ internal class SqliteDialect : SqlDialect
         new ManagedSessionSetting("PRAGMA query_only", (_, _) => false,
             _ => "PRAGMA query_only = OFF;"),
         new ManagedSessionSetting("PRAGMA synchronous", (value, _) => !_walActive || ValueIs(value, "1"),
-            _ => "PRAGMA synchronous = NORMAL;"),
+            _ => _walActive ? "PRAGMA synchronous = NORMAL;" : string.Empty),
     };
 
     internal override async Task CaptureSessionDefaultsAsync(ITrackedConnection connection, bool readOnlyPool,

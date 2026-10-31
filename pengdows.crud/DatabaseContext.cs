@@ -204,6 +204,7 @@ public partial class DatabaseContext : ContextBase, IDatabaseContext, IContextId
     private bool _effectivePoolGovernorEnabled = true;
     private bool _enableSingleWriterFairness = true;
     private SessionInitializationFailureMode _sessionInitializationFailureMode = SessionInitializationFailureMode.BestEffort;
+    private SessionSettingsMode _sessionSettingsMode = SessionSettingsMode.Normal;
     private int? _maxQueuedWrites;
     private int? _maxQueuedReads;
     private int? _configuredReadPoolSize;

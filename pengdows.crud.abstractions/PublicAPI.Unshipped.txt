@@ -95,3 +95,8 @@ pengdows.crud.tenant.ITenantContextLease.Context.get -> pengdows.crud.IDatabaseC
 pengdows.crud.tenant.ITenantContextRegistry.AcquireLease(string! tenant) -> pengdows.crud.tenant.ITenantContextLease!
 pengdows.crud.tenant.ITenantContextRegistry.AcquireLeaseAsync(string! tenant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.tenant.ITenantContextLease!>!
 pengdows.crud.tenant.ITenantContextRegistry.GetContextAsync(string! tenant, System.Threading.CancellationToken cancellationToken = default(System.Threading.CancellationToken)) -> System.Threading.Tasks.Task<pengdows.crud.IDatabaseContext!>!
+pengdows.crud.configuration.IDatabaseContextConfiguration.SessionSettingsMode.get -> pengdows.crud.enums.SessionSettingsMode?
+pengdows.crud.configuration.IDatabaseContextConfiguration.SessionSettingsMode.set -> void
+pengdows.crud.enums.SessionSettingsMode
+pengdows.crud.enums.SessionSettingsMode.Normal = 0 -> pengdows.crud.enums.SessionSettingsMode
+pengdows.crud.enums.SessionSettingsMode.Paranoid = 1 -> pengdows.crud.enums.SessionSettingsMode

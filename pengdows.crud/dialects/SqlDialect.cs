@@ -1922,8 +1922,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return values;
     }
 
+    // Set by DatabaseContext from SessionSettingsMode before the settings are cached. Paranoid sends every managed
+    // setting that applies on every checkout; normal sends only the ones whose captured value differs.
+    internal bool ParanoidSessionSettings { get; set; }
+
     // The statements for the settings that differ from the pool's captured values, one per line (one batch, one RTT).
-    protected static string BuildManagedSessionSettings(
+    // Paranoid ignores the captured values and sends each applicable statement.
+    protected string BuildManagedSessionSettings(
         IEnumerable<ManagedSessionSetting> settings,
         IReadOnlyDictionary<string, object?>? captured,
         bool readOnly)
@@ -1932,7 +1937,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
         foreach (var setting in settings)
         {
             var current = captured is not null && captured.TryGetValue(setting.Probe, out var value) ? value : null;
-            if (setting.IsCompliant(current, readOnly))
+            if (!ParanoidSessionSettings && setting.IsCompliant(current, readOnly))
             {
                 continue;
             }

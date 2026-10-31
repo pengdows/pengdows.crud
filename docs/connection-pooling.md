@@ -138,3 +138,31 @@ To observe this in production, watch `PoolStatisticsSnapshot.TotalTurnstileTimeo
 Two live `DatabaseContext` instances sharing the same connection string in-process is a common accidental-non-singleton bug (`DatabaseContext` must be a singleton): each runs its own admission control, so together they can admit more connections than the provider pool was sized for. Since 2.0.6 pengdows.crud detects it: constructing a context whose connection string matches another live context's logs a warning. Set `DatabaseContextConfiguration.EnforceUniqueConnectionString = true` (default `false`) to make it an `InvalidOperationException` at construction of the second context. The check covers the writer and reader strings together (all or nothing), keys on a hash in which each credential is itself hashed (so strings that differ only in credentials are distinct pools and never collide), and is released when the first context is disposed.
 
 `InitializePoolGovernors` hashes the writer and reader connection strings to get pooled keys, respects the resolved pool size (including overrides) and the selected `DbMode`, and creates a governor for each pool (except `SingleConnection`, which disables governors entirely). `SingleWriter` mode uses the Standard lifecycle but adjusts the governor so writes serialize with `MaxConcurrentWrites = 1` (and an optional writer-preference turnstile); `PreventDatabaseUnload` retains one slot per sentinel from that sentinel's own pool (writer, and reader when a dedicated reader connection string exists or the context is read-only); a repaired sentinel releases the old slot and takes a new one. This keeps the governors aware of the pinned connections while still allowing other operations to proceed, and the hashed key ensures each unique connection string gets its own governor scope.
+
+## Session settings: normal and paranoid
+
+When a connection is first used, pengdows.crud sends the session settings it requires for that connection (for example
+`ANSI_QUOTES` on MySQL, `standard_conforming_strings` on PostgreSQL, `foreign_keys` and `query_only` on SQLite). It
+reads each server's values once, when the context is created, and by default sends only the settings whose server value
+differs from what pengdows.crud requires. That is the normal mode, and it is the default.
+
+Normal mode relies on the pool handing back a connection in the state it was given. A caller that changes a session
+setting on a pooled connection (for example `SET sql_mode = ...`) can leave the connection in a state that normal mode will
+not repair, because the server's value at creation already matched the requirement.
+
+Set `SessionSettingsMode.Paranoid` on the context configuration to send every managed setting that applies on every
+checkout, whatever the server reported:
+
+```csharp
+var config = new DatabaseContextConfiguration
+{
+    ConnectionString = connectionString,
+    SessionSettingsMode = SessionSettingsMode.Paranoid,
+};
+```
+
+Paranoid mode costs one batch of settings per checkout, and it bypasses the PostgreSQL startup-options shortcut so
+the settings are re-sent on every checkout. Use it to diagnose odd session-state problems. It is not needed in normal
+use, and the connection strings pengdows.crud builds are already unique to the context.
+
+Paranoid mode re-sends the settings pengdows.crud manages. It does not reset settings it does not manage.

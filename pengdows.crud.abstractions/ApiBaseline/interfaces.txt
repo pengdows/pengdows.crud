@@ -369,6 +369,7 @@ property pengdows.crud.configuration.IDatabaseContextConfiguration::ReadWriteMod
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ReaderPlanCacheSize : System.Nullable`1<int> { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::ResourceConnectionHeadroom : int { get; set; }
 property pengdows.crud.configuration.IDatabaseContextConfiguration::SessionInitializationFailureMode : System.Nullable`1<pengdows.crud.enums.SessionInitializationFailureMode> { get; set; }
+property pengdows.crud.configuration.IDatabaseContextConfiguration::SessionSettingsMode : System.Nullable`1<pengdows.crud.enums.SessionSettingsMode> { get; set; }
 property pengdows.crud.connection.IConnectionLocalState::PrepareDisabled : bool { get; }
 property pengdows.crud.connection.IConnectionLocalState::SessionSettingsApplied : bool { get; }
 property pengdows.crud.dialects.IDatabaseProductInfo::DatabaseType : pengdows.crud.enums.SupportedDatabase { get; set; }

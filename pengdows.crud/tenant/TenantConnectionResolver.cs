@@ -166,6 +166,7 @@ public class TenantConnectionResolver : ITenantConnectionResolver
             ApplicationName = source.ApplicationName,
             EnableSingleWriterFairness = source.EnableSingleWriterFairness,
             SessionInitializationFailureMode = source.SessionInitializationFailureMode,
+            SessionSettingsMode = source.SessionSettingsMode,
             MaxQueuedWrites = source.MaxQueuedWrites,
             MaxQueuedReads = source.MaxQueuedReads,
             EnforceUniqueConnectionString = source.EnforceUniqueConnectionString,

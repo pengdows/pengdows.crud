@@ -208,6 +208,26 @@ public interface IDatabaseContextConfiguration
     }
 
     /// <summary>
+    /// How managed session settings are sent on each checkout. <c>null</c> (the default) and
+    /// <see cref="enums.SessionSettingsMode.Normal"/> send only the settings whose server value differs from the
+    /// requirement. <see cref="enums.SessionSettingsMode.Paranoid"/> sends every managed setting on every checkout,
+    /// so a connection a caller changed is reset when it is next used. Use it to diagnose odd session-state problems.
+    /// </summary>
+    // Default implementation keeps implementations compiled against 2.0.x binary compatible: only the default is supported.
+    enums.SessionSettingsMode? SessionSettingsMode
+    {
+        get => null;
+        set
+        {
+            if (value is not (null or enums.SessionSettingsMode.Normal))
+            {
+                throw new NotSupportedException(
+                    $"{GetType().Name} does not support setting {nameof(SessionSettingsMode)}.");
+            }
+        }
+    }
+
+    /// <summary>
     /// Maximum number of callers allowed to queue for a write-governor slot before further
     /// callers are rejected immediately with <c>PoolSaturatedException</c>, rather than waiting
     /// out the full <see cref="PoolAcquireTimeout"/>. <c>0</c> disables queueing. <c>null</c>

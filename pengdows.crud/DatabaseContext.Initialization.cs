@@ -320,6 +320,8 @@ public partial class DatabaseContext
             // null keeps 2.0.5's best-effort behavior for every context on 2.0.x.
             _sessionInitializationFailureMode =
                 configuration.SessionInitializationFailureMode ?? SessionInitializationFailureMode.BestEffort;
+            // null keeps the 2.0.6 normal (diff) mode; paranoid re-sends every managed setting on every checkout.
+            _sessionSettingsMode = configuration.SessionSettingsMode ?? SessionSettingsMode.Normal;
             _maxQueuedWrites = configuration.MaxQueuedWrites;
             _maxQueuedReads = configuration.MaxQueuedReads;
             _configuredReadPoolSize = normalizedReadPoolSize;

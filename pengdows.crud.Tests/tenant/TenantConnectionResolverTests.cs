@@ -481,6 +481,7 @@ public class TenantConnectionResolverTests
             ApplicationName = "app-under-test",
             EnableSingleWriterFairness = false,
             SessionInitializationFailureMode = SessionInitializationFailureMode.FailClosed,
+            SessionSettingsMode = SessionSettingsMode.Paranoid,
             MaxQueuedWrites = 3,
             MaxQueuedReads = 4,
             EnforceUniqueConnectionString = true,

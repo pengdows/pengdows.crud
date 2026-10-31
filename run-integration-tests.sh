@@ -101,7 +101,16 @@ preflight() {
     if has_library libgds.so; then
       echo "  ok      InterBase: libgds.so resolves"
     else
-      echo "  WARN    InterBase: libgds.so not found (add its directory to PENGDOWS_EXTRA_LIB_DIRS)"
+      echo "  PROBLEM InterBase: libgds.so not found; the run would time out waiting for the server." \
+           "Add the directory that holds libgds.so to PENGDOWS_EXTRA_LIB_DIRS"
+      fatal=1
+    fi
+    if has_library libdl.so; then
+      echo "  ok      InterBase: libdl.so resolves"
+    else
+      echo "  PROBLEM InterBase: libdl.so not found; the driver cannot load without it (Ubuntu 26.04 ships only libdl.so.2)." \
+           "Make a directory with libdl.so -> /usr/lib/x86_64-linux-gnu/libdl.so.2 and add it to PENGDOWS_EXTRA_LIB_DIRS"
+      fatal=1
     fi
     if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx 'interbase-interbase-1'; then
       echo "  ok      InterBase: licensed container interbase-interbase-1 exists"

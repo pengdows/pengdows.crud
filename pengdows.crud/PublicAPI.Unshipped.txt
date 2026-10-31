@@ -67,3 +67,5 @@ static pengdows.crud.types.valueobjects.HierarchyId.operator ==(pengdows.crud.ty
 static pengdows.crud.types.valueobjects.HierarchyId.operator >(pengdows.crud.types.valueobjects.HierarchyId left, pengdows.crud.types.valueobjects.HierarchyId right) -> bool
 static pengdows.crud.types.valueobjects.HierarchyId.operator >=(pengdows.crud.types.valueobjects.HierarchyId left, pengdows.crud.types.valueobjects.HierarchyId right) -> bool
 static readonly pengdows.crud.DataReaderMapper.Instance -> pengdows.crud.IDataReaderMapper!
+pengdows.crud.configuration.DatabaseContextConfiguration.SessionSettingsMode.get -> pengdows.crud.enums.SessionSettingsMode?
+pengdows.crud.configuration.DatabaseContextConfiguration.SessionSettingsMode.set -> void
