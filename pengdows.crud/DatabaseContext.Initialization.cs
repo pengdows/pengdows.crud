@@ -432,6 +432,11 @@ public partial class DatabaseContext
             _sessionSettingsRoAppName = string.IsNullOrWhiteSpace(effectiveApplicationName)
                 ? null
                 : effectiveApplicationName + ReadOnlyApplicationNameSuffix;
+            if (initialConnection is not null)
+            {
+                await _dialect!.CaptureSessionDefaultsAsync(initialConnection, false, useAsync).ConfigureAwait(false);
+            }
+
             CacheSessionSettings();
 
             // Validate read-only connection if an explicit RO connection string was provided
@@ -1204,6 +1209,10 @@ public partial class DatabaseContext
                 try
                 {
                     await conn.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    if (isReadOnly)
+                    {
+                        await CaptureReaderPoolDefaultsAsync(conn, useAsync, cancellationToken).ConfigureAwait(false);
+                    }
                 }
                 finally
                 {
@@ -1215,6 +1224,10 @@ public partial class DatabaseContext
                 using (conn)
                 {
                     conn.Open();
+                    if (isReadOnly)
+                    {
+                        CaptureReaderPoolDefaultsAsync(conn, useAsync, cancellationToken).GetAwaiter().GetResult();
+                    }
                 }
             }
         }
@@ -1226,6 +1239,28 @@ public partial class DatabaseContext
                 Phase = phase,
                 Role = role
             };
+        }
+    }
+
+    // The reader pool's server defaults can differ from the writer's (a replica), so they are read once, at creation,
+    // on the reader validation connection that is already open. Best effort: a failed read leaves the reader on the
+    // writer's captured defaults, and is logged.
+    private async ValueTask CaptureReaderPoolDefaultsAsync(IDbConnection connection, bool useAsync,
+        CancellationToken cancellationToken)
+    {
+        if (_dialect is null || connection is not ITrackedConnection tracked)
+        {
+            return;
+        }
+
+        try
+        {
+            await _dialect.CaptureSessionDefaultsAsync(tracked, true, useAsync).ConfigureAwait(false);
+            CacheSessionSettings();
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogWarning(ex, "Could not capture the reader pool's session defaults for {Name}; the reader uses the writer's.", Name);
         }
     }
 

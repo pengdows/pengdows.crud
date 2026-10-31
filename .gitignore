@@ -63,6 +63,10 @@ artifacts/*
 artifacts/local-packages/*
 !artifacts/local-packages/.gitkeep
 
+# Per-project build output (dotnet pack, benchmark runs); the root artifacts/local-packages feed stays tracked
+*/artifacts/
+*/*/artifacts/
+
 # Debug/scratch files
 debug_*.cs
 *.log

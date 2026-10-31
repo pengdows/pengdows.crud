@@ -81,6 +81,13 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
                 // column type each time, and a pooled connection's prepared plans for the same SQL
                 // text would otherwise fail with "cached plan must not change result type".
                 await using var typeContext = await CreateAdditionalContextAsync(provider);
+                var declare = await DeclareAsync(provider, typeContext, entry);
+                if (declare != null)
+                {
+                    failures.Add($"{entry.Declaration ?? entry.CanonicalName}: {declare}");
+                    continue;
+                }
+
                 var failure = await RoundTripAsync(provider, typeContext, entry);
                 if (failure != null)
                 {
@@ -91,8 +98,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
                 // midnight must not read back as the next day (docs/utc-and-time.md).
                 if (EdgeSample(entry) is { } edgeEntry)
                 {
-                    await using var edgeContext = await CreateAdditionalContextAsync(provider);
-                    var edgeFailure = await EdgeRoundTripAsync(provider, edgeContext, edgeEntry);
+                    var edgeFailure = await EdgeRoundTripAsync(provider, typeContext, edgeEntry);
                     if (edgeFailure != null)
                     {
                         failures.Add($"{entry.Declaration ?? entry.CanonicalName} (one tick before midnight): {edgeFailure}");
@@ -113,8 +119,7 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
                         continue;
                     }
 
-                    await using var variantContext = await CreateAdditionalContextAsync(provider);
-                    var variantFailure = await RoundTripAsync(provider, variantContext, variant);
+                    var variantFailure = await RoundTripAsync(provider, typeContext, variant);
                     if (variantFailure != null)
                     {
                         failures.Add($"{entry.Declaration ?? entry.CanonicalName} ({label}): {variantFailure}");
@@ -164,10 +169,9 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
     private async Task<string?> EdgeRoundTripAsync(SupportedDatabase provider, IDatabaseContext context,
         ColumnTypeDescriptor entry)
     {
-        var declare = await DeclareAsync(provider, context, entry);
-        if (declare != null)
+        if (await ClearTableAsync(context) is { } clearFailure)
         {
-            return declare;
+            return clearFailure;
         }
 
         var rowType = TypeRoundTripRows.ByDbType[entry.DbType!.Value].MakeGenericType(entry.ClrType!);
@@ -198,6 +202,23 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
         catch (Exception ex)
         {
             return Describe(ex);
+        }
+    }
+
+    // Each round starts from an empty table. The rows use fixed ids, so the previous round's row is deleted: a DELETE
+    // per round, where a DROP and CREATE per round made Spanner, YugabyteDB and CockroachDB pay for schema changes.
+    private static async Task<string?> ClearTableAsync(IDatabaseContext context)
+    {
+        try
+        {
+            await using var clear = context.CreateSqlContainer(
+                $"DELETE FROM {IntegrationObjectNameHelper.Table(context, TableName)}");
+            await clear.ExecuteNonQueryAsync();
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return "clear: " + Describe(ex);
         }
     }
 
@@ -241,10 +262,9 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
     private async Task<string?> RoundTripAsync(SupportedDatabase provider, IDatabaseContext context,
         ColumnTypeDescriptor entry)
     {
-        var declare = await DeclareAsync(provider, context, entry);
-        if (declare != null)
+        if (await ClearTableAsync(context) is { } clearFailure)
         {
-            return declare;
+            return clearFailure;
         }
 
         var rowType = TypeRoundTripRows.ByDbType[entry.DbType!.Value].MakeGenericType(entry.ClrType!);

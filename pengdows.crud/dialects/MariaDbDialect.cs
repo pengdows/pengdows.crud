@@ -158,20 +158,10 @@ internal class MariaDbDialect : MySqlDialect
         return SqlStandardLevel.Sql92;
     }
 
-    public override string GetFinalSessionSettings(bool readOnly)
-    {
-        // 1 RTT / 1 Command Optimization: Combine sql_mode and session-persistent read-only intent.
-        // MariaDB uses tx_read_only, so we MUST override the MySqlDialect implementation
-        // that hardcodes transaction_read_only.
-        var baseline = GetBaseSessionSettings();
-        var intent = readOnly ? MariaDbReadOnlySql : MariaDbReadWriteSql;
-
-        return baseline.TrimEnd(';') + "; " + intent;
-    }
-
-    public override string GetReadOnlySessionSettings() => MariaDbReadOnlySql;
-
-    internal override string? GetReadOnlyTransactionResetSql() => MariaDbReadWriteSql;
+    // MariaDB's variable is tx_read_only; the read-only diff itself is the MySQL-family rule.
+    protected override string ReadOnlyVariableName => "tx_read_only";
+    protected override string ReadOnlySwitchStatement => MariaDbReadOnlySql;
+    protected override string ReadWriteSwitchStatement => MariaDbReadWriteSql;
 
     protected override string? ReadOnlyTransactionSql => MariaDbReadOnlySql;
 

@@ -162,7 +162,9 @@ internal class MySqlDialect : SqlDialect
         "Connection Timeout", "ConnectionTimeout", "Connect Timeout"
     };
 
-    private string? _sessionSettings;
+    // The writer's and the reader's captured values. Null until captured; an unknown value is sent.
+    private IReadOnlyDictionary<string, object?>? _sessionDefaults;
+    private IReadOnlyDictionary<string, object?>? _readerSessionDefaults;
     protected readonly bool _isMySqlConnector;
     private readonly SupportedDatabase _flavor;
     private volatile bool _prepareDisabledByServerLimit;
@@ -431,76 +433,48 @@ internal class MySqlDialect : SqlDialect
         return true;
     }
 
-    internal override async Task<IDatabaseProductInfo> DetectDatabaseInfoCoreAsync(ITrackedConnection connection, bool useAsync)
+    public override string GetFinalSessionSettings(bool readOnly) => GetFinalSessionSettings(readOnly, null);
+
+    // sql_mode is a set of flags. The server returns them in its own order, so the comparison ignores order.
+    private static bool SameSqlModeFlags(string? current, string required)
     {
-        var productInfo = await base.DetectDatabaseInfoCoreAsync(connection, useAsync);
-
-        // Check and cache MySQL session settings during initialization
-        if (_sessionSettings == null)
+        if (current is null)
         {
-            var result = GetMySqlSessionSettings(connection);
-            _sessionSettings = result.Settings;
-
-            if (!string.IsNullOrWhiteSpace(_sessionSettings))
-            {
-                Logger.LogInformation("Applying MySQL session settings on first connect:\n{Settings}",
-                    _sessionSettings);
-            }
-            else
-            {
-                Logger.LogInformation(
-                    "MySQL session settings: already compliant; enforcing baseline on every checkout");
-            }
+            return false;
         }
 
-        return productInfo;
+        var have = current.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var want = required.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        return new HashSet<string>(have, StringComparer.OrdinalIgnoreCase).SetEquals(want);
     }
 
-    public override string GetFinalSessionSettings(bool readOnly)
+    // A boolean server variable. Null when the value is missing or not recognized.
+    protected static bool? ParseBooleanVariable(string? value) => value switch
     {
-        // 1 RTT / 1 Command Optimization: Combine sql_mode and session-persistent read-only intent.
-        var baseline = GetBaseSessionSettings();
-        var intent = readOnly ? SetSessionReadOnlySql : SetSessionReadWriteSql;
+        "1" or "ON" => true,
+        "0" or "OFF" => false,
+        _ => null,
+    };
 
-        return baseline.TrimEnd(';') + "; " + intent;
-    }
-
-    private SessionSettingsResult GetMySqlSessionSettings(IDbConnection connection)
+    // The sql_mode flags pengdows requires on this server. Before MySQL 8, with no version, and on MariaDB, the legacy
+    // zero-date flags are included. NO_BACKSLASH_ESCAPES is left out where the provider cannot have it.
+    private string SqlModeRequirement()
     {
-        return EvaluateSessionSettings(
-            connection,
-            conn =>
-            {
-                var version = ProductInfo.ParsedVersion;
-                var useLegacyModes = version == null ||
-                                     DatabaseType == SupportedDatabase.MariaDb ||
-                                     version < MySqlLegacyModeDeprecationThreshold;
+        // Before detection the version is unknown, and the legacy flags apply.
+        var version = IsInitialized ? ProductInfo.ParsedVersion : null;
+        var useLegacyModes = version == null ||
+                             DatabaseType == SupportedDatabase.MariaDb ||
+                             version < MySqlLegacyModeDeprecationThreshold;
 
-                var flags = useLegacyModes
-                    ? $"{RequiredSqlModeFlags},{LegacySqlModeFlags}"
-                    : RequiredSqlModeFlags;
-                if (SupportsTimeTruncateFractional)
-                {
-                    flags += "," + TimeTruncateFractionalFlag;
-                }
+        var flags = useLegacyModes
+            ? $"{RequiredSqlModeFlags},{LegacySqlModeFlags}"
+            : RequiredSqlModeFlags;
+        if (SupportsTimeTruncateFractional)
+        {
+            flags += "," + TimeTruncateFractionalFlag;
+        }
 
-                // Overwrite-only policy: Always set the full sql_mode to our standard baseline.
-                // This is safer than delta interrogation across a pooled connection lifetime.
-                var script = $"SET SESSION {SqlModeSettingName} = '{flags}';";
-
-                return new SessionSettingsResult(script, new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    [SqlModeSettingName] = flags
-                }, false);
-            },
-            () => new SessionSettingsResult(
-                DefaultSqlMode,
-                new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-                {
-                    ["sql_mode"] = "unknown"
-                },
-                true),
-            "Failed to configure MySQL session settings, applying default settings");
+        return OmitNoBackslashEscapes ? StripNoBackslashEscapes(flags) : flags;
     }
 
     internal override string PrepareConnectionStringForDataSource(string connectionString, bool readOnly = false)
@@ -588,8 +562,7 @@ internal class MySqlDialect : SqlDialect
 
     public override string GetBaseSessionSettings()
     {
-        var settings = string.IsNullOrWhiteSpace(_sessionSettings) ? DefaultSqlMode : _sessionSettings;
-        return OmitNoBackslashEscapes ? StripNoBackslashEscapes(settings) : settings;
+        return $"SET SESSION {SqlModeSettingName} = '{SqlModeRequirement()}';";
     }
 
     // Oracle's MySql.Data binds parameters by substituting backslash-escaped literals into
@@ -629,15 +602,54 @@ internal class MySqlDialect : SqlDialect
             .Replace("NO_BACKSLASH_ESCAPES,", string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
-    public override string GetReadOnlySessionSettings()
+    public override string GetReadOnlySessionSettings() => ReadOnlySwitchStatement;
+
+    internal override string? GetReadOnlyTransactionResetSql() => ReadWriteSwitchStatement;
+
+    // The settings pengdows requires on every connection, and how each is read and set. sql_mode is a set of flags, so
+    // it is compared as a set; the read-only variable is named per server (MariaDB differs).
+    // What a dialect of the MySQL family adds to the managed baseline (TiDB's pessimistic mode). MySQL adds nothing.
+    protected virtual IEnumerable<ManagedSessionSetting> AdditionalManagedSettings => Array.Empty<ManagedSessionSetting>();
+
+    private IEnumerable<ManagedSessionSetting> AllManagedSettings() => ManagedSettings().Concat(AdditionalManagedSettings);
+
+    private ManagedSessionSetting[] ManagedSettings() => new[]
     {
-        return SetSessionReadOnlySql;
+        new ManagedSessionSetting("SELECT @@SESSION." + SqlModeSettingName,
+            (value, _) => SameSqlModeFlags(value?.ToString(), SqlModeRequirement()),
+            _ => $"SET SESSION {SqlModeSettingName} = '{SqlModeRequirement()}';"),
+        new ManagedSessionSetting("SELECT @@SESSION." + ReadOnlyVariableName,
+            (value, readOnly) => ParseBooleanVariable(value?.ToString()) == readOnly,
+            readOnly => readOnly ? ReadOnlySwitchStatement : ReadWriteSwitchStatement),
+    };
+
+    // The writer's and the reader's defaults are kept apart: a read replica can differ from its primary.
+    internal override async Task CaptureSessionDefaultsAsync(ITrackedConnection connection, bool readOnlyPool,
+        bool useAsync)
+    {
+        var captured = await CaptureProbeValuesAsync(connection, AllManagedSettings(), useAsync).ConfigureAwait(false);
+        if (readOnlyPool)
+        {
+            _readerSessionDefaults = captured;
+        }
+        else
+        {
+            _sessionDefaults = captured;
+        }
     }
 
-    internal override string? GetReadOnlyTransactionResetSql()
+    // Normal mode per pool: a setting is sent only when the pool's captured value differs from what pengdows requires.
+    // A pool that was not captured uses the writer's, which is the same server.
+    public override string GetFinalSessionSettings(bool readOnly, string? applicationName)
     {
-        return SetSessionReadWriteSql;
+        var captured = readOnly && _readerSessionDefaults is not null ? _readerSessionDefaults : _sessionDefaults;
+        return BuildManagedSessionSettings(AllManagedSettings(), captured, readOnly);
     }
+
+    // The server variable and the statements that set it. MariaDB names the variable differently.
+    protected virtual string ReadOnlyVariableName => "transaction_read_only";
+    protected virtual string ReadOnlySwitchStatement => SetSessionReadOnlySql;
+    protected virtual string ReadWriteSwitchStatement => SetSessionReadWriteSql;
 
     // Before 5, and with no version, the default SQL-92 (DRY-019: was a switch beside the base's mapping).
     public override Dictionary<int, SqlStandardLevel> GetMajorVersionToStandardMapping() => new()

@@ -491,6 +491,28 @@ Live: SQL Server 34/34, DuckDB 27/27, InterBase 14/14 (with SQL Server in the sa
 | TYPE-014 | **A `TimeSpan` outside a day into `TIME` became a different value**: Sybase ASE stored -01:00:00 as 23:00:00, Informix stored 24:00:00 as 00:00:00 (live), and pengdows.flatfile stored -01:00:00 then couldn't read it back | **Fixed** 2026-09-29 (2.0.6): `SqlDialect.TimeColumnHoldsOnlyATimeOfDay` (Sybase ASE, Informix, FlatFile) rejects such a value with `ArgumentOutOfRangeException` before binding (`TimeOfDayWrapGuardTests`). Other engines reject it themselves (PostgreSQL, Firebird, DuckDB, Oracle, SQL Server via `OverflowException`) or hold it (MySQL `TIME` is ±838 h). Upstream: pengdows.flatfile should validate TIME on write (FF-DEF) |
 | TYPE-012 | **Informix.Net.Core bug:** `IfxDataReader.GetInt64` throws `InvalidCastException` for a BIGSERIAL column, although `GetFieldType` reports `Int64` and `GetValue` returns an `Int64` (SERIAL8, INT8 and BIGINT read fine; probed live 2026-09-29 against the 15 developer image). The compiled mapper calls `GetInt64` for an `Int64` field, so any entity keyed by BIGSERIAL (Informix's usual id type) failed to load | **Fixed** 2026-09-29 (2.0.6): `SqlDialect.ReadsInt64ThroughGetValue` (internal; Informix only), so `TrackedReader.GetInt64` unboxes `GetValue`; fakeDb emulates the quirk (`fakeDbDataReader.GetInt64RejectedColumns`); live Informix passes |
 
+## PostgreSQL types the core doesn't have (TYPE-023 to TYPE-029, listed 2026-10-30)
+
+**Goal:** the core should handle every PostgreSQL type a column can hold, so these are gaps in pengdows.crud, not only in the
+EF provider (`pengdows.efcore.adonet`). Found by the shared EF Core 10 conformance suite against PostgreSQL 17 (1,274 cases; each
+native type is a probe case). Checked against the core sources on 2026-10-30: the names below appear nowhere in
+`pengdows.crud` or `pengdows.crud.abstractions`, and the core does already handle ranges (`int4range`, `int8range`, `numrange`,
+`daterange`, `tsrange`, `tstzrange`), `bit` (`BitArray`), `cidr`, `inet`, `macaddr`, `pg_lsn`, `timetz`, and `money`.
+
+| ID | Item | Status |
+|---|---|---|
+| TYPE-023 | Geometric types `point`, `lseg`, `path`, `box`, `line`, `circle`, `polygon`, and their arrays. Npgsql's `NpgsqlPoint` and related types are the CLR side, but the core has no mapping. Each type fails its probes (6 to 8 cases each) | Open |
+| TYPE-024 | Text-search types `tsvector` and `tsquery`, and their arrays (`NpgsqlTsVector`, `NpgsqlTsQuery`). 6 to 8 cases each | Open |
+| TYPE-025 | Object-identifier types `oid`, `regtype`, and `regconfig` read as `uint`. The core reads them as `Int64`, which Npgsql refuses (6, 6, and 4 cases). System-column types `tid` and `cid` (8 and 6 cases) need the same decision | Open |
+| TYPE-026 | `xid8` (`ulong`) and `jsonpath` (`string`), written with the parameter typed as the column. The EF provider already does this (`PostgreSqlNamedTypeMapping`); the core has neither type | Open |
+| TYPE-027 | Multirange types `int4multirange`, `int8multirange`, `nummultirange`, `datemultirange`, `tsmultirange`, `tstzmultirange` (6 cases each) | Open |
+| TYPE-028 | Arrays of types the core already handles: `int4range[]` and the other scalar range arrays (6 each), `cidr[]` (6). Arrays of ranges are where EF's model finalization refuses a range element mapping, so the core needs the element mapping first | Open |
+| TYPE-029 | `bit varying` (`varbit`) and its arrays. The core maps `bit` to `BitArray` but nothing for `varbit` (6 cases each, including `bit[]` and `bit varying[]`) | Open |
+
+**Already in the core, failing only in the EF provider:** `bit`, `pg_lsn`, `timetz`, `money`, the scalar range types, `cidr`,
+`inet`, `macaddr`/`macaddr8`. The EF provider needs its own mappings for those; the core already has the CLR side and the
+binding rules, so the EF provider should copy them from here rather than from another source.
+
 ## Type-handling performance review (PERF-*, 2026-10-02, branch 2.0.6)
 
 Three read-only reviews (parameter binding, gateway hydration, DataReaderMapper and coercion) found 27 candidates. Each fix below has a red test first. The "before" and "after" numbers are per value, measured with a fakeDb PostgreSQL BenchmarkDotNet run (scratch, not in the repo). Each suspect cell is paired with its typed fast path.

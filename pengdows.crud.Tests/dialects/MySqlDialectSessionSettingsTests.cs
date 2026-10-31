@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System;
 using System.Reflection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,25 +14,42 @@ namespace pengdows.crud.Tests.dialects;
 public class MySqlDialectSessionSettingsTests
 {
     [Fact]
-    public void GetConnectionSessionSettings_EmptyCache_UsesDefaultSqlMode()
+    public void GetConnectionSessionSettings_CapturedSqlModeMatches_SendsNoSqlMode()
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
+        var required = RequiredSqlMode(dialect);
 
-        var field = typeof(MySqlDialect).GetField("_sessionSettings", BindingFlags.NonPublic | BindingFlags.Instance);
-        field!.SetValue(dialect, string.Empty);
-
-        var config = new DatabaseContextConfiguration
+        // The writer's captured values: the server's sql_mode already has every required flag, and read-only is off.
+        SetCapturedWriterDefaults(dialect, new Dictionary<string, object?>
         {
-            ConnectionString = "Data Source=test;EmulatedProduct=MySql",
-            DbMode = DbMode.Standard
-        };
-        using var ctx = new DatabaseContext(config, factory);
+            ["SELECT @@SESSION.sql_mode"] = required,
+            ["SELECT @@SESSION.transaction_read_only"] = 0L,
+        });
 
-        var settings = dialect.GetConnectionSessionSettings(ctx, false);
+        Assert.DoesNotContain("sql_mode", dialect.GetConnectionSessionSettings(null!, false));
+    }
 
-        Assert.Contains("sql_mode", settings, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("ANSI_QUOTES", settings, StringComparison.OrdinalIgnoreCase);
+    [Fact]
+    public void GetConnectionSessionSettings_NothingCaptured_SendsSqlMode()
+    {
+        var dialect = new MySqlDialect(new fakeDbFactory(SupportedDatabase.MySql), NullLogger<MySqlDialect>.Instance);
+
+        Assert.Contains("SET SESSION sql_mode = ", dialect.GetConnectionSessionSettings(null!, false));
+    }
+
+    // The requirement is whatever the dialect sends when nothing is captured; the test reads it from there.
+    private static string RequiredSqlMode(MySqlDialect dialect)
+    {
+        var statement = dialect.GetConnectionSessionSettings(null!, false)
+            .Split('\n').Single(line => line.Contains("sql_mode", StringComparison.Ordinal));
+        return System.Text.RegularExpressions.Regex.Match(statement, "sql_mode = '([^']*)'").Groups[1].Value;
+    }
+
+    private static void SetCapturedWriterDefaults(MySqlDialect dialect, Dictionary<string, object?> captured)
+    {
+        var field = typeof(MySqlDialect).GetField("_sessionDefaults", BindingFlags.NonPublic | BindingFlags.Instance);
+        field!.SetValue(dialect, captured);
     }
 
     [Fact]

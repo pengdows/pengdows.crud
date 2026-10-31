@@ -61,6 +61,25 @@ internal class PostgreSqlDialect : SqlDialect
     private const string NpgsqlOptionsKey = "Options";
 
     private bool _settingsBaked;
+    // The server's own values for the managed settings, captured at first connect; null until detection has run.
+    private IReadOnlyDictionary<string, object?>? _serverDefaults;
+    // The reader pool's own captured values, when a reader connection was captured.
+    private IReadOnlyDictionary<string, object?>? _readerServerDefaults;
+
+    // The settings pengdows requires on every connection, and how each one is read and set.
+    private static readonly ManagedSessionSetting[] ManagedSettings =
+    {
+        new(ShowSql(StandardConformingStringsSetting), (value, _) => ValueIs(value, "on"),
+            _ => $"SET {StandardConformingStringsSetting} = on;"),
+        new(ShowSql(ClientMinMessagesSetting), (value, _) => ValueIs(value, "warning"),
+            _ => $"SET {ClientMinMessagesSetting} = warning;"),
+        new(ShowSql(ReadOnlyTransactionSetting), (value, readOnly) => ValueIs(value, readOnly ? "on" : "off"),
+            readOnly => $"SET {ReadOnlyTransactionSetting} = {(readOnly ? "on" : "off")};"),
+    };
+
+    private static string ShowSql(string setting) => "SHOW " + setting;
+
+
     internal override bool SessionSettingsBakedIntoDataSource => _settingsBaked;
 
     // Reflection-based property/type names used to stamp NpgsqlDbType on JSON parameters
@@ -653,28 +672,7 @@ internal class PostgreSqlDialect : SqlDialect
         return productInfo;
     }
 
-    public override string GetFinalSessionSettings(bool readOnly)
-    {
-        // 1 RTT / 1 Command Optimization: Consolidate all session assignments (baseline + intent)
-        // into a single comma-separated SET command.
-        var sb = SbLite.Create(stackalloc char[SbLite.DefaultStack]);
-        try
-        {
-            sb.Append("SET ");
-            sb.Append(StandardConformingStringsSetting);
-            sb.Append(" = on, ");
-            sb.Append(ClientMinMessagesSetting);
-            sb.Append(" = warning, ");
-            sb.Append(ReadOnlyTransactionSetting);
-            sb.Append(readOnly ? " = on;" : " = off;");
-
-            return sb.ToString();
-        }
-        finally
-        {
-            sb.Dispose();
-        }
-    }
+    public override string GetFinalSessionSettings(bool readOnly) => GetFinalSessionSettings(readOnly, null);
 
     private SessionSettingsResult GetPostgreSqlSessionSettings(IDbConnection connection)
     {
@@ -712,6 +710,29 @@ internal class PostgreSqlDialect : SqlDialect
     public override string GetReadOnlySessionSettings()
     {
         return $"SET {ReadOnlyTransactionSetting} = on;";
+    }
+
+    // Normal mode: a setting is sent only when the server's default differs from what pengdows requires. Nothing is
+    // sent when every default already matches. Each pool's own defaults: the reader's when it was captured, otherwise
+    // the writer's (the same server).
+    internal override async Task CaptureSessionDefaultsAsync(ITrackedConnection connection, bool readOnlyPool,
+        bool useAsync)
+    {
+        var captured = await CaptureProbeValuesAsync(connection, ManagedSettings, useAsync).ConfigureAwait(false);
+        if (readOnlyPool)
+        {
+            _readerServerDefaults = captured;
+        }
+        else
+        {
+            _serverDefaults = captured;
+        }
+    }
+
+    public override string GetFinalSessionSettings(bool readOnly, string? applicationName)
+    {
+        var captured = readOnly && _readerServerDefaults is not null ? _readerServerDefaults : _serverDefaults;
+        return BuildManagedSessionSettings(ManagedSettings, captured, readOnly);
     }
 
     internal override string? GetReadOnlyTransactionResetSql()

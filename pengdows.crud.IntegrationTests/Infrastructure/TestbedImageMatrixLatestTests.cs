@@ -20,7 +20,7 @@ public class TestbedImageMatrixLatestTests
     [InlineData("Db2")]
     public void Latest_IsTheFirstEntryOfTheList(string provider)
     {
-        var first = TestbedImageMatrix.Get(provider)[0].Image;
+        var first = TestbedImageMatrix.DefaultsFor(provider)[0].Image;
 
         Assert.Equal(first, TestbedImageMatrix.Latest(provider));
     }
@@ -32,7 +32,7 @@ public class TestbedImageMatrixLatestTests
         var original = Environment.GetEnvironmentVariable(variable);
         try
         {
-            var expected = TestbedImageMatrix.Get("PostgreSQL")[0].Image;
+            var expected = TestbedImageMatrix.DefaultsFor("PostgreSQL")[0].Image;
             Environment.SetEnvironmentVariable(variable, "postgres:9.5");
 
             Assert.Equal(expected, TestbedImageMatrix.Latest("PostgreSQL"));

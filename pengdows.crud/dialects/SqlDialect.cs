@@ -1784,6 +1784,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
         return GetFinalSessionSettings(readOnly, null);
     }
 
+    // Captures the server defaults of one pool: the writer's at detection (readOnlyPool false) and the reader's
+    // on the reader pool's connection at creation (readOnlyPool true). Every dialect goes through this; the probes
+    // and the comparison are the dialect's own.
+    internal virtual Task CaptureSessionDefaultsAsync(ITrackedConnection connection, bool readOnlyPool, bool useAsync)
+        => Task.CompletedTask;
+
     public virtual string GetFinalSessionSettings(bool readOnly, string? applicationName)
     {
         var baseline = GetBaseSessionSettings(applicationName);
@@ -1886,6 +1892,78 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     protected static async Task<object?> ScalarAsync(DbCommand command, bool useAsync)
         => useAsync ? await command.ExecuteScalarAsync().ConfigureAwait(false) : command.ExecuteScalar();
+
+    // A setting pengdows needs on every connection. Probe is the SQL that reads the server's current value; the value
+    // is compared with what the setting requires for this pool (readOnly), and Statement is sent only when it differs.
+    // A probe that failed has a null value, which is never compliant, so the setting is sent.
+    protected sealed record ManagedSessionSetting(
+        string Probe,
+        Func<object?, bool, bool> IsCompliant,
+        Func<bool, string> Statement);
+
+    // Reads each distinct probe once, best effort: a failed read is null (unknown), and nothing is thrown, since startup
+    // must not depend on it.
+    protected static async Task<IReadOnlyDictionary<string, object?>> CaptureProbeValuesAsync(
+        ITrackedConnection connection,
+        IEnumerable<ManagedSessionSetting> settings,
+        bool useAsync)
+    {
+        var values = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var setting in settings)
+        {
+            if (values.ContainsKey(setting.Probe))
+            {
+                continue;
+            }
+
+            values[setting.Probe] = await ReadProbeValueAsync(connection, setting.Probe, useAsync).ConfigureAwait(false);
+        }
+
+        return values;
+    }
+
+    // The statements for the settings that differ from the pool's captured values, one per line (one batch, one RTT).
+    protected static string BuildManagedSessionSettings(
+        IEnumerable<ManagedSessionSetting> settings,
+        IReadOnlyDictionary<string, object?>? captured,
+        bool readOnly)
+    {
+        var statements = new List<string>();
+        foreach (var setting in settings)
+        {
+            var current = captured is not null && captured.TryGetValue(setting.Probe, out var value) ? value : null;
+            if (setting.IsCompliant(current, readOnly))
+            {
+                continue;
+            }
+
+            var statement = setting.Statement(readOnly);
+            if (!string.IsNullOrWhiteSpace(statement))
+            {
+                statements.Add(statement);
+            }
+        }
+
+        return string.Join("\n", statements);
+    }
+
+    // Compliance helper: a probe value that reads as the expected text (case-insensitive). Unknown (null) never matches.
+    protected static bool ValueIs(object? value, string expected) =>
+        value is not null && string.Equals(value.ToString(), expected, StringComparison.OrdinalIgnoreCase);
+
+    protected static async Task<object?> ReadProbeValueAsync(ITrackedConnection connection, string probe, bool useAsync)
+    {
+        try
+        {
+            await using var cmd = (DbCommand)connection.CreateCommand();
+            cmd.CommandText = probe;
+            return await ScalarAsync(cmd, useAsync).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return null;
+        }
+    }
 
     protected readonly record struct SessionSettingsResult(
         string Settings,
@@ -2777,7 +2855,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     public virtual string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        return BuildSessionSettings(GetBaseSessionSettings(null), GetReadOnlySessionSettings(), readOnly);
+        return GetFinalSessionSettings(readOnly, null);
     }
 
     public virtual void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)

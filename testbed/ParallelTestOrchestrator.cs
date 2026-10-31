@@ -664,8 +664,13 @@ public static class TestbedImageMatrix
             return images.Select((image, index) => new ImageVersion($"custom-{index + 1}", image)).ToArray();
         }
 
-        return Defaults.TryGetValue(provider, out var versions) ? versions : Array.Empty<ImageVersion>();
+        return DefaultsFor(provider);
     }
+
+    // The built-in list for a provider. Unlike Get, it ignores the TESTBED_<PROVIDER>_IMAGES override, so a test that
+    // names the list's own first entry does not depend on the environment it runs in.
+    public static IReadOnlyList<ImageVersion> DefaultsFor(string provider) =>
+        Defaults.TryGetValue(provider, out var versions) ? versions : Array.Empty<ImageVersion>();
 }
 
 public class TestResult

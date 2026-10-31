@@ -228,6 +228,46 @@ internal class SqliteDialect : SqlDialect
 
     private volatile bool _walActive;
 
+    // The writer's and the reader's captured pragma values. Null until captured; an unknown value is sent.
+    private IReadOnlyDictionary<string, object?>? _sessionDefaults;
+    private IReadOnlyDictionary<string, object?>? _readerSessionDefaults;
+
+    // The pragmas pengdows requires on every connection, and how each one is read and set. synchronous = NORMAL is
+    // required only in WAL, the state ObserveDatabaseInitialization records: a rollback-journal database keeps SQLite's
+    // own default.
+    private ManagedSessionSetting[] ManagedSettings() => new[]
+    {
+        new ManagedSessionSetting("PRAGMA foreign_keys", (value, _) => ValueIs(value, "1"),
+            _ => "PRAGMA foreign_keys = ON;"),
+        // Always sent, whatever the captured value: the SQLite pool hands a physical connection back with its pragmas
+        // as the last caller left them, so a query_only a caller set would fail the next write on that connection.
+        new ManagedSessionSetting("PRAGMA query_only", (_, _) => false,
+            _ => "PRAGMA query_only = OFF;"),
+        new ManagedSessionSetting("PRAGMA synchronous", (value, _) => !_walActive || ValueIs(value, "1"),
+            _ => "PRAGMA synchronous = NORMAL;"),
+    };
+
+    internal override async Task CaptureSessionDefaultsAsync(ITrackedConnection connection, bool readOnlyPool,
+        bool useAsync)
+    {
+        var captured = await CaptureProbeValuesAsync(connection, ManagedSettings(), useAsync).ConfigureAwait(false);
+        if (readOnlyPool)
+        {
+            _readerSessionDefaults = captured;
+        }
+        else
+        {
+            _sessionDefaults = captured;
+        }
+    }
+
+    // Normal mode: a pragma is sent only when the pool's captured value differs from what pengdows requires.
+    public override string GetFinalSessionSettings(bool readOnly, string? applicationName)
+    {
+        var captured = readOnly && _readerSessionDefaults is not null ? _readerSessionDefaults : _sessionDefaults;
+        return BuildManagedSessionSettings(ManagedSettings(), captured, readOnly);
+    }
+
     private int _probedMaxVariableNumber; // 0 = not read
     private int _jsonbFunction;           // 0 = not read, 1 = present, 2 = absent
     private int _rowNumberFunction;

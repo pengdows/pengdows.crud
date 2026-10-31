@@ -40,6 +40,8 @@ internal class TiDbDialect : MySqlDialect
 
     public override string GetReadOnlySessionSettings() => string.Empty;
 
+    protected override string ReadOnlySwitchStatement => string.Empty;
+
     public override string GetFinalSessionSettings(bool readOnly) => GetFinalSessionSettings(readOnly, null);
 
     internal TiDbDialect(DbProviderFactory factory, ILogger logger)
@@ -113,6 +115,13 @@ internal class TiDbDialect : MySqlDialect
     {
         return string.Concat(base.GetBaseSessionSettings(), "\nSET tidb_pessimistic_txn_default = ON;");
     }
+
+    protected override IEnumerable<ManagedSessionSetting> AdditionalManagedSettings => new[]
+    {
+        new ManagedSessionSetting("SELECT @@SESSION.tidb_pessimistic_txn_default",
+            (value, _) => ParseBooleanVariable(value?.ToString()) == true,
+            _ => "SET tidb_pessimistic_txn_default = ON;"),
+    };
 
     // Isolation mapping (DEC-010; was IsolationResolver's per-database switch, same names as 3.0).
     internal override HashSet<IsolationLevel> GetSupportedIsolationLevels(bool allowSnapshotIsolation) =>

@@ -638,6 +638,32 @@ internal class SqlServerDialect : SqlDialect
     // any SQL Server version this dialect targets — kept only as the gate for the defensive
     // fallback below.
     private const int MinimumCompatibilityLevelForImplicitArithAbort = 90;
+    // One pool's server defaults: whether the compatibility level is modern, the @@OPTIONS bits and the isolation
+    // level. Null means unknown, and the requirement for an unknown value is sent on each open.
+    private sealed record ServerDefaults(bool? ModernCompatibility, IReadOnlyDictionary<string, object?> Values);
+
+    // The writer's and the reader's defaults are kept apart: a read replica can differ from its primary.
+    private ServerDefaults? _writerDefaults;
+    private ServerDefaults? _readerDefaults;
+
+    // Captures one pool's defaults: the writer's at detection, the reader's on the reader pool's connection at creation.
+    // Best effort: a value that cannot be read is unknown.
+    internal override async Task CaptureSessionDefaultsAsync(ITrackedConnection connection, bool readOnlyPool,
+        bool useAsync)
+    {
+        var modern = ParseInt(await ReadProbeValueAsync(connection, CompatibilityLevelQuery, useAsync)
+            .ConfigureAwait(false)) is { } level && level >= MinimumCompatibilityLevelForImplicitArithAbort;
+        var values = await CaptureProbeValuesAsync(connection, ManagedSettings, useAsync).ConfigureAwait(false);
+        var defaults = new ServerDefaults(modern, values);
+        if (readOnlyPool)
+        {
+            _readerDefaults = defaults;
+        }
+        else
+        {
+            _writerDefaults = defaults;
+        }
+    }
 
     private const string CompatibilityLevelQuery =
         "SELECT compatibility_level FROM sys.databases WHERE database_id = DB_ID()";
@@ -668,6 +694,65 @@ internal class SqlServerDialect : SqlDialect
                 true),
             "Failed to configure SQL Server session settings");
     }
+
+    // Normal mode, modern compatibility: each option whose server default differs from its requirement is sent on each
+    // open. ARITHABORT is not managed here: at compatibility level 90 and above it does not affect indexed views.
+    public override string GetFinalSessionSettings(bool readOnly, string? applicationName)
+    {
+        // The reader's defaults when they were captured, otherwise the writer's (the same server).
+        var defaults = readOnly && _readerDefaults is not null ? _readerDefaults : _writerDefaults;
+        if (defaults?.ModernCompatibility != true)
+        {
+            return base.GetFinalSessionSettings(readOnly, applicationName);
+        }
+
+        return BuildManagedSessionSettings(ManagedSettings, defaults.Values, readOnly);
+    }
+
+    // @@OPTIONS bit and required value for each managed option.
+    private static readonly (string Name, int Bit, bool Required)[] ManagedOptionRequirements =
+    {
+        ("QUOTED_IDENTIFIER", 256, true),
+        ("ANSI_NULLS", 32, true),
+        ("ANSI_PADDING", 16, true),
+        ("ANSI_WARNINGS", 8, true),
+        ("CONCAT_NULL_YIELDS_NULL", 4096, true),
+        ("NUMERIC_ROUNDABORT", 8192, false),
+        ("NOCOUNT", 512, false),
+        ("XACT_ABORT", 16384, false),
+        ("IMPLICIT_TRANSACTIONS", 2, false),
+    };
+
+    // Each option is read from @@OPTIONS, the isolation level from the session. An unreadable value is unknown, and so
+    // the requirement is sent.
+    private static readonly ManagedSessionSetting[] ManagedSettings = ManagedOptionRequirements
+        .Select(option => new ManagedSessionSetting(
+            OptionBitsQuery,
+            (value, _) => OptionIsSet(value, option.Bit) == option.Required,
+            _ => $"SET {option.Name} {(option.Required ? "ON" : "OFF")};"))
+        .Append(new ManagedSessionSetting(
+            IsolationLevelQuery,
+            (value, _) => ParseInt(value) == ReadCommittedIsolationLevel,
+            _ => "SET TRANSACTION ISOLATION LEVEL READ COMMITTED;"))
+        .ToArray();
+
+    private const string OptionBitsQuery = "SELECT @@OPTIONS";
+
+    private static bool? OptionIsSet(object? value, int bit) =>
+        ParseInt(value) is { } bits ? (bits & bit) != 0 : null;
+
+    private const int ReadCommittedIsolationLevel = 2;
+
+    private const string IsolationLevelQuery =
+        "SELECT transaction_isolation_level FROM sys.dm_exec_sessions WHERE session_id = @@SPID";
+
+
+    private static int? ParseInt(object? value) =>
+        value is not null
+        && int.TryParse(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture),
+            System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var parsed)
+            ? parsed
+            : null;
 
     private int? TryGetCompatibilityLevel(IDbConnection connection)
     {
