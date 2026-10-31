@@ -47,42 +47,55 @@ public class PoisonedPooledConnectionTests : DatabaseTestBase
 
             // Each context gets its own pool (a unique Application Name), so a poisoned connection cannot reach any
             // other test through a shared pool.
+            var paranoidConnectionString = raw + ";No Reset On Close=true;Application Name=poison-paranoid-" + Guid.NewGuid().ToString("N");
+            var normalConnectionString = raw + ";No Reset On Close=true;Application Name=poison-normal-" + Guid.NewGuid().ToString("N");
+
             using var paranoid = new DatabaseContext(new DatabaseContextConfiguration
             {
-                ConnectionString = raw + ";No Reset On Close=true;Application Name=poison-paranoid-" + Guid.NewGuid().ToString("N"),
+                ConnectionString = paranoidConnectionString,
                 ProviderName = "Npgsql",
                 SessionSettingsMode = SessionSettingsMode.Paranoid,
             }, NpgsqlFactory.Instance);
 
             using var normal = new DatabaseContext(new DatabaseContextConfiguration
             {
-                ConnectionString = raw + ";No Reset On Close=true;Application Name=poison-normal-" + Guid.NewGuid().ToString("N"),
+                ConnectionString = normalConnectionString,
                 ProviderName = "Npgsql",
             }, NpgsqlFactory.Instance);
 
-            var paranoidValue = await ValueAfterPoisonAndNextCheckoutAsync(paranoid);
-            Assert.Equal("on", paranoidValue);
+            try
+            {
+                var paranoidValue = await ValueAfterPoisonAndNextCheckoutAsync(paranoid, PoisonSql, ProbeSql, "off");
+                Assert.Equal("on", paranoidValue);
 
-            // Documents the trade-off of normal mode: its captured default already matched, so nothing was sent.
-            var normalValue = await ValueAfterPoisonAndNextCheckoutAsync(normal);
-            Assert.Equal("off", normalValue);
+                // Documents the trade-off of normal mode: its captured default already matched, so nothing was sent.
+                var normalValue = await ValueAfterPoisonAndNextCheckoutAsync(normal, PoisonSql, ProbeSql, "off");
+                Assert.Equal("off", normalValue);
+            }
+            finally
+            {
+                // Each context's pool is private to its Application Name; release its idle connections.
+                NpgsqlConnection.ClearPool(new NpgsqlConnection(paranoidConnectionString));
+                NpgsqlConnection.ClearPool(new NpgsqlConnection(normalConnectionString));
+            }
         });
     }
 
     // Poisons one pooled connection, proves the poison took effect on that checkout, then returns the value the next
     // checkout's connection reports for the setting.
-    private static async Task<string?> ValueAfterPoisonAndNextCheckoutAsync(DatabaseContext context)
+    private static async Task<string?> ValueAfterPoisonAndNextCheckoutAsync(DatabaseContext context, string poisonSql,
+        string probeSql, string poisonedValue)
     {
         using (var first = context.GetConnection(ExecutionType.Write))
         {
             first.Open();
-            await ExecuteAsync(first, PoisonSql);
-            Assert.Equal("off", await ScalarAsync(first, ProbeSql));
+            await ExecuteAsync(first, poisonSql);
+            Assert.Equal(poisonedValue, await ScalarAsync(first, probeSql));
         }
 
         using var second = context.GetConnection(ExecutionType.Write);
         second.Open();
-        return await ScalarAsync(second, ProbeSql);
+        return await ScalarAsync(second, probeSql);
     }
 
     private static async Task ExecuteAsync(IDbConnection connection, string sql)

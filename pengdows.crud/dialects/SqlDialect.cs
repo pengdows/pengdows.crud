@@ -1903,7 +1903,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     // Reads each distinct probe once, best effort: a failed read is null (unknown), and nothing is thrown, since startup
     // must not depend on it.
-    protected static async Task<IReadOnlyDictionary<string, object?>> CaptureProbeValuesAsync(
+    protected async Task<IReadOnlyDictionary<string, object?>> CaptureProbeValuesAsync(
         ITrackedConnection connection,
         IEnumerable<ManagedSessionSetting> settings,
         bool useAsync)
@@ -1956,7 +1956,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
     protected static bool ValueIs(object? value, string expected) =>
         value is not null && string.Equals(value.ToString(), expected, StringComparison.OrdinalIgnoreCase);
 
-    protected static async Task<object?> ReadProbeValueAsync(ITrackedConnection connection, string probe, bool useAsync)
+    protected async Task<object?> ReadProbeValueAsync(ITrackedConnection connection, string probe, bool useAsync)
     {
         try
         {
@@ -1966,6 +1966,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // An unknown value is never compliant, so the setting this probe guards is sent on each open. The failure is
+            // still reported: a probe that cannot be read is an operational fact the operator should see.
+            Logger.LogWarning(ex, "Session probe {Probe} failed; the setting it reads is sent on every open.", probe);
             return null;
         }
     }
@@ -2860,7 +2863,7 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
     public virtual string GetConnectionSessionSettings(IDatabaseContext context, bool readOnly)
     {
-        return GetFinalSessionSettings(readOnly, null);
+        return BuildSessionSettings(GetBaseSessionSettings(null), GetReadOnlySessionSettings(), readOnly);
     }
 
     public virtual void ApplyConnectionSettings(IDbConnection connection, IDatabaseContext context, bool readOnly)

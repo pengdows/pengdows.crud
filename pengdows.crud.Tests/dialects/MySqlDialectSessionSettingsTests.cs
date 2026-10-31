@@ -14,7 +14,7 @@ namespace pengdows.crud.Tests.dialects;
 public class MySqlDialectSessionSettingsTests
 {
     [Fact]
-    public void GetConnectionSessionSettings_CapturedSqlModeMatches_SendsNoSqlMode()
+    public void GetConnectionSessionSettings_CapturedSqlModeMatches_StillReturnsTheFullEnforcementSql()
     {
         var factory = new fakeDbFactory(SupportedDatabase.MySql);
         var dialect = new MySqlDialect(factory, NullLogger<MySqlDialect>.Instance);
@@ -27,7 +27,7 @@ public class MySqlDialectSessionSettingsTests
             ["SELECT @@SESSION.transaction_read_only"] = 0L,
         });
 
-        Assert.DoesNotContain("sql_mode", dialect.GetConnectionSessionSettings(null!, false));
+        Assert.Contains("SET SESSION sql_mode = ", dialect.GetConnectionSessionSettings(null!, false));
     }
 
     [Fact]

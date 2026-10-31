@@ -32,7 +32,7 @@ public class SqlDialectAdditionalBehaviorTests
         var dialect = new TestableDialect(factory, NullLoggerFactory.Instance.CreateLogger<TestableDialect>());
         var context = new DatabaseContext("Data Source=:memory:", factory);
         var settings = dialect.GetConnectionSessionSettings(context, true);
-        Assert.Equal("SET BASE SETTINGS;\nSET READONLY MODE", settings);
+        Assert.Equal("SET BASE SETTINGS\nSET READONLY MODE", settings);
     }
 
     [Fact]

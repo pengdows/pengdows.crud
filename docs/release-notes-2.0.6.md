@@ -86,6 +86,15 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
   so implementations compiled against 2.0.5 still load. Because the clamp can shrink a pool that exceeded
   the server's limit, it is opt-in on 2.0.x. See [connection-pooling.md](connection-pooling.md).
 
+- `SessionSettingsMode` (enum in `pengdows.crud.enums`, `Normal` by default and `Paranoid`) on
+  `DatabaseContextConfiguration` and `IDatabaseContextConfiguration` (a default member, so implementations
+  compiled against 2.0.5 still load). `Paranoid` sends every managed session setting on every checkout, so a
+  connection a caller changed is put back the next time it is used. It exists for diagnosing odd session-state
+  problems; the connection strings pengdows.crud builds are unique to the context, so normal use does not need
+  it. See [connection-pooling.md](connection-pooling.md#session-settings-normal-and-paranoid). Recorded reason
+  (REVIEW_POLICY §4D): a consumer that must reset a poisoned pooled connection cannot do it without this switch.
+  The reasons live here because `PublicAPI.Unshipped.txt` rejects comment lines (RS0017).
+
 - `services.AddDbProviderLoading(configuration)` (`pengdows.crud.configuration`) loads the
   `DatabaseProviders` section of an `IConfiguration` (by assembly path, assembly name, or the legacy
   `DbProviderFactories` registry) and registers each `DbProviderFactory` as a keyed singleton, so a host can

@@ -746,7 +746,6 @@ internal class SqlServerDialect : SqlDialect
     private const string IsolationLevelQuery =
         "SELECT transaction_isolation_level FROM sys.dm_exec_sessions WHERE session_id = @@SPID";
 
-
     private static int? ParseInt(object? value) =>
         value is not null
         && int.TryParse(Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture),

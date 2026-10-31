@@ -760,6 +760,11 @@ public partial class DatabaseContext
         _dialect!.ParanoidSessionSettings = _sessionSettingsMode == SessionSettingsMode.Paranoid;
         _cachedReadWriteSessionSettings = _dialect!.GetFinalSessionSettings(readOnly: false, _sessionSettingsRwAppName);
         _cachedReadOnlySessionSettings = _dialect.GetFinalSessionSettings(readOnly: true, _sessionSettingsRoAppName);
+        if (!string.IsNullOrWhiteSpace(_cachedReadWriteSessionSettings))
+        {
+            _logger.LogInformation("Session settings for {Name} on each read-write open:\n{Settings}",
+                Name, _cachedReadWriteSessionSettings);
+        }
     }
 
     /// <summary>

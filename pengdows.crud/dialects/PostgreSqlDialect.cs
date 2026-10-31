@@ -79,7 +79,6 @@ internal class PostgreSqlDialect : SqlDialect
 
     private static string ShowSql(string setting) => "SHOW " + setting;
 
-
     internal override bool SessionSettingsBakedIntoDataSource => _settingsBaked;
 
     // Reflection-based property/type names used to stamp NpgsqlDbType on JSON parameters

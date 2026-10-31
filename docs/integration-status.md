@@ -13,11 +13,11 @@ that was run for the release is green. Access runs only on Windows.
 
 | Database | net8.0 | net10.0 |
 |---|---|---|
-| Sqlite | 153 pass, 0 fail, 0 skip · 2026-10-31 20:02Z · 9250ee42+ | 153 pass, 0 fail, 0 skip · 2026-10-31 20:09Z · 9250ee42+ |
-| PostgreSql | 169 pass, 0 fail, 0 skip · 2026-10-31 20:02Z · 9250ee42+ | 169 pass, 0 fail, 0 skip · 2026-10-31 20:08Z · 9250ee42+ |
-| SqlServer | 156 pass, 0 fail, 0 skip · 2026-10-31 20:06Z · 9250ee42+ | 156 pass, 0 fail, 0 skip · 2026-10-31 20:09Z · 9250ee42+ |
-| MySql | 159 pass, 0 fail, 0 skip · 2026-10-31 19:56Z · 9250ee42+ | 159 pass, 0 fail, 0 skip · 2026-10-31 20:07Z · 9250ee42+ |
-| MariaDb | 159 pass, 0 fail, 0 skip · 2026-10-31 19:58Z · 9250ee42+ | 159 pass, 0 fail, 0 skip · 2026-10-31 20:07Z · 9250ee42+ |
+| Sqlite | 153 pass, 0 fail, 0 skip · 2026-10-31 22:12Z · af65fda1+ | 153 pass, 0 fail, 0 skip · 2026-10-31 22:15Z · af65fda1+ |
+| PostgreSql | 169 pass, 0 fail, 0 skip · 2026-10-31 22:12Z · af65fda1+ | 169 pass, 0 fail, 0 skip · 2026-10-31 22:14Z · af65fda1+ |
+| SqlServer | 156 pass, 0 fail, 0 skip · 2026-10-31 22:13Z · af65fda1+ | 156 pass, 0 fail, 0 skip · 2026-10-31 22:15Z · af65fda1+ |
+| MySql | 159 pass, 0 fail, 0 skip · 2026-10-31 22:11Z · af65fda1+ | 159 pass, 0 fail, 0 skip · 2026-10-31 22:13Z · af65fda1+ |
+| MariaDb | 159 pass, 0 fail, 0 skip · 2026-10-31 22:11Z · af65fda1+ | 159 pass, 0 fail, 0 skip · 2026-10-31 22:14Z · af65fda1+ |
 | Firebird | 152 pass, 0 fail, 0 skip · 2026-10-31 15:30Z · 9250ee42+ | 152 pass, 0 fail, 0 skip · 2026-10-31 15:52Z · 9250ee42+ |
 | CockroachDb | 165 pass, 0 fail, 0 skip · 2026-10-31 15:35Z · 9250ee42+ | 165 pass, 0 fail, 0 skip · 2026-10-31 15:57Z · 9250ee42+ |
 | DuckDB | 152 pass, 0 fail, 0 skip · 2026-10-31 15:39Z · 9250ee42+ | 152 pass, 0 fail, 0 skip · 2026-10-31 16:00Z · 9250ee42+ |
