@@ -88,7 +88,6 @@ public class SqlContainerConnectionSharingTests
             throw new InvalidOperationException("IDatabaseContext must expose an internal TypeMapRegistry.");
 
         public IDataSourceInformation DataSourceInfo => _context.DataSourceInfo;
-        public string SessionSettingsPreamble => _context.GetSessionSettingsPreamble();
         public string GetBaseSessionSettings() => _context.GetBaseSessionSettings();
         public string GetReadOnlySessionSettings() => _context.GetReadOnlySessionSettings();
         public ProcWrappingStyle ProcWrappingStyle => _context.ProcWrappingStyle;

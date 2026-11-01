@@ -280,52 +280,9 @@ public class RefactoringDuplicationTests
     [InlineData(SupportedDatabase.SqlServer)]
     public void SessionSettingsDialects_CanBeConstructed_AfterRefactoring(SupportedDatabase db)
     {
-        // After extracting LogSessionSettingsResult to the base class,
-        // verify that each dialect constructs and has correct DatabaseType
+        // Each dialect constructs and reports its DatabaseType.
         var dialect = CreateDialect(db);
         Assert.Equal(db, dialect.DatabaseType);
-    }
-
-    [Fact]
-    public void LogSessionSettingsResult_ExposedToSubclasses_ViaTestDialect()
-    {
-        // Verify the protected helper is accessible from subclasses
-        var result = TestableDialect.CallLogSessionSettingsResult(_logger, "SET ANSI_NULLS ON;");
-        Assert.NotNull(result);
-    }
-
-    [Fact]
-    public void LogSessionSettingsResult_EmptySettings_LogsAlreadyCompliantBranch()
-    {
-        // When there are no pending changes, LogSessionSettingsResult must take the
-        // "already compliant" logging branch instead of the "applying changes" one.
-        var result = TestableDialect.CallLogSessionSettingsResult(_logger, string.Empty);
-        Assert.Equal(string.Empty, result);
-    }
-
-    /// <summary>
-    /// Testable dialect subclass that exposes the protected LogSessionSettingsResult helper.
-    /// </summary>
-    private sealed class TestableDialect : SqlDialect
-    {
-        internal TestableDialect(DbProviderFactory factory, ILogger logger) : base(factory, logger)
-        {
-        }
-
-        public override SupportedDatabase DatabaseType => SupportedDatabase.SqlServer;
-        public override string ParameterMarker => "@";
-
-        public static string CallLogSessionSettingsResult(ILogger logger, string settings)
-        {
-            var factory = new fakeDbFactory(SupportedDatabase.SqlServer);
-            var dialect = new TestableDialect(factory, logger);
-            var result = new SessionSettingsResult(
-                settings,
-                new Dictionary<string, string> { ["ANSI_NULLS"] = "OFF" },
-                false);
-            dialect.LogSessionSettingsResult(result, "Test");
-            return result.Settings;
-        }
     }
 
     #endregion

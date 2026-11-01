@@ -1978,35 +1978,6 @@ internal abstract class SqlDialect : IInternalSqlDialect
         IReadOnlyDictionary<string, string> Snapshot,
         bool UsedFallback);
 
-    /// <summary>
-    /// Logs session settings detection results in a standardized format.
-    /// Available to dialect overrides; no dialect currently calls it (each logs its own result).
-    /// </summary>
-    protected void LogSessionSettingsResult(in SessionSettingsResult result, string dialectName)
-    {
-        var snapshotParts = new string[result.Snapshot.Count];
-        var i = 0;
-        foreach (var kv in result.Snapshot)
-        {
-            snapshotParts[i++] = $"{kv.Key}={kv.Value}";
-        }
-
-        var snapshot = string.Join(", ", snapshotParts);
-
-        if (!string.IsNullOrWhiteSpace(result.Settings))
-        {
-            Logger.LogInformation(
-                "{Dialect} session settings detected: {CurrentSettings}. Applying changes:\n{Settings}",
-                dialectName, snapshot, result.Settings);
-        }
-        else
-        {
-            Logger.LogInformation(
-                "{Dialect} session settings detected: {CurrentSettings}. No changes required (already compliant)",
-                dialectName, snapshot);
-        }
-    }
-
     private static ReadOnlySpan<char> TrimWhitespace(ReadOnlySpan<char> span)
     {
         var start = 0;

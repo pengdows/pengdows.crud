@@ -59,7 +59,7 @@ public class ReadOnlySessionSettingsTests
         };
         var factory = new fakeDbFactory(db);
         using var ctx = new DatabaseContext(config, factory);
-        Assert.Contains(expected, ctx.GetSessionSettingsPreamble());
+        Assert.Contains(expected, ctx.GetBaseSessionSettings() + ctx.GetReadOnlySessionSettings());
     }
 
     [Theory]
@@ -77,7 +77,7 @@ public class ReadOnlySessionSettingsTests
         };
         var factory = new fakeDbFactory(db);
         using var ctx = new DatabaseContext(config, factory);
-        Assert.DoesNotContain(expected, ctx.GetSessionSettingsPreamble());
+        Assert.DoesNotContain(expected, ctx.GetBaseSessionSettings());
     }
 
     // Regression guard: these dialects must NOT produce session SQL for read-only enforcement —

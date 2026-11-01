@@ -114,7 +114,6 @@ public class InfrastructureEdgeCaseTests
         public IDataSourceInformation DataSourceInfo => throw new NotImplementedException();
         public ISqlDialect Dialect => throw new NotImplementedException();
         public TimeSpan? ModeLockTimeout => null;
-        public string SessionSettingsPreamble => string.Empty;
         public string GetBaseSessionSettings() => string.Empty;
         public string GetReadOnlySessionSettings() => string.Empty;
         public ProcWrappingStyle ProcWrappingStyle => ProcWrappingStyle.Call;

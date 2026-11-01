@@ -365,7 +365,6 @@ public class TransactionContextTests
         public ISqlDialect Dialect => _dialect;
         public TimeSpan? ModeLockTimeout => null;
 
-        public string SessionSettingsPreamble => string.Empty;
 
         public string GetBaseSessionSettings() => string.Empty;
 
@@ -1094,9 +1093,6 @@ public class TransactionContextTests
         Assert.NotNull(tx.GetInternalTypeMapRegistry());
         Assert.Equal(context.DataSourceInfo, tx.DataSourceInfo);
         Assert.NotNull(tx.DataSourceInfo);
-#pragma warning disable CS0618
-        Assert.Equal(context.GetSessionSettingsPreamble(), tx.GetSessionSettingsPreamble());
-#pragma warning restore CS0618
         Assert.Equal(context.GetBaseSessionSettings(), tx.GetBaseSessionSettings());
         Assert.Equal(context.GetReadOnlySessionSettings(), tx.GetReadOnlySessionSettings());
         Assert.Equal(identity.RootId, tx.RootId);
