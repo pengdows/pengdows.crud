@@ -13,7 +13,7 @@ that was run for the release is green. Access runs only on Windows.
 
 | Database | net8.0 | net10.0 |
 |---|---|---|
-| Sqlite | 153 pass, 0 fail, 0 skip · 2026-11-01 10:31Z · d6b387d1+ | 153 pass, 0 fail, 0 skip · 2026-11-01 10:54Z · d6b387d1+ |
+| Sqlite | 153 pass, 0 fail, 0 skip · 2026-11-01 18:22Z · e9fdee44+ | 153 pass, 0 fail, 0 skip · 2026-11-01 18:22Z · e9fdee44+ |
 | PostgreSql | 169 pass, 0 fail, 0 skip · 2026-11-01 10:31Z · d6b387d1+ | 169 pass, 0 fail, 0 skip · 2026-11-01 10:54Z · d6b387d1+ |
 | SqlServer | 156 pass, 0 fail, 0 skip · 2026-11-01 10:26Z · d6b387d1+ | 156 pass, 0 fail, 0 skip · 2026-11-01 10:50Z · d6b387d1+ |
 | MySql | 159 pass, 0 fail, 0 skip · 2026-11-01 10:31Z · d6b387d1+ | 159 pass, 0 fail, 0 skip · 2026-11-01 10:53Z · d6b387d1+ |

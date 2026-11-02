@@ -29,7 +29,6 @@ public sealed class SqliteFileWriterBenchmarksTests
     {
         yield return new object[] { nameof(SqliteFileWriterBenchmarks.Write_Dapper) };
         yield return new object[] { nameof(SqliteFileWriterBenchmarks.Write_DapperPinnedWriter) };
-        yield return new object[] { nameof(SqliteFileWriterBenchmarks.Write_DapperWriterQueue) };
         yield return new object[] { nameof(SqliteFileWriterBenchmarks.Write_Pengdows) };
     }
 
@@ -93,7 +92,7 @@ public sealed class SqliteFileWriterBenchmarksTests
 
         foreach (var arm in new[]
                  {
-                     "Write_Dapper", "Write_DapperPinnedWriter", "Write_DapperWriterQueue", "Write_Pengdows",
+                     "Write_Dapper", "Write_DapperPinnedWriter", "Write_Pengdows",
                      "ReadSingle_Dapper", "ReadSingle_DapperSingleConnection", "ReadSingle_Pengdows"
                  })
         {
@@ -125,7 +124,6 @@ public sealed class SqliteFileWriterBenchmarksTests
     public static IEnumerable<object[]> CoordinatedStormArms()
     {
         yield return new object[] { nameof(SqliteFileWriterStormBenchmarks.Storm_DapperPinnedWriter) };
-        yield return new object[] { nameof(SqliteFileWriterStormBenchmarks.Storm_DapperWriterQueue) };
         yield return new object[] { nameof(SqliteFileWriterStormBenchmarks.Storm_Pengdows) };
     }
 
@@ -184,7 +182,6 @@ public sealed class SqliteFileWriterBenchmarksTests
         yield return new object[] { nameof(SqliteFileWriterStormBenchmarks.Mixed_Dapper) };
         yield return new object[] { nameof(SqliteFileWriterStormBenchmarks.Mixed_DapperPinnedWriter) };
         yield return new object[] { nameof(SqliteFileWriterStormBenchmarks.Mixed_DapperSingleConnection) };
-        yield return new object[] { nameof(SqliteFileWriterStormBenchmarks.Mixed_DapperWriterQueue) };
         yield return new object[] { nameof(SqliteFileWriterStormBenchmarks.Mixed_Pengdows) };
     }
 
@@ -217,12 +214,12 @@ public sealed class SqliteFileWriterBenchmarksTests
     }
 
     [Fact]
-    public async Task APinnedWriterWithNoRecovery_FailsEveryTransactionFromTheSeverOn()
+    public async Task APooledWriterWithNoEviction_FailsEveryTransactionFromTheSeverOn()
     {
         var b = await NewPoisonAsync();
         try
         {
-            await b.Poison_DapperPinnedWriter();
+            await b.Poison_DapperPool();
 
             Assert.Equal(10, b.FailedTransactions); // transactions 10..19
             Assert.Equal(10, b.CommittedTransactions);
@@ -234,7 +231,7 @@ public sealed class SqliteFileWriterBenchmarksTests
     }
 
     [Theory]
-    [InlineData(nameof(SqliteFileWriterPoisonBenchmarks.Poison_DapperPinnedWriterWithReconnect))]
+    [InlineData(nameof(SqliteFileWriterPoisonBenchmarks.Poison_DapperPoolWithEviction))]
     [InlineData(nameof(SqliteFileWriterPoisonBenchmarks.Poison_Pengdows))]
     public async Task ARecoveringWriter_LosesOnlyTheTransactionInFlightWhenTheConnectionDies(string arm)
     {

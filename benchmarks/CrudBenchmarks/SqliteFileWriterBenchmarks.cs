@@ -16,9 +16,8 @@ namespace CrudBenchmarks;
 ///
 /// Arms, per operation:
 ///   _Dapper                    a new connection per operation, no write coordination (SQLAlchemy 1.4's shape).
-///   _DapperPinnedWriter        one long-lived writer connection behind a gate (sqlite-net-pcl, GRDB, a size-1 pool).
-///   _DapperSingleConnection    that same connection and gate for reads too (reads are serialized behind writes).
-///   _DapperWriterQueue         a channel drained by one background writer (EntityFrameworkCore.Sqlite.Concurrency).
+///   _DapperPinnedWriter        a gate so one write runs at a time, each command on its own connection (sqlite-net-pcl, GRDB, a size-1 pool).
+///   _DapperSingleConnection    that same gate for reads too, each read on its own connection (reads are serialized behind writes).
 ///   _Pengdows                  DbMode.Best, which is SingleWriter for a SQLite file: governor, ephemeral connections.
 ///
 /// Every arm runs the same session settings (foreign keys on, query_only off, synchronous NORMAL; see
@@ -38,7 +37,6 @@ public class SqliteFileWriterBenchmarks : IDisposable
     private string _dapperConnectionString = null!;
     private PinnedWriterArm _pinned = null!;
     private PinnedWriterArm _single = null!;
-    private WriterQueueArm _queue = null!;
     private DatabaseContext _pengdows = null!;
     private ISqlContainer _updateSc = null!;
     private ISqlContainer _readSc = null!;
@@ -54,7 +52,6 @@ public class SqliteFileWriterBenchmarks : IDisposable
         _dapperConnectionString = _database.DapperConnectionString();
         _pinned = new PinnedWriterArm(_dapperConnectionString, SqliteFileDatabase.SessionSql);
         _single = new PinnedWriterArm(_dapperConnectionString, SqliteFileDatabase.SessionSql);
-        _queue = new WriterQueueArm(_dapperConnectionString, SqliteFileDatabase.SessionSql);
 
         _pengdows = new DatabaseContext(_database.PengdowsConnectionString(), SqliteFactory.Instance);
         if (_pengdows.ConnectionMode != DbMode.SingleWriter)
@@ -85,7 +82,6 @@ public class SqliteFileWriterBenchmarks : IDisposable
         _updateSc?.Dispose();
         _readSc?.Dispose();
         _pengdows?.Dispose();
-        _queue?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _single?.Dispose();
         _pinned?.Dispose();
         _database?.Dispose();
@@ -110,6 +106,13 @@ public class SqliteFileWriterBenchmarks : IDisposable
         return affected;
     }
 
+    // Dapper's connection per command: each command opens its own connection and closes it when it completes.
+    private async Task<T> OnOwnConnectionAsync<T>(Func<SqliteConnection, Task<T>> command)
+    {
+        await using var connection = await SqliteFileDatabase.OpenWithSessionAsync(_dapperConnectionString);
+        return await command(connection);
+    }
+
     [Benchmark, BenchmarkCategory("Write")]
     public async Task<int> Write_DapperPinnedWriter()
     {
@@ -119,27 +122,13 @@ public class SqliteFileWriterBenchmarks : IDisposable
             await _pinned.Gate.WaitAsync();
             try
             {
-                affected += await _pinned.Connection.ExecuteAsync(UpdateSql, new { v = i, id = RowFor(i) });
+                affected += await OnOwnConnectionAsync(connection =>
+                    connection.ExecuteAsync(UpdateSql, new { v = i, id = RowFor(i) }));
             }
             finally
             {
                 _pinned.Gate.Release();
             }
-        }
-
-        return affected;
-    }
-
-    [Benchmark, BenchmarkCategory("Write")]
-    public async Task<int> Write_DapperWriterQueue()
-    {
-        var affected = 0;
-        for (var i = 0; i < RecordCount; i++)
-        {
-            var value = i;
-            var id = RowFor(i);
-            affected += await _queue.EnqueueAsync(connection =>
-                connection.ExecuteAsync(UpdateSql, new { v = value, id }));
         }
 
         return affected;
@@ -183,7 +172,8 @@ public class SqliteFileWriterBenchmarks : IDisposable
             await _single.Gate.WaitAsync();
             try
             {
-                value = await _single.Connection.ExecuteScalarAsync<int>(ReadSql, new { id = RowFor(i) });
+                value = await OnOwnConnectionAsync(connection =>
+                    connection.ExecuteScalarAsync<int>(ReadSql, new { id = RowFor(i) }));
             }
             finally
             {

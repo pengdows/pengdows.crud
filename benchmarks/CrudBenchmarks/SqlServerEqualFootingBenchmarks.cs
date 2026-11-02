@@ -55,6 +55,7 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
     private ISqlContainer _filteredQuerySc = null!;
     private ISqlContainer _updateSc = null!;
     private ISqlContainer _deleteSc = null!;
+    private ISqlContainer _createSc = null!;
     private ISqlContainer _aggregateSc = null!;
 
     // The fixed (non-varying) column values baked into _updateSc's BenchEntity below — reused by
@@ -65,7 +66,7 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
     private const bool UpdateFixedIsActive = true;
     private string _updateFixedCreatedAt = null!;
 
-    [Params(1, 10, 100)] public int RecordCount { get; set; }
+    [Params(1, 10, 100, 1000, 10000)] public int RecordCount { get; set; }
 
     // ========================================================================
     // SETUP / TEARDOWN
@@ -206,6 +207,14 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
 
         // Delete — BuildDelete; loop sets SetParameterValue("k0", id)
         _deleteSc = _gateway.BuildDelete(0);
+        _createSc = _gateway.BuildCreate(new BenchEntity
+        {
+            Name = "template",
+            Age = 25,
+            Salary = 50000.0,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow.ToString("O")
+        });
 
         // Aggregate — no variable params; same container reused each iteration
         // BIT column comparison: is_active = 1
@@ -377,6 +386,7 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
         _filteredQuerySc?.Dispose();
         _updateSc?.Dispose();
         _deleteSc?.Dispose();
+        _createSc?.Dispose();
         _aggregateSc?.Dispose();
 
         if (_pengdowsContext != null)
@@ -428,16 +438,13 @@ public class SqlServerEqualFootingBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            var entity = new BenchEntity
-            {
-                Name = $"Created {i}",
-                Age = 25,
-                Salary = 50000.0,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow.ToString("O")
-            };
-            await using var sc = _gateway.BuildCreate(entity);
-            count += await sc.ExecuteNonQueryAsync();
+            // The INSERT is built once in GlobalSetup, as Dapper's SQL is: only the parameter values are set per row.
+            _createSc.SetParameterValue("i0", $"Created {i}");
+            _createSc.SetParameterValue("i1", 25);
+            _createSc.SetParameterValue("i2", 50000.0);
+            _createSc.SetParameterValue("i3", true);
+            _createSc.SetParameterValue("i4", DateTime.UtcNow.ToString("O"));
+            count += await _createSc.ExecuteNonQueryAsync();
         }
 
         return count;

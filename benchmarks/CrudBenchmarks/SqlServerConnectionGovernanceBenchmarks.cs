@@ -31,7 +31,7 @@ namespace CrudBenchmarks;
 public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
 {
     private const string FrameworkDapper = "Dapper";
-    private const string FrameworkStormGate = "StormGate";
+    private const string FrameworkStormGate = "PengdowsStormGate";
     private const string FrameworkEntityFramework = "EntityFramework";
     private const string FrameworkPengdows = "Pengdows";
     private const string ScenarioUncontrolled = "Uncontrolled";
@@ -58,10 +58,13 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
     private DbContextOptions<GovEfDbContext> _efOptions = null!;
     private DatabaseContext _pengdowsContext = null!;    // PoolGovernor only — NO StormGate
     private TableGateway<GovSqlEntity, int> _pengdowsGateway = null!;
+    private PrebuiltContainerPool _pengdowsPool = null!;
     private DatabaseContext _pengdowsClampedContext = null!;   // same, with ClampPoolsToServerConnectionLimit on
     private TableGateway<GovSqlEntity, int> _pengdowsClampedGateway = null!;
+    private PrebuiltContainerPool _pengdowsClampedPool = null!;
     private DatabaseContext _pengdowsHeadroomContext = null!;  // clamp on, plus ResourceConnectionHeadroom
     private TableGateway<GovSqlEntity, int> _pengdowsHeadroomGateway = null!;
+    private PrebuiltContainerPool _pengdowsHeadroomPool = null!;
 
     private const string QuerySql = "SELECT id, val FROM gov_items WHERE id = 1";
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
@@ -152,6 +155,7 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
         typeMap.Register<GovSqlEntity>();
         _pengdowsContext = new DatabaseContext(PengdowsConfiguration(_connStr), SqlClientFactory.Instance, null, typeMap);
         _pengdowsGateway = new TableGateway<GovSqlEntity, int>(_pengdowsContext);
+        _pengdowsPool = new PrebuiltContainerPool(() => _pengdowsGateway.BuildRetrieve(new[] { 1 }));
 
         // Identical connection string and load; the only difference is the opt-in clamp, which reads
         // the server's real limit (user connections) and sizes the pools to it.
@@ -159,6 +163,7 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             PengdowsConfiguration(_connStr, clamp: true),
             SqlClientFactory.Instance, null, typeMap);
         _pengdowsClampedGateway = new TableGateway<GovSqlEntity, int>(_pengdowsClampedContext);
+        _pengdowsClampedPool = new PrebuiltContainerPool(() => _pengdowsClampedGateway.BuildRetrieve(new[] { 1 }));
 
         // SQL Server has no admin reserve to leave slots free, so the same clamp with a configured
         // headroom shows whether leaving a couple of slots for the context's own idle connections helps.
@@ -166,6 +171,7 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
             PengdowsConfiguration(_connStr, clamp: true, headroom: Headroom),
             SqlClientFactory.Instance, null, typeMap);
         _pengdowsHeadroomGateway = new TableGateway<GovSqlEntity, int>(_pengdowsHeadroomContext);
+        _pengdowsHeadroomPool = new PrebuiltContainerPool(() => _pengdowsHeadroomGateway.BuildRetrieve(new[] { 1 }));
 
         Console.WriteLine($"[GOV-SQLSERVER] server user connections={ServerMaxConnections}, pool max=default (pengdows arms: {PengdowsCeiling} per role), StormGate permits={StormGatePermits}, " +
                           $"parallelism={StormParallelism}, operations={StormOperationsPerRun}");
@@ -246,7 +252,8 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(StormOperationsPerRun, StormParallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = _pengdowsGateway.BuildRetrieve(new[] { 1 });
+            await using var lease = _pengdowsPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsGateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -262,7 +269,8 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(StormOperationsPerRun, StormParallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = _pengdowsClampedGateway.BuildRetrieve(new[] { 1 });
+            await using var lease = _pengdowsClampedPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsClampedGateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -278,7 +286,8 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(StormOperationsPerRun, StormParallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = _pengdowsHeadroomGateway.BuildRetrieve(new[] { 1 });
+            await using var lease = _pengdowsHeadroomPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsHeadroomGateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -309,6 +318,10 @@ public class SqlServerConnectionGovernanceBenchmarks : IAsyncDisposable
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
+        _pengdowsPool?.Dispose();
+        _pengdowsClampedPool?.Dispose();
+        _pengdowsHeadroomPool?.Dispose();
+
         BenchmarkCorrectnessArtifacts.Write(nameof(SqlServerConnectionGovernanceBenchmarks),
             _correctnessIssues
                 .OrderBy(pair => pair.Key.ParameterKey, StringComparer.Ordinal)

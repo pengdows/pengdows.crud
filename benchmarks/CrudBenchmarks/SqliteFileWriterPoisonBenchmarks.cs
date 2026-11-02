@@ -17,9 +17,10 @@ namespace CrudBenchmarks;
 /// <c>BreakConnection()</c> marks the connection Broken; commands, transactions and reopening on it throw). The
 /// question is what the death costs, counted in failed transactions:
 ///
-///   Poison_DapperPinnedWriter                the plain pinned writer has nothing that notices, so it fails the
-///                                            transaction in flight and every one after it.
-///   Poison_DapperPinnedWriterWithReconnect   with reconnect logic it loses the transaction in flight.
+///   Poison_DapperPool                        a connection pool that takes the broken connection back, as a naive pool
+///                                            does: it fails the transaction in flight and every one after it.
+///   Poison_DapperPoolWithEviction            the same pool, dropping the broken connection: it loses the transaction
+///                                            in flight.
 ///   Poison_Pengdows                          pengdows.crud loses the transaction in flight too, because it keeps no
 ///                                            connection between operations: the next one checks out a new one.
 ///
@@ -37,8 +38,8 @@ namespace CrudBenchmarks;
 public class SqliteFileWriterPoisonBenchmarks : IDisposable
 {
     private const string ScenarioPoison = "Poison";
-    private const string FrameworkPinned = "DapperPinnedWriter";
-    private const string FrameworkReconnect = "DapperPinnedWriterWithReconnect";
+    private const string FrameworkPinned = "DapperPool";
+    private const string FrameworkReconnect = "DapperPoolWithEviction";
     private const string FrameworkPengdows = "Pengdows";
     private const string UpdateSql = "UPDATE stress_test SET value = @v WHERE id = @id";
 
@@ -118,46 +119,91 @@ public class SqliteFileWriterPoisonBenchmarks : IDisposable
         return 0;
     }
 
-    [Benchmark, CorrectnessIdentity(FrameworkPinned, ScenarioPoison)]
-    public async Task Poison_DapperPinnedWriter()
+    // A plain connection pool: a transaction takes a connection, and returns it when it finishes, failed or not. A
+    // broken connection is handed back, so the next transaction gets the same dead connection.
+    private sealed class PoolArm : IDisposable
     {
-        Reset();
-        var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        using var writer = new PinnedWriterArm(() => NewConnection(factory));
-        for (var index = 0; index < TransactionCount; index++)
+        private readonly fakeDbFactory _factory;
+        private readonly ConcurrentBag<DbConnection> _free = new();
+        private readonly bool _evictBroken;
+        private readonly List<DbConnection> _all = new();
+
+        public PoolArm(fakeDbFactory factory, bool evictBroken)
         {
-            try
+            _factory = factory;
+            _evictBroken = evictBroken;
+        }
+
+        public DbConnection Rent()
+        {
+            if (_free.TryTake(out var connection))
             {
-                await writer.RunAsync(connection => PinnedTransactionAsync(factory, connection, index));
-                Committed();
+                return connection;
             }
-            catch (Exception ex)
+
+            connection = NewConnection(_factory);
+            connection.Open();
+            lock (_all)
             {
-                Failed(FrameworkPinned, ex);
+                _all.Add(connection);
+            }
+
+            return connection;
+        }
+
+        public void Return(DbConnection connection, bool broken)
+        {
+            if (broken && _evictBroken)
+            {
+                return;
+            }
+
+            _free.Add(connection);
+        }
+
+        public void Dispose()
+        {
+            lock (_all)
+            {
+                foreach (var connection in _all)
+                {
+                    connection.Dispose();
+                }
             }
         }
     }
 
-    [Benchmark, CorrectnessIdentity(FrameworkReconnect, ScenarioPoison)]
-    public async Task Poison_DapperPinnedWriterWithReconnect()
+    private async Task RunPoolArmAsync(string framework, bool evictBroken)
     {
         Reset();
         var factory = new fakeDbFactory(SupportedDatabase.Sqlite);
-        using var writer = new PinnedWriterArm(() => NewConnection(factory));
+        using var pool = new PoolArm(factory, evictBroken);
         for (var index = 0; index < TransactionCount; index++)
         {
+            var connection = pool.Rent();
+            var broken = false;
             try
             {
-                await writer.RunAsync(connection => PinnedTransactionAsync(factory, connection, index));
+                await PinnedTransactionAsync(factory, connection, index);
                 Committed();
             }
             catch (Exception ex)
             {
-                Failed(FrameworkReconnect, ex);
-                writer.Reconnect();
+                broken = true;
+                Failed(framework, ex);
+            }
+            finally
+            {
+                pool.Return(connection, broken);
             }
         }
     }
+
+    [Benchmark, CorrectnessIdentity(FrameworkPinned, ScenarioPoison)]
+    public Task Poison_DapperPool() => RunPoolArmAsync(FrameworkPinned, evictBroken: false);
+
+    [Benchmark, CorrectnessIdentity(FrameworkReconnect, ScenarioPoison)]
+    public Task Poison_DapperPoolWithEviction() => RunPoolArmAsync(FrameworkReconnect, evictBroken: true);
 
     [Benchmark, CorrectnessIdentity(FrameworkPengdows, ScenarioPoison)]
     public async Task Poison_Pengdows()

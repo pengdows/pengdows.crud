@@ -49,6 +49,7 @@ public class SqliteMethodologyBenchmarks
 
     private DatabaseContext _pengdowsContext = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
+    private ISqlContainer _createSc = null!;
     private DbContextOptions<EfBenchContext> _efOptions = null!;
     private PooledDbContextFactory<EfBenchContext> _efPool = null!;
     private ISqlContainer _readSingleSc = null!;
@@ -96,6 +97,8 @@ public class SqliteMethodologyBenchmarks
         typeMap.Register<BenchEntity>();
         _pengdowsContext = new DatabaseContext(ConnStr, SqliteFactory.Instance, typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsContext);
+        // The INSERT is built once here, as Dapper's SQL is; only the parameter values change per row.
+        _createSc = _gateway.BuildCreate(NewEntity(0));
         _readSingleSc = _gateway.BuildRetrieve(new[] { 1 });
 
         _efOptions = new DbContextOptionsBuilder<EfBenchContext>().UseSqlite(ConnStr).Options;
@@ -125,6 +128,7 @@ public class SqliteMethodologyBenchmarks
     {
         DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
         await _readSingleSc.DisposeAsync();
+        _createSc?.Dispose();
         await _pengdowsContext.DisposeAsync();
     }
 
@@ -249,8 +253,13 @@ public class SqliteMethodologyBenchmarks
         var count = 0;
         for (var i = 0; i < Ops; i++)
         {
-            await using var sc = _gateway.BuildCreate(NewEntity(i));
-            count += await sc.ExecuteNonQueryAsync();
+            var entity = NewEntity(i);
+            _createSc.SetParameterValue("i0", entity.Name);
+            _createSc.SetParameterValue("i1", entity.Age);
+            _createSc.SetParameterValue("i2", entity.Salary);
+            _createSc.SetParameterValue("i3", entity.IsActive);
+            _createSc.SetParameterValue("i4", entity.CreatedAt);
+            count += await _createSc.ExecuteNonQueryAsync();
         }
 
         return count;

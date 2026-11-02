@@ -150,7 +150,8 @@ public sealed class PinnedWriterPoisoningTests : IDisposable
     [Fact]
     public async Task Pengdows_ReassertsForeignKeysOnEveryCheckout_EvenWhenThePoolHandsBackThePoisonedConnection()
     {
-        using var context = new DatabaseContext(PooledConnectionString, SqliteFactory.Instance);
+        // Defence against a poisoned pool is paranoid mode's job: normal mode only keeps our own changes from drifting.
+        using var context = new DatabaseContext(new pengdows.crud.configuration.DatabaseContextConfiguration { ConnectionString = PooledConnectionString, SessionSettingsMode = pengdows.crud.enums.SessionSettingsMode.Paranoid }, SqliteFactory.Instance);
 
         await using (var container = context.CreateSqlContainer("PRAGMA foreign_keys = OFF"))
         {

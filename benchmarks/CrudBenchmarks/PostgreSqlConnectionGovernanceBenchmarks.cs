@@ -67,7 +67,7 @@ namespace CrudBenchmarks;
 public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
 {
     private const string FrameworkDapper = "Dapper";
-    private const string FrameworkStormGate = "StormGate";
+    private const string FrameworkStormGate = "PengdowsStormGate";
     private const string FrameworkEntityFramework = "EntityFramework";
     private const string FrameworkPengdows = "Pengdows";
     private const string FrameworkPengdowsClamped = "PengdowsClamped";
@@ -138,20 +138,35 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private DbContextOptions<GovEfDbContext> _efOptions = null!;
     private DatabaseContext _pengdowsContext = null!;    // PoolGovernor only — NO StormGate
     private TableGateway<GovPgEntity, int> _pengdowsGateway = null!;
+    private PrebuiltContainerPool _pengdowsPool = null!;
     private DatabaseContext _pengdowsClampedContext = null!;   // same, with ClampPoolsToServerConnectionLimit on
     private TableGateway<GovPgEntity, int> _pengdowsClampedGateway = null!;
+    private PrebuiltContainerPool _pengdowsClampedPool = null!;
     private DatabaseContext _pengdowsPatientContext = null!;   // clamp on, and StormGate's 30 s wait for a slot
     private TableGateway<GovPgEntity, int> _pengdowsPatientGateway = null!;
+    private PrebuiltContainerPool _pengdowsPatientPool = null!;
     private DatabaseContext _pengdowsGovernedPatientContext = null!;   // ceiling 20, StormGate's 30 s wait, NO clamp
     private TableGateway<GovPgEntity, int> _pengdowsGovernedPatientGateway = null!;
+    private PrebuiltContainerPool _pengdowsGovernedPatientPool = null!;
     private DatabaseContext _pengdowsGoverned11Context = null!;        // the clamp's share by hand: 11 per role, no clamp
     private TableGateway<GovPgEntity, int> _pengdowsGoverned11Gateway = null!;
+    private PrebuiltContainerPool _pengdowsGoverned11Pool = null!;
     private DatabaseContext _pengdowsClampedReadOnlyContext = null!;   // clamp on, writes forbidden, 30 s wait
     private TableGateway<GovPgEntity, int> _pengdowsClampedReadOnlyGateway = null!;
+    private PrebuiltContainerPool _pengdowsClampedReadOnlyPool = null!;
     private DatabaseContext _pengdowsReadOnlyContext = null!;          // writes forbidden, NO clamp, the default 5 s wait
     private TableGateway<GovPgEntity, int> _pengdowsReadOnlyGateway = null!;
+    private PrebuiltContainerPool _pengdowsReadOnlyPool = null!;
 
     private string _querySql = null!;
+
+    // A governed read's container, built once per pool slot. WorkMilliseconds == 0 runs the gateway's retrieve; otherwise the
+    // query with its work step, as the arms always did. Nothing here is built inside a timed operation.
+    private ISqlContainer BuildGovernedRead(TableGateway<GovPgEntity, int> gateway, DatabaseContext context) =>
+        WorkMilliseconds == 0
+            ? gateway.BuildRetrieve(new[] { 1 })
+            : context.CreateSqlContainer(_querySql);
+
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
     private readonly ConcurrentBag<long> _stormGateLatencyTicks = new();
     private readonly ConcurrentBag<long> _efStormGateLatencyTicks = new();
@@ -231,6 +246,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         typeMap.Register<GovPgEntity>();
         _pengdowsContext = new DatabaseContext(PengdowsConfiguration(_connStr), NpgsqlFactory.Instance, null, typeMap);
         _pengdowsGateway = new TableGateway<GovPgEntity, int>(_pengdowsContext);
+        _pengdowsPool = new PrebuiltContainerPool(() => BuildGovernedRead(_pengdowsGateway, _pengdowsContext));
 
         // Identical connection string and load; the only difference is the opt-in clamp, which reads
         // the server's real limit (25, less the superuser reserve) and sizes the pools to it.
@@ -238,17 +254,20 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             PengdowsConfiguration(_connStr, clamp: true),
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsClampedGateway = new TableGateway<GovPgEntity, int>(_pengdowsClampedContext);
+        _pengdowsClampedPool = new PrebuiltContainerPool(() => BuildGovernedRead(_pengdowsClampedGateway, _pengdowsClampedContext));
 
         _pengdowsPatientContext = new DatabaseContext(
             PengdowsConfiguration(_connStr, clamp: true, poolAcquireTimeout: PatientPoolAcquireTimeout),
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsPatientGateway = new TableGateway<GovPgEntity, int>(_pengdowsPatientContext);
+        _pengdowsPatientPool = new PrebuiltContainerPool(() => BuildGovernedRead(_pengdowsPatientGateway, _pengdowsPatientContext));
 
         // The like-for-like arm for StormGate: its 20 permits and its 30 s wait, with nothing else on top.
         _pengdowsGovernedPatientContext = new DatabaseContext(
             PengdowsConfiguration(_connStr, poolAcquireTimeout: PatientPoolAcquireTimeout),
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsGovernedPatientGateway = new TableGateway<GovPgEntity, int>(_pengdowsGovernedPatientContext);
+        _pengdowsGovernedPatientPool = new PrebuiltContainerPool(() => BuildGovernedRead(_pengdowsGovernedPatientGateway, _pengdowsGovernedPatientContext));
 
         // The control: the share the clamp computes, configured by hand with no clamp. If the clamp is only the
         // split, this arm and Pengdows_Clamped fail the same operations.
@@ -256,12 +275,14 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             PengdowsConfiguration(_connStr, reads: ClampedShare, writes: ClampedShare),
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsGoverned11Gateway = new TableGateway<GovPgEntity, int>(_pengdowsGoverned11Context);
+        _pengdowsGoverned11Pool = new PrebuiltContainerPool(() => BuildGovernedRead(_pengdowsGoverned11Gateway, _pengdowsGoverned11Context));
 
         // A context that says it never writes: a pool of 0 forbids writes, so the clamp has nothing to split.
         _pengdowsClampedReadOnlyContext = new DatabaseContext(
             PengdowsConfiguration(_connStr, clamp: true, poolAcquireTimeout: PatientPoolAcquireTimeout, writes: 0),
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsClampedReadOnlyGateway = new TableGateway<GovPgEntity, int>(_pengdowsClampedReadOnlyContext);
+        _pengdowsClampedReadOnlyPool = new PrebuiltContainerPool(() => BuildGovernedRead(_pengdowsClampedReadOnlyGateway, _pengdowsClampedReadOnlyContext));
 
         // Governed with writes forbidden and nothing else changed (no clamp, default wait). The slow-call failures are
         // acquire timeouts, so declaring the context read-only should not change them: slots and wait decide.
@@ -269,6 +290,7 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
             PengdowsConfiguration(_connStr, writes: 0),
             NpgsqlFactory.Instance, null, typeMap);
         _pengdowsReadOnlyGateway = new TableGateway<GovPgEntity, int>(_pengdowsReadOnlyContext);
+        _pengdowsReadOnlyPool = new PrebuiltContainerPool(() => BuildGovernedRead(_pengdowsReadOnlyGateway, _pengdowsReadOnlyContext));
 
         _querySql = QuerySqlFor(WorkMilliseconds);
 
@@ -387,9 +409,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         {
             Interlocked.Increment(ref _attempted);
             var stopwatch = Stopwatch.StartNew();
-            await using var sc = WorkMilliseconds == 0
-                ? _pengdowsGateway.BuildRetrieve(new[] { 1 })
-                : _pengdowsContext.CreateSqlContainer(_querySql);
+            await using var lease = _pengdowsPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsGateway.LoadSingleAsync(sc);
             stopwatch.Stop();
             _pengdowsLatencyTicks.Add(stopwatch.ElapsedTicks);
@@ -410,9 +431,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = WorkMilliseconds == 0
-                ? _pengdowsClampedGateway.BuildRetrieve(new[] { 1 })
-                : _pengdowsClampedContext.CreateSqlContainer(_querySql);
+            await using var lease = _pengdowsClampedPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsClampedGateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -429,9 +449,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = WorkMilliseconds == 0
-                ? _pengdowsPatientGateway.BuildRetrieve(new[] { 1 })
-                : _pengdowsPatientContext.CreateSqlContainer(_querySql);
+            await using var lease = _pengdowsPatientPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsPatientGateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -449,9 +468,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = WorkMilliseconds == 0
-                ? _pengdowsGovernedPatientGateway.BuildRetrieve(new[] { 1 })
-                : _pengdowsGovernedPatientContext.CreateSqlContainer(_querySql);
+            await using var lease = _pengdowsGovernedPatientPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsGovernedPatientGateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -469,9 +487,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = WorkMilliseconds == 0
-                ? _pengdowsGoverned11Gateway.BuildRetrieve(new[] { 1 })
-                : _pengdowsGoverned11Context.CreateSqlContainer(_querySql);
+            await using var lease = _pengdowsGoverned11Pool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsGoverned11Gateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -488,9 +505,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = WorkMilliseconds == 0
-                ? _pengdowsClampedReadOnlyGateway.BuildRetrieve(new[] { 1 })
-                : _pengdowsClampedReadOnlyContext.CreateSqlContainer(_querySql);
+            await using var lease = _pengdowsClampedReadOnlyPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsClampedReadOnlyGateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -507,9 +523,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
         {
             Interlocked.Increment(ref _attempted);
-            await using var sc = WorkMilliseconds == 0
-                ? _pengdowsReadOnlyGateway.BuildRetrieve(new[] { 1 })
-                : _pengdowsReadOnlyContext.CreateSqlContainer(_querySql);
+            await using var lease = _pengdowsReadOnlyPool.Lease();
+            var sc = lease.Container;
             var item = await _pengdowsReadOnlyGateway.LoadSingleAsync(sc);
             if (item == null)
             {
@@ -555,6 +570,14 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     [GlobalCleanup]
     public async Task GlobalCleanup()
     {
+        _pengdowsPool?.Dispose();
+        _pengdowsClampedPool?.Dispose();
+        _pengdowsPatientPool?.Dispose();
+        _pengdowsGovernedPatientPool?.Dispose();
+        _pengdowsGoverned11Pool?.Dispose();
+        _pengdowsClampedReadOnlyPool?.Dispose();
+        _pengdowsReadOnlyPool?.Dispose();
+
         BenchmarkCorrectnessArtifacts.Write(nameof(PostgreSqlConnectionGovernanceBenchmarks),
             _correctnessIssues
                 .OrderBy(pair => pair.Key.ParameterKey, StringComparer.Ordinal)

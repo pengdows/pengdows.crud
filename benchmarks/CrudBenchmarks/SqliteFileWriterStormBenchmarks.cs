@@ -39,7 +39,6 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
     private const string FrameworkDapper = "Dapper";
     private const string FrameworkPinned = "DapperPinnedWriter";
     private const string FrameworkSingle = "DapperSingleConnection";
-    private const string FrameworkQueue = "DapperWriterQueue";
     private const string FrameworkPengdows = "Pengdows";
     private const string FrameworkPengdowsDefaults = "PengdowsDefaults";
     private const string FrameworkPengdowsFairnessOff = "PengdowsFairnessOff";
@@ -57,8 +56,11 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
     private string _dapperConnectionString = null!;
     private PinnedWriterArm _pinned = null!;
     private PinnedWriterArm _single = null!;
-    private WriterQueueArm _queue = null!;
     private DatabaseContext _pengdows = null!;
+    private PrebuiltContainerPool _pengdowsUpdates = null!;
+    private PrebuiltContainerPool _pengdowsReads = null!;
+    private PrebuiltContainerPool _fairnessOffUpdates = null!;
+    private PrebuiltContainerPool _fairnessOffReads = null!;
     private DatabaseContext _pengdowsDefaults = null!;
     private DatabaseContext _pengdowsFairnessOff = null!;
 
@@ -91,7 +93,6 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
         var setup = $"{SqliteFileDatabase.SessionSql} {SqliteFileDatabase.BusyTimeoutSql(BusyTimeoutMs)}";
         _pinned = new PinnedWriterArm(_dapperConnectionString, setup);
         _single = new PinnedWriterArm(_dapperConnectionString, setup);
-        _queue = new WriterQueueArm(_dapperConnectionString, setup);
 
         var typeMap = new TypeMapRegistry();
         // The queue is sized for the storm on purpose: admission control otherwise rejects a 100-writer burst by
@@ -104,6 +105,8 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
             PoolAcquireTimeout = TimeSpan.FromMinutes(5),
             MaxQueuedWrites = Math.Max(StormConcurrency, MixedWriters) + 8
         }, SqliteFactory.Instance, null, typeMap);
+        _pengdowsUpdates = new PrebuiltContainerPool(() => BuildUpdate(_pengdows));
+        _pengdowsReads = new PrebuiltContainerPool(() => BuildRead(_pengdows));
         // SQLITE-008: the same context as above with the writer turnstile off, to see what fairness costs readers on a WAL file.
         _pengdowsFairnessOff = new DatabaseContext(new DatabaseContextConfiguration
         {
@@ -114,6 +117,8 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
             MaxQueuedWrites = Math.Max(StormConcurrency, MixedWriters) + 8,
             EnableSingleWriterFairness = false
         }, SqliteFactory.Instance, null, typeMap);
+        _fairnessOffUpdates = new PrebuiltContainerPool(() => BuildUpdate(_pengdowsFairnessOff));
+        _fairnessOffReads = new PrebuiltContainerPool(() => BuildRead(_pengdowsFairnessOff));
         _pengdowsDefaults = new DatabaseContext(new DatabaseContextConfiguration
         {
             ConnectionString = _database.PengdowsConnectionString(BusyTimeoutMs),
@@ -144,10 +149,13 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
 
         WriteSidecar();
 
+        _pengdowsUpdates?.Dispose();
+        _pengdowsReads?.Dispose();
+        _fairnessOffUpdates?.Dispose();
+        _fairnessOffReads?.Dispose();
         _pengdowsFairnessOff?.Dispose();
         _pengdowsDefaults?.Dispose();
         _pengdows?.Dispose();
-        _queue?.DisposeAsync().AsTask().GetAwaiter().GetResult();
         _single?.Dispose();
         _pinned?.Dispose();
         _database?.Dispose();
@@ -200,6 +208,13 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
     // ================================================================================================
     // STORM: 100 concurrent writers, each one transaction of 50 updates
     // ================================================================================================
+
+    // Dapper's connection per command: each command opens its own connection and closes it when it completes.
+    private async Task<T> OnOwnConnectionAsync<T>(Func<SqliteConnection, Task<T>> command)
+    {
+        await using var connection = await SqliteFileDatabase.OpenWithSessionAsync(_dapperConnectionString);
+        return await command(connection);
+    }
 
     private async Task<int> TransactionOnAsync(DbConnection connection, int worker)
     {
@@ -292,15 +307,7 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
     {
         Begin(FrameworkPinned, mixed: false);
         await RunTogetherAsync(StormConcurrency, worker => TrackTransactionAsync(FrameworkPinned,
-            () => _pinned.RunAsync(connection => TransactionOnAsync(connection, worker))));
-    }
-
-    [Benchmark, CorrectnessIdentity(FrameworkQueue, ScenarioStorm)]
-    public async Task Storm_DapperWriterQueue()
-    {
-        Begin(FrameworkQueue, mixed: false);
-        await RunTogetherAsync(StormConcurrency, worker => TrackTransactionAsync(FrameworkQueue,
-            () => _queue.EnqueueAsync(connection => TransactionOnAsync(connection, worker))));
+            () => OnOwnConnectionAsync(connection => TransactionOnAsync(connection, worker))));
     }
 
     [Benchmark, CorrectnessIdentity(FrameworkPengdows, ScenarioStorm)]
@@ -412,49 +419,74 @@ public class SqliteFileWriterStormBenchmarks : IDisposable
     [Benchmark, CorrectnessIdentity(FrameworkPinned, ScenarioMixed)]
     public Task Mixed_DapperPinnedWriter() =>
         RunMixedAsync(FrameworkPinned,
-            (writer, n) => _pinned.RunAsync(connection => connection.ExecuteAsync(
+            (writer, n) => OnOwnConnectionAsync(connection => connection.ExecuteAsync(
                 UpdateSql, new { v = (writer * 1000) + n, id = RowFor((writer * WritesPerWriter) + n) })),
             PerOperationReadAsync);
 
     [Benchmark, CorrectnessIdentity(FrameworkSingle, ScenarioMixed)]
     public Task Mixed_DapperSingleConnection() =>
         RunMixedAsync(FrameworkSingle,
-            (writer, n) => _single.RunAsync(connection => connection.ExecuteAsync(
+            (writer, n) => OnOwnConnectionAsync(connection => connection.ExecuteAsync(
                 UpdateSql, new { v = (writer * 1000) + n, id = RowFor((writer * WritesPerWriter) + n) })),
-            i => _single.RunAsync(connection => connection.ExecuteScalarAsync<int>(ReadSql, new { id = RowFor(i) })));
-
-    [Benchmark, CorrectnessIdentity(FrameworkQueue, ScenarioMixed)]
-    public Task Mixed_DapperWriterQueue() =>
-        RunMixedAsync(FrameworkQueue,
-            (writer, n) => _queue.EnqueueAsync(connection => connection.ExecuteAsync(
-                UpdateSql, new { v = (writer * 1000) + n, id = RowFor((writer * WritesPerWriter) + n) })),
-            PerOperationReadAsync);
+            i => OnOwnConnectionAsync(connection => connection.ExecuteScalarAsync<int>(ReadSql, new { id = RowFor(i) })));
 
     [Benchmark, CorrectnessIdentity(FrameworkPengdows, ScenarioMixed)]
-    public Task Mixed_Pengdows() => MixedPengdowsAsync(_pengdows, FrameworkPengdows);
+    public Task Mixed_Pengdows() => MixedPengdowsAsync(_pengdowsUpdates, _pengdowsReads, FrameworkPengdows);
 
     [Benchmark, CorrectnessIdentity(FrameworkPengdowsFairnessOff, ScenarioMixed)]
-    public Task Mixed_Pengdows_FairnessOff() => MixedPengdowsAsync(_pengdowsFairnessOff, FrameworkPengdowsFairnessOff);
+    public Task Mixed_Pengdows_FairnessOff() =>
+        MixedPengdowsAsync(_fairnessOffUpdates, _fairnessOffReads, FrameworkPengdowsFairnessOff);
 
-    private Task MixedPengdowsAsync(DatabaseContext context, string framework) =>
+    // The statements are built once per context; each operation rents one, sets its parameter values and returns it, so
+    // no SQL is built inside the timed operation (Dapper's statements are constants).
+    private Task MixedPengdowsAsync(PrebuiltContainerPool updates, PrebuiltContainerPool reads, string framework) =>
         RunMixedAsync(framework,
             async (writer, n) =>
             {
-                await using var container = context.CreateSqlContainer();
-                container.Query.Append("UPDATE stress_test SET value = ");
-                container.Query.Append(container.MakeParameterName("v"));
-                container.Query.Append(" WHERE id = ");
-                container.Query.Append(container.MakeParameterName("id"));
-                container.AddParameterWithValue("v", DbType.Int32, (writer * 1000) + n);
-                container.AddParameterWithValue("id", DbType.Int32, RowFor((writer * WritesPerWriter) + n));
-                await container.ExecuteNonQueryAsync();
+                var container = updates.Rent();
+                try
+                {
+                    container.SetParameterValue("v", (writer * 1000) + n);
+                    container.SetParameterValue("id", RowFor((writer * WritesPerWriter) + n));
+                    await container.ExecuteNonQueryAsync();
+                }
+                finally
+                {
+                    updates.Return(container);
+                }
             },
             async i =>
             {
-                await using var container = context.CreateSqlContainer();
-                container.Query.Append("SELECT value FROM stress_test WHERE id = ");
-                container.Query.Append(container.MakeParameterName("id"));
-                container.AddParameterWithValue("id", DbType.Int32, RowFor(i));
-                await container.ExecuteScalarRequiredAsync<int>();
+                var container = reads.Rent();
+                try
+                {
+                    container.SetParameterValue("id", RowFor(i));
+                    await container.ExecuteScalarRequiredAsync<int>();
+                }
+                finally
+                {
+                    reads.Return(container);
+                }
             });
+
+    private static ISqlContainer BuildUpdate(DatabaseContext context)
+    {
+        var container = context.CreateSqlContainer();
+        container.Query.Append("UPDATE stress_test SET value = ");
+        container.Query.Append(container.MakeParameterName("v"));
+        container.Query.Append(" WHERE id = ");
+        container.Query.Append(container.MakeParameterName("id"));
+        container.AddParameterWithValue("v", DbType.Int32, 0);
+        container.AddParameterWithValue("id", DbType.Int32, 1);
+        return container;
+    }
+
+    private static ISqlContainer BuildRead(DatabaseContext context)
+    {
+        var container = context.CreateSqlContainer();
+        container.Query.Append("SELECT value FROM stress_test WHERE id = ");
+        container.Query.Append(container.MakeParameterName("id"));
+        container.AddParameterWithValue("id", DbType.Int32, 1);
+        return container;
+    }
 }

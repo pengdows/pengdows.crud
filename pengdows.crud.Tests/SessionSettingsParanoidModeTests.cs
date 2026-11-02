@@ -14,6 +14,13 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public class SessionSettingsParanoidModeTests
 {
+    // The whole SQLite list, in the order it is sent: every item is sent on every checkout.
+    private const string WalList =
+        "PRAGMA foreign_keys = ON;\nPRAGMA query_only = OFF;\nPRAGMA synchronous = NORMAL;\nPRAGMA ignore_check_constraints = OFF;\nPRAGMA locking_mode = NORMAL;\nPRAGMA recursive_triggers = OFF;\nPRAGMA read_uncommitted = OFF;\nPRAGMA busy_timeout = 0;";
+
+    private const string RollbackList =
+        "PRAGMA foreign_keys = ON;\nPRAGMA query_only = OFF;\nPRAGMA ignore_check_constraints = OFF;\nPRAGMA locking_mode = NORMAL;\nPRAGMA recursive_triggers = OFF;\nPRAGMA read_uncommitted = OFF;\nPRAGMA busy_timeout = 0;";
+
     private const string SqliteConnectionString = "Data Source=test;EmulatedProduct=Sqlite";
     private const string MariaDbConnectionString = "Server=localhost;Database=test;EmulatedProduct=MariaDb";
     private const string PostgresConnectionString = "Host=localhost;Database=test;EmulatedProduct=PostgreSql";
@@ -57,7 +64,7 @@ public class SessionSettingsParanoidModeTests
             }
         }
 
-        var expected = "PRAGMA foreign_keys = ON;\nPRAGMA query_only = OFF;\nPRAGMA synchronous = NORMAL;";
+        var expected = WalList;
         Assert.Equal(new[] { expected, expected }, SessionStatements(factory));
     }
 
@@ -77,7 +84,7 @@ public class SessionSettingsParanoidModeTests
             connection.Open();
         }
 
-        Assert.Equal(new[] { "PRAGMA foreign_keys = ON;\nPRAGMA query_only = OFF;" }, SessionStatements(factory));
+        Assert.Equal(new[] { RollbackList }, SessionStatements(factory));
     }
 
     [Fact]
@@ -183,6 +190,16 @@ public class SessionSettingsParanoidModeTests
         return Regex.Match(statement, "sql_mode = '([^']*)'").Groups[1].Value;
     }
 
+
+    // The list items beyond the original four: compliant unless a test names otherwise.
+    private static string? CompliantNewProbes(string commandText) =>
+        commandText.Contains("ignore_check_constraints", System.StringComparison.OrdinalIgnoreCase) ? "0"
+        : commandText.Contains("locking_mode", System.StringComparison.OrdinalIgnoreCase) ? "normal"
+        : commandText.Contains("recursive_triggers", System.StringComparison.OrdinalIgnoreCase) ? "0"
+        : commandText.Contains("read_uncommitted", System.StringComparison.OrdinalIgnoreCase) ? "0"
+        : commandText.Contains("busy_timeout", System.StringComparison.OrdinalIgnoreCase) ? "0"
+        : null;
+
     private static fakeDbFactory FactoryReportingPragmas(string foreignKeys, string queryOnly, string journalMode,
         string synchronous)
     {
@@ -196,7 +213,7 @@ public class SessionSettingsParanoidModeTests
                     : commandText.Contains("query_only", System.StringComparison.OrdinalIgnoreCase) ? queryOnly
                     : commandText.Contains("journal_mode", System.StringComparison.OrdinalIgnoreCase) ? journalMode
                     : commandText.Contains("synchronous", System.StringComparison.OrdinalIgnoreCase) ? synchronous
-                    : null,
+                    : CompliantNewProbes(commandText),
             });
         }
 

@@ -41,6 +41,8 @@ public class DuckDbReadBenchmarks : IDisposable
     // pengdows.crud uses Standard mode (connection-per-op — same as EqualFootingCrudBenchmarks)
     private DatabaseContext _pengdowsCtx = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
+    private ISqlContainer _readSingleSc = null!;
+    private ISqlContainer _readListSc = null!;
     private TypeMapRegistry _typeMap = null!;
 
     private bool _originalMatchNamesWithUnderscores;
@@ -93,12 +95,27 @@ public class DuckDbReadBenchmarks : IDisposable
         };
         _pengdowsCtx = new DatabaseContext(cfg, DuckDBClientFactory.Instance, null, _typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsCtx);
+
+        // The SELECTs are built once here, as Dapper's are; only the parameter value changes per call.
+        _readSingleSc = _pengdowsCtx.CreateSqlContainer();
+        _readSingleSc.Query.Append("SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
+        _readSingleSc.Query.Append(_readSingleSc.MakeParameterName("Id"));
+        _readSingleSc.AddParameterWithValue("Id", DbType.Int32, 1);
+
+        _readListSc = _pengdowsCtx.CreateSqlContainer();
+        // DuckDB does not support named parameters in LIMIT; inline the value directly.
+        _readListSc.Query.Append("SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
+        _readListSc.Query.Append(_readListSc.MakeParameterName("Age"));
+        _readListSc.Query.Append($" LIMIT {RecordCount}");
+        _readListSc.AddParameterWithValue("Age", DbType.Int32, 30);
     }
 
     [GlobalCleanup]
     public void GlobalCleanup()
     {
         DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
+        _readSingleSc?.Dispose();
+        _readListSc?.Dispose();
         _pengdowsCtx?.Dispose();
         _dapperConn?.Dispose();
 
@@ -132,12 +149,8 @@ public class DuckDbReadBenchmarks : IDisposable
         BenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            await using var container = _pengdowsCtx.CreateSqlContainer();
-            container.Query.Append(
-                "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = ");
-            container.Query.Append(container.MakeParameterName("Id"));
-            container.AddParameterWithValue("Id", DbType.Int32, (i % SeedRows) + 1);
-            result = await _gateway.LoadSingleAsync(container);
+            _readSingleSc.SetParameterValue("Id", (i % SeedRows) + 1);
+            result = await _gateway.LoadSingleAsync(_readSingleSc);
         }
 
         return result;
@@ -161,14 +174,15 @@ public class DuckDbReadBenchmarks : IDisposable
     }
 
     // One pinned connection reused for every call: the floor for a reader that never pays open/close.
-    // Not comparable with the per-call pengdows arm; it shows what the open/close costs.
     [Benchmark]
     public async Task<BenchEntity?> ReadSingle_DapperPinnedConnection()
     {
         BenchEntity? result = null;
         for (var i = 0; i < RecordCount; i++)
         {
-            result = await _dapperConn.QueryFirstOrDefaultAsync<BenchEntity>(
+            await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
+            await conn.OpenAsync();
+            result = await conn.QueryFirstOrDefaultAsync<BenchEntity>(
                 "SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE id = @Id",
                 new { Id = (i % SeedRows) + 1 });
         }
@@ -183,14 +197,7 @@ public class DuckDbReadBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntity>> ReadList_Pengdows()
     {
-        await using var container = _pengdowsCtx.CreateSqlContainer();
-        // DuckDB does not support named parameters in LIMIT; inline the value directly.
-        container.Query.Append(
-            $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > ");
-        container.Query.Append(container.MakeParameterName("Age"));
-        container.Query.Append($" LIMIT {RecordCount}");
-        container.AddParameterWithValue("Age", DbType.Int32, 30);
-        return await _gateway.LoadListAsync(container);
+        return await _gateway.LoadListAsync(_readListSc);
     }
 
     [Benchmark]
@@ -208,7 +215,9 @@ public class DuckDbReadBenchmarks : IDisposable
     [Benchmark]
     public async Task<List<BenchEntity>> ReadList_DapperPinnedConnection()
     {
-        var rows = await _dapperConn.QueryAsync<BenchEntity>(
+        await using var conn = new DuckDBConnection($"Data Source={_dbFile}");
+        await conn.OpenAsync();
+        var rows = await conn.QueryAsync<BenchEntity>(
             // DuckDB does not support named parameters in LIMIT; inline the value directly.
             $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > @Age LIMIT {RecordCount}",
             new { Age = 30 });

@@ -71,6 +71,7 @@ public class PostgreSqlMethodologyBenchmarks
     private bool _originalMatchNamesWithUnderscores;
     private DatabaseContext _pengdowsContext = null!;
     private TableGateway<BenchEntity, int> _gateway = null!;
+    private ISqlContainer _createSc = null!;
     private DbContextOptions<EfPgBenchContext> _efOptions = null!;
     private PooledDbContextFactory<EfPgBenchContext> _efPool = null!;
     private pengdows.crud.ISqlContainer _readSingleSc = null!;
@@ -167,6 +168,8 @@ public class PostgreSqlMethodologyBenchmarks
         typeMap.Register<BenchEntity>();
         _pengdowsContext = new DatabaseContext(_connStr, NpgsqlFactory.Instance, typeMap);
         _gateway = new TableGateway<BenchEntity, int>(_pengdowsContext);
+        // The INSERT is built once here, as Dapper's SQL is; only the parameter values change per row.
+        _createSc = _gateway.BuildCreate(NewEntity(0));
 
         _efOptions = new DbContextOptionsBuilder<EfPgBenchContext>().UseNpgsql(equalConnStr).Options;
         _efPool = new PooledDbContextFactory<EfPgBenchContext>(_efOptions);
@@ -224,6 +227,7 @@ public class PostgreSqlMethodologyBenchmarks
         finally
         {
             DefaultTypeMap.MatchNamesWithUnderscores = _originalMatchNamesWithUnderscores;
+            _createSc?.Dispose();
             await _pengdowsContext.DisposeAsync();
             await _dapperDataSource.DisposeAsync();
             await _container.DisposeAsync();
@@ -434,8 +438,13 @@ public class PostgreSqlMethodologyBenchmarks
         var count = 0;
         for (var i = 0; i < Ops; i++)
         {
-            await using var sc = _gateway.BuildCreate(NewEntity(i));
-            count += await sc.ExecuteNonQueryAsync();
+            var entity = NewEntity(i);
+            _createSc.SetParameterValue("i0", entity.Name);
+            _createSc.SetParameterValue("i1", entity.Age);
+            _createSc.SetParameterValue("i2", entity.Salary);
+            _createSc.SetParameterValue("i3", entity.IsActive);
+            _createSc.SetParameterValue("i4", entity.CreatedAt);
+            count += await _createSc.ExecuteNonQueryAsync();
         }
 
         return count;

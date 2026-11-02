@@ -29,8 +29,8 @@ public class SqlServerConnectionGovernanceBenchmarkShapeTests
         Assert.Contains(("Pengdows", "Governed"), ids);
         Assert.Contains(("Dapper", "Uncontrolled"), ids);
         Assert.Contains(("EntityFramework", "Uncontrolled"), ids);
-        Assert.Contains(("StormGate", "Governed"), ids);
-        Assert.Contains(("StormGate", "GovernedEf"), ids);
+        Assert.Contains(("PengdowsStormGate", "Governed"), ids);
+        Assert.Contains(("PengdowsStormGate", "GovernedEf"), ids);
     }
 
     // SQL Server's default is 32,767 user connections, far above any pool, so nothing can fail and a

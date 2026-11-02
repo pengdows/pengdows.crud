@@ -27,9 +27,8 @@ namespace CrudBenchmarks;
 /// The pengdows context runs in SingleWriter mode (governor + write turnstile). The plain *_Dapper arms are
 /// ungoverned: a fresh connection per operation and no write coordination, which is what most Dapper code does
 /// and which fails under concurrent writers. The *_DapperPinnedWriter arms are the hand-rolled equivalent of
-/// SingleWriter (one pinned writer connection behind a gate, reads on their own connections). The
-/// *_DapperSingleConnection arms are the other common pattern: reads go through that same one connection and
-/// gate too (its writes are the *_DapperPinnedWriter arms). Retry-on-exception is not a writer design and is
+/// SingleWriter: a gate so only one write runs at a time, with each command on its own connection (a connection
+/// per command, as the plain arms have). The *_DapperSingleConnection arms are that same gate on the reads. Retry-on-exception is not a writer design and is
 /// not benchmarked.
 ///
 /// pengdows.crud side uses the full TableGateway API:
@@ -54,9 +53,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
     private const string PragmaConnStr = ConnStr + ";Foreign Keys=True";
     private const int SeedRows = 1000;
 
-    // The hand-rolled equivalent of SingleWriter for the *_DapperPinnedWriter arms: one long-lived writer
-    // connection, with a gate so only one write runs at a time. Dapper has nothing like this built in.
-    private SqliteConnection _dapperWriter = null!;
+    // The hand-rolled equivalent of SingleWriter for the *_DapperPinnedWriter arms: a gate so only one write runs at a
+    // time. Each command still opens its own connection. Dapper has nothing like this built in.
     private readonly SemaphoreSlim _dapperWriteGate = new(1, 1);
 
     // pengdows.crud
@@ -86,6 +84,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
     private ISqlContainer _updateSc = null!;
     private ISqlContainer _deleteInsertSc = null!;
     private ISqlContainer _deleteSc = null!;
+    private ISqlContainer _createSc = null!;
     private ISqlContainer _aggregateSc = null!;
 
     // The fixed (non-varying) column values baked into _updateSc's BenchEntity below — reused by
@@ -98,7 +97,7 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
     private bool _originalMatchNamesWithUnderscores;
 
-    [Params(1, 100)] public int RecordCount { get; set; }
+    [Params(1, 10, 100, 1000, 10000)] public int RecordCount { get; set; }
 
     // ========================================================================
     // SETUP / TEARDOWN
@@ -109,9 +108,6 @@ public class EqualFootingCrudBenchmarks : IDisposable
     {
         _originalMatchNamesWithUnderscores = DefaultTypeMap.MatchNamesWithUnderscores;
         DefaultTypeMap.MatchNamesWithUnderscores = true;
-
-        _dapperWriter = new SqliteConnection(PragmaConnStr);
-        _dapperWriter.Open();
 
         // Temporary setup connection. The pengdows.crud context installs its own shared-memory
         // read sentinel; no benchmark-owned sentinel is needed.
@@ -239,6 +235,14 @@ public class EqualFootingCrudBenchmarks : IDisposable
 
         // Delete — BuildDelete; loop sets SetParameterValue("k0", id)
         _deleteSc = _gateway.BuildDelete(0);
+        _createSc = _gateway.BuildCreate(new BenchEntity
+        {
+            Name = "template",
+            Age = 25,
+            Salary = 50000.0,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow.ToString("O")
+        });
 
         // Aggregate — no variable params; same container reused each iteration
         _aggregateSc = _pengdowsContext.CreateSqlContainer(
@@ -267,9 +271,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
         _updateSc?.Dispose();
         _deleteInsertSc?.Dispose();
         _deleteSc?.Dispose();
+        _createSc?.Dispose();
         _aggregateSc?.Dispose();
         _pengdowsContext?.Dispose();
-        _dapperWriter?.Dispose();
     }
 
     public void Dispose()
@@ -478,16 +482,13 @@ public class EqualFootingCrudBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            var entity = new BenchEntity
-            {
-                Name = $"Created {i}",
-                Age = 25,
-                Salary = 50000.0,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow.ToString("O")
-            };
-            await using var sc = _gateway.BuildCreate(entity);
-            count += await sc.ExecuteNonQueryAsync();
+            // The INSERT is built once in GlobalSetup, as Dapper's SQL is: only the parameter values are set per row.
+            _createSc.SetParameterValue("i0", $"Created {i}");
+            _createSc.SetParameterValue("i1", 25);
+            _createSc.SetParameterValue("i2", 50000.0);
+            _createSc.SetParameterValue("i3", true);
+            _createSc.SetParameterValue("i4", DateTime.UtcNow.ToString("O"));
+            count += await _createSc.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -1086,6 +1087,14 @@ public class EqualFootingCrudBenchmarks : IDisposable
     // with the *_Pengdows arms; the plain *_Dapper arms are the ungoverned baseline.
     // ========================================================================
 
+    // Dapper's connection per command: each command opens its own connection and closes it when it completes.
+    private static async Task<SqliteConnection> OpenPerCommandAsync()
+    {
+        var connection = new SqliteConnection(PragmaConnStr);
+        await connection.OpenAsync();
+        return connection;
+    }
+
     [Benchmark]
     public async Task<int> Create_DapperPinnedWriter()
     {
@@ -1097,7 +1106,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                count += await _dapperWriter.ExecuteAsync(sql, new
+                await using var connection = await OpenPerCommandAsync();
+                count += await connection.ExecuteAsync(sql, new
                 {
                     Name = $"Created {i}",
                     Age = 25,
@@ -1124,7 +1134,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                count += await _dapperWriter.ExecuteAsync(UpdateSql, new
+                await using var connection = await OpenPerCommandAsync();
+                count += await connection.ExecuteAsync(UpdateSql, new
                 {
                     Name = UpdateFixedName,
                     Age = UpdateFixedAge,
@@ -1153,8 +1164,9 @@ public class EqualFootingCrudBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                await using var tx = await _dapperWriter.BeginTransactionAsync();
-                count += await _dapperWriter.ExecuteAsync(deleteSql, new { Id = (i % SeedRows) + 1 }, tx);
+                await using var connection = await OpenPerCommandAsync();
+                await using var tx = await connection.BeginTransactionAsync();
+                count += await connection.ExecuteAsync(deleteSql, new { Id = (i % SeedRows) + 1 }, tx);
                 await tx.RollbackAsync();
             }
             finally
@@ -1180,7 +1192,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                await _dapperWriter.ExecuteAsync(insertSql, new
+                await using var insertConnection = await OpenPerCommandAsync();
+                await insertConnection.ExecuteAsync(insertSql, new
                 {
                     Id = id,
                     Name = "ToDelete",
@@ -1198,7 +1211,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                count += await _dapperWriter.ExecuteAsync(deleteSql, new { Id = id });
+                await using var deleteConnection = await OpenPerCommandAsync();
+                count += await deleteConnection.ExecuteAsync(deleteSql, new { Id = id });
             }
             finally
             {
@@ -1210,10 +1224,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
     }
 
     // ========================================================================
-    // SINGLE-CONNECTION DAPPER ARMS (reads)
-    // The other common pattern: one connection and one lock, and *everything* (reads too) goes through
-    // them. Its write arms are the *_DapperPinnedWriter ones above (there is only the one connection), so
-    // only the reads are added here.
+    // GATED DAPPER ARMS (reads)
+    // The same gate as the *_DapperPinnedWriter arms, applied to reads too; each read opens its own connection.
     // ========================================================================
 
     [Benchmark]
@@ -1227,7 +1239,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                result = await _dapperWriter.QueryFirstOrDefaultAsync<DapperBenchEntity>(
+                await using var connection = await OpenPerCommandAsync();
+                result = await connection.QueryFirstOrDefaultAsync<DapperBenchEntity>(
                     sql, new { Id = (i % SeedRows) + 1 });
             }
             finally
@@ -1247,7 +1260,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
         await _dapperWriteGate.WaitAsync();
         try
         {
-            var rows = await _dapperWriter.QueryAsync<DapperBenchEntity>(
+            await using var connection = await OpenPerCommandAsync();
+            var rows = await connection.QueryAsync<DapperBenchEntity>(
                 sql, new { Age = 30, Limit = RecordCount });
             return rows.ToList();
         }
@@ -1265,7 +1279,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
         await _dapperWriteGate.WaitAsync();
         try
         {
-            var rows = await _dapperWriter.QueryAsync<DapperBenchEntity>(
+            await using var connection = await OpenPerCommandAsync();
+            var rows = await connection.QueryAsync<DapperBenchEntity>(
                 sql, new { IsActive = true, MinAge = 25, MaxAge = 45, Limit = RecordCount });
             return rows.ToList();
         }
@@ -1284,7 +1299,8 @@ public class EqualFootingCrudBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                result = await _dapperWriter.ExecuteScalarAsync<double>(
+                await using var connection = await OpenPerCommandAsync();
+                result = await connection.ExecuteScalarAsync<double>(
                     "SELECT AVG(salary) FROM benchmark WHERE is_active = 1");
             }
             finally

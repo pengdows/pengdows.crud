@@ -30,9 +30,8 @@ namespace CrudBenchmarks;
 ///
 /// The pengdows context here runs in Standard mode (DuckDB honors it explicitly), so it has the pool governor
 /// but no single-writer serialization. The plain *_Dapper arms are ungoverned (fresh connection per operation).
-/// The *_DapperPinnedWriter arms are the hand-rolled single writer: one pinned writer connection behind a gate,
-/// reads on their own connections. The *_DapperSingleConnection arms put reads through that same connection and
-/// gate too. The *_PengdowsSingleWriter arms run pengdows in DbMode.SingleWriter, which is what Best selects for
+/// The *_DapperPinnedWriter arms are the hand-rolled single writer: a gate so only one write runs at a time, with
+/// each command on its own connection. The *_DapperSingleConnection arms put reads behind that same gate. The *_PengdowsSingleWriter arms run pengdows in DbMode.SingleWriter, which is what Best selects for
 /// a DuckDB file. Retry-on-exception is not a writer design and is not benchmarked.
 ///
 /// pengdows.crud side uses the full TableGateway API:
@@ -48,9 +47,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
 
     private string _dbFile = null!;
 
-    // The hand-rolled equivalent of SingleWriter for the *_DapperPinnedWriter arms: one long-lived writer
-    // connection, with a gate so only one write runs at a time. Dapper has nothing like this built in.
-    private DuckDBConnection _dapperWriter = null!;
+    // The hand-rolled equivalent of SingleWriter for the *_DapperPinnedWriter arms: a gate so only one write runs at a
+    // time. Each command still opens its own connection. Dapper has nothing like this built in.
     private readonly SemaphoreSlim _dapperWriteGate = new(1, 1);
 
     // pengdows.crud — Standard mode (connection-per-op)
@@ -70,6 +68,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     private ISqlContainer _filteredQuerySc = null!;
     private ISqlContainer _updateSc = null!;
     private ISqlContainer _deleteSc = null!;
+    private ISqlContainer _createSc = null!;
+    private ISqlContainer _deleteInsertSc = null!;
     private ISqlContainer _aggregateSc = null!;
 
     // The fixed (non-varying) column values baked into _updateSc's DuckBenchEntity below —
@@ -100,6 +100,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     private ISqlContainer _filteredQueryScWriter = null!;
     private ISqlContainer _updateScWriter = null!;
     private ISqlContainer _deleteScWriter = null!;
+    private ISqlContainer _createScWriter = null!;
+    private ISqlContainer _deleteInsertScWriter = null!;
     private ISqlContainer _aggregateScWriter = null!;
 
     [Params(1, 100)] public int RecordCount { get; set; }
@@ -143,8 +145,6 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
                 string.Join(",", rows));
         }
 
-        _dapperWriter = new DuckDBConnection($"Data Source={_dbFile}");
-        _dapperWriter.Open();
 
         _typeMap = new TypeMapRegistry();
         _typeMap.Register<DuckBenchEntity>();
@@ -215,6 +215,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         });
 
         _deleteSc = _gateway.BuildDelete(0);
+        _createSc = _gateway.BuildCreate(InsertTemplate());
+        _deleteInsertSc = _gateway.BuildCreate(InsertTemplate());
 
         _aggregateSc = _pengdowsCtx.CreateSqlContainer(
             "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
@@ -260,6 +262,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         });
 
         _deleteScWriter = _writerGateway.BuildDelete(0);
+        _createScWriter = _writerGateway.BuildCreate(InsertTemplate());
+        _deleteInsertScWriter = _writerGateway.BuildCreate(InsertTemplate());
 
         _aggregateScWriter = _pengdowsWriterCtx.CreateSqlContainer(
             "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
@@ -285,6 +289,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         _filteredQuerySc?.Dispose();
         _updateSc?.Dispose();
         _deleteSc?.Dispose();
+        _createSc?.Dispose();
+        _deleteInsertSc?.Dispose();
         _aggregateSc?.Dispose();
 
         _readSingleScWriter?.Dispose();
@@ -292,12 +298,13 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         _filteredQueryScWriter?.Dispose();
         _updateScWriter?.Dispose();
         _deleteScWriter?.Dispose();
+        _createScWriter?.Dispose();
+        _deleteInsertScWriter?.Dispose();
         _aggregateScWriter?.Dispose();
 
         _pengdowsCtx?.Dispose();
         _pengdowsSingleCtx?.Dispose();
         _pengdowsWriterCtx?.Dispose();
-        _dapperWriter?.Dispose();
 
         foreach (var f in new[] { _dbFile, _dbFile + ".wal" })
         {
@@ -321,6 +328,28 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
     // CREATE BENCHMARKS
     // ========================================================================
 
+    private static DuckBenchEntity InsertTemplate() => new()
+    {
+        Id = 0,
+        Name = "template",
+        Age = 25,
+        Salary = 50000.0,
+        IsActive = true,
+        CreatedAt = DateTime.UtcNow,
+    };
+
+    // The INSERT is built once in setup, as Dapper's SQL is; only these parameter values change per row.
+    private static void SetInsertValues(ISqlContainer sc, int id, string name, int age, double salary,
+        bool isActive, DateTime createdAt)
+    {
+        sc.SetParameterValue("i0", id);
+        sc.SetParameterValue("i1", name);
+        sc.SetParameterValue("i2", age);
+        sc.SetParameterValue("i3", salary);
+        sc.SetParameterValue("i4", isActive);
+        sc.SetParameterValue("i5", createdAt);
+    }
+
     [Benchmark]
     public async Task<int> Create_Pengdows()
     {
@@ -328,17 +357,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _createIdSeed);
-            var entity = new DuckBenchEntity
-            {
-                Id = id,
-                Name = $"Created {id}",
-                Age = 25,
-                Salary = 50000.0,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-            await using var sc = _gateway.BuildCreate(entity);
-            count += await sc.ExecuteNonQueryAsync();
+            SetInsertValues(_createSc, id, $"Created {id}", 25, 50000.0, true, DateTime.UtcNow);
+            count += await _createSc.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -510,17 +530,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
-            var entity = new DuckBenchEntity
-            {
-                Id = id,
-                Name = "ToDelete",
-                Age = 99,
-                Salary = 1.0,
-                IsActive = false,
-                CreatedAt = DateTime.UtcNow
-            };
-            await using var ins = _gateway.BuildCreate(entity);
-            await ins.ExecuteNonQueryAsync();
+            SetInsertValues(_deleteInsertSc, id, "ToDelete", 99, 1.0, false, DateTime.UtcNow);
+            await _deleteInsertSc.ExecuteNonQueryAsync();
 
             _deleteSc.SetParameterValue("k0", id);
             count += await _deleteSc.ExecuteNonQueryAsync();
@@ -565,9 +576,17 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
 
     // ========================================================================
     // PINNED-WRITER DAPPER ARMS
-    // Every write goes through one long-lived writer connection, one at a time (_dapperWriteGate).
+    // Every write goes through the gate, one at a time (_dapperWriteGate); each command opens its own connection.
     // Compare with the *_Pengdows arms; the plain *_Dapper arms are the ungoverned baseline.
     // ========================================================================
+
+    // Dapper's connection per command: each command opens its own connection and closes it when it completes.
+    private async Task<DuckDBConnection> OpenPerCommandAsync()
+    {
+        var connection = new DuckDBConnection($"Data Source={_dbFile}");
+        await connection.OpenAsync();
+        return connection;
+    }
 
     [Benchmark]
     public async Task<int> Create_DapperPinnedWriter()
@@ -581,7 +600,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                count += await _dapperWriter.ExecuteAsync(sql, new
+                await using var connection = await OpenPerCommandAsync();
+                count += await connection.ExecuteAsync(sql, new
                 {
                     Id = id,
                     Name = $"Created {id}",
@@ -609,7 +629,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                count += await _dapperWriter.ExecuteAsync(UpdateSql, new
+                await using var connection = await OpenPerCommandAsync();
+                count += await connection.ExecuteAsync(UpdateSql, new
                 {
                     Name = UpdateFixedName,
                     Age = UpdateFixedAge,
@@ -642,7 +663,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                await _dapperWriter.ExecuteAsync(insertSql, new
+                await using var insertConnection = await OpenPerCommandAsync();
+                await insertConnection.ExecuteAsync(insertSql, new
                 {
                     Id = id,
                     Name = "ToDelete",
@@ -660,7 +682,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                count += await _dapperWriter.ExecuteAsync(deleteSql, new { Id = id });
+                await using var deleteConnection = await OpenPerCommandAsync();
+                count += await deleteConnection.ExecuteAsync(deleteSql, new { Id = id });
             }
             finally
             {
@@ -673,8 +696,7 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
 
     // ========================================================================
     // SINGLE-CONNECTION DAPPER ARMS (reads)
-    // One connection and one lock, and everything (reads too) goes through them. Its write arms are the
-    // *_DapperPinnedWriter ones above (there is only the one connection).
+    // The same gate as the *_DapperPinnedWriter arms, applied to reads too; each read opens its own connection.
     // ========================================================================
 
     [Benchmark]
@@ -688,7 +710,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                result = await _dapperWriter.QueryFirstOrDefaultAsync<DuckBenchEntity>(
+                await using var connection = await OpenPerCommandAsync();
+                result = await connection.QueryFirstOrDefaultAsync<DuckBenchEntity>(
                     sql, new { Id = (i % SeedRows) + 1 });
             }
             finally
@@ -706,7 +729,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         await _dapperWriteGate.WaitAsync();
         try
         {
-            var rows = await _dapperWriter.QueryAsync<DuckBenchEntity>(
+            await using var connection = await OpenPerCommandAsync();
+            var rows = await connection.QueryAsync<DuckBenchEntity>(
                 $"SELECT id, name, age, salary, is_active, created_at FROM benchmark WHERE age > $Age LIMIT {RecordCount}",
                 new { Age = 30 });
             return rows.AsList();
@@ -723,7 +747,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         await _dapperWriteGate.WaitAsync();
         try
         {
-            var rows = await _dapperWriter.QueryAsync<DuckBenchEntity>(
+            await using var connection = await OpenPerCommandAsync();
+            var rows = await connection.QueryAsync<DuckBenchEntity>(
                 $"SELECT id, name, age, salary, is_active, created_at FROM benchmark " +
                 $"WHERE is_active = TRUE AND age >= $MinAge AND age <= $MaxAge LIMIT {RecordCount}",
                 new { MinAge = 25, MaxAge = 45 });
@@ -744,7 +769,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
             await _dapperWriteGate.WaitAsync();
             try
             {
-                result = await _dapperWriter.ExecuteScalarAsync<double>(
+                await using var connection = await OpenPerCommandAsync();
+                result = await connection.ExecuteScalarAsync<double>(
                     "SELECT AVG(salary) FROM benchmark WHERE is_active = TRUE");
             }
             finally
@@ -769,17 +795,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _createIdSeed);
-            var entity = new DuckBenchEntity
-            {
-                Id = id,
-                Name = $"Created {id}",
-                Age = 25,
-                Salary = 50000.0,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow
-            };
-            await using var sc = _writerGateway.BuildCreate(entity);
-            count += await sc.ExecuteNonQueryAsync();
+            SetInsertValues(_createScWriter, id, $"Created {id}", 25, 50000.0, true, DateTime.UtcNow);
+            count += await _createScWriter.ExecuteNonQueryAsync();
         }
 
         return count;
@@ -826,17 +843,8 @@ public class DuckDbEqualFootingBenchmarks : IDisposable
         for (var i = 0; i < RecordCount; i++)
         {
             var id = Interlocked.Increment(ref _deleteIdSeed);
-            var entity = new DuckBenchEntity
-            {
-                Id = id,
-                Name = "ToDelete",
-                Age = 99,
-                Salary = 1.0,
-                IsActive = false,
-                CreatedAt = DateTime.UtcNow
-            };
-            await using var ins = _writerGateway.BuildCreate(entity);
-            await ins.ExecuteNonQueryAsync();
+            SetInsertValues(_deleteInsertScWriter, id, "ToDelete", 99, 1.0, false, DateTime.UtcNow);
+            await _deleteInsertScWriter.ExecuteNonQueryAsync();
 
             _deleteScWriter.SetParameterValue("k0", id);
             count += await _deleteScWriter.ExecuteNonQueryAsync();

@@ -207,6 +207,28 @@ The EF results are intentionally isolated because Skirrels' provider requires EF
 - **IsolationBenchmarks**: Transaction isolation level performance (opt-in)
 - **DatabaseFeatureBenchmarks**: Advanced PostgreSQL features (opt-in)
 
+## Fairness notes for the equal-footing classes
+
+These rules keep the comparisons between pengdows.crud, Dapper and EF Core on equal footing. Read them before
+quoting a ratio.
+
+- **SQL is built outside the timed loop.** Dapper's SQL is a constant, so the pengdows arms build theirs once in
+  `GlobalSetup` and only set parameter values per operation: `ReadSingle`, `ReadList`, `FilteredQuery`, `Aggregate`,
+  `Update`, and `Create` (the insert container). Building SQL inside the timed loop measures the builder, not the data
+  path. Results recorded before this rule was applied to `Create` are not comparable for that row.
+- **The one remaining per-row copy is `DeleteOnly` and the delete-insert cycle.** Each row runs in its own transaction, and a
+  prebuilt container is bound to a transaction with `Clone(tx)`. That copies the statement, it does not rebuild it. Dapper binds
+  the same transaction at execute time, so this arm carries a small cost Dapper does not pay.
+- **EF Core has no compiled write API.** EF Core's compiled queries (`EF.CompileAsyncQuery`) cover reads only. The EF write
+  arms use a constant SQL string through `ExecuteSqlRawAsync`, with no SQL built per row, so they are already like-for-like
+  with Dapper's writes. The EF write arms also create a new `DbContext` per operation, which is how EF is normally used.
+- **Read comparisons with EF Core should use the compiled arm.** `ReadSingle_EntityFramework` is uncompiled LINQ, and it
+  overstates EF Core's read cost against pengdows' prebuilt container. `ReadSingle_EntityFramework_Compiled` is the
+  closest match. Report both, and quote the compiled one when comparing reads.
+- **Per-operation connection lifecycle is the same on both sides.** The plain Dapper arm opens a connection per
+  operation, as the `Standard` pengdows mode does. `*_DapperPinnedWriter` and `*_DapperSingleConnection` arms reuse a
+  connection; they measure what a pinned connection saves, and are not the default comparison.
+
 ## Reading the Dapper arms (SQLite and DuckDB)
 
 Dapper has no single-writer mode, so "the Dapper time" depends on what the application around it does. The
@@ -218,7 +240,6 @@ and libraries:
 | `*_Dapper` | A new connection per operation, no write coordination | The common default; SQLAlchemy 1.4 used it for file SQLite. Under concurrent SQLite writers it queues inside SQLite and the provider's retry loop, and fails when the queue outlasts the command timeout (see `SQLiteWriteContentionBenchmarks`, and "What the cost buys"). DuckDB documents concurrent in-process writers, so there it is a supported pattern |
 | `*_DapperPinnedWriter` | One long-lived writer connection behind a `SemaphoreSlim(1)`; reads stay on per-operation connections | A pinned writer and a lock |
 | `*_DapperSingleConnection` | The same one connection and lock for everything, reads included. Its writes are the `PinnedWriter` arms | One connection and a lock |
-| `*_DapperWriterQueue` | A `Channel` drained by one background task that holds one connection (file-backed classes only) | EntityFrameworkCore.Sqlite.Concurrency, PepperX.SqliteGate |
 
 Retry-on-exception is not benchmarked: it recovers from contention and does not prevent it. The pengdows.crud
 arms are `*_Pengdows` (SQLite: `SingleWriter`; DuckDB: `Standard`) and, on DuckDB, `*_PengdowsSingleWriter`.

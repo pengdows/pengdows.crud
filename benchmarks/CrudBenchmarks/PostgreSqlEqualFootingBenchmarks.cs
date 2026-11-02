@@ -71,6 +71,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
     private ISqlContainer _updateSc = null!;
     private ISqlContainer _deleteInsertSc = null!;
     private ISqlContainer _deleteSc = null!;
+    private ISqlContainer _createSc = null!;
     private ISqlContainer _aggregateSc = null!;
 
     // The fixed (non-varying) column values baked into _updateSc's BenchEntity below — reused by
@@ -235,6 +236,14 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
 
         // Delete — BuildDelete; loop sets SetParameterValue("k0", id)
         _deleteSc = _gateway.BuildDelete(0);
+        _createSc = _gateway.BuildCreate(new BenchEntity
+        {
+            Name = "template",
+            Age = 25,
+            Salary = 50000.0,
+            IsActive = true,
+            CreatedAt = DateTime.UtcNow.ToString("O")
+        });
 
         // Aggregate — no variable params; same container reused each iteration
         _aggregateSc = _pengdowsContext.CreateSqlContainer(
@@ -439,6 +448,7 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         _updateSc?.Dispose();
         _deleteInsertSc?.Dispose();
         _deleteSc?.Dispose();
+        _createSc?.Dispose();
         _aggregateSc?.Dispose();
         _pengdowsContext?.Dispose();
         _dapperDataSource?.Dispose();
@@ -484,16 +494,13 @@ public class PostgreSqlEqualFootingBenchmarks : IDisposable
         var count = 0;
         for (var i = 0; i < RecordCount; i++)
         {
-            var entity = new BenchEntity
-            {
-                Name = $"Created {i}",
-                Age = 25,
-                Salary = 50000.0,
-                IsActive = true,
-                CreatedAt = DateTime.UtcNow.ToString("O")
-            };
-            await using var sc = _gateway.BuildCreate(entity);
-            count += await sc.ExecuteNonQueryAsync();
+            // The INSERT is built once in GlobalSetup, as Dapper's SQL is: only the parameter values are set per row.
+            _createSc.SetParameterValue("i0", $"Created {i}");
+            _createSc.SetParameterValue("i1", 25);
+            _createSc.SetParameterValue("i2", 50000.0);
+            _createSc.SetParameterValue("i3", true);
+            _createSc.SetParameterValue("i4", DateTime.UtcNow.ToString("O"));
+            count += await _createSc.ExecuteNonQueryAsync();
         }
 
         return count;

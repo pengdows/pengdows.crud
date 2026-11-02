@@ -73,8 +73,13 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
 
     private DatabaseContext _pengdowsContext = null!;
     private TableGateway<PoolProtectEntity, int> _pengdowsHelper = null!;
+    private PrebuiltContainerPool _readPool = null!;
+    private ISqlContainer _sequentialRead = null!;
+    private PrebuiltContainerPool _busyPool = null!;
+    private ISqlContainer _sequentialBusy = null!;
     private string _connectionString = null!;
     private DbContextOptions<EfPoolProtectContext> _efOptions = null!;
+    private SqliteConnection _sentinelConnection = null!;
     private readonly ConcurrentDictionary<CorrectnessIssueKey, int> _correctnessIssues = new();
 
     [GlobalSetup]
@@ -90,6 +95,10 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             DefaultTimeout = 1
         };
         _connectionString = builder.ToString();
+
+        // Sentinel connection keeps the in-memory database alive
+        _sentinelConnection = new SqliteConnection(_connectionString);
+        _sentinelConnection.Open();
 
         var typeMap = new TypeMapRegistry();
         typeMap.Register<PoolProtectEntity>();
@@ -119,6 +128,10 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
 
         _pengdowsContext = new DatabaseContext(config, SqliteFactory.Instance, null, typeMap);
         _pengdowsHelper = new TableGateway<PoolProtectEntity, int>(_pengdowsContext);
+        _readPool = new PrebuiltContainerPool(BuildPengdowsReadContainer);
+        _sequentialRead = BuildPengdowsReadContainer();
+        _busyPool = new PrebuiltContainerPool(BuildPengdowsBusyContainer);
+        _sequentialBusy = BuildPengdowsBusyContainer();
 
         _efOptions = new DbContextOptionsBuilder<EfPoolProtectContext>()
             .UseSqlite(_connectionString)
@@ -150,7 +163,12 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             BenchmarkMetricsWriter.Write(nameof(ConnectionPoolProtectionBenchmarks), _pengdowsContext);
         }
 
+        _readPool?.Dispose();
+        _sequentialRead?.Dispose();
+        _busyPool?.Dispose();
+        _sequentialBusy?.Dispose();
         _pengdowsContext?.Dispose();
+        _sentinelConnection?.Dispose();
     }
 
     private async Task CreateSchemaAsync()
@@ -186,15 +204,22 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             var id = i % 100 + 1;
             tasks.Add(Task.Run(async () =>
             {
-                await using var container = _pengdowsContext.CreateSqlContainer();
-                await ApplyBusyTimeoutAsync(container, ExecutionType.Read);
-                var sql = BuildReadSql(param => container.MakeParameterName(param));
-                container.Query.Append(sql);
-                container.AddParameterWithValue("id", DbType.Int32, id);
-                var entity = await _pengdowsHelper.LoadSingleAsync(container);
-                if (entity == null)
+                var container = _readPool.Rent();
+                var busy = _busyPool.Rent();
+                try
                 {
-                    MarkInvalid(ScenarioPoolExhaustion, FrameworkPengdows, "Read returned null");
+                    await busy.ExecuteNonQueryAsync(ExecutionType.Read);
+                    container.SetParameterValue("id", id);
+                    var entity = await _pengdowsHelper.LoadSingleAsync(container);
+                    if (entity == null)
+                    {
+                        MarkInvalid(ScenarioPoolExhaustion, FrameworkPengdows, "Read returned null");
+                    }
+                }
+                finally
+                {
+                    _readPool.Return(container);
+                    _busyPool.Return(busy);
                 }
             }));
         }
@@ -215,7 +240,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                 await using var conn = new SqliteConnection(_connectionString);
                 await conn.OpenAsync();
                 await ApplyBusyTimeoutAsync(conn);
-                var sql = BuildReadSql(param => $"@{param}");
+                var sql = ReadSqlDapper;
                 var entity = await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id });
                 if (entity == null)
                 {
@@ -240,7 +265,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                 await using var context = new EfPoolProtectContext(_efOptions);
                 await context.Database.OpenConnectionAsync();
                 await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
-                var sql = BuildReadSql(param => $"@{param}");
+                var sql = ReadSqlDapper;
                 var entity = await context.Entities
                     .FromSqlRaw(sql, new SqliteParameter("id", id))
                     .AsNoTracking()
@@ -272,13 +297,15 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                     await ApplyBusyTimeoutAsync(setup);
                 }
 
+                await using var update = tx.CreateSqlContainer();
+                update.Query.Append(BuildUpdateSql(param => update.MakeParameterName(param)));
+                update.AddParameterWithValue("value", DbType.Int32, 0);
+                update.AddParameterWithValue("id", DbType.Int32, 1);
                 for (var j = 0; j < WriteStormWritesPerTransaction; j++)
                 {
-                    await using var container = tx.CreateSqlContainer();
-                    container.Query.Append(BuildUpdateSql(param => container.MakeParameterName(param)));
-                    container.AddParameterWithValue("value", DbType.Int32, (i * 1000) + j);
-                    container.AddParameterWithValue("id", DbType.Int32, (j % 100) + 1);
-                    var affected = await container.ExecuteNonQueryAsync();
+                    update.SetParameterValue("value", (i * 1000) + j);
+                    update.SetParameterValue("id", (j % 100) + 1);
+                    var affected = await update.ExecuteNonQueryAsync();
                     if (affected != 1)
                     {
                         MarkInvalid(ScenarioWriteStorm, FrameworkPengdows, $"Expected 1 row affected, got {affected}");
@@ -307,7 +334,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                 await conn.OpenAsync();
                 await ApplyBusyTimeoutAsync(conn);
                 await using var tx = await conn.BeginTransactionAsync();
-                var sql = BuildUpdateSql(param => $"@{param}");
+                var sql = UpdateSqlDapper;
 
                 for (var j = 0; j < WriteStormWritesPerTransaction; j++)
                 {
@@ -342,7 +369,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
                 await context.Database.OpenConnectionAsync();
                 await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
                 await using var tx = await context.Database.BeginTransactionAsync();
-                var sql = BuildUpdateSql(param => $"@{param}");
+                var sql = UpdateSqlDapper;
 
                 for (var j = 0; j < WriteStormWritesPerTransaction; j++)
                 {
@@ -376,12 +403,9 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     {
         for (int i = 0; i < SustainedOps; i++)
         {
-            await using var container = _pengdowsContext.CreateSqlContainer();
-            await ApplyBusyTimeoutAsync(container);
-            var sql = BuildReadSql(param => container.MakeParameterName(param));
-            container.Query.Append(sql);
-            container.AddParameterWithValue("id", DbType.Int32, i % 100 + 1);
-            var entity = await _pengdowsHelper.LoadSingleAsync(container);
+            await _sequentialBusy.ExecuteNonQueryAsync();
+            _sequentialRead.SetParameterValue("id", i % 100 + 1);
+            var entity = await _pengdowsHelper.LoadSingleAsync(_sequentialRead);
             if (entity == null)
             {
                 MarkInvalid(ScenarioSustainedPressure, FrameworkPengdows, "Read returned null");
@@ -397,7 +421,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             await using var conn = new SqliteConnection(_connectionString);
             await conn.OpenAsync();
             await ApplyBusyTimeoutAsync(conn);
-            var sql = BuildReadSql(param => $"@{param}");
+            var sql = ReadSqlDapper;
             var entity = await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id = i % 100 + 1 });
             if (entity == null)
             {
@@ -414,7 +438,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             await using var context = new EfPoolProtectContext(_efOptions);
             await context.Database.OpenConnectionAsync();
             await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
-            var sql = BuildReadSql(param => $"@{param}");
+            var sql = ReadSqlDapper;
             var entity = await context.Entities
                 .FromSqlRaw(sql, new SqliteParameter("id", i % 100 + 1))
                 .AsNoTracking()
@@ -438,12 +462,9 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
         for (int i = 0; i < SustainedOps; i++)
         {
             var sw = Stopwatch.StartNew();
-            await using var container = _pengdowsContext.CreateSqlContainer();
-            await ApplyBusyTimeoutAsync(container);
-            var sql = BuildReadSql(param => container.MakeParameterName(param));
-            container.Query.Append(sql);
-            container.AddParameterWithValue("id", DbType.Int32, i % 100 + 1);
-            var entity = await _pengdowsHelper.LoadSingleAsync(container);
+            await _sequentialBusy.ExecuteNonQueryAsync();
+            _sequentialRead.SetParameterValue("id", i % 100 + 1);
+            var entity = await _pengdowsHelper.LoadSingleAsync(_sequentialRead);
             if (entity == null)
             {
                 MarkInvalid(ScenarioConnectionHoldTime, FrameworkPengdows, "Read returned null");
@@ -466,7 +487,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             await using var conn = new SqliteConnection(_connectionString);
             await conn.OpenAsync();
             await ApplyBusyTimeoutAsync(conn);
-            var sql = BuildReadSql(param => $"@{param}");
+            var sql = ReadSqlDapper;
             var entity = await conn.QueryFirstOrDefaultAsync<PoolProtectEntity>(sql, new { id = i % 100 + 1 });
             if (entity == null)
             {
@@ -490,7 +511,7 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
             await using var context = new EfPoolProtectContext(_efOptions);
             await context.Database.OpenConnectionAsync();
             await ApplyBusyTimeoutAsync(context.Database.GetDbConnection());
-            var sql = BuildReadSql(param => $"@{param}");
+            var sql = ReadSqlDapper;
             var entity = await context.Entities
                 .FromSqlRaw(sql, new SqliteParameter("id", i % 100 + 1))
                 .AsNoTracking()
@@ -520,6 +541,26 @@ public class ConnectionPoolProtectionBenchmarks : IDisposable
     public void Dispose()
     {
         Cleanup();
+    }
+
+    // Dapper and EF run one constant statement, so their SQL is built once here, not per call.
+    private static readonly string ReadSqlDapper = BuildReadSql(param => $"@{param}");
+    private static readonly string UpdateSqlDapper = BuildUpdateSql(param => $"@{param}");
+
+    // ApplyBusyTimeoutAsync clears a container's query, so the pragma gets its own container; the read container keeps its SQL.
+    private ISqlContainer BuildPengdowsBusyContainer()
+    {
+        var container = _pengdowsContext.CreateSqlContainer();
+        container.Query.Append(BusyTimeoutSql);
+        return container;
+    }
+
+    private ISqlContainer BuildPengdowsReadContainer()
+    {
+        var container = _pengdowsContext.CreateSqlContainer();
+        container.Query.Append(BuildReadSql(param => container.MakeParameterName(param)));
+        container.AddParameterWithValue("id", DbType.Int32, 1);
+        return container;
     }
 
     private static string BuildReadSql(Func<string, string> param)

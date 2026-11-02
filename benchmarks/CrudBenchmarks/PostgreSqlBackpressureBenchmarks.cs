@@ -71,6 +71,8 @@ public class PostgreSqlBackpressureBenchmarks : IAsyncDisposable
 
     private NpgsqlDataSource? _dataSource;
     private StormGate? _stormGate;
+    private PrebuiltContainerPool? _workPool;
+    private PrebuiltContainerPool? _probePool;
     private DatabaseContext? _context;
 
     [GlobalSetup]
@@ -126,7 +128,7 @@ public class PostgreSqlBackpressureBenchmarks : IAsyncDisposable
     {
         _dataSource = NpgsqlDataSource.Create(_baseConnectionString);
         _stormGate = new StormGate(_dataSource, Concurrency, AcquireTimeout);
-        return RunScenarioAsync("StormGate_Dapper",
+        return RunScenarioAsync("PengdowsStormGate_Dapper",
             async ct =>
             {
                 await using var conn = await _stormGate.OpenAsync(ct);
@@ -178,16 +180,19 @@ public class PostgreSqlBackpressureBenchmarks : IAsyncDisposable
             EnableMetrics = true
         }, NpgsqlFactory.Instance);
 
+        // The statements are built once per arm and leased per operation, as the Dapper arm's constant SQL is.
+        _workPool = new PrebuiltContainerPool(() => _context.CreateSqlContainer(WorkSql));
+        _probePool = new PrebuiltContainerPool(() => _context.CreateSqlContainer(ProbeSql));
         return RunScenarioAsync(arm,
             async ct =>
             {
-                await using var sc = _context.CreateSqlContainer(WorkSql);
-                await sc.ExecuteScalarOrNullAsync<int>(ExecutionType.Read, CommandType.Text, ct);
+                await using var lease = _workPool.Lease();
+                await lease.Container.ExecuteScalarOrNullAsync<int>(ExecutionType.Read, CommandType.Text, ct);
             },
             async ct =>
             {
-                await using var sc = _context.CreateSqlContainer(ProbeSql);
-                await sc.ExecuteScalarOrNullAsync<int>(ExecutionType.Read, CommandType.Text, ct);
+                await using var lease = _probePool.Lease();
+                await lease.Container.ExecuteScalarOrNullAsync<int>(ExecutionType.Read, CommandType.Text, ct);
             });
     }
 
@@ -198,6 +203,10 @@ public class PostgreSqlBackpressureBenchmarks : IAsyncDisposable
     // the first call holds server connections and turns the second call into a different experiment.
     private async Task ReleaseArmResourcesAsync()
     {
+        _workPool?.Dispose();
+        _workPool = null;
+        _probePool?.Dispose();
+        _probePool = null;
         _context?.Dispose();
         _context = null;
         _stormGate?.Dispose();

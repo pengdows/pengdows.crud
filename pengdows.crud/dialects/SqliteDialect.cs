@@ -239,12 +239,22 @@ internal class SqliteDialect : SqlDialect
     {
         new ManagedSessionSetting("PRAGMA foreign_keys", (value, _) => ValueIs(value, "1"),
             _ => "PRAGMA foreign_keys = ON;"),
-        // Always sent, whatever the captured value: the SQLite pool hands a physical connection back with its pragmas
-        // as the last caller left them, so a query_only a caller set would fail the next write on that connection.
+        // Always sent, whatever the captured value: a query_only a caller left on would fail the next write on that
+        // connection, and the pool hands connections back as they were left.
         new ManagedSessionSetting("PRAGMA query_only", (_, _) => false,
             _ => "PRAGMA query_only = OFF;"),
         new ManagedSessionSetting("PRAGMA synchronous", (value, _) => !_walActive || ValueIs(value, "1"),
             _ => _walActive ? "PRAGMA synchronous = NORMAL;" : string.Empty),
+        new ManagedSessionSetting("PRAGMA ignore_check_constraints", (value, _) => ValueIs(value, "0"),
+            _ => "PRAGMA ignore_check_constraints = OFF;"),
+        new ManagedSessionSetting("PRAGMA locking_mode", (value, _) => ValueIs(value, "normal"),
+            _ => "PRAGMA locking_mode = NORMAL;"),
+        new ManagedSessionSetting("PRAGMA recursive_triggers", (value, _) => ValueIs(value, "0"),
+            _ => "PRAGMA recursive_triggers = OFF;"),
+        new ManagedSessionSetting("PRAGMA read_uncommitted", (value, _) => ValueIs(value, "0"),
+            _ => "PRAGMA read_uncommitted = OFF;"),
+        new ManagedSessionSetting("PRAGMA busy_timeout", (value, _) => ValueIs(value, "0"),
+            _ => "PRAGMA busy_timeout = 0;"),
     };
 
     internal override async Task CaptureSessionDefaultsAsync(ITrackedConnection connection, bool readOnlyPool,

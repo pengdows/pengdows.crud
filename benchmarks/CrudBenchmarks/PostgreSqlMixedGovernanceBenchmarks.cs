@@ -147,7 +147,7 @@ public class PostgreSqlMixedGovernanceBenchmarks : IAsyncDisposable
     public Task Dapper_Uncontrolled() => RunDapperAsync(async () => await _providerDataSource.OpenConnectionAsync(), "DapperUncontrolled");
 
     [Benchmark]
-    public Task Dapper_StormGate() => RunDapperAsync(() => _stormGate.OpenAsync(), "DapperStormGate");
+    public Task Dapper_StormGate() => RunDapperAsync(() => _stormGate.OpenAsync(), "PengdowsStormGate-Dapper");
 
     [Benchmark]
     public Task EF_Uncontrolled() => RunAsync("EFUncontrolled", async (isRead, readSql) =>
@@ -159,30 +159,36 @@ public class PostgreSqlMixedGovernanceBenchmarks : IAsyncDisposable
     // EF on a StormGate-issued connection (UseNpgsql(DbConnection)), as PostgreSqlConnectionGovernanceBenchmarks.EF_StormGate
     // does. EF does not dispose a connection it was handed, so the call owns it.
     [Benchmark]
-    public Task EF_StormGate() => RunAsync("EFStormGate", async (isRead, readSql) =>
+    public Task EF_StormGate() => RunAsync("PengdowsStormGate-EF", async (isRead, readSql) =>
     {
         await using var connection = await _stormGate.OpenAsync();
         await using var ctx = new GovEfDbContext(new DbContextOptionsBuilder<GovEfDbContext>().UseNpgsql(connection).Options);
-        await EfCallAsync(ctx, isRead, readSql, "EFStormGate");
+        await EfCallAsync(ctx, isRead, readSql, "PengdowsStormGate-EF");
     });
 
-    private Task RunPengdowsAsync(DatabaseContext context, TableGateway<GovPgEntity, int> gateway, string arm) =>
-        RunAsync(arm, async (isRead, readSql) =>
+    private async Task RunPengdowsAsync(DatabaseContext context, TableGateway<GovPgEntity, int> gateway, string arm)
+    {
+        // The read statement is fixed for a run (RunAsync derives it from SlowWorkMilliseconds), so each statement is
+        // built once and leased per operation, as Dapper's constant SQL is.
+        using var readPool = new PrebuiltContainerPool(() => context.CreateSqlContainer(QuerySqlFor(SlowWorkMilliseconds)));
+        using var writePool = new PrebuiltContainerPool(() => context.CreateSqlContainer(WriteSql));
+        await RunAsync(arm, async (isRead, readSql) =>
         {
             if (isRead)
             {
-                await using var read = context.CreateSqlContainer(readSql);
-                if (await gateway.LoadSingleAsync(read) == null)
+                await using var read = readPool.Lease();
+                if (await gateway.LoadSingleAsync(read.Container) == null)
                 {
                     Fail(arm, "Query returned null");
                 }
             }
             else
             {
-                await using var write = context.CreateSqlContainer(WriteSql);
-                await write.ExecuteNonQueryAsync();
+                await using var write = writePool.Lease();
+                await write.Container.ExecuteNonQueryAsync();
             }
         });
+    }
 
     private Task RunDapperAsync(Func<Task<System.Data.Common.DbConnection>> open, string arm) =>
         RunAsync(arm, async (isRead, readSql) =>
