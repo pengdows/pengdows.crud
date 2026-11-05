@@ -171,7 +171,7 @@ public static class DatabaseTypeCatalog
     // Hyperlink are not plain column declarations a DAL writes through DDL, so they carry no ClrType.
     private static readonly IReadOnlyList<ColumnTypeDescriptor> AccessTypes = new ColumnTypeDescriptor[]
     {
-        new("YESNO", ColumnTypeCategory.Boolean, Aliases: new[] { "BIT", "LOGICAL", "BOOLEAN" },
+        new("YESNO", ColumnTypeCategory.Boolean, Aliases: new[] { "BIT", "LOGICAL" },
             Declaration: "YESNO", ClrType: typeof(bool), DbType: System.Data.DbType.Boolean, Sample: true),
         new("BYTE", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "TINYINT", "INTEGER1" }, IsUnsigned: true,
             Declaration: "BYTE", ClrType: typeof(byte), DbType: System.Data.DbType.Byte, Sample: byte.MaxValue),
@@ -191,15 +191,15 @@ public static class DatabaseTypeCatalog
             Declaration: "DATETIME", ClrType: typeof(DateTime), DbType: System.Data.DbType.DateTime,
             Sample: new DateTime(2026, 10, 1, 13, 45, 30, DateTimeKind.Unspecified),
             Notes: "Stored as a double; sub-second precision is not preserved."),
-        new("TEXT(n)", ColumnTypeCategory.Character, Aliases: new[] { "VARCHAR(n)", "CHAR(n)", "SHORT TEXT" },
+        new("TEXT(n)", ColumnTypeCategory.Character, Aliases: new[] { "VARCHAR(n)", "CHAR(n)" },
             Declaration: "TEXT(255)", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: "héllo wörld ✓"),
-        new("MEMO", ColumnTypeCategory.Lob, Aliases: new[] { "LONGTEXT", "LONGCHAR", "NOTE", "LONG TEXT" }, IsLob: true,
+        new("MEMO", ColumnTypeCategory.Lob, Aliases: new[] { "LONGTEXT", "LONGCHAR", "NOTE" }, IsLob: true,
             Declaration: "MEMO", ClrType: typeof(string), DbType: System.Data.DbType.String, Sample: new string('x', 5000),
-            Comparable: false, Notes: "Memo fields cannot be compared with = in a WHERE clause."),
+            Comparable: false, Notes: "Memo fields cannot be compared with = in a WHERE clause. The Access designer's names Long Text, Short Text, Large Number and Yes/No are not DDL keywords: CREATE TABLE refuses LONG TEXT, SHORT TEXT, LARGE NUMBER and BOOLEAN."),
         new("GUID", ColumnTypeCategory.Other, Aliases: new[] { "UNIQUEIDENTIFIER" },
             Declaration: "GUID", ClrType: typeof(Guid), DbType: System.Data.DbType.Guid,
             Sample: new Guid("0190f3a1-7b2c-7d3e-8f40-123456789abc")),
-        new("BIGINT", ColumnTypeCategory.ExactNumeric, Aliases: new[] { "LARGE NUMBER" },
+        new("BIGINT", ColumnTypeCategory.ExactNumeric, Aliases: null,
             Declaration: "BIGINT", ClrType: typeof(long), DbType: System.Data.DbType.Int64, Sample: 1L << 53,
             Notes: "Access's native 64-bit Large Number. Creatable by DDL only on the newer ACE build (an older 16.0.5320 " +
                    "refused it with a syntax error); LARGEINT is not accepted."),

@@ -34,6 +34,53 @@ public class TypeRoundTripMatrixTests : DatabaseTestBase
     protected override Task SetupDatabaseAsync(SupportedDatabase provider, IDatabaseContext context) =>
         Task.CompletedTask;
 
+    /// <summary>
+    /// Access answers to many DDL spellings for one storage type (LOGICAL for YESNO, INTEGER1 for BYTE, FLOAT8 for DOUBLE,
+    /// LONGCHAR for MEMO, ...). The catalog round trip declares each type once, by its primary spelling; this declares every
+    /// plain alias the catalog lists as its own column and round-trips the same sample through the gateway, so a spelling that
+    /// Access accepts but stores differently (or one the catalog lists but the engine refuses) is reported, not assumed.
+    /// </summary>
+    [SkippableFact]
+    public async Task EveryAccessSpelling_RoundTripsThroughTheGateway()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (provider != SupportedDatabase.Access)
+            {
+                return;
+            }
+
+            var spellings = DatabaseTypeCatalog.GetColumnTypes(provider)
+                .Where(e => e.ClrType != null && e.DbType != null && e.CanDeclareColumn && e.Aliases != null)
+                .SelectMany(e => e.Aliases!
+                    .Where(alias => !alias.Contains('('))
+                    .Select(alias => e with { Declaration = alias, Aliases = null }))
+                .ToList();
+            Assert.True(spellings.Count > 0, "Access: the catalog lists no plain aliases");
+
+            var failures = new List<string>();
+            foreach (var entry in spellings)
+            {
+                await using var typeContext = await CreateAdditionalContextAsync(provider);
+                var failure = await DeclareAsync(provider, typeContext, entry)
+                              ?? await RoundTripAsync(provider, typeContext, entry);
+                if (failure != null)
+                {
+                    failures.Add($"{entry.Declaration} (alias of {entry.CanonicalName}): {failure}");
+                }
+            }
+
+            Output.WriteLine($"Access: {spellings.Count - failures.Count}/{spellings.Count} spellings round-tripped");
+            foreach (var f in failures)
+            {
+                Output.WriteLine("  FAIL " + f);
+            }
+
+            Assert.True(failures.Count == 0,
+                $"Access: {failures.Count} of {spellings.Count} spellings failed:\n" + string.Join("\n", failures));
+        });
+    }
+
     private static async Task<bool> OracleSpatialInstalledAsync(IDatabaseContext context)
     {
         await using var probe = context.CreateSqlContainer(

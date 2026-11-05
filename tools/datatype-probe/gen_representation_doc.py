@@ -35,7 +35,7 @@ SHORT = {
     "PostgreSql": "PostgreSQL", "SqlServer": "SQL Server", "Oracle": "Oracle", "Firebird": "Firebird",
     "CockroachDb": "CockroachDB", "MariaDb": "MariaDB", "MySql": "MySQL", "Sqlite": "SQLite", "DuckDB": "DuckDB",
     "YugabyteDb": "YugabyteDB", "TiDb": "TiDB", "SingleStore": "SingleStore", "SybaseASE": "Sybase ASE",
-    "Spanner": "Spanner", "FlatFile": "FlatFile",
+    "Spanner": "Spanner", "FlatFile": "FlatFile", "Access": "Access",
 }
 
 

@@ -149,6 +149,8 @@ DB_PREFER = {
     # next signed type up. Spanner (its PostgreSQL interface) has no INT2 and no NUMERIC precision, so its column is BIGINT and NUMERIC.
     ("SqlServer", "signed 8-bit"): ("SMALLINT", "smallint"),
     ("SybaseASE", "signed 8-bit"): ("SMALLINT", "smallint"),
+    # Access's TINYINT is its unsigned BYTE: -5 overflows, so the column is SMALLINT (a 16-bit integer).
+    ("Access", "signed 8-bit"): ("SMALLINT", "DBTYPE_I2"),
     ("Spanner", "signed 8-bit"): ("BIGINT", "bigint"),
     ("Spanner", "unsigned 8-bit"): ("BIGINT", "bigint"),
     ("Spanner", "unsigned 64-bit"): ("NUMERIC", "numeric"),
@@ -211,6 +213,8 @@ DB_REFUSED = {
     ("YugabyteDb", "point geometry"): "by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row)",
     ("YugabyteDb", "polygon geometry"): "by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPolygon (the native polygon row)",
     ("SqlServer", "bit / bitstring"): "by design: a BIT column holds one bit; a bit string of any length is not representable without a length-bearing column",
+    ("Access", "bit / bitstring"): "by design: a BIT (YESNO) column holds one bit; a bit string of any length is not representable without a length-bearing column",
+    ("Access", "arbitrary-size integer"): "by design: Access has no integer beyond DECIMAL(28), and NUMBER is a double that loses digits; a BigInteger is not a type the OLE DB provider can marshal",
     ("Oracle", "variant / dynamic value"): "by design: ANYDATA is built by its type's constructor functions (ANYDATA.ConvertVarchar2), not bound as a value",
     # Firebird's driver converts a numeric parameter to decimal, which holds 28 digits: a 30-digit value cannot be bound to a
     # NUMERIC (the 128-bit INT128 type is bound typed, and carries 39 digits).
@@ -234,7 +238,7 @@ DB_GENERATED = {
 
 DB_ENUM = [
     "PostgreSql", "SqlServer", "Oracle", "Firebird", "CockroachDb", "MariaDb", "MySql", "Sqlite", "DuckDB",
-    "YugabyteDb", "TiDb", "SingleStore", "SybaseASE", "Spanner", "FlatFile",
+    "YugabyteDb", "TiDb", "SingleStore", "SybaseASE", "Spanner", "FlatFile", "Access",
 ]
 
 
@@ -281,7 +285,7 @@ def class_name(db):
 # variable-length binary type, the one the "varying binary" cell uses: a fixed-width BINARY(16) would pad the token.
 ROWVERSION_AS_FIXED_BINARY = {
     "PostgreSql", "YugabyteDb", "CockroachDb", "DuckDB", "MariaDb", "MySql", "SingleStore", "TiDb", "Oracle",
-    "Firebird", "FlatFile",
+    "Firebird", "FlatFile", "Access",
 }
 
 

@@ -21,6 +21,7 @@ using testbed.SingleStore;
 using testbed.Sybase;
 using testbed.Spanner;
 using testbed.FlatFile;
+using testbed.Access;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -46,6 +47,7 @@ ITestContainer Make(string name) => name switch
     "SybaseASE" => new SybaseTestContainer(),
     "Spanner" => new SpannerOmniTestContainer(),
     "FlatFile" => new FlatFileTestContainer(),
+    "Access" => new AccessTestContainer(),
     _ => throw new ArgumentException($"no container for {name}")
 };
 

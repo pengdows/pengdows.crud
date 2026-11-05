@@ -33,8 +33,8 @@ that was run for the release is green. Access runs only on Windows.
 | Snowflake | 146 pass, 0 fail, 0 skip · 2026-10-12 14:58Z · 0d031db1 | 146 pass, 0 fail, 0 skip · 2026-10-12 15:45Z · 0d031db1 |
 | SapHana | 152 pass, 0 fail, 0 skip · 2026-11-01 10:13Z · d6b387d1+ | 152 pass, 0 fail, 0 skip · 2026-11-01 10:38Z · d6b387d1+ |
 | InterBase | 152 pass, 0 fail, 0 skip · 2026-11-01 10:32Z · d6b387d1+ | 152 pass, 0 fail, 0 skip · 2026-11-01 10:55Z · d6b387d1+ |
-| Access | 150 pass, 0 fail, 0 skip · 2026-11-01 11:31Z · 34a03801 | 150 pass, 0 fail, 0 skip · 2026-11-01 11:33Z · 34a03801 |
+| Access | 154 pass, 0 fail, 0 skip · 2026-11-05 17:58Z · 9af672d9+ | 154 pass, 0 fail, 0 skip · 2026-11-05 18:00Z · 9af672d9+ |
 | AuroraPostgreSql | 170 pass, 0 fail, 0 skip · 2026-11-01 12:05Z · 584d3e41 | 170 pass, 0 fail, 0 skip · 2026-11-01 12:18Z · 584d3e41 |
 | AuroraMySql | 160 pass, 0 fail, 0 skip · 2026-11-01 12:09Z · 584d3e41 | 160 pass, 0 fail, 0 skip · 2026-11-01 12:23Z · 584d3e41 |
 
-Failing now: none.
+Failing now: PostgreSql net10.0.

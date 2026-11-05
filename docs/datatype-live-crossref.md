@@ -28,11 +28,11 @@ create the prerequisite object, not that the engine lacks the type.
 ## Scope and limits
 
 - **Databases:** 15 always-on containers: PostgreSql, SqlServer, Oracle, Firebird, CockroachDb,
-  MariaDb, MySql, Sqlite, DuckDB, YugabyteDb, TiDb, SingleStore, SybaseASE, Spanner, FlatFile.
+  MariaDb, MySql, Sqlite, DuckDB, YugabyteDb, TiDb, SingleStore, SybaseASE, Spanner, FlatFile, plus Access (Windows only;
+  its probe creates a temporary .accdb through ADOX instead of starting a container).
   **Not yet probed:** Db2 and Informix (their native-library bootstraps are `internal` to the
   testbed, so the probe can't call them yet), and the opt-in or platform-bound ones: Aurora
-  PostgreSQL and Aurora MySQL (AWS), Snowflake (credentials), SAP HANA and InterBase (opt-in), and
-  Access (Windows only).
+  PostgreSQL and Aurora MySQL (AWS), Snowflake (credentials), SAP HANA and InterBase (opt-in).
 - **78 semantic types** from the workbook.
 - **Candidates are a generator, not an oracle.** A type reported as `—` means none of its
   candidates was accepted. It is not a claim that the engine lacks the type. Add candidates and
@@ -508,3 +508,10 @@ tables. The five FAIL cells are the time-with-zone cell on PostgreSQL, YugabyteD
 returns the instant with its offset dropped (the offset is 2 hours when written and 0 when read). That is an open defect,
 not a settled limit. Earlier sections above are the dated history of the cycle and are kept as written.
 
+**Access (2026-11-05).** The probe now runs against Access (355 declarations, 68 accepted) and the fidelity test covers it on
+net8.0 and net10.0: 32 cells store and read the value back, 2 are refused by design, and the rest have no Access column type. The
+first run had four FAIL cells, all declaration problems in the generator, none a library defect: a signed 8-bit value needs
+SMALLINT (Access's TINYINT is its unsigned BYTE), a rowversion token needs VARBINARY (Access's TIMESTAMP is a DATETIME alias),
+a bit string cannot live in a one-bit YESNO column, and an arbitrary-size integer has no Access type (DECIMAL stops at 28
+digits, NUMBER is a double, and a BigInteger cannot be marshalled to OLE DB). The last two are refusals recorded in
+`gen_fidelity.py` DB_REFUSED.

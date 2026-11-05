@@ -3,6 +3,7 @@ using System.Data.OleDb;
 using pengdows.crud.attributes;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
+using pengdows.crud.exceptions;
 using Xunit.Abstractions;
 
 namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
@@ -16,6 +17,8 @@ namespace pengdows.crud.IntegrationTests.DatabaseSpecific;
 ///   <item>Attachment and Multi-value fields read as child columns (<c>v.FileName</c>, <c>v.Value</c>)
 ///     and can only be written with <c>INSERT INTO t (v.X) SELECT ... FROM t WHERE ...</c> against
 ///     an existing parent row - an INSERT naming the field with another field is rejected.</item>
+///   <item>A Calculated field is a column whose value Access computes from an expression: it cannot be written, and it reads
+///     through the gateway as its result type.</item>
 ///   <item>Native Large Number (64-bit) needs a current ACE build; 16.0.5320 refused it by DDL, ADOX and
 ///     DAO ("Invalid field data type"). See AccessDialect for how a long is bound.</item>
 /// </list>
@@ -77,6 +80,48 @@ public class AccessComplexTypeTests : IDisposable
         Assert.Equal(row.V, loaded?.V);
     }
 
+    [Table("t_calc")]
+    private sealed class CalculatedRow
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("a", DbType.Int32)] public int A { get; set; }
+        [Column("v", DbType.Int32)] public int V { get; set; }
+    }
+
+    [SkippableFact]
+    public async Task CalculatedField_IsComputedByAccessAndReadThroughTheGateway()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "Access requires Windows");
+        CreateCalculatedTable("t_calc", "[a]*2");
+        await using var context = CreateContext();
+
+        // The calculated column is never written: the row is inserted without it.
+        await Exec(context, "INSERT INTO t_calc (id, a) VALUES (1, 21)");
+
+        var gateway = new TableGateway<CalculatedRow, int>(context);
+        var loaded = await gateway.RetrieveOneAsync(1, context);
+        Assert.Equal(21, loaded?.A);
+        Assert.Equal(42, loaded?.V);
+
+        // A later change to the source column is reflected on the next read.
+        await Exec(context, "UPDATE t_calc SET a = 5 WHERE id = 1");
+        Assert.Equal(10, (await gateway.RetrieveOneAsync(1, context))?.V);
+    }
+
+    [SkippableFact]
+    public async Task CalculatedField_RefusesAnExplicitWrite()
+    {
+        Skip.IfNot(OperatingSystem.IsWindows(), "Access requires Windows");
+        CreateCalculatedTable("t_calc", "[a]*2");
+        await using var context = CreateContext();
+
+        // A CreateAsync names every mapped column, so a calculated column makes Access refuse the insert: the failure is
+        // typed, not a silent drop of the value.
+        var gateway = new TableGateway<CalculatedRow, int>(context);
+        await Assert.ThrowsAnyAsync<DatabaseException>(async () =>
+            await gateway.CreateAsync(new CalculatedRow { Id = 2, A = 1, V = 99 }, context));
+    }
+
     [SkippableFact]
     public async Task Attachment_IsWrittenWithInsertSelectAndReadAsChildColumns()
     {
@@ -133,6 +178,32 @@ public class AccessComplexTypeTests : IDisposable
         OleDbFactory.Instance,
         null,
         new TypeMapRegistry());
+
+    private const int DaoCalculatedExpressionType = DaoLong;
+
+    // A Calculated field is a DAO field whose Expression names the computation; it must follow the columns it reads.
+    private void CreateCalculatedTable(string name, string expression)
+    {
+        dynamic engine = Activator.CreateInstance(
+            Type.GetTypeFromProgID("DAO.DBEngine.120")
+            ?? throw new InvalidOperationException(
+                "DAO.DBEngine.120 not found - the Access Database Engine Redistributable is not installed."))!;
+        dynamic db = engine.CreateDatabase(_path, ";LANGID=0x0409;CP=1252;COUNTRY=0", 128);
+        try
+        {
+            dynamic table = db.CreateTableDef(name);
+            table.Fields.Append(table.CreateField("id", DaoLong));
+            table.Fields.Append(table.CreateField("a", DaoLong));
+            dynamic calculated = table.CreateField("v", DaoCalculatedExpressionType);
+            calculated.Expression = expression;
+            table.Fields.Append(calculated);
+            db.TableDefs.Append(table);
+        }
+        finally
+        {
+            db.Close();
+        }
+    }
 
     private void CreateTables(params (string Name, int DaoType, bool hyperlink)[] tables)
     {

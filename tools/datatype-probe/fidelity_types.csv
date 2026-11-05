@@ -14,6 +14,7 @@ signed 8-bit,signed_8_bit,sbyte,SByte,SingleStore,declared,TINYINT,TINYINT,
 signed 8-bit,signed_8_bit,sbyte,SByte,SybaseASE,declared,SMALLINT,smallint,
 signed 8-bit,signed_8_bit,sbyte,SByte,Spanner,declared,BIGINT,bigint,
 signed 8-bit,signed_8_bit,sbyte,SByte,FlatFile,declared,SMALLINT,SMALLINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,Access,declared,SMALLINT,DBTYPE_I2,
 signed 16-bit,signed_16_bit,short,Int16,PostgreSql,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,SqlServer,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,Oracle,declared,SMALLINT,Decimal,
@@ -29,6 +30,7 @@ signed 16-bit,signed_16_bit,short,Int16,SingleStore,declared,SMALLINT,SMALLINT,
 signed 16-bit,signed_16_bit,short,Int16,SybaseASE,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,Spanner,declared,INT8,bigint,
 signed 16-bit,signed_16_bit,short,Int16,FlatFile,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,Access,declared,SMALLINT,DBTYPE_I2,
 signed 32-bit,signed_32_bit,int,Int32,PostgreSql,declared,INTEGER,integer,
 signed 32-bit,signed_32_bit,int,Int32,SqlServer,declared,INTEGER,int,
 signed 32-bit,signed_32_bit,int,Int32,Oracle,declared,INTEGER,Decimal,
@@ -44,6 +46,7 @@ signed 32-bit,signed_32_bit,int,Int32,SingleStore,declared,INTEGER,INT,
 signed 32-bit,signed_32_bit,int,Int32,SybaseASE,declared,INTEGER,int,
 signed 32-bit,signed_32_bit,int,Int32,Spanner,declared,INTEGER,bigint,
 signed 32-bit,signed_32_bit,int,Int32,FlatFile,declared,INTEGER,INTEGER,
+signed 32-bit,signed_32_bit,int,Int32,Access,declared,INTEGER,DBTYPE_I4,
 signed 64-bit,signed_64_bit,long,Int64,PostgreSql,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,SqlServer,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,Oracle,declared,"NUMBER(19,0)",Decimal,
@@ -59,6 +62,7 @@ signed 64-bit,signed_64_bit,long,Int64,SingleStore,declared,BIGINT,BIGINT,
 signed 64-bit,signed_64_bit,long,Int64,SybaseASE,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,Spanner,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,FlatFile,declared,BIGINT,BIGINT,
+signed 64-bit,signed_64_bit,long,Int64,Access,declared,BIGINT,DBTYPE_I8,
 signed 128-bit,signed_128_bit,Int128,Object,PostgreSql,declared,"NUMERIC(38,0)",numeric(38),
 signed 128-bit,signed_128_bit,Int128,Object,SqlServer,declared,"NUMERIC(38,0)",decimal,
 signed 128-bit,signed_128_bit,Int128,Object,Oracle,declared,"NUMBER(38,0)",Decimal,
@@ -74,6 +78,7 @@ signed 128-bit,signed_128_bit,Int128,Object,SingleStore,declared,"NUMERIC(38,0)"
 signed 128-bit,signed_128_bit,Int128,Object,SybaseASE,declared,"NUMERIC(38,0)",numeric,
 signed 128-bit,signed_128_bit,Int128,Object,Spanner,unsupported,,,P0001: Type <hugeint> does not exist.
 signed 128-bit,signed_128_bit,Int128,Object,FlatFile,declared,"NUMERIC(38,0)",NUMERIC,
+signed 128-bit,signed_128_bit,Int128,Object,Access,unsupported,,,Syntax error in field definition.
 unsigned 8-bit,unsigned_8_bit,byte,Byte,PostgreSql,widened,SMALLINT,(widened),
 unsigned 8-bit,unsigned_8_bit,byte,Byte,SqlServer,declared,TINYINT,tinyint,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,Oracle,widened,SMALLINT,(widened),
@@ -89,6 +94,7 @@ unsigned 8-bit,unsigned_8_bit,byte,Byte,SingleStore,declared,TINYINT UNSIGNED,TI
 unsigned 8-bit,unsigned_8_bit,byte,Byte,SybaseASE,declared,TINYINT,tinyint,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,Spanner,declared,BIGINT,bigint,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,FlatFile,widened,SMALLINT,(widened),
+unsigned 8-bit,unsigned_8_bit,byte,Byte,Access,declared,BYTE,DBTYPE_UI1,
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,PostgreSql,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SqlServer,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Oracle,widened,INTEGER,(widened),
@@ -104,6 +110,7 @@ unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SingleStore,declared,SMALLINT UNSI
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SybaseASE,declared,UNSIGNED SMALLINT,unsigned smallint,
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Spanner,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,FlatFile,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Access,widened,INTEGER,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,PostgreSql,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,SqlServer,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,Oracle,declared,"NUMBER(10,0)",NUMBER,
@@ -119,6 +126,7 @@ unsigned 32-bit,unsigned_32_bit,uint,UInt32,SingleStore,declared,INT UNSIGNED,IN
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,SybaseASE,declared,UNSIGNED INT,unsigned int,
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,Spanner,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,FlatFile,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,Access,widened,BIGINT,(widened),
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,PostgreSql,widened,"NUMERIC(20,0)",(widened),
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SqlServer,widened,"NUMERIC(20,0)",(widened),
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Oracle,widened,"NUMERIC(20,0)",(widened),
@@ -134,6 +142,7 @@ unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SingleStore,declared,BIGINT UNSIGNE
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SybaseASE,declared,UNSIGNED BIGINT,unsigned bigint,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Spanner,declared,NUMERIC,numeric,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,FlatFile,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Access,widened,"NUMERIC(20,0)",(widened),
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,PostgreSql,declared,"NUMERIC(1000,0)",numeric(1000),
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,SqlServer,declared,"NUMERIC(38,0)",decimal,
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,Oracle,declared,NUMBER,Decimal,
@@ -149,6 +158,7 @@ arbitrary-size integer,arbitrary_integer,BigInteger,Object,SingleStore,declared,
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,SybaseASE,declared,"NUMERIC(38,0)",numeric,
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,Spanner,unsupported,,,P0001: Type modifier is not supported for type <numeric>.
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,FlatFile,declared,"NUMERIC(1000,0)",NUMERIC,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,Access,unsupported,,,Invalid precision for decimal data type.
 binary float32,binary_float32,float,Single,PostgreSql,declared,REAL,real,
 binary float32,binary_float32,float,Single,SqlServer,declared,REAL,real,
 binary float32,binary_float32,float,Single,Oracle,declared,REAL,Decimal,
@@ -164,6 +174,7 @@ binary float32,binary_float32,float,Single,SingleStore,declared,REAL,DOUBLE,
 binary float32,binary_float32,float,Single,SybaseASE,declared,REAL,real,
 binary float32,binary_float32,float,Single,Spanner,declared,REAL,real,
 binary float32,binary_float32,float,Single,FlatFile,declared,REAL,REAL,
+binary float32,binary_float32,float,Single,Access,declared,REAL,DBTYPE_R4,
 binary float64,binary_float64,double,Double,PostgreSql,declared,DOUBLE PRECISION,double precision,
 binary float64,binary_float64,double,Double,SqlServer,declared,DOUBLE PRECISION,float,
 binary float64,binary_float64,double,Double,Oracle,declared,DOUBLE PRECISION,Decimal,
@@ -179,6 +190,7 @@ binary float64,binary_float64,double,Double,SingleStore,declared,DOUBLE PRECISIO
 binary float64,binary_float64,double,Double,SybaseASE,declared,DOUBLE PRECISION,float,
 binary float64,binary_float64,double,Double,Spanner,declared,DOUBLE PRECISION,double precision,
 binary float64,binary_float64,double,Double,FlatFile,declared,DOUBLE PRECISION,DOUBLE PRECISION,
+binary float64,binary_float64,double,Double,Access,declared,DOUBLE PRECISION,DBTYPE_R8,
 fixed decimal,fixed_decimal,decimal,Decimal,PostgreSql,declared,"DECIMAL(18,4)","numeric(18, 4)",
 fixed decimal,fixed_decimal,decimal,Decimal,SqlServer,declared,"DECIMAL(18,4)",decimal,
 fixed decimal,fixed_decimal,decimal,Decimal,Oracle,declared,"DECIMAL(18,4)",Decimal,
@@ -194,6 +206,7 @@ fixed decimal,fixed_decimal,decimal,Decimal,SingleStore,declared,"DECIMAL(18,4)"
 fixed decimal,fixed_decimal,decimal,Decimal,SybaseASE,declared,"DECIMAL(18,4)",decimal,
 fixed decimal,fixed_decimal,decimal,Decimal,Spanner,declared,NUMERIC,numeric,
 fixed decimal,fixed_decimal,decimal,Decimal,FlatFile,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,Access,declared,"DECIMAL(18,4)",DBTYPE_NUMERIC,
 boolean,boolean,bool,Boolean,PostgreSql,declared,BOOLEAN,boolean,
 boolean,boolean,bool,Boolean,SqlServer,declared,BIT,bit,
 boolean,boolean,bool,Boolean,Oracle,declared,BOOLEAN,Boolean,
@@ -209,6 +222,7 @@ boolean,boolean,bool,Boolean,SingleStore,declared,BOOLEAN,TINYINT,
 boolean,boolean,bool,Boolean,SybaseASE,unsupported,,,Can't find type 'BOOLEAN'.
 boolean,boolean,bool,Boolean,Spanner,declared,BOOLEAN,boolean,
 boolean,boolean,bool,Boolean,FlatFile,declared,BOOLEAN,BOOLEAN,
+boolean,boolean,bool,Boolean,Access,declared,BIT,DBTYPE_BOOL,
 bit / bitstring,bit_string,BitArray,Object,PostgreSql,declared,BIT VARYING(8),bit varying(8),
 bit / bitstring,bit_string,BitArray,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot specify a column width on data type bit."
 bit / bitstring,bit_string,BitArray,Object,Oracle,unsupported,,,ORA-03060: Data type BIT is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -224,6 +238,7 @@ bit / bitstring,bit_string,BitArray,Object,SingleStore,declared,BIT(3),bit(3),
 bit / bitstring,bit_string,BitArray,Object,SybaseASE,unsupported,,,"Can't specify a length, scale or storage property on type 'bit'."
 bit / bitstring,bit_string,BitArray,Object,Spanner,unsupported,,,P0001: Type <bit> is not supported.
 bit / bitstring,bit_string,BitArray,Object,FlatFile,unsupported,,,SQL feature 'BIT data types' is not implemented by pengdows.flatfile.
+bit / bitstring,bit_string,BitArray,Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 varying character,varying_character,string,String,PostgreSql,declared,VARCHAR(100),character varying(100),
 varying character,varying_character,string,String,SqlServer,declared,VARCHAR(100),varchar,
 varying character,varying_character,string,String,Oracle,declared,VARCHAR(100),Varchar2,
@@ -239,6 +254,7 @@ varying character,varying_character,string,String,SingleStore,declared,VARCHAR(1
 varying character,varying_character,string,String,SybaseASE,declared,VARCHAR(100),varchar,
 varying character,varying_character,string,String,Spanner,declared,VARCHAR(100),character varying,
 varying character,varying_character,string,String,FlatFile,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,Access,declared,VARCHAR(100),DBTYPE_WVARCHAR,
 unbounded text,unbounded_text,string,String,PostgreSql,declared,TEXT,text,
 unbounded text,unbounded_text,string,String,SqlServer,declared,TEXT,text,
 unbounded text,unbounded_text,string,String,Oracle,declared,CLOB,Clob,
@@ -254,6 +270,7 @@ unbounded text,unbounded_text,string,String,SingleStore,declared,TEXT,VARCHAR,
 unbounded text,unbounded_text,string,String,SybaseASE,declared,TEXT,text,
 unbounded text,unbounded_text,string,String,Spanner,declared,TEXT,character varying,
 unbounded text,unbounded_text,string,String,FlatFile,declared,CLOB,CLOB,
+unbounded text,unbounded_text,string,String,Access,declared,TEXT,DBTYPE_WLONGVARCHAR,
 UUID / GUID,uuid,Guid,Guid,PostgreSql,declared,UUID,uuid,
 UUID / GUID,uuid,Guid,Guid,SqlServer,declared,UNIQUEIDENTIFIER,uniqueidentifier,
 UUID / GUID,uuid,Guid,Guid,Oracle,declared,VARCHAR2(36),VARCHAR2,
@@ -269,6 +286,7 @@ UUID / GUID,uuid,Guid,Guid,SingleStore,declared,CHAR(36),CHAR(36),
 UUID / GUID,uuid,Guid,Guid,SybaseASE,declared,BINARY(16),binary,
 UUID / GUID,uuid,Guid,Guid,Spanner,declared,UUID,uuid,
 UUID / GUID,uuid,Guid,Guid,FlatFile,declared,UUID,UUID,
+UUID / GUID,uuid,Guid,Guid,Access,declared,UNIQUEIDENTIFIER,DBTYPE_GUID,
 calendar date,calendar_date,DateOnly,Date,PostgreSql,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,SqlServer,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,Oracle,declared,DATE,Date,
@@ -284,6 +302,7 @@ calendar date,calendar_date,DateOnly,Date,SingleStore,declared,DATE,DATE,
 calendar date,calendar_date,DateOnly,Date,SybaseASE,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,Spanner,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,FlatFile,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,Access,declared,DATE,DBTYPE_DATE,
 time without zone,time_of_day,TimeOnly,Time,PostgreSql,declared,TIME(6),time(6) without time zone,
 time without zone,time_of_day,TimeOnly,Time,SqlServer,declared,TIME(6),time,
 time without zone,time_of_day,TimeOnly,Time,Oracle,unsupported,,,ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -299,6 +318,7 @@ time without zone,time_of_day,TimeOnly,Time,SingleStore,declared,TIME(6),TIME,
 time without zone,time_of_day,TimeOnly,Time,SybaseASE,declared,TIME,time,
 time without zone,time_of_day,TimeOnly,Time,Spanner,unsupported,,,P0001: Type <time> is not supported.
 time without zone,time_of_day,TimeOnly,Time,FlatFile,declared,TIME(6),TIME,
+time without zone,time_of_day,TimeOnly,Time,Access,declared,TIME,DBTYPE_DATE,
 time without zone,time_span,TimeSpan,Time,PostgreSql,declared,TIME(6),time(6) without time zone,
 time without zone,time_span,TimeSpan,Time,SqlServer,declared,TIME(6),time,
 time without zone,time_span,TimeSpan,Time,Oracle,unsupported,,,ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -314,6 +334,7 @@ time without zone,time_span,TimeSpan,Time,SingleStore,declared,TIME(6),TIME,
 time without zone,time_span,TimeSpan,Time,SybaseASE,declared,TIME,time,
 time without zone,time_span,TimeSpan,Time,Spanner,unsupported,,,P0001: Type <time> is not supported.
 time without zone,time_span,TimeSpan,Time,FlatFile,declared,TIME(6),TIME,
+time without zone,time_span,TimeSpan,Time,Access,declared,TIME,DBTYPE_DATE,
 day-time interval,day_time_interval,IntervalDaySecond,Object,PostgreSql,declared,INTERVAL DAY TO SECOND(6),interval(6),
 day-time interval,day_time_interval,IntervalDaySecond,Object,SqlServer,unsupported,,,Incorrect syntax near 'DAY'.
 day-time interval,day_time_interval,IntervalDaySecond,Object,Oracle,declared,INTERVAL DAY TO SECOND(6),IntervalDS,
@@ -329,6 +350,7 @@ day-time interval,day_time_interval,IntervalDaySecond,Object,SingleStore,unsuppo
 day-time interval,day_time_interval,IntervalDaySecond,Object,SybaseASE,unsupported,,,Incorrect syntax near 'DAY'.
 day-time interval,day_time_interval,IntervalDaySecond,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
 day-time interval,day_time_interval,IntervalDaySecond,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+day-time interval,day_time_interval,IntervalDaySecond,Object,Access,unsupported,,,Syntax error in field definition.
 timestamp without zone,timestamp,DateTime,DateTime2,PostgreSql,declared,TIMESTAMP(6),timestamp(6) without time zone,
 timestamp without zone,timestamp,DateTime,DateTime2,SqlServer,declared,DATETIME2(6),datetime2,
 timestamp without zone,timestamp,DateTime,DateTime2,Oracle,declared,TIMESTAMP(6),TimeStamp,
@@ -344,6 +366,7 @@ timestamp without zone,timestamp,DateTime,DateTime2,SingleStore,declared,TIMESTA
 timestamp without zone,timestamp,DateTime,DateTime2,SybaseASE,declared,DATETIME,datetime,
 timestamp without zone,timestamp,DateTime,DateTime2,Spanner,unsupported,,,P0001: Type <timestamp> is not supported.
 timestamp without zone,timestamp,DateTime,DateTime2,FlatFile,declared,TIMESTAMP(6),TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,Access,declared,DATETIME,DBTYPE_DATE,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,PostgreSql,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SqlServer,declared,DATETIMEOFFSET,datetimeoffset,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Oracle,declared,TIMESTAMP WITH TIME ZONE,TimeStampTZ,
@@ -359,6 +382,7 @@ timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SingleStor
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SybaseASE,unsupported,,,Incorrect syntax near the keyword 'WITH'.
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Spanner,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,FlatFile,declared,TIMESTAMP WITH TIME ZONE,TIMESTAMP WITH TIME ZONE,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 binary LOB,binary,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 binary LOB,binary,byte[],Binary,SqlServer,declared,IMAGE,image,
 binary LOB,binary,byte[],Binary,Oracle,declared,BLOB,Blob,
@@ -374,6 +398,7 @@ binary LOB,binary,byte[],Binary,SingleStore,declared,BLOB,BLOB,
 binary LOB,binary,byte[],Binary,SybaseASE,declared,IMAGE,image,
 binary LOB,binary,byte[],Binary,Spanner,declared,BYTEA,bytea,
 binary LOB,binary,byte[],Binary,FlatFile,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,Access,declared,IMAGE,DBTYPE_LONGVARBINARY,
 JSON text / JSON value,json,JsonDocument,Object,PostgreSql,declared,JSON,json,
 JSON text / JSON value,json,JsonDocument,Object,SqlServer,declared,JSON,json,
 JSON text / JSON value,json,JsonDocument,Object,Oracle,declared,CLOB,Clob,
@@ -389,6 +414,7 @@ JSON text / JSON value,json,JsonDocument,Object,SingleStore,declared,JSON,JSON,
 JSON text / JSON value,json,JsonDocument,Object,SybaseASE,unsupported,,,Can't find type 'JSON'.
 JSON text / JSON value,json,JsonDocument,Object,Spanner,declared,JSONB,jsonb,
 JSON text / JSON value,json,JsonDocument,Object,FlatFile,declared,JSON,JSON,
+JSON text / JSON value,json,JsonDocument,Object,Access,unsupported,,,Syntax error in field definition.
 IP address,ip_address,IPAddress,Object,PostgreSql,declared,INET,inet,
 IP address,ip_address,IPAddress,Object,SqlServer,declared,VARCHAR(45),varchar,
 IP address,ip_address,IPAddress,Object,Oracle,declared,VARCHAR(45),Varchar2,
@@ -404,6 +430,7 @@ IP address,ip_address,IPAddress,Object,SingleStore,declared,VARCHAR(45),VARCHAR,
 IP address,ip_address,IPAddress,Object,SybaseASE,declared,VARCHAR(45),varchar,
 IP address,ip_address,IPAddress,Object,Spanner,declared,VARCHAR(45),character varying,
 IP address,ip_address,IPAddress,Object,FlatFile,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,Access,declared,VARCHAR(45),DBTYPE_WVARCHAR,
 SQL array,int_array,int[],Object,PostgreSql,declared,INTEGER ARRAY,integer[],
 SQL array,int_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
 SQL array,int_array,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
@@ -419,6 +446,7 @@ SQL array,int_array,int[],Object,SingleStore,unsupported,,,You have an error in 
 SQL array,int_array,int[],Object,SybaseASE,unsupported,,,Incorrect syntax near 'ARRAY'.
 SQL array,int_array,int[],Object,Spanner,declared,INTEGER ARRAY,bigint[],
 SQL array,int_array,int[],Object,FlatFile,unsupported,,,"Expected token 'RightParen' at position 63, but found 'Identifier'."
+SQL array,int_array,int[],Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,PostgreSql,unsupported,,,"42704: type ""uhugeint"" does not exist POSITION: 55"
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type UHUGEINT."
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -434,6 +462,7 @@ unsigned 128-bit,unsigned_128_bit,UInt128,Object,SingleStore,unsupported,,,You h
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,SybaseASE,unsupported,,,Can't find type 'UHUGEINT'.
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,Spanner,unsupported,,,P0001: Type <uhugeint> does not exist.
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,FlatFile,unsupported,,,"Unknown SQL data type 'UHUGEINT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,Access,unsupported,,,Syntax error in field definition.
 decimal floating point,decimal_float,decimal,Decimal,PostgreSql,unsupported,,,"42704: type ""decfloat"" does not exist POSITION: 55"
 decimal floating point,decimal_float,decimal,Decimal,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type DECFLOAT."
 decimal floating point,decimal_float,decimal,Decimal,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -449,6 +478,7 @@ decimal floating point,decimal_float,decimal,Decimal,SingleStore,unsupported,,,Y
 decimal floating point,decimal_float,decimal,Decimal,SybaseASE,unsupported,,,Can't find type 'DECFLOAT'.
 decimal floating point,decimal_float,decimal,Decimal,Spanner,unsupported,,,P0001: Type <decfloat> does not exist.
 decimal floating point,decimal_float,decimal,Decimal,FlatFile,unsupported,,,"Unknown SQL data type 'DECFLOAT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+decimal floating point,decimal_float,decimal,Decimal,Access,unsupported,,,Syntax error in field definition.
 money / currency,money,decimal,Decimal,PostgreSql,declared,MONEY,money,
 money / currency,money,decimal,Decimal,SqlServer,declared,MONEY,money,
 money / currency,money,decimal,Decimal,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -464,6 +494,7 @@ money / currency,money,decimal,Decimal,SingleStore,unsupported,,,You have an err
 money / currency,money,decimal,Decimal,SybaseASE,declared,MONEY,money,
 money / currency,money,decimal,Decimal,Spanner,unsupported,,,P0001: Type <money> is not supported; use numeric or decimal instead.
 money / currency,money,decimal,Decimal,FlatFile,unsupported,,,"SQL syntax extension 'MONEY' is not valid ISO SQL, at position 54."
+money / currency,money,decimal,Decimal,Access,declared,MONEY,DBTYPE_CY,
 fixed character,fixed_character,string,String,PostgreSql,declared,CHAR(10),character(10),
 fixed character,fixed_character,string,String,SqlServer,declared,CHAR(10),char,
 fixed character,fixed_character,string,String,Oracle,declared,CHAR(10),Char,
@@ -479,6 +510,7 @@ fixed character,fixed_character,string,String,SingleStore,declared,CHAR(10),CHAR
 fixed character,fixed_character,string,String,SybaseASE,declared,CHAR(10),varchar,
 fixed character,fixed_character,string,String,Spanner,unsupported,,,P0001: Type <bpchar> is not supported.
 fixed character,fixed_character,string,String,FlatFile,declared,CHAR(10),CHAR,
+fixed character,fixed_character,string,String,Access,declared,CHAR(10),DBTYPE_WCHAR,
 national / Unicode character,national_text,string,String,PostgreSql,declared,VARCHAR(100),character varying(100),
 national / Unicode character,national_text,string,String,SqlServer,declared,NVARCHAR(100),nvarchar,
 national / Unicode character,national_text,string,String,Oracle,declared,NVARCHAR2(100),NVarchar2,
@@ -494,6 +526,7 @@ national / Unicode character,national_text,string,String,SingleStore,declared,NV
 national / Unicode character,national_text,string,String,SybaseASE,declared,NVARCHAR(100),nvarchar,
 national / Unicode character,national_text,string,String,Spanner,unsupported,,,P0001: Type <nvarchar> does not exist.
 national / Unicode character,national_text,string,String,FlatFile,declared,NCHAR(10),NCHAR,
+national / Unicode character,national_text,string,String,Access,declared,NVARCHAR(100),DBTYPE_WVARCHAR,
 long text LOB,long_text,string,String,PostgreSql,declared,TEXT,text,
 long text LOB,long_text,string,String,SqlServer,declared,TEXT,text,
 long text LOB,long_text,string,String,Oracle,declared,CLOB,Clob,
@@ -509,6 +542,7 @@ long text LOB,long_text,string,String,SingleStore,declared,TEXT,VARCHAR,
 long text LOB,long_text,string,String,SybaseASE,declared,TEXT,text,
 long text LOB,long_text,string,String,Spanner,declared,TEXT,character varying,
 long text LOB,long_text,string,String,FlatFile,declared,CLOB,CLOB,
+long text LOB,long_text,string,String,Access,declared,TEXT,DBTYPE_WLONGVARCHAR,
 enumeration,enumeration,string,String,PostgreSql,unsupported,,,"42704: type ""enum"" does not exist POSITION: 56"
 enumeration,enumeration,string,String,SqlServer,unsupported,,,Incorrect syntax near 'a'.
 enumeration,enumeration,string,String,Oracle,unsupported,,,ORA-03060: Data type ENUM is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -524,6 +558,7 @@ enumeration,enumeration,string,String,SingleStore,declared,"ENUM('active','inact
 enumeration,enumeration,string,String,SybaseASE,unsupported,,,Incorrect syntax near '('.
 enumeration,enumeration,string,String,Spanner,unsupported,,,P0001: Type <enum> does not exist.
 enumeration,enumeration,string,String,FlatFile,unsupported,,,"Expected token 'NumericLiteral' at position 60, but found 'StringLiteral'."
+enumeration,enumeration,string,String,Access,unsupported,,,Syntax error in field definition.
 set-valued enum,set_value,string,String,PostgreSql,unsupported,,,"42704: type ""set"" does not exist POSITION: 56"
 set-valued enum,set_value,string,String,SqlServer,unsupported,,,The definition for column 'c' must include a data type. Incorrect syntax near the keyword 'SET'.
 set-valued enum,set_value,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -539,6 +574,7 @@ set-valued enum,set_value,string,String,SingleStore,declared,"SET('a','b')",VARC
 set-valued enum,set_value,string,String,SybaseASE,unsupported,,,The definition for column 'c' must include a datatype.
 set-valued enum,set_value,string,String,Spanner,unsupported,,,P0001: Type <set> does not exist.
 set-valued enum,set_value,string,String,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Set'."
+set-valued enum,set_value,string,String,Access,unsupported,,,Syntax error in field definition.
 fixed binary,fixed_binary,byte[],Binary,PostgreSql,unsupported,,,"42704: type ""binary"" does not exist POSITION: 56"
 fixed binary,fixed_binary,byte[],Binary,SqlServer,declared,BINARY(16),binary,
 fixed binary,fixed_binary,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -554,6 +590,7 @@ fixed binary,fixed_binary,byte[],Binary,SingleStore,declared,BINARY(16),BLOB,
 fixed binary,fixed_binary,byte[],Binary,SybaseASE,declared,BINARY(16),varbinary,
 fixed binary,fixed_binary,byte[],Binary,Spanner,unsupported,,,P0001: Type <binary> does not exist.
 fixed binary,fixed_binary,byte[],Binary,FlatFile,declared,BINARY(16),BINARY,
+fixed binary,fixed_binary,byte[],Binary,Access,declared,BINARY(16),DBTYPE_VARBINARY,
 varying binary,varying_binary,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 varying binary,varying_binary,byte[],Binary,SqlServer,declared,VARBINARY(16),varbinary,
 varying binary,varying_binary,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -569,6 +606,7 @@ varying binary,varying_binary,byte[],Binary,SingleStore,declared,VARBINARY(16),B
 varying binary,varying_binary,byte[],Binary,SybaseASE,declared,VARBINARY(16),varbinary,
 varying binary,varying_binary,byte[],Binary,Spanner,declared,BYTEA,bytea,
 varying binary,varying_binary,byte[],Binary,FlatFile,declared,BLOB,BLOB,
+varying binary,varying_binary,byte[],Binary,Access,declared,VARBINARY(16),DBTYPE_VARBINARY,
 legacy long binary,legacy_binary,byte[],Binary,PostgreSql,unsupported,,,"42601: syntax error at or near ""RAW"" POSITION: 61"
 legacy long binary,legacy_binary,byte[],Binary,SqlServer,declared,IMAGE,image,
 legacy long binary,legacy_binary,byte[],Binary,Oracle,declared,LONG RAW,LongRaw,
@@ -584,6 +622,7 @@ legacy long binary,legacy_binary,byte[],Binary,SingleStore,declared,TINYBLOB,BLO
 legacy long binary,legacy_binary,byte[],Binary,SybaseASE,declared,IMAGE,image,
 legacy long binary,legacy_binary,byte[],Binary,Spanner,unsupported,,,"P0001: syntax error at or near ""RAW""; failed to parse the DDL statements."
 legacy long binary,legacy_binary,byte[],Binary,FlatFile,unsupported,,,"SQL syntax extension 'LONG' is not valid ISO SQL, at position 55."
+legacy long binary,legacy_binary,byte[],Binary,Access,declared,IMAGE,DBTYPE_LONGVARBINARY,
 rowversion / timestamp token,rowversion,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 rowversion / timestamp token,rowversion,byte[],Binary,SqlServer,declared,ROWVERSION,timestamp,
 rowversion / timestamp token,rowversion,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -599,6 +638,7 @@ rowversion / timestamp token,rowversion,byte[],Binary,SingleStore,declared,VARBI
 rowversion / timestamp token,rowversion,byte[],Binary,SybaseASE,unsupported,,,Can't find type 'ROWVERSION'.
 rowversion / timestamp token,rowversion,byte[],Binary,Spanner,unsupported,,,P0001: Type <rowversion> does not exist.
 rowversion / timestamp token,rowversion,byte[],Binary,FlatFile,declared,BLOB,BLOB,
+rowversion / timestamp token,rowversion,byte[],Binary,Access,declared,VARBINARY(16),DBTYPE_VARBINARY,
 local-zone timestamp,local_timestamp,DateTime,DateTime,PostgreSql,unsupported,,,"42601: syntax error at or near ""WITH"" POSITION: 66"
 local-zone timestamp,local_timestamp,DateTime,DateTime,SqlServer,unsupported,,,"Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"
 local-zone timestamp,local_timestamp,DateTime,DateTime,Oracle,declared,TIMESTAMP WITH LOCAL TIME ZONE,TimeStampLTZ,
@@ -614,6 +654,7 @@ local-zone timestamp,local_timestamp,DateTime,DateTime,SingleStore,unsupported,,
 local-zone timestamp,local_timestamp,DateTime,DateTime,SybaseASE,unsupported,,,Incorrect syntax near the keyword 'WITH'.
 local-zone timestamp,local_timestamp,DateTime,DateTime,Spanner,unsupported,,,"P0001: syntax error at or near ""WITH""; failed to parse the DDL statements."
 local-zone timestamp,local_timestamp,DateTime,DateTime,FlatFile,unsupported,,,"Expected token 'RightParen' at position 70, but found 'Identifier'."
+local-zone timestamp,local_timestamp,DateTime,DateTime,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 second-precision datetime,second_datetime,DateTime,DateTime,PostgreSql,declared,TIMESTAMP(0),timestamp(0) without time zone,
 second-precision datetime,second_datetime,DateTime,DateTime,SqlServer,declared,DATETIME2(0),datetime2,
 second-precision datetime,second_datetime,DateTime,DateTime,Oracle,declared,DATE,Date,
@@ -629,6 +670,7 @@ second-precision datetime,second_datetime,DateTime,DateTime,SingleStore,declared
 second-precision datetime,second_datetime,DateTime,DateTime,SybaseASE,declared,DATETIME,datetime,
 second-precision datetime,second_datetime,DateTime,DateTime,Spanner,declared,TIMESTAMPTZ,timestamptz,
 second-precision datetime,second_datetime,DateTime,DateTime,FlatFile,declared,TIMESTAMP,timestamp,
+second-precision datetime,second_datetime,DateTime,DateTime,Access,declared,SMALLDATETIME,DBTYPE_DATE,
 time with zone,time_zoned,DateTimeOffset,DateTimeOffset,PostgreSql,declared,TIME WITH TIME ZONE,time with time zone,
 time with zone,time_zoned,DateTimeOffset,DateTimeOffset,SqlServer,unsupported,,,"Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"
 time with zone,time_zoned,DateTimeOffset,DateTimeOffset,Oracle,unsupported,,,ORA-02000: missing ROWID keyword https://docs.oracle.com/error-help/db/ora-02000/
@@ -644,6 +686,7 @@ time with zone,time_zoned,DateTimeOffset,DateTimeOffset,SingleStore,unsupported,
 time with zone,time_zoned,DateTimeOffset,DateTimeOffset,SybaseASE,unsupported,,,Incorrect syntax near the keyword 'WITH'.
 time with zone,time_zoned,DateTimeOffset,DateTimeOffset,Spanner,unsupported,,,P0001: Type <timetz> is not supported.
 time with zone,time_zoned,DateTimeOffset,DateTimeOffset,FlatFile,declared,TIME WITH TIME ZONE,TIME WITH TIME ZONE,
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 year-only,year_only,short,Int16,PostgreSql,declared,SMALLINT,smallint,
 year-only,year_only,short,Int16,SqlServer,declared,SMALLINT,smallint,
 year-only,year_only,short,Int16,Oracle,declared,SMALLINT,Decimal,
@@ -659,6 +702,7 @@ year-only,year_only,short,Int16,SingleStore,declared,YEAR,YEAR,
 year-only,year_only,short,Int16,SybaseASE,declared,SMALLINT,smallint,
 year-only,year_only,short,Int16,Spanner,unsupported,,,P0001: Type <year> does not exist.
 year-only,year_only,short,Int16,FlatFile,declared,SMALLINT,SMALLINT,
+year-only,year_only,short,Int16,Access,declared,SMALLINT,DBTYPE_I2,
 year-month interval,year_month_interval,IntervalYearMonth,Object,PostgreSql,declared,INTERVAL YEAR TO MONTH,interval(65535),
 year-month interval,year_month_interval,IntervalYearMonth,Object,SqlServer,unsupported,,,Incorrect syntax near 'YEAR'.
 year-month interval,year_month_interval,IntervalYearMonth,Object,Oracle,declared,INTERVAL YEAR TO MONTH,IntervalYM,
@@ -674,6 +718,7 @@ year-month interval,year_month_interval,IntervalYearMonth,Object,SingleStore,uns
 year-month interval,year_month_interval,IntervalYearMonth,Object,SybaseASE,unsupported,,,Incorrect syntax near 'YEAR'.
 year-month interval,year_month_interval,IntervalYearMonth,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
 year-month interval,year_month_interval,IntervalYearMonth,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+year-month interval,year_month_interval,IntervalYearMonth,Object,Access,unsupported,,,Syntax error in field definition.
 generic interval,generic_interval,PostgreSqlInterval,Object,PostgreSql,declared,INTERVAL,interval,
 generic interval,generic_interval,PostgreSqlInterval,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INTERVAL."
 generic interval,generic_interval,PostgreSqlInterval,Object,Oracle,unsupported,,,ORA-30089: missing or invalid <datetime field> https://docs.oracle.com/error-help/db/ora-30089/
@@ -689,6 +734,7 @@ generic interval,generic_interval,PostgreSqlInterval,Object,SingleStore,unsuppor
 generic interval,generic_interval,PostgreSqlInterval,Object,SybaseASE,unsupported,,,Can't find type 'interval'.
 generic interval,generic_interval,PostgreSqlInterval,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
 generic interval,generic_interval,PostgreSqlInterval,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+generic interval,generic_interval,PostgreSqlInterval,Object,Access,unsupported,,,Syntax error in field definition.
 row identifier / ROWID,row_identifier,string,String,PostgreSql,declared,CHAR(18),character(18),
 row identifier / ROWID,row_identifier,string,String,SqlServer,declared,CHAR(18),char,
 row identifier / ROWID,row_identifier,string,String,Oracle,unsupported,,,no candidate was tried
@@ -704,6 +750,7 @@ row identifier / ROWID,row_identifier,string,String,SingleStore,declared,CHAR(18
 row identifier / ROWID,row_identifier,string,String,SybaseASE,declared,CHAR(18),varchar,
 row identifier / ROWID,row_identifier,string,String,Spanner,unsupported,,,P0001: Type <rowid> does not exist.
 row identifier / ROWID,row_identifier,string,String,FlatFile,declared,CHAR(18),CHAR,
+row identifier / ROWID,row_identifier,string,String,Access,declared,CHAR(18),DBTYPE_WCHAR,
 object identifier / OID,oid,uint,UInt32,PostgreSql,declared,OID,oid,
 object identifier / OID,oid,uint,UInt32,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type OID."
 object identifier / OID,oid,uint,UInt32,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -719,6 +766,7 @@ object identifier / OID,oid,uint,UInt32,SingleStore,unsupported,,,You have an er
 object identifier / OID,oid,uint,UInt32,SybaseASE,unsupported,,,Can't find type 'OID'.
 object identifier / OID,oid,uint,UInt32,Spanner,unsupported,,,P0001: Type <oid> is not supported.
 object identifier / OID,oid,uint,UInt32,FlatFile,unsupported,,,"Unknown SQL data type 'OID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+object identifier / OID,oid,uint,UInt32,Access,unsupported,,,Syntax error in field definition.
 transaction ID,transaction_id,ulong,UInt64,PostgreSql,declared,XID8,xid8,
 transaction ID,transaction_id,ulong,UInt64,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type XID."
 transaction ID,transaction_id,ulong,UInt64,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -734,6 +782,7 @@ transaction ID,transaction_id,ulong,UInt64,SingleStore,unsupported,,,You have an
 transaction ID,transaction_id,ulong,UInt64,SybaseASE,unsupported,,,Can't find type 'XID'.
 transaction ID,transaction_id,ulong,UInt64,Spanner,unsupported,,,P0001: Type <xid> is not supported.
 transaction ID,transaction_id,ulong,UInt64,FlatFile,unsupported,,,"Unknown SQL data type 'XID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+transaction ID,transaction_id,ulong,UInt64,Access,unsupported,,,Syntax error in field definition.
 WAL / log position,wal_position,string,String,PostgreSql,declared,PG_LSN,pg_lsn,
 WAL / log position,wal_position,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type PG_LSN."
 WAL / log position,wal_position,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -749,6 +798,7 @@ WAL / log position,wal_position,string,String,SingleStore,unsupported,,,You have
 WAL / log position,wal_position,string,String,SybaseASE,unsupported,,,Can't find type 'PG_LSN'.
 WAL / log position,wal_position,string,String,Spanner,unsupported,,,P0001: Type <pg_lsn> is not supported.
 WAL / log position,wal_position,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'PG_LSN'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+WAL / log position,wal_position,string,String,Access,unsupported,,,Syntax error in field definition.
 native binary JSON,binary_json,JsonDocument,Object,PostgreSql,declared,JSONB,jsonb,
 native binary JSON,binary_json,JsonDocument,Object,SqlServer,declared,JSON,json,
 native binary JSON,binary_json,JsonDocument,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -764,6 +814,7 @@ native binary JSON,binary_json,JsonDocument,Object,SingleStore,declared,BSON,BLO
 native binary JSON,binary_json,JsonDocument,Object,SybaseASE,unsupported,,,Can't find type 'JSONB'.
 native binary JSON,binary_json,JsonDocument,Object,Spanner,declared,JSONB,jsonb,
 native binary JSON,binary_json,JsonDocument,Object,FlatFile,declared,JSON,JSON,
+native binary JSON,binary_json,JsonDocument,Object,Access,unsupported,,,Syntax error in field definition.
 XML,xml,string,String,PostgreSql,declared,XML,xml,
 XML,xml,string,String,SqlServer,declared,XML,xml,
 XML,xml,string,String,Oracle,declared,CLOB,Clob,
@@ -779,6 +830,7 @@ XML,xml,string,String,SingleStore,unsupported,,,You have an error in your SQL sy
 XML,xml,string,String,SybaseASE,unsupported,,,Can't find type 'XML'.
 XML,xml,string,String,Spanner,unsupported,,,P0001: Type <xml> is not supported; use text instead.
 XML,xml,string,String,FlatFile,declared,CLOB,CLOB,
+XML,xml,string,String,Access,unsupported,,,Syntax error in field definition.
 BSON,bson,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 BSON,bson,byte[],Binary,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type BSON."
 BSON,bson,byte[],Binary,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -794,6 +846,7 @@ BSON,bson,byte[],Binary,SingleStore,declared,BSON,BLOB,
 BSON,bson,byte[],Binary,SybaseASE,unsupported,,,Can't find type 'BSON'.
 BSON,bson,byte[],Binary,Spanner,declared,BYTEA,bytea,
 BSON,bson,byte[],Binary,FlatFile,unsupported,,,"Unknown SQL data type 'BSON'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+BSON,bson,byte[],Binary,Access,unsupported,,,Syntax error in field definition.
 variant / dynamic value,variant,object,Object,PostgreSql,unsupported,,,"42704: type ""variant"" does not exist POSITION: 56"
 variant / dynamic value,variant,object,Object,SqlServer,declared,SQL_VARIANT,sql_variant,
 variant / dynamic value,variant,object,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -809,6 +862,7 @@ variant / dynamic value,variant,object,Object,SingleStore,unsupported,,,You have
 variant / dynamic value,variant,object,Object,SybaseASE,unsupported,,,Can't find type 'VARIANT'.
 variant / dynamic value,variant,object,Object,Spanner,unsupported,,,P0001: Type <variant> does not exist.
 variant / dynamic value,variant,object,Object,FlatFile,unsupported,,,"Unknown SQL data type 'VARIANT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+variant / dynamic value,variant,object,Object,Access,unsupported,,,Syntax error in field definition.
 IP network / CIDR,cidr,Cidr,Object,PostgreSql,declared,CIDR,cidr,
 IP network / CIDR,cidr,Cidr,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type CIDR."
 IP network / CIDR,cidr,Cidr,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -824,6 +878,7 @@ IP network / CIDR,cidr,Cidr,Object,SingleStore,unsupported,,,You have an error i
 IP network / CIDR,cidr,Cidr,Object,SybaseASE,unsupported,,,Can't find type 'CIDR'.
 IP network / CIDR,cidr,Cidr,Object,Spanner,unsupported,,,P0001: Type <cidr> is not supported; use text instead.
 IP network / CIDR,cidr,Cidr,Object,FlatFile,unsupported,,,"Unknown SQL data type 'CIDR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+IP network / CIDR,cidr,Cidr,Object,Access,unsupported,,,Syntax error in field definition.
 MAC address,mac_address,MacAddress,Object,PostgreSql,declared,MACADDR,macaddr,
 MAC address,mac_address,MacAddress,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type MACADDR."
 MAC address,mac_address,MacAddress,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -839,6 +894,7 @@ MAC address,mac_address,MacAddress,Object,SingleStore,unsupported,,,You have an 
 MAC address,mac_address,MacAddress,Object,SybaseASE,unsupported,,,Can't find type 'MACADDR'.
 MAC address,mac_address,MacAddress,Object,Spanner,unsupported,,,P0001: Type <macaddr> is not supported; use text instead.
 MAC address,mac_address,MacAddress,Object,FlatFile,unsupported,,,"Unknown SQL data type 'MACADDR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+MAC address,mac_address,MacAddress,Object,Access,unsupported,,,Syntax error in field definition.
 point geometry,point,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 point geometry,point,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
 point geometry,point,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -854,6 +910,7 @@ point geometry,point,Geometry,Object,SingleStore,unsupported,,,You have an error
 point geometry,point,Geometry,Object,SybaseASE,unsupported,,,Can't find type 'POINT'.
 point geometry,point,Geometry,Object,Spanner,unsupported,,,P0001: Type <point> is not supported.
 point geometry,point,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data type 'POINT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+point geometry,point,Geometry,Object,Access,unsupported,,,Syntax error in field definition.
 line / linestring geometry,linestring,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
 line / linestring geometry,linestring,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
 line / linestring geometry,linestring,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -869,6 +926,7 @@ line / linestring geometry,linestring,Geometry,Object,SingleStore,unsupported,,,
 line / linestring geometry,linestring,Geometry,Object,SybaseASE,unsupported,,,Can't find type 'LINESTRING'.
 line / linestring geometry,linestring,Geometry,Object,Spanner,unsupported,,,P0001: Type <linestring> does not exist.
 line / linestring geometry,linestring,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data type 'LINESTRING'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+line / linestring geometry,linestring,Geometry,Object,Access,unsupported,,,Syntax error in field definition.
 polygon geometry,polygon,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 polygon geometry,polygon,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
 polygon geometry,polygon,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -884,6 +942,7 @@ polygon geometry,polygon,Geometry,Object,SingleStore,unsupported,,,You have an e
 polygon geometry,polygon,Geometry,Object,SybaseASE,unsupported,,,Can't find type 'POLYGON'.
 polygon geometry,polygon,Geometry,Object,Spanner,unsupported,,,P0001: Type <polygon> is not supported.
 polygon geometry,polygon,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data type 'POLYGON'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+polygon geometry,polygon,Geometry,Object,Access,unsupported,,,Syntax error in field definition.
 general geometry,geometry,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 general geometry,geometry,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
 general geometry,geometry,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -899,6 +958,7 @@ general geometry,geometry,Geometry,Object,SingleStore,unsupported,,,Feature 'GEO
 general geometry,geometry,Geometry,Object,SybaseASE,unsupported,,,Can't find type 'GEOMETRY'.
 general geometry,geometry,Geometry,Object,Spanner,unsupported,,,P0001: Type <geometry> does not exist.
 general geometry,geometry,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data type 'GEOMETRY'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+general geometry,geometry,Geometry,Object,Access,unsupported,,,Syntax error in field definition.
 geography / geodetic,geography,Geography,Object,PostgreSql,unsupported,,,"42704: type ""geography"" does not exist POSITION: 56"
 geography / geodetic,geography,Geography,Object,SqlServer,declared,GEOGRAPHY,crud_test_d5c8b57230.sys.geography,
 geography / geodetic,geography,Geography,Object,Oracle,declared,SDO_GEOMETRY,Object,
@@ -914,6 +974,7 @@ geography / geodetic,geography,Geography,Object,SingleStore,unsupported,,,Featur
 geography / geodetic,geography,Geography,Object,SybaseASE,unsupported,,,Can't find type 'GEOGRAPHY'.
 geography / geodetic,geography,Geography,Object,Spanner,unsupported,,,P0001: Type <geography> does not exist.
 geography / geodetic,geography,Geography,Object,FlatFile,unsupported,,,"Unknown SQL data type 'GEOGRAPHY'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+geography / geodetic,geography,Geography,Object,Access,unsupported,,,Syntax error in field definition.
 fixed-length array,fixed_array,int[],Object,PostgreSql,declared,INTEGER ARRAY[10],integer[],
 fixed-length array,fixed_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
 fixed-length array,fixed_array,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
@@ -929,6 +990,7 @@ fixed-length array,fixed_array,int[],Object,SingleStore,unsupported,,,You have a
 fixed-length array,fixed_array,int[],Object,SybaseASE,unsupported,,,Incorrect syntax near 'ARRAY'.
 fixed-length array,fixed_array,int[],Object,Spanner,declared,INTEGER ARRAY[10],bigint[],
 fixed-length array,fixed_array,int[],Object,FlatFile,unsupported,,,Unexpected character '[' at position 68.
+fixed-length array,fixed_array,int[],Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 list / multiset / set collection,list_collection,List<int>,Object,PostgreSql,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
 list / multiset / set collection,list_collection,List<int>,Object,SqlServer,unsupported,,,Incorrect syntax near 'MULTISET'.
 list / multiset / set collection,list_collection,List<int>,Object,Oracle,unsupported,,,ORA-03099: unexpected item MULTISET in a column definition https://docs.oracle.com/error-help/db/ora-03099/
@@ -944,6 +1006,7 @@ list / multiset / set collection,list_collection,List<int>,Object,SingleStore,un
 list / multiset / set collection,list_collection,List<int>,Object,SybaseASE,unsupported,,,Incorrect syntax near 'MULTISET'.
 list / multiset / set collection,list_collection,List<int>,Object,Spanner,unsupported,,,"P0001: syntax error at or near ""MULTISET""; failed to parse the DDL statements."
 list / multiset / set collection,list_collection,List<int>,Object,FlatFile,unsupported,,,"Expected token 'RightParen' at position 63, but found 'Identifier'."
+list / multiset / set collection,list_collection,List<int>,Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 map / dictionary,map,"Dictionary<string,object>",Object,PostgreSql,unsupported,,,"42601: syntax error at or near "","" POSITION: 71"
 map / dictionary,map,"Dictionary<string,object>",Object,SqlServer,unsupported,,,Incorrect syntax near '('.
 map / dictionary,map,"Dictionary<string,object>",Object,Oracle,unsupported,,,ORA-03060: Data type MAP is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -959,6 +1022,7 @@ map / dictionary,map,"Dictionary<string,object>",Object,SingleStore,unsupported,
 map / dictionary,map,"Dictionary<string,object>",Object,SybaseASE,unsupported,,,Incorrect syntax near 'VARCHAR'.
 map / dictionary,map,"Dictionary<string,object>",Object,Spanner,unsupported,,,"P0001: syntax error at or near "",""; failed to parse the DDL statements."
 map / dictionary,map,"Dictionary<string,object>",Object,FlatFile,unsupported,,,"Expected token 'NumericLiteral' at position 59, but found 'Identifier'."
+map / dictionary,map,"Dictionary<string,object>",Object,Access,unsupported,,,Syntax error in field definition.
 range,range,Range<int>,Object,PostgreSql,declared,INT4RANGE,int4range,
 range,range,Range<int>,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INT4RANGE."
 range,range,Range<int>,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -974,6 +1038,7 @@ range,range,Range<int>,Object,SingleStore,unsupported,,,You have an error in you
 range,range,Range<int>,Object,SybaseASE,unsupported,,,Can't find type 'INT4RANGE'.
 range,range,Range<int>,Object,Spanner,unsupported,,,P0001: Type <int4range> is not supported.
 range,range,Range<int>,Object,FlatFile,unsupported,,,"Unknown SQL data type 'INT4RANGE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+range,range,Range<int>,Object,Access,unsupported,,,Syntax error in field definition.
 multirange,multirange,Range<int>[],Object,PostgreSql,declared,INT4MULTIRANGE,int4multirange,
 multirange,multirange,Range<int>[],Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INT4MULTIRANGE."
 multirange,multirange,Range<int>[],Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -989,6 +1054,7 @@ multirange,multirange,Range<int>[],Object,SingleStore,unsupported,,,You have an 
 multirange,multirange,Range<int>[],Object,SybaseASE,unsupported,,,Can't find type 'INT4MULTIRANGE'.
 multirange,multirange,Range<int>[],Object,Spanner,unsupported,,,P0001: Type <int4multirange> does not exist.
 multirange,multirange,Range<int>[],Object,FlatFile,unsupported,,,"Unknown SQL data type 'INT4MULTIRANGE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+multirange,multirange,Range<int>[],Object,Access,unsupported,,,Syntax error in field definition.
 user-defined enum / domain,domain,string,String,PostgreSql,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
 user-defined enum / domain,domain,string,String,SqlServer,unsupported,,,The definition for column 'c' must include a data type.
 user-defined enum / domain,domain,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1004,6 +1070,7 @@ user-defined enum / domain,domain,string,String,SingleStore,unsupported,,,You ha
 user-defined enum / domain,domain,string,String,SybaseASE,unsupported,,,The definition for column 'c' must include a datatype.
 user-defined enum / domain,domain,string,String,Spanner,unsupported,,,"P0001: syntax error at or near ""CREATE""; failed to parse the DDL statements."
 user-defined enum / domain,domain,string,String,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Create'."
+user-defined enum / domain,domain,string,String,Access,unsupported,,,Syntax error in field definition.
 full-text search vector / query,full_text,string,String,PostgreSql,declared,TSQUERY,tsquery,
 full-text search vector / query,full_text,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type TSVECTOR."
 full-text search vector / query,full_text,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1019,6 +1086,7 @@ full-text search vector / query,full_text,string,String,SingleStore,unsupported,
 full-text search vector / query,full_text,string,String,SybaseASE,unsupported,,,Can't find type 'TSVECTOR'.
 full-text search vector / query,full_text,string,String,Spanner,unsupported,,,P0001: Type <tsvector> is not supported.
 full-text search vector / query,full_text,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'TSVECTOR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+full-text search vector / query,full_text,string,String,Access,unsupported,,,Syntax error in field definition.
 native point,native_point,PostgreSqlPoint,Object,PostgreSql,declared,POINT,point,
 native point,native_point,PostgreSqlPoint,Object,SqlServer,unsupported,,,no candidate was tried
 native point,native_point,PostgreSqlPoint,Object,Oracle,unsupported,,,no candidate was tried
@@ -1034,6 +1102,7 @@ native point,native_point,PostgreSqlPoint,Object,SingleStore,unsupported,,,no ca
 native point,native_point,PostgreSqlPoint,Object,SybaseASE,unsupported,,,no candidate was tried
 native point,native_point,PostgreSqlPoint,Object,Spanner,unsupported,,,no candidate was tried
 native point,native_point,PostgreSqlPoint,Object,FlatFile,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,Access,unsupported,,,no candidate was tried
 native polygon,native_polygon,PostgreSqlPolygon,Object,PostgreSql,declared,POLYGON,polygon,
 native polygon,native_polygon,PostgreSqlPolygon,Object,SqlServer,unsupported,,,no candidate was tried
 native polygon,native_polygon,PostgreSqlPolygon,Object,Oracle,unsupported,,,no candidate was tried
@@ -1049,6 +1118,7 @@ native polygon,native_polygon,PostgreSqlPolygon,Object,SingleStore,unsupported,,
 native polygon,native_polygon,PostgreSqlPolygon,Object,SybaseASE,unsupported,,,no candidate was tried
 native polygon,native_polygon,PostgreSqlPolygon,Object,Spanner,unsupported,,,no candidate was tried
 native polygon,native_polygon,PostgreSqlPolygon,Object,FlatFile,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,Access,unsupported,,,no candidate was tried
 32-bit transaction ID,xid32,uint,UInt32,PostgreSql,declared,XID,xid,
 32-bit transaction ID,xid32,uint,UInt32,SqlServer,unsupported,,,no candidate was tried
 32-bit transaction ID,xid32,uint,UInt32,Oracle,unsupported,,,no candidate was tried
@@ -1064,6 +1134,7 @@ native polygon,native_polygon,PostgreSqlPolygon,Object,FlatFile,unsupported,,,no
 32-bit transaction ID,xid32,uint,UInt32,SybaseASE,unsupported,,,no candidate was tried
 32-bit transaction ID,xid32,uint,UInt32,Spanner,unsupported,,,no candidate was tried
 32-bit transaction ID,xid32,uint,UInt32,FlatFile,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,Access,unsupported,,,no candidate was tried
 vector embedding,vector,float[],Object,PostgreSql,unsupported,,,"42704: type ""vector"" does not exist POSITION: 56"
 vector embedding,vector,float[],Object,SqlServer,declared,VECTOR(3),varchar,
 vector embedding,vector,float[],Object,Oracle,unsupported,,,"ORA-43853: VECTOR type cannot be used in non-automatic segment space management tablespace ""SYSTEM"" https://docs.oracle.com/error-help/db/ora-43853/"
@@ -1079,6 +1150,7 @@ vector embedding,vector,float[],Object,SingleStore,declared,VECTOR(3),BLOB,
 vector embedding,vector,float[],Object,SybaseASE,unsupported,,,Can't find type 'VECTOR'.
 vector embedding,vector,float[],Object,Spanner,unsupported,,,P0001: Type <vector> does not exist.
 vector embedding,vector,float[],Object,FlatFile,unsupported,,,"Unknown SQL data type 'VECTOR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+vector embedding,vector,float[],Object,Access,unsupported,,,Syntax error in field definition.
 hierarchical path,hierarchy,HierarchyId,Object,PostgreSql,unsupported,,,"42704: type ""hierarchyid"" does not exist POSITION: 56"
 hierarchical path,hierarchy,HierarchyId,Object,SqlServer,declared,HIERARCHYID,crud_test_d5c8b57230.sys.hierarchyid,
 hierarchical path,hierarchy,HierarchyId,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1094,6 +1166,7 @@ hierarchical path,hierarchy,HierarchyId,Object,SingleStore,unsupported,,,You hav
 hierarchical path,hierarchy,HierarchyId,Object,SybaseASE,unsupported,,,Can't find type 'HIERARCHYID'.
 hierarchical path,hierarchy,HierarchyId,Object,Spanner,unsupported,,,P0001: Type <hierarchyid> does not exist.
 hierarchical path,hierarchy,HierarchyId,Object,FlatFile,unsupported,,,"Unknown SQL data type 'HIERARCHYID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+hierarchical path,hierarchy,HierarchyId,Object,Access,unsupported,,,Syntax error in field definition.
 external-file reference,file_reference,string,String,PostgreSql,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
 external-file reference,file_reference,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type BFILE."
 external-file reference,file_reference,string,String,Oracle,declared,BFILE,bfile,
@@ -1109,6 +1182,7 @@ external-file reference,file_reference,string,String,SingleStore,unsupported,,,Y
 external-file reference,file_reference,string,String,SybaseASE,unsupported,,,Can't find type 'BFILE'.
 external-file reference,file_reference,string,String,Spanner,unsupported,,,P0001: Type <bfile> does not exist.
 external-file reference,file_reference,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'BFILE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+external-file reference,file_reference,string,String,Access,unsupported,,,Syntax error in field definition.
 specialized security label,security_label,string,String,PostgreSql,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"
 specialized security label,security_label,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type IDSSECURITYLABEL."
 specialized security label,security_label,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -1124,3 +1198,4 @@ specialized security label,security_label,string,String,SingleStore,unsupported,
 specialized security label,security_label,string,String,SybaseASE,unsupported,,,Can't find type 'IDSSECURITYLABEL'.
 specialized security label,security_label,string,String,Spanner,unsupported,,,P0001: Type <idssecuritylabel> does not exist.
 specialized security label,security_label,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'IDSSECURITYLABEL'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+specialized security label,security_label,string,String,Access,unsupported,,,Syntax error in field definition.

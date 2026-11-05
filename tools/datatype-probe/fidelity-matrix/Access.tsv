@@ -1,0 +1,75 @@
+Access	signed 8-bit	signed_8_bit	PASS
+Access	signed 16-bit	signed_16_bit	PASS
+Access	signed 32-bit	signed_32_bit	PASS
+Access	signed 64-bit	signed_64_bit	PASS
+Access	signed 128-bit	signed_128_bit	UNSUPPORTED refused: Syntax error in field definition.
+Access	unsigned 8-bit	unsigned_8_bit	PASS
+Access	unsigned 16-bit	unsigned_16_bit	PASS
+Access	unsigned 32-bit	unsigned_32_bit	PASS
+Access	unsigned 64-bit	unsigned_64_bit	PASS
+Access	arbitrary-size integer	arbitrary_integer	UNSUPPORTED refused: by design: Access has no integer beyond DECIMAL(28), and NUMBER is a double that loses digits; a BigInteger is not a type the OLE DB provider can marshal
+Access	binary float32	binary_float32	PASS
+Access	binary float64	binary_float64	PASS
+Access	fixed decimal	fixed_decimal	PASS
+Access	boolean	boolean	PASS
+Access	bit / bitstring	bit_string	UNSUPPORTED refused: by design: a BIT (YESNO) column holds one bit; a bit string of any length is not representable without a length-bearing column
+Access	varying character	varying_character	PASS
+Access	unbounded text	unbounded_text	PASS
+Access	UUID / GUID	uuid	PASS
+Access	calendar date	calendar_date	PASS
+Access	time without zone	time_of_day	PASS
+Access	time without zone	time_span	PASS
+Access	day-time interval	day_time_interval	UNSUPPORTED refused: Syntax error in field definition.
+Access	timestamp without zone	timestamp	PASS
+Access	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: Syntax error in CREATE TABLE statement.
+Access	binary LOB	binary	PASS
+Access	JSON text / JSON value	json	UNSUPPORTED refused: Syntax error in field definition.
+Access	IP address	ip_address	PASS
+Access	SQL array	int_array	UNSUPPORTED refused: Syntax error in CREATE TABLE statement.
+Access	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: Syntax error in field definition.
+Access	decimal floating point	decimal_float	UNSUPPORTED refused: Syntax error in field definition.
+Access	money / currency	money	PASS
+Access	fixed character	fixed_character	PASS
+Access	national / Unicode character	national_text	PASS
+Access	long text LOB	long_text	PASS
+Access	enumeration	enumeration	UNSUPPORTED refused: Syntax error in field definition.
+Access	set-valued enum	set_value	UNSUPPORTED refused: Syntax error in field definition.
+Access	fixed binary	fixed_binary	PASS
+Access	varying binary	varying_binary	PASS
+Access	legacy long binary	legacy_binary	PASS
+Access	rowversion / timestamp token	rowversion	PASS
+Access	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Syntax error in CREATE TABLE statement.
+Access	second-precision datetime	second_datetime	PASS
+Access	time with zone	time_zoned	UNSUPPORTED refused: Syntax error in CREATE TABLE statement.
+Access	year-only	year_only	PASS
+Access	year-month interval	year_month_interval	UNSUPPORTED refused: Syntax error in field definition.
+Access	generic interval	generic_interval	UNSUPPORTED refused: Syntax error in field definition.
+Access	row identifier / ROWID	row_identifier	PASS
+Access	object identifier / OID	oid	UNSUPPORTED refused: Syntax error in field definition.
+Access	transaction ID	transaction_id	UNSUPPORTED refused: Syntax error in field definition.
+Access	WAL / log position	wal_position	UNSUPPORTED refused: Syntax error in field definition.
+Access	native binary JSON	binary_json	UNSUPPORTED refused: Syntax error in field definition.
+Access	XML	xml	UNSUPPORTED refused: Syntax error in field definition.
+Access	BSON	bson	UNSUPPORTED refused: Syntax error in field definition.
+Access	variant / dynamic value	variant	UNSUPPORTED refused: Syntax error in field definition.
+Access	IP network / CIDR	cidr	UNSUPPORTED refused: Syntax error in field definition.
+Access	MAC address	mac_address	UNSUPPORTED refused: Syntax error in field definition.
+Access	point geometry	point	UNSUPPORTED refused: Syntax error in field definition.
+Access	line / linestring geometry	linestring	UNSUPPORTED refused: Syntax error in field definition.
+Access	polygon geometry	polygon	UNSUPPORTED refused: Syntax error in field definition.
+Access	general geometry	geometry	UNSUPPORTED refused: Syntax error in field definition.
+Access	geography / geodetic	geography	UNSUPPORTED refused: Syntax error in field definition.
+Access	fixed-length array	fixed_array	UNSUPPORTED refused: Syntax error in CREATE TABLE statement.
+Access	list / multiset / set collection	list_collection	UNSUPPORTED refused: Syntax error in CREATE TABLE statement.
+Access	map / dictionary	map	UNSUPPORTED refused: Syntax error in field definition.
+Access	range	range	UNSUPPORTED refused: Syntax error in field definition.
+Access	multirange	multirange	UNSUPPORTED refused: Syntax error in field definition.
+Access	user-defined enum / domain	domain	UNSUPPORTED refused: Syntax error in field definition.
+Access	full-text search vector / query	full_text	UNSUPPORTED refused: Syntax error in field definition.
+Access	native point	native_point	UNSUPPORTED refused: no candidate was tried
+Access	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+Access	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+Access	vector embedding	vector	UNSUPPORTED refused: Syntax error in field definition.
+Access	hierarchical path	hierarchy	UNSUPPORTED refused: Syntax error in field definition.
+Access	external-file reference	file_reference	UNSUPPORTED refused: Syntax error in field definition.
+Access	specialized security label	security_label	UNSUPPORTED refused: Syntax error in field definition.
