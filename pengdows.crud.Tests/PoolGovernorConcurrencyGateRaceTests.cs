@@ -41,28 +41,34 @@ public sealed class PoolGovernorConcurrencyGateRaceTests
 
         forcedCancellation.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(async () => await forcedWaiter);
-        gate.Release(held);
-        gate.Release(secondHeld);
 
+        // Both permits stay held while the workers start, so each worker's first acquire queues: the workers that cancel
+        // on their first iteration (0, 5, 10 and 15) are certain to cancel a queued waiter, whatever the scheduler does.
         var workers = Enumerable.Range(0, 16).Select(async worker =>
         {
             for (var iteration = 0; iteration < 200; iteration++)
             {
                 using var attempt = new CancellationTokenSource();
-                if ((worker + iteration) % 5 == 0)
-                {
-                    attempt.CancelAfter(1);
-                }
+                var cancelAttempt = (worker + iteration) % 5 == 0;
 
                 try
                 {
-                    var permit = await gate.AcquireAsync(attempt.Token);
+                    // Cancelled as soon as the acquire is issued, not by a timer: a timer's resolution (about 15 ms
+                    // on Windows) decides whether it ever fires before the loop ends. This races the cancellation
+                    // against a grant or a resize on another thread, and a grant that wins is released as usual.
+                    var pending = gate.AcquireAsync(attempt.Token);
+                    if (cancelAttempt)
+                    {
+                        attempt.Cancel();
+                    }
+
+                    var permit = await pending;
                     var current = Interlocked.Increment(ref inUse);
                     UpdateHighWater(ref highWater, current);
                     Assert.InRange(current, 1, 2);
                     try
                     {
-                        await Task.Delay(1);
+                        await Task.Yield();
                     }
                     finally
                     {
@@ -76,6 +82,9 @@ public sealed class PoolGovernorConcurrencyGateRaceTests
                 }
             }
         }).ToArray();
+
+        gate.Release(held);
+        gate.Release(secondHeld);
 
         var resizing = Task.Run(async () =>
         {
