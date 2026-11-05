@@ -180,8 +180,10 @@ public class IntervalAndRangeCoercionEdgeCaseTests
         var converter = new IntervalYearMonthConverter();
         var interval = new IntervalYearMonth(1, 0);
 
+        // PostgreSQL takes the Npgsql interval, or ISO text when Npgsql isn't loaded (as here): either way the value
+        // written reads back as the same interval.
         var result = converter.ToProviderValue(interval, SupportedDatabase.PostgreSql);
-        Assert.Equal("P1Y0M", result);
+        Assert.Equal(interval.TotalMonths, IntervalYearMonth.Parse((string)result!).TotalMonths);
     }
 
     [Fact]
@@ -195,14 +197,16 @@ public class IntervalAndRangeCoercionEdgeCaseTests
     }
 
     [Fact]
-    public void IntervalYearMonthConverter_ConvertToProvider_DefaultProvider_ReturnsRaw()
+    public void IntervalYearMonthConverter_ConvertToProvider_DefaultProvider_ReturnsIsoText()
     {
+        // SQLite has no interval type: the year-month interval is ISO 8601 text that reads back exactly.
         var converter = new IntervalYearMonthConverter();
         var interval = new IntervalYearMonth(2, 3);
 
         var result = converter.ToProviderValue(interval, SupportedDatabase.Sqlite);
-        Assert.IsType<IntervalYearMonth>(result);
-        Assert.Equal(interval, (IntervalYearMonth)result!);
+        Assert.Equal("P2Y3M", result);
+        Assert.True(converter.TryConvertFromProvider((string)result!, SupportedDatabase.Sqlite, out var back));
+        Assert.Equal(interval, back);
     }
 
     [Fact]
@@ -299,8 +303,11 @@ public class IntervalAndRangeCoercionEdgeCaseTests
 
         var parameter = context.CreateDbParameter("p0", DbType.Object, interval);
 
-        var written = Assert.IsType<PostgreSqlInterval>(parameter.Value);
-        Assert.Equal(14, written.Months);
-        Assert.Equal(3, written.Days);
+        // The database has no interval type, so the interval is bound as its text, which reads back to the same value.
+        var written = Assert.IsType<string>(parameter.Value);
+        Assert.True(new PostgreSqlIntervalConverter().TryConvertFromProvider(written, SupportedDatabase.Sqlite, out var back));
+        Assert.Equal(14, back.Months);
+        Assert.Equal(3, back.Days);
+        Assert.Equal(5_000_000L, back.Microseconds);
     }
 }

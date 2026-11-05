@@ -47,8 +47,25 @@ internal sealed class NpgsqlTypedFieldReader
     public bool AppliesTo(IDataRecord record, int ordinal)
     {
         var reader = record as DbDataReader ?? (record as IInternalTrackedReader)?.InnerReader;
-        return reader != null && _read.Value != null &&
-               string.Equals(reader.GetDataTypeName(ordinal), _dataTypeName, StringComparison.OrdinalIgnoreCase);
+        return reader != null && _read.Value != null && IsNpgsqlReaderTypeName(reader.GetType().FullName) &&
+               DataTypeNameMatches(reader.GetDataTypeName(ordinal), _dataTypeName);
+    }
+
+    /// <summary>
+    /// Whether a reader type is Npgsql's. Another provider can name a column "interval" too (SQLite, DuckDB), and its
+    /// values are not NpgsqlInterval.
+    /// </summary>
+    internal static bool IsNpgsqlReaderTypeName(string? readerTypeName) =>
+        readerTypeName != null && readerTypeName.StartsWith("Npgsql", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Whether a provider-reported type name is the base name, with or without its type modifier ("interval(65535)").
+    /// </summary>
+    internal static bool DataTypeNameMatches(string reported, string baseName)
+    {
+        var open = reported.IndexOf('(');
+        var name = open < 0 ? reported : reported.Substring(0, open);
+        return string.Equals(name, baseName, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The column's typed value; only for a column <see cref="AppliesTo"/> accepted.</summary>

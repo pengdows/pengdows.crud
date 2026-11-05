@@ -12,6 +12,7 @@
         <ProjectReference Include="../../pengdows.crud.abstractions/pengdows.crud.abstractions.csproj" />
         <ProjectReference Include="../../pengdows.crud.fakeDb/pengdows.crud.fakeDb.csproj" />
         <ProjectReference Include="../../pengdows.stormgate/pengdows.stormgate.csproj" />
+        <ProjectReference Include="../../pengdows.crud.opentelemetry/pengdows.crud.opentelemetry.csproj" />
     </ItemGroup>
 
     <ItemGroup>

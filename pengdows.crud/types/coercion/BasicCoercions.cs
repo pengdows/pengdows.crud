@@ -345,30 +345,9 @@ internal class BooleanCoercion : DbCoercion<bool>
                 value = b;
                 return true;
             case string s:
-                if (bool.TryParse(s, out value))
-                {
-                    return true;
-                }
-
-                if (s.Length == 1)
-                {
-                    value = EvaluateCharBoolean(char.ToLowerInvariant(s[0]));
-                    return true;
-                }
-
-                // NaN is neither true nor false: declined here (a Try method doesn't throw, REV-079);
-                // Coerce fails it (NumericTruth.Check).
-                if (double.TryParse(s, NumberStyles.Any, CultureInfo.InvariantCulture, out var dbl) && !double.IsNaN(dbl))
-                {
-                    value = dbl != 0;
-                    return true;
-                }
-
-                value = false;
-                return false;
+                return TryReadBooleanText(s, out value);
             case char c:
-                value = EvaluateCharBoolean(char.ToLowerInvariant(c));
-                return true;
+                return TryReadBooleanText(c.ToString(), out value);
             case ulong u:
                 // Before the Int64 case: Convert.ToInt64 overflows above long.MaxValue.
                 value = u != 0;
@@ -391,15 +370,81 @@ internal class BooleanCoercion : DbCoercion<bool>
         }
     }
 
-    private static bool EvaluateCharBoolean(char lower)
+    // Text is a boolean if, once surrounding whitespace is removed, it is "true" or "false" (any case),
+    // "y" (any case), or one of "0", "0.0", "f", "n", "no", "NaN" or "-NaN" (any case, the last six false).
+    // Anything else, including blank text, fails the read instead of guessing a value.
+    private static bool TryReadBooleanText(string text, out bool value)
     {
-        return lower switch
+        // Fast path for the exact spellings that occur in practice. Each one is a token the full parser below also reads
+        // as the same value, so the result cannot differ; anything else (padding, control characters, other casing)
+        // goes through the full parser.
+        switch (text)
         {
-            't' or 'y' or '1' => true,
-            'f' or 'n' or '0' => false,
-            _ => throw new InvalidCastException($"Cannot convert character '{lower}' to Boolean.")
-        };
+            case "true" or "True" or "TRUE":
+                value = true;
+                return true;
+            case "false" or "False" or "FALSE":
+                value = false;
+                return true;
+        }
+
+        var parsed = ParseBooleanToken(text.AsSpan().Trim());
+        value = parsed ?? false;
+        return parsed.HasValue;
     }
+
+    // null means the token is not a boolean token. It is kept separate from false so that "false" and an
+    // unrecognised token can never be confused.
+    private static bool? ParseBooleanToken(ReadOnlySpan<char> token)
+    {
+        switch (token.Length)
+        {
+            case 1:
+                return token[0] switch
+                {
+                    'y' or 'Y' => true,
+                    'f' or 'F' or 'n' or 'N' or '0' => false,
+                    _ => null,
+                };
+            case 2:
+                return AsciiEqualsIgnoreCase(token, "no") ? false : null;
+            case 3:
+                return AsciiEqualsIgnoreCase(token, "0.0") || AsciiEqualsIgnoreCase(token, "nan") ? false : null;
+            case 4:
+                if (AsciiEqualsIgnoreCase(token, "true"))
+                {
+                    return true;
+                }
+
+                return AsciiEqualsIgnoreCase(token, "-nan") ? false : null;
+            case 5:
+                return AsciiEqualsIgnoreCase(token, "false") ? false : null;
+            default:
+                return null;
+        }
+    }
+
+    // expectedLowerAscii is lower-case ASCII: letters, digits, '.' or '-'. A letter matches its
+    // upper- or lower-case form exactly. Any other character must match exactly, because OR-ing 0x20 would
+    // fold control characters onto token characters (0x0D onto '-', 0x10 onto '0').
+    private static bool AsciiEqualsIgnoreCase(ReadOnlySpan<char> token, string expectedLowerAscii)
+    {
+        for (var i = 0; i < expectedLowerAscii.Length; i++)
+        {
+            var expected = expectedLowerAscii[i];
+            var actual = token[i];
+            var matches = expected is >= 'a' and <= 'z'
+                ? (actual | 0x20) == expected
+                : actual == expected;
+            if (!matches)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
 }
 
 /// <summary>

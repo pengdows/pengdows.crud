@@ -19,6 +19,7 @@
 // - Savepoint support for nested transaction semantics.
 // =============================================================================
 
+using System.Buffers.Binary;
 using System.Data;
 using System.Data.Common;
 using System.Globalization;
@@ -26,6 +27,7 @@ using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions.translators;
 using pengdows.crud.types;
+using pengdows.crud.types.coercion;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
 using pengdows.crud.wrappers;
@@ -169,6 +171,10 @@ internal class SqliteDialect : SqlDialect
 
     // SQLite has no native BOOLEAN type; store as INTEGER.
     public override DbType BooleanDbType => DbType.Int32;
+
+    // Microsoft.Data.Sqlite has no parameter type for a BigInteger or Int128 (TYPE-005); the exact text is bound.
+    internal override bool BindsWideIntegersAsText => true;
+
     public override bool SupportsJsonTypes => Probed(ref _jsonbFunction) ?? IsVersionAtLeast(3, 45);
     public override bool SupportsWindowFunctions => Probed(ref _rowNumberFunction) ?? IsVersionAtLeast(3, 25);
     public override bool SupportsCommonTableExpressions => IsVersionAtLeast(3, 8, 3);
@@ -795,7 +801,17 @@ internal class SqliteDialect : SqlDialect
     internal static DatabaseTraits CreateSqliteTraits() =>
         new(SupportedDatabase.Sqlite, new SqliteExceptionTranslator())
         {
-            RegisterTypeMappings = RegisterSqliteTypeMappings
+            RegisterTypeMappings = RegisterSqliteTypeMappings,
+            // No interval type: an interval is ISO 8601 text, which the interval converters read back exactly.
+            IntervalFormat = IntervalWireFormat.Iso8601,
+            // No spatial type: a geometry is its EWKB in a BLOB, which keeps the SRID (see RegisterSqliteTypeMappings).
+            SpatialFormat = SpatialWireFormat.ExtendedWkb,
+            // A float vector is stored as float32 bytes (see RegisterSqliteTypeMappings): read it back as the packed vector.
+            RegisterCoercions = registry =>
+            {
+                registry.Register(SupportedDatabase.Sqlite, new PackedFloat32VectorCoercion());
+                TextCollections.RegisterCoercions(registry, SupportedDatabase.Sqlite);
+            }
         };
 
     private static void RegisterSqliteTypeMappings(AdvancedTypeRegistry registry)
@@ -826,6 +842,68 @@ internal class SqliteDialect : SqlDialect
                     var (inferredPrecision, inferredScale) = DecimalHelpers.Infer(dec);
                     param.Precision = (byte)Math.Max(inferredPrecision, 18);
                     param.Scale = (byte)inferredScale;
+                }
+            }
+        });
+
+        // A geometry and a geography are stored as their EWKB (the SpatialConverter's ExtendedWkb form) in a BLOB.
+        var ewkb = new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) => param.DbType = DbType.Binary
+        };
+        registry.RegisterMapping<pengdows.crud.types.valueobjects.Geometry>(SupportedDatabase.Sqlite, ewkb);
+        registry.RegisterMapping<pengdows.crud.types.valueobjects.Geography>(SupportedDatabase.Sqlite, ewkb);
+
+        // A list, a map and a range array stored as text (no such type on SQLite).
+        TextCollections.RegisterMappings(registry, SupportedDatabase.Sqlite);
+
+        // A bit string stored as its 0/1 text (BitStringFormat), which keeps its length exactly. SQLite has no bit type,
+        // and its BIT affinity reads the text back; the BitArray coercion parses it.
+        registry.RegisterMapping<System.Collections.BitArray>(SupportedDatabase.Sqlite, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                if (value is System.Collections.BitArray bits)
+                {
+                    param.Value = BitStringFormat.Format(bits);
+                }
+            }
+        });
+
+        // An int array stored as its comma-separated text, which the int-array coercion reads back. SQLite has no array type.
+        registry.RegisterMapping<int[]>(SupportedDatabase.Sqlite, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                if (value is int[] ints)
+                {
+                    param.Value = string.Join(",", ints);
+                }
+            }
+        });
+
+        // A float vector stored as its little-endian float32 bytes, which the packed-vector coercion reads back.
+        registry.RegisterMapping<float[]>(SupportedDatabase.Sqlite, new ProviderTypeMapping
+        {
+            DbType = DbType.Binary,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.Binary;
+                if (value is float[] floats)
+                {
+                    var bytes = new byte[floats.Length * sizeof(float)];
+                    for (var i = 0; i < floats.Length; i++)
+                    {
+                        BinaryPrimitives.WriteSingleLittleEndian(bytes.AsSpan(i * sizeof(float)), floats[i]);
+                    }
+
+                    param.Value = bytes;
+                    param.Size = bytes.Length;
                 }
             }
         });

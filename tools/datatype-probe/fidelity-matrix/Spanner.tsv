@@ -1,0 +1,75 @@
+Spanner	signed 8-bit	signed_8_bit	PASS
+Spanner	signed 16-bit	signed_16_bit	PASS
+Spanner	signed 32-bit	signed_32_bit	PASS
+Spanner	signed 64-bit	signed_64_bit	PASS
+Spanner	signed 128-bit	signed_128_bit	UNSUPPORTED refused: P0001: Type <hugeint> does not exist.
+Spanner	unsigned 8-bit	unsigned_8_bit	PASS
+Spanner	unsigned 16-bit	unsigned_16_bit	PASS
+Spanner	unsigned 32-bit	unsigned_32_bit	PASS
+Spanner	unsigned 64-bit	unsigned_64_bit	PASS
+Spanner	arbitrary-size integer	arbitrary_integer	UNSUPPORTED refused: P0001: Type modifier is not supported for type <numeric>.
+Spanner	binary float32	binary_float32	PASS
+Spanner	binary float64	binary_float64	PASS
+Spanner	fixed decimal	fixed_decimal	PASS
+Spanner	boolean	boolean	PASS
+Spanner	bit / bitstring	bit_string	UNSUPPORTED refused: P0001: Type <bit> is not supported.
+Spanner	varying character	varying_character	PASS
+Spanner	unbounded text	unbounded_text	PASS
+Spanner	UUID / GUID	uuid	PASS
+Spanner	calendar date	calendar_date	PASS
+Spanner	time without zone	time_of_day	UNSUPPORTED refused: P0001: Type <time> is not supported.
+Spanner	time without zone	time_span	UNSUPPORTED refused: P0001: Type <time> is not supported.
+Spanner	day-time interval	day_time_interval	UNSUPPORTED refused: P0001: Column of type <interval> is not supported.
+Spanner	timestamp without zone	timestamp	UNSUPPORTED refused: P0001: Type <timestamp> is not supported.
+Spanner	timestamp with zone	timestamp_with_zone	PASS
+Spanner	binary LOB	binary	PASS
+Spanner	JSON text / JSON value	json	PASS
+Spanner	IP address	ip_address	PASS
+Spanner	SQL array	int_array	PASS
+Spanner	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: P0001: Type <uhugeint> does not exist.
+Spanner	decimal floating point	decimal_float	UNSUPPORTED refused: P0001: Type <decfloat> does not exist.
+Spanner	money / currency	money	UNSUPPORTED refused: P0001: Type <money> is not supported; use numeric or decimal instead.
+Spanner	fixed character	fixed_character	UNSUPPORTED refused: P0001: Type <bpchar> is not supported.
+Spanner	national / Unicode character	national_text	UNSUPPORTED refused: P0001: Type <nvarchar> does not exist.
+Spanner	long text LOB	long_text	PASS
+Spanner	enumeration	enumeration	UNSUPPORTED refused: P0001: Type <enum> does not exist.
+Spanner	set-valued enum	set_value	UNSUPPORTED refused: P0001: Type <set> does not exist.
+Spanner	fixed binary	fixed_binary	UNSUPPORTED refused: P0001: Type <binary> does not exist.
+Spanner	varying binary	varying_binary	PASS
+Spanner	legacy long binary	legacy_binary	UNSUPPORTED refused: P0001: syntax error at or near "RAW"; failed to parse the DDL statements.
+Spanner	rowversion / timestamp token	rowversion	UNSUPPORTED refused: P0001: Type <rowversion> does not exist.
+Spanner	local-zone timestamp	local_timestamp	UNSUPPORTED refused: P0001: syntax error at or near "WITH"; failed to parse the DDL statements.
+Spanner	second-precision datetime	second_datetime	PASS
+Spanner	time with zone	time_zoned	UNSUPPORTED refused: P0001: Type <timetz> is not supported.
+Spanner	year-only	year_only	UNSUPPORTED refused: P0001: Type <year> does not exist.
+Spanner	year-month interval	year_month_interval	UNSUPPORTED refused: P0001: Column of type <interval> is not supported.
+Spanner	generic interval	generic_interval	UNSUPPORTED refused: P0001: Column of type <interval> is not supported.
+Spanner	row identifier / ROWID	row_identifier	UNSUPPORTED refused: P0001: Type <rowid> does not exist.
+Spanner	object identifier / OID	oid	UNSUPPORTED refused: P0001: Type <oid> is not supported.
+Spanner	transaction ID	transaction_id	UNSUPPORTED refused: P0001: Type <xid> is not supported.
+Spanner	WAL / log position	wal_position	UNSUPPORTED refused: P0001: Type <pg_lsn> is not supported.
+Spanner	native binary JSON	binary_json	PASS
+Spanner	XML	xml	UNSUPPORTED refused: P0001: Type <xml> is not supported; use text instead.
+Spanner	BSON	bson	PASS
+Spanner	variant / dynamic value	variant	UNSUPPORTED refused: P0001: Type <variant> does not exist.
+Spanner	IP network / CIDR	cidr	UNSUPPORTED refused: P0001: Type <cidr> is not supported; use text instead.
+Spanner	MAC address	mac_address	UNSUPPORTED refused: P0001: Type <macaddr> is not supported; use text instead.
+Spanner	point geometry	point	UNSUPPORTED refused: P0001: Type <point> is not supported.
+Spanner	line / linestring geometry	linestring	UNSUPPORTED refused: P0001: Type <linestring> does not exist.
+Spanner	polygon geometry	polygon	UNSUPPORTED refused: P0001: Type <polygon> is not supported.
+Spanner	general geometry	geometry	UNSUPPORTED refused: P0001: Type <geometry> does not exist.
+Spanner	geography / geodetic	geography	UNSUPPORTED refused: P0001: Type <geography> does not exist.
+Spanner	fixed-length array	fixed_array	PASS
+Spanner	list / multiset / set collection	list_collection	UNSUPPORTED refused: P0001: syntax error at or near "MULTISET"; failed to parse the DDL statements.
+Spanner	map / dictionary	map	UNSUPPORTED refused: P0001: syntax error at or near ","; failed to parse the DDL statements.
+Spanner	range	range	UNSUPPORTED refused: P0001: Type <int4range> is not supported.
+Spanner	multirange	multirange	UNSUPPORTED refused: P0001: Type <int4multirange> does not exist.
+Spanner	user-defined enum / domain	domain	UNSUPPORTED refused: P0001: syntax error at or near "CREATE"; failed to parse the DDL statements.
+Spanner	full-text search vector / query	full_text	UNSUPPORTED refused: P0001: Type <tsvector> is not supported.
+Spanner	native point	native_point	UNSUPPORTED refused: no candidate was tried
+Spanner	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+Spanner	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+Spanner	vector embedding	vector	UNSUPPORTED refused: P0001: Type <vector> does not exist.
+Spanner	hierarchical path	hierarchy	UNSUPPORTED refused: P0001: Type <hierarchyid> does not exist.
+Spanner	external-file reference	file_reference	UNSUPPORTED refused: P0001: Type <bfile> does not exist.
+Spanner	specialized security label	security_label	UNSUPPORTED refused: P0001: Type <idssecuritylabel> does not exist.

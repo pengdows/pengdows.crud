@@ -244,7 +244,7 @@ internal sealed class InformixDialect : SqlDialect
                 : inMergeOnly ? StagedClobInMerge : StagedClob;
             if (inMergeOnly && staged.Stage == 'c')
             {
-                ProviderPropertySetter.Set(parameter, "IfxType", "Text");
+                ProviderPropertySetter.TrySet(parameter, "IfxType", "Text");
             }
         }
         else if (FractionDigits(column) is { } digits)
@@ -333,7 +333,7 @@ internal sealed class InformixDialect : SqlDialect
                 var value = Make(factoryCommand, blob ? DbType.Binary : DbType.String, parameter.Value);
                 if (!blob)
                 {
-                    ProviderPropertySetter.Set(value, "IfxType", "Text");
+                    ProviderPropertySetter.TrySet(value, "IfxType", "Text");
                 }
 
                 await RunAsync(blob

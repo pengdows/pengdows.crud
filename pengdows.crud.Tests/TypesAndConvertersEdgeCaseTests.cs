@@ -955,7 +955,7 @@ public class TypesAndConvertersEdgeCaseTests
         var converter = new GeographyConverter();
         var geog = Geography.FromWellKnownText("POINT(0 0)", 4326);
 
-        var result = converter.ToProviderValue(geog, SupportedDatabase.Sqlite);
+        var result = converter.ToProviderValue(geog, SupportedDatabase.Firebird);
 
         Assert.IsType<string>(result);
     }
@@ -967,7 +967,7 @@ public class TypesAndConvertersEdgeCaseTests
         var json = "{\"type\":\"Point\",\"coordinates\":[0,0]}";
         var geog = Geography.FromGeoJson(json, 4326);
 
-        var result = converter.ToProviderValue(geog, SupportedDatabase.Sqlite);
+        var result = converter.ToProviderValue(geog, SupportedDatabase.Firebird);
 
         Assert.Equal(json, result);
     }

@@ -24,7 +24,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2} NpgsqlDbType=-2147483639
     i3 = Object Single[]{float:1.5}
     i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
-    i5 = String "10.0.0.1"
+    i5 = String "10.0.0.1" NpgsqlDbType=Inet
     i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
 == SqlServer
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -52,7 +52,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = String "[1.5]"
     i4 = Binary 0x000010E60101000000000000000000F03F0000000000000040
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == Oracle
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6, :i7, :i8, :i9)
@@ -80,7 +80,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = String "[1.5]"
     i4 = String "SRID=4326;POINT(1 2)"
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == Firebird
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -97,7 +97,7 @@
   Temporal: INSERT INTO "t_time" ("id", "dt", "dt2", "dto", "d", "t", "ts") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
     i0 = Int32 Int32:0
     i1 = DateTime DateTime:2026-10-05T01:02:03.0000000Z/Utc
-    i2 = DateTime2 DateTime:2026-10-05T01:02:03.1234567/Unspecified
+    i2 = DateTime DateTime:2026-10-05T01:02:03.1234567/Unspecified
     i3 = Object FbZonedDateTime:2026-10-05T06:02:03.0000000Z/UTC
     i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
     i5 = Time TimeSpan:01:02:03
@@ -108,7 +108,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == CockroachDb
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -136,7 +136,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2} NpgsqlDbType=-2147483639
     i3 = Object Single[]{float:1.5}
     i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
-    i5 = String "10.0.0.1"
+    i5 = String "10.0.0.1" NpgsqlDbType=Inet
     i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
 == MariaDb
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -164,7 +164,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Binary 0xE61000000101000000000000000000F03F0000000000000040
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == MySql
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -192,7 +192,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Binary 0xE61000000101000000000000000000F03F0000000000000040
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == Sqlite
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -217,10 +217,10 @@
   Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
     i0 = Int32 Int32:0
     i1 = String "["a"]"
-    i2 = Object Int32[]{Int32:1,Int32:2}
-    i3 = Object Single[]{float:1.5}
-    i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i2 = String "1,2"
+    i3 = Binary 0x0000C03F
+    i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == DuckDB
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES ($i0, $i1, $i2, $i3, $i4, $i5, $i6, $i7, $i8, $i9)
@@ -248,7 +248,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == YugabyteDb
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -276,7 +276,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2} NpgsqlDbType=-2147483639
     i3 = Object Single[]{float:1.5}
     i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
-    i5 = String "10.0.0.1"
+    i5 = String "10.0.0.1" NpgsqlDbType=Inet
     i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
 == TiDb
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -302,9 +302,9 @@
     i0 = Int32 Int32:0
     i1 = String "["a"]"
     i2 = Object Int32[]{Int32:1,Int32:2}
-    i3 = Object Single[]{float:1.5}
+    i3 = String "[1.5]"
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == Snowflake
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6, :i7, :i8, :i9)
@@ -332,7 +332,7 @@
     i2 = String "[1,2]"
     i3 = String "[1.5]"
     i4 = String "SRID=4326;POINT(1 2)"
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == AuroraMySql
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -360,7 +360,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Binary 0xE61000000101000000000000000000F03F0000000000000040
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == AuroraPostgreSql
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -388,7 +388,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2} NpgsqlDbType=-2147483639
     i3 = Object Single[]{float:1.5}
     i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
-    i5 = String "10.0.0.1"
+    i5 = String "10.0.0.1" NpgsqlDbType=Inet
     i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
 == Db2
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -416,7 +416,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == FlatFile
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (:i0, :i1, :i2, :i3, :i4, :i5, :i6, :i7, :i8, :i9)
@@ -444,7 +444,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == SingleStore
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -466,14 +466,7 @@
     i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
     i5 = String "01:02:03"
     i6 = String "01:02:03"
-  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6)
-    i0 = Int32 Int32:0
-    i1 = String "["a"]"
-    i2 = Object Int32[]{Int32:1,Int32:2}
-    i3 = String "[1.5]"
-    i4 = String "POINT(1 2)"
-    i5 = Object Inet:10.0.0.1
-    i6 = String "{}"
+  Advanced: throws TemplateInitializationException
 == SybaseASE
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
     i0 = Int32 Int32:0
@@ -500,7 +493,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == Spanner
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -528,7 +521,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}" DataTypeName=jsonb NpgsqlDbType=Jsonb
 == Informix
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -556,7 +549,7 @@
     i2 = String "LIST{1,2}"
     i3 = String "LIST{1.5}"
     i4 = AnsiString Geometry:srid=4326:wkb=
-    i5 = AnsiString Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = AnsiString "{}"
 == SapHana
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -578,13 +571,13 @@
     i4 = Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
     i5 = Time TimeSpan:01:02:03
     i6 = Time TimeSpan:01:02:03
-  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (?, ?, ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V INT PATH '$')) ORDER BY O), ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V DOUBLE PATH '$')) ORDER BY O), ST_GeomFromEWKB(?), ?, ?)
+  Advanced: INSERT INTO "t_adv" ("id", "j", "ia", "fa", "geo", "inet", "doc") VALUES (?, ?, ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V INT PATH '$')) ORDER BY O), ARRAY(SELECT CAST(V AS REAL) FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V DOUBLE PATH '$')) ORDER BY O), ST_GeomFromEWKB(?), ?, ?)
     i0 = Int32 Int32:0
     i1 = String "["a"]"
     i2 = String "[1,2]"
     i3 = String "[1.5]"
     i4 = Binary 0x0101000020E6100000000000000000F03F0000000000000040
-    i5 = AnsiString Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = AnsiString "{}"
 == InterBase
   Scalars: INSERT INTO "t_scalar" ("id", "b", "l", "d", "f", "s", "g", "e", "en", "bin") VALUES (@i0, @i1, @i2, @i3, @i4, @i5, @i6, @i7, @i8, @i9)
@@ -612,7 +605,7 @@
     i2 = Object Int32[]{Int32:1,Int32:2} IBDbType=Array
     i3 = Object Single[]{float:1.5} IBDbType=Array
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"
 == Access
   Scalars: INSERT INTO [t_scalar] ([id], [b], [l], [d], [f], [s], [g], [e], [en], [bin]) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -640,5 +633,5 @@
     i2 = Object Int32[]{Int32:1,Int32:2}
     i3 = Object Single[]{float:1.5}
     i4 = Object Geometry:srid=4326:wkb=
-    i5 = Object Inet:10.0.0.1
+    i5 = String "10.0.0.1"
     i6 = String "{}"

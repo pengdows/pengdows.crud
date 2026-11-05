@@ -7,7 +7,6 @@ public class TypeCoercionHelperAdditionalTests
 {
     [Theory]
     [InlineData("true", true)]
-    [InlineData("1", true)]
     [InlineData("False", false)]
     public void CoerceBoolean_FromString(string input, bool expected)
     {

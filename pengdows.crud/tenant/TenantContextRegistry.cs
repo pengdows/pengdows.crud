@@ -57,8 +57,9 @@ namespace pengdows.crud.tenant;
 /// </list>
 /// <para>
 /// <b>Disposal:</b> After this registry is disposed, <see cref="GetContext"/> and <see cref="AcquireLease"/> throw
-/// <see cref="ObjectDisposedException"/>. Contexts obtained before disposal continue working
-/// normally until they are themselves disposed.
+/// <see cref="ObjectDisposedException"/>. Disposing the registry also disposes every context it
+/// constructed, including contexts callers obtained earlier and still hold, so those contexts stop
+/// working when the registry is disposed.
 /// </para>
 /// <para>
 /// <b>Cardinality:</b> The optional <c>maxTenantCount</c> constructor parameter enforces an upper

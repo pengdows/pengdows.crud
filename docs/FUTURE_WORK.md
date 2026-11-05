@@ -504,7 +504,7 @@ native type is a probe case). Checked against the core sources on 2026-10-30: th
 | TYPE-023 | Geometric types `point`, `lseg`, `path`, `box`, `line`, `circle`, `polygon`, and their arrays. Npgsql's `NpgsqlPoint` and related types are the CLR side, but the core has no mapping. Each type fails its probes (6 to 8 cases each) | Open |
 | TYPE-024 | Text-search types `tsvector` and `tsquery`, and their arrays (`NpgsqlTsVector`, `NpgsqlTsQuery`). 6 to 8 cases each | Open |
 | TYPE-025 | Object-identifier types `oid`, `regtype`, and `regconfig` read as `uint`. The core reads them as `Int64`, which Npgsql refuses (6, 6, and 4 cases). System-column types `tid` and `cid` (8 and 6 cases) need the same decision | Open |
-| TYPE-026 | `xid8` (`ulong`) and `jsonpath` (`string`), written with the parameter typed as the column. The EF provider already does this (`PostgreSqlNamedTypeMapping`); the core has neither type | Open |
+| TYPE-026 | `xid8` (`ulong`) and `jsonpath` (`string`), written with the parameter typed as the column. The EF provider already does this (`PostgreSqlNamedTypeMapping`); the core has neither type | `xid8`: **Done** 2026-11-05 (a declared `NativeType`, PostgreSQL family; YugabyteDB excepted, see the upstream defect in advanced-types). `jsonpath`: Open |
 | TYPE-027 | Multirange types `int4multirange`, `int8multirange`, `nummultirange`, `datemultirange`, `tsmultirange`, `tstzmultirange` (6 cases each) | Open |
 | TYPE-028 | Arrays of types the core already handles: `int4range[]` and the other scalar range arrays (6 each), `cidr[]` (6). Arrays of ranges are where EF's model finalization refuses a range element mapping, so the core needs the element mapping first | Open |
 | TYPE-029 | `bit varying` (`varbit`) and its arrays. The core maps `bit` to `BitArray` but nothing for `varbit` (6 cases each, including `bit[]` and `bit varying[]`) | Open |
@@ -1165,7 +1165,7 @@ buffer `N` rows at a time rather than pre-splitting the full list.
 
 **Done** (checked 2026-10-13). `SessionSettingsPreamble` is not a member of `IDatabaseContext` on 2.0.5 (tag `v2.0.5`)
 or on 2.0.6: only the internal extension `GetSessionSettingsPreamble()`
-(`pengdows.crud/internal/InternalSessionSettingsExtensions.cs`) remains. The public replacement is
+(`pengdows.crud/internal/InternalSessionSettingsExtensions.cs`) remained at that check. It was removed later as dead code (commit `34a03801`, "remove dead session-settings helpers"), so `GetSessionSettingsPreamble` no longer exists. The public replacement is
 `GetBaseSessionSettings()` / `GetReadOnlySessionSettings()` (`PublicAPI.Shipped.txt`). The earlier
 tracked usage in `benchmarks/CrudBenchmarks/ViewPerformanceBenchmarks.cs` no longer exists.
 

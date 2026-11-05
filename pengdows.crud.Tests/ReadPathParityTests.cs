@@ -325,18 +325,19 @@ public class ReadPathParityTests
         Assert.Contains("'v'", error.Message);
     }
 
-    // REV-079: a Try method reports failure by returning false. Text "NaN" made BooleanCoercion.TryRead
-    // throw (NumericTruth); Coerce still fails the value, through its fallback.
+    // "NaN" and "-NaN" read as false. A Try method reports success
+    // by returning true and never throws (REV-079), so the read succeeds with a false value.
     [Theory]
     [InlineData("NaN")]
     [InlineData("-NaN")]
-    public void BooleanCoercion_NaNText_TryReadReturnsFalse(string text)
+    public void BooleanCoercion_NaNText_ReadsAsFalse(string text)
     {
         var read = pengdows.crud.types.coercion.CoercionRegistry.Shared.TryRead(
-            new pengdows.crud.types.coercion.DbValue(text, typeof(string)), typeof(bool), out _);
+            new pengdows.crud.types.coercion.DbValue(text, typeof(string)), typeof(bool), out var value);
 
-        Assert.False(read);
-        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce(text, typeof(string), typeof(bool)));
+        Assert.True(read);
+        Assert.False((bool)value!);
+        Assert.False((bool)TypeCoercionHelper.Coerce(text, typeof(string), typeof(bool))!);
     }
 
     // REV-078: parity says the paths agree; these say what they agree on. null = the read fails.

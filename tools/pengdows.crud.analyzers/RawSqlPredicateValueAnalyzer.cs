@@ -123,7 +123,7 @@ public sealed class RawSqlPredicateValueAnalyzer : DiagnosticAnalyzer
                 .OfType<InterpolatedStringTextSyntax>()
                 .Select(static x => x.TextToken.ValueText));
 
-        if (!HasPredicateContext(literalText) || IsNullPredicate(literalText))
+        if (!HasPredicateContext(literalText))
         {
             return false;
         }
@@ -144,7 +144,7 @@ public sealed class RawSqlPredicateValueAnalyzer : DiagnosticAnalyzer
         CollectConcatenationTerms(binary, terms);
 
         var literalText = string.Concat(terms.Select(term => GetConstantString(term, semanticModel, cancellationToken) ?? string.Empty));
-        if (!HasPredicateContext(literalText) || IsNullPredicate(literalText))
+        if (!HasPredicateContext(literalText))
         {
             return false;
         }
@@ -190,23 +190,10 @@ public sealed class RawSqlPredicateValueAnalyzer : DiagnosticAnalyzer
         }
 
         var normalized = sqlFragment.ToUpperInvariant();
-        if (normalized.Contains(" IS NULL", StringComparison.Ordinal)
-            || normalized.Contains(" IS NOT NULL", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
         return normalized.Contains(" WHERE ", StringComparison.Ordinal)
                || normalized.Contains(" AND ", StringComparison.Ordinal)
                || normalized.Contains(" OR ", StringComparison.Ordinal)
                || normalized.Contains(" ON ", StringComparison.Ordinal)
                || normalized.Contains(" HAVING ", StringComparison.Ordinal);
-    }
-
-    private static bool IsNullPredicate(string sqlFragment)
-    {
-        var normalized = sqlFragment.ToUpperInvariant();
-        return normalized.Contains(" IS NULL", StringComparison.Ordinal)
-               || normalized.Contains(" IS NOT NULL", StringComparison.Ordinal);
     }
 }

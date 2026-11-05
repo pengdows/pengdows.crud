@@ -190,8 +190,44 @@ internal class FirebirdDialect : SqlDialect
     private Type? _decFloatType;
     private bool _decFloatTypeResolved;
 
+    // The driver has no DateTime2 parameter (DbType 26 is refused); a TIMESTAMP takes a DateTime.
     protected override DbType RemapDbType(DbType type) =>
-        type == DbType.VarNumeric ? DbType.Object : base.RemapDbType(type);
+        type switch
+        {
+            DbType.VarNumeric => DbType.Object,
+            DbType.DateTime2 => DbType.DateTime,
+            _ => base.RemapDbType(type),
+        };
+
+    // The driver's decimal conversion refuses a BigInteger (and so a 128-bit integer) bound to a NUMERIC column: the exact
+    // decimal text is bound, which the column stores without loss.
+    internal override bool BindsWideIntegersAsText => true;
+
+    // The driver's decimal read overflows a NUMERIC wider than decimal: the digits are selected as text.
+    internal override string WideIntegerTextCast(string columnReference) => $"CAST({columnReference} AS VARCHAR(100))";
+
+    // A 128-bit integer goes to the INT128 column as its typed value (the driver refuses its text there, confirmed live).
+    internal override bool BindsInt128AsText => false;
+
+    // A BigInteger written to a NUMERIC column is sent as its text, and the statement casts that text to NUMERIC(38,0): the
+    // driver would convert the parameter to decimal first, which overflows past 28 digits. Only BigInteger: an Int128
+    // column takes its typed value, which a text cast would break.
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        IsBigIntegerColumn(column) || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        IsBigIntegerColumn(column)
+            ? $"CAST(CAST({parameterMarker} AS VARCHAR(100)) AS NUMERIC(38,0))"
+            : base.RenderColumnArgument(parameterMarker, column);
+
+    // A declared native type (DECFLOAT, a NUMERIC of another width): the value is sent as its text and cast there, because the
+    // driver converts a parameter to the decimal type of its column and a DECFLOAT parameter needs its own FbDecFloat.
+    internal override string? NativeTypeArgument(string parameterMarker, string nativeType) =>
+        PostgreSqlDialect.IsTextNativeType(nativeType) ? parameterMarker
+        : $"CAST(CAST({parameterMarker} AS VARCHAR(100)) AS {nativeType})";
+
+    private static bool IsBigIntegerColumn(IColumnInfo column) =>
+        column.PropertyInfo?.PropertyType is { } type && (Nullable.GetUnderlyingType(type) ?? type) == typeof(System.Numerics.BigInteger);
 
     public override object? PrepareParameterValue(object? value, DbType dbType)
     {

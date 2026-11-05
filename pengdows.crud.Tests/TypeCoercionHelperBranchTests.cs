@@ -184,17 +184,7 @@ public class TypeCoercionHelperBranchTests
             TypeCoercionHelper.Coerce(123, typeof(int), typeof(TestPayload)));
     }
 
-    [Fact]
-    public void EvaluateCharBoolean_PrivateThrowsOnUnknown()
-    {
-        Assert.True(InvokePrivate<bool>("EvaluateCharBoolean", 't'));
-        Assert.False(InvokePrivate<bool>("EvaluateCharBoolean", 'f'));
-        Assert.False(InvokePrivate<bool>("EvaluateCharBoolean", 'n'));
-        Assert.False(InvokePrivate<bool>("EvaluateCharBoolean", '0'));
 
-        var ex = InvokePrivateThrows("EvaluateCharBoolean", 'x');
-        Assert.IsType<InvalidCastException>(ex);
-    }
 
     [Fact]
     public void CoerceDateTimeOffset_PrivateHandlesInputs()

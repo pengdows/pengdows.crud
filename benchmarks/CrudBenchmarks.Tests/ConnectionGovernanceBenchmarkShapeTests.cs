@@ -25,6 +25,38 @@ public class ConnectionGovernanceBenchmarkShapeTests
         Assert.NotNull(arm);
     }
 
+    // Experiment: Dapper gets the same capacity as the clamped pengdows arm, split the same way (one pool for reads,
+    // one for writes, each at the clamp's share of the server's usable connections), so the two are compared at equal
+    // capacity rather than with Dapper holding the whole server. The read-only governance load only uses the read pool,
+    // as it does for pengdows.
+    [Fact]
+    public void DapperSplitPools_Arm_ExistsWithItsOwnIdentity()
+    {
+        var arm = BenchmarkMethods()
+            .SingleOrDefault(m => m.GetCustomAttribute<CorrectnessIdentityAttribute>() is
+                { Framework: "DapperSplitPools", Scenario: "Governed" });
+
+        Assert.NotNull(arm);
+    }
+
+    [Fact]
+    public void SplitPoolConnectionString_CapsEachPoolAtTheClampShare_WithThePengdowsAcquireTimeout()
+    {
+        var share = PostgreSqlConnectionGovernanceBenchmarks.ClampedShare;
+        var cs = PostgreSqlConnectionGovernanceBenchmarks.SplitPoolConnectionString(
+            "Host=localhost;Port=5432;Database=gov_test;Username=postgres;Password=x", share, acquireTimeoutSeconds: 5);
+
+        var builder = new System.Data.Common.DbConnectionStringBuilder { ConnectionString = cs };
+        Assert.Equal(share, Convert.ToInt32(builder["Maximum Pool Size"]));
+        Assert.Equal(5, Convert.ToInt32(builder["Timeout"]));
+    }
+
+    [Fact]
+    public void SplitPoolShare_IsTheSameAsTheClampShare()
+    {
+        Assert.Equal(11, PostgreSqlConnectionGovernanceBenchmarks.ClampedShare);
+    }
+
     // The opt-in server-ceiling clamp is measured next to the default-configured pengdows arm, on the
     // same connection string and the same load, so the only difference between the two is the flag.
     [Fact]

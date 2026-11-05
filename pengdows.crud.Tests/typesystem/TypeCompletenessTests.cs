@@ -93,6 +93,12 @@ public class TypeCompletenessTests
         yield return S("Geography", DbType.Object, () => Geography.FromWellKnownBinary(PointWkb, 4326));
         yield return S("Inet", DbType.Object, () => Inet.Parse("192.168.0.1/24"));
         yield return S("Cidr", DbType.Object, () => Cidr.Parse("10.0.0.0/8"));
+        yield return S("IPAddress", DbType.Object, () => System.Net.IPAddress.Parse("192.168.1.10"));
+        yield return S("PostgreSqlPoint", DbType.Object, () => new pengdows.crud.types.valueobjects.PostgreSqlPoint(1, 2));
+        yield return S("PostgreSqlPolygon", DbType.Object, () => pengdows.crud.types.valueobjects.PostgreSqlPolygon.Parse("((0,0),(1,0),(1,1),(0,0))"));
+        yield return S("List<int>", DbType.Object, () => new System.Collections.Generic.List<int> { 1, 2, 3 });
+        yield return S("Dictionary<string,object>", DbType.Object, () => new System.Collections.Generic.Dictionary<string, object> { ["a"] = "1" });
+        yield return S("Range<int>[]", DbType.Object, () => new[] { new Range<int>(1, 5, true, false), new Range<int>(7, 9, true, false) });
         yield return S("MacAddress", DbType.Object, () => MacAddress.Parse("08:00:2b:01:02:03"));
         yield return S("IntervalYearMonth", DbType.Object, () => IntervalYearMonth.Parse("P1Y2M"));
         yield return S("IntervalDaySecond", DbType.Object, () => IntervalDaySecond.Parse("P1DT2H3M4.1234567S"));
@@ -113,12 +119,17 @@ public class TypeCompletenessTests
     private const string GatewaySendsOffsetTail = " column they have learned keeps it, verified live (DRY-029)";
     private const string Microseconds = "holds microseconds: the 7th fraction digit is truncated, never rounded";
     private const string NoNullElements = "an Informix collection can't hold a NULL element: the write is refused";
-    private const string HanaArray = "bound as JSON text the statement builds the ARRAY from (JSON_TABLE); read from the " +
-                                     "ARRAY's wire encoding (HanaArrayCoercion), verified live";
-    private const string SqlServerSpatial = "bound as SRID-prefixed WKB the statement builds the value from (STGeomFromWKB); " +
-                                            "read from the stored encoding, verified live";
-    private const string SnowflakeSpatial = "bound as EWKB hex the statement builds the value from; read in the session's " +
-                                            "output format, verified live";
+
+    // SQL Server binds the SRID-prefixed WKB that STGeomFromWKB turns into the native value: this check reads the bound bytes,
+    // the round-trip test runs the conversion (the fakeDb store emulates it) and reads the native encoding.
+    private const string SqlServerSpatial = "bound as SRID-prefixed WKB that the statement turns into the native value; this check " +
+                                            "reads the bound bytes, the round-trip test reads the native encoding";
+
+    // This check reads the bound value as the coercion would, without the server: a SAP HANA array is bound as JSON text
+    // that the statement turns into the ARRAY, whose wire encoding is read back. FakeDbSampleRoundTripTests runs that
+    // conversion (the fakeDb store emulates it) and reads the ARRAY's bytes.
+    private const string HanaArray = "bound as JSON text that the statement turns into the ARRAY (JSON_TABLE); this check reads the " +
+                                     "text, the round-trip test reads the ARRAY's wire encoding";
 
     // Why a database can't round-trip a type. "*" is every database not otherwise listed for the label.
     private static readonly Dictionary<(string Label, string Database), string> Known = new()
@@ -131,23 +142,24 @@ public class TypeCompletenessTests
         [("TimeOnly", "SingleStore")] = "TIME(6) " + Microseconds,
         [("TimeSpan", "SingleStore")] = "TIME(6) " + Microseconds,
         [("IntervalDaySecond", "Oracle")] = "INTERVAL DAY TO SECOND(6) " + Microseconds,
+        [("IntervalDaySecond", "PostgreSql")] = "interval " + Microseconds,
+        [("IntervalDaySecond", "YugabyteDb")] = "interval " + Microseconds,
+        [("IntervalDaySecond", "AuroraPostgreSql")] = "interval " + Microseconds,
         [("int?[]", "Informix")] = NoNullElements,
         [("long?[]", "Informix")] = NoNullElements,
         [("short?[]", "Informix")] = NoNullElements,
         [("double?[]", "Informix")] = NoNullElements,
         [("float?[]", "Informix")] = NoNullElements,
+        [("Geometry", "SqlServer")] = SqlServerSpatial,
+        [("Geography", "SqlServer")] = SqlServerSpatial,
         [("int?[]", "SapHana")] = HanaArray,
         [("long?[]", "SapHana")] = HanaArray,
         [("short?[]", "SapHana")] = HanaArray,
         [("double?[]", "SapHana")] = HanaArray,
         [("float?[]", "SapHana")] = HanaArray,
         [("string[]", "SapHana")] = HanaArray,
-        [("Geometry", "SqlServer")] = SqlServerSpatial,
-        [("Geography", "SqlServer")] = SqlServerSpatial,
-        [("Geometry", "Snowflake")] = SnowflakeSpatial,
-        [("Geography", "Snowflake")] = SnowflakeSpatial,
-        [("Geometry", "SingleStore")] = "written as WKT, which carries no SRID: a Geometry reads back with SRID 0 " +
-                                        "(GEOGRAPHY is always 4326)"
+        [("Geometry", "SingleStore")] = "refused: SingleStore has no GEOMETRY type, and its GEOGRAPHY is WGS 84 only, so the " +
+                                        "SRID cannot be kept (the library refuses it)"
     };
 
     internal static IEnumerable<SupportedDatabase> Products() =>

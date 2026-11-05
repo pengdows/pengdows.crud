@@ -84,7 +84,7 @@ public class TypeCoercionHelperTests
     {
         var options = TypeCoercionOptions.Default;
         Assert.True((bool)TypeCoercionHelper.Coerce("true", typeof(string), typeof(bool), options)!);
-        Assert.True((bool)TypeCoercionHelper.Coerce("1", typeof(string), typeof(bool), options)!);
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce("1", typeof(string), typeof(bool), options));
         Assert.True((bool)TypeCoercionHelper.Coerce('Y', typeof(char), typeof(bool), options)!);
         Assert.False((bool)TypeCoercionHelper.Coerce(0, typeof(int), typeof(bool), options)!);
         Assert.False((bool)TypeCoercionHelper.Coerce(0.0, typeof(double), typeof(bool), options)!);

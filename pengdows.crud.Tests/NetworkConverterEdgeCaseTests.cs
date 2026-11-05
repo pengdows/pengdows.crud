@@ -30,22 +30,25 @@ public class NetworkConverterEdgeCaseTests
     }
 
     [Fact]
-    public void MacAddressConverter_ConvertToProvider_NonPostgres_ReturnsPhysicalAddress()
+    public void MacAddressConverter_ConvertToProvider_NonPostgres_ReturnsCanonicalText()
     {
+        // Only the Npgsql family takes a PhysicalAddress; every other database gets the canonical text (see
+        // MacAddressProviderTests), since a PhysicalAddress has no bind there.
         var converter = new MacAddressConverter();
         var mac = MacAddress.Parse("08:00:2B:01:02:03");
 
         var result = converter.ToProviderValue(mac, SupportedDatabase.Sqlite);
-        Assert.IsType<PhysicalAddress>(result);
+        Assert.Equal("08:00:2B:01:02:03", result);
     }
 
     [Fact]
-    public void MacAddressConverter_TryConvert_InvalidString_ReturnsFalse()
+    public void MacAddressConverter_TryConvert_InvalidString_ThrowsWithoutEchoingTheValue()
     {
         var converter = new MacAddressConverter();
 
-        var success = converter.TryConvertFromProvider("not a mac", SupportedDatabase.PostgreSql, out _);
-        Assert.False(success);
+        var ex = Assert.ThrowsAny<FormatException>(() =>
+            converter.TryConvertFromProvider("not a mac", SupportedDatabase.PostgreSql, out _));
+        Assert.DoesNotContain("not a mac", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -134,31 +137,34 @@ public class NetworkConverterEdgeCaseTests
     }
 
     [Fact]
-    public void CidrConverter_ConvertToProvider_NonPostgresNonCockroach_ReturnsCidrStruct()
+    public void CidrConverter_ConvertToProvider_NonNpgsqlCidr_ReturnsCanonicalText()
     {
+        // Only a database with a cidr type gets the NpgsqlCidr; any other (SQLite, CockroachDB, ...) gets the text.
         var converter = new CidrConverter();
         var cidr = Cidr.Parse("192.168.0.0/16");
 
         var result = converter.ToProviderValue(cidr, SupportedDatabase.Sqlite);
-        Assert.IsType<Cidr>(result);
+        Assert.Equal("192.168.0.0/16", result);
     }
 
     [Fact]
-    public void CidrConverter_TryConvert_EmptyString_ReturnsFalse()
+    public void CidrConverter_TryConvert_EmptyString_ThrowsTheParserReason()
     {
         var converter = new CidrConverter();
 
-        var success = converter.TryConvertFromProvider("", SupportedDatabase.PostgreSql, out _);
-        Assert.False(success);
+        // Malformed text is an error with a reason, not "not a CIDR".
+        Assert.Throws<FormatException>(() =>
+            converter.TryConvertFromProvider("", SupportedDatabase.PostgreSql, out _));
     }
 
     [Fact]
-    public void CidrConverter_TryConvert_NoSlash_ReturnsFalse()
+    public void CidrConverter_TryConvert_NoSlash_ThrowsTheParserReason()
     {
         var converter = new CidrConverter();
 
-        var success = converter.TryConvertFromProvider("192.168.0.0", SupportedDatabase.PostgreSql, out _);
-        Assert.False(success);
+        // Malformed text is an error with a reason, not "not a CIDR".
+        Assert.Throws<FormatException>(() =>
+            converter.TryConvertFromProvider("192.168.0.0", SupportedDatabase.PostgreSql, out _));
     }
 
     [Fact]

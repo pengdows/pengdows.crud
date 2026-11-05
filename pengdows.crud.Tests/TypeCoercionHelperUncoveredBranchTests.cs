@@ -83,7 +83,7 @@ public class TypeCoercionHelperUncoveredBranchTests
 
     // BooleanCoercion: char and double cases.
     [Theory]
-    [InlineData('t', true)]
+    [InlineData('F', false)]
     [InlineData('n', false)]
     public void Coerce_CharToBoolean_UsesCharEvaluation(char input, bool expected)
     {

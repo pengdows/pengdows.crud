@@ -235,8 +235,20 @@ internal sealed class HanaDialect : SqlDialect
         IsSpatial(column)
             ? string.Concat("ST_GeomFromEWKB(", parameterMarker, ")")
             : ArrayElementSqlType(column) is { } elementType
-                ? string.Concat(ArrayPrefix, parameterMarker, ", '$[*]' COLUMNS (O FOR ORDINALITY, V ", elementType, " PATH '$')", ArraySuffix)
+                ? string.Concat("ARRAY(SELECT ", ArrayElementValue(column), " FROM JSON_TABLE(", parameterMarker, ", '$[*]' COLUMNS (O FOR ORDINALITY, V ", elementType, " PATH '$')", ArraySuffix)
                 : base.RenderColumnArgument(parameterMarker, column);
+
+    // The subquery's column names the array's element type. JSON_TABLE types no SMALLINT or REAL column, so a short or float
+    // element is cast from the INT or DOUBLE JSON_TABLE gives it.
+    private static string ArrayElementValue(IColumnInfo column) =>
+        ArrayElementCast(column) is { } cast ? string.Concat("CAST(V AS ", cast, ")") : "V";
+
+    private static string? ArrayElementCast(IColumnInfo column)
+    {
+        var element = column.PropertyInfo.PropertyType.GetElementType();
+        element = element is null ? null : Nullable.GetUnderlyingType(element) ?? element;
+        return element == typeof(short) ? "SMALLINT" : element == typeof(float) ? "REAL" : null;
+    }
 
     internal override bool MarksColumnParameter(IColumnInfo column) =>
         ArrayElementSqlType(column) != null || base.MarksColumnParameter(column);

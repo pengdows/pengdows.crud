@@ -186,8 +186,12 @@ internal class MariaDbDialect : MySqlDialect
     internal static DatabaseTraits CreateMariaDbTraits() =>
         new(SupportedDatabase.MariaDb, MySqlFamilyExceptionTranslator)
         {
+            NativeColumnRead = MySqlDialect.MySqlNativeColumnRead,
             SpatialFormat = SpatialWireFormat.LittleEndianSridPrefixedWkb,
             RegisterTypeMappings = registry =>
-                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.MariaDb)
+            {
+                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.MariaDb);
+                MySqlDialect.RegisterBitStringMapping(registry, SupportedDatabase.MariaDb);
+            }
         };
 }

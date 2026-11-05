@@ -1,0 +1,75 @@
+Firebird	signed 8-bit	signed_8_bit	PASS
+Firebird	signed 16-bit	signed_16_bit	PASS
+Firebird	signed 32-bit	signed_32_bit	PASS
+Firebird	signed 64-bit	signed_64_bit	PASS
+Firebird	signed 128-bit	signed_128_bit	PASS
+Firebird	unsigned 8-bit	unsigned_8_bit	PASS
+Firebird	unsigned 16-bit	unsigned_16_bit	PASS
+Firebird	unsigned 32-bit	unsigned_32_bit	PASS
+Firebird	unsigned 64-bit	unsigned_64_bit	PASS
+Firebird	arbitrary-size integer	arbitrary_integer	PASS
+Firebird	binary float32	binary_float32	PASS
+Firebird	binary float64	binary_float64	PASS
+Firebird	fixed decimal	fixed_decimal	PASS
+Firebird	boolean	boolean	PASS
+Firebird	bit / bitstring	bit_string	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 58 (
+Firebird	varying character	varying_character	PASS
+Firebird	unbounded text	unbounded_text	PASS
+Firebird	UUID / GUID	uuid	PASS
+Firebird	calendar date	calendar_date	PASS
+Firebird	time without zone	time_of_day	PASS
+Firebird	time without zone	time_span	PASS
+Firebird	day-time interval	day_time_interval	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 DAY
+Firebird	timestamp without zone	timestamp	PASS
+Firebird	timestamp with zone	timestamp_with_zone	PASS
+Firebird	binary LOB	binary	PASS
+Firebird	JSON text / JSON value	json	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR237 failed SQL error code = -607 Invalid command Specified domain or source column JSON does not exist
+Firebird	IP address	ip_address	PASS
+Firebird	SQL array	int_array	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 ARRAY
+Firebird	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR50 failed SQL error code = -607 Invalid command Specified domain or source column UHUGEINT does not exist
+Firebird	decimal floating point	decimal_float	PASS
+Firebird	money / currency	money	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR89 failed SQL error code = -607 Invalid command Specified domain or source column MONEY does not exist
+Firebird	fixed character	fixed_character	PASS
+Firebird	national / Unicode character	national_text	PASS
+Firebird	long text LOB	long_text	PASS
+Firebird	enumeration	enumeration	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 60 (
+Firebird	set-valued enum	set_value	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 SET
+Firebird	fixed binary	fixed_binary	PASS
+Firebird	varying binary	varying_binary	PASS
+Firebird	legacy long binary	legacy_binary	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 61 RAW
+Firebird	rowversion / timestamp token	rowversion	PASS
+Firebird	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 71 LOCAL
+Firebird	second-precision datetime	second_datetime	PASS
+Firebird	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+Firebird	year-only	year_only	PASS
+Firebird	year-month interval	year_month_interval	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 YEAR
+Firebird	generic interval	generic_interval	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR221 failed SQL error code = -607 Invalid command Specified domain or source column INTERVAL does not exist
+Firebird	row identifier / ROWID	row_identifier	PASS
+Firebird	object identifier / OID	oid	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR232 failed SQL error code = -607 Invalid command Specified domain or source column OID does not exist
+Firebird	transaction ID	transaction_id	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR234 failed SQL error code = -607 Invalid command Specified domain or source column XID does not exist
+Firebird	WAL / log position	wal_position	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR236 failed SQL error code = -607 Invalid command Specified domain or source column PG_LSN does not exist
+Firebird	native binary JSON	binary_json	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR244 failed SQL error code = -607 Invalid command Specified domain or source column JSONB does not exist
+Firebird	XML	xml	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR249 failed SQL error code = -607 Invalid command Specified domain or source column XML does not exist
+Firebird	BSON	bson	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR254 failed SQL error code = -607 Invalid command Specified domain or source column BSON does not exist
+Firebird	variant / dynamic value	variant	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR257 failed SQL error code = -607 Invalid command Specified domain or source column VARIANT does not exist
+Firebird	IP network / CIDR	cidr	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR265 failed SQL error code = -607 Invalid command Specified domain or source column CIDR does not exist
+Firebird	MAC address	mac_address	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR267 failed SQL error code = -607 Invalid command Specified domain or source column MACADDR does not exist
+Firebird	point geometry	point	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR269 failed SQL error code = -607 Invalid command Specified domain or source column POINT does not exist
+Firebird	line / linestring geometry	linestring	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR277 failed SQL error code = -607 Invalid command Specified domain or source column LINESTRING does not exist
+Firebird	polygon geometry	polygon	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR282 failed SQL error code = -607 Invalid command Specified domain or source column POLYGON does not exist
+Firebird	general geometry	geometry	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR287 failed SQL error code = -607 Invalid command Specified domain or source column GEOMETRY does not exist
+Firebird	geography / geodetic	geography	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR291 failed SQL error code = -607 Invalid command Specified domain or source column GEOGRAPHY does not exist
+Firebird	fixed-length array	fixed_array	PASS
+Firebird	list / multiset / set collection	list_collection	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 MULTISET
+Firebird	map / dictionary	map	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 59 (
+Firebird	range	range	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR325 failed SQL error code = -607 Invalid command Specified domain or source column INT4RANGE does not exist
+Firebird	multirange	multirange	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR329 failed SQL error code = -607 Invalid command Specified domain or source column INT4MULTIRANGE does not exist
+Firebird	user-defined enum / domain	domain	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 CREATE
+Firebird	full-text search vector / query	full_text	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR336 failed SQL error code = -607 Invalid command Specified domain or source column TSVECTOR does not exist
+Firebird	native point	native_point	UNSUPPORTED refused: no candidate was tried
+Firebird	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+Firebird	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+Firebird	vector embedding	vector	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 62 (
+Firebird	hierarchical path	hierarchy	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR344 failed SQL error code = -607 Invalid command Specified domain or source column HIERARCHYID does not exist
+Firebird	external-file reference	file_reference	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR348 failed SQL error code = -607 Invalid command Specified domain or source column BFILE does not exist
+Firebird	specialized security label	security_label	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR355 failed SQL error code = -607 Invalid command Specified domain or source column IDSSECURITYLABEL does not exist

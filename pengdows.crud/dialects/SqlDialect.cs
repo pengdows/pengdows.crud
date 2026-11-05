@@ -673,6 +673,13 @@ internal abstract class SqlDialect : IInternalSqlDialect
     /// </summary>
     internal virtual bool BindsWideIntegersAsText => false;
 
+    /// <summary>
+    /// A 128-bit integer is sent as its text when this is true. By default it follows <see cref="BindsWideIntegersAsText"/>; a
+    /// database whose 128-bit column takes the typed value (Firebird's INT128) but whose NUMERIC column refuses a BigInteger
+    /// keeps the typed value.
+    /// </summary>
+    internal virtual bool BindsInt128AsText => BindsWideIntegersAsText;
+
     private static string FormatVectorText(object vector)
     {
         var sb = new System.Text.StringBuilder("[");
@@ -914,7 +921,25 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual string? EnableHintForProfile(IsolationProfile profile) => null;
 
     /// <inheritdoc cref="IInternalSqlDialect.RendersColumnArgument"/>
-    public virtual bool RendersColumnArgument(IColumnInfo column) => column.IsJsonType;
+    public virtual bool RendersColumnArgument(IColumnInfo column) =>
+        column.IsJsonType || (IsWideIntegerColumn(column) && WideIntegerArgument("p") != null) ||
+        (column.NativeType != null && NativeTypeArgument("p", column.NativeType) != null);
+
+    /// <summary>
+    /// The statement's expression for a value written to a column whose declared native type is <paramref name="nativeType"/>
+    /// (<see cref="pengdows.crud.attributes.ColumnAttribute.NativeType"/>), or null when the database takes the value as bound.
+    /// </summary>
+    internal virtual string? NativeTypeArgument(string parameterMarker, string nativeType) => null;
+
+    /// <summary>
+    /// The statement's expression for a wide integer written as its text (<paramref name="parameterMarker"/>), or null when
+    /// the database converts the text by itself. Sybase ASE refuses the implicit conversion to NUMERIC.
+    /// </summary>
+    internal virtual string? WideIntegerArgument(string parameterMarker) => null;
+
+    // A column with no property (a test double) is not a wide integer.
+    private static bool IsWideIntegerColumn(IColumnInfo column) =>
+        column.PropertyInfo?.PropertyType is { } type && IsWideInteger(type);
 
     /// <summary>
     /// The expression a gateway SELECT list reads <paramref name="column"/> with: the column reference
@@ -924,9 +949,38 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
         columnReference;
 
+    /// <summary>
+    /// The SELECT expression for one column. A wide integer column (BigInteger, Int128, UInt128) whose driver cannot return
+    /// its digits (a numeric wider than the driver's decimal) is selected as its exact text, when the dialect has a text
+    /// cast (<see cref="WideIntegerTextCast"/>); every other column is <see cref="RenderColumnSelect"/>.
+    /// </summary>
+    internal string RenderColumnSelectFor(string columnReference, string wrappedName, IColumnInfo column)
+    {
+        if (IsWideIntegerColumn(column) && WideIntegerTextCast(columnReference) is { } cast)
+        {
+            return string.Concat(cast, " AS ", wrappedName);
+        }
+
+        return RenderColumnSelect(columnReference, wrappedName, column);
+    }
+
+    /// <summary>
+    /// The text cast of a column reference for a wide integer, or null when the driver returns the digits as they are.
+    /// </summary>
+    internal virtual string? WideIntegerTextCast(string columnReference) => null;
+
+    private static bool IsWideInteger(Type type)
+    {
+        var underlying = Nullable.GetUnderlyingType(type) ?? type;
+        return underlying == typeof(BigInteger) || underlying == typeof(Int128) || underlying == typeof(UInt128);
+    }
+
     /// <inheritdoc cref="IInternalSqlDialect.RenderColumnArgument"/>
     public virtual string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
-        column.IsJsonType ? RenderJsonArgument(parameterMarker, column) : parameterMarker;
+        column.IsJsonType ? RenderJsonArgument(parameterMarker, column)
+        : column.NativeType is { } nativeType && NativeTypeArgument(parameterMarker, nativeType) is { } native ? native
+        : IsWideIntegerColumn(column) && WideIntegerArgument(parameterMarker) is { } wide ? wide
+        : parameterMarker;
 
     /// <summary>
     /// False when the database refuses a function call (<see cref="RenderColumnArgument"/>) inside
@@ -2394,14 +2448,20 @@ internal abstract class SqlDialect : IInternalSqlDialect
 
             return type == typeof(RowVersion) || type == typeof(DateOnly) || type == typeof(TimeOnly) ||
                    type == typeof(char) || type == typeof(float[]) || type == typeof(double[]) ||
-                   type == typeof(HierarchyId) || type == typeof(Int128) || type == typeof(UInt128);
+                   type == typeof(HierarchyId) || type == typeof(Int128) || type == typeof(UInt128) ||
+                   type == typeof(BigInteger);
         }
     }
 
     [SuppressMessage("Security", "cs/exposure-of-private-information",
         Justification = "This method's purpose is to store user-supplied values in DbParameters. " +
                         "No parameter values are written to logs — only timing metadata (DbType, elapsed).")]
-    public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    public virtual DbParameter CreateDbParameter<T>(string? name, DbType type, T value) =>
+        CreateDbParameterCore(name, type, value, wideIntegersAsText: true);
+
+    // The parameter for a value. A 128-bit integer is bound as its BigInteger value without the text rule (a driver whose
+    // INT128 column takes the typed value, Firebird), so that path calls this with wideIntegersAsText false.
+    private DbParameter CreateDbParameterCore<T>(string? name, DbType type, T value, bool wideIntegersAsText)
     {
         // Re-dispatched virtually, so each dialect's DateTimeOffset handling applies to it. The DbType is tested before the generic
         // call: for a reference-typed T (a string) the call goes through a runtime generic lookup, and almost no parameter needs it.
@@ -2487,20 +2547,28 @@ internal abstract class SqlDialect : IInternalSqlDialect
                     : CreateDbParameter(name, type == DbType.Object ? DbType.String : type, hierarchyId.ToString());
             }
 
+            // A provider with no native integer that wide refuses a BigInteger parameter ("No mapping exists from
+            // object type System.Numerics.BigInteger"); such a dialect binds the exact decimal text, which its
+            // column stores without loss.
+            if (wideIntegersAsText && value is BigInteger bigInteger && BindsWideIntegersAsText)
+            {
+                return CreateDbParameter(name, DbType.String, bigInteger.ToString(CultureInfo.InvariantCulture));
+            }
+
             // TYPE-005: 128-bit integers reach providers as BigInteger, the type DuckDB.NET, FirebirdClient
             // and Npgsql bind for HUGEINT/INT128/NUMERIC (both rejected a raw Int128, confirmed live).
             if (value is Int128 int128)
             {
-                return BindsWideIntegersAsText
+                return BindsInt128AsText
                     ? CreateDbParameter(name, DbType.String, int128.ToString(CultureInfo.InvariantCulture))
-                    : CreateDbParameter(name, type, (BigInteger)int128);
+                    : CreateDbParameterCore(name, type, (BigInteger)int128, wideIntegersAsText: false);
             }
 
             if (value is UInt128 uint128)
             {
-                return BindsWideIntegersAsText
+                return BindsInt128AsText
                     ? CreateDbParameter(name, DbType.String, uint128.ToString(CultureInfo.InvariantCulture))
-                    : CreateDbParameter(name, type, (BigInteger)uint128);
+                    : CreateDbParameterCore(name, type, (BigInteger)uint128, wideIntegersAsText: false);
             }
         }
 

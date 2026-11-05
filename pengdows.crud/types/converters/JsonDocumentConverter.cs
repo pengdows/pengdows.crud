@@ -12,6 +12,7 @@
 // =============================================================================
 
 using System.Text.Json;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
@@ -40,6 +41,13 @@ internal sealed class JsonDocumentConverter : AdvancedTypeConverter<JsonDocument
         if (value is JsonElement element)
         {
             result = JsonDocument.Parse(element.GetRawText());
+            return true;
+        }
+
+        // A binary JSON document (BSON) reads as the JSON text of the document (DatabaseTraits.BinaryJsonIsBson).
+        if (value is byte[] bson && DatabaseTraits.For(provider).BinaryJsonIsBson && BsonJson.IsDocument(bson))
+        {
+            result = JsonDocument.Parse(BsonJson.ToJson(bson));
             return true;
         }
 

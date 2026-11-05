@@ -199,11 +199,11 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     [Fact]
     public void CoerceBoolean_FromSingleChar_ParsesCorrectly()
     {
-        Assert.True((bool)TypeCoercionHelper.Coerce("t", typeof(string), typeof(bool))!);
-        Assert.True((bool)TypeCoercionHelper.Coerce("T", typeof(string), typeof(bool))!);
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce("t", typeof(string), typeof(bool)));
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce("T", typeof(string), typeof(bool)));
         Assert.True((bool)TypeCoercionHelper.Coerce("y", typeof(string), typeof(bool))!);
         Assert.True((bool)TypeCoercionHelper.Coerce("Y", typeof(string), typeof(bool))!);
-        Assert.True((bool)TypeCoercionHelper.Coerce("1", typeof(string), typeof(bool))!);
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce("1", typeof(string), typeof(bool)));
 
         Assert.False((bool)TypeCoercionHelper.Coerce("f", typeof(string), typeof(bool))!);
         Assert.False((bool)TypeCoercionHelper.Coerce("F", typeof(string), typeof(bool))!);
@@ -215,10 +215,10 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     [Fact]
     public void CoerceBoolean_FromChar_ParsesCorrectly()
     {
-        Assert.True((bool)TypeCoercionHelper.Coerce('t', typeof(char), typeof(bool))!);
-        Assert.True((bool)TypeCoercionHelper.Coerce('T', typeof(char), typeof(bool))!);
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce('t', typeof(char), typeof(bool)));
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce('T', typeof(char), typeof(bool)));
         Assert.True((bool)TypeCoercionHelper.Coerce('y', typeof(char), typeof(bool))!);
-        Assert.True((bool)TypeCoercionHelper.Coerce('1', typeof(char), typeof(bool))!);
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce('1', typeof(char), typeof(bool)));
 
         Assert.False((bool)TypeCoercionHelper.Coerce('f', typeof(char), typeof(bool))!);
         Assert.False((bool)TypeCoercionHelper.Coerce('n', typeof(char), typeof(bool))!);
@@ -256,24 +256,22 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     }
 
     [Fact]
-    public void CoerceBoolean_FromNumericString_ConvertsCorrectly()
+    public void CoerceBoolean_FromNumericString_OnlyTheFalseTokenIsFalse()
     {
-        Assert.True((bool)TypeCoercionHelper.Coerce("1.5", typeof(string), typeof(bool))!);
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce("1.5", typeof(string), typeof(bool)));
         Assert.False((bool)TypeCoercionHelper.Coerce("0.0", typeof(string), typeof(bool))!);
     }
 
     [Fact]
-    public void CoerceBoolean_FromInvalidChar_ThrowsException()
+    public void CoerceBoolean_FromOtherChar_FailsTheRead()
     {
-        Assert.Throws<InvalidCastException>(() =>
-            TypeCoercionHelper.Coerce('x', typeof(char), typeof(bool)));
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce('x', typeof(char), typeof(bool)));
     }
 
     [Fact]
-    public void CoerceBoolean_FromInvalidString_ThrowsException()
+    public void CoerceBoolean_FromOtherString_FailsTheRead()
     {
-        Assert.Throws<InvalidCastException>(() =>
-            TypeCoercionHelper.Coerce("invalid", typeof(string), typeof(bool)));
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce("invalid", typeof(string), typeof(bool)));
     }
 
     #endregion

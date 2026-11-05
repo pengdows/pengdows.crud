@@ -66,8 +66,7 @@ public class BasicCoercionsBranchTests2
         var coercion = new BooleanCoercion();
         Assert.False(coercion.TryRead(new DbValue("nope", typeof(string)), out _));
 
-        Assert.Throws<InvalidCastException>(() =>
-            coercion.TryRead(new DbValue('x', typeof(char)), out _));
+        Assert.False(coercion.TryRead(new DbValue('x', typeof(char)), out _));
     }
 
     [Fact]

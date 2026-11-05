@@ -27,7 +27,7 @@ namespace pengdows.crud.Tests;
 /// </summary>
 public sealed class OracleFirebirdTypeFixesTests
 {
-    public enum OracleDbTypeStub { Int16 = 111, Double = 108, BinaryDouble = 132, BinaryFloat = 133, Decimal = 107 }
+    public enum OracleDbTypeStub { Int16 = 111, Double = 108, BinaryDouble = 132, BinaryFloat = 133, Decimal = 107, TimeStampTZ = 125 }
 
     private sealed class OracleLikeParameter : fakeDbParameter
     {

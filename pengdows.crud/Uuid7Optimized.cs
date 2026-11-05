@@ -64,8 +64,8 @@ public enum Uuid7ClockMode
 /// </summary>
 /// <param name="Mode">Clock synchronization mode (PTP, NTP, or single instance)</param>
 /// <param name="MaxNegativeSkewMs">Maximum backward clock drift tolerated before using logical clock (ms)</param>
-/// <param name="MaxSpinCount">Maximum spin-wait cycles before sleeping on counter overflow</param>
-/// <param name="SleepMs">Sleep duration when spin limit exceeded (ms)</param>
+/// <param name="MaxSpinCount">Retained for compatibility. Counter overflow no longer waits, so this has no effect.</param>
+/// <param name="SleepMs">Retained for compatibility. Counter overflow no longer sleeps, so this has no effect.</param>
 /// <param name="FailFastOnBurst">If true, NewUuid7/NewUuid7RfcBytes throw InvalidOperationException
 /// on counter overflow instead of blocking for the next millisecond. TryNewUuid7 always returns
 /// false on overflow regardless of this setting — it never blocks in the first place.</param>
@@ -92,7 +92,9 @@ public sealed record Uuid7Options(
 /// ordered relative to each other, and ordering is not guaranteed across machines.
 /// Throughput limit: 4096 IDs/ms per thread. Multiple threads can each generate 4096 IDs/ms independently.
 /// If multiple threads exhaust counters simultaneously, each waits independently.
-/// Clock rollback: Bounded drift with logical clock fallback.
+/// Clock rollback: bounded drift with logical clock fallback. Counter exhaustion advances the logical
+/// millisecond while it leads the wall clock by less than MaxLogicalLeadMs; at that limit the generator waits
+/// about one millisecond. A backward clock step beyond the limit makes NewUuid7 throw and TryNewUuid7 return false.
 /// </summary>
 public static partial class Uuid7Optimized
 {
@@ -124,6 +126,9 @@ public static partial class Uuid7Optimized
     private static Uuid7Options _opts = DefaultsFor(Uuid7ClockMode.NtpSynced);
 
     // Counter limits (immutable)
+    // Largest amount the logical clock may lead the wall clock when a burst exhausts its counter.
+    internal const int MaxLogicalLeadMs = 10;
+
     private const int CounterBits = 12;
     private const int CounterMax = (1 << CounterBits) - 1; // 4095
     private const ushort RandAMask = 0x0FFF;
@@ -246,7 +251,7 @@ public static partial class Uuid7Optimized
             ThrowIfFailFastOnBurst();
 
             // Counter exhausted: wait for next millisecond
-            usedMs = BoundedWaitNextMs(usedMs);
+            usedMs = NextMsAfterExhaustion(usedMs);
             tls.LastMs = usedMs;
             tls.Counter = 0;
             ReseedRandomState(tls);
@@ -352,7 +357,7 @@ public static partial class Uuid7Optimized
         {
             ThrowIfFailFastOnBurst();
 
-            usedMs = BoundedWaitNextMs(usedMs);
+            usedMs = NextMsAfterExhaustion(usedMs);
             tls.LastMs = usedMs;
             tls.Counter = 0;
             ReseedRandomState(tls);
@@ -393,6 +398,28 @@ public static partial class Uuid7Optimized
         return lastMs;
     }
 
+    // Returns the millisecond to use after the counter for usedMs is exhausted. The logical clock may lead
+    // the wall clock by at most MaxLogicalLeadMs. At that limit we wait for the wall clock (about one
+    // millisecond). A larger lead means the clock moved backward, so we fail rather than stall for the
+    // length of the step.
+    private static long NextMsAfterExhaustion(long exhaustedMs)
+    {
+        var lead = exhaustedMs - UnixTimeMs();
+        if (lead > MaxLogicalLeadMs)
+        {
+            throw new InvalidOperationException(
+                $"The clock moved back by {lead - MaxLogicalLeadMs} ms during a UUIDv7 burst. " +
+                "Generation resumes once the wall clock catches up; TryNewUuid7 reports this without throwing.");
+        }
+
+        while (exhaustedMs - UnixTimeMs() >= MaxLogicalLeadMs)
+        {
+            Thread.Yield();
+        }
+
+        return exhaustedMs + 1;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ThrowIfFailFastOnBurst()
     {
@@ -403,42 +430,6 @@ public static partial class Uuid7Optimized
                 "millisecond on this thread) and FailFastOnBurst is enabled. Use TryNewUuid7 for " +
                 "non-throwing backoff, or disable FailFastOnBurst to block until the next millisecond.");
         }
-    }
-
-    private static long BoundedWaitNextMs(long currentMs)
-    {
-        var spinCount = 0;
-        long newMs;
-
-        do
-        {
-            if (spinCount < _opts.MaxSpinCount)
-            {
-                if (spinCount < 64)
-                {
-                    Thread.SpinWait(64); // Busy wait for first phase
-                }
-                else if (spinCount % 10 == 0)
-                {
-                    Thread.Yield(); // Be scheduler-friendly
-                }
-                else
-                {
-                    Thread.SpinWait(10);
-                }
-
-                spinCount++;
-            }
-            else
-            {
-                Thread.Sleep(_opts.SleepMs);
-                spinCount = 0; // Reset spin count after sleep
-            }
-
-            newMs = UnixTimeMs();
-        } while (newMs <= currentMs);
-
-        return newMs;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

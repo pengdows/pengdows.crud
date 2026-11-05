@@ -15,6 +15,8 @@
 //   CoercionRegistry to collect each database's registrations.
 // =============================================================================
 
+using pengdows.crud;
+using System.Linq.Expressions;
 using System.Numerics;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions.translators;
@@ -57,15 +59,37 @@ internal enum SpatialWireFormat
 /// <summary>How a database takes the <c>IntervalYearMonth</c>/<c>IntervalDaySecond</c> value objects.</summary>
 internal enum IntervalWireFormat
 {
-    /// <summary>The value object itself (year-month) or its <see cref="TimeSpan"/> (day-second).</summary>
+    /// <summary>
+    /// The value object itself (year-month). A database with no interval type of its own gets the ISO 8601 text for a
+    /// day-second value (see the interval converters).
+    /// </summary>
     Unspecified = 0,
 
     /// <summary>Oracle INTERVAL literal text.</summary>
     OracleLiteral,
 
     /// <summary>ISO 8601 duration text.</summary>
-    Iso8601
+    Iso8601,
+
+    /// <summary>
+    /// The PostgreSQL interval: months, days and microseconds, sent as the Npgsql interval the
+    /// <see cref="PostgreSqlInterval"/> converter builds. Keeps months, which text through a text parameter does not
+    /// (Npgsql refuses a string on an interval parameter, and the interval type cannot be cast from text).
+    /// </summary>
+    PostgreSqlInterval,
+
+    /// <summary>
+    /// A native day-time interval that takes the value as a <see cref="TimeSpan"/> (DuckDB's INTERVAL, whose days are kept).
+    /// </summary>
+    DayTimeSpan
 }
+
+/// <summary>
+/// Reads one column declared with a native type: <paramref name="reader"/> and <paramref name="ordinal"/> are the reader and
+/// the column, and the result converts to <paramref name="targetType"/>. Null when the rule does not cover the column.
+/// </summary>
+internal delegate Expression? NativeColumnReadRule(Expression reader, Expression ordinal, string nativeType,
+    Type targetType, TypeCoercionOptions? options);
 
 /// <summary>
 /// What code outside the dialects needs to know about one database, declared by its dialect.
@@ -99,11 +123,29 @@ internal sealed class DatabaseTraits
     /// </summary>
     public bool BindsNpgsqlValueTypes { get; init; }
 
+    /// <summary>
+    /// The database has a cidr type, so a CIDR is bound as Npgsql's NpgsqlCidr. CockroachDB takes its network as inet and
+    /// refuses NpgsqlDbType.Cidr; its CIDR is bound as text.
+    /// </summary>
+    public bool BindsNpgsqlCidr { get; init; }
+
+    /// <summary>
+    /// A binary JSON column (SingleStore's BSON) returns the binary document, read as its JSON text.
+    /// </summary>
+    public bool BinaryJsonIsBson { get; init; }
+
     /// <summary>Adds this database's parameter mappings to the shared type registry.</summary>
     public Action<AdvancedTypeRegistry>? RegisterTypeMappings { get; init; }
 
     /// <summary>Adds this database's read coercions to a coercion registry.</summary>
     public Action<CoercionRegistry>? RegisterCoercions { get; init; }
+
+    /// <summary>
+    /// The read of a column the driver returns in a provider-specific way, for a column declared with a native type (a BIT(n)
+    /// width, an Oracle BFILE locator). Null when the database has no such column. Returns null for a column the rule does
+    /// not cover, which then takes the general read.
+    /// </summary>
+    public NativeColumnReadRule? NativeColumnRead { get; init; }
 
     /// <summary>One entry per <see cref="SupportedDatabase"/> value, Unknown first.</summary>
     public static IReadOnlyList<DatabaseTraits> All => Entries;

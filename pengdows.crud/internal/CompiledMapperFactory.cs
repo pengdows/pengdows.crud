@@ -1,3 +1,4 @@
+using pengdows.crud.dialects;
 using System.Data;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -97,7 +98,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     var jsonText = Expression.Call(
                         typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.JsonTextOrNullLiteral),
                             BindingFlags.NonPublic | BindingFlags.Static)!,
-                        Expression.Call(SingleReadColumns.StringFromValueMethod, jsonStored,
+                        Expression.Call(SingleReadColumns.JsonTextFromValueMethod, jsonStored,
                             Expression.Constant(coercionOptions, typeof(TypeCoercionOptions))));
                     var jsonValue = (Nullable.GetUnderlyingType(targetType) ?? targetType) == typeof(types.valueobjects.JsonValue)
                         ? (Expression)Expression.Convert(Expression.New(
@@ -113,6 +114,16 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                             Expression.Assign(Expression.Property(entityVar, property), jsonValue))));
                     continue;
                 }
+            }
+            else if (column.NativeType is { } declaredNative && coercionOptions is not null &&
+                     DatabaseTraits.For(coercionOptions.Provider).NativeColumnRead is { } nativeRule &&
+                     nativeRule(readerParam, ordinalExpr, declaredNative, targetType, coercionOptions) is { } nativeRead)
+            {
+                // A column declared with a native type that its database reads in a provider-specific way (a BIT(n) width,
+                // an Oracle BFILE locator): the dialect's rule reads it, ahead of the general reads.
+                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                expressions.Add(Expression.Assign(Expression.Property(entityVar, property), nativeRead));
+                continue;
             }
             else if (ColumnStatementReads.TryBuild(readerParam, i, fieldType, targetType, coercionOptions,
                          Expression.Property(entityVar, property)) is { } statement)

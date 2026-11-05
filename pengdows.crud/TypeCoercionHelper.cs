@@ -73,6 +73,11 @@ namespace pengdows.crud;
 internal static class TypeCoercionHelper
 {
 
+    // A BFILE locator has a directory object and a file name, both text.
+    private static bool IsLocator(Type type) =>
+        type.GetProperty("DirectoryName")?.PropertyType == typeof(string) &&
+        type.GetProperty("FileName")?.PropertyType == typeof(string);
+
     /// <summary>
     /// Cache of compiled type conversion delegates for faster Convert.ChangeType operations.
     /// Key: (sourceType, targetType), Value: compiled converter function.
@@ -294,6 +299,12 @@ internal static class TypeCoercionHelper
             return guidValue;
         }
 
+        // A Guid the driver returned for a 16-byte column reads back as those bytes, in the dialect's byte order.
+        if (underlyingTarget == typeof(byte[]) && value is Guid guidSource)
+        {
+            return GuidBytes(guidSource, options.GuidBytesBigEndian);
+        }
+
         // Primary path: Use unified CoercionRegistry system for other types
         var dbValue = new types.coercion.DbValue(value, sourceType);
         if (types.coercion.CoercionRegistry.Shared.TryRead(dbValue, underlyingTarget, out var coercedValue,
@@ -342,6 +353,22 @@ internal static class TypeCoercionHelper
         WholeNumber.Check(value, underlyingTarget);
         NumericTruth.Check(value, underlyingTarget);
 
+        // An Oracle BFILE locator (ODP.NET's OracleBFile) reads as its "DIRECTORY/file" text, the form the BFILE column is
+        // written from. Its two properties are read, so no driver assembly is needed.
+        if (underlyingTarget == typeof(string) && IsLocator(value.GetType()))
+        {
+            return value.GetType().GetProperty("DirectoryName")!.GetValue(value) + "/" +
+                   value.GetType().GetProperty("FileName")!.GetValue(value);
+        }
+
+        // Npgsql's own value types for a native PostgreSQL column (a point, a tsquery, a log sequence number) are not
+        // IConvertible: their text is the column's value.
+        if (underlyingTarget == typeof(string) && value.GetType().FullName is { } fullName &&
+            fullName.StartsWith("NpgsqlTypes.", StringComparison.Ordinal))
+        {
+            return value.ToString()!;
+        }
+
         // Final fallback: Use cached compiled converter for better performance
         try
         {
@@ -360,6 +387,14 @@ internal static class TypeCoercionHelper
 
     // A 16-byte value read into a Guid is decoded in the dialect's Guid byte order (TYPE-002);
     // the registered Guid coercion only knows .NET's mixed-endian order.
+    // The 16 bytes of a Guid in the dialect's byte order (the inverse of TryDecodeGuidBytes).
+    private static byte[] GuidBytes(Guid guid, bool bigEndian)
+    {
+        var bytes = new byte[16];
+        guid.TryWriteBytes(bytes, bigEndian, out _);
+        return bytes;
+    }
+
     private static bool TryDecodeGuidBytes(object value, bool bigEndian, out object guid)
     {
         switch (value)
@@ -565,7 +600,10 @@ internal static class TypeCoercionHelper
         if (item is null || item is DBNull)
         {
             // As IList.Add(null) on a List of a non-nullable value type did.
-            return default(T) is null ? default! : throw new ArgumentNullException(nameof(item));
+            return default(T) is null
+                ? default!
+                : throw new InvalidCastException(
+                    $"A NULL element cannot be stored in a non-nullable {typeof(T).Name} collection.");
         }
 
         return (T)Coerce(item, item.GetType(), typeof(T), options)!;
@@ -738,23 +776,6 @@ internal static class TypeCoercionHelper
         catch
         {
             // Ignore logging failures in debug-only fallbacks.
-        }
-    }
-
-    private static bool EvaluateCharBoolean(char lower)
-    {
-        switch (lower)
-        {
-            case 't':
-            case 'y':
-            case '1':
-                return true;
-            case 'f':
-            case 'n':
-            case '0':
-                return false;
-            default:
-                throw new InvalidCastException("Cannot convert character to Boolean.");
         }
     }
 
@@ -1143,6 +1164,11 @@ internal static class TypeCoercionHelper
                 if (runtimeTarget == typeof(Guid) && TryDecodeGuidBytes(value!, guidBytesBigEndian, out var guid))
                 {
                     return guid;
+                }
+
+                if (runtimeTarget == typeof(byte[]) && value is Guid guidSource)
+                {
+                    return GuidBytes(guidSource, guidBytesBigEndian);
                 }
 
                 var dbValue = new types.coercion.DbValue(value!, sourceType);

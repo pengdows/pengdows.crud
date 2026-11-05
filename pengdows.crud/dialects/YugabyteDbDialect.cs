@@ -95,14 +95,17 @@ internal class YugabyteDbDialect : PostgreSqlDialect
         }
     }
 
-    // REV-039: YugabyteDB shares PostgreSQL's type mappings, hstore and Npgsql value types. Its
-    // IntervalYearMonth/IntervalDaySecond values have never been sent as ISO 8601 text the way
-    // PostgreSQL's and CockroachDB's are; that is kept as it was.
+    // REV-039: YugabyteDB shares PostgreSQL's type mappings, hstore and Npgsql value types. Its interval values
+    // are sent as ISO 8601 text, as PostgreSQL's and CockroachDB's are: Npgsql refused the unmapped value objects
+    // before, so there was no working form to keep (fidelity matrix, YugabyteDb interval cells).
     internal static DatabaseTraits CreateYugabyteDbTraits() =>
         new(SupportedDatabase.YugabyteDb, PostgreSqlFamilyExceptionTranslator)
         {
             SpatialFormat = SpatialWireFormat.ExtendedWkb,
+            IntervalFormat = IntervalWireFormat.PostgreSqlInterval,
             BindsNpgsqlValueTypes = true,
+            RegisterCoercions = registry => registry.Register(SupportedDatabase.YugabyteDb, new types.coercion.PostgreSqlMultirangeCoercion(SupportedDatabase.YugabyteDb)),
+            BindsNpgsqlCidr = true,
             RegisterTypeMappings = registry =>
             {
                 RegisterPostgreSqlFamilyTypeMappings(registry, SupportedDatabase.YugabyteDb);

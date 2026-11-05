@@ -8,7 +8,7 @@
 // - Provider-specific:
 //   * PostgreSQL: MACADDR or MACADDR8 type ("08:00:2b:01:02:03")
 //   * Others: Store as VARCHAR or BINARY
-// - ConvertToProvider(): Returns string for PostgreSQL, PhysicalAddress otherwise.
+// - ConvertToProvider(): PhysicalAddress on the Npgsql family, the canonical text otherwise.
 // - TryConvertFromProvider(): Handles MacAddress, string, PhysicalAddress, NpgsqlMacAddress.
 // - Accepts colon-separated, hyphen-separated, or raw hex formats.
 // - Output standardized to colon-separated format.
@@ -16,6 +16,7 @@
 // =============================================================================
 
 using System.Net.NetworkInformation;
+using pengdows.crud.dialects;
 using pengdows.crud.@internal;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
@@ -88,10 +89,10 @@ internal sealed class MacAddressConverter : AdvancedTypeConverter<MacAddress>
             return null;
         }
 
-        // Every provider, PostgreSQL included, gets the PhysicalAddress: Npgsql's macaddr/macaddr8
-        // handlers bind from PhysicalAddress, while a string with NpgsqlDbType.MacAddr is rejected
-        // ("Writing values of 'System.String' is not supported ...", confirmed live).
-        return value.Address;
+        // The Npgsql family gets the PhysicalAddress: its macaddr/macaddr8 handlers bind from it, while a string with
+        // NpgsqlDbType.MacAddr is rejected ("Writing values of 'System.String' is not supported ...", confirmed live).
+        // Every other database has no PhysicalAddress bind, so it gets the canonical colon-separated text.
+        return DatabaseTraits.For(provider).BindsNpgsqlValueTypes ? value.Address : value.ToString();
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out MacAddress result)
@@ -104,16 +105,9 @@ internal sealed class MacAddressConverter : AdvancedTypeConverter<MacAddress>
 
         if (value is string text)
         {
-            try
-            {
-                result = MacAddress.Parse(text);
-                return true;
-            }
-            catch
-            {
-                result = default!;
-                return false;
-            }
+            // Malformed MAC text is an error with the parser's reason, not "not a MAC address".
+            result = MacAddress.Parse(text);
+            return true;
         }
 
         if (value is PhysicalAddress physical)

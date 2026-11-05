@@ -71,7 +71,8 @@ public class SpatialConverterBranchTests
         var wkt = Geometry.FromWellKnownText("POINT(1 2)", 4326);
         var geo = Geometry.FromGeoJson("{\"type\":\"Point\"}", 4326);
 
-        Assert.IsType<byte[]>(converter.ToProviderValue(wkb, SupportedDatabase.PostgreSql));
+        // One byte cannot carry an SRID header, so it fails rather than being written without its SRID.
+        Assert.Throws<ArgumentException>(() => converter.ToProviderValue(wkb, SupportedDatabase.PostgreSql));
         // TYPE-002: bound as bytea, so WKT is encoded to EWKB; GeoJSON text can't be sent as bytea.
         Assert.Equal(GeometryConverter.AddSridToWkb(WellKnownTextEncoder.Encode("POINT(1 2)"), 4326),
             converter.ToProviderValue(wkt, SupportedDatabase.PostgreSql));

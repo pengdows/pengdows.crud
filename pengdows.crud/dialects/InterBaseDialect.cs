@@ -233,7 +233,7 @@ internal sealed class InterBaseDialect : SqlDialect
         if (value is Array array and not byte[])
         {
             var parameter = base.CreateDbParameter<object?>(name, type, null);
-            ProviderPropertySetter.Set(parameter, "IBDbType", "Array");
+            ProviderPropertySetter.TrySet(parameter, "IBDbType", "Array");
             parameter.Value = array;
             return parameter;
         }

@@ -405,12 +405,16 @@ for the comparison methodology and limitations.
   for it), and why `Invalidate`'s dictionary eviction is synchronous/immediate while actual context
   disposal is dispatched to the thread pool (so a blocking governor drain never runs on the
   invalidating caller's thread).
+- [`docs/type-representation-matrix.md`](docs/type-representation-matrix.md) — every type on every supported database
+  with its verdict from the live fidelity matrix (supported, unsupported by design, by server, or upstream defect), and
+  the column type each database stores it in. Generated from the live run; read it before claiming a type works.
 - [`docs/entity-mapping.md`](docs/entity-mapping.md) — complete reference for all 15
   entity-mapping attributes (`[Table]`/`[Column]`/`[Id]`/`[PrimaryKey]`/`[Version]`/audit/
   `[Json]`/enum/correlation-token/`[NonInsertable]`/`[NonUpdateable]`), a summary matrix, valid
   combinations, and the exact `TypeMapRegistry` validation rules that throw `SqlGenerationException`.
   Also `ColumnName(nameof(Entity.Prop))` (gateways) / `ctx.ColumnName<T>(...)` for mapped column names
-  in custom SQL.
+  in custom SQL. The `NativeType` property of `[Column]` declares a column's native database type where the CLR
+  type cannot say it (a PostgreSQL `xml` or `point`, a Firebird `DECFLOAT`, a MySQL `BIT(n)`, an Oracle `BFILE`).
 - [`docs/audit-fields.md`](docs/audit-fields.md) — the full audit-field lifecycle: the
   `IAuditValueResolver` contract (synchronous only, unwrapped exception propagation), what's set
   on CREATE (both `Created*`/`LastUpdated*` pairs) vs. UPDATE (only `LastUpdated*`),

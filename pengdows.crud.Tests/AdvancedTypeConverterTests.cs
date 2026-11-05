@@ -64,10 +64,11 @@ public class AdvancedTypeConverterTests
     [Fact]
     public void CidrConverter_ShouldFailOnMissingPrefix()
     {
+        // A malformed CIDR is an error with the parser's reason, not a silent "not a CIDR".
         var converter = new CidrConverter();
-        var success = converter.TryConvertFromProvider("192.168.1.1", SupportedDatabase.PostgreSql, out var result);
 
-        Assert.False(success);
+        Assert.Throws<FormatException>(() =>
+            converter.TryConvertFromProvider("192.168.1.1", SupportedDatabase.PostgreSql, out _));
     }
 
     [Fact]
@@ -408,11 +409,12 @@ public class AdvancedTypeConverterTests
     [Fact]
     public void IntervalConverter_ShouldRejectInvalidString()
     {
+        // Malformed text is an error that does not echo the stored value.
         var converter = new PostgreSqlIntervalConverter();
-        var success = converter.TryConvertFromProvider("invalid", SupportedDatabase.PostgreSql, out var result);
+        var ex = Assert.Throws<FormatException>(() =>
+            converter.TryConvertFromProvider("invalid", SupportedDatabase.PostgreSql, out _));
 
-        Assert.False(success);
-        Assert.Equal(default, result);
+        Assert.DoesNotContain("invalid", ex.Message, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -420,11 +422,10 @@ public class AdvancedTypeConverterTests
     {
         var converter = new PostgreSqlIntervalConverter();
 
-        var success = converter.TryConvertFromProvider("Pnot-an-interval", SupportedDatabase.PostgreSql,
-            out var result);
+        var ex = Assert.Throws<FormatException>(() =>
+            converter.TryConvertFromProvider("Pnot-an-interval", SupportedDatabase.PostgreSql, out _));
 
-        Assert.False(success);
-        Assert.Equal(default, result);
+        Assert.DoesNotContain("Pnot-an-interval", ex.Message, StringComparison.Ordinal);
     }
 
     #endregion

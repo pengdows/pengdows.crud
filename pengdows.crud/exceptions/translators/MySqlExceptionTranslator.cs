@@ -10,8 +10,6 @@ internal sealed class MySqlExceptionTranslator : IDbExceptionTranslator
     {
         var database = dialect.DatabaseType;
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
-        var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
-        var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
 
         // Check unique constraint (delegated to the dialect) before LooksLikeTimeout so that
         // PK-violation messages that happen to contain "timeout" in their payload (e.g. a

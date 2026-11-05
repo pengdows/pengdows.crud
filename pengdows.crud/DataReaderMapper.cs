@@ -37,6 +37,7 @@ using System.Reflection;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.attributes;
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
@@ -452,7 +453,9 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 var requiresCoercion = RequiresCoercion(fieldType, prop.PropertyType);
                 // An Npgsql inet or interval column is read as Npgsql's own type, which the schema says once, here.
                 var npgsqlTyped = ColumnQuirkReads.NpgsqlTypedFor(reader, i, prop.PropertyType);
-                var key = new SetterCacheKey(typeof(T), prop, fieldType, requiresCoercion, options.EnumMode, i, coercion, npgsqlTyped);
+                // A column declared with a native type (its ColumnAttribute) reads through its dialect's rule, as a gateway's does.
+                var nativeType = prop.GetCustomAttribute<ColumnAttribute>()?.NativeType;
+                var key = new SetterCacheKey(typeof(T), prop, fieldType, requiresCoercion, options.EnumMode, i, coercion, npgsqlTyped, nativeType);
                 var isUnresolved = IsUnresolved(i, unresolved);
                 // Non-nullable value types cannot hold null at the .NET level. Skip the IsDBNull
                 // guard for these columns — if the DB returns NULL for a non-nullable property,
@@ -569,6 +572,14 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var propertyAccess = Expression.Property(objParam, key.Property);
         var targetType = key.Property.PropertyType;
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
+
+        if (key.NativeType is { } declaredNative && key.Coercion is { } nativeOptions &&
+            DatabaseTraits.For(nativeOptions.Provider).NativeColumnRead is { } nativeRule &&
+            nativeRule(readerParam, Expression.Constant(key.Ordinal), declaredNative, targetType, nativeOptions) is { } nativeRead)
+        {
+            handlesNull = false;
+            return Expression.Assign(propertyAccess, nativeRead);
+        }
 
         if (ColumnStatementReads.TryBuild(readerParam, key.Ordinal, key.FieldType, targetType, key.Coercion,
                 propertyAccess) is { } statement)
@@ -784,7 +795,8 @@ public sealed class DataReaderMapper : IDataReaderMapper
         EnumParseFailureMode EnumMode,
         int Ordinal,
         TypeCoercionOptions? Coercion,
-        bool NpgsqlTyped = false);
+        bool NpgsqlTyped = false,
+        string? NativeType = null);
 
     private readonly record struct PropertyLookupCacheKey(Type Type, bool ColumnsOnly);
 

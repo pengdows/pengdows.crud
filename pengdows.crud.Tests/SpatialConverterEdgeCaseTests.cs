@@ -120,7 +120,7 @@ public class SpatialConverterEdgeCaseTests
         var converter = new GeometryConverter();
         var geometry = Geometry.FromWellKnownText("POINT(1 2)", 0);
 
-        var result = converter.ToProviderValue(geometry, SupportedDatabase.Sqlite);
+        var result = converter.ToProviderValue(geometry, SupportedDatabase.Firebird);
         Assert.Equal("POINT(1 2)", result);
     }
 
@@ -131,7 +131,7 @@ public class SpatialConverterEdgeCaseTests
         var json = "{\"type\":\"Point\",\"coordinates\":[1,2]}";
         var geometry = Geometry.FromGeoJson(json, 0);
 
-        var result = converter.ToProviderValue(geometry, SupportedDatabase.Sqlite);
+        var result = converter.ToProviderValue(geometry, SupportedDatabase.Firebird);
         Assert.Equal(json, result);
     }
 
@@ -359,8 +359,8 @@ public class SpatialConverterEdgeCaseTests
         var wkb = new byte[] { 1, 2, 3 };
         var geography = Geography.FromWellKnownBinary(wkb, 4326);
 
-        var result = converter.ToProviderValue(geography, SupportedDatabase.PostgreSql);
-        Assert.IsType<byte[]>(result);
+        // Three bytes cannot carry an SRID header; writing them with no SRID would be a silent drop.
+        Assert.Throws<ArgumentException>(() => converter.ToProviderValue(geography, SupportedDatabase.PostgreSql));
     }
 
     [Fact]

@@ -1,3 +1,4 @@
+using System.Linq;
 using pengdows.crud.enums;
 using pengdows.crud.exceptions;
 using pengdows.crud.infrastructure;
@@ -43,6 +44,80 @@ public class ConstraintViolationTests : DatabaseTestBase
 
         // Create a second table with foreign key for FK tests
         await CreateRelatedTableAsync(provider, context);
+    }
+
+    // A constraint name is an identifier, or it is null. A phrase such as "fails" or a quoted or
+    // parenthesised fragment from the message text is never a name (see ConstraintNameExtractionTests).
+    [SkippableFact]
+    public async Task UniqueViolation_ConstraintName_IsAnIdentifierOrNull()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (!context.Dialect.EnforcesConstraints)
+            {
+                Output.WriteLine($"Skipping constraint test for {provider} (constraints are not enforced)");
+                return;
+            }
+
+            var helper = CreateTableGateway(context);
+            var entity1 = CreateTestEntity(NameEnum.Test, 100);
+            await helper.CreateAsync(entity1, context);
+
+            var duplicate = CreateTestEntity(NameEnum.Test2, 200);
+            duplicate.Id = entity1.Id;
+
+            var ex = await Assert.ThrowsAsync<UniqueConstraintViolationException>(async () =>
+            {
+                await using var container = helper.BuildCreate(duplicate, context);
+                await container.ExecuteNonQueryAsync();
+            });
+
+            AssertNameIsNullOrQuotedInMessage(provider, ex);
+        });
+    }
+
+    // A reported name is null, or it appears in the message delimited the way providers delimit
+    // identifiers: "name", 'name', `name`, (SCHEMA.name) or .name). A bare word such as "fails" from
+    // "a foreign key constraint fails" is never delimited, so it is rejected.
+    private static void AssertNameIsNullOrQuotedInMessage(SupportedDatabase provider, ConstraintViolationException ex)
+    {
+        var name = ex.ConstraintName;
+        if (name is null)
+        {
+            return;
+        }
+
+        var message = ex.Message;
+        var delimitedInMessage =
+            message.Contains("\"" + name + "\"", StringComparison.Ordinal) ||
+            message.Contains("'" + name + "'", StringComparison.Ordinal) ||
+            message.Contains("`" + name + "`", StringComparison.Ordinal) ||
+            message.Contains("." + name + ")", StringComparison.Ordinal);
+        Assert.True(delimitedInMessage, $"{provider} reported ConstraintName '{name}', which the message does not delimit as a name.");
+    }
+
+    // Foreign-key messages carry the word "constraint" in prose ("a foreign key constraint fails" on
+    // MySQL), which is exactly where a message-based fallback once produced a phrase as a name.
+    [SkippableFact]
+    public async Task ForeignKeyViolation_ConstraintName_IsAnIdentifierOrNull()
+    {
+        await RunTestAgainstAllProvidersAsync(async (provider, context) =>
+        {
+            if (!context.Dialect.EnforcesConstraints || !context.Dialect.EnforcesForeignKeyConstraints)
+            {
+                Output.WriteLine($"Skipping FK name test for {provider} (foreign keys are not enforced)");
+                return;
+            }
+
+            var ex = await Assert.ThrowsAsync<ForeignKeyViolationException>(async () =>
+            {
+                await using var container = context.CreateSqlContainer();
+                AppendInsertRelatedTable(container, provider, -99999L, "Related Item");
+                await container.ExecuteNonQueryAsync();
+            });
+
+            AssertNameIsNullOrQuotedInMessage(provider, ex);
+        });
     }
 
     [SkippableFact]

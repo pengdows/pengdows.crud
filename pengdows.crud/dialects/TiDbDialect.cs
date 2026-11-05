@@ -145,6 +145,13 @@ internal class TiDbDialect : MySqlDialect
     internal static DatabaseTraits CreateTiDbTraits() =>
         new(SupportedDatabase.TiDb, MySqlFamilyExceptionTranslator)
         {
-            RegisterTypeMappings = registry => RegisterJsonMapping(registry, SupportedDatabase.TiDb)
+            NativeColumnRead = MySqlDialect.MySqlNativeColumnRead,
+            RegisterTypeMappings = registry =>
+            {
+                RegisterJsonMapping(registry, SupportedDatabase.TiDb);
+                MySqlDialect.RegisterBitStringMapping(registry, SupportedDatabase.TiDb);
+            },
+            RegisterCoercions = registry =>
+                registry.Register(SupportedDatabase.TiDb, new pengdows.crud.types.coercion.BracketedVectorCoercion())
         };
 }

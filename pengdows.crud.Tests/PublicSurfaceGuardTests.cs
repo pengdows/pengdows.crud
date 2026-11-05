@@ -146,6 +146,44 @@ public class PublicSurfaceGuardTests
             found.ToArray());
     }
 
+    // The output guard above does not see inputs: a public method that accepts a raw connection or command hands the
+    // caller a way to bypass governance just as a returned one does. Every such input shipped in 2.0.5 and goes in 3.0;
+    // nothing may be added to this list.
+    [Fact]
+    public void NoPublicInputAcceptsARawAdoNetObject_BeyondTheListShippedIn205()
+    {
+        var found = new SortedSet<string>(StringComparer.Ordinal);
+        foreach (var type in new[] { Core, Abstractions }.SelectMany(a => a.GetTypes()).Where(IsReachableFromOutside))
+        {
+            const BindingFlags all = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance |
+                                     BindingFlags.Static | BindingFlags.DeclaredOnly;
+            foreach (var method in type.GetMethods(all).Where(m => ReachableAccessor(m) && !m.IsSpecialName))
+            {
+                if (method.GetParameters().Any(p => IsRaw(p.ParameterType)))
+                {
+                    found.Add($"{type.FullName}.{method.Name}");
+                }
+            }
+
+            foreach (var ctor in type.GetConstructors(all).Where(c => c.IsPublic || c.IsFamily || c.IsFamilyOrAssembly))
+            {
+                if (ctor.GetParameters().Any(p => IsRaw(p.ParameterType)))
+                {
+                    found.Add($"{type.FullName}..ctor");
+                }
+            }
+        }
+
+        Assert.Equal(
+            new[]
+            {
+                "pengdows.crud.DatabaseContext..ctor",
+                "pengdows.crud.connection.ConnectionLocalState.ComputeShapeHash", // API-002 (3.0)
+                "pengdows.crud.dialects.ISqlDialect.GetLastInsertedIdFromCommand"
+            },
+            found.ToArray());
+    }
+
     // A public type that inherits a System.Data connection, command, reader or transaction type hands every caller
     // that type's whole surface. ITrackedReader (2.0.5) is the one governed wrapper that does so on purpose: it is a
     // lease that holds the connection lock until disposed and the provider's own reader never leaves the library, and

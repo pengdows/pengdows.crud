@@ -9,7 +9,7 @@
 //   * Oracle: INTERVAL DAY TO SECOND type
 //   * PostgreSQL/CockroachDB: INTERVAL (ISO 8601 format)
 //   * Others: TimeSpan equivalent
-// - ConvertToProvider(): Returns ISO 8601 format (P5DT12H30M45.5S) for Oracle/PostgreSQL.
+// - ConvertToProvider(): Returns ISO 8601 format (P5DT12H30M45.5S) for every database without an interval type.
 // - TryConvertFromProvider(): Handles IntervalDaySecond, TimeSpan, and string.
 // - Text is read by IntervalDaySecond.TryParseText (ISO, SQL/Oracle/Informix and word forms; DRY-012).
 // - Components: Days (int) and Time (TimeSpan).
@@ -90,34 +90,45 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
         {
             IntervalWireFormat.OracleLiteral => FormatOracle(value),
             IntervalWireFormat.Iso8601 => FormatIso(value),
-            _ => value.TotalTime
+            IntervalWireFormat.PostgreSqlInterval => PostgreSqlIntervalConverter.ToProvider(
+                new PostgreSqlInterval(0, value.Days, value.Time.Ticks / 10), provider),
+            IntervalWireFormat.DayTimeSpan => value.TotalTime,
+            // A database with no interval type takes the ISO 8601 text, which reads back exactly. A TimeSpan would be a time
+            // of day to it (Access, SQL Server, MySQL's TIME): the day count is lost or refused.
+            _ => FormatIso(value)
         };
     }
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out IntervalDaySecond result)
     {
-        try
+        switch (value)
         {
-            switch (value)
-            {
-                case IntervalDaySecond interval:
-                    result = interval;
-                    return true;
-                case TimeSpan span:
-                    result = IntervalDaySecond.FromTimeSpan(span);
-                    return true;
-                // DRY-012: the value object's strict parser; blank or unrecognized text is no interval.
-                case string text:
-                    return IntervalDaySecond.TryParseText(text, out result);
-                default:
+            case IntervalDaySecond interval:
+                result = interval;
+                return true;
+            case TimeSpan span:
+                result = IntervalDaySecond.FromTimeSpan(span);
+                return true;
+            // DRY-012: the value object's strict parser. Text it does not recognise is malformed data, so it throws with
+            // the offending text rather than returning false (which callers report as a generic cast failure).
+            case string text:
+                // Blank text is no interval (COR-002): a plain false. Other text that does not parse is malformed data and
+                // throws without echoing the value, so a stored value never reaches an exception message or a log.
+                if (string.IsNullOrWhiteSpace(text))
+                {
                     result = default!;
                     return false;
-            }
-        }
-        catch
-        {
-            result = default!;
-            return false;
+                }
+
+                if (!IntervalDaySecond.TryParseText(text, out result))
+                {
+                    throw new FormatException("Not a valid day-to-second interval.");
+                }
+
+                return true;
+            default:
+                result = default!;
+                return false;
         }
     }
 

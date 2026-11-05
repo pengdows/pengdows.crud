@@ -1,0 +1,27 @@
+unified_id,concept,db,probe_database,probe_semantic,verdict
+B10,128-bit signed,FB,Firebird,signed 128-bit,version-dependent (confirmed)
+B16,Decimal floating point,FB,Firebird,decimal floating point,version-dependent (confirmed)
+B20,Boolean,ORA,Oracle,boolean,version-dependent (confirmed)
+B20,Boolean,FB,Firebird,boolean,no change across tested versions
+B32,Fixed-length BINARY(n),FB,Firebird,fixed binary,version-dependent (confirmed)
+B33,Variable-length VARBINARY(n),FB,Firebird,varying binary,version-dependent (confirmed)
+B40,Time with time zone,FB,Firebird,time with zone,version-dependent (confirmed)
+B42,Timestamp with time zone (offset/zone retained),FB,Firebird,timestamp with zone,version-dependent (confirmed)
+B48,UUID / GUID,MDB,MariaDb,UUID / GUID,version-dependent (confirmed)
+B51,IP address / CIDR,MDB,MariaDb,IP address,no change across tested versions
+B53,JSON (text-preserving),MSSQL,SqlServer,JSON text / JSON value,version-dependent (confirmed)
+B53,JSON (text-preserving),ORA,Oracle,JSON text / JSON value,no change across tested versions
+B65,Multirange,PG,PostgreSql,multirange,version-dependent (confirmed)
+B66,Domain / distinct type,ORA,Oracle,user-defined enum / domain,no change across tested versions
+B71,Vector embedding,MSSQL,SqlServer,vector embedding,version-dependent (confirmed)
+B71,Vector embedding,ORA,Oracle,vector embedding,no change across tested versions
+B71,Vector embedding,MDB,MariaDb,vector embedding,no change across tested versions
+B71,Vector embedding,MYSQL,MySql,vector embedding,no change across tested versions
+B72,Full-text document/query,CRDB,CockroachDb,full-text search vector / query,no change across tested versions
+A53,IP address,MDB,MariaDb,IP address,no change across tested versions
+B12,Arbitrary-precision integer,DUCK,DuckDB,arbitrary-size integer,not swept (no version matrix)
+B71,Vector embedding,TIDB,TiDb,vector embedding,version-dependent (confirmed)
+B18,32-bit IEEE float,SPAN,Spanner,binary float32,not swept (no version matrix)
+B48,UUID / GUID,SPAN,Spanner,UUID / GUID,not swept (no version matrix)
+B55,BSON,SS,SingleStore,BSON,not swept (no version matrix)
+B71,Vector embedding,SS,SingleStore,vector embedding,not swept (no version matrix)

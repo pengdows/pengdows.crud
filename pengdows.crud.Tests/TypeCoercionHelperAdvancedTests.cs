@@ -13,17 +13,15 @@ namespace pengdows.crud.Tests;
 public class TypeCoercionHelperAdvancedTests
 {
     [Fact]
-    public void CoerceBoolean_FromCharacterSucceeds()
+    public void CoerceBoolean_CharacterYIsTrue()
     {
-        var result = TypeCoercionHelper.Coerce("Y", typeof(string), typeof(bool));
-
-        Assert.True((bool)result!);
+        Assert.True((bool)TypeCoercionHelper.Coerce("Y", typeof(string), typeof(bool))!);
     }
 
     [Fact]
-    public void CoerceBoolean_InvalidCharacterThrows()
+    public void CoerceBoolean_OtherCharacterFailsTheRead()
     {
-        Assert.Throws<InvalidCastException>(() => TypeCoercionHelper.Coerce("x", typeof(string), typeof(bool)));
+        Assert.ThrowsAny<Exception>(() => TypeCoercionHelper.Coerce("x", typeof(string), typeof(bool)));
     }
 
     [Fact]

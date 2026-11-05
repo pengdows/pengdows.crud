@@ -1,0 +1,75 @@
+MariaDb	signed 8-bit	signed_8_bit	PASS
+MariaDb	signed 16-bit	signed_16_bit	PASS
+MariaDb	signed 32-bit	signed_32_bit	PASS
+MariaDb	signed 64-bit	signed_64_bit	PASS
+MariaDb	signed 128-bit	signed_128_bit	PASS
+MariaDb	unsigned 8-bit	unsigned_8_bit	PASS
+MariaDb	unsigned 16-bit	unsigned_16_bit	PASS
+MariaDb	unsigned 32-bit	unsigned_32_bit	PASS
+MariaDb	unsigned 64-bit	unsigned_64_bit	PASS
+MariaDb	arbitrary-size integer	arbitrary_integer	PASS
+MariaDb	binary float32	binary_float32	PASS
+MariaDb	binary float64	binary_float64	PASS
+MariaDb	fixed decimal	fixed_decimal	PASS
+MariaDb	boolean	boolean	PASS
+MariaDb	bit / bitstring	bit_string	PASS
+MariaDb	varying character	varying_character	PASS
+MariaDb	unbounded text	unbounded_text	PASS
+MariaDb	UUID / GUID	uuid	PASS
+MariaDb	calendar date	calendar_date	PASS
+MariaDb	time without zone	time_of_day	PASS
+MariaDb	time without zone	time_span	PASS
+MariaDb	day-time interval	day_time_interval	UNSUPPORTED refused: Unknown data type: 'INTERVAL'
+MariaDb	timestamp without zone	timestamp	PASS
+MariaDb	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+MariaDb	binary LOB	binary	PASS
+MariaDb	JSON text / JSON value	json	PASS
+MariaDb	IP address	ip_address	PASS
+MariaDb	SQL array	int_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
+MariaDb	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: Unknown data type: 'UHUGEINT'
+MariaDb	decimal floating point	decimal_float	UNSUPPORTED refused: Unknown data type: 'DECFLOAT'
+MariaDb	money / currency	money	UNSUPPORTED refused: Unknown data type: 'MONEY'
+MariaDb	fixed character	fixed_character	PASS
+MariaDb	national / Unicode character	national_text	PASS
+MariaDb	long text LOB	long_text	PASS
+MariaDb	enumeration	enumeration	PASS
+MariaDb	set-valued enum	set_value	PASS
+MariaDb	fixed binary	fixed_binary	PASS
+MariaDb	varying binary	varying_binary	PASS
+MariaDb	legacy long binary	legacy_binary	PASS
+MariaDb	rowversion / timestamp token	rowversion	PASS
+MariaDb	local-zone timestamp	local_timestamp	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
+MariaDb	second-precision datetime	second_datetime	PASS
+MariaDb	time with zone	time_zoned	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+MariaDb	year-only	year_only	PASS
+MariaDb	year-month interval	year_month_interval	UNSUPPORTED refused: Unknown data type: 'INTERVAL'
+MariaDb	generic interval	generic_interval	UNSUPPORTED refused: Unknown data type: 'INTERVAL'
+MariaDb	row identifier / ROWID	row_identifier	PASS
+MariaDb	object identifier / OID	oid	UNSUPPORTED refused: Unknown data type: 'OID'
+MariaDb	transaction ID	transaction_id	UNSUPPORTED refused: Unknown data type: 'XID'
+MariaDb	WAL / log position	wal_position	UNSUPPORTED refused: Unknown data type: 'PG_LSN'
+MariaDb	native binary JSON	binary_json	PASS
+MariaDb	XML	xml	UNSUPPORTED refused: Unknown data type: 'XML'
+MariaDb	BSON	bson	UNSUPPORTED refused: Unknown data type: 'BSON'
+MariaDb	variant / dynamic value	variant	UNSUPPORTED refused: Unknown data type: 'VARIANT'
+MariaDb	IP network / CIDR	cidr	UNSUPPORTED refused: Unknown data type: 'CIDR'
+MariaDb	MAC address	mac_address	UNSUPPORTED refused: Unknown data type: 'MACADDR'
+MariaDb	point geometry	point	PASS
+MariaDb	line / linestring geometry	linestring	PASS
+MariaDb	polygon geometry	polygon	PASS
+MariaDb	general geometry	geometry	PASS
+MariaDb	geography / geodetic	geography	UNSUPPORTED refused: Unknown data type: 'GEOGRAPHY'
+MariaDb	fixed-length array	fixed_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '[10])' at line 1
+MariaDb	list / multiset / set collection	list_collection	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
+MariaDb	map / dictionary	map	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'VARCHAR(10),INTEGER))' at line 1
+MariaDb	range	range	UNSUPPORTED refused: Unknown data type: 'INT4RANGE'
+MariaDb	multirange	multirange	UNSUPPORTED refused: Unknown data type: 'INT4MULTIRANGE'
+MariaDb	user-defined enum / domain	domain	UNSUPPORTED refused: Unknown data type: 'CREATE'
+MariaDb	full-text search vector / query	full_text	UNSUPPORTED refused: Unknown data type: 'TSVECTOR'
+MariaDb	native point	native_point	UNSUPPORTED refused: no candidate was tried
+MariaDb	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+MariaDb	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+MariaDb	vector embedding	vector	UNSUPPORTED refused: Unknown data type: 'VECTOR'
+MariaDb	hierarchical path	hierarchy	UNSUPPORTED refused: Unknown data type: 'HIERARCHYID'
+MariaDb	external-file reference	file_reference	UNSUPPORTED refused: Unknown data type: 'BFILE'
+MariaDb	specialized security label	security_label	UNSUPPORTED refused: Unknown data type: 'IDSSECURITYLABEL'

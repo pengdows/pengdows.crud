@@ -1,0 +1,75 @@
+PostgreSql	signed 8-bit	signed_8_bit	PASS
+PostgreSql	signed 16-bit	signed_16_bit	PASS
+PostgreSql	signed 32-bit	signed_32_bit	PASS
+PostgreSql	signed 64-bit	signed_64_bit	PASS
+PostgreSql	signed 128-bit	signed_128_bit	PASS
+PostgreSql	unsigned 8-bit	unsigned_8_bit	PASS
+PostgreSql	unsigned 16-bit	unsigned_16_bit	PASS
+PostgreSql	unsigned 32-bit	unsigned_32_bit	PASS
+PostgreSql	unsigned 64-bit	unsigned_64_bit	PASS
+PostgreSql	arbitrary-size integer	arbitrary_integer	PASS
+PostgreSql	binary float32	binary_float32	PASS
+PostgreSql	binary float64	binary_float64	PASS
+PostgreSql	fixed decimal	fixed_decimal	PASS
+PostgreSql	boolean	boolean	PASS
+PostgreSql	bit / bitstring	bit_string	PASS
+PostgreSql	varying character	varying_character	PASS
+PostgreSql	unbounded text	unbounded_text	PASS
+PostgreSql	UUID / GUID	uuid	PASS
+PostgreSql	calendar date	calendar_date	PASS
+PostgreSql	time without zone	time_of_day	PASS
+PostgreSql	time without zone	time_span	PASS
+PostgreSql	day-time interval	day_time_interval	PASS
+PostgreSql	timestamp without zone	timestamp	PASS
+PostgreSql	timestamp with zone	timestamp_with_zone	PASS
+PostgreSql	binary LOB	binary	PASS
+PostgreSql	JSON text / JSON value	json	PASS
+PostgreSql	IP address	ip_address	PASS
+PostgreSql	SQL array	int_array	PASS
+PostgreSql	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: 42704: type "uhugeint" does not exist POSITION: 55
+PostgreSql	decimal floating point	decimal_float	UNSUPPORTED refused: 42704: type "decfloat" does not exist POSITION: 55
+PostgreSql	money / currency	money	PASS
+PostgreSql	fixed character	fixed_character	PASS
+PostgreSql	national / Unicode character	national_text	PASS
+PostgreSql	long text LOB	long_text	PASS
+PostgreSql	enumeration	enumeration	UNSUPPORTED refused: 42704: type "enum" does not exist POSITION: 56
+PostgreSql	set-valued enum	set_value	UNSUPPORTED refused: 42704: type "set" does not exist POSITION: 56
+PostgreSql	fixed binary	fixed_binary	UNSUPPORTED refused: 42704: type "binary" does not exist POSITION: 56
+PostgreSql	varying binary	varying_binary	PASS
+PostgreSql	legacy long binary	legacy_binary	UNSUPPORTED refused: 42601: syntax error at or near "RAW" POSITION: 61
+PostgreSql	rowversion / timestamp token	rowversion	PASS
+PostgreSql	local-zone timestamp	local_timestamp	UNSUPPORTED refused: 42601: syntax error at or near "WITH" POSITION: 66
+PostgreSql	second-precision datetime	second_datetime	PASS
+PostgreSql	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+PostgreSql	year-only	year_only	PASS
+PostgreSql	year-month interval	year_month_interval	PASS
+PostgreSql	generic interval	generic_interval	PASS
+PostgreSql	row identifier / ROWID	row_identifier	PASS
+PostgreSql	object identifier / OID	oid	PASS
+PostgreSql	transaction ID	transaction_id	PASS
+PostgreSql	WAL / log position	wal_position	PASS
+PostgreSql	native binary JSON	binary_json	PASS
+PostgreSql	XML	xml	PASS
+PostgreSql	BSON	bson	PASS
+PostgreSql	variant / dynamic value	variant	UNSUPPORTED refused: 42704: type "variant" does not exist POSITION: 56
+PostgreSql	IP network / CIDR	cidr	PASS
+PostgreSql	MAC address	mac_address	PASS
+PostgreSql	point geometry	point	UNSUPPORTED refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row)
+PostgreSql	line / linestring geometry	linestring	UNSUPPORTED refused: 42704: type "linestring" does not exist POSITION: 56
+PostgreSql	polygon geometry	polygon	UNSUPPORTED refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPolygon (the native polygon row)
+PostgreSql	general geometry	geometry	UNSUPPORTED refused: 42704: type "geometry" does not exist POSITION: 56
+PostgreSql	geography / geodetic	geography	UNSUPPORTED refused: 42704: type "geography" does not exist POSITION: 56
+PostgreSql	fixed-length array	fixed_array	PASS
+PostgreSql	list / multiset / set collection	list_collection	UNSUPPORTED refused: 42601: syntax error at or near "MULTISET" POSITION: 64
+PostgreSql	map / dictionary	map	UNSUPPORTED refused: 42601: syntax error at or near "," POSITION: 71
+PostgreSql	range	range	PASS
+PostgreSql	multirange	multirange	PASS
+PostgreSql	user-defined enum / domain	domain	UNSUPPORTED refused: 42601: syntax error at or near "CREATE" POSITION: 56
+PostgreSql	full-text search vector / query	full_text	PASS
+PostgreSql	native point	native_point	PASS
+PostgreSql	native polygon	native_polygon	PASS
+PostgreSql	32-bit transaction ID	xid32	PASS
+PostgreSql	vector embedding	vector	UNSUPPORTED refused: 42704: type "vector" does not exist POSITION: 56
+PostgreSql	hierarchical path	hierarchy	UNSUPPORTED refused: 42704: type "hierarchyid" does not exist POSITION: 56
+PostgreSql	external-file reference	file_reference	UNSUPPORTED refused: 42704: type "bfile" does not exist POSITION: 56
+PostgreSql	specialized security label	security_label	UNSUPPORTED refused: 42704: type "idssecuritylabel" does not exist POSITION: 56

@@ -743,6 +743,7 @@ public class fakeDbConnection : DbConnection, IFakeDbConnection
             if (_emulatedProduct == null || _emulatedProduct == SupportedDatabase.Unknown)
             {
                 _emulatedProduct = value;
+                DataStore.Product = value;
             }
         }
     }

@@ -16,6 +16,8 @@
 // - Parameter name limit: 30 chars (pre-12.2), 128 chars (12.2+).
 // =============================================================================
 
+using pengdows.crud;
+using System.Linq.Expressions;
 using System.Data;
 using System.Data.Common;
 using Microsoft.Extensions.Logging;
@@ -45,6 +47,35 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class OracleDialect : SqlDialect
 {
+
+    // A BFILE column is read as its locator (its directory and file): the driver's GetValue would open the file and return its
+    // content, so the provider-specific value is the one read.
+    internal static Expression? OracleNativeColumnRead(Expression reader, Expression ordinal, string nativeType,
+        Type targetType, TypeCoercionOptions? options)
+    {
+        if (!string.Equals(nativeType, "BFILE", StringComparison.OrdinalIgnoreCase) || targetType != typeof(string))
+        {
+            return null;
+        }
+
+        return @internal.ColumnConversion.Build(Expression.Call(@internal.BFileLocator.ReadMethod, reader, ordinal),
+            typeof(object), targetType, options);
+    }
+
+    // A BFILE locator is built by BFILENAME(directory, file). The value is "DIRECTORY/file" and is bound once: a single-row
+    // subquery holds it, and the statement splits it at the slash.
+    internal override string? NativeTypeArgument(string parameterMarker, string nativeType) =>
+        string.Equals(nativeType, "BFILE", StringComparison.OrdinalIgnoreCase)
+            ? $"(SELECT BFILENAME(CASE WHEN v.x IS NULL THEN NULL WHEN INSTR(v.x, '/') > 0 THEN SUBSTR(v.x, 1, INSTR(v.x, '/') - 1) " +
+              $"ELSE TO_CHAR(1/0) END, SUBSTR(v.x, INSTR(v.x, '/') + 1)) FROM (SELECT {parameterMarker} AS x FROM DUAL) v)"
+            : null;
+    // This provider has no 128-bit or arbitrary-size integer parameter, and its column is an exact decimal type: the
+    // decimal text is bound and stored without loss.
+    internal override bool BindsWideIntegersAsText => true;
+
+    // ODP.NET cannot return a NUMBER wider than decimal as a number: the digits are selected as text.
+    internal override string WideIntegerTextCast(string columnReference) => $"TO_CHAR({columnReference})";
+
     internal override bool EnforcesReadOnlyTransactions => true;
 
     // TYPE-002: ODP.NET writes a Guid to RAW(16) in .NET's mixed-endian ToByteArray order.
@@ -621,7 +652,7 @@ internal class OracleDialect : SqlDialect
         base.MarkColumnParameter(parameter, column);
         if (NationalTypeOf(column) is { } national)
         {
-            ProviderPropertySetter.Set(parameter, "OracleDbType", national);
+            ProviderPropertySetter.TrySet(parameter, "OracleDbType", national);
         }
 
         if (parameter.Value is string literal && TemporalUnitsPerMinute(column) != null &&
@@ -662,14 +693,14 @@ internal class OracleDialect : SqlDialect
     // which also store into NUMBER/FLOAT columns and compare with them.
     private static void BindAsBinaryFloatingPoint(DbParameter parameter, DbType type)
     {
-        ProviderPropertySetter.Set(parameter, "OracleDbType", type == DbType.Double ? "BinaryDouble" : "BinaryFloat");
+        ProviderPropertySetter.TrySet(parameter, "OracleDbType", type == DbType.Double ? "BinaryDouble" : "BinaryFloat");
     }
 
     // ODP.NET reads LONG/LONG RAW as empty unless the select list has the row's key or ROWID, or
     // InitialLONGFetchSize is -1 (fetch it all with the row), confirmed live (TYPE-002).
     internal override void ConfigureCommand(DbCommand command)
     {
-        ProviderPropertySetter.Set(command, "InitialLONGFetchSize", "-1");
+        ProviderPropertySetter.TrySet(command, "InitialLONGFetchSize", "-1");
     }
 
     // Oracle has no TIME type; a time of day binds as INTERVAL DAY TO SECOND (TYPE-001). A value is
@@ -683,7 +714,7 @@ internal class OracleDialect : SqlDialect
         if (value is types.valueobjects.SpatialValue spatial)
         {
             var text = base.CreateDbParameter(name, DbType.String, types.converters.ExtendedWellKnownText.From(spatial));
-            ProviderPropertySetter.Set(text, "OracleDbType", "Clob");
+            ProviderPropertySetter.TrySet(text, "OracleDbType", "Clob");
             return text;
         }
 
@@ -798,6 +829,7 @@ internal class OracleDialect : SqlDialect
     internal static DatabaseTraits CreateOracleTraits() =>
         new(SupportedDatabase.Oracle, new OracleExceptionTranslator())
         {
+            NativeColumnRead = OracleNativeColumnRead,
             // EWKT text, always with its SRID: RenderColumnArgument builds SDO_GEOMETRY from it (TYPE-021).
             SpatialFormat = SpatialWireFormat.ExtendedWellKnownText,
             IntervalFormat = IntervalWireFormat.OracleLiteral,

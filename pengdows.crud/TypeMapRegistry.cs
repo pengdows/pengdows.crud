@@ -189,6 +189,7 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
             Name = columnName,
             PropertyInfo = prop,
             DbType = colAttr.Type,
+            NativeType = colAttr.NativeType,
             Ordinal = colAttr.Ordinal,
             IsId = isId,
             IsIdWritable = isId && isIdWritable && nonIns == null,
@@ -303,13 +304,6 @@ internal sealed class TypeMapRegistry : ITypeMapRegistry
             throw new SqlGenerationException(
                 $"Enum column {entityType.FullName}.{prop.Name} must use string or numeric DbType; found {ci.DbType}.",
                 SupportedDatabase.Unknown);
-        }
-
-        if (ci.EnumAsString)
-        {
-            // Pre-compile a delegate that unboxes object → TEnum and calls EnumLiteralCache<TEnum>.GetOrAdd()
-            // directly (JIT-level call, no reflection overhead per row).
-            ci.EnumStringConverter = ColumnInfo.BuildEnumStringConverter(ci.EnumType);
         }
 
         if (ci.EnumAsString)

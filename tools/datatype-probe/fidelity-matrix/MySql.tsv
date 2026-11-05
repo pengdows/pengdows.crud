@@ -1,0 +1,75 @@
+MySql	signed 8-bit	signed_8_bit	PASS
+MySql	signed 16-bit	signed_16_bit	PASS
+MySql	signed 32-bit	signed_32_bit	PASS
+MySql	signed 64-bit	signed_64_bit	PASS
+MySql	signed 128-bit	signed_128_bit	PASS
+MySql	unsigned 8-bit	unsigned_8_bit	PASS
+MySql	unsigned 16-bit	unsigned_16_bit	PASS
+MySql	unsigned 32-bit	unsigned_32_bit	PASS
+MySql	unsigned 64-bit	unsigned_64_bit	PASS
+MySql	arbitrary-size integer	arbitrary_integer	PASS
+MySql	binary float32	binary_float32	PASS
+MySql	binary float64	binary_float64	PASS
+MySql	fixed decimal	fixed_decimal	PASS
+MySql	boolean	boolean	PASS
+MySql	bit / bitstring	bit_string	PASS
+MySql	varying character	varying_character	PASS
+MySql	unbounded text	unbounded_text	PASS
+MySql	UUID / GUID	uuid	PASS
+MySql	calendar date	calendar_date	PASS
+MySql	time without zone	time_of_day	PASS
+MySql	time without zone	time_span	PASS
+MySql	day-time interval	day_time_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
+MySql	timestamp without zone	timestamp	PASS
+MySql	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+MySql	binary LOB	binary	PASS
+MySql	JSON text / JSON value	json	PASS
+MySql	IP address	ip_address	PASS
+MySql	SQL array	int_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY)' at line 1
+MySql	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
+MySql	decimal floating point	decimal_float	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
+MySql	money / currency	money	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
+MySql	fixed character	fixed_character	PASS
+MySql	national / Unicode character	national_text	PASS
+MySql	long text LOB	long_text	PASS
+MySql	enumeration	enumeration	PASS
+MySql	set-valued enum	set_value	PASS
+MySql	fixed binary	fixed_binary	PASS
+MySql	varying binary	varying_binary	PASS
+MySql	legacy long binary	legacy_binary	PASS
+MySql	rowversion / timestamp token	rowversion	PASS
+MySql	local-zone timestamp	local_timestamp	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
+MySql	second-precision datetime	second_datetime	PASS
+MySql	time with zone	time_zoned	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+MySql	year-only	year_only	PASS
+MySql	year-month interval	year_month_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL YEAR TO MONTH)' at line 1
+MySql	generic interval	generic_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL)' at line 1
+MySql	row identifier / ROWID	row_identifier	PASS
+MySql	object identifier / OID	oid	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'OID)' at line 1
+MySql	transaction ID	transaction_id	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XID)' at line 1
+MySql	WAL / log position	wal_position	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'PG_LSN)' at line 1
+MySql	native binary JSON	binary_json	PASS
+MySql	XML	xml	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XML)' at line 1
+MySql	BSON	bson	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BSON)' at line 1
+MySql	variant / dynamic value	variant	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARIANT)' at line 1
+MySql	IP network / CIDR	cidr	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
+MySql	MAC address	mac_address	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MACADDR)' at line 1
+MySql	point geometry	point	PASS
+MySql	line / linestring geometry	linestring	PASS
+MySql	polygon geometry	polygon	PASS
+MySql	general geometry	geometry	PASS
+MySql	geography / geodetic	geography	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GEOGRAPHY)' at line 1
+MySql	fixed-length array	fixed_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY[10])' at line 1
+MySql	list / multiset / set collection	list_collection	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
+MySql	map / dictionary	map	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MAP(VARCHAR(10),INTEGER))' at line 1
+MySql	range	range	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4RANGE)' at line 1
+MySql	multirange	multirange	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
+MySql	user-defined enum / domain	domain	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
+MySql	full-text search vector / query	full_text	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
+MySql	native point	native_point	UNSUPPORTED refused: no candidate was tried
+MySql	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+MySql	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+MySql	vector embedding	vector	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VECTOR(3))' at line 1
+MySql	hierarchical path	hierarchy	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
+MySql	external-file reference	file_reference	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
+MySql	specialized security label	security_label	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1

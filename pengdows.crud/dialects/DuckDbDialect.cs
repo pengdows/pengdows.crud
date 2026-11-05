@@ -22,6 +22,7 @@ using System.Data.Common;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using pengdows.crud.enums;
+using pengdows.crud.types.coercion;
 using pengdows.crud.exceptions.translators;
 using pengdows.crud.infrastructure;
 using pengdows.crud.@internal;
@@ -646,5 +647,12 @@ internal class DuckDbDialect : SqlDialect
     // REV-039: the translator for this database's provider exceptions; no type mappings or
     // value formats of its own.
     internal static DatabaseTraits CreateDuckDbTraits() =>
-        new(SupportedDatabase.DuckDB, new DuckDbExceptionTranslator());
+        new(SupportedDatabase.DuckDB, new DuckDbExceptionTranslator())
+        {
+            // DuckDB's INTERVAL takes the day-time value as a TimeSpan, days kept (it refuses ISO text).
+            IntervalFormat = IntervalWireFormat.DayTimeSpan,
+            // A map is stored as its JSON text (DuckDB.NET does not map a dictionary to its MAP type).
+            RegisterTypeMappings = registry => TextCollections.RegisterMappings(registry, SupportedDatabase.DuckDB),
+            RegisterCoercions = registry => TextCollections.RegisterCoercions(registry, SupportedDatabase.DuckDB)
+        };
 }

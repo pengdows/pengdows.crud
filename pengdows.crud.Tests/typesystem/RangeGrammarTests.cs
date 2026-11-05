@@ -65,7 +65,8 @@ public class RangeGrammarTests
     {
         var ex = Assert.ThrowsAny<FormatException>(() => Range<int>.Parse(text));
         Assert.DoesNotContain(text, ex.Message, StringComparison.Ordinal);
-        Assert.Null(new PostgreSqlRangeConverter<int>().FromProviderValue(text, SupportedDatabase.PostgreSql));
+        // The read path reports malformed text as an error with a reason, not as "no value".
+        Assert.ThrowsAny<FormatException>(() => new PostgreSqlRangeConverter<int>().FromProviderValue(text, SupportedDatabase.PostgreSql));
     }
 
     // Blank is no range on the read path (the converter read it as empty); Parse keeps its ArgumentException.

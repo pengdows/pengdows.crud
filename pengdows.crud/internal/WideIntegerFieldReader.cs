@@ -73,7 +73,8 @@ internal static class WideIntegerFieldReader
         value = null!;
         try
         {
-            if (record.GetFieldType(ordinal) != typeof(long) ||
+            var reported = record.GetFieldType(ordinal);
+            if ((reported != typeof(long) && reported != typeof(decimal)) ||
                 !BigInteger.TryParse(record.GetString(ordinal), NumberStyles.Integer, CultureInfo.InvariantCulture,
                     out var parsed))
             {
@@ -88,6 +89,16 @@ internal static class WideIntegerFieldReader
             // The text isn't readable either: the original overflow is the error to report.
             return false;
         }
+    }
+
+    /// <summary>
+    /// True for a property that can hold an integer beyond <see cref="decimal"/>'s range, so a decimal-reported column
+    /// (a NUMERIC) is read through <see cref="Read"/>: its text is the exact value when the typed read overflows.
+    /// </summary>
+    public static bool IsWiderThanDecimal(Type targetType)
+    {
+        var type = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        return type == typeof(BigInteger) || type == typeof(Int128) || type == typeof(UInt128);
     }
 
     /// <summary>

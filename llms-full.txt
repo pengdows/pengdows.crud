@@ -1101,6 +1101,13 @@ sc.Query.Append(sc.MakeParameterName(p));
 
 ## Key Mapping Rules
 
+- A `[Column]` may declare `NativeType`, the column's native database type where the CLR type cannot say it (a PostgreSQL
+  `xml`, `point` or `tsquery`; a Firebird `DECFLOAT`; a MySQL-family `BIT(n)`; an Oracle `BFILE`). A dialect casts or
+  reads the value by that type. A `BitArray` column on the MySQL family must declare its width.
+- PostgreSQL's native `point` and `polygon` map to `PostgreSqlPoint` and `PostgreSqlPolygon`. A PostGIS `Geometry` keeps
+  its SRID and is refused by a native point column. Oracle `ANYDATA` and `ROWID`, SQL Server `bit` for multi-bit values,
+  and YugabyteDB and CockroachDB `xml` are unsupported; see `docs/advanced-types.md`.
+
 - `[Id]` is the row identifier used by row-id operations
 - `[PrimaryKey]` is the business key and may be composite
 - `[Id]` and `[PrimaryKey]` must not be placed on the same property

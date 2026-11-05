@@ -51,6 +51,9 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class PostgreSqlDialect : SqlDialect
 {
+    // Npgsql cannot return a NUMERIC wider than decimal as a number: the digits are selected as text (the family inherits).
+    internal override string WideIntegerTextCast(string columnReference) => $"CAST({columnReference} AS TEXT)";
+
     internal override bool EnforcesReadOnlyTransactions => true;
 
     private const string StandardConformingStringsSetting = "standard_conforming_strings";
@@ -584,7 +587,7 @@ internal class PostgreSqlDialect : SqlDialect
 
     private protected static void SetNpgsqlDbTypeOnly(DbParameter parameter, string npgsqlDbTypeName)
     {
-        ProviderPropertySetter.Set(parameter, NpgsqlDbTypeProperty, npgsqlDbTypeName);
+        ProviderPropertySetter.TrySet(parameter, NpgsqlDbTypeProperty, npgsqlDbTypeName);
     }
 
     public override void TryMarkJsonParameter(DbParameter parameter, IColumnInfo column)
@@ -595,8 +598,8 @@ internal class PostgreSqlDialect : SqlDialect
 
         try
         {
-            ProviderPropertySetter.Set(parameter, DataTypeNameProperty, "jsonb");
-            ProviderPropertySetter.Set(parameter, NpgsqlDbTypeProperty, JsonbTypeName);
+            ProviderPropertySetter.TrySet(parameter, DataTypeNameProperty, "jsonb");
+            ProviderPropertySetter.TrySet(parameter, NpgsqlDbTypeProperty, JsonbTypeName);
         }
         catch (Exception ex)
         {
@@ -1046,8 +1049,8 @@ internal class PostgreSqlDialect : SqlDialect
     {
         try
         {
-            ProviderPropertySetter.Set(parameter, NpgsqlDbTypeProperty, npgsqlDbTypeName);
-            ProviderPropertySetter.Set(parameter, DataTypeNameProperty, dataTypeName);
+            ProviderPropertySetter.TrySet(parameter, NpgsqlDbTypeProperty, npgsqlDbTypeName);
+            ProviderPropertySetter.TrySet(parameter, DataTypeNameProperty, dataTypeName);
         }
         catch (Exception ex) when (ex is not OutOfMemoryException)
         {
@@ -1217,6 +1220,19 @@ internal class PostgreSqlDialect : SqlDialect
 
     // NpgsqlParameter property names, set by reflection (no Npgsql reference). Typos here fail
     // silently at runtime; centralising makes them grep-able.
+    // A value for a column whose native type is declared (xml, tsvector, pg_lsn, point, xid8): PostgreSQL refuses an implicit
+    // conversion to it, so the value goes through text, which every bound value converts to (a ulong binds as numeric, which
+    // has no cast to xid8 of its own).
+    internal override string? NativeTypeArgument(string parameterMarker, string nativeType) =>
+        IsTextNativeType(nativeType) ? parameterMarker : $"CAST(CAST({parameterMarker} AS text) AS {nativeType})";
+
+    // A text-typed column (varchar(n), char(n), text) takes its text unchanged: a CAST would cut a long value silently.
+    internal static bool IsTextNativeType(string nativeType) =>
+        nativeType.StartsWith("varchar", StringComparison.OrdinalIgnoreCase) ||
+        nativeType.StartsWith("char", StringComparison.OrdinalIgnoreCase) ||
+        nativeType.StartsWith("character", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(nativeType, "text", StringComparison.OrdinalIgnoreCase);
+
     private static class NpgsqlNames
     {
         public const string DbTypeProperty = "NpgsqlDbType";
@@ -1228,6 +1244,7 @@ internal class PostgreSqlDialect : SqlDialect
         // NpgsqlDbType member names (NpgsqlDbType has no Int4Range/TsRange; an unknown name
         // silently left the parameter as text, which PostgreSQL rejects for a range column).
         public const string Int4Range = "IntegerRange";
+        public const string IntegerMultirange = "IntegerMultirange";
         public const string Int8Range = "BigIntRange";
         public const string TsRange = "TimestampRange";
         public const string TsTzRange = "TimestampTzRange";
@@ -1246,8 +1263,10 @@ internal class PostgreSqlDialect : SqlDialect
         new(SupportedDatabase.PostgreSql, PostgreSqlFamilyExceptionTranslator)
         {
             SpatialFormat = SpatialWireFormat.ExtendedWkb,
-            IntervalFormat = IntervalWireFormat.Iso8601,
+            IntervalFormat = IntervalWireFormat.PostgreSqlInterval,
             BindsNpgsqlValueTypes = true,
+            RegisterCoercions = registry => registry.Register(SupportedDatabase.PostgreSql, new types.coercion.PostgreSqlMultirangeCoercion(SupportedDatabase.PostgreSql)),
+            BindsNpgsqlCidr = true,
             RegisterTypeMappings = registry =>
             {
                 RegisterPostgreSqlFamilyTypeMappings(registry, SupportedDatabase.PostgreSql);
@@ -1290,6 +1309,33 @@ internal class PostgreSqlDialect : SqlDialect
         registry.RegisterMapping<Geometry>(database, spatial);
         registry.RegisterMapping<Geography>(database, spatial);
 
+        // Interval value objects: Npgsql refuses an unmapped value object, and refuses a string on an interval parameter
+        // (confirmed live). Each is sent as the Npgsql interval the converter builds (months, days, microseconds), typed
+        // as the interval type.
+        // A database that takes the Npgsql interval (PostgreSQL, YugabyteDB) gets the interval type; one that takes ISO
+        // text (CockroachDB) gets the text, typed as the interval.
+        var sendsNpgsqlInterval = DatabaseTraits.For(database).IntervalFormat == IntervalWireFormat.PostgreSqlInterval;
+        var interval = sendsNpgsqlInterval
+            ? new ProviderTypeMapping
+            {
+                DbType = DbType.Object,
+                ConfigureParameter = (param, value) =>
+                {
+                    AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.Interval);
+                }
+            }
+            : new ProviderTypeMapping
+            {
+                DbType = DbType.String,
+                ConfigureParameter = (param, value) =>
+                {
+                    param.DbType = DbType.String;
+                    param.GetType().GetProperty(NpgsqlNames.DataTypeName)?.SetValue(param, NpgsqlNames.Interval.ToLowerInvariant());
+                }
+            };
+        registry.RegisterMapping<IntervalDaySecond>(database, interval);
+        registry.RegisterMapping<IntervalYearMonth>(database, interval);
+
         // int[] and text[] arrays
         registry.RegisterMapping<int[]>(database, new ProviderTypeMapping
         {
@@ -1312,6 +1358,27 @@ internal class PostgreSqlDialect : SqlDialect
 
         // Ranges: int4range, tsrange, int8range, and (TYPE-009) daterange, numrange, tstzrange.
         RegisterNpgsqlTyped<Range<int>>(registry, database, DbType.Object, NpgsqlNames.Int4Range);
+
+        // A multirange (an array of int ranges) is sent as an array of the driver's range type, typed as the multirange.
+        registry.RegisterMapping<Range<int>[]>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                if (value is Range<int>[] ranges)
+                {
+                    var converter = new types.converters.PostgreSqlRangeConverter<int>();
+                    var converted = new object?[ranges.Length];
+                    for (var i = 0; i < ranges.Length; i++)
+                    {
+                        converted[i] = converter.ToProviderValue(ranges[i], database);
+                    }
+
+                    param.Value = types.coercion.PostgreSqlMultirange.TypedArray(converted);
+                    AdvancedTypeRegistry.SetEnumProperty(param, NpgsqlNames.DbTypeProperty, NpgsqlNames.IntegerMultirange);
+                }
+            }
+        });
         RegisterNpgsqlTyped<Range<DateTime>>(registry, database, DbType.Object, NpgsqlNames.TsRange);
         RegisterNpgsqlTyped<Range<long>>(registry, database, DbType.Object, NpgsqlNames.Int8Range);
         RegisterNpgsqlTyped<Range<DateOnly>>(registry, database, DbType.Object, NpgsqlNames.DateRange);
@@ -1320,7 +1387,19 @@ internal class PostgreSqlDialect : SqlDialect
 
         // inet, cidr
         RegisterNpgsqlTyped<Inet>(registry, database, DbType.String, NpgsqlNames.Inet);
-        RegisterNpgsqlTyped<Cidr>(registry, database, DbType.String, NpgsqlNames.Cidr);
+        if (DatabaseTraits.For(database).BindsNpgsqlCidr)
+        {
+            RegisterNpgsqlTyped<Cidr>(registry, database, DbType.String, NpgsqlNames.Cidr);
+        }
+        else
+        {
+            // No cidr type on this database (CockroachDB): the network is bound as its text.
+            registry.RegisterMapping<Cidr>(database, new ProviderTypeMapping
+            {
+                DbType = DbType.String,
+                ConfigureParameter = (param, value) => param.DbType = DbType.String
+            });
+        }
 
         // macaddr (6-byte EUI-48) / macaddr8 (8-byte EUI-64) - dispatch on the actual address
         // width, since MacAddress supports both. By the time this callback runs the registered

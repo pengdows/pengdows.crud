@@ -20,6 +20,7 @@
 // =============================================================================
 
 using System.Buffers.Binary;
+using System.Linq;
 using System.Data.SqlTypes;
 using System.Text;
 using System.Text.Json.Nodes;
@@ -93,42 +94,42 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out TSpatial result)
     {
-        try
+        // Malformed WKB or WKT for this converter's type is an error that carries the decoder's reason; only a value of
+        // another type returns false.
+        switch (value)
         {
-            switch (value)
-            {
-                // Spatial values are immutable: one already of the type is read as itself (DRY-010).
-                case TSpatial spatial:
-                    result = spatial;
-                    return true;
-                case byte[] bytes:
-                    result = FromWellKnownBinary(bytes, provider);
-                    return true;
-                case ReadOnlyMemory<byte> memory:
-                    result = FromWellKnownBinary(memory.ToArray(), provider);
-                    return true;
-                case ArraySegment<byte> segment:
-                    result = FromWellKnownBinary(segment.ToArray(), provider);
-                    return true;
-                case string text:
-                    result = FromText(text, provider);
-                    return true;
-                default:
-                    var specific = FromProviderSpecific(value, provider);
-                    if (specific != null)
-                    {
-                        result = specific;
-                        return true;
-                    }
-
+            case TSpatial spatial:
+                result = spatial;
+                return true;
+            case byte[] bytes:
+                result = FromWellKnownBinary(bytes, provider);
+                return true;
+            case ReadOnlyMemory<byte> memory:
+                result = FromWellKnownBinary(memory.ToArray(), provider);
+                return true;
+            case ArraySegment<byte> segment:
+                result = FromWellKnownBinary(segment.ToArray(), provider);
+                return true;
+            case string text:
+                // Blank text is no value (as for the other converters): a plain false, not an empty geometry or an error.
+                if (string.IsNullOrWhiteSpace(text))
+                {
                     result = default!;
                     return false;
-            }
-        }
-        catch
-        {
-            result = default!;
-            return false;
+                }
+
+                result = FromText(text, provider);
+                return true;
+            default:
+                var specific = FromProviderSpecific(value, provider);
+                if (specific != null)
+                {
+                    result = specific;
+                    return true;
+                }
+
+                result = default!;
+                return false;
         }
     }
 
@@ -208,9 +209,16 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
 
     internal static byte[] AddSridToWkb(ReadOnlySpan<byte> wkb, int srid, bool flagSridZero = false)
     {
-        if ((srid == 0 && !flagSridZero) || wkb.Length < 5)
+        if (srid == 0 && !flagSridZero)
         {
             return wkb.ToArray();
+        }
+
+        // A value that cannot carry an SRID, or that already names a different one, fails here rather than being
+        // written with the wrong or no SRID.
+        if (wkb.Length < 5)
+        {
+            throw new ArgumentException("WKB is too short to carry an SRID header.", nameof(wkb));
         }
 
         var result = new byte[wkb.Length + 4];
@@ -221,6 +229,17 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             : BinaryPrimitives.ReadUInt32BigEndian(wkb[1..5]);
         if ((type & 0x20000000) != 0)
         {
+            var existing = wkb.Length >= 9
+                ? (littleEndian
+                    ? BinaryPrimitives.ReadInt32LittleEndian(wkb[5..9])
+                    : BinaryPrimitives.ReadInt32BigEndian(wkb[5..9]))
+                : 0;
+            if (existing != srid)
+            {
+                throw new ArgumentException(
+                    $"WKB already carries SRID {existing}, which does not match the requested SRID {srid}.", nameof(wkb));
+            }
+
             return wkb.ToArray();
         }
         type |= 0x20000000;
@@ -304,7 +323,23 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             return FromGeoJsonInternal(text, provider);
         }
 
+        // EWKB as hex (a database that stores the value's WKB, SRID flag included) is binary, not WKT text.
+        if (IsHexWkb(text))
+        {
+            return FromBinary(Convert.FromHexString(text.Trim()), provider);
+        }
+
         return FromTextInternal(text, provider);
+    }
+
+    // Hex of a WKB: an even run of hex digits starting with the byte-order byte (00 or 01). WKT starts with a letter (POINT,
+    // LINESTRING, ...) or an SRID= prefix, never with a hex digit pair, so it is not taken for hex.
+    private static bool IsHexWkb(string text)
+    {
+        var trimmed = text.Trim();
+        return trimmed.Length >= 10 && trimmed.Length % 2 == 0 &&
+               (trimmed.StartsWith("00", StringComparison.Ordinal) || trimmed.StartsWith("01", StringComparison.Ordinal)) &&
+               trimmed.All(Uri.IsHexDigit);
     }
 
     private TSpatial? FromProviderSpecific(object value, SupportedDatabase provider)
@@ -348,6 +383,8 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
             return FromBinary(memory.ToArray(), provider);
         }
 
-        throw new NotSupportedException($"Unsupported spatial provider type: {type.FullName}");
+        // Not a provider type this converter knows: null means "not my type" (the caller returns false). A known provider
+        // type that fails to decode throws from above with its own reason.
+        return null;
     }
 }

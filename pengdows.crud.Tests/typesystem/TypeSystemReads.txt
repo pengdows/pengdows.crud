@@ -95,7 +95,7 @@ decimal:2.7 -> Nullable`1?: throws InvalidCastException
 "1" -> Double: double:1
 "1" -> Single: float:1
 "1" -> Decimal: decimal:1
-"1" -> Boolean: Boolean:True
+"1" -> Boolean: throws InvalidCastException
 "1" -> UInt64: UInt64:1
 "1" -> Nullable`1?: Int32:1
 "2.7" -> Int32: throws InvalidCastException
@@ -105,7 +105,7 @@ decimal:2.7 -> Nullable`1?: throws InvalidCastException
 "2.7" -> Double: double:2.7
 "2.7" -> Single: float:2.7
 "2.7" -> Decimal: decimal:2.7
-"2.7" -> Boolean: Boolean:True
+"2.7" -> Boolean: throws InvalidCastException
 "2.7" -> UInt64: throws InvalidCastException
 "2.7" -> Nullable`1?: throws InvalidCastException
 Boolean:True -> Int32: Int32:1
@@ -305,22 +305,22 @@ Object[]{Int32:1,"2"} -> List`1: List`1{Int32:1,Int32:2}
 "{"type":"Point","coordinates":[1,2]}" -> Geography: Geography:srid=4326:wkb=
 "192.168.0.1/24" -> Inet: Inet:192.168.0.1/24
 "192.168.0.1/24" -> Cidr: Cidr:192.168.0.0/24
-"192.168.0.1/24" -> MacAddress: throws InvalidCastException
+"192.168.0.1/24" -> MacAddress: throws FormatException
 "10.0.0.0/8" -> Inet: Inet:10.0.0.0/8
 "10.0.0.0/8" -> Cidr: Cidr:10.0.0.0/8
-"10.0.0.0/8" -> MacAddress: throws InvalidCastException
+"10.0.0.0/8" -> MacAddress: throws FormatException
 "08:00:2b:01:02:03" -> Inet: throws InvalidCastException
-"08:00:2b:01:02:03" -> Cidr: throws InvalidCastException
+"08:00:2b:01:02:03" -> Cidr: throws FormatException
 "08:00:2b:01:02:03" -> MacAddress: MacAddress:08:00:2B:01:02:03
 "::1" -> Inet: Inet:::1
-"::1" -> Cidr: throws InvalidCastException
-"::1" -> MacAddress: throws InvalidCastException
+"::1" -> Cidr: throws FormatException
+"::1" -> MacAddress: throws FormatException
 "P1Y2M" -> IntervalYearMonth: IntervalYearMonth:1 years 2 months
-"P1Y2M" -> IntervalDaySecond: throws InvalidCastException
+"P1Y2M" -> IntervalDaySecond: throws FormatException
 "p1y2m" -> IntervalYearMonth: IntervalYearMonth:1 years 2 months
-"p1y2m" -> IntervalDaySecond: throws InvalidCastException
+"p1y2m" -> IntervalDaySecond: throws FormatException
 "1-2" -> IntervalYearMonth: IntervalYearMonth:1 years 2 months
-"1-2" -> IntervalDaySecond: throws InvalidCastException
+"1-2" -> IntervalDaySecond: throws FormatException
 "P1DT2H3M4S" -> IntervalYearMonth: throws InvalidCastException
 "P1DT2H3M4S" -> IntervalDaySecond: IntervalDaySecond:1 days 02:03:04
 "p1dt2h3m4s" -> IntervalYearMonth: throws InvalidCastException
@@ -333,8 +333,8 @@ TimeSpan:1.02:00:00 -> IntervalDaySecond: IntervalDaySecond:1 days 02:00:00
 "(,5]" -> Range`1: Range`1:(, 5]
 "empty" -> Range`1: Range`1:empty
 "empty" -> Range`1: Range`1:empty
-"[1,x)" -> Range`1: throws InvalidCastException
-"[1,x)" -> Range`1: throws InvalidCastException
+"[1,x)" -> Range`1: throws FormatException
+"[1,x)" -> Range`1: throws FormatException
 0x0000000000000009 -> RowVersion: RowVersion:0000000000000009
 UInt64:9 -> RowVersion: RowVersion:0000000000000009
 0x0102 -> RowVersion: throws InvalidCastException

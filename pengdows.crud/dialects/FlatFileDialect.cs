@@ -40,6 +40,13 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class FlatFileDialect : SqlDialect
 {
+    // The decimal read overflows a NUMERIC wider than decimal: the digits are selected as text.
+    internal override string WideIntegerTextCast(string columnReference) => $"CAST({columnReference} AS VARCHAR(100))";
+
+    // This provider has no 128-bit or arbitrary-size integer parameter, and its column is an exact decimal type: the
+    // decimal text is bound and stored without loss.
+    internal override bool BindsWideIntegersAsText => true;
+
     internal override bool EnforcesReadOnlyTransactions => true;
 
     internal FlatFileDialect(DbProviderFactory factory, ILogger logger)

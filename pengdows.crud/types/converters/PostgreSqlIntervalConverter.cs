@@ -111,7 +111,15 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
         @"^P(?:[+-]?\d+[YMWD])*(?:T(?:[+-]?\d+(?:\.\d+)?[HMS])+)?$",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    protected override object? ConvertToProvider(PostgreSqlInterval value, SupportedDatabase provider)
+    protected override object? ConvertToProvider(PostgreSqlInterval value, SupportedDatabase provider) =>
+        ToProvider(value, provider);
+
+    /// <summary>
+    /// The value a PostgreSQL-family database takes for an interval: the Npgsql interval when Npgsql is loaded, the ISO
+    /// 8601 text otherwise. Other databases take the value object itself. Shared by the day-second and year-month
+    /// converters, which send their values through this interval type.
+    /// </summary>
+    internal static object? ToProvider(PostgreSqlInterval value, SupportedDatabase provider)
     {
         if (!DatabaseTraits.For(provider).BindsNpgsqlValueTypes)
         {
@@ -130,54 +138,54 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out PostgreSqlInterval result)
     {
-        try
+        switch (value)
         {
-            switch (value)
-            {
-                case PostgreSqlInterval interval:
-                    result = interval;
-                    return true;
-                case TimeSpan time:
-                    result = PostgreSqlInterval.FromTimeSpan(time);
-                    return true;
-                case string text:
-                    result = Parse(text);
-                    return true;
-                default:
+            case PostgreSqlInterval interval:
+                result = interval;
+                return true;
+            case TimeSpan time:
+                result = PostgreSqlInterval.FromTimeSpan(time);
+                return true;
+            case string text:
+                // Malformed text throws the parser's reason; it is not "not an interval".
+                result = Parse(text);
+                return true;
+            default:
+                {
+                    var type = value.GetType();
+                    if (type.FullName == "NpgsqlTypes.NpgsqlInterval")
                     {
-                        var type = value.GetType();
-                        if (type.FullName == "NpgsqlTypes.NpgsqlInterval")
-                        {
-                            // Npgsql's full-fidelity interval (months, days, microseconds), read by
-                            // NpgsqlTypedFieldReader.Interval so months and the stored days/time split survive.
-                            result = new PostgreSqlInterval(
-                                ProviderMembers.Getter<int>(type, "Months")!(value),
-                                ProviderMembers.Getter<int>(type, "Days")!(value),
-                                ProviderMembers.Getter<long>(type, "Time")!(value));
-                            return true;
-                        }
-
-                        if (type.FullName?.Contains("NpgsqlTimeSpan", StringComparison.OrdinalIgnoreCase) == true)
-                        {
-                            var months = ProviderMembers.Getter<int>(type, "Months") is { } getMonths ? getMonths(value) : 0;
-                            var days = ProviderMembers.Getter<int>(type, "Days") is { } getDays ? getDays(value) : 0;
-                            var ticks = ProviderMembers.Getter<long>(type, "Ticks") is { } getTicks ? getTicks(value) : 0L;
-                            var microseconds = ticks / 10;
-                            result = new PostgreSqlInterval(months, days, microseconds);
-                            return true;
-                        }
-
-                        result = default!;
-                        return false;
+                        // Npgsql's full-fidelity interval (months, days, microseconds), read by
+                        // NpgsqlTypedFieldReader.Interval so months and the stored days/time split survive.
+                        result = new PostgreSqlInterval(
+                            RequiredMember<int>(type, "Months")(value),
+                            RequiredMember<int>(type, "Days")(value),
+                            RequiredMember<long>(type, "Time")(value));
+                        return true;
                     }
-            }
-        }
-        catch
-        {
-            result = default!;
-            return false;
+
+                    if (type.FullName?.Contains("NpgsqlTimeSpan", StringComparison.OrdinalIgnoreCase) == true)
+                    {
+                        // A missing member is an error that names it, never a zero: silently reading 0 months or
+                        // 0 ticks would corrupt the stored interval without any signal.
+                        var getMonths = RequiredMember<int>(type, "Months");
+                        var getDays = RequiredMember<int>(type, "Days");
+                        var getTicks = RequiredMember<long>(type, "Ticks");
+                        var microseconds = getTicks(value) / 10;
+                        result = new PostgreSqlInterval(getMonths(value), getDays(value), microseconds);
+                        return true;
+                    }
+
+                    result = default!;
+                    return false;
+                }
         }
     }
+
+    private static Func<object, T> RequiredMember<T>(Type owner, string name) =>
+        ProviderMembers.Getter<T>(owner, name)
+        ?? throw new InvalidOperationException(
+            $"Provider type {owner.FullName} has no readable '{name}' member, so its interval cannot be read.");
 
     private static string FormatIso8601(PostgreSqlInterval value)
     {
@@ -261,7 +269,7 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
         var isoText = text.Trim();
         if (isoText.Length == 1 || !IsoDurationRegex.IsMatch(isoText))
         {
-            throw new FormatException($"Invalid PostgreSQL interval: '{text}'.");
+            throw new FormatException("Invalid PostgreSQL interval.");
         }
 
         var timeIndex = remaining.IndexOf('T');
@@ -346,8 +354,21 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
             {
                 days += checked((int)value);
             }
+            else if (unit.StartsWith("hour", StringComparison.Ordinal) || unit.StartsWith("hr", StringComparison.Ordinal))
+            {
+                microseconds += checked((long)(value * 3_600_000_000m));
+            }
+            else if (unit.StartsWith("min", StringComparison.Ordinal))
+            {
+                microseconds += checked((long)(value * 60_000_000m));
+            }
+            else if (unit.StartsWith("microsecond", StringComparison.Ordinal) || unit.StartsWith("usec", StringComparison.Ordinal) || unit == "us")
+            {
+                microseconds += checked((long)value);
+            }
             else
             {
+                // seconds ("sec", "secs", "second", "seconds")
                 microseconds += checked((long)(value * 1_000_000m));
             }
         }
@@ -369,7 +390,7 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
         unparsed = VerboseClockRegex.Replace(unparsed, string.Empty);
         if (!matched || unparsed.Trim().Length != 0)
         {
-            throw new FormatException($"Invalid PostgreSQL interval: '{text}'.");
+            throw new FormatException("Invalid PostgreSQL interval.");
         }
 
         if (ago)

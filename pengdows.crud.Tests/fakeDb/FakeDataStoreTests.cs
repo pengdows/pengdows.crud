@@ -594,6 +594,45 @@ public class FakeDataStoreTests
     }
 
     [Fact]
+    public async Task StrictMode_UnrecognizedUpdateShape_Throws()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var cmd = conn.CreateCommand();
+        // No SET clause, so HandleUpdate's regex cannot parse it. Returning 0 would look like a
+        // lost optimistic-lock race to pengdows, so strict mode must refuse it instead.
+        cmd.CommandText = "UPDATE users WHERE id = 1";
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => cmd.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
+    public async Task StrictMode_UnrecognizedDeleteShape_Throws()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var cmd = conn.CreateCommand();
+        // No FROM keyword, so HandleDelete's regex cannot parse it.
+        cmd.CommandText = "DELETE users WHERE id = 1";
+
+        await Assert.ThrowsAsync<NotSupportedException>(() => cmd.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
+    public async Task StrictMode_RecognizedUpdate_StillWorksNormally()
+    {
+        using var conn = MakeConnection();
+        conn.DataStore.StrictMode = true;
+        using var insertCmd = conn.CreateCommand();
+        insertCmd.CommandText = "INSERT INTO users (id, name) VALUES (1, 'Alice')";
+        Assert.Equal(1, await insertCmd.ExecuteNonQueryAsync());
+
+        using var updateCmd = conn.CreateCommand();
+        updateCmd.CommandText = "UPDATE users SET name = 'Bob' WHERE id = 1";
+        Assert.Equal(1, await updateCmd.ExecuteNonQueryAsync());
+    }
+
+    [Fact]
     public async Task StrictMode_RecognizedStatements_StillWorkNormally()
     {
         using var conn = MakeConnection();

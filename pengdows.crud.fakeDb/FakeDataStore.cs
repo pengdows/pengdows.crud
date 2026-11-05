@@ -174,7 +174,8 @@ public class FakeDataStore
         // The first column of the first row of the first result, or null when it has no rows (DbCommand.ExecuteScalar).
         if (FakeConstantSelect.TryEvaluate(commandText, parameters, out var constantResults))
         {
-            return constantResults[0].Count == 0 ? null : constantResults[0][0].Values.FirstOrDefault();
+            // A NULL cell is DBNull (null is "no row"): the command tells the two apart.
+            return constantResults[0].Count == 0 ? null : constantResults[0][0].Values.FirstOrDefault() ?? DBNull.Value;
         }
 
         var sql = commandText.Trim().ToUpperInvariant();
@@ -204,7 +205,7 @@ public class FakeDataStore
             if (results.Any())
             {
                 var firstRow = results.First();
-                return firstRow.Values.FirstOrDefault();
+                return firstRow.Values.FirstOrDefault() ?? DBNull.Value;
             }
         }
 
@@ -217,9 +218,19 @@ public class FakeDataStore
     /// Every result set the command produces: one per statement for a batch of constant SELECTs, otherwise the single
     /// result <see cref="ExecuteReader"/> returns.
     /// </summary>
+    // The UDT a server reports for a column it stores a spatial value in, by table and column (SQL Server's geometry or
+    // geography), and the map the last SELECT read with (the reader reports those columns as unloadable UDTs).
+    private readonly Dictionary<string, Dictionary<string, string>> _udtColumns = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<int, string> _spatialUdtIndexes = new();
+
+    /// <summary>
+    /// The result sets of a read, and the UDT names of the columns its SELECT read (null when it read none). The map is
+    /// returned with the result, so no other read on the same store can change it.
+    /// </summary>
     internal List<List<Dictionary<string, object?>>> ExecuteReaderResultSets(string commandText,
-        DbParameterCollection? parameters)
+        DbParameterCollection? parameters, out IReadOnlyDictionary<string, string>? udtColumns)
     {
+        udtColumns = null;
         if (!string.IsNullOrWhiteSpace(commandText))
         {
             ThrowIfNotSql(commandText);
@@ -229,7 +240,25 @@ public class FakeDataStore
             }
         }
 
-        return [ExecuteReader(commandText, parameters).ToList()];
+        var rows = ExecuteReader(commandText, parameters).ToList();
+        udtColumns = UdtColumnsOf(commandText);
+        return [rows];
+    }
+
+    private IReadOnlyDictionary<string, string>? UdtColumnsOf(string commandText)
+    {
+        var from = Regex.Match(commandText, @"\bFROM\s+([`\[\]""'.\w]+)", RegexOptions.IgnoreCase);
+        if (!from.Success)
+        {
+            return null;
+        }
+
+        lock (_lockObject)
+        {
+            return _udtColumns.TryGetValue(CleanIdentifier(from.Groups[1].Value), out var columns)
+                ? new Dictionary<string, string>(columns, StringComparer.OrdinalIgnoreCase)
+                : null;
+        }
     }
 
     // In StrictMode, text that is not a statement at all fails as the database would: with the emulated product's syntax
@@ -302,6 +331,8 @@ public class FakeDataStore
 
     private int HandleInsert(string commandText, DbParameterCollection? parameters)
     {
+        commandText = RewriteInsertSelectAsValues(commandText);
+
         // Match INSERT INTO table (columns) portion — handles both single and multi-row VALUES
         var headerMatch = Regex.Match(commandText,
             @"INSERT\s+INTO\s+([`\[\]""'.\w]+)\s*\(([^)]+)\)\s*VALUES\s*",
@@ -367,13 +398,30 @@ public class FakeDataStore
             afterValues = afterValues.Substring(0, trailingClause.Index);
         }
 
-        var valueRowMatches = Regex.Matches(afterValues, @"\(([^)]+)\)");
+        var valueRowMatches = ExtractTuples(afterValues);
 
         var rowsInserted = 0;
         var positional = 0;
-        foreach (Match rowMatch in valueRowMatches)
+        foreach (var tuple in valueRowMatches)
         {
-            var values = ParseValues(rowMatch.Groups[1].Value, parameters, ref positional);
+            var values = ParseValues(tuple, parameters, ref positional);
+            foreach (var (index, udt) in _spatialUdtIndexes)
+            {
+                if (index < columns.Count)
+                {
+                    lock (_lockObject)
+                    {
+                        if (!_udtColumns.TryGetValue(table, out var udtColumns))
+                        {
+                            udtColumns = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+                            _udtColumns[table] = udtColumns;
+                        }
+
+                        udtColumns[CleanIdentifier(columns[index])] = udt;
+                    }
+                }
+            }
+
             var rowData = new Dictionary<string, object?>();
 
             // Auto-assign ID when the table has no explicit Id column
@@ -446,6 +494,14 @@ public class FakeDataStore
 
         if (!updateMatch.Success)
         {
+            if (StrictMode)
+            {
+                throw new NotSupportedException(
+                    $"FakeDataStore (StrictMode) does not recognize this UPDATE statement shape: {commandText}");
+            }
+
+            // Unparsed UPDATE: 0 rows keeps the lenient default, but pengdows reads 0 as a lost
+            // optimistic-lock race, so strict mode refuses the shape instead.
             return 0;
         }
 
@@ -482,6 +538,12 @@ public class FakeDataStore
 
         if (!deleteMatch.Success)
         {
+            if (StrictMode)
+            {
+                throw new NotSupportedException(
+                    $"FakeDataStore (StrictMode) does not recognize this DELETE statement shape: {commandText}");
+            }
+
             return 0;
         }
 
@@ -512,6 +574,18 @@ public class FakeDataStore
         }
     }
 
+    // Positional (bare ?) markers in a WHERE clause bind in statement order: _whereMarkerBase counts the
+    // markers before the WHERE, and _whereMarkerCursor counts the ones already evaluated for the current row.
+    private int _whereMarkerBase;
+    private int _whereMarkerCursor;
+
+    // A parameter marker in any product's style: @name, ?name, :name (Oracle), $name (DuckDB), or a bare ?.
+    private static readonly Regex WholeMarker = new(@"^(?:@\w+|:\w+|\$\w+|\?)$", RegexOptions.Compiled);
+
+    private static bool IsParameterMarker(string text) => WholeMarker.IsMatch(text);
+
+    private static string BareParameterName(string name) => name.TrimStart('@', '?', ':', '$');
+
     private IEnumerable<Dictionary<string, object?>> HandleSelect(string commandText, DbParameterCollection? parameters)
     {
         // Handle COUNT queries via reader path (ExecuteScalarCore uses ExecuteReader, not ExecuteScalar)
@@ -530,12 +604,11 @@ public class FakeDataStore
             return HandleLiteralSelect(literalMatch.Groups[1].Value.Trim(), parameters);
         }
 
-        // Handle SELECT * FROM table [alias] [WHERE ...] [ORDER BY ...]
-        var selectMatch = Regex.Match(commandText,
-            @"SELECT\s+([\s\S]+?)\s+FROM\s+([`\[\]""'.\w]+)(?:\s+(?:AS\s+)?[`\[\]""'\w]+)?(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
-            RegexOptions.IgnoreCase);
+        // Handle SELECT * FROM table [alias] [WHERE ...] [ORDER BY ...]. The FROM is the statement's own: a scalar subquery
+        // in the select list (Oracle's SDO_GEOMETRY read, FROM DUAL) has FROMs inside its parentheses.
+        var parts = SplitSelect(commandText);
 
-        if (!selectMatch.Success)
+        if (parts is null)
         {
             if (StrictMode)
             {
@@ -546,9 +619,9 @@ public class FakeDataStore
             return Enumerable.Empty<Dictionary<string, object?>>();
         }
 
-        var selectPart = selectMatch.Groups[1].Value.Trim();
-        var tableName = CleanIdentifier(selectMatch.Groups[2].Value);
-        var wherePart = selectMatch.Groups.Count > 3 ? selectMatch.Groups[3].Value : null;
+        var selectPart = parts.Value.SelectList;
+        var tableName = CleanIdentifier(parts.Value.Table);
+        var wherePart = parts.Value.Where;
 
         EnsureTable(tableName);
 
@@ -559,7 +632,13 @@ public class FakeDataStore
 
             if (!string.IsNullOrWhiteSpace(wherePart))
             {
-                filteredRows = filteredRows.Where(row => EvaluateWhereClause(row, wherePart, parameters));
+                var whereIndex = commandText.IndexOf("WHERE", StringComparison.OrdinalIgnoreCase);
+                _whereMarkerBase = whereIndex < 0 ? 0 : commandText[..whereIndex].Count(c => c == '?');
+                filteredRows = filteredRows.Where(row =>
+                {
+                    _whereMarkerCursor = 0;
+                    return EvaluateWhereClause(row, wherePart, parameters);
+                });
             }
 
             // Handle column selection
@@ -571,7 +650,7 @@ public class FakeDataStore
             // Handle specific columns, honoring an optional "AS alias" or implicit "column alias"
             // suffix on each — mirrors HandleLiteralSelect's identical alias pattern for the
             // no-FROM literal-select path, so both SELECT forms support aliasing consistently.
-            var columnSpecs = selectPart.Split(',').Select(ParseColumnSpec).ToList();
+            var columnSpecs = SplitTopLevel(selectPart, ',').Select(ParseColumnSpec).ToList();
             return filteredRows.Select(row =>
             {
                 var result = new Dictionary<string, object?>();
@@ -588,14 +667,92 @@ public class FakeDataStore
         }
     }
 
+    // The SELECT's select list, table and WHERE clause, split at the first FROM that is not inside parentheses or quotes.
+    private static SelectParts? SplitSelect(string commandText)
+    {
+        var select = Regex.Match(commandText, @"^\s*SELECT\s+", RegexOptions.IgnoreCase);
+        if (!select.Success)
+        {
+            return null;
+        }
+
+        var from = TopLevelFrom(commandText, select.Length);
+        if (from < 0)
+        {
+            return null;
+        }
+
+        var tail = Regex.Match(commandText[from..],
+            @"^FROM\s+([`\[\]""'.\w]+)(?:\s+(?:AS\s+)?[`\[\]""'\w]+)?(?:\s+WHERE\s+([\s\S]+?))?(?:\s+ORDER\s+BY\s+.+)?$",
+            RegexOptions.IgnoreCase);
+        if (!tail.Success)
+        {
+            return null;
+        }
+
+        return new SelectParts(commandText[select.Length..from].Trim(), tail.Groups[1].Value,
+            tail.Groups[2].Success ? tail.Groups[2].Value : null);
+    }
+
+    private readonly record struct SelectParts(string SelectList, string Table, string? Where);
+
+    private static int TopLevelFrom(string text, int start)
+    {
+        var depth = 0;
+        char? quote = null;
+        for (var i = start; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (quote is { } q)
+            {
+                if (c == q)
+                {
+                    quote = null;
+                }
+
+                continue;
+            }
+
+            if (c is '\'' or '"' or '`')
+            {
+                quote = c;
+            }
+            else if (c == '(')
+            {
+                depth++;
+            }
+            else if (c == ')')
+            {
+                depth--;
+            }
+            else if (depth == 0 && (i == 0 || char.IsWhiteSpace(text[i - 1])) &&
+                     string.Compare(text, i, "FROM", 0, 4, StringComparison.OrdinalIgnoreCase) == 0 &&
+                     (i + 4 == text.Length || char.IsWhiteSpace(text[i + 4])))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
     private (string SourceColumn, string OutputKey) ParseColumnSpec(string token)
     {
         var trimmed = token.Trim();
-        var match = Regex.Match(trimmed, @"^(.+?)\s+(?:AS\s+)?([a-zA-Z_][a-zA-Z0-9_]*)$", RegexOptions.IgnoreCase);
+        var match = Regex.Match(trimmed, @"^(.+?)\s+(?:AS\s+)?""?([a-zA-Z_][a-zA-Z0-9_]*)""?$", RegexOptions.IgnoreCase);
+
+        // Oracle's spatial read: "SRID=n;" then SDO_UTIL.TO_WKTGEOMETRY(col) over a CASE. The column's stored EWKT is that text.
+        var spatial = Regex.Match(trimmed, @"SDO_UTIL\.TO_WKTGEOMETRY\(\s*([^)]+?)\s*\)", RegexOptions.IgnoreCase);
+        if (spatial.Success && match.Success)
+        {
+            // The column may be qualified ("alias"."column"): the column is the last name.
+            var reference = spatial.Groups[1].Value.Split('.').Last();
+            return (CleanIdentifier(reference), match.Groups[2].Value.Trim());
+        }
 
         if (match.Success)
         {
-            var sourceColumn = CleanIdentifier(match.Groups[1].Value.Trim());
+            var sourceColumn = CleanIdentifier(ColumnOfExpression(StripConversionCall(match.Groups[1].Value.Trim())));
             var alias = match.Groups[2].Value.Trim();
             return (sourceColumn, alias);
         }
@@ -658,14 +815,234 @@ public class FakeDataStore
         return cleaned;
     }
 
+    // The product this store emulates; set by the connection that owns it. Unknown until a product is named.
+    internal SupportedDatabase Product { get; set; } = SupportedDatabase.Unknown;
+
+    // Fractional-second precision a product's column keeps (docs/type-support-matrix.md). The extra digits are
+    // truncated, never rounded. Sybase ASE's BIGDATETIME keeps microseconds; SingleStore's TIME(6) and Oracle's
+    // INTERVAL DAY TO SECOND(6) keep microseconds for time values. Other products keep the full tick.
+    private object? TruncateToStoredPrecision(object? value)
+    {
+        const long MicrosecondTicks = 10;
+        switch (Product, value)
+        {
+            case (SupportedDatabase.SybaseASE, DateTime dt):
+                return new DateTime(dt.Ticks - dt.Ticks % MicrosecondTicks, dt.Kind);
+            case (SupportedDatabase.SybaseASE, DateTimeOffset dto):
+                return new DateTimeOffset(dto.Ticks - dto.Ticks % MicrosecondTicks, dto.Offset);
+            case (SupportedDatabase.SingleStore or SupportedDatabase.Oracle, TimeSpan ts):
+                return new TimeSpan(ts.Ticks - ts.Ticks % MicrosecondTicks);
+            case (SupportedDatabase.SingleStore, TimeOnly to):
+                return new TimeOnly(to.Ticks - to.Ticks % MicrosecondTicks);
+            default:
+                return value;
+        }
+    }
+
+    // A parameter marker token: @name, :name (Oracle), $name (DuckDB), or a bare ? (positional). The lookbehind
+    // keeps the second colon of a :: cast and the @ inside @name from starting a second token.
+    private static readonly Regex MarkerToken = new(@"(?<![\w.:$@])(@\w+|:\w+|\$\w+|\?)", RegexOptions.Compiled);
+
+    private static string StripLiterals(string expr) => Regex.Replace(expr, @"'[^']*'", "''");
+
+    private static bool ContainsParameterMarker(string expr) => MarkerToken.IsMatch(StripLiterals(expr));
+
+    // Rewrites INSERT INTO t (cols) SELECT list, with no FROM, as INSERT INTO t (cols) VALUES (list): the form
+    // Snowflake uses. The list is then parsed like any VALUES tuple.
+    private static string RewriteInsertSelectAsValues(string commandText)
+    {
+        var match = Regex.Match(commandText, @"^(\s*INSERT\s+INTO\s+[^(]+\([^)]+\)\s*)SELECT\s+(.+)$",
+            RegexOptions.IgnoreCase | RegexOptions.Singleline);
+        if (!match.Success || Regex.IsMatch(match.Groups[2].Value, @"\bFROM\b", RegexOptions.IgnoreCase))
+        {
+            return commandText;
+        }
+
+        return match.Groups[1].Value + "VALUES (" + match.Groups[2].Value.Trim() + ")";
+    }
+
+    // The top-level parenthesised groups in text, each without its outer parentheses. Quoted text and
+    // nested parentheses are skipped, so CAST(@p AS varchar(10)) stays one group.
+    private static List<string> ExtractTuples(string text)
+    {
+        var tuples = new List<string>();
+        var depth = 0;
+        var start = -1;
+        char? quote = null;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (quote != null)
+            {
+                if (c == quote)
+                {
+                    quote = null;
+                }
+
+                continue;
+            }
+
+            if (c is '\'' or '"' or '`')
+            {
+                quote = c;
+            }
+            else if (c == '(')
+            {
+                if (depth == 0)
+                {
+                    start = i + 1;
+                }
+
+                depth++;
+            }
+            else if (c == ')' && depth > 0)
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    tuples.Add(text[start..i]);
+                }
+            }
+        }
+
+        return tuples;
+    }
+
+    // Splits on separator only at the top level: not inside parentheses or quotes.
+    private static List<string> SplitTopLevel(string text, char separator)
+    {
+        var parts = new List<string>();
+        var depth = 0;
+        var last = 0;
+        char? quote = null;
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (quote != null)
+            {
+                if (c == quote)
+                {
+                    quote = null;
+                }
+
+                continue;
+            }
+
+            if (c is '\'' or '"' or '`')
+            {
+                quote = c;
+            }
+            else if (c == '(')
+            {
+                depth++;
+            }
+            else if (c == ')')
+            {
+                depth--;
+            }
+            else if (c == separator && depth == 0)
+            {
+                parts.Add(text[last..i]);
+                last = i + 1;
+            }
+        }
+
+        parts.Add(text[last..]);
+        return parts;
+    }
+
+    // expr::VECTOR(INT, 0) and similar: a cast on the end of a value does not change what is stored.
+    private static string StripTrailingCast(string expr)
+    {
+        var match = Regex.Match(expr, @"^(.+?)::\w+(?:\([^)]*\))?$", RegexOptions.Singleline);
+        return match.Success ? match.Groups[1].Value.Trim() : expr;
+    }
+
+    // expr.ST_AsEWKB() on a column reference reads the column: the conversion is the identity in fakeDb.
+    private static string StripConversionCall(string expr)
+    {
+        var match = Regex.Match(expr, @"^(.+)\.\w+\(\)$", RegexOptions.Singleline);
+        if (!match.Success)
+        {
+            return expr;
+        }
+
+        var segments = match.Groups[1].Value.Split('.');
+        return segments[^1];
+    }
+
+    // FUNC(..., column, ...) reads the column: the conversion is the identity in fakeDb, so the column is the first
+    // argument that is a column reference (CONVERT(VARCHAR(26), col, 140) and TO_VARCHAR(col, 'fmt') both qualify),
+    // with any "AS type" suffix removed (CAST(col AS VARCHAR(10))).
+    private static string ColumnOfExpression(string expr)
+    {
+        var match = Regex.Match(expr, @"^[A-Za-z_]\w*\((.*)\)$", RegexOptions.Singleline);
+        if (!match.Success)
+        {
+            return expr;
+        }
+
+        foreach (var argument in SplitTopLevel(match.Groups[1].Value, ','))
+        {
+            var head = Regex.Replace(argument.Trim(), @"\s+AS\s+.*$", "", RegexOptions.IgnoreCase);
+            if (Regex.IsMatch(head, @"^(?:""?\w+""?\.)*""?\w+""?$"))
+            {
+                return head;
+            }
+        }
+
+        return expr;
+    }
+
+    // The stored value of a server-side conversion over one bound value is that value. A conversion over two
+    // different bound values has no single stored value, so it is refused rather than guessed.
+    private object? EvaluateConversion(string expr, DbParameterCollection? parameters, ref int positional)
+    {
+        var tokens = MarkerToken.Matches(StripLiterals(expr)).Select(m => m.Value).ToList();
+        var positionalCount = tokens.Count(t => t == "?");
+        var named = tokens.Where(t => t != "?").Distinct().ToList();
+        if ((positionalCount > 0 && named.Count > 0) || named.Count > 1 || positionalCount > 1)
+        {
+            throw new NotSupportedException(
+                $"FakeDataStore cannot emulate a server-side expression over more than one bound value: '{expr}'.");
+        }
+
+        if (named.Count == 1)
+        {
+            return GetParameterValue(named[0], parameters);
+        }
+
+        object? value = null;
+        if (parameters != null && positional < parameters.Count)
+        {
+            var raw = parameters[positional].Value;
+            value = raw == DBNull.Value ? null : raw;
+        }
+
+        positional++;
+        return value;
+    }
+
+    private static bool IsOracleSdoGeometry(string expression) =>
+        expression.Contains("SDO_GEOMETRY(", StringComparison.OrdinalIgnoreCase) &&
+        expression.Contains("TO_CLOB(", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsSqlServerSpatialConstructor(string expression) =>
+        expression.Contains("STGeomFromWKB(", StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsHanaArrayExpression(string expression) =>
+        expression.StartsWith("ARRAY(SELECT", StringComparison.OrdinalIgnoreCase) &&
+        expression.Contains("JSON_TABLE", StringComparison.OrdinalIgnoreCase);
+
     private List<object?> ParseValues(string valuesPart, DbParameterCollection? parameters, ref int positional)
     {
+        _spatialUdtIndexes.Clear();
         var values = new List<object?>();
-        var parts = valuesPart.Split(',');
+        var parts = SplitTopLevel(valuesPart, ',');
 
         foreach (var part in parts)
         {
-            var trimmed = part.Trim();
+            var trimmed = StripTrailingCast(part.Trim());
 
             // Handle parameters
             if (trimmed == "?")
@@ -681,10 +1058,38 @@ public class FakeDataStore
                 positional++;
                 values.Add(positionalValue);
             }
-            else if (trimmed.StartsWith("@") || trimmed.StartsWith("?"))
+            else if (IsParameterMarker(trimmed))
             {
                 var paramValue = GetParameterValue(trimmed, parameters);
                 values.Add(paramValue);
+            }
+            // A server-side conversion over one bound value (CAST, PARSE_JSON, geometry::STGeomFromWKB,
+            // ST_GeomFromEWKB, CASE WHEN @p IS NULL ... END): the stored value is the bound value.
+            // SAP HANA's ARRAY(SELECT V FROM JSON_TABLE(?, ...)) over the bound JSON array: the stored value is the varbinary the
+            // driver returns for an ARRAY column (HanaArrayWire), not the JSON text.
+            // Oracle's SDO_GEOMETRY(wkt, srid) over the bound EWKT, in the scalar subquery the dialect writes: the stored value is the
+            // EWKT, and SRID 0 (the unknown SRID) is NULL, as the dialect's NULLIF makes it.
+            else if (IsOracleSdoGeometry(trimmed))
+            {
+                var ewkt = EvaluateConversion(trimmed, parameters, ref positional)?.ToString();
+                values.Add(ewkt is null || Regex.IsMatch(ewkt, @"^SRID=0;", RegexOptions.IgnoreCase) ? null : ewkt);
+            }
+            // SQL Server's geometry::STGeomFromWKB(bytes, srid) (geography:: for a geography): the stored value is the native
+            // encoding the spatial reader decodes (SqlServerSpatialWire), not the bound argument.
+            else if (IsSqlServerSpatialConstructor(trimmed))
+            {
+                var geography = trimmed.Contains("geography::", StringComparison.OrdinalIgnoreCase);
+                _spatialUdtIndexes[values.Count] = geography ? "geography" : "geometry";
+                values.Add(SqlServerSpatialWire.Encode(EvaluateConversion(trimmed, parameters, ref positional), geography));
+            }
+            else if (IsHanaArrayExpression(trimmed))
+            {
+                var elementType = HanaArrayWire.ElementTypeOf(trimmed);
+                values.Add(HanaArrayWire.Encode(EvaluateConversion(trimmed, parameters, ref positional), elementType));
+            }
+            else if (ContainsParameterMarker(trimmed))
+            {
+                values.Add(EvaluateConversion(trimmed, parameters, ref positional));
             }
             // Handle string literals
             else if (trimmed.StartsWith("'") && trimmed.EndsWith("'"))
@@ -711,6 +1116,11 @@ public class FakeDataStore
             }
         }
 
+        for (var i = 0; i < values.Count; i++)
+        {
+            values[i] = TruncateToStoredPrecision(values[i]);
+        }
+
         return values;
     }
 
@@ -721,9 +1131,18 @@ public class FakeDataStore
             return null;
         }
 
+        if (paramName == "?")
+        {
+            var index = _whereMarkerBase + _whereMarkerCursor++;
+            return index < parameters.Count
+                ? (parameters[index].Value == DBNull.Value ? null : parameters[index].Value)
+                : null;
+        }
+
+        var bare = BareParameterName(paramName);
         foreach (DbParameter param in parameters)
         {
-            if (param.ParameterName == paramName || param.ParameterName == paramName.TrimStart('@', '?'))
+            if (param.ParameterName == paramName || BareParameterName(param.ParameterName) == bare)
             {
                 return param.Value == DBNull.Value ? null : param.Value;
             }
@@ -903,7 +1322,7 @@ public class FakeDataStore
         var trimmed = valueExpression.Trim();
 
         // Handle parameters
-        if (trimmed.StartsWith("@") || trimmed.StartsWith("?"))
+        if (IsParameterMarker(trimmed))
         {
             return GetParameterValue(trimmed, parameters);
         }

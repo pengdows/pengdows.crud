@@ -30,6 +30,9 @@ internal interface IColumnInfo
     /// </summary>
     DbType DbType { get; }
 
+    /// <summary>The column's declared native type (<see cref="pengdows.crud.attributes.ColumnAttribute.NativeType"/>), or null.</summary>
+    string? NativeType => null;
+
     /// <summary>
     /// True when the column should not be updated.
     /// </summary>

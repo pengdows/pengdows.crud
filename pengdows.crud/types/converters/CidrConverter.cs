@@ -10,7 +10,7 @@
 //   * PostgreSQL/CockroachDB: CIDR type ("192.168.0.0/16")
 //   * Others: Store as VARCHAR
 // - ConvertToProvider(): Returns string for PostgreSQL, raw value otherwise.
-// - TryConvertFromProvider(): Handles Cidr, string, and NpgsqlCidr.
+// - TryConvertFromProvider(): Handles Cidr, string, NpgsqlCidr, and an Inet with its prefix.
 // - Text is parsed by Cidr.Parse (one parser, DRY-012).
 // - Thread-safe and immutable value objects.
 // =============================================================================
@@ -90,8 +90,8 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
             return null;
         }
 
-        // Npgsql binds NpgsqlDbType.Cidr from NpgsqlCidr and rejects a string.
-        return DatabaseTraits.For(provider).BindsNpgsqlValueTypes ? CreateNpgsqlCidr(value) : value;
+        // Npgsql binds NpgsqlDbType.Cidr from NpgsqlCidr and rejects a string. A database with no cidr type gets the text.
+        return DatabaseTraits.For(provider).BindsNpgsqlCidr ? CreateNpgsqlCidr(value) : value.ToString();
     }
 
     // NpgsqlTypes.NpgsqlCidr(IPAddress, byte), found by name and compiled once.
@@ -103,8 +103,28 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
     private static object CreateNpgsqlCidr(Cidr value) =>
         NpgsqlCidrCtor.Value?.Invoke(value.Network, value.PrefixLength) ?? value.ToString();
 
+    /// <summary>The CIDR an inet names, when it has a prefix.</summary>
+    internal static bool TryFromInet(Inet inet, out Cidr result)
+    {
+        if (inet.PrefixLength is { } prefix)
+        {
+            result = new Cidr(inet.Address, prefix);
+            return true;
+        }
+
+        result = default;
+        return false;
+    }
+
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Cidr result)
     {
+        // An address with its prefix (a column the database types as inet, read through Npgsql's typed inet) is the
+        // network it names. A bare address has no prefix, so it is not a CIDR here.
+        if (value is Inet inet && TryFromInet(inet, out result))
+        {
+            return true;
+        }
+
         if (value is Cidr cidr)
         {
             result = cidr;
@@ -113,16 +133,9 @@ internal sealed class CidrConverter : AdvancedTypeConverter<Cidr>
 
         if (value is string text)
         {
-            try
-            {
-                result = Cidr.Parse(text);
-                return true;
-            }
-            catch
-            {
-                result = default!;
-                return false;
-            }
+            // A malformed CIDR is an error with a reason (the parser's message), not "not a CIDR": let it propagate.
+            result = Cidr.Parse(text);
+            return true;
         }
 
         var type = value.GetType();

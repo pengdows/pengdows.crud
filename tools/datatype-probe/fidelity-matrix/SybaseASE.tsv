@@ -1,0 +1,75 @@
+SybaseASE	signed 8-bit	signed_8_bit	PASS
+SybaseASE	signed 16-bit	signed_16_bit	PASS
+SybaseASE	signed 32-bit	signed_32_bit	PASS
+SybaseASE	signed 64-bit	signed_64_bit	PASS
+SybaseASE	signed 128-bit	signed_128_bit	PASS
+SybaseASE	unsigned 8-bit	unsigned_8_bit	PASS
+SybaseASE	unsigned 16-bit	unsigned_16_bit	PASS
+SybaseASE	unsigned 32-bit	unsigned_32_bit	PASS
+SybaseASE	unsigned 64-bit	unsigned_64_bit	PASS
+SybaseASE	arbitrary-size integer	arbitrary_integer	PASS
+SybaseASE	binary float32	binary_float32	PASS
+SybaseASE	binary float64	binary_float64	PASS
+SybaseASE	fixed decimal	fixed_decimal	PASS
+SybaseASE	boolean	boolean	UNSUPPORTED refused: Can't find type 'BOOLEAN'.
+SybaseASE	bit / bitstring	bit_string	UNSUPPORTED refused: Can't specify a length, scale or storage property on type 'bit'.
+SybaseASE	varying character	varying_character	PASS
+SybaseASE	unbounded text	unbounded_text	PASS
+SybaseASE	UUID / GUID	uuid	PASS
+SybaseASE	calendar date	calendar_date	PASS
+SybaseASE	time without zone	time_of_day	PASS
+SybaseASE	time without zone	time_span	PASS
+SybaseASE	day-time interval	day_time_interval	UNSUPPORTED refused: Incorrect syntax near 'DAY'.
+SybaseASE	timestamp without zone	timestamp	PASS
+SybaseASE	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: Incorrect syntax near the keyword 'WITH'.
+SybaseASE	binary LOB	binary	PASS
+SybaseASE	JSON text / JSON value	json	UNSUPPORTED refused: Can't find type 'JSON'.
+SybaseASE	IP address	ip_address	PASS
+SybaseASE	SQL array	int_array	UNSUPPORTED refused: Incorrect syntax near 'ARRAY'.
+SybaseASE	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: Can't find type 'UHUGEINT'.
+SybaseASE	decimal floating point	decimal_float	UNSUPPORTED refused: Can't find type 'DECFLOAT'.
+SybaseASE	money / currency	money	PASS
+SybaseASE	fixed character	fixed_character	PASS
+SybaseASE	national / Unicode character	national_text	PASS
+SybaseASE	long text LOB	long_text	PASS
+SybaseASE	enumeration	enumeration	UNSUPPORTED refused: Incorrect syntax near '('.
+SybaseASE	set-valued enum	set_value	UNSUPPORTED refused: The definition for column 'c' must include a datatype.
+SybaseASE	fixed binary	fixed_binary	PASS
+SybaseASE	varying binary	varying_binary	PASS
+SybaseASE	legacy long binary	legacy_binary	PASS
+SybaseASE	rowversion / timestamp token	rowversion	UNSUPPORTED refused: Can't find type 'ROWVERSION'.
+SybaseASE	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Incorrect syntax near the keyword 'WITH'.
+SybaseASE	second-precision datetime	second_datetime	PASS
+SybaseASE	time with zone	time_zoned	UNSUPPORTED refused: Incorrect syntax near the keyword 'WITH'.
+SybaseASE	year-only	year_only	PASS
+SybaseASE	year-month interval	year_month_interval	UNSUPPORTED refused: Incorrect syntax near 'YEAR'.
+SybaseASE	generic interval	generic_interval	UNSUPPORTED refused: Can't find type 'interval'.
+SybaseASE	row identifier / ROWID	row_identifier	PASS
+SybaseASE	object identifier / OID	oid	UNSUPPORTED refused: Can't find type 'OID'.
+SybaseASE	transaction ID	transaction_id	UNSUPPORTED refused: Can't find type 'XID'.
+SybaseASE	WAL / log position	wal_position	UNSUPPORTED refused: Can't find type 'PG_LSN'.
+SybaseASE	native binary JSON	binary_json	UNSUPPORTED refused: Can't find type 'JSONB'.
+SybaseASE	XML	xml	UNSUPPORTED refused: Can't find type 'XML'.
+SybaseASE	BSON	bson	UNSUPPORTED refused: Can't find type 'BSON'.
+SybaseASE	variant / dynamic value	variant	UNSUPPORTED refused: Can't find type 'VARIANT'.
+SybaseASE	IP network / CIDR	cidr	UNSUPPORTED refused: Can't find type 'CIDR'.
+SybaseASE	MAC address	mac_address	UNSUPPORTED refused: Can't find type 'MACADDR'.
+SybaseASE	point geometry	point	UNSUPPORTED refused: Can't find type 'POINT'.
+SybaseASE	line / linestring geometry	linestring	UNSUPPORTED refused: Can't find type 'LINESTRING'.
+SybaseASE	polygon geometry	polygon	UNSUPPORTED refused: Can't find type 'POLYGON'.
+SybaseASE	general geometry	geometry	UNSUPPORTED refused: Can't find type 'GEOMETRY'.
+SybaseASE	geography / geodetic	geography	UNSUPPORTED refused: Can't find type 'GEOGRAPHY'.
+SybaseASE	fixed-length array	fixed_array	UNSUPPORTED refused: Incorrect syntax near 'ARRAY'.
+SybaseASE	list / multiset / set collection	list_collection	UNSUPPORTED refused: Incorrect syntax near 'MULTISET'.
+SybaseASE	map / dictionary	map	UNSUPPORTED refused: Incorrect syntax near 'VARCHAR'.
+SybaseASE	range	range	UNSUPPORTED refused: Can't find type 'INT4RANGE'.
+SybaseASE	multirange	multirange	UNSUPPORTED refused: Can't find type 'INT4MULTIRANGE'.
+SybaseASE	user-defined enum / domain	domain	UNSUPPORTED refused: The definition for column 'c' must include a datatype.
+SybaseASE	full-text search vector / query	full_text	UNSUPPORTED refused: Can't find type 'TSVECTOR'.
+SybaseASE	native point	native_point	UNSUPPORTED refused: no candidate was tried
+SybaseASE	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+SybaseASE	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+SybaseASE	vector embedding	vector	UNSUPPORTED refused: Can't find type 'VECTOR'.
+SybaseASE	hierarchical path	hierarchy	UNSUPPORTED refused: Can't find type 'HIERARCHYID'.
+SybaseASE	external-file reference	file_reference	UNSUPPORTED refused: Can't find type 'BFILE'.
+SybaseASE	specialized security label	security_label	UNSUPPORTED refused: Can't find type 'IDSSECURITYLABEL'.

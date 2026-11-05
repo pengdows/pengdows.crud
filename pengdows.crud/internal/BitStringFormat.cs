@@ -26,6 +26,31 @@ internal static class BitStringFormat
         });
     }
 
+    /// <summary>
+    /// A fixed-width BIT(<paramref name="width"/>) column's integer as its bits, first bit first (the value 5 at width 3 is
+    /// "101"). A value that does not fit the width is refused, never truncated.
+    /// </summary>
+    public static BitArray FromBitField(ulong value, int width)
+    {
+        if (width is < 1 or > 64)
+        {
+            throw new System.ArgumentOutOfRangeException(nameof(width), width, "A BIT column is 1 to 64 bits wide.");
+        }
+
+        if (width < 64 && value >> width != 0)
+        {
+            throw new System.ArgumentOutOfRangeException(nameof(value), value, $"{value} does not fit in BIT({width}).");
+        }
+
+        var bits = new BitArray(width);
+        for (var i = 0; i < width; i++)
+        {
+            bits[i] = ((value >> (width - 1 - i)) & 1) == 1;
+        }
+
+        return bits;
+    }
+
     public static bool TryParse(string text, out BitArray bits)
     {
         bits = new BitArray(text.Length);

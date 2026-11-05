@@ -18,6 +18,7 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
     private readonly Meter _meter;
     private readonly bool _ownsMeter;
     private readonly ConcurrentDictionary<Guid, DatabaseMetrics> _lastSnapshots = new();
+    private readonly object _snapshotGate = new();
     private readonly ConcurrentDictionary<Guid, IDatabaseContext> _contexts = new();
 
     // ── Aggregate delta counters ──────────────────────────────────────────
@@ -412,49 +413,67 @@ public sealed class PengdowsMetricsObserver : IPengdowsMetricsObserver
             return;
         }
 
-        if (!_lastSnapshots.TryGetValue(context.RootId, out var last))
-        {
-            return;
-        }
-
         var tags = new TagList
         {
             { "db.name", context.Name },
             { "db.system", context.Product.ToString().ToLowerInvariant() }
         };
 
-        // Commands
-        EmitDelta(_commandsExecuted, e.CommandsExecuted, last.CommandsExecuted, tags);
-        EmitDelta(_commandsFailed, e.CommandsFailed, last.CommandsFailed, tags);
-        EmitDelta(_commandsTimedOut, e.CommandsTimedOut, last.CommandsTimedOut, tags);
-        EmitDelta(_commandsCancelled, e.CommandsCancelled, last.CommandsCancelled, tags);
-        EmitDelta(_commandsSlow, e.SlowCommandsTotal, last.SlowCommandsTotal, tags);
+        // Read the baseline, emit the deltas, and write the new baseline as one step. Handlers for one
+        // context can run on several threads; without this lock two of them could emit the same delta.
+        lock (_snapshotGate)
+        {
+            if (!_lastSnapshots.TryGetValue(context.RootId, out var last))
+            {
+                return;
+            }
 
-        // Rows
-        EmitDelta(_rowsRead, e.RowsReadTotal, last.RowsReadTotal, tags);
-        EmitDelta(_rowsAffected, e.RowsAffectedTotal, last.RowsAffectedTotal, tags);
+            // A snapshot older than the baseline arrived late. Moving the baseline back would make the
+            // next event re-emit the gap, so it is dropped.
+            if (IsOlderThan(e, last))
+            {
+                return;
+            }
 
-        // Connections
-        EmitDelta(_connectionsOpened, e.ConnectionsOpened, last.ConnectionsOpened, tags);
-        EmitDelta(_connectionsClosed, e.ConnectionsClosed, last.ConnectionsClosed, tags);
-        EmitDelta(_connectionsLongLived, e.LongLivedConnections, last.LongLivedConnections, tags);
+            // Commands
+            EmitDelta(_commandsExecuted, e.CommandsExecuted, last.CommandsExecuted, tags);
+            EmitDelta(_commandsFailed, e.CommandsFailed, last.CommandsFailed, tags);
+            EmitDelta(_commandsTimedOut, e.CommandsTimedOut, last.CommandsTimedOut, tags);
+            EmitDelta(_commandsCancelled, e.CommandsCancelled, last.CommandsCancelled, tags);
+            EmitDelta(_commandsSlow, e.SlowCommandsTotal, last.SlowCommandsTotal, tags);
 
-        // Transactions
-        EmitDelta(_transactionsCommitted, e.TransactionsCommitted, last.TransactionsCommitted, tags);
-        EmitDelta(_transactionsRolledBack, e.TransactionsRolledBack, last.TransactionsRolledBack, tags);
+            // Rows
+            EmitDelta(_rowsRead, e.RowsReadTotal, last.RowsReadTotal, tags);
+            EmitDelta(_rowsAffected, e.RowsAffectedTotal, last.RowsAffectedTotal, tags);
 
-        // Errors
-        EmitDelta(_errorsDeadlocks, e.ErrorDeadlocks, last.ErrorDeadlocks, tags);
-        EmitDelta(_errorsSerializationFailures, e.ErrorSerializationFailures, last.ErrorSerializationFailures, tags);
-        EmitDelta(_errorsConstraintViolations, e.ErrorConstraintViolations, last.ErrorConstraintViolations, tags);
+            // Connections
+            EmitDelta(_connectionsOpened, e.ConnectionsOpened, last.ConnectionsOpened, tags);
+            EmitDelta(_connectionsClosed, e.ConnectionsClosed, last.ConnectionsClosed, tags);
+            EmitDelta(_connectionsLongLived, e.LongLivedConnections, last.LongLivedConnections, tags);
 
-        // Statements / session
-        EmitDelta(_statementsPrepared, e.PreparedStatements, last.PreparedStatements, tags);
-        EmitDelta(_statementsEvicted, e.StatementsEvicted, last.StatementsEvicted, tags);
-        EmitDelta(_sessionInits, e.SessionInitCount, last.SessionInitCount, tags);
+            // Transactions
+            EmitDelta(_transactionsCommitted, e.TransactionsCommitted, last.TransactionsCommitted, tags);
+            EmitDelta(_transactionsRolledBack, e.TransactionsRolledBack, last.TransactionsRolledBack, tags);
 
-        _lastSnapshots[context.RootId] = e;
+            // Errors
+            EmitDelta(_errorsDeadlocks, e.ErrorDeadlocks, last.ErrorDeadlocks, tags);
+            EmitDelta(_errorsSerializationFailures, e.ErrorSerializationFailures, last.ErrorSerializationFailures, tags);
+            EmitDelta(_errorsConstraintViolations, e.ErrorConstraintViolations, last.ErrorConstraintViolations, tags);
+
+            // Statements / session
+            EmitDelta(_statementsPrepared, e.PreparedStatements, last.PreparedStatements, tags);
+            EmitDelta(_statementsEvicted, e.StatementsEvicted, last.StatementsEvicted, tags);
+            EmitDelta(_sessionInits, e.SessionInitCount, last.SessionInitCount, tags);
+
+            _lastSnapshots[context.RootId] = e;
+        }
     }
+
+    private static bool IsOlderThan(DatabaseMetrics e, DatabaseMetrics last) =>
+        e.CommandsExecuted < last.CommandsExecuted ||
+        e.RowsReadTotal < last.RowsReadTotal ||
+        e.ConnectionsOpened < last.ConnectionsOpened ||
+        e.TransactionsCommitted < last.TransactionsCommitted;
 
     private static void EmitDelta(Counter<long> counter, long current, long last, TagList tags)
     {

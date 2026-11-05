@@ -1,0 +1,75 @@
+TiDb	signed 8-bit	signed_8_bit	PASS
+TiDb	signed 16-bit	signed_16_bit	PASS
+TiDb	signed 32-bit	signed_32_bit	PASS
+TiDb	signed 64-bit	signed_64_bit	PASS
+TiDb	signed 128-bit	signed_128_bit	PASS
+TiDb	unsigned 8-bit	unsigned_8_bit	PASS
+TiDb	unsigned 16-bit	unsigned_16_bit	PASS
+TiDb	unsigned 32-bit	unsigned_32_bit	PASS
+TiDb	unsigned 64-bit	unsigned_64_bit	PASS
+TiDb	arbitrary-size integer	arbitrary_integer	PASS
+TiDb	binary float32	binary_float32	PASS
+TiDb	binary float64	binary_float64	PASS
+TiDb	fixed decimal	fixed_decimal	PASS
+TiDb	boolean	boolean	PASS
+TiDb	bit / bitstring	bit_string	PASS
+TiDb	varying character	varying_character	PASS
+TiDb	unbounded text	unbounded_text	PASS
+TiDb	UUID / GUID	uuid	PASS
+TiDb	calendar date	calendar_date	PASS
+TiDb	time without zone	time_of_day	PASS
+TiDb	time without zone	time_span	PASS
+TiDb	day-time interval	day_time_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near "INTERVAL DAY TO SECOND(6))"
+TiDb	timestamp without zone	timestamp	PASS
+TiDb	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 69 near "WITH TIME ZONE)"
+TiDb	binary LOB	binary	PASS
+TiDb	JSON text / JSON value	json	PASS
+TiDb	IP address	ip_address	PASS
+TiDb	SQL array	int_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 68 near "ARRAY)"
+TiDb	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near "UHUGEINT)"
+TiDb	decimal floating point	decimal_float	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near "DECFLOAT)"
+TiDb	money / currency	money	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 59 near "MONEY)"
+TiDb	fixed character	fixed_character	PASS
+TiDb	national / Unicode character	national_text	PASS
+TiDb	long text LOB	long_text	PASS
+TiDb	enumeration	enumeration	PASS
+TiDb	set-valued enum	set_value	PASS
+TiDb	fixed binary	fixed_binary	PASS
+TiDb	varying binary	varying_binary	PASS
+TiDb	legacy long binary	legacy_binary	PASS
+TiDb	rowversion / timestamp token	rowversion	PASS
+TiDb	local-zone timestamp	local_timestamp	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 69 near "WITH LOCAL TIME ZONE)"
+TiDb	second-precision datetime	second_datetime	PASS
+TiDb	time with zone	time_zoned	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near "WITH TIME ZONE)"
+TiDb	year-only	year_only	PASS
+TiDb	year-month interval	year_month_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near "INTERVAL YEAR TO MONTH)"
+TiDb	generic interval	generic_interval	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near "INTERVAL)"
+TiDb	row identifier / ROWID	row_identifier	PASS
+TiDb	object identifier / OID	oid	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near "OID)"
+TiDb	transaction ID	transaction_id	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near "XID)"
+TiDb	WAL / log position	wal_position	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 61 near "PG_LSN)"
+TiDb	native binary JSON	binary_json	PASS
+TiDb	XML	xml	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near "XML)"
+TiDb	BSON	bson	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 59 near "BSON)"
+TiDb	variant / dynamic value	variant	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near "VARIANT)"
+TiDb	IP network / CIDR	cidr	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 59 near "CIDR)"
+TiDb	MAC address	mac_address	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near "MACADDR)"
+TiDb	point geometry	point	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 60 near "POINT)"
+TiDb	line / linestring geometry	linestring	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 65 near "LINESTRING)"
+TiDb	polygon geometry	polygon	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near "POLYGON)"
+TiDb	general geometry	geometry	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near "GEOMETRY)"
+TiDb	geography / geodetic	geography	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near "GEOGRAPHY)"
+TiDb	fixed-length array	fixed_array	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 68 near "ARRAY[10])"
+TiDb	list / multiset / set collection	list_collection	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 71 near "MULTISET)"
+TiDb	map / dictionary	map	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near "MAP(VARCHAR(10),INTEGER))"
+TiDb	range	range	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near "INT4RANGE)"
+TiDb	multirange	multirange	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 69 near "INT4MULTIRANGE)"
+TiDb	user-defined enum / domain	domain	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 61 near "CREATE TYPE)"
+TiDb	full-text search vector / query	full_text	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near "TSVECTOR)"
+TiDb	native point	native_point	UNSUPPORTED refused: no candidate was tried
+TiDb	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+TiDb	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+TiDb	vector embedding	vector	PASS
+TiDb	hierarchical path	hierarchy	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 66 near "HIERARCHYID)"
+TiDb	external-file reference	file_reference	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 60 near "BFILE)"
+TiDb	specialized security label	security_label	UNSUPPORTED refused: You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 71 near "IDSSECURITYLABEL)"

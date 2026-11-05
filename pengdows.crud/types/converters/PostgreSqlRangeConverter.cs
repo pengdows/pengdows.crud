@@ -217,58 +217,63 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
 
     public override bool TryConvertFromProvider(object value, SupportedDatabase provider, out Range<T> result)
     {
-        try
+        if (value is Range<T> existing)
         {
-            if (value is Range<T> existing)
-            {
-                result = existing;
-                return true;
-            }
-
-            // DRY-013: the one range grammar; blank or other text is no range.
-            if (value is string text)
-            {
-                return Range<T>.TryParseText(text, out result);
-            }
-
-            var type = value.GetType();
-            if (type.FullName?.StartsWith("NpgsqlTypes.NpgsqlRange", StringComparison.Ordinal) == true)
-            {
-                var accessors = AccessorsFor(type);
-                if (accessors.IsEmpty?.Invoke(value) is true)
-                {
-                    result = Range<T>.Empty;
-                    return true;
-                }
-
-                // Npgsql's element type can differ from the property's (daterange as NpgsqlRange<DateTime>,
-                // tstzrange as UTC NpgsqlRange<DateTime>), so such a bound is coerced rather than unboxed.
-                var lower = accessors.LowerInfinite?.Invoke(value) is true
-                    ? default
-                    : accessors.LowerTyped != null ? accessors.LowerTyped(value) : CoerceBound(accessors.LowerBoxed?.Invoke(value));
-                var upper = accessors.UpperInfinite?.Invoke(value) is true
-                    ? default
-                    : accessors.UpperTyped != null ? accessors.UpperTyped(value) : CoerceBound(accessors.UpperBoxed?.Invoke(value));
-                var lowerInclusive = accessors.LowerInclusive?.Invoke(value) ?? true;
-                var upperInclusive = accessors.UpperInclusive?.Invoke(value) ?? false;
-                result = new Range<T>(lower, upper, lowerInclusive, upperInclusive);
-                return true;
-            }
-
-            if (value is Tuple<T?, T?> tuple)
-            {
-                result = new Range<T>(tuple.Item1, tuple.Item2);
-                return true;
-            }
-
-            result = default!;
-            return false;
+            result = existing;
+            return true;
         }
-        catch
+
+        // DRY-013: the one range grammar; blank or other text is no range.
+        if (value is string text)
         {
-            result = default!;
-            return false;
+            // Blank text is no range (DRY-013): a plain false. Other text that does not parse is malformed data and throws
+            // without echoing the value.
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                result = default!;
+                return false;
+            }
+
+            if (!Range<T>.TryParseText(text, out result))
+            {
+                throw new FormatException($"Not a valid range for {typeof(T).Name}.");
+            }
+
+            return true;
         }
+
+        var type = value.GetType();
+        if (type.FullName?.StartsWith("NpgsqlTypes.NpgsqlRange", StringComparison.Ordinal) == true)
+        {
+            var accessors = AccessorsFor(type);
+            if (accessors.IsEmpty?.Invoke(value) is true)
+            {
+                result = Range<T>.Empty;
+                return true;
+            }
+
+            // Npgsql's element type can differ from the property's (daterange as NpgsqlRange<DateTime>,
+            // tstzrange as UTC NpgsqlRange<DateTime>), so such a bound is coerced rather than unboxed.
+            var lower = accessors.LowerInfinite?.Invoke(value) is true
+                ? default
+                : accessors.LowerTyped != null ? accessors.LowerTyped(value) : CoerceBound(accessors.LowerBoxed?.Invoke(value));
+            var upper = accessors.UpperInfinite?.Invoke(value) is true
+                ? default
+                : accessors.UpperTyped != null ? accessors.UpperTyped(value) : CoerceBound(accessors.UpperBoxed?.Invoke(value));
+            var lowerInclusive = accessors.LowerInclusive?.Invoke(value) ?? true;
+            var upperInclusive = accessors.UpperInclusive?.Invoke(value) ?? false;
+            result = new Range<T>(lower, upper, lowerInclusive, upperInclusive);
+            return true;
+        }
+
+        if (value is Tuple<T?, T?> tuple)
+        {
+            result = new Range<T>(tuple.Item1, tuple.Item2);
+            return true;
+        }
+
+        result = default!;
+        return false;
     }
 
     private static T? CoerceBound(object? bound)

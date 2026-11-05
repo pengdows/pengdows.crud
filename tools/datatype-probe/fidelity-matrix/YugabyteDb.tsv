@@ -1,0 +1,75 @@
+YugabyteDb	signed 8-bit	signed_8_bit	PASS
+YugabyteDb	signed 16-bit	signed_16_bit	PASS
+YugabyteDb	signed 32-bit	signed_32_bit	PASS
+YugabyteDb	signed 64-bit	signed_64_bit	PASS
+YugabyteDb	signed 128-bit	signed_128_bit	PASS
+YugabyteDb	unsigned 8-bit	unsigned_8_bit	PASS
+YugabyteDb	unsigned 16-bit	unsigned_16_bit	PASS
+YugabyteDb	unsigned 32-bit	unsigned_32_bit	PASS
+YugabyteDb	unsigned 64-bit	unsigned_64_bit	PASS
+YugabyteDb	arbitrary-size integer	arbitrary_integer	PASS
+YugabyteDb	binary float32	binary_float32	PASS
+YugabyteDb	binary float64	binary_float64	PASS
+YugabyteDb	fixed decimal	fixed_decimal	PASS
+YugabyteDb	boolean	boolean	PASS
+YugabyteDb	bit / bitstring	bit_string	PASS
+YugabyteDb	varying character	varying_character	PASS
+YugabyteDb	unbounded text	unbounded_text	PASS
+YugabyteDb	UUID / GUID	uuid	PASS
+YugabyteDb	calendar date	calendar_date	PASS
+YugabyteDb	time without zone	time_of_day	PASS
+YugabyteDb	time without zone	time_span	PASS
+YugabyteDb	day-time interval	day_time_interval	PASS
+YugabyteDb	timestamp without zone	timestamp	PASS
+YugabyteDb	timestamp with zone	timestamp_with_zone	PASS
+YugabyteDb	binary LOB	binary	PASS
+YugabyteDb	JSON text / JSON value	json	PASS
+YugabyteDb	IP address	ip_address	PASS
+YugabyteDb	SQL array	int_array	PASS
+YugabyteDb	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: 42704: type "uhugeint" does not exist POSITION: 55
+YugabyteDb	decimal floating point	decimal_float	UNSUPPORTED refused: 42704: type "decfloat" does not exist POSITION: 55
+YugabyteDb	money / currency	money	PASS
+YugabyteDb	fixed character	fixed_character	PASS
+YugabyteDb	national / Unicode character	national_text	PASS
+YugabyteDb	long text LOB	long_text	PASS
+YugabyteDb	enumeration	enumeration	UNSUPPORTED refused: 42704: type "enum" does not exist POSITION: 56
+YugabyteDb	set-valued enum	set_value	UNSUPPORTED refused: 42704: type "set" does not exist POSITION: 56
+YugabyteDb	fixed binary	fixed_binary	UNSUPPORTED refused: 42704: type "binary" does not exist POSITION: 56
+YugabyteDb	varying binary	varying_binary	PASS
+YugabyteDb	legacy long binary	legacy_binary	UNSUPPORTED refused: 42601: syntax error at or near "RAW" POSITION: 61
+YugabyteDb	rowversion / timestamp token	rowversion	PASS
+YugabyteDb	local-zone timestamp	local_timestamp	UNSUPPORTED refused: 42601: syntax error at or near "WITH" POSITION: 66
+YugabyteDb	second-precision datetime	second_datetime	PASS
+YugabyteDb	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+YugabyteDb	year-only	year_only	PASS
+YugabyteDb	year-month interval	year_month_interval	PASS
+YugabyteDb	generic interval	generic_interval	PASS
+YugabyteDb	row identifier / ROWID	row_identifier	PASS
+YugabyteDb	object identifier / OID	oid	PASS
+YugabyteDb	transaction ID	transaction_id	UNSUPPORTED refused: upstream: YugabyteDB's xid8 adds high bits on write: 4294967296 (0x100000000) reads back as 18700287606784 (0x110200000000), so no raw integer round-trips
+YugabyteDb	WAL / log position	wal_position	PASS
+YugabyteDb	native binary JSON	binary_json	PASS
+YugabyteDb	XML	xml	UNSUPPORTED refused: server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application
+YugabyteDb	BSON	bson	PASS
+YugabyteDb	variant / dynamic value	variant	UNSUPPORTED refused: 42704: type "variant" does not exist POSITION: 56
+YugabyteDb	IP network / CIDR	cidr	PASS
+YugabyteDb	MAC address	mac_address	PASS
+YugabyteDb	point geometry	point	UNSUPPORTED refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row)
+YugabyteDb	line / linestring geometry	linestring	UNSUPPORTED refused: 42704: type "linestring" does not exist POSITION: 56
+YugabyteDb	polygon geometry	polygon	UNSUPPORTED refused: by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPolygon (the native polygon row)
+YugabyteDb	general geometry	geometry	UNSUPPORTED refused: 42704: type "geometry" does not exist POSITION: 56
+YugabyteDb	geography / geodetic	geography	UNSUPPORTED refused: 42704: type "geography" does not exist POSITION: 56
+YugabyteDb	fixed-length array	fixed_array	PASS
+YugabyteDb	list / multiset / set collection	list_collection	UNSUPPORTED refused: 42601: syntax error at or near "MULTISET" POSITION: 64
+YugabyteDb	map / dictionary	map	UNSUPPORTED refused: 42601: syntax error at or near "," POSITION: 71
+YugabyteDb	range	range	PASS
+YugabyteDb	multirange	multirange	PASS
+YugabyteDb	user-defined enum / domain	domain	UNSUPPORTED refused: 42601: syntax error at or near "CREATE" POSITION: 56
+YugabyteDb	full-text search vector / query	full_text	PASS
+YugabyteDb	native point	native_point	PASS
+YugabyteDb	native polygon	native_polygon	PASS
+YugabyteDb	32-bit transaction ID	xid32	PASS
+YugabyteDb	vector embedding	vector	UNSUPPORTED refused: 42704: type "vector" does not exist POSITION: 56
+YugabyteDb	hierarchical path	hierarchy	UNSUPPORTED refused: 42704: type "hierarchyid" does not exist POSITION: 56
+YugabyteDb	external-file reference	file_reference	UNSUPPORTED refused: 42704: type "bfile" does not exist POSITION: 56
+YugabyteDb	specialized security label	security_label	UNSUPPORTED refused: 42704: type "idssecuritylabel" does not exist POSITION: 56

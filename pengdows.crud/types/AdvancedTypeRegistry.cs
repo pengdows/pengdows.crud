@@ -30,6 +30,7 @@ using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 using pengdows.crud.types.converters;
 using pengdows.crud.types.coercion;
+using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.types;
 
@@ -141,6 +142,14 @@ internal class AdvancedTypeRegistry
         var type = typeof(T);
         _converters[type] = converter;
 
+        // A converter-only type reaches the registry too: its converted value is bound by the fallback when no mapping
+        // exists for the provider. The dialect's parameter path asks IsMappedType before it calls the registry. A spatial
+        // value stays off that path: the fallback never binds it (see ConverterOutputMappingFor).
+        if (!typeof(SpatialValue).IsAssignableFrom(type))
+        {
+            _mappedTypes[type] = 0;
+        }
+
         // Bump converter version — cached entries with old version will be rebuilt on next access
         Interlocked.Increment(ref _converterVersion);
 
@@ -175,6 +184,44 @@ internal class AdvancedTypeRegistry
     /// Configure a DbParameter with provider-specific type information.
     /// High-performance version with caching and version-stamped converter tracking.
     /// </summary>
+    // Binds a converter's output by its shape: text as a string, bytes as binary, a provider value as it is, and a value
+    // object as its canonical text. On the Npgsql family a value object is the driver's own (Npgsql maps an address to
+    // inet), so it is passed as it is there; text would not bind to a typed column.
+    private static ProviderTypeMapping ConverterOutputMappingFor(SupportedDatabase provider)
+    {
+        var textForValueObjects = !DatabaseTraits.For(provider).BindsNpgsqlValueTypes;
+        return new ProviderTypeMapping
+        {
+            DbType = DbType.Object,
+            ConfigureParameter = (param, value) =>
+            {
+                switch (value)
+                {
+                    case null:
+                        break;
+                    case string:
+                        param.DbType = DbType.String;
+                        break;
+                    case byte[]:
+                        param.DbType = DbType.Binary;
+                        break;
+                    case IConvertible or Guid or DateTimeOffset or TimeSpan:
+                        break; // a provider value the database binds as it is
+                    default:
+                        if (textForValueObjects && value.GetType().Namespace == "pengdows.crud.types.valueobjects")
+                        {
+                            // A library value object the converter left as is: its canonical text (Cidr, MacAddress, ...).
+                            // Any other object has no text of its own (a BitArray's ToString is its type name), so it is
+                            // left for the provider to refuse.
+                            param.DbType = DbType.String;
+                            param.Value = value.ToString();
+                        }
+                        break;
+                }
+            }
+        };
+    }
+
     public bool TryConfigureParameter(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider)
     {
         // Unwrap nullable to ensure DateTime? matches DateTime mapping, etc.
@@ -189,8 +236,16 @@ internal class AdvancedTypeRegistry
             // Build and cache the configuration
             if (!_mappings.TryGetValue(key, out var foundMapping))
             {
-                _parameterCache[key] = null; // Cache negative result
-                return false;
+                // A type with a converter but no mapping for this provider is bound as the converter's output: text or
+                // binary. Without a converter there is nothing to bind it as, so the value goes to the provider raw. A
+                // spatial value is excluded: its binary form drops the SRID, so it would be stored silently wrong.
+                if (!_converters.ContainsKey(clrType) || typeof(SpatialValue).IsAssignableFrom(clrType))
+                {
+                    _parameterCache[key] = null; // Cache negative result
+                    return false;
+                }
+
+                foundMapping = ConverterOutputMappingFor(provider);
             }
 
             _converters.TryGetValue(clrType, out var initialConverter);
@@ -278,6 +333,11 @@ internal class AdvancedTypeRegistry
 
     private void RegisterDefaultConverters()
     {
+        // Network address converters
+        RegisterConverter(new IPAddressConverter());
+        RegisterConverter(new PostgreSqlPointConverter());
+        RegisterConverter(new PostgreSqlPolygonConverter());
+
         // Spatial converters
         RegisterConverter(new GeometryConverter());
         RegisterConverter(new GeographyConverter());
@@ -319,7 +379,7 @@ internal class AdvancedTypeRegistry
             return;
         }
 
-        @internal.ProviderPropertySetter.Set(parameter, propertyName, enumName);
+        @internal.ProviderPropertySetter.TrySet(parameter, propertyName, enumName);
     }
 
     internal static void SetEnumProperty(DbParameter parameter, string propertyName, params string[] enumNames)

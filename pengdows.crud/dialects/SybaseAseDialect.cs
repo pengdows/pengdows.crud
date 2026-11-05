@@ -38,6 +38,16 @@ namespace pengdows.crud.dialects;
 /// </summary>
 internal class SybaseAseDialect : SqlDialect
 {
+    // This provider has no 128-bit or arbitrary-size integer parameter, and its column is an exact decimal type: the
+    // decimal text is bound and stored without loss.
+    internal override bool BindsWideIntegersAsText => true;
+
+    // AseClient cannot return a NUMERIC wider than decimal as a number: the digits are selected as text.
+    internal override string WideIntegerTextCast(string columnReference) => $"CONVERT(VARCHAR(100), {columnReference})";
+
+    // The text is converted to the column's NUMERIC in the statement: Sybase refuses the implicit conversion.
+    internal override string? WideIntegerArgument(string parameterMarker) => $"CONVERT(NUMERIC(38,0), {parameterMarker})";
+
     // TYPE-002: AseClient writes a Guid to BINARY(16) in .NET's mixed-endian ToByteArray order.
     internal override bool StoresGuidBytesBigEndian => false;
 

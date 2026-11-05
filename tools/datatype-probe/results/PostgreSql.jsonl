@@ -1,0 +1,355 @@
+{"db":"PostgreSql","type":"signed 8-bit","decl":"TINYINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022tinyint\u0022 does not exist  POSITION: 54"}
+{"db":"PostgreSql","type":"signed 8-bit","decl":"INT1","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022int1\u0022 does not exist  POSITION: 54"}
+{"db":"PostgreSql","type":"signed 8-bit","decl":"NUMBER(3,0)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022number\u0022 does not exist  POSITION: 54"}
+{"db":"PostgreSql","type":"signed 8-bit","decl":"SMALLINT","accepted":true,"providerType":"smallint","clrType":"System.Int16"}
+{"db":"PostgreSql","type":"signed 8-bit","decl":"INT2","accepted":true,"providerType":"smallint","clrType":"System.Int16"}
+{"db":"PostgreSql","type":"signed 8-bit","decl":"INTEGER storage","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022)\u0022  POSITION: 69"}
+{"db":"PostgreSql","type":"signed 8-bit","decl":"TINYINT is unsigned; use SMALLINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022is\u0022  POSITION: 62"}
+{"db":"PostgreSql","type":"signed 16-bit","decl":"SMALLINT","accepted":true,"providerType":"smallint","clrType":"System.Int16"}
+{"db":"PostgreSql","type":"signed 16-bit","decl":"INT2","accepted":true,"providerType":"smallint","clrType":"System.Int16"}
+{"db":"PostgreSql","type":"signed 16-bit","decl":"NUMBER(5,0)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022number\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"signed 16-bit","decl":"INTEGER storage","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022)\u0022  POSITION: 70"}
+{"db":"PostgreSql","type":"signed 16-bit","decl":"INT8","accepted":true,"providerType":"bigint","clrType":"System.Int64"}
+{"db":"PostgreSql","type":"signed 32-bit","decl":"INTEGER","accepted":true,"providerType":"integer","clrType":"System.Int32"}
+{"db":"PostgreSql","type":"signed 32-bit","decl":"INT","accepted":true,"providerType":"integer","clrType":"System.Int32"}
+{"db":"PostgreSql","type":"signed 32-bit","decl":"INT4","accepted":true,"providerType":"integer","clrType":"System.Int32"}
+{"db":"PostgreSql","type":"signed 32-bit","decl":"NUMBER(10,0)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022number\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"signed 32-bit","decl":"INT4 (alias subject to width behavior)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022subject\u0022  POSITION: 67"}
+{"db":"PostgreSql","type":"signed 32-bit","decl":"INTEGER storage","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022)\u0022  POSITION: 70"}
+{"db":"PostgreSql","type":"signed 32-bit","decl":"INT8","accepted":true,"providerType":"bigint","clrType":"System.Int64"}
+{"db":"PostgreSql","type":"signed 64-bit","decl":"BIGINT","accepted":true,"providerType":"bigint","clrType":"System.Int64"}
+{"db":"PostgreSql","type":"signed 64-bit","decl":"INT8","accepted":true,"providerType":"bigint","clrType":"System.Int64"}
+{"db":"PostgreSql","type":"signed 64-bit","decl":"INT64","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022int64\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"signed 64-bit","decl":"NUMBER(19,0)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022number\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"signed 64-bit","decl":"INTEGER storage","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022)\u0022  POSITION: 70"}
+{"db":"PostgreSql","type":"signed 128-bit","decl":"HUGEINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022hugeint\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"signed 128-bit","decl":"INT128","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022int128\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"signed 128-bit","decl":"NUMBER(38,0)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022number\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"signed 128-bit","decl":"NUMERIC(38,0)","accepted":true,"providerType":"numeric(38)","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"unsigned 8-bit","decl":"TINYINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022UNSIGNED\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"unsigned 8-bit","decl":"UTINYINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022utinyint\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 8-bit","decl":"UINT1","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uint1\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 8-bit","decl":"BYTE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022byte\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 8-bit","decl":"TINYINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022tinyint\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 16-bit","decl":"SMALLINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022UNSIGNED\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"unsigned 16-bit","decl":"USMALLINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022usmallint\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 16-bit","decl":"UINT2","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uint2\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 16-bit","decl":"UINT16","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uint16\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 16-bit","decl":"UNSIGNED SMALLINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022SMALLINT\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"unsigned 32-bit","decl":"INT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022UNSIGNED\u0022  POSITION: 59"}
+{"db":"PostgreSql","type":"unsigned 32-bit","decl":"INTEGER UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022UNSIGNED\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"unsigned 32-bit","decl":"UINTEGER","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uinteger\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 32-bit","decl":"UINT4","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uint4\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 32-bit","decl":"UINT32","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uint32\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 32-bit","decl":"UNSIGNED INT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022INT\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"unsigned 64-bit","decl":"BIGINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022UNSIGNED\u0022  POSITION: 62"}
+{"db":"PostgreSql","type":"unsigned 64-bit","decl":"UBIGINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022ubigint\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 64-bit","decl":"UINT8","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uint8\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 64-bit","decl":"UINT64","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uint64\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 64-bit","decl":"UNSIGNED BIGINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022BIGINT\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"unsigned 128-bit","decl":"UHUGEINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uhugeint\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"unsigned 128-bit","decl":"UINT128","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uint128\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"arbitrary-size integer","decl":"NUMERIC(1000,0)","accepted":true,"providerType":"numeric(1000)","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"arbitrary-size integer","decl":"DECIMAL(65,0)","accepted":true,"providerType":"numeric(65)","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"arbitrary-size integer","decl":"NUMBER","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022number\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"arbitrary-size integer","decl":"VARINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022varint\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"arbitrary-size integer","decl":"BIGNUMERIC","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022bignumeric\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"arbitrary-size integer","decl":"BIGNUM","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022bignum\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"arbitrary-size integer","decl":"NUMERIC(38,0)","accepted":true,"providerType":"numeric(38)","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"arbitrary-size integer","decl":"DECIMAL(38,0)","accepted":true,"providerType":"numeric(38)","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"INTEGER GENERATED BY DEFAULT AS IDENTITY","accepted":true,"providerType":"integer","clrType":"System.Int32"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"INT AUTO_INCREMENT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022AUTO_INCREMENT\u0022  POSITION: 59"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"SERIAL","accepted":true,"providerType":"integer","clrType":"System.Int32"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"INTEGER IDENTITY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022IDENTITY\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"IDENTITY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022identity\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"GENERATED AS IDENTITY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022AS\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"GENERATED BY DEFAULT AS IDENTITY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022BY\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"AUTO_INCREMENT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022auto_increment\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"INTEGER PRIMARY KEY [AUTOINCREMENT]","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022[\u0022  POSITION: 75"}
+{"db":"PostgreSql","type":"auto-increment integer","decl":"SEQUENCE \u002B DEFAULT nextval","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022\u002B\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"fixed decimal","decl":"DECIMAL(18,4)","accepted":true,"providerType":"numeric(18, 4)","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"fixed decimal","decl":"NUMERIC(18,4)","accepted":true,"providerType":"numeric(18, 4)","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"fixed decimal","decl":"NUMERIC affinity","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022affinity\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"fixed decimal","decl":"NUMERIC","accepted":true,"providerType":"numeric","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"decimal floating point","decl":"DECFLOAT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022decfloat\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"decimal floating point","decl":"DECFLOAT(34)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022decfloat\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"decimal floating point","decl":"SMALLDECIMAL","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022smalldecimal\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"binary float32","decl":"REAL","accepted":true,"providerType":"real","clrType":"System.Single"}
+{"db":"PostgreSql","type":"binary float32","decl":"FLOAT4","accepted":true,"providerType":"real","clrType":"System.Single"}
+{"db":"PostgreSql","type":"binary float32","decl":"BINARY_FLOAT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022binary_float\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"binary float32","decl":"FLOAT(24)","accepted":true,"providerType":"real","clrType":"System.Single"}
+{"db":"PostgreSql","type":"binary float32","decl":"SINGLE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022single\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"binary float32","decl":"FLOAT","accepted":true,"providerType":"double precision","clrType":"System.Double"}
+{"db":"PostgreSql","type":"binary float32","decl":"SMALLFLOAT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022smallfloat\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"binary float64","decl":"DOUBLE PRECISION","accepted":true,"providerType":"double precision","clrType":"System.Double"}
+{"db":"PostgreSql","type":"binary float64","decl":"DOUBLE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022double\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"binary float64","decl":"FLOAT8","accepted":true,"providerType":"double precision","clrType":"System.Double"}
+{"db":"PostgreSql","type":"binary float64","decl":"BINARY_DOUBLE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022binary_double\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"binary float64","decl":"FLOAT","accepted":true,"providerType":"double precision","clrType":"System.Double"}
+{"db":"PostgreSql","type":"money / currency","decl":"MONEY","accepted":true,"providerType":"money","clrType":"System.Decimal"}
+{"db":"PostgreSql","type":"money / currency","decl":"SMALLMONEY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022smallmoney\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"money / currency","decl":"CURRENCY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022currency\u0022 does not exist  POSITION: 55"}
+{"db":"PostgreSql","type":"bit / bitstring","decl":"BIT(8)","accepted":true,"providerType":"bit(8)","clrType":"System.Collections.BitArray"}
+{"db":"PostgreSql","type":"bit / bitstring","decl":"BIT VARYING(8)","accepted":true,"providerType":"bit varying(8)","clrType":"System.Collections.BitArray"}
+{"db":"PostgreSql","type":"bit / bitstring","decl":"VARBIT(8)","accepted":true,"providerType":"bit varying(8)","clrType":"System.Collections.BitArray"}
+{"db":"PostgreSql","type":"bit / bitstring","decl":"BIT","accepted":true,"providerType":"bit(1)","clrType":"System.Boolean"}
+{"db":"PostgreSql","type":"bit / bitstring","decl":"RAW(n) [bitstring substitute]","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022bitstring\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"bit / bitstring","decl":"BINARY(n) [bitstring substitute]","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022bitstring\u0022  POSITION: 66"}
+{"db":"PostgreSql","type":"bit / bitstring","decl":"BIT(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 22P02: invalid input syntax for type integer: \u0022n\u0022  POSITION: 55"}
+{"db":"PostgreSql","type":"boolean","decl":"BOOLEAN","accepted":true,"providerType":"boolean","clrType":"System.Boolean"}
+{"db":"PostgreSql","type":"boolean","decl":"BOOL","accepted":true,"providerType":"boolean","clrType":"System.Boolean"}
+{"db":"PostgreSql","type":"boolean","decl":"BIT","accepted":true,"providerType":"bit(1)","clrType":"System.Boolean"}
+{"db":"PostgreSql","type":"boolean","decl":"TINYINT(1)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022tinyint\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"fixed character","decl":"CHAR(10)","accepted":true,"providerType":"character(10)","clrType":"System.String"}
+{"db":"PostgreSql","type":"fixed character","decl":"CHARACTER(10)","accepted":true,"providerType":"character(10)","clrType":"System.String"}
+{"db":"PostgreSql","type":"fixed character","decl":"NCHAR(10)","accepted":true,"providerType":"character(10)","clrType":"System.String"}
+{"db":"PostgreSql","type":"fixed character","decl":"CHAR(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022n\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"fixed character","decl":"TEXT affinity","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022affinity\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"fixed character","decl":"CHAR(n) -\u003E VARCHAR","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022n\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"fixed character","decl":"VARCHAR(n) [no fixed CHAR semantics]","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022n\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"varying character","decl":"VARCHAR(100)","accepted":true,"providerType":"character varying(100)","clrType":"System.String"}
+{"db":"PostgreSql","type":"varying character","decl":"CHARACTER VARYING(100)","accepted":true,"providerType":"character varying(100)","clrType":"System.String"}
+{"db":"PostgreSql","type":"varying character","decl":"VARCHAR2(100)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022varchar2\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying character","decl":"NVARCHAR(100)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022nvarchar\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying character","decl":"VARCHAR(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022n\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"varying character","decl":"VARCHAR2(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022varchar2\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying character","decl":"TEXT affinity","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022affinity\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"varying character","decl":"VARCHAR","accepted":true,"providerType":"character varying","clrType":"System.String"}
+{"db":"PostgreSql","type":"unbounded text","decl":"CLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022clob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"unbounded text","decl":"TEXT","accepted":true,"providerType":"text","clrType":"System.String"}
+{"db":"PostgreSql","type":"unbounded text","decl":"STRING","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022string\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"unbounded text","decl":"VARCHAR(MAX)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022MAX\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"unbounded text","decl":"LONGVARCHAR","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022longvarchar\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"unbounded text","decl":"BLOB SUB_TYPE TEXT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022SUB_TYPE\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"unbounded text","decl":"LONGTEXT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022longtext\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"unbounded text","decl":"VARCHAR","accepted":true,"providerType":"character varying","clrType":"System.String"}
+{"db":"PostgreSql","type":"unbounded text","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022nclob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"national / Unicode character","decl":"NVARCHAR(100)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022nvarchar\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"national / Unicode character","decl":"NCHAR(10)","accepted":true,"providerType":"character(10)","clrType":"System.String"}
+{"db":"PostgreSql","type":"national / Unicode character","decl":"NVARCHAR2(100)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022nvarchar2\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"national / Unicode character","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022nclob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"national / Unicode character","decl":"NATIONAL CHAR","accepted":true,"providerType":"character","clrType":"System.String"}
+{"db":"PostgreSql","type":"national / Unicode character","decl":"NVARCHAR","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022nvarchar\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"national / Unicode character","decl":"Unicode text fields","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022text\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"long text LOB","decl":"CLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022clob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"long text LOB","decl":"TEXT","accepted":true,"providerType":"text","clrType":"System.String"}
+{"db":"PostgreSql","type":"long text LOB","decl":"NTEXT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022ntext\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"long text LOB","decl":"MEDIUMTEXT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022mediumtext\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"long text LOB","decl":"LONGTEXT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022longtext\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"long text LOB","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022nclob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"long text LOB","decl":"VARCHAR(MAX)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022MAX\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"long text LOB","decl":"BLOB SUB_TYPE TEXT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022SUB_TYPE\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"long text LOB","decl":"VARCHAR","accepted":true,"providerType":"character varying","clrType":"System.String"}
+{"db":"PostgreSql","type":"enumeration","decl":"ENUM(\u0027a\u0027,\u0027b\u0027)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022enum\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"enumeration","decl":"ENUM","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022enum\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"set-valued enum","decl":"SET(\u0027a\u0027,\u0027b\u0027)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022set\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"set-valued enum","decl":"SET","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022set\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"fixed binary","decl":"BINARY(16)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022binary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"fixed binary","decl":"CHAR(16) FOR BIT DATA","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022FOR\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"fixed binary","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022raw\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"fixed binary","decl":"BYTEA (no fixed-length binary)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022fixed\u0022  POSITION: 66"}
+{"db":"PostgreSql","type":"fixed binary","decl":"BINARY(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022binary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"fixed binary","decl":"RAW(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022raw\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"fixed binary","decl":"BLOB (no fixed semantics)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022fixed\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"fixed binary","decl":"VARBINARY(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022varbinary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"fixed binary","decl":"BLOB SUB_TYPE 0","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022SUB_TYPE\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"varying binary","decl":"VARBINARY(16)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022varbinary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying binary","decl":"BINARY VARYING(16)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022VARYING\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"varying binary","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022raw\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying binary","decl":"BYTEA","accepted":true,"providerType":"bytea","clrType":"System.Byte[]"}
+{"db":"PostgreSql","type":"varying binary","decl":"VARBINARY(MAX)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022varbinary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying binary","decl":"VARBINARY(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022varbinary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying binary","decl":"RAW(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022raw\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying binary","decl":"BLOB storage","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022)\u0022  POSITION: 68"}
+{"db":"PostgreSql","type":"varying binary","decl":"BLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022blob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"varying binary","decl":"BLOB SUB_TYPE 0","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022SUB_TYPE\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"binary LOB","decl":"BLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022blob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"binary LOB","decl":"BYTEA","accepted":true,"providerType":"bytea","clrType":"System.Byte[]"}
+{"db":"PostgreSql","type":"binary LOB","decl":"IMAGE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022image\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"binary LOB","decl":"LONGBLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022longblob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"binary LOB","decl":"VARBINARY(MAX)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022varbinary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"binary LOB","decl":"BINARY LARGE OBJECT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022LARGE\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"binary LOB","decl":"BINARY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022binary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"legacy long binary","decl":"LONG RAW","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022RAW\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"legacy long binary","decl":"IMAGE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022image\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"legacy long binary","decl":"TINYBLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022tinyblob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"legacy long binary","decl":"MEDIUMBLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022mediumblob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"legacy long binary","decl":"LONGBLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022longblob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"legacy long binary","decl":"BYTE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022byte\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"rowversion / timestamp token","decl":"ROWVERSION","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022rowversion\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"rowversion / timestamp token","decl":"TIMESTAMP","accepted":true,"providerType":"timestamp without time zone","clrType":"System.DateTime"}
+{"db":"PostgreSql","type":"rowversion / timestamp token","decl":"no direct SQL rowversion type","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022direct\u0022  POSITION: 59"}
+{"db":"PostgreSql","type":"calendar date","decl":"DATE","accepted":true,"providerType":"date","clrType":"System.DateTime"}
+{"db":"PostgreSql","type":"time without zone","decl":"TIME(6)","accepted":true,"providerType":"time(6) without time zone","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"time without zone","decl":"TIME","accepted":true,"providerType":"time without time zone","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"time with zone","decl":"TIME WITH TIME ZONE","accepted":true,"providerType":"time with time zone","clrType":"System.DateTimeOffset"}
+{"db":"PostgreSql","type":"time with zone","decl":"TIMETZ","accepted":true,"providerType":"time with time zone","clrType":"System.DateTimeOffset"}
+{"db":"PostgreSql","type":"time with zone","decl":"TIME(6) WITH TIME ZONE","accepted":true,"providerType":"time(6) with time zone","clrType":"System.DateTimeOffset"}
+{"db":"PostgreSql","type":"time with zone","decl":"TIME (no zone; no direct match)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022no\u0022  POSITION: 62"}
+{"db":"PostgreSql","type":"timestamp without zone","decl":"TIMESTAMP(6)","accepted":true,"providerType":"timestamp(6) without time zone","clrType":"System.DateTime"}
+{"db":"PostgreSql","type":"timestamp without zone","decl":"DATETIME2(6)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022datetime2\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"timestamp without zone","decl":"DATETIME","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022datetime\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"timestamp without zone","decl":"DATETIME(6)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022datetime\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"timestamp without zone","decl":"TIMESTAMP","accepted":true,"providerType":"timestamp without time zone","clrType":"System.DateTime"}
+{"db":"PostgreSql","type":"timestamp without zone","decl":"DATETIME2","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022datetime2\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"timestamp without zone","decl":"TIMESTAMP_NTZ","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022timestamp_ntz\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"timestamp without zone","decl":"DATETIME YEAR TO FRACTION","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022YEAR\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"timestamp with zone","decl":"TIMESTAMP WITH TIME ZONE","accepted":true,"providerType":"timestamp with time zone","clrType":"System.DateTime"}
+{"db":"PostgreSql","type":"timestamp with zone","decl":"TIMESTAMPTZ","accepted":true,"providerType":"timestamp with time zone","clrType":"System.DateTime"}
+{"db":"PostgreSql","type":"timestamp with zone","decl":"DATETIMEOFFSET","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022datetimeoffset\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"timestamp with zone","decl":"TIMESTAMP(6) WITH TIME ZONE","accepted":true,"providerType":"timestamp(6) with time zone","clrType":"System.DateTime"}
+{"db":"PostgreSql","type":"timestamp with zone","decl":"TIMESTAMP_TZ","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022timestamp_tz\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"local-zone timestamp","decl":"TIMESTAMP WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022WITH\u0022  POSITION: 66"}
+{"db":"PostgreSql","type":"local-zone timestamp","decl":"TIMESTAMP(6) WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022WITH\u0022  POSITION: 69"}
+{"db":"PostgreSql","type":"local-zone timestamp","decl":"TIMESTAMP_LTZ","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022timestamp_ltz\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"second-precision datetime","decl":"DATETIME(0)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022datetime\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"second-precision datetime","decl":"SMALLDATETIME","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022smalldatetime\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"second-precision datetime","decl":"DATETIME","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022datetime\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"second-precision datetime","decl":"DATE","accepted":true,"providerType":"date","clrType":"System.DateTime"}
+{"db":"PostgreSql","type":"second-precision datetime","decl":"SECONDDATE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022seconddate\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"year-only","decl":"YEAR","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022year\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"year-only","decl":"SMALLINT","accepted":true,"providerType":"smallint","clrType":"System.Int16"}
+{"db":"PostgreSql","type":"year-only","decl":"DATETIME YEAR TO YEAR","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022YEAR\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"year-month interval","decl":"INTERVAL YEAR TO MONTH","accepted":true,"providerType":"interval(65535)","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"year-month interval","decl":"INTERVAL YEAR(4) TO MONTH","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022(\u0022  POSITION: 69"}
+{"db":"PostgreSql","type":"year-month interval","decl":"INTERVAL","accepted":true,"providerType":"interval","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"day-time interval","decl":"INTERVAL DAY TO SECOND(6)","accepted":true,"providerType":"interval(6)","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"day-time interval","decl":"INTERVAL DAY(9) TO SECOND(6)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022(\u0022  POSITION: 68"}
+{"db":"PostgreSql","type":"day-time interval","decl":"INTERVAL DAY TO SECOND","accepted":true,"providerType":"interval(65535)","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"day-time interval","decl":"INTERVAL","accepted":true,"providerType":"interval","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"day-time interval","decl":"INTERVAL DAY TO FRACTION","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022FRACTION\u0022  POSITION: 72"}
+{"db":"PostgreSql","type":"generic interval","decl":"INTERVAL","accepted":true,"providerType":"interval","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"generic interval","decl":"INTERVAL(6)","accepted":true,"providerType":"interval(6)","clrType":"System.TimeSpan"}
+{"db":"PostgreSql","type":"generic interval","decl":"INTERVAL (query-only)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022query\u0022  POSITION: 66"}
+{"db":"PostgreSql","type":"UUID / GUID","decl":"UUID","accepted":true,"providerType":"uuid","clrType":"System.Guid"}
+{"db":"PostgreSql","type":"UUID / GUID","decl":"UNIQUEIDENTIFIER","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022uniqueidentifier\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"UUID / GUID","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022raw\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"UUID / GUID","decl":"CHAR(36)","accepted":true,"providerType":"character(36)","clrType":"System.String"}
+{"db":"PostgreSql","type":"UUID / GUID","decl":"BINARY(16)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022binary\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"row identifier / ROWID","decl":"ROWID","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022rowid\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"row identifier / ROWID","decl":"UROWID","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022urowid\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"row identifier / ROWID","decl":"CHAR(18)","accepted":true,"providerType":"character(18)","clrType":"System.String"}
+{"db":"PostgreSql","type":"object identifier / OID","decl":"OID","accepted":true,"providerType":"oid","clrType":"System.UInt32"}
+{"db":"PostgreSql","type":"object identifier / OID","decl":"REGCLASS","accepted":true,"providerType":"regclass","clrType":"System.Object"}
+{"db":"PostgreSql","type":"transaction ID","decl":"XID","accepted":true,"providerType":"xid","clrType":"System.UInt32"}
+{"db":"PostgreSql","type":"transaction ID","decl":"XID8","accepted":true,"providerType":"xid8","clrType":"System.UInt64"}
+{"db":"PostgreSql","type":"WAL / log position","decl":"PG_LSN","accepted":true,"providerType":"pg_lsn","clrType":"NpgsqlTypes.NpgsqlLogSequenceNumber"}
+{"db":"PostgreSql","type":"JSON text / JSON value","decl":"JSON","accepted":true,"providerType":"json","clrType":"System.String"}
+{"db":"PostgreSql","type":"JSON text / JSON value","decl":"JSONB","accepted":true,"providerType":"jsonb","clrType":"System.String"}
+{"db":"PostgreSql","type":"JSON text / JSON value","decl":"CLOB CHECK (c IS JSON)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022clob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"JSON text / JSON value","decl":"JSON -\u003E JSONB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022-\u003E\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"JSON text / JSON value","decl":"JSON -\u003E LONGTEXT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022-\u003E\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"JSON text / JSON value","decl":"TEXT \u002B JSON functions","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022\u002B\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"JSON text / JSON value","decl":"JSON extension","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022extension\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"native binary JSON","decl":"JSONB","accepted":true,"providerType":"jsonb","clrType":"System.String"}
+{"db":"PostgreSql","type":"native binary JSON","decl":"BSON","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022bson\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"native binary JSON","decl":"JSON (binary storage)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022storage\u0022  POSITION: 69"}
+{"db":"PostgreSql","type":"native binary JSON","decl":"VARIANT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022variant\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"native binary JSON","decl":"JSON","accepted":true,"providerType":"json","clrType":"System.String"}
+{"db":"PostgreSql","type":"XML","decl":"XML","accepted":true,"providerType":"xml","clrType":"System.String"}
+{"db":"PostgreSql","type":"XML","decl":"CLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022clob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"XML","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022nclob\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"XML","decl":"XMLTYPE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022xmltype\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"XML","decl":"PARSE_XML -\u003E VARIANT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022-\u003E\u0022  POSITION: 66"}
+{"db":"PostgreSql","type":"BSON","decl":"BSON","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022bson\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"BSON","decl":"BYTEA","accepted":true,"providerType":"bytea","clrType":"System.Byte[]"}
+{"db":"PostgreSql","type":"BSON","decl":"VARIANT (not BSON)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022variant\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"variant / dynamic value","decl":"VARIANT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022variant\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"variant / dynamic value","decl":"SQL_VARIANT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022sql_variant\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"variant / dynamic value","decl":"ANYDATA","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022anydata\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"variant / dynamic value","decl":"opaque types","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022types\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"IP address","decl":"INET","accepted":true,"providerType":"inet","clrType":"System.Net.IPAddress"}
+{"db":"PostgreSql","type":"IP address","decl":"IPADDRESS","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022ipaddress\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"IP address","decl":"VARCHAR(45)","accepted":true,"providerType":"character varying(45)","clrType":"System.String"}
+{"db":"PostgreSql","type":"IP address","decl":"VARCHAR representation","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022representation\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"IP network / CIDR","decl":"CIDR","accepted":true,"providerType":"cidr","clrType":"NpgsqlTypes.NpgsqlCidr"}
+{"db":"PostgreSql","type":"IP network / CIDR","decl":"INET","accepted":true,"providerType":"inet","clrType":"System.Net.IPAddress"}
+{"db":"PostgreSql","type":"MAC address","decl":"MACADDR","accepted":true,"providerType":"macaddr","clrType":"System.Net.NetworkInformation.PhysicalAddress"}
+{"db":"PostgreSql","type":"MAC address","decl":"MACADDR8","accepted":true,"providerType":"macaddr8","clrType":"System.Net.NetworkInformation.PhysicalAddress"}
+{"db":"PostgreSql","type":"point geometry","decl":"POINT","accepted":true,"providerType":"point","clrType":"NpgsqlTypes.NpgsqlPoint"}
+{"db":"PostgreSql","type":"point geometry","decl":"GEOMETRY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"point geometry","decl":"SDO_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022sdo_geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"point geometry","decl":"GEOMETRY(POINT)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"point geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022extension\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"point geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"point geometry","decl":"spatial DataBlade","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022DataBlade\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"point geometry","decl":"ST_POINT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022st_point\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"line / linestring geometry","decl":"LINESTRING","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022linestring\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"line / linestring geometry","decl":"GEOMETRY(LINESTRING)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"line / linestring geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"line / linestring geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022extension\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"line / linestring geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"polygon geometry","decl":"POLYGON","accepted":true,"providerType":"polygon","clrType":"NpgsqlTypes.NpgsqlPolygon"}
+{"db":"PostgreSql","type":"polygon geometry","decl":"GEOMETRY(POLYGON)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"polygon geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"polygon geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022extension\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"polygon geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"general geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"general geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"general geometry","decl":"SDO_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022sdo_geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"general geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022extension\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"geography / geodetic","decl":"GEOGRAPHY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geography\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"geography / geodetic","decl":"GEOGRAPHY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geography\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"geography / geodetic","decl":"PostGIS geography","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022geography\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"geography / geodetic","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022extension\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"geography / geodetic","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"SQL array","decl":"INTEGER ARRAY","accepted":true,"providerType":"integer[]","clrType":"System.Array"}
+{"db":"PostgreSql","type":"SQL array","decl":"INTEGER[]","accepted":true,"providerType":"integer[]","clrType":"System.Array"}
+{"db":"PostgreSql","type":"SQL array","decl":"INT[]","accepted":true,"providerType":"integer[]","clrType":"System.Array"}
+{"db":"PostgreSql","type":"SQL array","decl":"type[]","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022type[]\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"SQL array","decl":"type[n] (legacy fixed array)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022n\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"SQL array","decl":"ARRAY(type)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022ARRAY\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"SQL array","decl":"type[] (1 dimension)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022(\u0022  POSITION: 63"}
+{"db":"PostgreSql","type":"SQL array","decl":"ARRAY (SQLScript)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022ARRAY\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"fixed-length array","decl":"INTEGER ARRAY[10]","accepted":true,"providerType":"integer[]","clrType":"System.Array"}
+{"db":"PostgreSql","type":"fixed-length array","decl":"INTEGER[10]","accepted":true,"providerType":"integer[]","clrType":"System.Array"}
+{"db":"PostgreSql","type":"fixed-length array","decl":"type[n] (not enforced as fixed)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022n\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"fixed-length array","decl":"type[n]","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022n\u0022  POSITION: 61"}
+{"db":"PostgreSql","type":"fixed-length array","decl":"ARRAY(type)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022ARRAY\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"list / multiset / set collection","decl":"INTEGER MULTISET","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022MULTISET\u0022  POSITION: 64"}
+{"db":"PostgreSql","type":"list / multiset / set collection","decl":"LIST(INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022list\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"list / multiset / set collection","decl":"MULTISET","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022multiset\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"list / multiset / set collection","decl":"type[]","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022type[]\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"list / multiset / set collection","decl":"LIST","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022list\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"list / multiset / set collection","decl":"ARRAY","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022ARRAY\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"map / dictionary","decl":"MAP(VARCHAR(10),INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022,\u0022  POSITION: 71"}
+{"db":"PostgreSql","type":"map / dictionary","decl":"HSTORE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022hstore\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"struct / composite / row","decl":"ROW(a INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022ROW\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"struct / composite / row","decl":"STRUCT(a INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022INTEGER\u0022  POSITION: 65"}
+{"db":"PostgreSql","type":"struct / composite / row","decl":"STRUCT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022struct\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"struct / composite / row","decl":"OBJECT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022object\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"struct / composite / row","decl":"ROW","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022ROW\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"tagged union / variant","decl":"UNION(a INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022UNION\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"tagged union / variant","decl":"SQL_VARIANT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022sql_variant\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"tagged union / variant","decl":"VARIANT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022variant\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"range","decl":"INT4RANGE","accepted":true,"providerType":"int4range","clrType":"NpgsqlTypes.NpgsqlRange\u00601[[System.Int32, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"}
+{"db":"PostgreSql","type":"range","decl":"INT8RANGE","accepted":true,"providerType":"int8range","clrType":"NpgsqlTypes.NpgsqlRange\u00601[[System.Int64, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"}
+{"db":"PostgreSql","type":"range","decl":"TSTZRANGE","accepted":true,"providerType":"tstzrange","clrType":"NpgsqlTypes.NpgsqlRange\u00601[[System.DateTime, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"}
+{"db":"PostgreSql","type":"range","decl":"NUMRANGE","accepted":true,"providerType":"numrange","clrType":"NpgsqlTypes.NpgsqlRange\u00601[[System.Decimal, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"}
+{"db":"PostgreSql","type":"multirange","decl":"INT4MULTIRANGE","accepted":true,"providerType":"int4multirange","clrType":"NpgsqlTypes.NpgsqlRange\u00601[[System.Int32, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]][]"}
+{"db":"PostgreSql","type":"multirange","decl":"INT8MULTIRANGE","accepted":true,"providerType":"int8multirange","clrType":"NpgsqlTypes.NpgsqlRange\u00601[[System.Int64, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]][]"}
+{"db":"PostgreSql","type":"user-defined enum / domain","decl":"CREATE TYPE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022CREATE\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"user-defined enum / domain","decl":"CREATE DOMAIN","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022CREATE\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"user-defined enum / domain","decl":"ENUM","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022enum\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"user-defined enum / domain","decl":"CREATE DISTINCT TYPE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022CREATE\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"user-defined scalar / object","decl":"CREATE TYPE alias","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022CREATE\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"full-text search vector / query","decl":"TSVECTOR","accepted":true,"providerType":"tsvector","clrType":"NpgsqlTypes.NpgsqlTsVector"}
+{"db":"PostgreSql","type":"full-text search vector / query","decl":"TSQUERY","accepted":true,"providerType":"tsquery","clrType":"NpgsqlTypes.NpgsqlTsQuery"}
+{"db":"PostgreSql","type":"vector embedding","decl":"VECTOR(3)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022vector\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"vector embedding","decl":"VECTOR(3,FLOAT32)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022vector\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"vector embedding","decl":"VECTOR(n)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022vector\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"vector embedding","decl":"VECTOR","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022vector\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"vector embedding","decl":"VECTOR (not in standard MySQL 8.4)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022in\u0022  POSITION: 68"}
+{"db":"PostgreSql","type":"vector embedding","decl":"FLOAT[dimension]","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022dimension\u0022  POSITION: 62"}
+{"db":"PostgreSql","type":"hierarchical path","decl":"HIERARCHYID","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022hierarchyid\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"hierarchical path","decl":"LTREE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022ltree\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"opaque / special database type","decl":"SQL_VARIANT","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022sql_variant\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"opaque / special database type","decl":"FILE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022file\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"external-file reference","decl":"BFILE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022bfile\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"external-file reference","decl":"FILE","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022file\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"spatial raster / other extensions","decl":"RASTER","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022raster\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"spatial raster / other extensions","decl":"GEOMETRY(RASTER)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"cursor / table variable","decl":"REFCURSOR","accepted":true,"providerType":"refcursor","clrType":"System.String"}
+{"db":"PostgreSql","type":"cursor / table variable","decl":"SYS_REFCURSOR","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022sys_refcursor\u0022 does not exist  POSITION: 56"}
+{"db":"PostgreSql","type":"cursor / table variable","decl":"TABLE TYPE (SQLScript)","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42601: syntax error at or near \u0022TABLE\u0022  POSITION: 56"}
+{"db":"PostgreSql","type":"specialized security label","decl":"IDSSECURITYLABEL","accepted":false,"stage":"create","error":"Unknown failed on PostgreSql: 42704: type \u0022idssecuritylabel\u0022 does not exist  POSITION: 56"}

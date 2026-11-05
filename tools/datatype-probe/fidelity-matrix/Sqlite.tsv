@@ -1,0 +1,75 @@
+Sqlite	signed 8-bit	signed_8_bit	PASS
+Sqlite	signed 16-bit	signed_16_bit	PASS
+Sqlite	signed 32-bit	signed_32_bit	PASS
+Sqlite	signed 64-bit	signed_64_bit	PASS
+Sqlite	signed 128-bit	signed_128_bit	PASS
+Sqlite	unsigned 8-bit	unsigned_8_bit	PASS
+Sqlite	unsigned 16-bit	unsigned_16_bit	PASS
+Sqlite	unsigned 32-bit	unsigned_32_bit	PASS
+Sqlite	unsigned 64-bit	unsigned_64_bit	PASS
+Sqlite	arbitrary-size integer	arbitrary_integer	PASS
+Sqlite	binary float32	binary_float32	PASS
+Sqlite	binary float64	binary_float64	PASS
+Sqlite	fixed decimal	fixed_decimal	PASS
+Sqlite	boolean	boolean	PASS
+Sqlite	bit / bitstring	bit_string	PASS
+Sqlite	varying character	varying_character	PASS
+Sqlite	unbounded text	unbounded_text	PASS
+Sqlite	UUID / GUID	uuid	PASS
+Sqlite	calendar date	calendar_date	PASS
+Sqlite	time without zone	time_of_day	PASS
+Sqlite	time without zone	time_span	PASS
+Sqlite	day-time interval	day_time_interval	PASS
+Sqlite	timestamp without zone	timestamp	PASS
+Sqlite	timestamp with zone	timestamp_with_zone	PASS
+Sqlite	binary LOB	binary	PASS
+Sqlite	JSON text / JSON value	json	PASS
+Sqlite	IP address	ip_address	PASS
+Sqlite	SQL array	int_array	PASS
+Sqlite	unsigned 128-bit	unsigned_128_bit	PASS
+Sqlite	decimal floating point	decimal_float	PASS
+Sqlite	money / currency	money	PASS
+Sqlite	fixed character	fixed_character	PASS
+Sqlite	national / Unicode character	national_text	PASS
+Sqlite	long text LOB	long_text	PASS
+Sqlite	enumeration	enumeration	PASS
+Sqlite	set-valued enum	set_value	UNSUPPORTED refused: SQLite Error 1: 'near "SET": syntax error'.
+Sqlite	fixed binary	fixed_binary	PASS
+Sqlite	varying binary	varying_binary	PASS
+Sqlite	legacy long binary	legacy_binary	PASS
+Sqlite	rowversion / timestamp token	rowversion	PASS
+Sqlite	local-zone timestamp	local_timestamp	PASS
+Sqlite	second-precision datetime	second_datetime	PASS
+Sqlite	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+Sqlite	year-only	year_only	PASS
+Sqlite	year-month interval	year_month_interval	PASS
+Sqlite	generic interval	generic_interval	PASS
+Sqlite	row identifier / ROWID	row_identifier	PASS
+Sqlite	object identifier / OID	oid	PASS
+Sqlite	transaction ID	transaction_id	PASS
+Sqlite	WAL / log position	wal_position	PASS
+Sqlite	native binary JSON	binary_json	PASS
+Sqlite	XML	xml	PASS
+Sqlite	BSON	bson	PASS
+Sqlite	variant / dynamic value	variant	PASS
+Sqlite	IP network / CIDR	cidr	PASS
+Sqlite	MAC address	mac_address	PASS
+Sqlite	point geometry	point	PASS
+Sqlite	line / linestring geometry	linestring	PASS
+Sqlite	polygon geometry	polygon	PASS
+Sqlite	general geometry	geometry	PASS
+Sqlite	geography / geodetic	geography	PASS
+Sqlite	fixed-length array	fixed_array	PASS
+Sqlite	list / multiset / set collection	list_collection	PASS
+Sqlite	map / dictionary	map	PASS
+Sqlite	range	range	PASS
+Sqlite	multirange	multirange	PASS
+Sqlite	user-defined enum / domain	domain	PASS
+Sqlite	full-text search vector / query	full_text	PASS
+Sqlite	native point	native_point	UNSUPPORTED refused: no candidate was tried
+Sqlite	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+Sqlite	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+Sqlite	vector embedding	vector	PASS
+Sqlite	hierarchical path	hierarchy	PASS
+Sqlite	external-file reference	file_reference	PASS
+Sqlite	specialized security label	security_label	PASS

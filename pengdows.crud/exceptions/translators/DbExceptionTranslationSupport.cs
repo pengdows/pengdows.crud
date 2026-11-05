@@ -388,10 +388,20 @@ internal static partial class DbExceptionTranslationSupport
             return null;
         }
 
+        // Only a quoted identifier ("name", 'name') or Oracle's parenthesised (SCHEMA.name) form names
+        // a constraint. An unquoted word after "constraint" is an English phrase ("a foreign key
+        // constraint fails"), so it must not be taken as the name.
         var match = ConstraintNameRegex().Match(message);
-        return match.Success ? match.Groups["name"].Value : null;
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        return match.Groups["quoted"].Success ? match.Groups["quoted"].Value : match.Groups["oracle"].Value;
     }
 
-    [GeneratedRegex("constraint\\s+'?(?<name>[^'\\s\\)]+)'?", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    [GeneratedRegex(
+        "constraint\\s+(?:\"(?<quoted>[^\"]+)\"|'(?<quoted>[^']+)'|\\((?:[^.()\\s]+\\.)?(?<oracle>[^.()\\s]+)\\))",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex ConstraintNameRegex();
 }

@@ -93,7 +93,7 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
 
         foreach (var pair in pairs)
         {
-            var arrowIndex = pair.IndexOf("=>");
+            var arrowIndex = FindUnquotedArrow(pair);
             if (arrowIndex == -1)
             {
                 throw new FormatException($"Invalid HSTORE pair format: {pair}");
@@ -150,6 +150,38 @@ public readonly struct HStore : IEquatable<HStore>, IEnumerable<KeyValuePair<str
         }
 
         return sb.ToString();
+    }
+
+    // The "=>" separating key from value, found with the same quote and escape rules as the
+    // pair splitter, so an arrow inside a quoted key is not mistaken for the separator.
+    private static int FindUnquotedArrow(string pair)
+    {
+        var inQuotes = false;
+        var escaped = false;
+        for (var i = 0; i < pair.Length; i++)
+        {
+            var c = pair[i];
+            if (escaped)
+            {
+                escaped = false;
+                continue;
+            }
+            if (c == '\\')
+            {
+                escaped = true;
+                continue;
+            }
+            if (c == '"')
+            {
+                inQuotes = !inQuotes;
+                continue;
+            }
+            if (!inQuotes && c == '=' && i + 1 < pair.Length && pair[i + 1] == '>')
+            {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static IEnumerable<string> SplitHStorePairs(string hstore)

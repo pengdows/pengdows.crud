@@ -1,5 +1,6 @@
 #region
 
+using pengdows.crud.dialects;
 using pengdows.crud.enums;
 using pengdows.crud.infrastructure;
 
@@ -21,6 +22,9 @@ public sealed record TypeCoercionOptions(
     /// big-endian when true, .NET's mixed-endian <see cref="Guid.ToByteArray()"/> order when false.
     /// </summary>
     internal bool GuidBytesBigEndian { get; init; }
+
+    /// <summary>A binary JSON column (SingleStore's BSON) returns the binary document, read as its JSON text.</summary>
+    internal bool BinaryJsonIsBson { get; init; }
 
     /// <summary>
     /// The driver reports offset timestamps as DateTime but returns the DateTimeOffset from GetValue
@@ -58,6 +62,7 @@ public sealed record TypeCoercionOptions(
     private static TypeCoercionOptions Build(dialects.ISqlDialect dialect) => Default with
     {
         Provider = dialect is dialects.SqlDialect sqlDialect ? sqlDialect.TypeMappingProvider : dialect.DatabaseType,
+        BinaryJsonIsBson = DatabaseTraits.For(dialect is dialects.SqlDialect sd ? sd.TypeMappingProvider : dialect.DatabaseType).BinaryJsonIsBson,
         GuidBytesBigEndian = dialect is not dialects.SqlDialect { StoresGuidBytesBigEndian: false },
         ReadsOffsetTimestampsFromValue = dialect is dialects.SqlDialect { ReportsOffsetTimestampsAsDateTime: true },
         OffsetTimestampDataTypeName = (dialect as dialects.SqlDialect)?.OffsetTimestampDataTypeName,

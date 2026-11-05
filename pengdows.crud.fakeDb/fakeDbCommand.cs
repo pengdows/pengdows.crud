@@ -637,8 +637,14 @@ public class fakeDbCommand : DbCommand
         // Use data persistence if enabled
         if (conn != null && conn.EnableDataPersistence && !string.IsNullOrWhiteSpace(CommandText))
         {
-            var resultSets = WithDriverValueErrors(() => conn.DataStore.ExecuteReaderResultSets(CommandText, Parameters));
-            return new fakeDbDataReader(resultSets.Select(ConvertRows));
+            IReadOnlyDictionary<string, string>? udtColumns = null;
+            var resultSets = WithDriverValueErrors(() =>
+                conn.DataStore.ExecuteReaderResultSets(CommandText, Parameters, out udtColumns));
+            // A spatial column the store wrote reads as its UDT: the value is not loadable without the spatial types.
+            return new fakeDbDataReader(resultSets.Select(ConvertRows))
+            {
+                UnloadableUdtColumns = udtColumns == null ? null : new Dictionary<string, string>(udtColumns),
+            };
         }
 
         return new fakeDbDataReader();

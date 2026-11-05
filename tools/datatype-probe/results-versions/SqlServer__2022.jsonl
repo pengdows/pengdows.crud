@@ -1,0 +1,355 @@
+{"db":"SqlServer","type":"signed 8-bit","decl":"TINYINT","accepted":true,"providerType":"tinyint","clrType":"System.Byte"}
+{"db":"SqlServer","type":"signed 8-bit","decl":"INT1","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT1."}
+{"db":"SqlServer","type":"signed 8-bit","decl":"NUMBER(3,0)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NUMBER."}
+{"db":"SqlServer","type":"signed 8-bit","decl":"SMALLINT","accepted":true,"providerType":"smallint","clrType":"System.Int16"}
+{"db":"SqlServer","type":"signed 8-bit","decl":"INT2","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT2."}
+{"db":"SqlServer","type":"signed 8-bit","decl":"INTEGER storage","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027storage\u0027."}
+{"db":"SqlServer","type":"signed 8-bit","decl":"TINYINT is unsigned; use SMALLINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027is\u0027. Database \u0027SMALLINT\u0027 does not exist. Make sure that the name is entered correctly."}
+{"db":"SqlServer","type":"signed 16-bit","decl":"SMALLINT","accepted":true,"providerType":"smallint","clrType":"System.Int16"}
+{"db":"SqlServer","type":"signed 16-bit","decl":"INT2","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT2."}
+{"db":"SqlServer","type":"signed 16-bit","decl":"NUMBER(5,0)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NUMBER."}
+{"db":"SqlServer","type":"signed 16-bit","decl":"INTEGER storage","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027storage\u0027."}
+{"db":"SqlServer","type":"signed 16-bit","decl":"INT8","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT8."}
+{"db":"SqlServer","type":"signed 32-bit","decl":"INTEGER","accepted":true,"providerType":"int","clrType":"System.Int32"}
+{"db":"SqlServer","type":"signed 32-bit","decl":"INT","accepted":true,"providerType":"int","clrType":"System.Int32"}
+{"db":"SqlServer","type":"signed 32-bit","decl":"INT4","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT4."}
+{"db":"SqlServer","type":"signed 32-bit","decl":"NUMBER(10,0)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NUMBER."}
+{"db":"SqlServer","type":"signed 32-bit","decl":"INT4 (alias subject to width behavior)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027to\u0027."}
+{"db":"SqlServer","type":"signed 32-bit","decl":"INTEGER storage","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027storage\u0027."}
+{"db":"SqlServer","type":"signed 32-bit","decl":"INT8","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT8."}
+{"db":"SqlServer","type":"signed 64-bit","decl":"BIGINT","accepted":true,"providerType":"bigint","clrType":"System.Int64"}
+{"db":"SqlServer","type":"signed 64-bit","decl":"INT8","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT8."}
+{"db":"SqlServer","type":"signed 64-bit","decl":"INT64","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT64."}
+{"db":"SqlServer","type":"signed 64-bit","decl":"NUMBER(19,0)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NUMBER."}
+{"db":"SqlServer","type":"signed 64-bit","decl":"INTEGER storage","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027storage\u0027."}
+{"db":"SqlServer","type":"signed 128-bit","decl":"HUGEINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type HUGEINT."}
+{"db":"SqlServer","type":"signed 128-bit","decl":"INT128","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT128."}
+{"db":"SqlServer","type":"signed 128-bit","decl":"NUMBER(38,0)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NUMBER."}
+{"db":"SqlServer","type":"signed 128-bit","decl":"NUMERIC(38,0)","accepted":true,"providerType":"decimal","clrType":"System.Decimal"}
+{"db":"SqlServer","type":"unsigned 8-bit","decl":"TINYINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027UNSIGNED\u0027."}
+{"db":"SqlServer","type":"unsigned 8-bit","decl":"UTINYINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UTINYINT."}
+{"db":"SqlServer","type":"unsigned 8-bit","decl":"UINT1","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINT1."}
+{"db":"SqlServer","type":"unsigned 8-bit","decl":"BYTE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BYTE."}
+{"db":"SqlServer","type":"unsigned 8-bit","decl":"TINYINT","accepted":true,"providerType":"tinyint","clrType":"System.Byte"}
+{"db":"SqlServer","type":"unsigned 16-bit","decl":"SMALLINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027UNSIGNED\u0027."}
+{"db":"SqlServer","type":"unsigned 16-bit","decl":"USMALLINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type USMALLINT."}
+{"db":"SqlServer","type":"unsigned 16-bit","decl":"UINT2","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINT2."}
+{"db":"SqlServer","type":"unsigned 16-bit","decl":"UINT16","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINT16."}
+{"db":"SqlServer","type":"unsigned 16-bit","decl":"UNSIGNED SMALLINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027SMALLINT\u0027."}
+{"db":"SqlServer","type":"unsigned 32-bit","decl":"INT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027UNSIGNED\u0027."}
+{"db":"SqlServer","type":"unsigned 32-bit","decl":"INTEGER UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027UNSIGNED\u0027."}
+{"db":"SqlServer","type":"unsigned 32-bit","decl":"UINTEGER","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINTEGER."}
+{"db":"SqlServer","type":"unsigned 32-bit","decl":"UINT4","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINT4."}
+{"db":"SqlServer","type":"unsigned 32-bit","decl":"UINT32","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINT32."}
+{"db":"SqlServer","type":"unsigned 32-bit","decl":"UNSIGNED INT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027INT\u0027."}
+{"db":"SqlServer","type":"unsigned 64-bit","decl":"BIGINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027UNSIGNED\u0027."}
+{"db":"SqlServer","type":"unsigned 64-bit","decl":"UBIGINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UBIGINT."}
+{"db":"SqlServer","type":"unsigned 64-bit","decl":"UINT8","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINT8."}
+{"db":"SqlServer","type":"unsigned 64-bit","decl":"UINT64","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINT64."}
+{"db":"SqlServer","type":"unsigned 64-bit","decl":"UNSIGNED BIGINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027BIGINT\u0027."}
+{"db":"SqlServer","type":"unsigned 128-bit","decl":"UHUGEINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UHUGEINT."}
+{"db":"SqlServer","type":"unsigned 128-bit","decl":"UINT128","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UINT128."}
+{"db":"SqlServer","type":"arbitrary-size integer","decl":"NUMERIC(1000,0)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column or parameter #2: Specified column precision 1000 is greater than the maximum precision of 38."}
+{"db":"SqlServer","type":"arbitrary-size integer","decl":"DECIMAL(65,0)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column or parameter #2: Specified column precision 65 is greater than the maximum precision of 38."}
+{"db":"SqlServer","type":"arbitrary-size integer","decl":"NUMBER","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NUMBER."}
+{"db":"SqlServer","type":"arbitrary-size integer","decl":"VARINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type VARINT."}
+{"db":"SqlServer","type":"arbitrary-size integer","decl":"BIGNUMERIC","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BIGNUMERIC."}
+{"db":"SqlServer","type":"arbitrary-size integer","decl":"BIGNUM","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BIGNUM."}
+{"db":"SqlServer","type":"arbitrary-size integer","decl":"NUMERIC(38,0)","accepted":true,"providerType":"decimal","clrType":"System.Decimal"}
+{"db":"SqlServer","type":"arbitrary-size integer","decl":"DECIMAL(38,0)","accepted":true,"providerType":"decimal","clrType":"System.Decimal"}
+{"db":"SqlServer","type":"auto-increment integer","decl":"INTEGER GENERATED BY DEFAULT AS IDENTITY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027BY\u0027."}
+{"db":"SqlServer","type":"auto-increment integer","decl":"INT AUTO_INCREMENT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027AUTO_INCREMENT\u0027."}
+{"db":"SqlServer","type":"auto-increment integer","decl":"SERIAL","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type SERIAL."}
+{"db":"SqlServer","type":"auto-increment integer","decl":"INTEGER IDENTITY","accepted":true,"providerType":"int","clrType":"System.Int32"}
+{"db":"SqlServer","type":"auto-increment integer","decl":"IDENTITY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: The definition for column \u0027c\u0027 must include a data type."}
+{"db":"SqlServer","type":"auto-increment integer","decl":"GENERATED AS IDENTITY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027AS\u0027."}
+{"db":"SqlServer","type":"auto-increment integer","decl":"GENERATED BY DEFAULT AS IDENTITY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027BY\u0027."}
+{"db":"SqlServer","type":"auto-increment integer","decl":"AUTO_INCREMENT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type AUTO_INCREMENT."}
+{"db":"SqlServer","type":"auto-increment integer","decl":"INTEGER PRIMARY KEY [AUTOINCREMENT]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027AUTOINCREMENT\u0027."}
+{"db":"SqlServer","type":"auto-increment integer","decl":"SEQUENCE \u002B DEFAULT nextval","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027\u002B\u0027."}
+{"db":"SqlServer","type":"fixed decimal","decl":"DECIMAL(18,4)","accepted":true,"providerType":"decimal","clrType":"System.Decimal"}
+{"db":"SqlServer","type":"fixed decimal","decl":"NUMERIC(18,4)","accepted":true,"providerType":"decimal","clrType":"System.Decimal"}
+{"db":"SqlServer","type":"fixed decimal","decl":"NUMERIC affinity","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027affinity\u0027."}
+{"db":"SqlServer","type":"fixed decimal","decl":"NUMERIC","accepted":true,"providerType":"decimal","clrType":"System.Decimal"}
+{"db":"SqlServer","type":"decimal floating point","decl":"DECFLOAT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type DECFLOAT."}
+{"db":"SqlServer","type":"decimal floating point","decl":"DECFLOAT(34)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type DECFLOAT."}
+{"db":"SqlServer","type":"decimal floating point","decl":"SMALLDECIMAL","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type SMALLDECIMAL."}
+{"db":"SqlServer","type":"binary float32","decl":"REAL","accepted":true,"providerType":"real","clrType":"System.Single"}
+{"db":"SqlServer","type":"binary float32","decl":"FLOAT4","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type FLOAT4."}
+{"db":"SqlServer","type":"binary float32","decl":"BINARY_FLOAT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BINARY_FLOAT."}
+{"db":"SqlServer","type":"binary float32","decl":"FLOAT(24)","accepted":true,"providerType":"real","clrType":"System.Single"}
+{"db":"SqlServer","type":"binary float32","decl":"SINGLE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type SINGLE."}
+{"db":"SqlServer","type":"binary float32","decl":"FLOAT","accepted":true,"providerType":"float","clrType":"System.Double"}
+{"db":"SqlServer","type":"binary float32","decl":"SMALLFLOAT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type SMALLFLOAT."}
+{"db":"SqlServer","type":"binary float64","decl":"DOUBLE PRECISION","accepted":true,"providerType":"float","clrType":"System.Double"}
+{"db":"SqlServer","type":"binary float64","decl":"DOUBLE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027)\u0027."}
+{"db":"SqlServer","type":"binary float64","decl":"FLOAT8","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type FLOAT8."}
+{"db":"SqlServer","type":"binary float64","decl":"BINARY_DOUBLE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BINARY_DOUBLE."}
+{"db":"SqlServer","type":"binary float64","decl":"FLOAT","accepted":true,"providerType":"float","clrType":"System.Double"}
+{"db":"SqlServer","type":"money / currency","decl":"MONEY","accepted":true,"providerType":"money","clrType":"System.Decimal"}
+{"db":"SqlServer","type":"money / currency","decl":"SMALLMONEY","accepted":true,"providerType":"smallmoney","clrType":"System.Decimal"}
+{"db":"SqlServer","type":"money / currency","decl":"CURRENCY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type CURRENCY."}
+{"db":"SqlServer","type":"bit / bitstring","decl":"BIT(8)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot specify a column width on data type bit."}
+{"db":"SqlServer","type":"bit / bitstring","decl":"BIT VARYING(8)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027varying\u0027."}
+{"db":"SqlServer","type":"bit / bitstring","decl":"VARBIT(8)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type VARBIT."}
+{"db":"SqlServer","type":"bit / bitstring","decl":"BIT","accepted":true,"providerType":"bit","clrType":"System.Boolean"}
+{"db":"SqlServer","type":"bit / bitstring","decl":"RAW(n) [bitstring substitute]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027bitstring substitute\u0027."}
+{"db":"SqlServer","type":"bit / bitstring","decl":"BINARY(n) [bitstring substitute]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027bitstring substitute\u0027."}
+{"db":"SqlServer","type":"bit / bitstring","decl":"BIT(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"boolean","decl":"BOOLEAN","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BOOLEAN."}
+{"db":"SqlServer","type":"boolean","decl":"BOOL","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BOOL."}
+{"db":"SqlServer","type":"boolean","decl":"BIT","accepted":true,"providerType":"bit","clrType":"System.Boolean"}
+{"db":"SqlServer","type":"boolean","decl":"TINYINT(1)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot specify a column width on data type tinyint."}
+{"db":"SqlServer","type":"fixed character","decl":"CHAR(10)","accepted":true,"providerType":"char","clrType":"System.String"}
+{"db":"SqlServer","type":"fixed character","decl":"CHARACTER(10)","accepted":true,"providerType":"char","clrType":"System.String"}
+{"db":"SqlServer","type":"fixed character","decl":"NCHAR(10)","accepted":true,"providerType":"nchar","clrType":"System.String"}
+{"db":"SqlServer","type":"fixed character","decl":"CHAR(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"fixed character","decl":"TEXT affinity","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027affinity\u0027."}
+{"db":"SqlServer","type":"fixed character","decl":"CHAR(n) -\u003E VARCHAR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"fixed character","decl":"VARCHAR(n) [no fixed CHAR semantics]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027no fixed CHAR semantics\u0027."}
+{"db":"SqlServer","type":"varying character","decl":"VARCHAR(100)","accepted":true,"providerType":"varchar","clrType":"System.String"}
+{"db":"SqlServer","type":"varying character","decl":"CHARACTER VARYING(100)","accepted":true,"providerType":"varchar","clrType":"System.String"}
+{"db":"SqlServer","type":"varying character","decl":"VARCHAR2(100)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type VARCHAR2."}
+{"db":"SqlServer","type":"varying character","decl":"NVARCHAR(100)","accepted":true,"providerType":"nvarchar","clrType":"System.String"}
+{"db":"SqlServer","type":"varying character","decl":"VARCHAR(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"varying character","decl":"VARCHAR2(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"varying character","decl":"TEXT affinity","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027affinity\u0027."}
+{"db":"SqlServer","type":"varying character","decl":"VARCHAR","accepted":true,"providerType":"varchar","clrType":"System.String"}
+{"db":"SqlServer","type":"unbounded text","decl":"CLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type CLOB."}
+{"db":"SqlServer","type":"unbounded text","decl":"TEXT","accepted":true,"providerType":"text","clrType":"System.String"}
+{"db":"SqlServer","type":"unbounded text","decl":"STRING","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type STRING."}
+{"db":"SqlServer","type":"unbounded text","decl":"VARCHAR(MAX)","accepted":true,"providerType":"varchar","clrType":"System.String"}
+{"db":"SqlServer","type":"unbounded text","decl":"LONGVARCHAR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type LONGVARCHAR."}
+{"db":"SqlServer","type":"unbounded text","decl":"BLOB SUB_TYPE TEXT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027SUB_TYPE\u0027."}
+{"db":"SqlServer","type":"unbounded text","decl":"LONGTEXT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type LONGTEXT."}
+{"db":"SqlServer","type":"unbounded text","decl":"VARCHAR","accepted":true,"providerType":"varchar","clrType":"System.String"}
+{"db":"SqlServer","type":"unbounded text","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NCLOB."}
+{"db":"SqlServer","type":"national / Unicode character","decl":"NVARCHAR(100)","accepted":true,"providerType":"nvarchar","clrType":"System.String"}
+{"db":"SqlServer","type":"national / Unicode character","decl":"NCHAR(10)","accepted":true,"providerType":"nchar","clrType":"System.String"}
+{"db":"SqlServer","type":"national / Unicode character","decl":"NVARCHAR2(100)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NVARCHAR2."}
+{"db":"SqlServer","type":"national / Unicode character","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NCLOB."}
+{"db":"SqlServer","type":"national / Unicode character","decl":"NATIONAL CHAR","accepted":true,"providerType":"nchar","clrType":"System.String"}
+{"db":"SqlServer","type":"national / Unicode character","decl":"NVARCHAR","accepted":true,"providerType":"nvarchar","clrType":"System.String"}
+{"db":"SqlServer","type":"national / Unicode character","decl":"Unicode text fields","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027text\u0027."}
+{"db":"SqlServer","type":"long text LOB","decl":"CLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type CLOB."}
+{"db":"SqlServer","type":"long text LOB","decl":"TEXT","accepted":true,"providerType":"text","clrType":"System.String"}
+{"db":"SqlServer","type":"long text LOB","decl":"NTEXT","accepted":true,"providerType":"ntext","clrType":"System.String"}
+{"db":"SqlServer","type":"long text LOB","decl":"MEDIUMTEXT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type MEDIUMTEXT."}
+{"db":"SqlServer","type":"long text LOB","decl":"LONGTEXT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type LONGTEXT."}
+{"db":"SqlServer","type":"long text LOB","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NCLOB."}
+{"db":"SqlServer","type":"long text LOB","decl":"VARCHAR(MAX)","accepted":true,"providerType":"varchar","clrType":"System.String"}
+{"db":"SqlServer","type":"long text LOB","decl":"BLOB SUB_TYPE TEXT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027SUB_TYPE\u0027."}
+{"db":"SqlServer","type":"long text LOB","decl":"VARCHAR","accepted":true,"providerType":"varchar","clrType":"System.String"}
+{"db":"SqlServer","type":"enumeration","decl":"ENUM(\u0027a\u0027,\u0027b\u0027)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027a\u0027."}
+{"db":"SqlServer","type":"enumeration","decl":"ENUM","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ENUM."}
+{"db":"SqlServer","type":"set-valued enum","decl":"SET(\u0027a\u0027,\u0027b\u0027)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: The definition for column \u0027c\u0027 must include a data type. Incorrect syntax near the keyword \u0027SET\u0027."}
+{"db":"SqlServer","type":"set-valued enum","decl":"SET","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: The definition for column \u0027c\u0027 must include a data type."}
+{"db":"SqlServer","type":"fixed binary","decl":"BINARY(16)","accepted":true,"providerType":"binary","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"fixed binary","decl":"CHAR(16) FOR BIT DATA","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027FOR\u0027."}
+{"db":"SqlServer","type":"fixed binary","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type RAW."}
+{"db":"SqlServer","type":"fixed binary","decl":"BYTEA (no fixed-length binary)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027-\u0027."}
+{"db":"SqlServer","type":"fixed binary","decl":"BINARY(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"fixed binary","decl":"RAW(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"fixed binary","decl":"BLOB (no fixed semantics)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027semantics\u0027."}
+{"db":"SqlServer","type":"fixed binary","decl":"VARBINARY(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"fixed binary","decl":"BLOB SUB_TYPE 0","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027SUB_TYPE\u0027."}
+{"db":"SqlServer","type":"varying binary","decl":"VARBINARY(16)","accepted":true,"providerType":"varbinary","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"varying binary","decl":"BINARY VARYING(16)","accepted":true,"providerType":"varbinary","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"varying binary","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type RAW."}
+{"db":"SqlServer","type":"varying binary","decl":"BYTEA","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BYTEA."}
+{"db":"SqlServer","type":"varying binary","decl":"VARBINARY(MAX)","accepted":true,"providerType":"varbinary","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"varying binary","decl":"VARBINARY(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"varying binary","decl":"RAW(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"varying binary","decl":"BLOB storage","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027storage\u0027."}
+{"db":"SqlServer","type":"varying binary","decl":"BLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BLOB."}
+{"db":"SqlServer","type":"varying binary","decl":"BLOB SUB_TYPE 0","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027SUB_TYPE\u0027."}
+{"db":"SqlServer","type":"binary LOB","decl":"BLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BLOB."}
+{"db":"SqlServer","type":"binary LOB","decl":"BYTEA","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BYTEA."}
+{"db":"SqlServer","type":"binary LOB","decl":"IMAGE","accepted":true,"providerType":"image","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"binary LOB","decl":"LONGBLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type LONGBLOB."}
+{"db":"SqlServer","type":"binary LOB","decl":"VARBINARY(MAX)","accepted":true,"providerType":"varbinary","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"binary LOB","decl":"BINARY LARGE OBJECT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027LARGE\u0027."}
+{"db":"SqlServer","type":"binary LOB","decl":"BINARY","accepted":true,"providerType":"binary","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"legacy long binary","decl":"LONG RAW","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027RAW\u0027."}
+{"db":"SqlServer","type":"legacy long binary","decl":"IMAGE","accepted":true,"providerType":"image","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"legacy long binary","decl":"TINYBLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TINYBLOB."}
+{"db":"SqlServer","type":"legacy long binary","decl":"MEDIUMBLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type MEDIUMBLOB."}
+{"db":"SqlServer","type":"legacy long binary","decl":"LONGBLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type LONGBLOB."}
+{"db":"SqlServer","type":"legacy long binary","decl":"BYTE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BYTE."}
+{"db":"SqlServer","type":"rowversion / timestamp token","decl":"ROWVERSION","accepted":true,"providerType":"timestamp","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"rowversion / timestamp token","decl":"TIMESTAMP","accepted":true,"providerType":"timestamp","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"rowversion / timestamp token","decl":"no direct SQL rowversion type","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027direct\u0027."}
+{"db":"SqlServer","type":"calendar date","decl":"DATE","accepted":true,"providerType":"date","clrType":"System.DateTime"}
+{"db":"SqlServer","type":"time without zone","decl":"TIME(6)","accepted":true,"providerType":"time","clrType":"System.TimeSpan"}
+{"db":"SqlServer","type":"time without zone","decl":"TIME","accepted":true,"providerType":"time","clrType":"System.TimeSpan"}
+{"db":"SqlServer","type":"time with zone","decl":"TIME WITH TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027WITH\u0027. Incorrect syntax near the keyword \u0027with\u0027. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"}
+{"db":"SqlServer","type":"time with zone","decl":"TIMETZ","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TIMETZ."}
+{"db":"SqlServer","type":"time with zone","decl":"TIME(6) WITH TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027WITH\u0027. Incorrect syntax near the keyword \u0027with\u0027. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"}
+{"db":"SqlServer","type":"time with zone","decl":"TIME (no zone; no direct match)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027;\u0027."}
+{"db":"SqlServer","type":"timestamp without zone","decl":"TIMESTAMP(6)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot specify a column width on data type timestamp."}
+{"db":"SqlServer","type":"timestamp without zone","decl":"DATETIME2(6)","accepted":true,"providerType":"datetime2","clrType":"System.DateTime"}
+{"db":"SqlServer","type":"timestamp without zone","decl":"DATETIME","accepted":true,"providerType":"datetime","clrType":"System.DateTime"}
+{"db":"SqlServer","type":"timestamp without zone","decl":"DATETIME(6)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot specify a column width on data type datetime."}
+{"db":"SqlServer","type":"timestamp without zone","decl":"TIMESTAMP","accepted":true,"providerType":"timestamp","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"timestamp without zone","decl":"DATETIME2","accepted":true,"providerType":"datetime2","clrType":"System.DateTime"}
+{"db":"SqlServer","type":"timestamp without zone","decl":"TIMESTAMP_NTZ","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TIMESTAMP_NTZ."}
+{"db":"SqlServer","type":"timestamp without zone","decl":"DATETIME YEAR TO FRACTION","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027YEAR\u0027."}
+{"db":"SqlServer","type":"timestamp with zone","decl":"TIMESTAMP WITH TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027WITH\u0027. Incorrect syntax near the keyword \u0027with\u0027. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"}
+{"db":"SqlServer","type":"timestamp with zone","decl":"TIMESTAMPTZ","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TIMESTAMPTZ."}
+{"db":"SqlServer","type":"timestamp with zone","decl":"DATETIMEOFFSET","accepted":true,"providerType":"datetimeoffset","clrType":"System.DateTimeOffset"}
+{"db":"SqlServer","type":"timestamp with zone","decl":"TIMESTAMP(6) WITH TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027WITH\u0027. Incorrect syntax near the keyword \u0027with\u0027. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"}
+{"db":"SqlServer","type":"timestamp with zone","decl":"TIMESTAMP_TZ","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TIMESTAMP_TZ."}
+{"db":"SqlServer","type":"local-zone timestamp","decl":"TIMESTAMP WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027WITH\u0027. Incorrect syntax near the keyword \u0027with\u0027. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"}
+{"db":"SqlServer","type":"local-zone timestamp","decl":"TIMESTAMP(6) WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027WITH\u0027. Incorrect syntax near the keyword \u0027with\u0027. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"}
+{"db":"SqlServer","type":"local-zone timestamp","decl":"TIMESTAMP_LTZ","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TIMESTAMP_LTZ."}
+{"db":"SqlServer","type":"second-precision datetime","decl":"DATETIME(0)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Line 1: Length or precision specification 0 is invalid."}
+{"db":"SqlServer","type":"second-precision datetime","decl":"SMALLDATETIME","accepted":true,"providerType":"smalldatetime","clrType":"System.DateTime"}
+{"db":"SqlServer","type":"second-precision datetime","decl":"DATETIME","accepted":true,"providerType":"datetime","clrType":"System.DateTime"}
+{"db":"SqlServer","type":"second-precision datetime","decl":"DATE","accepted":true,"providerType":"date","clrType":"System.DateTime"}
+{"db":"SqlServer","type":"second-precision datetime","decl":"SECONDDATE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type SECONDDATE."}
+{"db":"SqlServer","type":"year-only","decl":"YEAR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type YEAR."}
+{"db":"SqlServer","type":"year-only","decl":"SMALLINT","accepted":true,"providerType":"smallint","clrType":"System.Int16"}
+{"db":"SqlServer","type":"year-only","decl":"DATETIME YEAR TO YEAR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027YEAR\u0027."}
+{"db":"SqlServer","type":"year-month interval","decl":"INTERVAL YEAR TO MONTH","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027YEAR\u0027."}
+{"db":"SqlServer","type":"year-month interval","decl":"INTERVAL YEAR(4) TO MONTH","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027YEAR\u0027."}
+{"db":"SqlServer","type":"year-month interval","decl":"INTERVAL","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INTERVAL."}
+{"db":"SqlServer","type":"day-time interval","decl":"INTERVAL DAY TO SECOND(6)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027DAY\u0027."}
+{"db":"SqlServer","type":"day-time interval","decl":"INTERVAL DAY(9) TO SECOND(6)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027DAY\u0027."}
+{"db":"SqlServer","type":"day-time interval","decl":"INTERVAL DAY TO SECOND","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027DAY\u0027."}
+{"db":"SqlServer","type":"day-time interval","decl":"INTERVAL","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INTERVAL."}
+{"db":"SqlServer","type":"day-time interval","decl":"INTERVAL DAY TO FRACTION","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027DAY\u0027."}
+{"db":"SqlServer","type":"generic interval","decl":"INTERVAL","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INTERVAL."}
+{"db":"SqlServer","type":"generic interval","decl":"INTERVAL(6)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INTERVAL."}
+{"db":"SqlServer","type":"generic interval","decl":"INTERVAL (query-only)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027-\u0027."}
+{"db":"SqlServer","type":"UUID / GUID","decl":"UUID","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UUID."}
+{"db":"SqlServer","type":"UUID / GUID","decl":"UNIQUEIDENTIFIER","accepted":true,"providerType":"uniqueidentifier","clrType":"System.Guid"}
+{"db":"SqlServer","type":"UUID / GUID","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type RAW."}
+{"db":"SqlServer","type":"UUID / GUID","decl":"CHAR(36)","accepted":true,"providerType":"char","clrType":"System.String"}
+{"db":"SqlServer","type":"UUID / GUID","decl":"BINARY(16)","accepted":true,"providerType":"binary","clrType":"System.Byte[]"}
+{"db":"SqlServer","type":"row identifier / ROWID","decl":"ROWID","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ROWID."}
+{"db":"SqlServer","type":"row identifier / ROWID","decl":"UROWID","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type UROWID."}
+{"db":"SqlServer","type":"row identifier / ROWID","decl":"CHAR(18)","accepted":true,"providerType":"char","clrType":"System.String"}
+{"db":"SqlServer","type":"object identifier / OID","decl":"OID","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type OID."}
+{"db":"SqlServer","type":"object identifier / OID","decl":"REGCLASS","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type REGCLASS."}
+{"db":"SqlServer","type":"transaction ID","decl":"XID","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type XID."}
+{"db":"SqlServer","type":"transaction ID","decl":"XID8","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type XID8."}
+{"db":"SqlServer","type":"WAL / log position","decl":"PG_LSN","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type PG_LSN."}
+{"db":"SqlServer","type":"JSON text / JSON value","decl":"JSON","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type json."}
+{"db":"SqlServer","type":"JSON text / JSON value","decl":"JSONB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type JSONB."}
+{"db":"SqlServer","type":"JSON text / JSON value","decl":"CLOB CHECK (c IS JSON)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027JSON\u0027."}
+{"db":"SqlServer","type":"JSON text / JSON value","decl":"JSON -\u003E JSONB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027-\u0027."}
+{"db":"SqlServer","type":"JSON text / JSON value","decl":"JSON -\u003E LONGTEXT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027-\u0027."}
+{"db":"SqlServer","type":"JSON text / JSON value","decl":"TEXT \u002B JSON functions","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027\u002B\u0027."}
+{"db":"SqlServer","type":"JSON text / JSON value","decl":"JSON extension","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027extension\u0027."}
+{"db":"SqlServer","type":"native binary JSON","decl":"JSONB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type JSONB."}
+{"db":"SqlServer","type":"native binary JSON","decl":"BSON","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BSON."}
+{"db":"SqlServer","type":"native binary JSON","decl":"JSON (binary storage)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027binary\u0027."}
+{"db":"SqlServer","type":"native binary JSON","decl":"VARIANT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type VARIANT."}
+{"db":"SqlServer","type":"native binary JSON","decl":"JSON","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type json."}
+{"db":"SqlServer","type":"XML","decl":"XML","accepted":true,"providerType":"xml","clrType":"System.String"}
+{"db":"SqlServer","type":"XML","decl":"CLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type CLOB."}
+{"db":"SqlServer","type":"XML","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NCLOB."}
+{"db":"SqlServer","type":"XML","decl":"XMLTYPE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type XMLTYPE."}
+{"db":"SqlServer","type":"XML","decl":"PARSE_XML -\u003E VARIANT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027-\u0027."}
+{"db":"SqlServer","type":"BSON","decl":"BSON","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BSON."}
+{"db":"SqlServer","type":"BSON","decl":"BYTEA","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BYTEA."}
+{"db":"SqlServer","type":"BSON","decl":"VARIANT (not BSON)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027not\u0027."}
+{"db":"SqlServer","type":"variant / dynamic value","decl":"VARIANT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type VARIANT."}
+{"db":"SqlServer","type":"variant / dynamic value","decl":"SQL_VARIANT","accepted":true,"providerType":"sql_variant","clrType":"System.Object"}
+{"db":"SqlServer","type":"variant / dynamic value","decl":"ANYDATA","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ANYDATA."}
+{"db":"SqlServer","type":"variant / dynamic value","decl":"opaque types","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027types\u0027."}
+{"db":"SqlServer","type":"IP address","decl":"INET","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INET."}
+{"db":"SqlServer","type":"IP address","decl":"IPADDRESS","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type IPADDRESS."}
+{"db":"SqlServer","type":"IP address","decl":"VARCHAR(45)","accepted":true,"providerType":"varchar","clrType":"System.String"}
+{"db":"SqlServer","type":"IP address","decl":"VARCHAR representation","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027representation\u0027."}
+{"db":"SqlServer","type":"IP network / CIDR","decl":"CIDR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type CIDR."}
+{"db":"SqlServer","type":"IP network / CIDR","decl":"INET","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INET."}
+{"db":"SqlServer","type":"MAC address","decl":"MACADDR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type MACADDR."}
+{"db":"SqlServer","type":"MAC address","decl":"MACADDR8","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type MACADDR8."}
+{"db":"SqlServer","type":"point geometry","decl":"POINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type POINT."}
+{"db":"SqlServer","type":"point geometry","decl":"GEOMETRY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027,\u0027."}
+{"db":"SqlServer","type":"point geometry","decl":"SDO_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type SDO_GEOMETRY."}
+{"db":"SqlServer","type":"point geometry","decl":"GEOMETRY(POINT)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027POINT\u0027."}
+{"db":"SqlServer","type":"point geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027extension\u0027."}
+{"db":"SqlServer","type":"point geometry","decl":"GEOMETRY","accepted":true,"providerType":"crud_test_cd4a13d241.sys.geometry","clrType":"pengdows.crud.types.valueobjects.Geometry"}
+{"db":"SqlServer","type":"point geometry","decl":"spatial DataBlade","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027DataBlade\u0027."}
+{"db":"SqlServer","type":"point geometry","decl":"ST_POINT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ST_POINT."}
+{"db":"SqlServer","type":"line / linestring geometry","decl":"LINESTRING","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type LINESTRING."}
+{"db":"SqlServer","type":"line / linestring geometry","decl":"GEOMETRY(LINESTRING)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027LINESTRING\u0027."}
+{"db":"SqlServer","type":"line / linestring geometry","decl":"GEOMETRY","accepted":true,"providerType":"crud_test_cd4a13d241.sys.geometry","clrType":"pengdows.crud.types.valueobjects.Geometry"}
+{"db":"SqlServer","type":"line / linestring geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027extension\u0027."}
+{"db":"SqlServer","type":"line / linestring geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ST_GEOMETRY."}
+{"db":"SqlServer","type":"polygon geometry","decl":"POLYGON","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type POLYGON."}
+{"db":"SqlServer","type":"polygon geometry","decl":"GEOMETRY(POLYGON)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027POLYGON\u0027."}
+{"db":"SqlServer","type":"polygon geometry","decl":"GEOMETRY","accepted":true,"providerType":"crud_test_cd4a13d241.sys.geometry","clrType":"pengdows.crud.types.valueobjects.Geometry"}
+{"db":"SqlServer","type":"polygon geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027extension\u0027."}
+{"db":"SqlServer","type":"polygon geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ST_GEOMETRY."}
+{"db":"SqlServer","type":"general geometry","decl":"GEOMETRY","accepted":true,"providerType":"crud_test_cd4a13d241.sys.geometry","clrType":"pengdows.crud.types.valueobjects.Geometry"}
+{"db":"SqlServer","type":"general geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ST_GEOMETRY."}
+{"db":"SqlServer","type":"general geometry","decl":"SDO_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type SDO_GEOMETRY."}
+{"db":"SqlServer","type":"general geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027extension\u0027."}
+{"db":"SqlServer","type":"geography / geodetic","decl":"GEOGRAPHY","accepted":true,"providerType":"crud_test_cd4a13d241.sys.geography","clrType":"pengdows.crud.types.valueobjects.Geography"}
+{"db":"SqlServer","type":"geography / geodetic","decl":"GEOGRAPHY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027,\u0027."}
+{"db":"SqlServer","type":"geography / geodetic","decl":"PostGIS geography","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027geography\u0027."}
+{"db":"SqlServer","type":"geography / geodetic","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027extension\u0027."}
+{"db":"SqlServer","type":"geography / geodetic","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ST_GEOMETRY."}
+{"db":"SqlServer","type":"SQL array","decl":"INTEGER ARRAY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027ARRAY\u0027."}
+{"db":"SqlServer","type":"SQL array","decl":"INTEGER[]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: An object or column name is missing or empty. For SELECT INTO statements, verify each column has a name. For other statements, look for empty alias names. Aliases defined as \u0022\u0022 or [] are not "}
+{"db":"SqlServer","type":"SQL array","decl":"INT[]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: An object or column name is missing or empty. For SELECT INTO statements, verify each column has a name. For other statements, look for empty alias names. Aliases defined as \u0022\u0022 or [] are not "}
+{"db":"SqlServer","type":"SQL array","decl":"type[]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: An object or column name is missing or empty. For SELECT INTO statements, verify each column has a name. For other statements, look for empty alias names. Aliases defined as \u0022\u0022 or [] are not "}
+{"db":"SqlServer","type":"SQL array","decl":"type[n] (legacy fixed array)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"SQL array","decl":"ARRAY(type)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027type\u0027."}
+{"db":"SqlServer","type":"SQL array","decl":"type[] (1 dimension)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: An object or column name is missing or empty. For SELECT INTO statements, verify each column has a name. For other statements, look for empty alias names. Aliases defined as \u0022\u0022 or [] are not "}
+{"db":"SqlServer","type":"SQL array","decl":"ARRAY (SQLScript)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027SQLScript\u0027."}
+{"db":"SqlServer","type":"fixed-length array","decl":"INTEGER ARRAY[10]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027ARRAY\u0027."}
+{"db":"SqlServer","type":"fixed-length array","decl":"INTEGER[10]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u002710\u0027."}
+{"db":"SqlServer","type":"fixed-length array","decl":"type[n] (not enforced as fixed)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"fixed-length array","decl":"type[n]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"fixed-length array","decl":"ARRAY(type)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027type\u0027."}
+{"db":"SqlServer","type":"list / multiset / set collection","decl":"INTEGER MULTISET","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027MULTISET\u0027."}
+{"db":"SqlServer","type":"list / multiset / set collection","decl":"LIST(INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027INTEGER\u0027."}
+{"db":"SqlServer","type":"list / multiset / set collection","decl":"MULTISET","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type MULTISET."}
+{"db":"SqlServer","type":"list / multiset / set collection","decl":"type[]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: An object or column name is missing or empty. For SELECT INTO statements, verify each column has a name. For other statements, look for empty alias names. Aliases defined as \u0022\u0022 or [] are not "}
+{"db":"SqlServer","type":"list / multiset / set collection","decl":"LIST","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type LIST."}
+{"db":"SqlServer","type":"list / multiset / set collection","decl":"ARRAY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ARRAY."}
+{"db":"SqlServer","type":"map / dictionary","decl":"MAP(VARCHAR(10),INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027(\u0027."}
+{"db":"SqlServer","type":"map / dictionary","decl":"HSTORE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type HSTORE."}
+{"db":"SqlServer","type":"struct / composite / row","decl":"ROW(a INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027a\u0027."}
+{"db":"SqlServer","type":"struct / composite / row","decl":"STRUCT(a INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027a\u0027."}
+{"db":"SqlServer","type":"struct / composite / row","decl":"STRUCT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type STRUCT."}
+{"db":"SqlServer","type":"struct / composite / row","decl":"OBJECT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type OBJECT."}
+{"db":"SqlServer","type":"struct / composite / row","decl":"ROW","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ROW."}
+{"db":"SqlServer","type":"tagged union / variant","decl":"UNION(a INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027UNION\u0027."}
+{"db":"SqlServer","type":"tagged union / variant","decl":"SQL_VARIANT","accepted":true,"providerType":"sql_variant","clrType":"System.Object"}
+{"db":"SqlServer","type":"tagged union / variant","decl":"VARIANT","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type VARIANT."}
+{"db":"SqlServer","type":"range","decl":"INT4RANGE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT4RANGE."}
+{"db":"SqlServer","type":"range","decl":"INT8RANGE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT8RANGE."}
+{"db":"SqlServer","type":"range","decl":"TSTZRANGE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TSTZRANGE."}
+{"db":"SqlServer","type":"range","decl":"NUMRANGE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type NUMRANGE."}
+{"db":"SqlServer","type":"multirange","decl":"INT4MULTIRANGE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT4MULTIRANGE."}
+{"db":"SqlServer","type":"multirange","decl":"INT8MULTIRANGE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type INT8MULTIRANGE."}
+{"db":"SqlServer","type":"user-defined enum / domain","decl":"CREATE TYPE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: The definition for column \u0027c\u0027 must include a data type."}
+{"db":"SqlServer","type":"user-defined enum / domain","decl":"CREATE DOMAIN","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: The definition for column \u0027c\u0027 must include a data type. Unknown object type \u0027DOMAIN\u0027 used in a CREATE, DROP, or ALTER statement."}
+{"db":"SqlServer","type":"user-defined enum / domain","decl":"ENUM","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type ENUM."}
+{"db":"SqlServer","type":"user-defined enum / domain","decl":"CREATE DISTINCT TYPE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: The definition for column \u0027c\u0027 must include a data type."}
+{"db":"SqlServer","type":"user-defined scalar / object","decl":"CREATE TYPE alias","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: The definition for column \u0027c\u0027 must include a data type. Incorrect syntax near \u0027)\u0027."}
+{"db":"SqlServer","type":"full-text search vector / query","decl":"TSVECTOR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TSVECTOR."}
+{"db":"SqlServer","type":"full-text search vector / query","decl":"TSQUERY","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type TSQUERY."}
+{"db":"SqlServer","type":"vector embedding","decl":"VECTOR(3)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type VECTOR."}
+{"db":"SqlServer","type":"vector embedding","decl":"VECTOR(3,FLOAT32)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027FLOAT32\u0027."}
+{"db":"SqlServer","type":"vector embedding","decl":"VECTOR(n)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027n\u0027."}
+{"db":"SqlServer","type":"vector embedding","decl":"VECTOR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type VECTOR."}
+{"db":"SqlServer","type":"vector embedding","decl":"VECTOR (not in standard MySQL 8.4)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027not\u0027."}
+{"db":"SqlServer","type":"vector embedding","decl":"FLOAT[dimension]","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027dimension\u0027."}
+{"db":"SqlServer","type":"hierarchical path","decl":"HIERARCHYID","accepted":true,"providerType":"crud_test_cd4a13d241.sys.hierarchyid","clrType":"pengdows.crud.types.valueobjects.HierarchyId"}
+{"db":"SqlServer","type":"hierarchical path","decl":"LTREE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type LTREE."}
+{"db":"SqlServer","type":"opaque / special database type","decl":"SQL_VARIANT","accepted":true,"providerType":"sql_variant","clrType":"System.Object"}
+{"db":"SqlServer","type":"opaque / special database type","decl":"FILE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027FILE\u0027."}
+{"db":"SqlServer","type":"external-file reference","decl":"BFILE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type BFILE."}
+{"db":"SqlServer","type":"external-file reference","decl":"FILE","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027FILE\u0027."}
+{"db":"SqlServer","type":"spatial raster / other extensions","decl":"RASTER","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type RASTER."}
+{"db":"SqlServer","type":"spatial raster / other extensions","decl":"GEOMETRY(RASTER)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near \u0027RASTER\u0027."}
+{"db":"SqlServer","type":"cursor / table variable","decl":"REFCURSOR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type REFCURSOR."}
+{"db":"SqlServer","type":"cursor / table variable","decl":"SYS_REFCURSOR","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type SYS_REFCURSOR."}
+{"db":"SqlServer","type":"cursor / table variable","decl":"TABLE TYPE (SQLScript)","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Incorrect syntax near the keyword \u0027TABLE\u0027."}
+{"db":"SqlServer","type":"specialized security label","decl":"IDSSECURITYLABEL","accepted":false,"stage":"create","error":"Unknown failed on SqlServer: Column, parameter, or variable #2: Cannot find data type IDSSECURITYLABEL."}

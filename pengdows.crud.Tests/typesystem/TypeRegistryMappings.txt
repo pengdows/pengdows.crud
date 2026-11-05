@@ -1,0 +1,1056 @@
+== System.Boolean
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: declared=Int16 configured=Int16/size=0 converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: declared=Boolean configured=AnsiString/size=0 converter=-
+== System.Byte
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.SByte
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Int16
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.UInt16
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Int32
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.UInt32
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Int64
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.UInt64
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Int128
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.UInt128
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Numerics.BigInteger
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Single
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Double
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Decimal
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: declared=Double configured=Double/size=0 converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.String
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Guid
+  PostgreSql: declared=Guid configured=AnsiString/size=0 converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: declared=Guid configured=AnsiString/size=0 converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: declared=Guid configured=AnsiString/size=0 converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.DateTime
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: declared=DateTime configured=AnsiString/size=0 converter=-
+== System.DateTimeOffset
+  PostgreSql: no-mapping converter=-
+  SqlServer: declared=DateTimeOffset configured=DateTimeOffset/size=0 converter=-
+  Oracle: declared=Object configured=AnsiString/size=0 converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: declared=DateTime configured=DateTime/size=0 converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.DateOnly
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.TimeOnly
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.TimeSpan
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: declared=Object configured=AnsiString/size=0 converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Byte[]
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: declared=Binary configured=Binary/size=0 converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Collections.BitArray
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: declared=String configured=String/size=0 converter=-
+  MySql: declared=String configured=String/size=0 converter=-
+  Sqlite: declared=String configured=String/size=0 converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: declared=String configured=String/size=0 converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: declared=String configured=String/size=0 converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: declared=String configured=String/size=0 converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Text.Json.JsonDocument
+  PostgreSql: declared=String configured=String/size=0 converter=JsonDocumentConverter
+  SqlServer: declared=String configured=String/size=-1 converter=JsonDocumentConverter
+  Oracle: no-mapping converter=JsonDocumentConverter
+  Firebird: no-mapping converter=JsonDocumentConverter
+  CockroachDb: declared=String configured=String/size=0 converter=JsonDocumentConverter
+  MariaDb: no-mapping converter=JsonDocumentConverter
+  MySql: declared=String configured=AnsiString/size=0 converter=JsonDocumentConverter
+  Sqlite: no-mapping converter=JsonDocumentConverter
+  DuckDB: no-mapping converter=JsonDocumentConverter
+  YugabyteDb: declared=String configured=String/size=0 converter=JsonDocumentConverter
+  TiDb: declared=String configured=AnsiString/size=0 converter=JsonDocumentConverter
+  Snowflake: no-mapping converter=JsonDocumentConverter
+  AuroraMySql: no-mapping converter=JsonDocumentConverter
+  AuroraPostgreSql: no-mapping converter=JsonDocumentConverter
+  Db2: no-mapping converter=JsonDocumentConverter
+  FlatFile: no-mapping converter=JsonDocumentConverter
+  SingleStore: no-mapping converter=JsonDocumentConverter
+  SybaseASE: no-mapping converter=JsonDocumentConverter
+  Spanner: no-mapping converter=JsonDocumentConverter
+  Informix: no-mapping converter=JsonDocumentConverter
+  SapHana: no-mapping converter=JsonDocumentConverter
+  InterBase: no-mapping converter=JsonDocumentConverter
+  Access: no-mapping converter=JsonDocumentConverter
+== System.Net.IPAddress
+  PostgreSql: no-mapping converter=IPAddressConverter
+  SqlServer: no-mapping converter=IPAddressConverter
+  Oracle: no-mapping converter=IPAddressConverter
+  Firebird: no-mapping converter=IPAddressConverter
+  CockroachDb: no-mapping converter=IPAddressConverter
+  MariaDb: no-mapping converter=IPAddressConverter
+  MySql: no-mapping converter=IPAddressConverter
+  Sqlite: no-mapping converter=IPAddressConverter
+  DuckDB: no-mapping converter=IPAddressConverter
+  YugabyteDb: no-mapping converter=IPAddressConverter
+  TiDb: no-mapping converter=IPAddressConverter
+  Snowflake: no-mapping converter=IPAddressConverter
+  AuroraMySql: no-mapping converter=IPAddressConverter
+  AuroraPostgreSql: no-mapping converter=IPAddressConverter
+  Db2: no-mapping converter=IPAddressConverter
+  FlatFile: no-mapping converter=IPAddressConverter
+  SingleStore: no-mapping converter=IPAddressConverter
+  SybaseASE: no-mapping converter=IPAddressConverter
+  Spanner: no-mapping converter=IPAddressConverter
+  Informix: no-mapping converter=IPAddressConverter
+  SapHana: no-mapping converter=IPAddressConverter
+  InterBase: no-mapping converter=IPAddressConverter
+  Access: no-mapping converter=IPAddressConverter
+== System.Net.NetworkInformation.PhysicalAddress
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== pengdows.crud.types.valueobjects.Cidr
+  PostgreSql: declared=String configured=AnsiString/size=0 converter=CidrConverter
+  SqlServer: no-mapping converter=CidrConverter
+  Oracle: no-mapping converter=CidrConverter
+  Firebird: no-mapping converter=CidrConverter
+  CockroachDb: declared=String configured=String/size=0 converter=CidrConverter
+  MariaDb: no-mapping converter=CidrConverter
+  MySql: no-mapping converter=CidrConverter
+  Sqlite: no-mapping converter=CidrConverter
+  DuckDB: no-mapping converter=CidrConverter
+  YugabyteDb: declared=String configured=AnsiString/size=0 converter=CidrConverter
+  TiDb: no-mapping converter=CidrConverter
+  Snowflake: no-mapping converter=CidrConverter
+  AuroraMySql: no-mapping converter=CidrConverter
+  AuroraPostgreSql: no-mapping converter=CidrConverter
+  Db2: no-mapping converter=CidrConverter
+  FlatFile: no-mapping converter=CidrConverter
+  SingleStore: no-mapping converter=CidrConverter
+  SybaseASE: no-mapping converter=CidrConverter
+  Spanner: no-mapping converter=CidrConverter
+  Informix: no-mapping converter=CidrConverter
+  SapHana: no-mapping converter=CidrConverter
+  InterBase: no-mapping converter=CidrConverter
+  Access: no-mapping converter=CidrConverter
+== pengdows.crud.types.valueobjects.Inet
+  PostgreSql: declared=String configured=AnsiString/size=0 converter=InetConverter
+  SqlServer: no-mapping converter=InetConverter
+  Oracle: no-mapping converter=InetConverter
+  Firebird: no-mapping converter=InetConverter
+  CockroachDb: declared=String configured=AnsiString/size=0 converter=InetConverter
+  MariaDb: no-mapping converter=InetConverter
+  MySql: no-mapping converter=InetConverter
+  Sqlite: no-mapping converter=InetConverter
+  DuckDB: no-mapping converter=InetConverter
+  YugabyteDb: declared=String configured=AnsiString/size=0 converter=InetConverter
+  TiDb: no-mapping converter=InetConverter
+  Snowflake: no-mapping converter=InetConverter
+  AuroraMySql: no-mapping converter=InetConverter
+  AuroraPostgreSql: no-mapping converter=InetConverter
+  Db2: no-mapping converter=InetConverter
+  FlatFile: no-mapping converter=InetConverter
+  SingleStore: no-mapping converter=InetConverter
+  SybaseASE: no-mapping converter=InetConverter
+  Spanner: no-mapping converter=InetConverter
+  Informix: no-mapping converter=InetConverter
+  SapHana: no-mapping converter=InetConverter
+  InterBase: no-mapping converter=InetConverter
+  Access: no-mapping converter=InetConverter
+== pengdows.crud.types.valueobjects.MacAddress
+  PostgreSql: declared=String configured=AnsiString/size=0 converter=MacAddressConverter
+  SqlServer: no-mapping converter=MacAddressConverter
+  Oracle: no-mapping converter=MacAddressConverter
+  Firebird: no-mapping converter=MacAddressConverter
+  CockroachDb: declared=String configured=AnsiString/size=0 converter=MacAddressConverter
+  MariaDb: no-mapping converter=MacAddressConverter
+  MySql: no-mapping converter=MacAddressConverter
+  Sqlite: no-mapping converter=MacAddressConverter
+  DuckDB: no-mapping converter=MacAddressConverter
+  YugabyteDb: declared=String configured=AnsiString/size=0 converter=MacAddressConverter
+  TiDb: no-mapping converter=MacAddressConverter
+  Snowflake: no-mapping converter=MacAddressConverter
+  AuroraMySql: no-mapping converter=MacAddressConverter
+  AuroraPostgreSql: no-mapping converter=MacAddressConverter
+  Db2: no-mapping converter=MacAddressConverter
+  FlatFile: no-mapping converter=MacAddressConverter
+  SingleStore: no-mapping converter=MacAddressConverter
+  SybaseASE: no-mapping converter=MacAddressConverter
+  Spanner: no-mapping converter=MacAddressConverter
+  Informix: no-mapping converter=MacAddressConverter
+  SapHana: no-mapping converter=MacAddressConverter
+  InterBase: no-mapping converter=MacAddressConverter
+  Access: no-mapping converter=MacAddressConverter
+== pengdows.crud.types.valueobjects.Geometry
+  PostgreSql: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  SqlServer: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  Oracle: no-mapping converter=GeometryConverter
+  Firebird: no-mapping converter=GeometryConverter
+  CockroachDb: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  MariaDb: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  MySql: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  Sqlite: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  DuckDB: no-mapping converter=GeometryConverter
+  YugabyteDb: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  TiDb: no-mapping converter=GeometryConverter
+  Snowflake: declared=String configured=String/size=0 converter=GeometryConverter
+  AuroraMySql: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  AuroraPostgreSql: no-mapping converter=GeometryConverter
+  Db2: no-mapping converter=GeometryConverter
+  FlatFile: no-mapping converter=GeometryConverter
+  SingleStore: declared=String configured=throws:NotSupportedException converter=GeometryConverter
+  SybaseASE: no-mapping converter=GeometryConverter
+  Spanner: no-mapping converter=GeometryConverter
+  Informix: no-mapping converter=GeometryConverter
+  SapHana: declared=Binary configured=Binary/size=0 converter=GeometryConverter
+  InterBase: no-mapping converter=GeometryConverter
+  Access: no-mapping converter=GeometryConverter
+== pengdows.crud.types.valueobjects.Geography
+  PostgreSql: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  SqlServer: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  Oracle: no-mapping converter=GeographyConverter
+  Firebird: no-mapping converter=GeographyConverter
+  CockroachDb: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  MariaDb: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  MySql: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  Sqlite: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  DuckDB: no-mapping converter=GeographyConverter
+  YugabyteDb: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  TiDb: no-mapping converter=GeographyConverter
+  Snowflake: declared=String configured=String/size=0 converter=GeographyConverter
+  AuroraMySql: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  AuroraPostgreSql: no-mapping converter=GeographyConverter
+  Db2: no-mapping converter=GeographyConverter
+  FlatFile: no-mapping converter=GeographyConverter
+  SingleStore: declared=String configured=String/size=0 converter=GeographyConverter
+  SybaseASE: no-mapping converter=GeographyConverter
+  Spanner: no-mapping converter=GeographyConverter
+  Informix: no-mapping converter=GeographyConverter
+  SapHana: declared=Binary configured=Binary/size=0 converter=GeographyConverter
+  InterBase: no-mapping converter=GeographyConverter
+  Access: no-mapping converter=GeographyConverter
+== pengdows.crud.types.valueobjects.HierarchyId
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== pengdows.crud.types.valueobjects.Range`1[System.Int32]
+  PostgreSql: declared=Object configured=AnsiString/size=0 converter=PostgreSqlRangeConverter`1
+  SqlServer: no-mapping converter=PostgreSqlRangeConverter`1
+  Oracle: no-mapping converter=PostgreSqlRangeConverter`1
+  Firebird: no-mapping converter=PostgreSqlRangeConverter`1
+  CockroachDb: declared=Object configured=AnsiString/size=0 converter=PostgreSqlRangeConverter`1
+  MariaDb: no-mapping converter=PostgreSqlRangeConverter`1
+  MySql: no-mapping converter=PostgreSqlRangeConverter`1
+  Sqlite: no-mapping converter=PostgreSqlRangeConverter`1
+  DuckDB: no-mapping converter=PostgreSqlRangeConverter`1
+  YugabyteDb: declared=Object configured=AnsiString/size=0 converter=PostgreSqlRangeConverter`1
+  TiDb: no-mapping converter=PostgreSqlRangeConverter`1
+  Snowflake: no-mapping converter=PostgreSqlRangeConverter`1
+  AuroraMySql: no-mapping converter=PostgreSqlRangeConverter`1
+  AuroraPostgreSql: no-mapping converter=PostgreSqlRangeConverter`1
+  Db2: no-mapping converter=PostgreSqlRangeConverter`1
+  FlatFile: no-mapping converter=PostgreSqlRangeConverter`1
+  SingleStore: no-mapping converter=PostgreSqlRangeConverter`1
+  SybaseASE: no-mapping converter=PostgreSqlRangeConverter`1
+  Spanner: no-mapping converter=PostgreSqlRangeConverter`1
+  Informix: no-mapping converter=PostgreSqlRangeConverter`1
+  SapHana: no-mapping converter=PostgreSqlRangeConverter`1
+  InterBase: no-mapping converter=PostgreSqlRangeConverter`1
+  Access: no-mapping converter=PostgreSqlRangeConverter`1
+== pengdows.crud.types.valueobjects.Range`1[System.DateTime]
+  PostgreSql: declared=Object configured=AnsiString/size=0 converter=PostgreSqlRangeConverter`1
+  SqlServer: no-mapping converter=PostgreSqlRangeConverter`1
+  Oracle: no-mapping converter=PostgreSqlRangeConverter`1
+  Firebird: no-mapping converter=PostgreSqlRangeConverter`1
+  CockroachDb: declared=Object configured=AnsiString/size=0 converter=PostgreSqlRangeConverter`1
+  MariaDb: no-mapping converter=PostgreSqlRangeConverter`1
+  MySql: no-mapping converter=PostgreSqlRangeConverter`1
+  Sqlite: no-mapping converter=PostgreSqlRangeConverter`1
+  DuckDB: no-mapping converter=PostgreSqlRangeConverter`1
+  YugabyteDb: declared=Object configured=AnsiString/size=0 converter=PostgreSqlRangeConverter`1
+  TiDb: no-mapping converter=PostgreSqlRangeConverter`1
+  Snowflake: no-mapping converter=PostgreSqlRangeConverter`1
+  AuroraMySql: no-mapping converter=PostgreSqlRangeConverter`1
+  AuroraPostgreSql: no-mapping converter=PostgreSqlRangeConverter`1
+  Db2: no-mapping converter=PostgreSqlRangeConverter`1
+  FlatFile: no-mapping converter=PostgreSqlRangeConverter`1
+  SingleStore: no-mapping converter=PostgreSqlRangeConverter`1
+  SybaseASE: no-mapping converter=PostgreSqlRangeConverter`1
+  Spanner: no-mapping converter=PostgreSqlRangeConverter`1
+  Informix: no-mapping converter=PostgreSqlRangeConverter`1
+  SapHana: no-mapping converter=PostgreSqlRangeConverter`1
+  InterBase: no-mapping converter=PostgreSqlRangeConverter`1
+  Access: no-mapping converter=PostgreSqlRangeConverter`1
+== pengdows.crud.types.valueobjects.IntervalYearMonth
+  PostgreSql: declared=Object configured=AnsiString/size=0 converter=IntervalYearMonthConverter
+  SqlServer: no-mapping converter=IntervalYearMonthConverter
+  Oracle: declared=Object configured=AnsiString/size=0 converter=IntervalYearMonthConverter
+  Firebird: no-mapping converter=IntervalYearMonthConverter
+  CockroachDb: declared=String configured=String/size=0 converter=IntervalYearMonthConverter
+  MariaDb: no-mapping converter=IntervalYearMonthConverter
+  MySql: no-mapping converter=IntervalYearMonthConverter
+  Sqlite: no-mapping converter=IntervalYearMonthConverter
+  DuckDB: no-mapping converter=IntervalYearMonthConverter
+  YugabyteDb: declared=Object configured=AnsiString/size=0 converter=IntervalYearMonthConverter
+  TiDb: no-mapping converter=IntervalYearMonthConverter
+  Snowflake: no-mapping converter=IntervalYearMonthConverter
+  AuroraMySql: no-mapping converter=IntervalYearMonthConverter
+  AuroraPostgreSql: no-mapping converter=IntervalYearMonthConverter
+  Db2: no-mapping converter=IntervalYearMonthConverter
+  FlatFile: no-mapping converter=IntervalYearMonthConverter
+  SingleStore: no-mapping converter=IntervalYearMonthConverter
+  SybaseASE: no-mapping converter=IntervalYearMonthConverter
+  Spanner: no-mapping converter=IntervalYearMonthConverter
+  Informix: no-mapping converter=IntervalYearMonthConverter
+  SapHana: no-mapping converter=IntervalYearMonthConverter
+  InterBase: no-mapping converter=IntervalYearMonthConverter
+  Access: no-mapping converter=IntervalYearMonthConverter
+== pengdows.crud.types.valueobjects.IntervalDaySecond
+  PostgreSql: declared=Object configured=AnsiString/size=0 converter=IntervalDaySecondConverter
+  SqlServer: no-mapping converter=IntervalDaySecondConverter
+  Oracle: declared=Object configured=AnsiString/size=0 converter=IntervalDaySecondConverter
+  Firebird: no-mapping converter=IntervalDaySecondConverter
+  CockroachDb: declared=String configured=String/size=0 converter=IntervalDaySecondConverter
+  MariaDb: no-mapping converter=IntervalDaySecondConverter
+  MySql: no-mapping converter=IntervalDaySecondConverter
+  Sqlite: no-mapping converter=IntervalDaySecondConverter
+  DuckDB: no-mapping converter=IntervalDaySecondConverter
+  YugabyteDb: declared=Object configured=AnsiString/size=0 converter=IntervalDaySecondConverter
+  TiDb: no-mapping converter=IntervalDaySecondConverter
+  Snowflake: no-mapping converter=IntervalDaySecondConverter
+  AuroraMySql: no-mapping converter=IntervalDaySecondConverter
+  AuroraPostgreSql: no-mapping converter=IntervalDaySecondConverter
+  Db2: no-mapping converter=IntervalDaySecondConverter
+  FlatFile: no-mapping converter=IntervalDaySecondConverter
+  SingleStore: no-mapping converter=IntervalDaySecondConverter
+  SybaseASE: no-mapping converter=IntervalDaySecondConverter
+  Spanner: no-mapping converter=IntervalDaySecondConverter
+  Informix: no-mapping converter=IntervalDaySecondConverter
+  SapHana: no-mapping converter=IntervalDaySecondConverter
+  InterBase: no-mapping converter=IntervalDaySecondConverter
+  Access: no-mapping converter=IntervalDaySecondConverter
+== pengdows.crud.types.valueobjects.PostgreSqlInterval
+  PostgreSql: declared=Object configured=AnsiString/size=0 converter=PostgreSqlIntervalConverter
+  SqlServer: no-mapping converter=PostgreSqlIntervalConverter
+  Oracle: no-mapping converter=PostgreSqlIntervalConverter
+  Firebird: no-mapping converter=PostgreSqlIntervalConverter
+  CockroachDb: declared=Object configured=AnsiString/size=0 converter=PostgreSqlIntervalConverter
+  MariaDb: no-mapping converter=PostgreSqlIntervalConverter
+  MySql: no-mapping converter=PostgreSqlIntervalConverter
+  Sqlite: no-mapping converter=PostgreSqlIntervalConverter
+  DuckDB: no-mapping converter=PostgreSqlIntervalConverter
+  YugabyteDb: declared=Object configured=AnsiString/size=0 converter=PostgreSqlIntervalConverter
+  TiDb: no-mapping converter=PostgreSqlIntervalConverter
+  Snowflake: no-mapping converter=PostgreSqlIntervalConverter
+  AuroraMySql: no-mapping converter=PostgreSqlIntervalConverter
+  AuroraPostgreSql: no-mapping converter=PostgreSqlIntervalConverter
+  Db2: no-mapping converter=PostgreSqlIntervalConverter
+  FlatFile: no-mapping converter=PostgreSqlIntervalConverter
+  SingleStore: no-mapping converter=PostgreSqlIntervalConverter
+  SybaseASE: no-mapping converter=PostgreSqlIntervalConverter
+  Spanner: no-mapping converter=PostgreSqlIntervalConverter
+  Informix: no-mapping converter=PostgreSqlIntervalConverter
+  SapHana: no-mapping converter=PostgreSqlIntervalConverter
+  InterBase: no-mapping converter=PostgreSqlIntervalConverter
+  Access: no-mapping converter=PostgreSqlIntervalConverter
+== System.Single[]
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: declared=Binary configured=Binary/size=0 converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Int32[]
+  PostgreSql: declared=Object configured=AnsiString/size=0 converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: declared=Object configured=AnsiString/size=0 converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: declared=String configured=String/size=0 converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: declared=Object configured=AnsiString/size=0 converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Collections.Generic.List`1[System.Int32]
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: declared=String configured=String/size=0 converter=-
+  DuckDB: declared=String configured=String/size=0 converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Collections.Generic.Dictionary`2[System.String,System.Object]
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: declared=String configured=String/size=0 converter=-
+  DuckDB: declared=String configured=String/size=0 converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== pengdows.crud.types.valueobjects.HStore
+  PostgreSql: declared=Object configured=AnsiString/size=0 converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: declared=Object configured=AnsiString/size=0 converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-
+== System.Object
+  PostgreSql: no-mapping converter=-
+  SqlServer: no-mapping converter=-
+  Oracle: no-mapping converter=-
+  Firebird: no-mapping converter=-
+  CockroachDb: no-mapping converter=-
+  MariaDb: no-mapping converter=-
+  MySql: no-mapping converter=-
+  Sqlite: no-mapping converter=-
+  DuckDB: no-mapping converter=-
+  YugabyteDb: no-mapping converter=-
+  TiDb: no-mapping converter=-
+  Snowflake: no-mapping converter=-
+  AuroraMySql: no-mapping converter=-
+  AuroraPostgreSql: no-mapping converter=-
+  Db2: no-mapping converter=-
+  FlatFile: no-mapping converter=-
+  SingleStore: no-mapping converter=-
+  SybaseASE: no-mapping converter=-
+  Spanner: no-mapping converter=-
+  Informix: no-mapping converter=-
+  SapHana: no-mapping converter=-
+  InterBase: no-mapping converter=-
+  Access: no-mapping converter=-

@@ -88,7 +88,7 @@ public class IntervalParsingTests
     public void DaySecond_OtherText_Fails(string text)
     {
         Assert.Throws<FormatException>(() => IntervalDaySecond.Parse(text));
-        Assert.Null(new IntervalDaySecondConverter().FromProviderValue(text, SupportedDatabase.Oracle));
+        Assert.Throws<FormatException>(() => new IntervalDaySecondConverter().FromProviderValue(text, SupportedDatabase.Oracle));
     }
 
     // Blank text is no interval on the read path (COR-002); Parse keeps its documented zero for blank.
@@ -104,8 +104,8 @@ public class IntervalParsingTests
     // What the converters write, they read back exactly.
     [Theory]
     [InlineData(SupportedDatabase.Oracle)]
-    [InlineData(SupportedDatabase.PostgreSql)]
     [InlineData(SupportedDatabase.SqlServer)]
+    // PostgreSQL is not here: it keeps microseconds, so its written value is cut to them (PostgreSqlFamilyIntervalBindingTests).
     public void WrittenText_ReadsBackExactly(SupportedDatabase provider)
     {
         var ym = new IntervalYearMonth(-3, -5);

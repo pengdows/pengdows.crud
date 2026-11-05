@@ -10,8 +10,6 @@ internal sealed class SqlServerExceptionTranslator : IDbExceptionTranslator
     {
         var database = dialect.DatabaseType;
         var errorCode = DbExceptionTranslationSupport.TryGetErrorCode(exception);
-        var sqlState = DbExceptionTranslationSupport.TryGetSqlState(exception);
-        var constraintName = DbExceptionTranslationSupport.TryGetConstraintName(exception);
 
         // Check unique violation first (delegated to the dialect — see IDbExceptionTranslator's
         // doc comment) so that PK-violation messages that happen to contain the word "timeout" in

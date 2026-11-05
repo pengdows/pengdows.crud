@@ -54,8 +54,15 @@ public sealed class DatabaseTraitsTests
 
         var iso = Enum.GetValues<SupportedDatabase>()
             .Where(d => DatabaseTraits.For(d).IntervalFormat == IntervalWireFormat.Iso8601);
-        Assert.Equal(new[] { SupportedDatabase.PostgreSql, SupportedDatabase.CockroachDb }.OrderBy(d => d),
-            iso.OrderBy(d => d));
+        // CockroachDB and SQLite (no interval type) take ISO 8601 text.
+        Assert.Equal(new[] { SupportedDatabase.CockroachDb, SupportedDatabase.Sqlite }.OrderBy(d => d), iso.OrderBy(d => d));
+
+        // PostgreSQL and YugabyteDB send the Npgsql interval (months, days, microseconds), not text (see the
+        // PostgreSqlInterval wire format).
+        var pgInterval = Enum.GetValues<SupportedDatabase>()
+            .Where(d => DatabaseTraits.For(d).IntervalFormat == IntervalWireFormat.PostgreSqlInterval);
+        Assert.Equal(new[] { SupportedDatabase.PostgreSql, SupportedDatabase.YugabyteDb }.OrderBy(d => d),
+            pgInterval.OrderBy(d => d));
 
         var mySqlInternal = Enum.GetValues<SupportedDatabase>()
             .Where(d => DatabaseTraits.For(d).SpatialFormat == SpatialWireFormat.LittleEndianSridPrefixedWkb);

@@ -219,7 +219,7 @@ plain .NET type (verified live, TYPE-005).
 | DuckDB `LIST` (`INTEGER[]`, `VARCHAR[]`, ...), PostgreSQL arrays | `T[]` or `List<T>` | Elements are coerced one by one. |
 | DuckDB `INTERVAL` | `TimeSpan` (`DbType.Object`) | Written as DuckDB interval text (microseconds). Read from the stored months, days and microseconds: DuckDB.NET 1.5.6 throws for every negative interval and drops negative months, so the dialect converts the parts itself, exactly. An interval with months throws `DataMappingException`, because a month has no fixed length. |
 | DuckDB `MAP` / `STRUCT` | `Dictionary<TKey, TValue>` / `Dictionary<string, object>` | Passed through as the provider returns them. |
-| Firebird `DECFLOAT` | `decimal` (or `double`) with `[Column(..., DbType.VarNumeric)]` | FirebirdClient binds a `DECFLOAT` parameter only from its own `FbDecFloat` and never binds a `NUMERIC` from it, so `DbType.VarNumeric` marks the column. Reads are exact: `NaN`/infinity, or a 34-digit value `decimal` would round, throw `DataMappingException` into a `decimal` (a `double` gets `NaN`/infinity). |
+| Firebird `DECFLOAT` | `decimal` with `[Column(..., DbType.Decimal, NativeType = "DECFLOAT")]` | The value is sent as text and cast to `DECFLOAT` in the statement (the driver binds a `DECFLOAT` parameter only from its own `FbDecFloat`). See [entity mapping, `NativeType`](entity-mapping.md#nativetype-on-column). |
 | Informix `INTERVAL DAY TO SECOND` | `TimeSpan` | |
 | Snowflake `NUMBER(p,0)` beyond `long` (e.g. `NUMBER(20,0)` holding `ulong.MaxValue`, `NUMBER(38,0)`) | `ulong`, `decimal`, `double`, `BigInteger`, `Int128`/`UInt128` | Snowflake.Data reports every scale-0 `NUMBER` as `Int64` and its `GetValue`/`GetInt64` overflow beyond it; such a value is read from its text as a `BigInteger` and converted with checked casts, so a property that can't hold it (e.g. `long`) throws `DataMappingException`. `ITrackedReader.GetValue` returns the `BigInteger`. |
 | SQLite column holding a `decimal` (declare it `TEXT` to keep every digit) | `decimal` with `DbType.Decimal` | Bound as a `double` when one holds the value exactly, else as exact invariant text (2.0.5 always bound a `double`, losing digits beyond 15 significant). Text only where needed, because SQLite never matches text against an arithmetic or aggregate result (`price * qty > @p`). A `REAL`/`NUMERIC` column converts either by affinity; decimal text with an exponent (as 2.0.5 stored) reads back. |
@@ -273,6 +273,31 @@ whole: `2.0` reads as `2`, `2.7` fails (gateway: `DataMappingException` naming t
 scalar reads: `InvalidCastException`), as a value beyond the property's range does. 2.0.5 truncated
 it on the gateway and rounded it to even elsewhere (COR-009). A `decimal` column (Oracle `NUMBER`)
 reads into an enum property; 2.0.5 failed to build the mapper (COR-013).
+
+The per-cell verdicts for every type and database are in [`type-representation-matrix.md`](type-representation-matrix.md).
+
+## PostgreSQL native point and polygon
+
+`PostgreSqlPoint` and `PostgreSqlPolygon` (in `pengdows.crud.types.valueobjects`) are the values of PostgreSQL's native
+`point` and `polygon`. They hold coordinates only: a native geometric column has no SRID, so a value of these types
+carries none. `Parse` and `ToString` use PostgreSQL's text (`(x,y)` and `((x,y),...)`). An unset polygon (the default
+value) is written as NULL. Use `Geometry` for PostGIS, which keeps its SRID.
+
+## Refused by design, and open decisions
+
+The live fidelity matrix (`docs/type-representation-matrix.md`) lists every cell with its verdict. These cells are
+refused on purpose, and each reason is recorded there:
+
+- **PostGIS `Geometry` into a native `point` or `polygon`** (PostgreSQL, YugabyteDB): the native column has no SRID, so
+  the value would lose it. Use `PostgreSqlPoint` or `PostgreSqlPolygon` for the native column.
+- **SQL Server `bit`**: one bit wide, so a multi-bit value has no `bit` column type. Store it as `binary` instead.
+- **Oracle `ANYDATA`**: built by its type's constructor functions, not bound as a value.
+- **Oracle `ROWID`**: a physical row address. A ROWID value is read as text and is usable in `WHERE ROWID = ?`, but the
+  library cannot choose one to write.
+- **YugabyteDB `xid8`**: an upstream defect. A raw integer gains high bits on write (`4294967296` reads back as
+  `18700287606784`), so no value round-trips. Reported as an upstream defect, not a library limit.
+- **YugabyteDB and CockroachDB `xml`**: the server has no working `xml` column. Map the property as `string` and store
+  it in a text column; the library writes the text unchanged, and de/serialization stays in the application.
 
 ## Declared column types
 

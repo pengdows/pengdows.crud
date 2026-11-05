@@ -14,8 +14,6 @@ public sealed class Uuid7OptimizedPathTests
         typeof(Uuid7Optimized).GetField("_globalEpochMs", NonPublicStatic)!;
     private static readonly FieldInfo OptionsField =
         typeof(Uuid7Optimized).GetField("_opts", NonPublicStatic)!;
-    private static readonly MethodInfo BoundedWaitNextMsMethod =
-        typeof(Uuid7Optimized).GetMethod("BoundedWaitNextMs", NonPublicStatic)!;
     private static readonly MethodInfo ReseedRandomStateMethod =
         typeof(Uuid7Optimized).GetMethod("ReseedRandomState", NonPublicStatic)!;
 
@@ -68,23 +66,30 @@ public sealed class Uuid7OptimizedPathTests
         }
     }
 
+    // On counter exhaustion the generator advances its logical millisecond
+    // instead of waiting for the wall clock, so a backward clock step cannot stall generation.
+    // Drift contract (decided 2026-11): on counter exhaustion the logical millisecond may lead the wall clock
+    // by at most MaxLogicalLeadMs. At the limit the generator waits about one millisecond for the wall clock.
+    // A lead beyond the limit means the clock moved backward, so the call fails rather than stall.
     [Fact]
-    public void NewUuid7_WhenCounterOverflows_UsesBoundedWaitPath()
+    public void NewUuid7_WhenBurstExhaustsAtTheLeadLimit_WaitsAtMostAboutOneMillisecond()
     {
         var state = GetCurrentThreadState();
         var snapshot = Capture(state);
         try
         {
-            var pinnedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 120;
+            var pinnedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + Uuid7Optimized.MaxLogicalLeadMs;
             LastMsField.SetValue(state, pinnedMs);
             CounterField.SetValue(state, 4096);
             GlobalEpochField.SetValue(null, 0L);
 
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
             var guid = Uuid7Optimized.NewUuid7();
+            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
 
             Assert.NotEqual(Guid.Empty, guid);
-            Assert.Equal(1, (int)CounterField.GetValue(state)!);
-            Assert.True((long)LastMsField.GetValue(state)! > pinnedMs);
+            Assert.True(elapsed < TimeSpan.FromMilliseconds(200), $"Waited {elapsed.TotalMilliseconds:F0} ms.");
+            Assert.True((long)LastMsField.GetValue(state)! <= pinnedMs + 1);
         }
         finally
         {
@@ -93,23 +98,100 @@ public sealed class Uuid7OptimizedPathTests
     }
 
     [Fact]
-    public void NewUuid7RfcBytes_WhenCounterOverflows_UsesBoundedWaitPath()
+    public void NewUuid7_WhenClockMovedBackwardBeyondTheLeadLimit_ThrowsInsteadOfStalling()
     {
         var state = GetCurrentThreadState();
         var snapshot = Capture(state);
         try
         {
-            var pinnedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 120;
+            var pinnedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 5_000;
             LastMsField.SetValue(state, pinnedMs);
             CounterField.SetValue(state, 4096);
             GlobalEpochField.SetValue(null, 0L);
 
-            Span<byte> bytes = stackalloc byte[16];
-            Uuid7Optimized.NewUuid7RfcBytes(bytes);
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            Assert.Throws<InvalidOperationException>(() => Uuid7Optimized.NewUuid7());
+            var elapsed = System.Diagnostics.Stopwatch.GetElapsedTime(started);
 
-            Assert.Equal(1, (int)CounterField.GetValue(state)!);
-            Assert.True((long)LastMsField.GetValue(state)! > pinnedMs);
-            Assert.Equal(0x7, (bytes[6] >> 4) & 0x0F);
+            Assert.True(elapsed < TimeSpan.FromSeconds(1), $"Stalled {elapsed.TotalSeconds:F2}s before failing.");
+        }
+        finally
+        {
+            Restore(state, snapshot);
+        }
+    }
+
+    [Fact]
+    public void NewUuid7RfcBytes_WhenClockMovedBackwardBeyondTheLeadLimit_ThrowsInsteadOfStalling()
+    {
+        var state = GetCurrentThreadState();
+        var snapshot = Capture(state);
+        try
+        {
+            var pinnedMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 5_000;
+            LastMsField.SetValue(state, pinnedMs);
+            CounterField.SetValue(state, 4096);
+            GlobalEpochField.SetValue(null, 0L);
+
+            Assert.Throws<InvalidOperationException>(() => Uuid7Optimized.NewUuid7RfcBytes(new byte[16]));
+        }
+        finally
+        {
+            Restore(state, snapshot);
+        }
+    }
+
+    [Fact]
+    public void TryNewUuid7_WhenClockMovedBackwardBeyondTheLeadLimit_ReturnsFalse()
+    {
+        var state = GetCurrentThreadState();
+        var snapshot = Capture(state);
+        try
+        {
+            LastMsField.SetValue(state, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 5_000);
+            CounterField.SetValue(state, 4096);
+            GlobalEpochField.SetValue(null, 0L);
+
+            Assert.False(Uuid7Optimized.TryNewUuid7(out _));
+        }
+        finally
+        {
+            Restore(state, snapshot);
+        }
+    }
+
+    // Sustained load: the embedded timestamp must stay within the lead limit (plus a small measurement
+    // tolerance) of the wall clock, however fast the thread generates IDs.
+    [Fact]
+    public void SustainedLoad_KeepsTheTimestampWithinTheLeadLimitOfTheWallClock()
+    {
+        var state = GetCurrentThreadState();
+        var snapshot = Capture(state);
+        try
+        {
+            LastMsField.SetValue(state, 0L);
+            CounterField.SetValue(state, 0);
+            GlobalEpochField.SetValue(null, 0L);
+
+            var worstLeadMs = 0L;
+            var started = System.Diagnostics.Stopwatch.GetTimestamp();
+            Span<byte> bytes = stackalloc byte[16];
+            var generated = 0;
+            while (System.Diagnostics.Stopwatch.GetElapsedTime(started) < TimeSpan.FromSeconds(1))
+            {
+                Uuid7Optimized.NewUuid7RfcBytes(bytes);
+                generated++;
+                if (generated % 4096 == 0)
+                {
+                    var stamp = ((long)bytes[0] << 40) | ((long)bytes[1] << 32) | ((long)bytes[2] << 24) |
+                                ((long)bytes[3] << 16) | ((long)bytes[4] << 8) | bytes[5];
+                    var lead = stamp - DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                    worstLeadMs = Math.Max(worstLeadMs, lead);
+                }
+            }
+
+            Assert.True(worstLeadMs <= Uuid7Optimized.MaxLogicalLeadMs + 2,
+                $"The timestamp led the wall clock by {worstLeadMs} ms after {generated} IDs.");
         }
         finally
         {
@@ -140,42 +222,6 @@ public sealed class Uuid7OptimizedPathTests
         finally
         {
             Restore(state, snapshot);
-        }
-    }
-
-    [Fact]
-    public void BoundedWaitNextMs_CoversSpinYieldAndSleepBranches()
-    {
-        var originalOptions = (Uuid7Options)OptionsField.GetValue(null)!;
-        try
-        {
-            // Force enough wait time to exercise spin/yield branches (including spinCount >= 64).
-            OptionsField.SetValue(null, new Uuid7Options(
-                Uuid7ClockMode.SingleInstance,
-                MaxNegativeSkewMs: 32,
-                MaxSpinCount: 80,
-                SleepMs: 0,
-                FailFastOnBurst: false));
-
-            var currentMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 50;
-            var waited = (long)BoundedWaitNextMsMethod.Invoke(null, new object[] { currentMs })!;
-            Assert.True(waited > currentMs);
-
-            // Force sleep branch (MaxSpinCount == 0 goes straight to sleep path).
-            OptionsField.SetValue(null, new Uuid7Options(
-                Uuid7ClockMode.SingleInstance,
-                MaxNegativeSkewMs: 32,
-                MaxSpinCount: 0,
-                SleepMs: 1,
-                FailFastOnBurst: false));
-
-            var currentMs2 = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() + 2;
-            var waited2 = (long)BoundedWaitNextMsMethod.Invoke(null, new object[] { currentMs2 })!;
-            Assert.True(waited2 > currentMs2);
-        }
-        finally
-        {
-            OptionsField.SetValue(null, originalOptions);
         }
     }
 

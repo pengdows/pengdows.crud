@@ -32,15 +32,14 @@ public sealed class SingleStoreTypeBindingTests
     [Fact]
     public void BuildCreate_SpatialFromWkt_BindsTheText()
     {
+        // A geography (WGS 84, SRID 4326 always) is written as its text. A geometry has no SingleStore type and is refused.
         var sc = Build(new Row
         {
             Id = 1,
             Geog = Geography.FromWellKnownText("POINT(-87.6298 41.8781)", 4326),
-            Geom = Geometry.FromWellKnownText("POLYGON((0 0, 4 0, 4 4, 0 0))", 0)
         });
 
         Assert.Equal("POINT(-87.6298 41.8781)", sc.GetParameterValue("i1"));
-        Assert.Equal("POLYGON((0 0, 4 0, 4 4, 0 0))", sc.GetParameterValue("i2"));
     }
 
     // A value built from WKB (read from another database) is written as its WKT, decoded as Oracle's

@@ -43,15 +43,14 @@ public class MissingCoercionTests
     }
 
     [Fact]
-    public void BooleanCoercion_TryRead_CharT_ReturnsTrue()
+    public void BooleanCoercion_TryRead_CharT_FailsTheRead()
     {
         var coercion = new BooleanCoercion();
         var dbValue = new DbValue('t');
 
-        var success = coercion.TryRead(dbValue, out var result);
+        var success = coercion.TryRead(dbValue, out _);
 
-        Assert.True(success);
-        Assert.True(result);
+        Assert.False(success);
     }
 
     [Fact]
@@ -67,15 +66,14 @@ public class MissingCoercionTests
     }
 
     [Fact]
-    public void BooleanCoercion_TryRead_Char1_ReturnsTrue()
+    public void BooleanCoercion_TryRead_Char1_FailsTheRead()
     {
         var coercion = new BooleanCoercion();
         var dbValue = new DbValue('1');
 
-        var success = coercion.TryRead(dbValue, out var result);
+        var success = coercion.TryRead(dbValue, out _);
 
-        Assert.True(success);
-        Assert.True(result);
+        Assert.False(success);
     }
 
     [Fact]
@@ -115,15 +113,12 @@ public class MissingCoercionTests
     }
 
     [Fact]
-    public void BooleanCoercion_TryRead_StringWithNumeric_ReturnsTrue()
+    public void BooleanCoercion_TryRead_StringWithNumeric_FailsTheRead()
     {
         var coercion = new BooleanCoercion();
         var dbValue = new DbValue("42.5");
 
-        var success = coercion.TryRead(dbValue, out var result);
-
-        Assert.True(success);
-        Assert.True(result);
+        Assert.False(coercion.TryRead(dbValue, out _));
     }
 
     [Fact]
@@ -151,12 +146,12 @@ public class MissingCoercionTests
     }
 
     [Fact]
-    public void BooleanCoercion_TryRead_InvalidChar_ThrowsException()
+    public void BooleanCoercion_TryRead_OtherChar_FailsTheRead()
     {
         var coercion = new BooleanCoercion();
         var dbValue = new DbValue('x');
 
-        Assert.Throws<InvalidCastException>(() => coercion.TryRead(dbValue, out _));
+        Assert.False(coercion.TryRead(dbValue, out _));
     }
 
     [Fact]
@@ -172,7 +167,7 @@ public class MissingCoercionTests
     }
 
     [Fact]
-    public void BooleanCoercion_TryRead_InvalidStringValue_ReturnsFalse()
+    public void BooleanCoercion_TryRead_OtherStringValue_FailsTheRead()
     {
         var coercion = new BooleanCoercion();
         var dbValue = new DbValue("invalid");
@@ -180,6 +175,7 @@ public class MissingCoercionTests
         var success = coercion.TryRead(dbValue, out var result);
 
         Assert.False(success);
+        Assert.False(result);
     }
 
     #endregion

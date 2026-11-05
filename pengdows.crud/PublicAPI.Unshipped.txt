@@ -69,3 +69,30 @@ static pengdows.crud.types.valueobjects.HierarchyId.operator >=(pengdows.crud.ty
 static readonly pengdows.crud.DataReaderMapper.Instance -> pengdows.crud.IDataReaderMapper!
 pengdows.crud.configuration.DatabaseContextConfiguration.SessionSettingsMode.get -> pengdows.crud.enums.SessionSettingsMode?
 pengdows.crud.configuration.DatabaseContextConfiguration.SessionSettingsMode.set -> void
+pengdows.crud.attributes.ColumnAttribute.NativeType.get -> string?
+pengdows.crud.attributes.ColumnAttribute.NativeType.set -> void
+pengdows.crud.types.valueobjects.PostgreSqlPoint.PostgreSqlPoint() -> void
+pengdows.crud.types.valueobjects.PostgreSqlPoint
+pengdows.crud.types.valueobjects.PostgreSqlPoint.PostgreSqlPoint(double x, double y) -> void
+pengdows.crud.types.valueobjects.PostgreSqlPoint.X.get -> double
+pengdows.crud.types.valueobjects.PostgreSqlPoint.Y.get -> double
+static pengdows.crud.types.valueobjects.PostgreSqlPoint.Parse(string! text) -> pengdows.crud.types.valueobjects.PostgreSqlPoint
+static pengdows.crud.types.valueobjects.PostgreSqlPoint.TryParse(string? text, out pengdows.crud.types.valueobjects.PostgreSqlPoint point) -> bool
+override pengdows.crud.types.valueobjects.PostgreSqlPoint.ToString() -> string!
+pengdows.crud.types.valueobjects.PostgreSqlPoint.Equals(pengdows.crud.types.valueobjects.PostgreSqlPoint other) -> bool
+override pengdows.crud.types.valueobjects.PostgreSqlPoint.Equals(object? obj) -> bool
+override pengdows.crud.types.valueobjects.PostgreSqlPoint.GetHashCode() -> int
+static pengdows.crud.types.valueobjects.PostgreSqlPoint.operator ==(pengdows.crud.types.valueobjects.PostgreSqlPoint left, pengdows.crud.types.valueobjects.PostgreSqlPoint right) -> bool
+static pengdows.crud.types.valueobjects.PostgreSqlPoint.operator !=(pengdows.crud.types.valueobjects.PostgreSqlPoint left, pengdows.crud.types.valueobjects.PostgreSqlPoint right) -> bool
+pengdows.crud.types.valueobjects.PostgreSqlPolygon
+pengdows.crud.types.valueobjects.PostgreSqlPolygon.PostgreSqlPolygon() -> void
+pengdows.crud.types.valueobjects.PostgreSqlPolygon.PostgreSqlPolygon(System.Collections.Generic.IEnumerable<pengdows.crud.types.valueobjects.PostgreSqlPoint>! points) -> void
+pengdows.crud.types.valueobjects.PostgreSqlPolygon.Points.get -> System.Collections.Generic.IReadOnlyList<pengdows.crud.types.valueobjects.PostgreSqlPoint>!
+static pengdows.crud.types.valueobjects.PostgreSqlPolygon.Parse(string! text) -> pengdows.crud.types.valueobjects.PostgreSqlPolygon
+static pengdows.crud.types.valueobjects.PostgreSqlPolygon.TryParse(string? text, out pengdows.crud.types.valueobjects.PostgreSqlPolygon polygon) -> bool
+override pengdows.crud.types.valueobjects.PostgreSqlPolygon.ToString() -> string!
+pengdows.crud.types.valueobjects.PostgreSqlPolygon.Equals(pengdows.crud.types.valueobjects.PostgreSqlPolygon other) -> bool
+override pengdows.crud.types.valueobjects.PostgreSqlPolygon.Equals(object? obj) -> bool
+override pengdows.crud.types.valueobjects.PostgreSqlPolygon.GetHashCode() -> int
+static pengdows.crud.types.valueobjects.PostgreSqlPolygon.operator ==(pengdows.crud.types.valueobjects.PostgreSqlPolygon left, pengdows.crud.types.valueobjects.PostgreSqlPolygon right) -> bool
+static pengdows.crud.types.valueobjects.PostgreSqlPolygon.operator !=(pengdows.crud.types.valueobjects.PostgreSqlPolygon left, pengdows.crud.types.valueobjects.PostgreSqlPolygon right) -> bool

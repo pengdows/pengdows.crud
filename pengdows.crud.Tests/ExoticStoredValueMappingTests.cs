@@ -84,12 +84,20 @@ public sealed class ExoticStoredValueMappingTests
         Assert.Throws<OverflowException>(() => TypeCoercionHelper.Coerce(new FbDecFloat(1, 6000), typeof(FbDecFloat), typeof(decimal), firebird));
     }
 
-    [Theory]
-    [InlineData(SupportedDatabase.Firebird)]
-    [InlineData(SupportedDatabase.PostgreSql)]
-    public void Int128AndUInt128Parameters_AreBoundAsBigInteger(SupportedDatabase database)
+    [Fact]
+    public void Int128AndUInt128Parameters_OnPostgreSql_AreBoundAsBigInteger()
     {
-        using var context = new DatabaseContext($"Data Source=x;EmulatedProduct={database}", new fakeDbFactory(database));
+        using var context = new DatabaseContext("Data Source=x;EmulatedProduct=PostgreSql", new fakeDbFactory(SupportedDatabase.PostgreSql));
+        Assert.Equal(Int128Max, context.CreateDbParameter("p", DbType.Object, Int128.MaxValue).Value);
+        Assert.Equal(UInt128Max, context.CreateDbParameter("p", DbType.Object, (UInt128?)UInt128.MaxValue).Value);
+    }
+
+    // Firebird's INT128 column takes the typed 128-bit value (its driver refuses the text); a BigInteger to a NUMERIC column is
+    // the text (see ABigIntegerIsSentAsItsExactText in FirebirdParameterTests).
+    [Fact]
+    public void Int128AndUInt128Parameters_OnFirebird_AreBoundTyped()
+    {
+        using var context = new DatabaseContext("Data Source=x;EmulatedProduct=Firebird", new fakeDbFactory(SupportedDatabase.Firebird));
         Assert.Equal(Int128Max, context.CreateDbParameter("p", DbType.Object, Int128.MaxValue).Value);
         Assert.Equal(UInt128Max, context.CreateDbParameter("p", DbType.Object, (UInt128?)UInt128.MaxValue).Value);
     }

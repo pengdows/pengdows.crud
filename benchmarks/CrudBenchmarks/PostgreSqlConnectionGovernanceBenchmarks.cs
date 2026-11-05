@@ -67,6 +67,7 @@ namespace CrudBenchmarks;
 public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
 {
     private const string FrameworkDapper = "Dapper";
+    private const string FrameworkDapperSplitPools = "DapperSplitPools";
     private const string FrameworkStormGate = "PengdowsStormGate";
     private const string FrameworkEntityFramework = "EntityFramework";
     private const string FrameworkPengdows = "Pengdows";
@@ -134,6 +135,9 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
     private string _connStr = string.Empty;
 
     private NpgsqlDataSource _dapperDataSource = null!;  // default pool (100) — above the server limit
+    // Experiment: Dapper with the clamped pengdows split — a read pool and a write pool, each capped at the clamp share.
+    private NpgsqlDataSource _dapperSplitReadSource = null!;
+    private NpgsqlDataSource _dapperSplitWriteSource = null!;
     private StormGate _stormGate = null!;                // 20 permits — stays under server limit
     private DbContextOptions<GovEfDbContext> _efOptions = null!;
     private DatabaseContext _pengdowsContext = null!;    // PoolGovernor only — NO StormGate
@@ -228,6 +232,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
 
         // Create the shared data source first so seeding uses the same pool as benchmarks.
         _dapperDataSource = NpgsqlDataSource.Create(_connStr);
+        _dapperSplitReadSource = NpgsqlDataSource.Create(SplitPoolConnectionString(_connStr, ClampedShare, acquireTimeoutSeconds: 5));
+        _dapperSplitWriteSource = NpgsqlDataSource.Create(SplitPoolConnectionString(_connStr, ClampedShare, acquireTimeoutSeconds: 5));
 
         await WaitForReadyAsync();
         await SeedAsync();
@@ -317,6 +323,38 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
                 MarkInvalid(ScenarioUncontrolled, FrameworkDapper, "Query returned null");
             }
         }, ex => MarkInvalid(ScenarioUncontrolled, FrameworkDapper, $"Exception: {ex.GetType().Name}"));
+    }
+
+    // ── Dapper, split pools (the experiment) ──────────────────────────────────
+    // The clamped pengdows arm's capacity, split the same way: a read pool and a write pool, each capped at the clamp
+    // share (11 of the server's 22 usable) with the pengdows acquire timeout (5 s, Npgsql's Timeout also bounds the
+    // wait for a pooled connection). Reads go to the read pool, as pengdows' reads go to its reader pool; the write
+    // pool is idle in this read-only load, exactly as pengdows' writer pool is.
+    [Benchmark]
+    [CorrectnessIdentity(FrameworkDapperSplitPools, ScenarioGoverned)]
+    public async Task Dapper_SplitPools()
+    {
+        await BenchmarkConcurrency.RunConcurrentWithErrors(OperationsPerRun, Parallelism, async () =>
+        {
+            Interlocked.Increment(ref _attempted);
+            await using var conn = await _dapperSplitReadSource.OpenConnectionAsync();
+            var item = await conn.QueryFirstOrDefaultAsync<GovItem>(_querySql);
+            if (item == null)
+            {
+                MarkInvalid(ScenarioGoverned, FrameworkDapperSplitPools, "Query returned null");
+            }
+        }, ex => MarkInvalid(ScenarioGoverned, FrameworkDapperSplitPools, $"Exception: {ex.GetType().Name}"));
+    }
+
+    // Builds an Npgsql connection string with the pool cap and the wait budget the split-pool arm is held to.
+    internal static string SplitPoolConnectionString(string connectionString, int maxPoolSize, int acquireTimeoutSeconds)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            MaxPoolSize = maxPoolSize,
+            Timeout = acquireTimeoutSeconds,
+        };
+        return builder.ConnectionString;
     }
 
     // ── Dapper + StormGate ────────────────────────────────────────────────────
@@ -604,6 +642,8 @@ public class PostgreSqlConnectionGovernanceBenchmarks : IAsyncDisposable
         _pengdowsContext?.Dispose();
         _stormGate.Dispose();
         await _dapperDataSource.DisposeAsync();
+        await _dapperSplitReadSource.DisposeAsync();
+        await _dapperSplitWriteSource.DisposeAsync();
 
         if (_container != null)
         {

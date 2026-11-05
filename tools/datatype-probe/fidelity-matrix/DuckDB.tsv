@@ -1,0 +1,75 @@
+DuckDB	signed 8-bit	signed_8_bit	PASS
+DuckDB	signed 16-bit	signed_16_bit	PASS
+DuckDB	signed 32-bit	signed_32_bit	PASS
+DuckDB	signed 64-bit	signed_64_bit	PASS
+DuckDB	signed 128-bit	signed_128_bit	PASS
+DuckDB	unsigned 8-bit	unsigned_8_bit	PASS
+DuckDB	unsigned 16-bit	unsigned_16_bit	PASS
+DuckDB	unsigned 32-bit	unsigned_32_bit	PASS
+DuckDB	unsigned 64-bit	unsigned_64_bit	PASS
+DuckDB	arbitrary-size integer	arbitrary_integer	PASS
+DuckDB	binary float32	binary_float32	PASS
+DuckDB	binary float64	binary_float64	PASS
+DuckDB	fixed decimal	fixed_decimal	PASS
+DuckDB	boolean	boolean	PASS
+DuckDB	bit / bitstring	bit_string	PASS
+DuckDB	varying character	varying_character	PASS
+DuckDB	unbounded text	unbounded_text	PASS
+DuckDB	UUID / GUID	uuid	PASS
+DuckDB	calendar date	calendar_date	PASS
+DuckDB	time without zone	time_of_day	PASS
+DuckDB	time without zone	time_span	PASS
+DuckDB	day-time interval	day_time_interval	PASS
+DuckDB	timestamp without zone	timestamp	PASS
+DuckDB	timestamp with zone	timestamp_with_zone	PASS
+DuckDB	binary LOB	binary	PASS
+DuckDB	JSON text / JSON value	json	PASS
+DuckDB	IP address	ip_address	PASS
+DuckDB	SQL array	int_array	PASS
+DuckDB	unsigned 128-bit	unsigned_128_bit	PASS
+DuckDB	decimal floating point	decimal_float	UNSUPPORTED refused: Catalog Error: Type with name DECFLOAT does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr74 (id INTEGER NOT NULL PRIMARY KEY, c DECFLOAT)
+DuckDB	money / currency	money	UNSUPPORTED refused: Catalog Error: Type with name MONEY does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr89 (id INTEGER NOT NULL PRIMARY KEY, c MONEY)
+DuckDB	fixed character	fixed_character	PASS
+DuckDB	national / Unicode character	national_text	PASS
+DuckDB	long text LOB	long_text	PASS
+DuckDB	enumeration	enumeration	PASS
+DuckDB	set-valued enum	set_value	UNSUPPORTED refused: Catalog Error: Type with name SET does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr145 (id INTEGER NOT NULL PRIMARY KEY, c SET('a','b'))
+DuckDB	fixed binary	fixed_binary	UNSUPPORTED refused: Binder Error: Type 'BLOB' does not take any type parameters LINE 1: CREATE TABLE pr147 (id INTEGER NOT NULL PRIMARY KEY, c BINARY(16))
+DuckDB	varying binary	varying_binary	PASS
+DuckDB	legacy long binary	legacy_binary	UNSUPPORTED refused: Parser Error: syntax error at or near "RAW" LINE 1: ...REATE TABLE pr173 (id INTEGER NOT NULL PRIMARY KEY, c LONG RAW) ^
+DuckDB	rowversion / timestamp token	rowversion	PASS
+DuckDB	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Parser Error: syntax error at or near "WITH" LINE 1: ... TABLE pr202 (id INTEGER NOT NULL PRIMARY KEY, c TIMESTAMP WITH LOCAL TIME ZONE)
+DuckDB	second-precision datetime	second_datetime	PASS
+DuckDB	time with zone	time_zoned	PASS
+DuckDB	year-only	year_only	PASS
+DuckDB	year-month interval	year_month_interval	PASS
+DuckDB	generic interval	generic_interval	PASS
+DuckDB	row identifier / ROWID	row_identifier	PASS
+DuckDB	object identifier / OID	oid	PASS
+DuckDB	transaction ID	transaction_id	UNSUPPORTED refused: Catalog Error: Type with name XID does not exist! Did you mean "main.INTEGER"? LINE 1: CREATE TABLE pr234 (id INTEGER NOT NULL PRIMARY KEY, c XID)
+DuckDB	WAL / log position	wal_position	UNSUPPORTED refused: Catalog Error: Type with name PG_LSN does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr236 (id INTEGER NOT NULL PRIMARY KEY, c PG_LSN)
+DuckDB	native binary JSON	binary_json	PASS
+DuckDB	XML	xml	UNSUPPORTED refused: Catalog Error: Type with name XML does not exist! LINE 1: CREATE TABLE pr249 (id INTEGER NOT NULL PRIMARY KEY, c XML) ^
+DuckDB	BSON	bson	PASS
+DuckDB	variant / dynamic value	variant	UNSUPPORTED refused: Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0 (database "pengdows" is using storage version v1.0.0+)
+DuckDB	IP network / CIDR	cidr	PASS
+DuckDB	MAC address	mac_address	UNSUPPORTED refused: Catalog Error: Type with name MACADDR does not exist! Did you mean "main.INTEGER"? LINE 1: CREATE TABLE pr267 (id INTEGER NOT NULL PRIMARY KEY, c MACADDR)
+DuckDB	point geometry	point	UNSUPPORTED refused: Catalog Error: Type with name POINT does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr269 (id INTEGER NOT NULL PRIMARY KEY, c POINT)
+DuckDB	line / linestring geometry	linestring	UNSUPPORTED refused: Catalog Error: Type with name LINESTRING does not exist! Did you mean "main.INTEGER"? LINE 1: CREATE TABLE pr277 (id INTEGER NOT NULL PRIMARY KEY, c LINESTRING)
+DuckDB	polygon geometry	polygon	UNSUPPORTED refused: Catalog Error: Type with name POLYGON does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr282 (id INTEGER NOT NULL PRIMARY KEY, c POLYGON)
+DuckDB	general geometry	geometry	UNSUPPORTED refused: Unrecognised type 40 (40) for column c
+DuckDB	geography / geodetic	geography	UNSUPPORTED refused: Catalog Error: Type with name GEOGRAPHY does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr291 (id INTEGER NOT NULL PRIMARY KEY, c GEOGRAPHY)
+DuckDB	fixed-length array	fixed_array	PASS
+DuckDB	list / multiset / set collection	list_collection	UNSUPPORTED refused: Parser Error: syntax error at or near "MULTISET" LINE 1: ... TABLE pr309 (id INTEGER NOT NULL PRIMARY KEY, c INTEGER MULTISET)
+DuckDB	map / dictionary	map	PASS
+DuckDB	range	range	UNSUPPORTED refused: Catalog Error: Type with name INT4RANGE does not exist! Did you mean "main.INTEGER"? LINE 1: CREATE TABLE pr325 (id INTEGER NOT NULL PRIMARY KEY, c INT4RANGE)
+DuckDB	multirange	multirange	UNSUPPORTED refused: Catalog Error: Type with name INT4MULTIRANGE does not exist! Did you mean "int4"? LINE 1: CREATE TABLE pr329 (id INTEGER NOT NULL PRIMARY KEY, c INT4MULTIRANGE)
+DuckDB	user-defined enum / domain	domain	UNSUPPORTED refused: Parser Error: syntax error at or near "CREATE" LINE 1: CREATE TABLE pr331 (id INTEGER NOT NULL PRIMARY KEY, c CREATE TYPE) ^
+DuckDB	full-text search vector / query	full_text	UNSUPPORTED refused: Catalog Error: Type with name TSVECTOR does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr336 (id INTEGER NOT NULL PRIMARY KEY, c TSVECTOR)
+DuckDB	native point	native_point	UNSUPPORTED refused: no candidate was tried
+DuckDB	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+DuckDB	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+DuckDB	vector embedding	vector	UNSUPPORTED refused: Catalog Error: Type with name VECTOR does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr338 (id INTEGER NOT NULL PRIMARY KEY, c VECTOR(3))
+DuckDB	hierarchical path	hierarchy	UNSUPPORTED refused: Catalog Error: Type with name HIERARCHYID does not exist! Did you mean "main.INTEGER"? LINE 1: CREATE TABLE pr344 (id INTEGER NOT NULL PRIMARY KEY, c HIERARCHYID)
+DuckDB	external-file reference	file_reference	UNSUPPORTED refused: Catalog Error: Type with name BFILE does not exist! Did you mean "main.INTEGER"? LINE 1: CREATE TABLE pr348 (id INTEGER NOT NULL PRIMARY KEY, c BFILE)
+DuckDB	specialized security label	security_label	UNSUPPORTED refused: Catalog Error: Type with name IDSSECURITYLABEL does not exist! Did you mean "JSON"? LINE 1: CREATE TABLE pr355 (id INTEGER NOT NULL PRIMARY KEY, c IDSSECURITYLABEL)

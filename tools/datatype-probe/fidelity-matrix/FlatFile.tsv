@@ -1,0 +1,75 @@
+FlatFile	signed 8-bit	signed_8_bit	PASS
+FlatFile	signed 16-bit	signed_16_bit	PASS
+FlatFile	signed 32-bit	signed_32_bit	PASS
+FlatFile	signed 64-bit	signed_64_bit	PASS
+FlatFile	signed 128-bit	signed_128_bit	PASS
+FlatFile	unsigned 8-bit	unsigned_8_bit	PASS
+FlatFile	unsigned 16-bit	unsigned_16_bit	PASS
+FlatFile	unsigned 32-bit	unsigned_32_bit	PASS
+FlatFile	unsigned 64-bit	unsigned_64_bit	PASS
+FlatFile	arbitrary-size integer	arbitrary_integer	PASS
+FlatFile	binary float32	binary_float32	PASS
+FlatFile	binary float64	binary_float64	PASS
+FlatFile	fixed decimal	fixed_decimal	PASS
+FlatFile	boolean	boolean	PASS
+FlatFile	bit / bitstring	bit_string	UNSUPPORTED refused: SQL feature 'BIT data types' is not implemented by pengdows.flatfile.
+FlatFile	varying character	varying_character	PASS
+FlatFile	unbounded text	unbounded_text	PASS
+FlatFile	UUID / GUID	uuid	PASS
+FlatFile	calendar date	calendar_date	PASS
+FlatFile	time without zone	time_of_day	PASS
+FlatFile	time without zone	time_span	PASS
+FlatFile	day-time interval	day_time_interval	UNSUPPORTED refused: Expected identifier at position 55, but found 'Interval'.
+FlatFile	timestamp without zone	timestamp	PASS
+FlatFile	timestamp with zone	timestamp_with_zone	PASS
+FlatFile	binary LOB	binary	PASS
+FlatFile	JSON text / JSON value	json	PASS
+FlatFile	IP address	ip_address	PASS
+FlatFile	SQL array	int_array	UNSUPPORTED refused: Expected token 'RightParen' at position 63, but found 'Identifier'.
+FlatFile	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: Unknown SQL data type 'UHUGEINT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	decimal floating point	decimal_float	UNSUPPORTED refused: Unknown SQL data type 'DECFLOAT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	money / currency	money	UNSUPPORTED refused: SQL syntax extension 'MONEY' is not valid ISO SQL, at position 54.
+FlatFile	fixed character	fixed_character	PASS
+FlatFile	national / Unicode character	national_text	PASS
+FlatFile	long text LOB	long_text	PASS
+FlatFile	enumeration	enumeration	UNSUPPORTED refused: Expected token 'NumericLiteral' at position 60, but found 'StringLiteral'.
+FlatFile	set-valued enum	set_value	UNSUPPORTED refused: Expected identifier at position 55, but found 'Set'.
+FlatFile	fixed binary	fixed_binary	PASS
+FlatFile	varying binary	varying_binary	PASS
+FlatFile	legacy long binary	legacy_binary	UNSUPPORTED refused: SQL syntax extension 'LONG' is not valid ISO SQL, at position 55.
+FlatFile	rowversion / timestamp token	rowversion	PASS
+FlatFile	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Expected token 'RightParen' at position 70, but found 'Identifier'.
+FlatFile	second-precision datetime	second_datetime	PASS
+FlatFile	time with zone	time_zoned	PASS
+FlatFile	year-only	year_only	PASS
+FlatFile	year-month interval	year_month_interval	UNSUPPORTED refused: Expected identifier at position 55, but found 'Interval'.
+FlatFile	generic interval	generic_interval	UNSUPPORTED refused: Expected identifier at position 55, but found 'Interval'.
+FlatFile	row identifier / ROWID	row_identifier	PASS
+FlatFile	object identifier / OID	oid	UNSUPPORTED refused: Unknown SQL data type 'OID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	transaction ID	transaction_id	UNSUPPORTED refused: Unknown SQL data type 'XID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	WAL / log position	wal_position	UNSUPPORTED refused: Unknown SQL data type 'PG_LSN'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	native binary JSON	binary_json	PASS
+FlatFile	XML	xml	PASS
+FlatFile	BSON	bson	UNSUPPORTED refused: Unknown SQL data type 'BSON'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	variant / dynamic value	variant	UNSUPPORTED refused: Unknown SQL data type 'VARIANT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	IP network / CIDR	cidr	UNSUPPORTED refused: Unknown SQL data type 'CIDR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	MAC address	mac_address	UNSUPPORTED refused: Unknown SQL data type 'MACADDR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	point geometry	point	UNSUPPORTED refused: Unknown SQL data type 'POINT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	line / linestring geometry	linestring	UNSUPPORTED refused: Unknown SQL data type 'LINESTRING'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	polygon geometry	polygon	UNSUPPORTED refused: Unknown SQL data type 'POLYGON'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	general geometry	geometry	UNSUPPORTED refused: Unknown SQL data type 'GEOMETRY'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	geography / geodetic	geography	UNSUPPORTED refused: Unknown SQL data type 'GEOGRAPHY'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	fixed-length array	fixed_array	UNSUPPORTED refused: Unexpected character '[' at position 68.
+FlatFile	list / multiset / set collection	list_collection	UNSUPPORTED refused: Expected token 'RightParen' at position 63, but found 'Identifier'.
+FlatFile	map / dictionary	map	UNSUPPORTED refused: Expected token 'NumericLiteral' at position 59, but found 'Identifier'.
+FlatFile	range	range	UNSUPPORTED refused: Unknown SQL data type 'INT4RANGE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	multirange	multirange	UNSUPPORTED refused: Unknown SQL data type 'INT4MULTIRANGE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	user-defined enum / domain	domain	UNSUPPORTED refused: Expected identifier at position 55, but found 'Create'.
+FlatFile	full-text search vector / query	full_text	UNSUPPORTED refused: Unknown SQL data type 'TSVECTOR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	native point	native_point	UNSUPPORTED refused: no candidate was tried
+FlatFile	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+FlatFile	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+FlatFile	vector embedding	vector	UNSUPPORTED refused: Unknown SQL data type 'VECTOR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	hierarchical path	hierarchy	UNSUPPORTED refused: Unknown SQL data type 'HIERARCHYID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	external-file reference	file_reference	UNSUPPORTED refused: Unknown SQL data type 'BFILE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.
+FlatFile	specialized security label	security_label	UNSUPPORTED refused: Unknown SQL data type 'IDSSECURITYLABEL'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. "System.Guid") for a type ClrTypeMap supports.

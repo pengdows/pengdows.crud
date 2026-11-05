@@ -19,7 +19,7 @@ public class SqlDialectParameterPoolingTests
 
         var first = dialect.CreateDbParameter("p0", DbType.Guid, Guid.NewGuid());
         var firstProvider = Assert.IsType<FakeProviderParameter>(first);
-        Assert.Equal(27, firstProvider.NpgsqlDbType);
+        Assert.Equal(27, (int)firstProvider.NpgsqlDbType);
         Assert.Equal("uuid", firstProvider.DataTypeName);
 
         dialect.ReturnParameterToPool(first);
@@ -28,7 +28,7 @@ public class SqlDialectParameterPoolingTests
         var secondProvider = Assert.IsType<FakeProviderParameter>(second);
 
         Assert.Same(first, second);
-        Assert.Equal(0, secondProvider.NpgsqlDbType);
+        Assert.Equal(0, (int)secondProvider.NpgsqlDbType);
         Assert.Null(secondProvider.DataTypeName);
     }
 
@@ -139,12 +139,12 @@ public class SqlDialectParameterPoolingTests
 
             if (parameter is FakeProviderParameter providerParam && type == DbType.Guid)
             {
-                providerParam.NpgsqlDbType = 27;
+                providerParam.NpgsqlDbType = NpgsqlDbTypeStub.Uuid;
                 providerParam.DataTypeName = "uuid";
             }
             else if (parameter is NpgsqlLikeParameter npgsqlParam && type == DbType.Guid)
             {
-                npgsqlParam.NpgsqlDbType = 27;
+                npgsqlParam.NpgsqlDbType = NpgsqlDbTypeStub.Uuid;
             }
 
             return parameter;
@@ -159,9 +159,16 @@ public class SqlDialectParameterPoolingTests
         }
     }
 
+    // Npgsql's NpgsqlDbType is an enum; these are its values for the members these tests set.
+    public enum NpgsqlDbTypeStub
+    {
+        Unknown = 40,
+        Uuid = 27
+    }
+
     private sealed class FakeProviderParameter : fakeDbParameter
     {
-        public int NpgsqlDbType { get; set; }
+        public NpgsqlDbTypeStub NpgsqlDbType { get; set; }
         public string? DataTypeName { get; set; }
     }
 
@@ -180,11 +187,11 @@ public class SqlDialectParameterPoolingTests
     /// </summary>
     private sealed class NpgsqlLikeParameter : fakeDbParameter
     {
-        private int _npgsqlDbType;
+        private NpgsqlDbTypeStub _npgsqlDbType;
 
         public bool NpgsqlDbTypeExplicitlySet { get; private set; }
 
-        public int NpgsqlDbType
+        public NpgsqlDbTypeStub NpgsqlDbType
         {
             get => _npgsqlDbType;
             set
@@ -197,7 +204,7 @@ public class SqlDialectParameterPoolingTests
         public override void ResetDbType()
         {
             base.ResetDbType();
-            _npgsqlDbType = 0;
+            _npgsqlDbType = default;
             NpgsqlDbTypeExplicitlySet = false;
         }
     }

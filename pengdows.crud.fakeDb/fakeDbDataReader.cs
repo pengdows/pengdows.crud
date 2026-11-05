@@ -290,6 +290,13 @@ public class fakeDbDataReader : DbDataReader
             throw HandlerlessRead(i, "System.Object");
         }
 
+        // A BFILE's GetValue is its content's bytes (the driver's behaviour, confirmed live); its locator is the
+        // provider-specific value.
+        if (row[keys[i]] is fakeDbBFile bfile)
+        {
+            return bfile.Content;
+        }
+
         if (IsDoubleBeyondDecimal(i) && row[keys[i]] is double)
         {
             throw new InvalidCastException("Specified cast is not valid.");
@@ -328,6 +335,13 @@ public class fakeDbDataReader : DbDataReader
             return null!; // deliberately violates the contract, as the emulated driver does
         }
 
+        if (IsDecimalTextColumn(i) && row[keys[i]] is string decimalText)
+        {
+            return decimal.TryParse(decimalText, NumberStyles.Number, CultureInfo.InvariantCulture, out var exact)
+                ? exact
+                : throw new OverflowException("Value was either too large or too small for a Decimal.");
+        }
+
         if (IsInt64TextColumn(i) && row[keys[i]] is string text)
         {
             return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var whole)
@@ -356,6 +370,17 @@ public class fakeDbDataReader : DbDataReader
     public ISet<string>? Int64TextColumns { get; set; }
 
     private bool IsInt64TextColumn(int i) => Int64TextColumns != null && Int64TextColumns.Contains(GetName(i));
+
+    /// <summary>
+    /// Columns that emulate Npgsql's NUMERIC (confirmed by the live integration matrix, 2026-11-03): the stored
+    /// value is the number's text; <see cref="GetFieldType"/> reports <see cref="decimal"/>;
+    /// <see cref="GetValue"/> and <see cref="GetDecimal"/> return the value when <see cref="decimal"/> holds it and,
+    /// beyond its range, throw <see cref="OverflowException"/> ("Value was either too large or too small for a
+    /// Decimal."); <see cref="GetString"/> returns the digits, which is how a caller reads the whole number.
+    /// </summary>
+    public ISet<string>? DecimalTextColumns { get; set; }
+
+    private bool IsDecimalTextColumn(int i) => DecimalTextColumns != null && DecimalTextColumns.Contains(GetName(i));
 
     private static OverflowException Int64TextOverflow(string text) =>
         new($"Error converting '{text} to Int64'. Use GetString() to handle very large values");
@@ -509,6 +534,12 @@ public class fakeDbDataReader : DbDataReader
     /// </summary>
     public override object GetProviderSpecificValue(int ordinal)
     {
+        if (RawValue(ordinal) is fakeDbBFile bfile)
+        {
+            CheckSequentialAccess(ordinal);
+            return bfile;
+        }
+
         if (RawValue(ordinal) is not fakeDbInterval interval)
         {
             return GetValue(ordinal);
@@ -785,6 +816,13 @@ public class fakeDbDataReader : DbDataReader
             return providerDecimal;
         }
 
+        if (IsDecimalTextColumn(i) && RawValue(i) is string decimalText)
+        {
+            return decimal.TryParse(decimalText, NumberStyles.Number, CultureInfo.InvariantCulture, out var exact)
+                ? exact
+                : throw new OverflowException("Value was either too large or too small for a Decimal.");
+        }
+
         if (IsInt64TextColumn(i) && RawValue(i) is string text)
         {
             return decimal.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value)
@@ -816,7 +854,7 @@ public class fakeDbDataReader : DbDataReader
         ColumnReadExceptions != null || OutOfRangeReturnsNullColumns != null || Int64TextColumns != null ||
         HandlerlessColumns != null || DoubleBeyondDecimalColumns != null || UnknownTypeColumns != null ||
         NullableElementArrayColumns != null || UnloadableUdtColumns != null || OffsetDroppedByGetValueColumns != null ||
-        ProviderDecimalColumns != null;
+        ProviderDecimalColumns != null || DecimalTextColumns != null;
 
     private object? RawValue(int i)
     {
@@ -876,6 +914,11 @@ public class fakeDbDataReader : DbDataReader
             || IsUnloadableUdt(ordinal))
         {
             return null!; // deliberately violates the contract, as the emulated driver does
+        }
+
+        if (IsDecimalTextColumn(ordinal))
+        {
+            return typeof(decimal);
         }
 
         if (IsInt64TextColumn(ordinal))
@@ -947,7 +990,7 @@ public class fakeDbDataReader : DbDataReader
     public override string GetString(int i)
     {
         CheckSequentialAccess(i);
-        if (IsInt64TextColumn(i) && RawValue(i) is string text)
+        if ((IsInt64TextColumn(i) || IsDecimalTextColumn(i)) && RawValue(i) is string text)
         {
             return text;
         }

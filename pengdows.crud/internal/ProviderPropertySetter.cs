@@ -19,21 +19,53 @@ namespace pengdows.crud.@internal;
 
 internal static class ProviderPropertySetter
 {
-    private static readonly ConcurrentDictionary<(Type Target, string Property, string Value), Action<object>?> Setters = new();
+    // Cache key includes whether an absent member is allowed, so Set and TrySet never share a cached answer.
+    private static readonly ConcurrentDictionary<(Type Target, string Property, string Value, bool Optional), Action<object>?> Setters = new();
 
+    // Applies a provider setting. Throws when the setting cannot be applied: the member is missing, read-only, of an
+    // unsupported type, or the text is not a valid value. Skipping any of those would leave the provider object with a
+    // different type or value than the caller asked for, and the database would then act on that silently.
     public static void Set(object target, string property, string value)
     {
-        var setter = Setters.GetOrAdd((target.GetType(), property, value),
-            static key => Build(key.Target, key.Property, key.Value));
-        setter?.Invoke(target);
+        var setter = Setters.GetOrAdd((target.GetType(), property, value, false),
+            static key => Build(key.Target, key.Property, key.Value, optional: false));
+        setter!(target);
     }
 
-    private static Action<object>? Build(Type targetType, string propertyName, string text)
+    // For a setting that only some provider types have. An absent member is the normal case for a generic parameter
+    // (fakeDb, or a provider that lacks the property), so it returns false and changes nothing. Every other failure
+    // still throws, so a member that exists but cannot take the value is never skipped.
+    public static bool TrySet(object target, string property, string value)
+    {
+        var setter = Setters.GetOrAdd((target.GetType(), property, value, true),
+            static key => Build(key.Target, key.Property, key.Value, optional: true));
+        if (setter == null)
+        {
+            return false;
+        }
+
+        setter(target);
+        return true;
+    }
+
+    private static Action<object>? Build(Type targetType, string propertyName, string text, bool optional)
     {
         var property = targetType.GetProperty(propertyName);
-        if (property == null || !property.CanWrite)
+        if (property == null)
         {
-            return null;
+            if (optional)
+            {
+                return null;
+            }
+
+            throw new InvalidOperationException(
+                $"Provider type {targetType.FullName} has no property '{propertyName}'; the setting cannot be applied.");
+        }
+
+        if (!property.CanWrite)
+        {
+            throw new InvalidOperationException(
+                $"Provider property {targetType.FullName}.{propertyName} is read-only; the setting cannot be applied.");
         }
 
         var valueType = Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType;
@@ -42,7 +74,8 @@ internal static class ProviderPropertySetter
         {
             if (!Enum.TryParse(valueType, text, true, out value))
             {
-                return null;
+                throw new InvalidOperationException(
+                    $"'{text}' is not a value of {valueType.FullName}; {targetType.FullName}.{propertyName} cannot be set.");
             }
         }
         else if (valueType == typeof(string))
@@ -55,7 +88,8 @@ internal static class ProviderPropertySetter
         }
         else
         {
-            return null;
+            throw new InvalidOperationException(
+                $"Provider property {targetType.FullName}.{propertyName} has type {valueType.FullName}, which the setter does not support.");
         }
 
         var target = Expression.Parameter(typeof(object), "target");

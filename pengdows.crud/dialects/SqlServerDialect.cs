@@ -53,6 +53,13 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class SqlServerDialect : SqlDialect
 {
+    // This provider has no 128-bit or arbitrary-size integer parameter, and its column is an exact decimal type: the
+    // decimal text is bound and stored without loss.
+    internal override bool BindsWideIntegersAsText => true;
+
+    // A numeric wider than the driver's decimal is selected as its digits, as NVARCHAR.
+    internal override string WideIntegerTextCast(string columnReference) => $"CAST({columnReference} AS NVARCHAR(100))";
+
     private static readonly Regex BuildToken =
         new(@"-\s*(\d+\.\d+\.\d+\.\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 

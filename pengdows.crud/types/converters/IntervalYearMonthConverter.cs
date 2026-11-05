@@ -91,6 +91,8 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
         {
             IntervalWireFormat.OracleLiteral => FormatOracle(value),
             IntervalWireFormat.Iso8601 => FormatIso(value),
+            IntervalWireFormat.PostgreSqlInterval => PostgreSqlIntervalConverter.ToProvider(
+                new PostgreSqlInterval(value.TotalMonths, 0, 0), provider),
             _ => value
         };
     }
@@ -101,6 +103,20 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
         {
             result = interval;
             return true;
+        }
+
+        // PostgreSQL returns its interval as months, days and microseconds. A value with no days or time is a
+        // year-month interval, normalised to years and months (27 months reads as 2 years 3 months).
+        if (value is not string && new PostgreSqlIntervalConverter().TryConvertFromProvider(value, provider, out var pgInterval))
+        {
+            if (pgInterval.Days == 0 && pgInterval.Microseconds == 0)
+            {
+                result = IntervalYearMonth.FromTotalMonths(pgInterval.Months);
+                return true;
+            }
+
+            result = default!;
+            return false;
         }
 
         // A month count (Informix, Db2 and some drivers return one; DRY-010).
@@ -121,7 +137,15 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
         // DRY-012: the value object's strict parser; blank or unrecognized text is no interval.
         if (value is string text)
         {
-            return IntervalYearMonth.TryParseText(text, out result);
+            // A database returns the interval as it normalised it: "P14M" is 1 year 2 months, read back as such.
+            if (!IntervalYearMonth.TryParseText(text, out var parsed))
+            {
+                result = default!;
+                return false;
+            }
+
+            result = IntervalYearMonth.FromTotalMonths(parsed.TotalMonths);
+            return true;
         }
 
         result = default!;

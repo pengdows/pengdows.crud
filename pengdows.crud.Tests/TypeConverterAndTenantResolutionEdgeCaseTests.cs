@@ -55,9 +55,9 @@ public class TypeConverterAndTenantResolutionEdgeCaseTests
         // Blank text is no interval on the read path (COR-002, DRY-012).
         Assert.False(converter.TryConvertFromProvider("   ", SupportedDatabase.Sqlite, out _));
 
-        var overflowSuccess = converter.TryConvertFromProvider("P999999999999999999999D", SupportedDatabase.Sqlite,
-            out _);
-        Assert.False(overflowSuccess);
+        // An overflowing duration is malformed data: an error, not "no value".
+        Assert.ThrowsAny<FormatException>(() =>
+            converter.TryConvertFromProvider("P999999999999999999999D", SupportedDatabase.Sqlite, out _));
     }
 
     [Fact]

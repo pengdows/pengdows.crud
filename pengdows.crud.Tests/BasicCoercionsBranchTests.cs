@@ -37,14 +37,12 @@ public class BasicCoercionsBranchTests
     {
         var coercion = new BooleanCoercion();
 
-        Assert.True(coercion.TryRead(new DbValue("t"), out var fromString));
-        Assert.True(fromString);
+        Assert.False(coercion.TryRead(new DbValue("t"), out _));
 
         Assert.True(coercion.TryRead(new DbValue("0"), out var fromZero));
         Assert.False(fromZero);
 
-        Assert.True(coercion.TryRead(new DbValue('y'), out var fromChar));
-        Assert.True(fromChar);
+        Assert.True(coercion.TryRead(new DbValue('y'), out var yes) && yes);
 
         Assert.True(coercion.TryRead(new DbValue(2L), out var fromNumber));
         Assert.True(fromNumber);
@@ -57,12 +55,11 @@ public class BasicCoercionsBranchTests
     }
 
     [Fact]
-    public void BooleanCoercion_InvalidChar_Throws()
+    public void BooleanCoercion_OtherChar_FailsTheRead()
     {
         var coercion = new BooleanCoercion();
 
-        Assert.Throws<InvalidCastException>(() =>
-            coercion.TryRead(new DbValue("x"), out _));
+        Assert.False(coercion.TryRead(new DbValue("x"), out _));
     }
 
     // Snowflake.Data (and some other drivers) return a TIME column as a DateTime anchored to a date,

@@ -4,6 +4,56 @@
 `pengdows.crud.abstractions` and `pengdows.crud.fakeDb`). This file collects what is new and the behavior
 changes a 2.0.5 user can notice.
 
+## Behaviour changes made after the first draft of this release
+
+These changes are in the 2.0.6 branch and are not yet released. Each one changes what a caller
+observes, so each is listed here with its reason.
+
+* **Boolean text.** A string or single character is read as a boolean only if `bool.TryParse` accepts it,
+  or it is one of `0`, `0.0`, `f`, `n`, `no`, `NaN` or `-NaN` (any case), which read as false. Anything
+  else fails the read with `InvalidCastException`. Previously `"1"`, `"t"`, `"yes"` and any other non-blank
+  text, for example `"truue"`, read as true; they now fail. `"Y"` and `"y"` still read as true, and `"N"`
+  reads as false. Y/N flag columns therefore need no mapping decision for `"Y"` or `"N"`; a column that holds
+  `"1"`, `"t"` or `"yes"` needs one before upgrading.
+* **UUIDv7 under burst.** When a thread exhausts its 4,096-ID counter in one millisecond, the logical
+  clock may lead the wall clock by at most `Uuid7Optimized.MaxLogicalLeadMs` (10 ms). At that limit the
+  generator waits about one millisecond. A backward clock step larger than the limit makes `NewUuid7` and
+  `NewUuid7RfcBytes` throw `InvalidOperationException`, and `TryNewUuid7` return false. Earlier builds
+  stalled for the length of the step, and before that the timestamp could run ahead of the wall clock
+  without bound under sustained load.
+* **`Uuid7Options.MaxSpinCount` and `SleepMs`.** Still accepted, but they no longer affect counter
+  exhaustion. They are retained for compatibility and are candidates for removal in 3.0.
+* **Constraint names.** `ConstraintViolationException.ConstraintName` is taken only from a quoted
+  identifier in the message, or from Oracle's parenthesised `(SCHEMA.name)` form. A provider that does not
+  expose a `ConstraintName` property now returns `null` where it used to return a phrase such as `"fails"`.
+  Providers that expose the property are unaffected.
+* **Metrics observer.** Counter deltas are emitted under a lock per observer, and a snapshot older than the
+  last one exported is dropped. A late-arriving snapshot can no longer make the next event re-emit a
+  delta that was already counted.
+* **Registry disposal.** `TenantContextRegistry` disposes every context it constructed when it is
+  disposed, including contexts a caller still holds. The documentation now says so.
+* **Collection element coercion.** A NULL element that cannot be stored in a non-nullable element type
+  throws `InvalidCastException`, which hydration reports as `DataMappingException`, instead of
+  `ArgumentNullException`.
+
+* **Interval members that are missing now fail.** A provider interval object whose `Months`, `Days` or
+  `Ticks` member cannot be read throws `InvalidOperationException` naming the member. It used to read as
+  zero, which silently corrupted the stored interval.
+* **Spatial SRID is never dropped.** Writing WKB that is too short to carry an SRID header, or WKB that
+  already names a different SRID, throws `ArgumentException`. A matching SRID is written unchanged. Before,
+  the value was written with no SRID or with the wrong one.
+* **Malformed text throws its reason instead of a generic cast failure.** For CIDR, MAC address, day-to-second
+  interval, PostgreSQL interval, range and spatial values, text that is not a valid value of that type now
+  throws the parser's error (`FormatException`), where 2.0.5 and earlier returned `false` and the caller
+  reported a generic `InvalidCastException`. Blank text is still no value. Error messages do not echo the
+  stored value.
+* **Provider setting that cannot be applied.** `ProviderPropertySetter.Set` throws when the member is
+  missing, read-only, of an unsupported type, or the text is not a valid value. Provider-specific probes
+  use `TrySet`, which returns `false` only when the member is absent (a generic parameter).
+* **Public surface.** `DataSource` on `IDatabaseContext`, `DatabaseContext` and `TransactionContext` is
+  obsolete and is removed in 3.0. `PublicSurfaceGuardTests` pins the list of public inputs that take a raw
+  ADO.NET object.
+
 ## New databases
 
 2.0.0 to 2.0.5 supported the same fourteen databases. 2.0.6 adds nine, each with a `SupportedDatabase` value of its

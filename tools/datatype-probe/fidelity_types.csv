@@ -1,0 +1,1126 @@
+semantic_type,column,clr_type,db_type,database,status,declaration,provider_type,reason
+signed 8-bit,signed_8_bit,sbyte,SByte,PostgreSql,declared,SMALLINT,smallint,
+signed 8-bit,signed_8_bit,sbyte,SByte,SqlServer,declared,SMALLINT,smallint,
+signed 8-bit,signed_8_bit,sbyte,SByte,Oracle,declared,"NUMBER(3,0)",Int16,
+signed 8-bit,signed_8_bit,sbyte,SByte,Firebird,declared,SMALLINT,SMALLINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,CockroachDb,declared,SMALLINT,smallint,
+signed 8-bit,signed_8_bit,sbyte,SByte,MariaDb,declared,TINYINT,TINYINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,MySql,declared,TINYINT,TINYINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,Sqlite,declared,TINYINT,TINYINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,DuckDB,declared,TINYINT,TinyInt,
+signed 8-bit,signed_8_bit,sbyte,SByte,YugabyteDb,declared,SMALLINT,smallint,
+signed 8-bit,signed_8_bit,sbyte,SByte,TiDb,declared,TINYINT,TINYINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,SingleStore,declared,TINYINT,TINYINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,SybaseASE,declared,SMALLINT,smallint,
+signed 8-bit,signed_8_bit,sbyte,SByte,Spanner,declared,BIGINT,bigint,
+signed 8-bit,signed_8_bit,sbyte,SByte,FlatFile,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,PostgreSql,declared,SMALLINT,smallint,
+signed 16-bit,signed_16_bit,short,Int16,SqlServer,declared,SMALLINT,smallint,
+signed 16-bit,signed_16_bit,short,Int16,Oracle,declared,SMALLINT,Decimal,
+signed 16-bit,signed_16_bit,short,Int16,Firebird,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,CockroachDb,declared,SMALLINT,smallint,
+signed 16-bit,signed_16_bit,short,Int16,MariaDb,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,MySql,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,Sqlite,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,DuckDB,declared,SMALLINT,SmallInt,
+signed 16-bit,signed_16_bit,short,Int16,YugabyteDb,declared,SMALLINT,smallint,
+signed 16-bit,signed_16_bit,short,Int16,TiDb,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,SingleStore,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,SybaseASE,declared,SMALLINT,smallint,
+signed 16-bit,signed_16_bit,short,Int16,Spanner,declared,INT8,bigint,
+signed 16-bit,signed_16_bit,short,Int16,FlatFile,declared,SMALLINT,SMALLINT,
+signed 32-bit,signed_32_bit,int,Int32,PostgreSql,declared,INTEGER,integer,
+signed 32-bit,signed_32_bit,int,Int32,SqlServer,declared,INTEGER,int,
+signed 32-bit,signed_32_bit,int,Int32,Oracle,declared,INTEGER,Decimal,
+signed 32-bit,signed_32_bit,int,Int32,Firebird,declared,INTEGER,INTEGER,
+signed 32-bit,signed_32_bit,int,Int32,CockroachDb,declared,INTEGER,bigint,
+signed 32-bit,signed_32_bit,int,Int32,MariaDb,declared,INTEGER,INT,
+signed 32-bit,signed_32_bit,int,Int32,MySql,declared,INTEGER,INT,
+signed 32-bit,signed_32_bit,int,Int32,Sqlite,declared,INTEGER,INTEGER,
+signed 32-bit,signed_32_bit,int,Int32,DuckDB,declared,INTEGER,Integer,
+signed 32-bit,signed_32_bit,int,Int32,YugabyteDb,declared,INTEGER,integer,
+signed 32-bit,signed_32_bit,int,Int32,TiDb,declared,INTEGER,INT,
+signed 32-bit,signed_32_bit,int,Int32,SingleStore,declared,INTEGER,INT,
+signed 32-bit,signed_32_bit,int,Int32,SybaseASE,declared,INTEGER,int,
+signed 32-bit,signed_32_bit,int,Int32,Spanner,declared,INTEGER,bigint,
+signed 32-bit,signed_32_bit,int,Int32,FlatFile,declared,INTEGER,INTEGER,
+signed 64-bit,signed_64_bit,long,Int64,PostgreSql,declared,BIGINT,bigint,
+signed 64-bit,signed_64_bit,long,Int64,SqlServer,declared,BIGINT,bigint,
+signed 64-bit,signed_64_bit,long,Int64,Oracle,declared,"NUMBER(19,0)",Decimal,
+signed 64-bit,signed_64_bit,long,Int64,Firebird,declared,BIGINT,BIGINT,
+signed 64-bit,signed_64_bit,long,Int64,CockroachDb,declared,BIGINT,bigint,
+signed 64-bit,signed_64_bit,long,Int64,MariaDb,declared,BIGINT,BIGINT,
+signed 64-bit,signed_64_bit,long,Int64,MySql,declared,BIGINT,BIGINT,
+signed 64-bit,signed_64_bit,long,Int64,Sqlite,declared,BIGINT,BIGINT,
+signed 64-bit,signed_64_bit,long,Int64,DuckDB,declared,BIGINT,BigInt,
+signed 64-bit,signed_64_bit,long,Int64,YugabyteDb,declared,BIGINT,bigint,
+signed 64-bit,signed_64_bit,long,Int64,TiDb,declared,BIGINT,BIGINT,
+signed 64-bit,signed_64_bit,long,Int64,SingleStore,declared,BIGINT,BIGINT,
+signed 64-bit,signed_64_bit,long,Int64,SybaseASE,declared,BIGINT,bigint,
+signed 64-bit,signed_64_bit,long,Int64,Spanner,declared,BIGINT,bigint,
+signed 64-bit,signed_64_bit,long,Int64,FlatFile,declared,BIGINT,BIGINT,
+signed 128-bit,signed_128_bit,Int128,Object,PostgreSql,declared,"NUMERIC(38,0)",numeric(38),
+signed 128-bit,signed_128_bit,Int128,Object,SqlServer,declared,"NUMERIC(38,0)",decimal,
+signed 128-bit,signed_128_bit,Int128,Object,Oracle,declared,"NUMBER(38,0)",Decimal,
+signed 128-bit,signed_128_bit,Int128,Object,Firebird,declared,INT128,INT128,
+signed 128-bit,signed_128_bit,Int128,Object,CockroachDb,declared,"NUMERIC(38,0)",numeric(38),
+signed 128-bit,signed_128_bit,Int128,Object,MariaDb,declared,"NUMERIC(38,0)",DECIMAL,
+signed 128-bit,signed_128_bit,Int128,Object,MySql,declared,"NUMERIC(38,0)",DECIMAL,
+signed 128-bit,signed_128_bit,Int128,Object,Sqlite,declared,TEXT,text,
+signed 128-bit,signed_128_bit,Int128,Object,DuckDB,declared,HUGEINT,HugeInt,
+signed 128-bit,signed_128_bit,Int128,Object,YugabyteDb,declared,"NUMERIC(38,0)",numeric(38),
+signed 128-bit,signed_128_bit,Int128,Object,TiDb,declared,"NUMERIC(38,0)",DECIMAL,
+signed 128-bit,signed_128_bit,Int128,Object,SingleStore,declared,"NUMERIC(38,0)",DECIMAL,
+signed 128-bit,signed_128_bit,Int128,Object,SybaseASE,declared,"NUMERIC(38,0)",numeric,
+signed 128-bit,signed_128_bit,Int128,Object,Spanner,unsupported,,,P0001: Type <hugeint> does not exist.
+signed 128-bit,signed_128_bit,Int128,Object,FlatFile,declared,"NUMERIC(38,0)",NUMERIC,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,PostgreSql,widened,SMALLINT,(widened),
+unsigned 8-bit,unsigned_8_bit,byte,Byte,SqlServer,declared,TINYINT,tinyint,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,Oracle,widened,SMALLINT,(widened),
+unsigned 8-bit,unsigned_8_bit,byte,Byte,Firebird,widened,SMALLINT,(widened),
+unsigned 8-bit,unsigned_8_bit,byte,Byte,CockroachDb,widened,SMALLINT,(widened),
+unsigned 8-bit,unsigned_8_bit,byte,Byte,MariaDb,declared,TINYINT UNSIGNED,TINYINT,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,MySql,declared,TINYINT UNSIGNED,TINYINT,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,Sqlite,declared,TINYINT UNSIGNED,TINYINT UNSIGNED,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,DuckDB,declared,UTINYINT,UnsignedTinyInt,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,YugabyteDb,widened,SMALLINT,(widened),
+unsigned 8-bit,unsigned_8_bit,byte,Byte,TiDb,declared,TINYINT UNSIGNED,TINYINT,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,SingleStore,declared,TINYINT UNSIGNED,TINYINT,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,SybaseASE,declared,TINYINT,tinyint,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,Spanner,declared,BIGINT,bigint,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,FlatFile,widened,SMALLINT,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,PostgreSql,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SqlServer,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Oracle,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Firebird,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,CockroachDb,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,MariaDb,declared,SMALLINT UNSIGNED,SMALLINT,
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,MySql,declared,SMALLINT UNSIGNED,SMALLINT,
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Sqlite,declared,SMALLINT UNSIGNED,SMALLINT UNSIGNED,
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,DuckDB,declared,USMALLINT,UnsignedSmallInt,
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,YugabyteDb,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,TiDb,declared,SMALLINT UNSIGNED,SMALLINT,
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SingleStore,declared,SMALLINT UNSIGNED,SMALLINT,
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SybaseASE,declared,UNSIGNED SMALLINT,unsigned smallint,
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Spanner,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,FlatFile,widened,INTEGER,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,PostgreSql,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,SqlServer,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,Oracle,declared,"NUMBER(10,0)",NUMBER,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,Firebird,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,CockroachDb,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,MariaDb,declared,INT UNSIGNED,INT,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,MySql,declared,INT UNSIGNED,INT,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,Sqlite,declared,INT UNSIGNED,INT UNSIGNED,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,DuckDB,declared,UINTEGER,UnsignedInteger,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,YugabyteDb,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,TiDb,declared,INT UNSIGNED,INT,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,SingleStore,declared,INT UNSIGNED,INT,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,SybaseASE,declared,UNSIGNED INT,unsigned int,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,Spanner,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,FlatFile,widened,BIGINT,(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,PostgreSql,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SqlServer,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Oracle,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Firebird,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,CockroachDb,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,MariaDb,declared,BIGINT UNSIGNED,BIGINT,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,MySql,declared,BIGINT UNSIGNED,BIGINT,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Sqlite,declared,TEXT,text,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,DuckDB,declared,UBIGINT,UnsignedBigInt,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,YugabyteDb,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,TiDb,declared,BIGINT UNSIGNED,BIGINT,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SingleStore,declared,BIGINT UNSIGNED,BIGINT,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SybaseASE,declared,UNSIGNED BIGINT,unsigned bigint,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Spanner,declared,NUMERIC,numeric,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,FlatFile,widened,"NUMERIC(20,0)",(widened),
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,PostgreSql,declared,"NUMERIC(1000,0)",numeric(1000),
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,SqlServer,declared,"NUMERIC(38,0)",decimal,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,Oracle,declared,NUMBER,Decimal,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,Firebird,declared,"NUMERIC(38,0)",NUMERIC,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,CockroachDb,declared,"NUMERIC(1000,0)",numeric(1000),
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,MariaDb,declared,"DECIMAL(65,0)",DECIMAL,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,MySql,declared,"DECIMAL(65,0)",DECIMAL,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,Sqlite,declared,TEXT,text,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,DuckDB,declared,VARINT,VarInt,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,YugabyteDb,declared,"NUMERIC(1000,0)",numeric(1000),
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,TiDb,declared,"DECIMAL(65,0)",DECIMAL,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,SingleStore,declared,"DECIMAL(65,0)",DECIMAL,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,SybaseASE,declared,"NUMERIC(38,0)",numeric,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,Spanner,unsupported,,,P0001: Type modifier is not supported for type <numeric>.
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,FlatFile,declared,"NUMERIC(1000,0)",NUMERIC,
+binary float32,binary_float32,float,Single,PostgreSql,declared,REAL,real,
+binary float32,binary_float32,float,Single,SqlServer,declared,REAL,real,
+binary float32,binary_float32,float,Single,Oracle,declared,REAL,Decimal,
+binary float32,binary_float32,float,Single,Firebird,declared,REAL,FLOAT,
+binary float32,binary_float32,float,Single,CockroachDb,declared,REAL,real,
+binary float32,binary_float32,float,Single,MariaDb,declared,REAL,DOUBLE,
+binary float32,binary_float32,float,Single,MySql,declared,REAL,DOUBLE,
+binary float32,binary_float32,float,Single,Sqlite,declared,REAL,REAL,
+binary float32,binary_float32,float,Single,DuckDB,declared,REAL,Float,
+binary float32,binary_float32,float,Single,YugabyteDb,declared,REAL,real,
+binary float32,binary_float32,float,Single,TiDb,declared,REAL,DOUBLE,
+binary float32,binary_float32,float,Single,SingleStore,declared,REAL,DOUBLE,
+binary float32,binary_float32,float,Single,SybaseASE,declared,REAL,real,
+binary float32,binary_float32,float,Single,Spanner,declared,REAL,real,
+binary float32,binary_float32,float,Single,FlatFile,declared,REAL,REAL,
+binary float64,binary_float64,double,Double,PostgreSql,declared,DOUBLE PRECISION,double precision,
+binary float64,binary_float64,double,Double,SqlServer,declared,DOUBLE PRECISION,float,
+binary float64,binary_float64,double,Double,Oracle,declared,DOUBLE PRECISION,Decimal,
+binary float64,binary_float64,double,Double,Firebird,declared,DOUBLE PRECISION,DOUBLE PRECISION,
+binary float64,binary_float64,double,Double,CockroachDb,declared,DOUBLE PRECISION,double precision,
+binary float64,binary_float64,double,Double,MariaDb,declared,DOUBLE PRECISION,DOUBLE,
+binary float64,binary_float64,double,Double,MySql,declared,DOUBLE PRECISION,DOUBLE,
+binary float64,binary_float64,double,Double,Sqlite,declared,DOUBLE PRECISION,DOUBLE PRECISION,
+binary float64,binary_float64,double,Double,DuckDB,declared,DOUBLE PRECISION,Double,
+binary float64,binary_float64,double,Double,YugabyteDb,declared,DOUBLE PRECISION,double precision,
+binary float64,binary_float64,double,Double,TiDb,declared,DOUBLE PRECISION,DOUBLE,
+binary float64,binary_float64,double,Double,SingleStore,declared,DOUBLE PRECISION,DOUBLE,
+binary float64,binary_float64,double,Double,SybaseASE,declared,DOUBLE PRECISION,float,
+binary float64,binary_float64,double,Double,Spanner,declared,DOUBLE PRECISION,double precision,
+binary float64,binary_float64,double,Double,FlatFile,declared,DOUBLE PRECISION,DOUBLE PRECISION,
+fixed decimal,fixed_decimal,decimal,Decimal,PostgreSql,declared,"DECIMAL(18,4)","numeric(18, 4)",
+fixed decimal,fixed_decimal,decimal,Decimal,SqlServer,declared,"DECIMAL(18,4)",decimal,
+fixed decimal,fixed_decimal,decimal,Decimal,Oracle,declared,"DECIMAL(18,4)",Decimal,
+fixed decimal,fixed_decimal,decimal,Decimal,Firebird,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,CockroachDb,declared,"DECIMAL(18,4)","numeric(18, 4)",
+fixed decimal,fixed_decimal,decimal,Decimal,MariaDb,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,MySql,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,Sqlite,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,DuckDB,declared,"DECIMAL(18,4)",Decimal,
+fixed decimal,fixed_decimal,decimal,Decimal,YugabyteDb,declared,"DECIMAL(18,4)","numeric(18, 4)",
+fixed decimal,fixed_decimal,decimal,Decimal,TiDb,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,SingleStore,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,SybaseASE,declared,"DECIMAL(18,4)",decimal,
+fixed decimal,fixed_decimal,decimal,Decimal,Spanner,declared,NUMERIC,numeric,
+fixed decimal,fixed_decimal,decimal,Decimal,FlatFile,declared,"DECIMAL(18,4)",DECIMAL,
+boolean,boolean,bool,Boolean,PostgreSql,declared,BOOLEAN,boolean,
+boolean,boolean,bool,Boolean,SqlServer,declared,BIT,bit,
+boolean,boolean,bool,Boolean,Oracle,declared,BOOLEAN,Boolean,
+boolean,boolean,bool,Boolean,Firebird,declared,BOOLEAN,BOOLEAN,
+boolean,boolean,bool,Boolean,CockroachDb,declared,BOOLEAN,boolean,
+boolean,boolean,bool,Boolean,MariaDb,declared,BOOLEAN,BOOL,
+boolean,boolean,bool,Boolean,MySql,declared,BOOLEAN,BOOL,
+boolean,boolean,bool,Boolean,Sqlite,declared,BOOLEAN,BOOLEAN,
+boolean,boolean,bool,Boolean,DuckDB,declared,BOOLEAN,Boolean,
+boolean,boolean,bool,Boolean,YugabyteDb,declared,BOOLEAN,boolean,
+boolean,boolean,bool,Boolean,TiDb,declared,BOOLEAN,BOOL,
+boolean,boolean,bool,Boolean,SingleStore,declared,BOOLEAN,TINYINT,
+boolean,boolean,bool,Boolean,SybaseASE,unsupported,,,Can't find type 'BOOLEAN'.
+boolean,boolean,bool,Boolean,Spanner,declared,BOOLEAN,boolean,
+boolean,boolean,bool,Boolean,FlatFile,declared,BOOLEAN,BOOLEAN,
+bit / bitstring,bit_string,BitArray,Object,PostgreSql,declared,BIT VARYING(8),bit varying(8),
+bit / bitstring,bit_string,BitArray,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot specify a column width on data type bit."
+bit / bitstring,bit_string,BitArray,Object,Oracle,unsupported,,,ORA-03060: Data type BIT is invalid. https://docs.oracle.com/error-help/db/ora-03060/
+bit / bitstring,bit_string,BitArray,Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 58 ("
+bit / bitstring,bit_string,BitArray,Object,CockroachDb,declared,BIT VARYING(8),bit varying(8),
+bit / bitstring,bit_string,BitArray,Object,MariaDb,declared,BIT(3),bit(3),
+bit / bitstring,bit_string,BitArray,Object,MySql,declared,BIT(3),bit(3),
+bit / bitstring,bit_string,BitArray,Object,Sqlite,declared,VARCHAR(100),varchar,
+bit / bitstring,bit_string,BitArray,Object,DuckDB,declared,BIT(8),Bit,
+bit / bitstring,bit_string,BitArray,Object,YugabyteDb,declared,BIT VARYING(8),bit varying(8),
+bit / bitstring,bit_string,BitArray,Object,TiDb,declared,BIT(3),bit(3),
+bit / bitstring,bit_string,BitArray,Object,SingleStore,declared,BIT(3),bit(3),
+bit / bitstring,bit_string,BitArray,Object,SybaseASE,unsupported,,,"Can't specify a length, scale or storage property on type 'bit'."
+bit / bitstring,bit_string,BitArray,Object,Spanner,unsupported,,,P0001: Type <bit> is not supported.
+bit / bitstring,bit_string,BitArray,Object,FlatFile,unsupported,,,SQL feature 'BIT data types' is not implemented by pengdows.flatfile.
+varying character,varying_character,string,String,PostgreSql,declared,VARCHAR(100),character varying(100),
+varying character,varying_character,string,String,SqlServer,declared,VARCHAR(100),varchar,
+varying character,varying_character,string,String,Oracle,declared,VARCHAR(100),Varchar2,
+varying character,varying_character,string,String,Firebird,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,CockroachDb,declared,VARCHAR(100),character varying(100),
+varying character,varying_character,string,String,MariaDb,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,MySql,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,Sqlite,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,DuckDB,declared,VARCHAR(100),Varchar,
+varying character,varying_character,string,String,YugabyteDb,declared,VARCHAR(100),character varying(100),
+varying character,varying_character,string,String,TiDb,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,SingleStore,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,SybaseASE,declared,VARCHAR(100),varchar,
+varying character,varying_character,string,String,Spanner,declared,VARCHAR(100),character varying,
+varying character,varying_character,string,String,FlatFile,declared,VARCHAR(100),VARCHAR,
+unbounded text,unbounded_text,string,String,PostgreSql,declared,TEXT,text,
+unbounded text,unbounded_text,string,String,SqlServer,declared,TEXT,text,
+unbounded text,unbounded_text,string,String,Oracle,declared,CLOB,Clob,
+unbounded text,unbounded_text,string,String,Firebird,declared,BLOB SUB_TYPE TEXT,BLOB SUB_TYPE 1,
+unbounded text,unbounded_text,string,String,CockroachDb,declared,TEXT,text,
+unbounded text,unbounded_text,string,String,MariaDb,declared,TEXT,VARCHAR,
+unbounded text,unbounded_text,string,String,MySql,declared,TEXT,VARCHAR,
+unbounded text,unbounded_text,string,String,Sqlite,declared,CLOB,CLOB,
+unbounded text,unbounded_text,string,String,DuckDB,declared,TEXT,Varchar,
+unbounded text,unbounded_text,string,String,YugabyteDb,declared,TEXT,text,
+unbounded text,unbounded_text,string,String,TiDb,declared,TEXT,VARCHAR,
+unbounded text,unbounded_text,string,String,SingleStore,declared,TEXT,VARCHAR,
+unbounded text,unbounded_text,string,String,SybaseASE,declared,TEXT,text,
+unbounded text,unbounded_text,string,String,Spanner,declared,TEXT,character varying,
+unbounded text,unbounded_text,string,String,FlatFile,declared,CLOB,CLOB,
+UUID / GUID,uuid,Guid,Guid,PostgreSql,declared,UUID,uuid,
+UUID / GUID,uuid,Guid,Guid,SqlServer,declared,UNIQUEIDENTIFIER,uniqueidentifier,
+UUID / GUID,uuid,Guid,Guid,Oracle,declared,VARCHAR2(36),VARCHAR2,
+UUID / GUID,uuid,Guid,Guid,Firebird,declared,CHAR(16) CHARACTER SET OCTETS,CHAR,
+UUID / GUID,uuid,Guid,Guid,CockroachDb,declared,UUID,uuid,
+UUID / GUID,uuid,Guid,Guid,MariaDb,declared,UUID,CHAR(36),
+UUID / GUID,uuid,Guid,Guid,MySql,declared,CHAR(36),CHAR(36),
+UUID / GUID,uuid,Guid,Guid,Sqlite,declared,UUID,UUID,
+UUID / GUID,uuid,Guid,Guid,DuckDB,declared,UUID,Uuid,
+UUID / GUID,uuid,Guid,Guid,YugabyteDb,declared,UUID,uuid,
+UUID / GUID,uuid,Guid,Guid,TiDb,declared,CHAR(36),CHAR(36),
+UUID / GUID,uuid,Guid,Guid,SingleStore,declared,CHAR(36),CHAR(36),
+UUID / GUID,uuid,Guid,Guid,SybaseASE,declared,BINARY(16),binary,
+UUID / GUID,uuid,Guid,Guid,Spanner,declared,UUID,uuid,
+UUID / GUID,uuid,Guid,Guid,FlatFile,declared,UUID,UUID,
+calendar date,calendar_date,DateOnly,Date,PostgreSql,declared,DATE,date,
+calendar date,calendar_date,DateOnly,Date,SqlServer,declared,DATE,date,
+calendar date,calendar_date,DateOnly,Date,Oracle,declared,DATE,Date,
+calendar date,calendar_date,DateOnly,Date,Firebird,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,CockroachDb,declared,DATE,date,
+calendar date,calendar_date,DateOnly,Date,MariaDb,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,MySql,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,Sqlite,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,DuckDB,declared,DATE,Date,
+calendar date,calendar_date,DateOnly,Date,YugabyteDb,declared,DATE,date,
+calendar date,calendar_date,DateOnly,Date,TiDb,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,SingleStore,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,SybaseASE,declared,DATE,date,
+calendar date,calendar_date,DateOnly,Date,Spanner,declared,DATE,date,
+calendar date,calendar_date,DateOnly,Date,FlatFile,declared,DATE,DATE,
+time without zone,time_of_day,TimeOnly,Time,PostgreSql,declared,TIME(6),time(6) without time zone,
+time without zone,time_of_day,TimeOnly,Time,SqlServer,declared,TIME(6),time,
+time without zone,time_of_day,TimeOnly,Time,Oracle,unsupported,,,ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
+time without zone,time_of_day,TimeOnly,Time,Firebird,declared,TIME,TIME,
+time without zone,time_of_day,TimeOnly,Time,CockroachDb,declared,TIME(6),time(6) without time zone,
+time without zone,time_of_day,TimeOnly,Time,MariaDb,declared,TIME(6),TIME,
+time without zone,time_of_day,TimeOnly,Time,MySql,declared,TIME(6),TIME,
+time without zone,time_of_day,TimeOnly,Time,Sqlite,declared,TIME(6),TIME,
+time without zone,time_of_day,TimeOnly,Time,DuckDB,declared,TIME,Time,
+time without zone,time_of_day,TimeOnly,Time,YugabyteDb,declared,TIME(6),time(6) without time zone,
+time without zone,time_of_day,TimeOnly,Time,TiDb,declared,TIME(6),TIME,
+time without zone,time_of_day,TimeOnly,Time,SingleStore,declared,TIME(6),TIME,
+time without zone,time_of_day,TimeOnly,Time,SybaseASE,declared,TIME,time,
+time without zone,time_of_day,TimeOnly,Time,Spanner,unsupported,,,P0001: Type <time> is not supported.
+time without zone,time_of_day,TimeOnly,Time,FlatFile,declared,TIME(6),TIME,
+time without zone,time_span,TimeSpan,Time,PostgreSql,declared,TIME(6),time(6) without time zone,
+time without zone,time_span,TimeSpan,Time,SqlServer,declared,TIME(6),time,
+time without zone,time_span,TimeSpan,Time,Oracle,unsupported,,,ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
+time without zone,time_span,TimeSpan,Time,Firebird,declared,TIME,TIME,
+time without zone,time_span,TimeSpan,Time,CockroachDb,declared,TIME(6),time(6) without time zone,
+time without zone,time_span,TimeSpan,Time,MariaDb,declared,TIME(6),TIME,
+time without zone,time_span,TimeSpan,Time,MySql,declared,TIME(6),TIME,
+time without zone,time_span,TimeSpan,Time,Sqlite,declared,TIME(6),TIME,
+time without zone,time_span,TimeSpan,Time,DuckDB,declared,TIME,Time,
+time without zone,time_span,TimeSpan,Time,YugabyteDb,declared,TIME(6),time(6) without time zone,
+time without zone,time_span,TimeSpan,Time,TiDb,declared,TIME(6),TIME,
+time without zone,time_span,TimeSpan,Time,SingleStore,declared,TIME(6),TIME,
+time without zone,time_span,TimeSpan,Time,SybaseASE,declared,TIME,time,
+time without zone,time_span,TimeSpan,Time,Spanner,unsupported,,,P0001: Type <time> is not supported.
+time without zone,time_span,TimeSpan,Time,FlatFile,declared,TIME(6),TIME,
+day-time interval,day_time_interval,IntervalDaySecond,Object,PostgreSql,declared,INTERVAL DAY TO SECOND(6),interval(6),
+day-time interval,day_time_interval,IntervalDaySecond,Object,SqlServer,unsupported,,,Incorrect syntax near 'DAY'.
+day-time interval,day_time_interval,IntervalDaySecond,Object,Oracle,declared,INTERVAL DAY TO SECOND(6),IntervalDS,
+day-time interval,day_time_interval,IntervalDaySecond,Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 DAY"
+day-time interval,day_time_interval,IntervalDaySecond,Object,CockroachDb,declared,INTERVAL DAY TO SECOND(6),interval(6),
+day-time interval,day_time_interval,IntervalDaySecond,Object,MariaDb,unsupported,,,Unknown data type: 'INTERVAL'
+day-time interval,day_time_interval,IntervalDaySecond,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
+day-time interval,day_time_interval,IntervalDaySecond,Object,Sqlite,declared,INTERVAL,INTERVAL,
+day-time interval,day_time_interval,IntervalDaySecond,Object,DuckDB,declared,INTERVAL DAY TO SECOND,Interval,
+day-time interval,day_time_interval,IntervalDaySecond,Object,YugabyteDb,declared,INTERVAL DAY TO SECOND(6),interval(6),
+day-time interval,day_time_interval,IntervalDaySecond,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near ""INTERVAL DAY TO SECOND(6))"""
+day-time interval,day_time_interval,IntervalDaySecond,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
+day-time interval,day_time_interval,IntervalDaySecond,Object,SybaseASE,unsupported,,,Incorrect syntax near 'DAY'.
+day-time interval,day_time_interval,IntervalDaySecond,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
+day-time interval,day_time_interval,IntervalDaySecond,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+timestamp without zone,timestamp,DateTime,DateTime2,PostgreSql,declared,TIMESTAMP(6),timestamp(6) without time zone,
+timestamp without zone,timestamp,DateTime,DateTime2,SqlServer,declared,DATETIME2(6),datetime2,
+timestamp without zone,timestamp,DateTime,DateTime2,Oracle,declared,TIMESTAMP(6),TimeStamp,
+timestamp without zone,timestamp,DateTime,DateTime2,Firebird,declared,TIMESTAMP,TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,CockroachDb,declared,TIMESTAMP(6),timestamp(6) without time zone,
+timestamp without zone,timestamp,DateTime,DateTime2,MariaDb,declared,TIMESTAMP(6),TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,MySql,declared,TIMESTAMP(6),TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,Sqlite,declared,TIMESTAMP(6),TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,DuckDB,declared,TIMESTAMP(6),Timestamp,
+timestamp without zone,timestamp,DateTime,DateTime2,YugabyteDb,declared,TIMESTAMP(6),timestamp(6) without time zone,
+timestamp without zone,timestamp,DateTime,DateTime2,TiDb,declared,TIMESTAMP(6),TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,SingleStore,declared,TIMESTAMP(6),TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,SybaseASE,declared,DATETIME,datetime,
+timestamp without zone,timestamp,DateTime,DateTime2,Spanner,unsupported,,,P0001: Type <timestamp> is not supported.
+timestamp without zone,timestamp,DateTime,DateTime2,FlatFile,declared,TIMESTAMP(6),TIMESTAMP,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,PostgreSql,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SqlServer,declared,DATETIMEOFFSET,datetimeoffset,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Oracle,declared,TIMESTAMP WITH TIME ZONE,TimeStampTZ,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Firebird,declared,TIMESTAMP WITH TIME ZONE,TIMESTAMP WITH TIME ZONE,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,CockroachDb,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Sqlite,declared,TIMESTAMP WITH TIME ZONE,TIMESTAMP WITH TIME ZONE,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,DuckDB,declared,TIMESTAMP WITH TIME ZONE,TimestampTz,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,YugabyteDb,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 69 near ""WITH TIME ZONE)"""
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SybaseASE,unsupported,,,Incorrect syntax near the keyword 'WITH'.
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Spanner,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,FlatFile,declared,TIMESTAMP WITH TIME ZONE,TIMESTAMP WITH TIME ZONE,
+binary LOB,binary,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
+binary LOB,binary,byte[],Binary,SqlServer,declared,IMAGE,image,
+binary LOB,binary,byte[],Binary,Oracle,declared,BLOB,Blob,
+binary LOB,binary,byte[],Binary,Firebird,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,CockroachDb,declared,BLOB,bytea,
+binary LOB,binary,byte[],Binary,MariaDb,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,MySql,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,Sqlite,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,DuckDB,declared,BLOB,Blob,
+binary LOB,binary,byte[],Binary,YugabyteDb,declared,BYTEA,bytea,
+binary LOB,binary,byte[],Binary,TiDb,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,SingleStore,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,SybaseASE,declared,IMAGE,image,
+binary LOB,binary,byte[],Binary,Spanner,declared,BYTEA,bytea,
+binary LOB,binary,byte[],Binary,FlatFile,declared,BLOB,BLOB,
+JSON text / JSON value,json,JsonDocument,Object,PostgreSql,declared,JSON,json,
+JSON text / JSON value,json,JsonDocument,Object,SqlServer,declared,JSON,json,
+JSON text / JSON value,json,JsonDocument,Object,Oracle,declared,CLOB,Clob,
+JSON text / JSON value,json,JsonDocument,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR237 failed SQL error code = -607 Invalid command Specified domain or source column JSON does not exist
+JSON text / JSON value,json,JsonDocument,Object,CockroachDb,declared,JSON,jsonb,
+JSON text / JSON value,json,JsonDocument,Object,MariaDb,declared,JSON,VARCHAR,
+JSON text / JSON value,json,JsonDocument,Object,MySql,declared,JSON,JSON,
+JSON text / JSON value,json,JsonDocument,Object,Sqlite,declared,JSON,JSON,
+JSON text / JSON value,json,JsonDocument,Object,DuckDB,declared,JSON,Varchar,
+JSON text / JSON value,json,JsonDocument,Object,YugabyteDb,declared,JSON,json,
+JSON text / JSON value,json,JsonDocument,Object,TiDb,declared,JSON,JSON,
+JSON text / JSON value,json,JsonDocument,Object,SingleStore,declared,JSON,JSON,
+JSON text / JSON value,json,JsonDocument,Object,SybaseASE,unsupported,,,Can't find type 'JSON'.
+JSON text / JSON value,json,JsonDocument,Object,Spanner,declared,JSONB,jsonb,
+JSON text / JSON value,json,JsonDocument,Object,FlatFile,declared,JSON,JSON,
+IP address,ip_address,IPAddress,Object,PostgreSql,declared,INET,inet,
+IP address,ip_address,IPAddress,Object,SqlServer,declared,VARCHAR(45),varchar,
+IP address,ip_address,IPAddress,Object,Oracle,declared,VARCHAR(45),Varchar2,
+IP address,ip_address,IPAddress,Object,Firebird,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,CockroachDb,declared,INET,inet,
+IP address,ip_address,IPAddress,Object,MariaDb,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,MySql,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,Sqlite,declared,INET,INET,
+IP address,ip_address,IPAddress,Object,DuckDB,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,YugabyteDb,declared,INET,inet,
+IP address,ip_address,IPAddress,Object,TiDb,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,SingleStore,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,SybaseASE,declared,VARCHAR(45),varchar,
+IP address,ip_address,IPAddress,Object,Spanner,declared,VARCHAR(45),character varying,
+IP address,ip_address,IPAddress,Object,FlatFile,declared,VARCHAR(45),VARCHAR,
+SQL array,int_array,int[],Object,PostgreSql,declared,INTEGER ARRAY,integer[],
+SQL array,int_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
+SQL array,int_array,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+SQL array,int_array,int[],Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 ARRAY"
+SQL array,int_array,int[],Object,CockroachDb,declared,INTEGER ARRAY,bigint[],
+SQL array,int_array,int[],Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
+SQL array,int_array,int[],Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY)' at line 1
+SQL array,int_array,int[],Object,Sqlite,declared,INTEGER ARRAY,INTEGER ARRAY,
+SQL array,int_array,int[],Object,DuckDB,declared,INTEGER ARRAY,List,
+SQL array,int_array,int[],Object,YugabyteDb,declared,INTEGER ARRAY,integer[],
+SQL array,int_array,int[],Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 68 near ""ARRAY)"""
+SQL array,int_array,int[],Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY)' at line 1
+SQL array,int_array,int[],Object,SybaseASE,unsupported,,,Incorrect syntax near 'ARRAY'.
+SQL array,int_array,int[],Object,Spanner,declared,INTEGER ARRAY,bigint[],
+SQL array,int_array,int[],Object,FlatFile,unsupported,,,"Expected token 'RightParen' at position 63, but found 'Identifier'."
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,PostgreSql,unsupported,,,"42704: type ""uhugeint"" does not exist POSITION: 55"
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type UHUGEINT."
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR50 failed SQL error code = -607 Invalid command Specified domain or source column UHUGEINT does not exist
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,CockroachDb,unsupported,,,"42704: type ""uhugeint"" does not exist"
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,MariaDb,unsupported,,,Unknown data type: 'UHUGEINT'
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,Sqlite,declared,TEXT,text,
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,DuckDB,declared,UHUGEINT,UnsignedHugeInt,
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,YugabyteDb,unsupported,,,"42704: type ""uhugeint"" does not exist POSITION: 55"
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""UHUGEINT)"""
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,SybaseASE,unsupported,,,Can't find type 'UHUGEINT'.
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,Spanner,unsupported,,,P0001: Type <uhugeint> does not exist.
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,FlatFile,unsupported,,,"Unknown SQL data type 'UHUGEINT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+decimal floating point,decimal_float,decimal,Decimal,PostgreSql,unsupported,,,"42704: type ""decfloat"" does not exist POSITION: 55"
+decimal floating point,decimal_float,decimal,Decimal,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type DECFLOAT."
+decimal floating point,decimal_float,decimal,Decimal,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+decimal floating point,decimal_float,decimal,Decimal,Firebird,declared,DECFLOAT,DECFLOAT,
+decimal floating point,decimal_float,decimal,Decimal,CockroachDb,unsupported,,,"42704: type ""decfloat"" does not exist"
+decimal floating point,decimal_float,decimal,Decimal,MariaDb,unsupported,,,Unknown data type: 'DECFLOAT'
+decimal floating point,decimal_float,decimal,Decimal,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
+decimal floating point,decimal_float,decimal,Decimal,Sqlite,declared,DECFLOAT,DECFLOAT,
+decimal floating point,decimal_float,decimal,Decimal,DuckDB,unsupported,,,"Catalog Error: Type with name DECFLOAT does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr74 (id INTEGER NOT NULL PRIMARY KEY, c DECFLOAT)"
+decimal floating point,decimal_float,decimal,Decimal,YugabyteDb,unsupported,,,"42704: type ""decfloat"" does not exist POSITION: 55"
+decimal floating point,decimal_float,decimal,Decimal,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""DECFLOAT)"""
+decimal floating point,decimal_float,decimal,Decimal,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
+decimal floating point,decimal_float,decimal,Decimal,SybaseASE,unsupported,,,Can't find type 'DECFLOAT'.
+decimal floating point,decimal_float,decimal,Decimal,Spanner,unsupported,,,P0001: Type <decfloat> does not exist.
+decimal floating point,decimal_float,decimal,Decimal,FlatFile,unsupported,,,"Unknown SQL data type 'DECFLOAT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+money / currency,money,decimal,Decimal,PostgreSql,declared,MONEY,money,
+money / currency,money,decimal,Decimal,SqlServer,declared,MONEY,money,
+money / currency,money,decimal,Decimal,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+money / currency,money,decimal,Decimal,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR89 failed SQL error code = -607 Invalid command Specified domain or source column MONEY does not exist
+money / currency,money,decimal,Decimal,CockroachDb,unsupported,,,"0A000: at or near "")"": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include"
+money / currency,money,decimal,Decimal,MariaDb,unsupported,,,Unknown data type: 'MONEY'
+money / currency,money,decimal,Decimal,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
+money / currency,money,decimal,Decimal,Sqlite,declared,MONEY,MONEY,
+money / currency,money,decimal,Decimal,DuckDB,unsupported,,,"Catalog Error: Type with name MONEY does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr89 (id INTEGER NOT NULL PRIMARY KEY, c MONEY)"
+money / currency,money,decimal,Decimal,YugabyteDb,declared,MONEY,money,
+money / currency,money,decimal,Decimal,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 59 near ""MONEY)"""
+money / currency,money,decimal,Decimal,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
+money / currency,money,decimal,Decimal,SybaseASE,declared,MONEY,money,
+money / currency,money,decimal,Decimal,Spanner,unsupported,,,P0001: Type <money> is not supported; use numeric or decimal instead.
+money / currency,money,decimal,Decimal,FlatFile,unsupported,,,"SQL syntax extension 'MONEY' is not valid ISO SQL, at position 54."
+fixed character,fixed_character,string,String,PostgreSql,declared,CHAR(10),character(10),
+fixed character,fixed_character,string,String,SqlServer,declared,CHAR(10),char,
+fixed character,fixed_character,string,String,Oracle,declared,CHAR(10),Char,
+fixed character,fixed_character,string,String,Firebird,declared,CHAR(10),CHAR,
+fixed character,fixed_character,string,String,CockroachDb,declared,CHAR(10),character(10),
+fixed character,fixed_character,string,String,MariaDb,declared,CHAR(10),CHAR(10),
+fixed character,fixed_character,string,String,MySql,declared,CHAR(10),CHAR(10),
+fixed character,fixed_character,string,String,Sqlite,declared,CHAR(10),CHAR,
+fixed character,fixed_character,string,String,DuckDB,declared,CHAR(10),Varchar,
+fixed character,fixed_character,string,String,YugabyteDb,declared,CHAR(10),character(10),
+fixed character,fixed_character,string,String,TiDb,declared,CHAR(10),CHAR(10),
+fixed character,fixed_character,string,String,SingleStore,declared,CHAR(10),CHAR(10),
+fixed character,fixed_character,string,String,SybaseASE,declared,CHAR(10),varchar,
+fixed character,fixed_character,string,String,Spanner,unsupported,,,P0001: Type <bpchar> is not supported.
+fixed character,fixed_character,string,String,FlatFile,declared,CHAR(10),CHAR,
+national / Unicode character,national_text,string,String,PostgreSql,declared,VARCHAR(100),character varying(100),
+national / Unicode character,national_text,string,String,SqlServer,declared,NVARCHAR(100),nvarchar,
+national / Unicode character,national_text,string,String,Oracle,declared,NVARCHAR2(100),NVarchar2,
+national / Unicode character,national_text,string,String,Firebird,declared,VARCHAR(100),VARCHAR,
+national / Unicode character,national_text,string,String,CockroachDb,unsupported,,,"42601: at or near ""("": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+national / Unicode character,national_text,string,String,MariaDb,declared,NVARCHAR(100),VARCHAR,
+national / Unicode character,national_text,string,String,MySql,declared,NVARCHAR(100),VARCHAR,
+national / Unicode character,national_text,string,String,Sqlite,declared,NVARCHAR(100),NVARCHAR,
+national / Unicode character,national_text,string,String,DuckDB,declared,NVARCHAR(100),Varchar,
+national / Unicode character,national_text,string,String,YugabyteDb,declared,VARCHAR(100),character varying(100),
+national / Unicode character,national_text,string,String,TiDb,declared,NVARCHAR(100),VARCHAR,
+national / Unicode character,national_text,string,String,SingleStore,declared,NVARCHAR(100),VARCHAR,
+national / Unicode character,national_text,string,String,SybaseASE,declared,NVARCHAR(100),nvarchar,
+national / Unicode character,national_text,string,String,Spanner,unsupported,,,P0001: Type <nvarchar> does not exist.
+national / Unicode character,national_text,string,String,FlatFile,declared,NCHAR(10),NCHAR,
+long text LOB,long_text,string,String,PostgreSql,declared,TEXT,text,
+long text LOB,long_text,string,String,SqlServer,declared,TEXT,text,
+long text LOB,long_text,string,String,Oracle,declared,CLOB,Clob,
+long text LOB,long_text,string,String,Firebird,declared,BLOB SUB_TYPE TEXT,BLOB SUB_TYPE 1,
+long text LOB,long_text,string,String,CockroachDb,declared,TEXT,text,
+long text LOB,long_text,string,String,MariaDb,declared,TEXT,VARCHAR,
+long text LOB,long_text,string,String,MySql,declared,TEXT,VARCHAR,
+long text LOB,long_text,string,String,Sqlite,declared,CLOB,CLOB,
+long text LOB,long_text,string,String,DuckDB,declared,TEXT,Varchar,
+long text LOB,long_text,string,String,YugabyteDb,declared,TEXT,text,
+long text LOB,long_text,string,String,TiDb,declared,TEXT,VARCHAR,
+long text LOB,long_text,string,String,SingleStore,declared,TEXT,VARCHAR,
+long text LOB,long_text,string,String,SybaseASE,declared,TEXT,text,
+long text LOB,long_text,string,String,Spanner,declared,TEXT,character varying,
+long text LOB,long_text,string,String,FlatFile,declared,CLOB,CLOB,
+enumeration,enumeration,string,String,PostgreSql,unsupported,,,"42704: type ""enum"" does not exist POSITION: 56"
+enumeration,enumeration,string,String,SqlServer,unsupported,,,Incorrect syntax near 'a'.
+enumeration,enumeration,string,String,Oracle,unsupported,,,ORA-03060: Data type ENUM is invalid. https://docs.oracle.com/error-help/db/ora-03060/
+enumeration,enumeration,string,String,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 60 ("
+enumeration,enumeration,string,String,CockroachDb,unsupported,,,"42601: at or near ""("": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+enumeration,enumeration,string,String,MariaDb,declared,"ENUM('active','inactive')",ENUM,
+enumeration,enumeration,string,String,MySql,declared,"ENUM('active','inactive')",ENUM,
+enumeration,enumeration,string,String,Sqlite,declared,ENUM,ENUM,
+enumeration,enumeration,string,String,DuckDB,declared,VARCHAR(20),VARCHAR,
+enumeration,enumeration,string,String,YugabyteDb,unsupported,,,"42704: type ""enum"" does not exist POSITION: 56"
+enumeration,enumeration,string,String,TiDb,declared,"ENUM('active','inactive')",ENUM,
+enumeration,enumeration,string,String,SingleStore,declared,"ENUM('active','inactive')",ENUM,
+enumeration,enumeration,string,String,SybaseASE,unsupported,,,Incorrect syntax near '('.
+enumeration,enumeration,string,String,Spanner,unsupported,,,P0001: Type <enum> does not exist.
+enumeration,enumeration,string,String,FlatFile,unsupported,,,"Expected token 'NumericLiteral' at position 60, but found 'StringLiteral'."
+set-valued enum,set_value,string,String,PostgreSql,unsupported,,,"42704: type ""set"" does not exist POSITION: 56"
+set-valued enum,set_value,string,String,SqlServer,unsupported,,,The definition for column 'c' must include a data type. Incorrect syntax near the keyword 'SET'.
+set-valued enum,set_value,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+set-valued enum,set_value,string,String,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 SET"
+set-valued enum,set_value,string,String,CockroachDb,unsupported,,,"42601: at or near ""("": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+set-valued enum,set_value,string,String,MariaDb,declared,"SET('a','b')",SET,
+set-valued enum,set_value,string,String,MySql,declared,"SET('a','b')",SET,
+set-valued enum,set_value,string,String,Sqlite,unsupported,,,"SQLite Error 1: 'near ""SET"": syntax error'."
+set-valued enum,set_value,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name SET does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr145 (id INTEGER NOT NULL PRIMARY KEY, c SET('a','b'))"
+set-valued enum,set_value,string,String,YugabyteDb,unsupported,,,"42704: type ""set"" does not exist POSITION: 56"
+set-valued enum,set_value,string,String,TiDb,declared,"SET('a','b')",SET,
+set-valued enum,set_value,string,String,SingleStore,declared,"SET('a','b')",VARCHAR,
+set-valued enum,set_value,string,String,SybaseASE,unsupported,,,The definition for column 'c' must include a datatype.
+set-valued enum,set_value,string,String,Spanner,unsupported,,,P0001: Type <set> does not exist.
+set-valued enum,set_value,string,String,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Set'."
+fixed binary,fixed_binary,byte[],Binary,PostgreSql,unsupported,,,"42704: type ""binary"" does not exist POSITION: 56"
+fixed binary,fixed_binary,byte[],Binary,SqlServer,declared,BINARY(16),binary,
+fixed binary,fixed_binary,byte[],Binary,Oracle,declared,RAW(16),Raw,
+fixed binary,fixed_binary,byte[],Binary,Firebird,declared,BINARY(16),CHAR,
+fixed binary,fixed_binary,byte[],Binary,CockroachDb,unsupported,,,"42601: at or near ""("": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+fixed binary,fixed_binary,byte[],Binary,MariaDb,declared,BINARY(16),BLOB,
+fixed binary,fixed_binary,byte[],Binary,MySql,declared,BINARY(16),BLOB,
+fixed binary,fixed_binary,byte[],Binary,Sqlite,declared,BINARY(16),BINARY,
+fixed binary,fixed_binary,byte[],Binary,DuckDB,unsupported,,,"Binder Error: Type 'BLOB' does not take any type parameters LINE 1: CREATE TABLE pr147 (id INTEGER NOT NULL PRIMARY KEY, c BINARY(16))"
+fixed binary,fixed_binary,byte[],Binary,YugabyteDb,unsupported,,,"42704: type ""binary"" does not exist POSITION: 56"
+fixed binary,fixed_binary,byte[],Binary,TiDb,declared,BINARY(16),BLOB,
+fixed binary,fixed_binary,byte[],Binary,SingleStore,declared,BINARY(16),BLOB,
+fixed binary,fixed_binary,byte[],Binary,SybaseASE,declared,BINARY(16),varbinary,
+fixed binary,fixed_binary,byte[],Binary,Spanner,unsupported,,,P0001: Type <binary> does not exist.
+fixed binary,fixed_binary,byte[],Binary,FlatFile,declared,BINARY(16),BINARY,
+varying binary,varying_binary,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
+varying binary,varying_binary,byte[],Binary,SqlServer,declared,VARBINARY(16),varbinary,
+varying binary,varying_binary,byte[],Binary,Oracle,declared,RAW(16),Raw,
+varying binary,varying_binary,byte[],Binary,Firebird,declared,VARBINARY(32),CHAR,
+varying binary,varying_binary,byte[],Binary,CockroachDb,declared,BYTEA,bytea,
+varying binary,varying_binary,byte[],Binary,MariaDb,declared,VARBINARY(16),BLOB,
+varying binary,varying_binary,byte[],Binary,MySql,declared,VARBINARY(16),BLOB,
+varying binary,varying_binary,byte[],Binary,Sqlite,declared,VARBINARY(16),VARBINARY,
+varying binary,varying_binary,byte[],Binary,DuckDB,declared,BYTEA,Blob,
+varying binary,varying_binary,byte[],Binary,YugabyteDb,declared,BYTEA,bytea,
+varying binary,varying_binary,byte[],Binary,TiDb,declared,VARBINARY(16),BLOB,
+varying binary,varying_binary,byte[],Binary,SingleStore,declared,VARBINARY(16),BLOB,
+varying binary,varying_binary,byte[],Binary,SybaseASE,declared,VARBINARY(16),varbinary,
+varying binary,varying_binary,byte[],Binary,Spanner,declared,BYTEA,bytea,
+varying binary,varying_binary,byte[],Binary,FlatFile,declared,BLOB,BLOB,
+legacy long binary,legacy_binary,byte[],Binary,PostgreSql,unsupported,,,"42601: syntax error at or near ""RAW"" POSITION: 61"
+legacy long binary,legacy_binary,byte[],Binary,SqlServer,declared,IMAGE,image,
+legacy long binary,legacy_binary,byte[],Binary,Oracle,declared,LONG RAW,LongRaw,
+legacy long binary,legacy_binary,byte[],Binary,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 61 RAW"
+legacy long binary,legacy_binary,byte[],Binary,CockroachDb,unsupported,,,"42601: at or near ""raw"": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+legacy long binary,legacy_binary,byte[],Binary,MariaDb,declared,TINYBLOB,BLOB,
+legacy long binary,legacy_binary,byte[],Binary,MySql,declared,TINYBLOB,BLOB,
+legacy long binary,legacy_binary,byte[],Binary,Sqlite,declared,LONG RAW,LONG RAW,
+legacy long binary,legacy_binary,byte[],Binary,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""RAW"" LINE 1: ...REATE TABLE pr173 (id INTEGER NOT NULL PRIMARY KEY, c LONG RAW) ^"
+legacy long binary,legacy_binary,byte[],Binary,YugabyteDb,unsupported,,,"42601: syntax error at or near ""RAW"" POSITION: 61"
+legacy long binary,legacy_binary,byte[],Binary,TiDb,declared,TINYBLOB,BLOB,
+legacy long binary,legacy_binary,byte[],Binary,SingleStore,declared,TINYBLOB,BLOB,
+legacy long binary,legacy_binary,byte[],Binary,SybaseASE,declared,IMAGE,image,
+legacy long binary,legacy_binary,byte[],Binary,Spanner,unsupported,,,"P0001: syntax error at or near ""RAW""; failed to parse the DDL statements."
+legacy long binary,legacy_binary,byte[],Binary,FlatFile,unsupported,,,"SQL syntax extension 'LONG' is not valid ISO SQL, at position 55."
+rowversion / timestamp token,rowversion,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
+rowversion / timestamp token,rowversion,byte[],Binary,SqlServer,declared,ROWVERSION,timestamp,
+rowversion / timestamp token,rowversion,byte[],Binary,Oracle,declared,RAW(16),Raw,
+rowversion / timestamp token,rowversion,byte[],Binary,Firebird,declared,VARBINARY(32),CHAR,
+rowversion / timestamp token,rowversion,byte[],Binary,CockroachDb,declared,BYTEA,bytea,
+rowversion / timestamp token,rowversion,byte[],Binary,MariaDb,declared,VARBINARY(16),BLOB,
+rowversion / timestamp token,rowversion,byte[],Binary,MySql,declared,VARBINARY(16),BLOB,
+rowversion / timestamp token,rowversion,byte[],Binary,Sqlite,declared,ROWVERSION,ROWVERSION,
+rowversion / timestamp token,rowversion,byte[],Binary,DuckDB,declared,BYTEA,Blob,
+rowversion / timestamp token,rowversion,byte[],Binary,YugabyteDb,declared,BYTEA,bytea,
+rowversion / timestamp token,rowversion,byte[],Binary,TiDb,declared,VARBINARY(16),BLOB,
+rowversion / timestamp token,rowversion,byte[],Binary,SingleStore,declared,VARBINARY(16),BLOB,
+rowversion / timestamp token,rowversion,byte[],Binary,SybaseASE,unsupported,,,Can't find type 'ROWVERSION'.
+rowversion / timestamp token,rowversion,byte[],Binary,Spanner,unsupported,,,P0001: Type <rowversion> does not exist.
+rowversion / timestamp token,rowversion,byte[],Binary,FlatFile,declared,BLOB,BLOB,
+local-zone timestamp,local_timestamp,DateTime,DateTime,PostgreSql,unsupported,,,"42601: syntax error at or near ""WITH"" POSITION: 66"
+local-zone timestamp,local_timestamp,DateTime,DateTime,SqlServer,unsupported,,,"Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"
+local-zone timestamp,local_timestamp,DateTime,DateTime,Oracle,declared,TIMESTAMP WITH LOCAL TIME ZONE,TimeStampLTZ,
+local-zone timestamp,local_timestamp,DateTime,DateTime,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 71 LOCAL"
+local-zone timestamp,local_timestamp,DateTime,DateTime,CockroachDb,unsupported,,,"42601: at or near ""with"": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+local-zone timestamp,local_timestamp,DateTime,DateTime,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
+local-zone timestamp,local_timestamp,DateTime,DateTime,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
+local-zone timestamp,local_timestamp,DateTime,DateTime,Sqlite,declared,TIMESTAMP WITH LOCAL TIME ZONE,TIMESTAMP WITH LOCAL TIME ZONE,
+local-zone timestamp,local_timestamp,DateTime,DateTime,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""WITH"" LINE 1: ... TABLE pr202 (id INTEGER NOT NULL PRIMARY KEY, c TIMESTAMP WITH LOCAL TIME ZONE)"
+local-zone timestamp,local_timestamp,DateTime,DateTime,YugabyteDb,unsupported,,,"42601: syntax error at or near ""WITH"" POSITION: 66"
+local-zone timestamp,local_timestamp,DateTime,DateTime,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 69 near ""WITH LOCAL TIME ZONE)"""
+local-zone timestamp,local_timestamp,DateTime,DateTime,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
+local-zone timestamp,local_timestamp,DateTime,DateTime,SybaseASE,unsupported,,,Incorrect syntax near the keyword 'WITH'.
+local-zone timestamp,local_timestamp,DateTime,DateTime,Spanner,unsupported,,,"P0001: syntax error at or near ""WITH""; failed to parse the DDL statements."
+local-zone timestamp,local_timestamp,DateTime,DateTime,FlatFile,unsupported,,,"Expected token 'RightParen' at position 70, but found 'Identifier'."
+second-precision datetime,second_datetime,DateTime,DateTime,PostgreSql,declared,TIMESTAMP(0),timestamp(0) without time zone,
+second-precision datetime,second_datetime,DateTime,DateTime,SqlServer,declared,DATETIME2(0),datetime2,
+second-precision datetime,second_datetime,DateTime,DateTime,Oracle,declared,DATE,Date,
+second-precision datetime,second_datetime,DateTime,DateTime,Firebird,declared,TIMESTAMP,TIMESTAMP,
+second-precision datetime,second_datetime,DateTime,DateTime,CockroachDb,declared,TIMESTAMP(0),timestamp(0) without time zone,
+second-precision datetime,second_datetime,DateTime,DateTime,MariaDb,declared,DATETIME(0),DATETIME,
+second-precision datetime,second_datetime,DateTime,DateTime,MySql,declared,DATETIME(0),DATETIME,
+second-precision datetime,second_datetime,DateTime,DateTime,Sqlite,declared,DATETIME(0),DATETIME,
+second-precision datetime,second_datetime,DateTime,DateTime,DuckDB,declared,DATETIME(0),TimestampS,
+second-precision datetime,second_datetime,DateTime,DateTime,YugabyteDb,declared,TIMESTAMP(0),timestamp(0) without time zone,
+second-precision datetime,second_datetime,DateTime,DateTime,TiDb,declared,DATETIME(0),DATETIME,
+second-precision datetime,second_datetime,DateTime,DateTime,SingleStore,declared,DATETIME(0),DATETIME,
+second-precision datetime,second_datetime,DateTime,DateTime,SybaseASE,declared,DATETIME,datetime,
+second-precision datetime,second_datetime,DateTime,DateTime,Spanner,declared,TIMESTAMPTZ,timestamptz,
+second-precision datetime,second_datetime,DateTime,DateTime,FlatFile,declared,TIMESTAMP,timestamp,
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,PostgreSql,declared,TIME WITH TIME ZONE,time with time zone,
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,SqlServer,unsupported,,,"Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,Oracle,unsupported,,,ORA-02000: missing ROWID keyword https://docs.oracle.com/error-help/db/ora-02000/
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,Firebird,declared,TIME WITH TIME ZONE,TIME WITH TIME ZONE,
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,CockroachDb,declared,TIME WITH TIME ZONE,time with time zone,
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,Sqlite,declared,TIME WITH TIME ZONE,TIME WITH TIME ZONE,
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,DuckDB,declared,TIME WITH TIME ZONE,TimeTz,
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,YugabyteDb,declared,TIME WITH TIME ZONE,time with time zone,
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near ""WITH TIME ZONE)"""
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,SybaseASE,unsupported,,,Incorrect syntax near the keyword 'WITH'.
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,Spanner,unsupported,,,P0001: Type <timetz> is not supported.
+time with zone,time_zoned,DateTimeOffset,DateTimeOffset,FlatFile,declared,TIME WITH TIME ZONE,TIME WITH TIME ZONE,
+year-only,year_only,short,Int16,PostgreSql,declared,SMALLINT,smallint,
+year-only,year_only,short,Int16,SqlServer,declared,SMALLINT,smallint,
+year-only,year_only,short,Int16,Oracle,declared,SMALLINT,Decimal,
+year-only,year_only,short,Int16,Firebird,declared,SMALLINT,SMALLINT,
+year-only,year_only,short,Int16,CockroachDb,declared,SMALLINT,smallint,
+year-only,year_only,short,Int16,MariaDb,declared,YEAR,YEAR,
+year-only,year_only,short,Int16,MySql,declared,YEAR,YEAR,
+year-only,year_only,short,Int16,Sqlite,declared,YEAR,YEAR,
+year-only,year_only,short,Int16,DuckDB,declared,SMALLINT,SmallInt,
+year-only,year_only,short,Int16,YugabyteDb,declared,SMALLINT,smallint,
+year-only,year_only,short,Int16,TiDb,declared,YEAR,YEAR,
+year-only,year_only,short,Int16,SingleStore,declared,YEAR,YEAR,
+year-only,year_only,short,Int16,SybaseASE,declared,SMALLINT,smallint,
+year-only,year_only,short,Int16,Spanner,unsupported,,,P0001: Type <year> does not exist.
+year-only,year_only,short,Int16,FlatFile,declared,SMALLINT,SMALLINT,
+year-month interval,year_month_interval,IntervalYearMonth,Object,PostgreSql,declared,INTERVAL YEAR TO MONTH,interval(65535),
+year-month interval,year_month_interval,IntervalYearMonth,Object,SqlServer,unsupported,,,Incorrect syntax near 'YEAR'.
+year-month interval,year_month_interval,IntervalYearMonth,Object,Oracle,declared,INTERVAL YEAR TO MONTH,IntervalYM,
+year-month interval,year_month_interval,IntervalYearMonth,Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 YEAR"
+year-month interval,year_month_interval,IntervalYearMonth,Object,CockroachDb,declared,INTERVAL YEAR TO MONTH,interval,
+year-month interval,year_month_interval,IntervalYearMonth,Object,MariaDb,unsupported,,,Unknown data type: 'INTERVAL'
+year-month interval,year_month_interval,IntervalYearMonth,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL YEAR TO MONTH)' at line 1
+year-month interval,year_month_interval,IntervalYearMonth,Object,Sqlite,declared,INTERVAL,INTERVAL,
+year-month interval,year_month_interval,IntervalYearMonth,Object,DuckDB,declared,INTERVAL YEAR TO MONTH,Interval,
+year-month interval,year_month_interval,IntervalYearMonth,Object,YugabyteDb,declared,INTERVAL YEAR TO MONTH,interval(65535),
+year-month interval,year_month_interval,IntervalYearMonth,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near ""INTERVAL YEAR TO MONTH)"""
+year-month interval,year_month_interval,IntervalYearMonth,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL YEAR TO MONTH)' at line 1
+year-month interval,year_month_interval,IntervalYearMonth,Object,SybaseASE,unsupported,,,Incorrect syntax near 'YEAR'.
+year-month interval,year_month_interval,IntervalYearMonth,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
+year-month interval,year_month_interval,IntervalYearMonth,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+generic interval,generic_interval,PostgreSqlInterval,Object,PostgreSql,declared,INTERVAL,interval,
+generic interval,generic_interval,PostgreSqlInterval,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INTERVAL."
+generic interval,generic_interval,PostgreSqlInterval,Object,Oracle,unsupported,,,ORA-30089: missing or invalid <datetime field> https://docs.oracle.com/error-help/db/ora-30089/
+generic interval,generic_interval,PostgreSqlInterval,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR221 failed SQL error code = -607 Invalid command Specified domain or source column INTERVAL does not exist
+generic interval,generic_interval,PostgreSqlInterval,Object,CockroachDb,declared,INTERVAL,interval,
+generic interval,generic_interval,PostgreSqlInterval,Object,MariaDb,unsupported,,,Unknown data type: 'INTERVAL'
+generic interval,generic_interval,PostgreSqlInterval,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL)' at line 1
+generic interval,generic_interval,PostgreSqlInterval,Object,Sqlite,declared,INTERVAL,INTERVAL,
+generic interval,generic_interval,PostgreSqlInterval,Object,DuckDB,declared,INTERVAL,Interval,
+generic interval,generic_interval,PostgreSqlInterval,Object,YugabyteDb,declared,INTERVAL,interval,
+generic interval,generic_interval,PostgreSqlInterval,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near ""INTERVAL)"""
+generic interval,generic_interval,PostgreSqlInterval,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL)' at line 1
+generic interval,generic_interval,PostgreSqlInterval,Object,SybaseASE,unsupported,,,Can't find type 'interval'.
+generic interval,generic_interval,PostgreSqlInterval,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
+generic interval,generic_interval,PostgreSqlInterval,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+row identifier / ROWID,row_identifier,string,String,PostgreSql,declared,CHAR(18),character(18),
+row identifier / ROWID,row_identifier,string,String,SqlServer,declared,CHAR(18),char,
+row identifier / ROWID,row_identifier,string,String,Oracle,unsupported,,,no candidate was tried
+row identifier / ROWID,row_identifier,string,String,Firebird,declared,CHAR(18),CHAR,
+row identifier / ROWID,row_identifier,string,String,CockroachDb,declared,CHAR(18),character(18),
+row identifier / ROWID,row_identifier,string,String,MariaDb,declared,CHAR(18),CHAR(18),
+row identifier / ROWID,row_identifier,string,String,MySql,declared,CHAR(18),CHAR(18),
+row identifier / ROWID,row_identifier,string,String,Sqlite,declared,ROWID,ROWID,
+row identifier / ROWID,row_identifier,string,String,DuckDB,declared,CHAR(18),Varchar,
+row identifier / ROWID,row_identifier,string,String,YugabyteDb,declared,CHAR(18),character(18),
+row identifier / ROWID,row_identifier,string,String,TiDb,declared,CHAR(18),CHAR(18),
+row identifier / ROWID,row_identifier,string,String,SingleStore,declared,CHAR(18),CHAR(18),
+row identifier / ROWID,row_identifier,string,String,SybaseASE,declared,CHAR(18),varchar,
+row identifier / ROWID,row_identifier,string,String,Spanner,unsupported,,,P0001: Type <rowid> does not exist.
+row identifier / ROWID,row_identifier,string,String,FlatFile,declared,CHAR(18),CHAR,
+object identifier / OID,oid,uint,UInt32,PostgreSql,declared,OID,oid,
+object identifier / OID,oid,uint,UInt32,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type OID."
+object identifier / OID,oid,uint,UInt32,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+object identifier / OID,oid,uint,UInt32,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR232 failed SQL error code = -607 Invalid command Specified domain or source column OID does not exist
+object identifier / OID,oid,uint,UInt32,CockroachDb,declared,OID,oid,
+object identifier / OID,oid,uint,UInt32,MariaDb,unsupported,,,Unknown data type: 'OID'
+object identifier / OID,oid,uint,UInt32,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'OID)' at line 1
+object identifier / OID,oid,uint,UInt32,Sqlite,declared,OID,OID,
+object identifier / OID,oid,uint,UInt32,DuckDB,declared,OID,BigInt,
+object identifier / OID,oid,uint,UInt32,YugabyteDb,declared,OID,oid,
+object identifier / OID,oid,uint,UInt32,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near ""OID)"""
+object identifier / OID,oid,uint,UInt32,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'OID)' at line 1
+object identifier / OID,oid,uint,UInt32,SybaseASE,unsupported,,,Can't find type 'OID'.
+object identifier / OID,oid,uint,UInt32,Spanner,unsupported,,,P0001: Type <oid> is not supported.
+object identifier / OID,oid,uint,UInt32,FlatFile,unsupported,,,"Unknown SQL data type 'OID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+transaction ID,transaction_id,ulong,UInt64,PostgreSql,declared,XID8,xid8,
+transaction ID,transaction_id,ulong,UInt64,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type XID."
+transaction ID,transaction_id,ulong,UInt64,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+transaction ID,transaction_id,ulong,UInt64,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR234 failed SQL error code = -607 Invalid command Specified domain or source column XID does not exist
+transaction ID,transaction_id,ulong,UInt64,CockroachDb,unsupported,,,"42704: type ""xid"" does not exist"
+transaction ID,transaction_id,ulong,UInt64,MariaDb,unsupported,,,Unknown data type: 'XID'
+transaction ID,transaction_id,ulong,UInt64,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XID)' at line 1
+transaction ID,transaction_id,ulong,UInt64,Sqlite,declared,XID,XID,
+transaction ID,transaction_id,ulong,UInt64,DuckDB,unsupported,,,"Catalog Error: Type with name XID does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr234 (id INTEGER NOT NULL PRIMARY KEY, c XID)"
+transaction ID,transaction_id,ulong,UInt64,YugabyteDb,unsupported,,,no candidate was tried
+transaction ID,transaction_id,ulong,UInt64,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near ""XID)"""
+transaction ID,transaction_id,ulong,UInt64,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XID)' at line 1
+transaction ID,transaction_id,ulong,UInt64,SybaseASE,unsupported,,,Can't find type 'XID'.
+transaction ID,transaction_id,ulong,UInt64,Spanner,unsupported,,,P0001: Type <xid> is not supported.
+transaction ID,transaction_id,ulong,UInt64,FlatFile,unsupported,,,"Unknown SQL data type 'XID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+WAL / log position,wal_position,string,String,PostgreSql,declared,PG_LSN,pg_lsn,
+WAL / log position,wal_position,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type PG_LSN."
+WAL / log position,wal_position,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+WAL / log position,wal_position,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR236 failed SQL error code = -607 Invalid command Specified domain or source column PG_LSN does not exist
+WAL / log position,wal_position,string,String,CockroachDb,declared,PG_LSN,pg_lsn,
+WAL / log position,wal_position,string,String,MariaDb,unsupported,,,Unknown data type: 'PG_LSN'
+WAL / log position,wal_position,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'PG_LSN)' at line 1
+WAL / log position,wal_position,string,String,Sqlite,declared,PG_LSN,PG_LSN,
+WAL / log position,wal_position,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name PG_LSN does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr236 (id INTEGER NOT NULL PRIMARY KEY, c PG_LSN)"
+WAL / log position,wal_position,string,String,YugabyteDb,declared,PG_LSN,pg_lsn,
+WAL / log position,wal_position,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 61 near ""PG_LSN)"""
+WAL / log position,wal_position,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'PG_LSN)' at line 1
+WAL / log position,wal_position,string,String,SybaseASE,unsupported,,,Can't find type 'PG_LSN'.
+WAL / log position,wal_position,string,String,Spanner,unsupported,,,P0001: Type <pg_lsn> is not supported.
+WAL / log position,wal_position,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'PG_LSN'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+native binary JSON,binary_json,JsonDocument,Object,PostgreSql,declared,JSONB,jsonb,
+native binary JSON,binary_json,JsonDocument,Object,SqlServer,declared,JSON,json,
+native binary JSON,binary_json,JsonDocument,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+native binary JSON,binary_json,JsonDocument,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR244 failed SQL error code = -607 Invalid command Specified domain or source column JSONB does not exist
+native binary JSON,binary_json,JsonDocument,Object,CockroachDb,declared,JSONB,jsonb,
+native binary JSON,binary_json,JsonDocument,Object,MariaDb,declared,JSON,VARCHAR,
+native binary JSON,binary_json,JsonDocument,Object,MySql,declared,JSON,JSON,
+native binary JSON,binary_json,JsonDocument,Object,Sqlite,declared,JSONB,JSONB,
+native binary JSON,binary_json,JsonDocument,Object,DuckDB,declared,JSON,Varchar,
+native binary JSON,binary_json,JsonDocument,Object,YugabyteDb,declared,JSONB,jsonb,
+native binary JSON,binary_json,JsonDocument,Object,TiDb,declared,JSON,JSON,
+native binary JSON,binary_json,JsonDocument,Object,SingleStore,declared,BSON,BLOB,
+native binary JSON,binary_json,JsonDocument,Object,SybaseASE,unsupported,,,Can't find type 'JSONB'.
+native binary JSON,binary_json,JsonDocument,Object,Spanner,declared,JSONB,jsonb,
+native binary JSON,binary_json,JsonDocument,Object,FlatFile,declared,JSON,JSON,
+XML,xml,string,String,PostgreSql,declared,XML,xml,
+XML,xml,string,String,SqlServer,declared,XML,xml,
+XML,xml,string,String,Oracle,declared,CLOB,Clob,
+XML,xml,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR249 failed SQL error code = -607 Invalid command Specified domain or source column XML does not exist
+XML,xml,string,String,CockroachDb,unsupported,,,"0A000: at or near "")"": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include"
+XML,xml,string,String,MariaDb,unsupported,,,Unknown data type: 'XML'
+XML,xml,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XML)' at line 1
+XML,xml,string,String,Sqlite,declared,XML,XML,
+XML,xml,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name XML does not exist! LINE 1: CREATE TABLE pr249 (id INTEGER NOT NULL PRIMARY KEY, c XML) ^"
+XML,xml,string,String,YugabyteDb,unsupported,,,"42704: type ""clob"" does not exist POSITION: 56"
+XML,xml,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near ""XML)"""
+XML,xml,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XML)' at line 1
+XML,xml,string,String,SybaseASE,unsupported,,,Can't find type 'XML'.
+XML,xml,string,String,Spanner,unsupported,,,P0001: Type <xml> is not supported; use text instead.
+XML,xml,string,String,FlatFile,declared,CLOB,CLOB,
+BSON,bson,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
+BSON,bson,byte[],Binary,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type BSON."
+BSON,bson,byte[],Binary,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+BSON,bson,byte[],Binary,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR254 failed SQL error code = -607 Invalid command Specified domain or source column BSON does not exist
+BSON,bson,byte[],Binary,CockroachDb,declared,BYTEA,bytea,
+BSON,bson,byte[],Binary,MariaDb,unsupported,,,Unknown data type: 'BSON'
+BSON,bson,byte[],Binary,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BSON)' at line 1
+BSON,bson,byte[],Binary,Sqlite,declared,BSON,BSON,
+BSON,bson,byte[],Binary,DuckDB,declared,BYTEA,Blob,
+BSON,bson,byte[],Binary,YugabyteDb,declared,BYTEA,bytea,
+BSON,bson,byte[],Binary,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 59 near ""BSON)"""
+BSON,bson,byte[],Binary,SingleStore,declared,BSON,BLOB,
+BSON,bson,byte[],Binary,SybaseASE,unsupported,,,Can't find type 'BSON'.
+BSON,bson,byte[],Binary,Spanner,declared,BYTEA,bytea,
+BSON,bson,byte[],Binary,FlatFile,unsupported,,,"Unknown SQL data type 'BSON'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+variant / dynamic value,variant,object,Object,PostgreSql,unsupported,,,"42704: type ""variant"" does not exist POSITION: 56"
+variant / dynamic value,variant,object,Object,SqlServer,declared,SQL_VARIANT,sql_variant,
+variant / dynamic value,variant,object,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+variant / dynamic value,variant,object,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR257 failed SQL error code = -607 Invalid command Specified domain or source column VARIANT does not exist
+variant / dynamic value,variant,object,Object,CockroachDb,unsupported,,,"42704: type ""variant"" does not exist"
+variant / dynamic value,variant,object,Object,MariaDb,unsupported,,,Unknown data type: 'VARIANT'
+variant / dynamic value,variant,object,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARIANT)' at line 1
+variant / dynamic value,variant,object,Object,Sqlite,declared,VARIANT,VARIANT,
+variant / dynamic value,variant,object,Object,DuckDB,unsupported,,,"Invalid Input Error: VARIANT columns are not supported in storage versions prior to v1.5.0 (database ""pengdows"" is using storage version v1.0.0+)"
+variant / dynamic value,variant,object,Object,YugabyteDb,unsupported,,,"42704: type ""variant"" does not exist POSITION: 56"
+variant / dynamic value,variant,object,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""VARIANT)"""
+variant / dynamic value,variant,object,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARIANT)' at line 1
+variant / dynamic value,variant,object,Object,SybaseASE,unsupported,,,Can't find type 'VARIANT'.
+variant / dynamic value,variant,object,Object,Spanner,unsupported,,,P0001: Type <variant> does not exist.
+variant / dynamic value,variant,object,Object,FlatFile,unsupported,,,"Unknown SQL data type 'VARIANT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+IP network / CIDR,cidr,Cidr,Object,PostgreSql,declared,CIDR,cidr,
+IP network / CIDR,cidr,Cidr,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type CIDR."
+IP network / CIDR,cidr,Cidr,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+IP network / CIDR,cidr,Cidr,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR265 failed SQL error code = -607 Invalid command Specified domain or source column CIDR does not exist
+IP network / CIDR,cidr,Cidr,Object,CockroachDb,declared,INET,inet,
+IP network / CIDR,cidr,Cidr,Object,MariaDb,unsupported,,,Unknown data type: 'CIDR'
+IP network / CIDR,cidr,Cidr,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
+IP network / CIDR,cidr,Cidr,Object,Sqlite,declared,CIDR,CIDR,
+IP network / CIDR,cidr,Cidr,Object,DuckDB,declared,VARCHAR(50),VARCHAR,
+IP network / CIDR,cidr,Cidr,Object,YugabyteDb,declared,CIDR,cidr,
+IP network / CIDR,cidr,Cidr,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 59 near ""CIDR)"""
+IP network / CIDR,cidr,Cidr,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
+IP network / CIDR,cidr,Cidr,Object,SybaseASE,unsupported,,,Can't find type 'CIDR'.
+IP network / CIDR,cidr,Cidr,Object,Spanner,unsupported,,,P0001: Type <cidr> is not supported; use text instead.
+IP network / CIDR,cidr,Cidr,Object,FlatFile,unsupported,,,"Unknown SQL data type 'CIDR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+MAC address,mac_address,MacAddress,Object,PostgreSql,declared,MACADDR,macaddr,
+MAC address,mac_address,MacAddress,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type MACADDR."
+MAC address,mac_address,MacAddress,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+MAC address,mac_address,MacAddress,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR267 failed SQL error code = -607 Invalid command Specified domain or source column MACADDR does not exist
+MAC address,mac_address,MacAddress,Object,CockroachDb,unsupported,,,"0A000: at or near "")"": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include"
+MAC address,mac_address,MacAddress,Object,MariaDb,unsupported,,,Unknown data type: 'MACADDR'
+MAC address,mac_address,MacAddress,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MACADDR)' at line 1
+MAC address,mac_address,MacAddress,Object,Sqlite,declared,MACADDR,MACADDR,
+MAC address,mac_address,MacAddress,Object,DuckDB,unsupported,,,"Catalog Error: Type with name MACADDR does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr267 (id INTEGER NOT NULL PRIMARY KEY, c MACADDR)"
+MAC address,mac_address,MacAddress,Object,YugabyteDb,declared,MACADDR,macaddr,
+MAC address,mac_address,MacAddress,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""MACADDR)"""
+MAC address,mac_address,MacAddress,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MACADDR)' at line 1
+MAC address,mac_address,MacAddress,Object,SybaseASE,unsupported,,,Can't find type 'MACADDR'.
+MAC address,mac_address,MacAddress,Object,Spanner,unsupported,,,P0001: Type <macaddr> is not supported; use text instead.
+MAC address,mac_address,MacAddress,Object,FlatFile,unsupported,,,"Unknown SQL data type 'MACADDR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+point geometry,point,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+point geometry,point,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
+point geometry,point,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
+point geometry,point,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR269 failed SQL error code = -607 Invalid command Specified domain or source column POINT does not exist
+point geometry,point,Geometry,Object,CockroachDb,declared,"GEOMETRY(POINT,4326)",geometry,
+point geometry,point,Geometry,Object,MariaDb,declared,POINT,GEOMETRY,
+point geometry,point,Geometry,Object,MySql,declared,POINT,GEOMETRY,
+point geometry,point,Geometry,Object,Sqlite,declared,POINT,POINT,
+point geometry,point,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POINT does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr269 (id INTEGER NOT NULL PRIMARY KEY, c POINT)"
+point geometry,point,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+point geometry,point,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 60 near ""POINT)"""
+point geometry,point,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POINT)' at line 1
+point geometry,point,Geometry,Object,SybaseASE,unsupported,,,Can't find type 'POINT'.
+point geometry,point,Geometry,Object,Spanner,unsupported,,,P0001: Type <point> is not supported.
+point geometry,point,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data type 'POINT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+line / linestring geometry,linestring,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
+line / linestring geometry,linestring,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
+line / linestring geometry,linestring,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
+line / linestring geometry,linestring,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR277 failed SQL error code = -607 Invalid command Specified domain or source column LINESTRING does not exist
+line / linestring geometry,linestring,Geometry,Object,CockroachDb,declared,GEOMETRY(LINESTRING),geometry,
+line / linestring geometry,linestring,Geometry,Object,MariaDb,declared,LINESTRING,GEOMETRY,
+line / linestring geometry,linestring,Geometry,Object,MySql,declared,LINESTRING,GEOMETRY,
+line / linestring geometry,linestring,Geometry,Object,Sqlite,declared,LINESTRING,LINESTRING,
+line / linestring geometry,linestring,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name LINESTRING does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr277 (id INTEGER NOT NULL PRIMARY KEY, c LINESTRING)"
+line / linestring geometry,linestring,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
+line / linestring geometry,linestring,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 65 near ""LINESTRING)"""
+line / linestring geometry,linestring,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'LINESTRING)' at line 1
+line / linestring geometry,linestring,Geometry,Object,SybaseASE,unsupported,,,Can't find type 'LINESTRING'.
+line / linestring geometry,linestring,Geometry,Object,Spanner,unsupported,,,P0001: Type <linestring> does not exist.
+line / linestring geometry,linestring,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data type 'LINESTRING'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+polygon geometry,polygon,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+polygon geometry,polygon,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
+polygon geometry,polygon,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
+polygon geometry,polygon,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR282 failed SQL error code = -607 Invalid command Specified domain or source column POLYGON does not exist
+polygon geometry,polygon,Geometry,Object,CockroachDb,declared,GEOMETRY(POLYGON),geometry,
+polygon geometry,polygon,Geometry,Object,MariaDb,declared,POLYGON,GEOMETRY,
+polygon geometry,polygon,Geometry,Object,MySql,declared,POLYGON,GEOMETRY,
+polygon geometry,polygon,Geometry,Object,Sqlite,declared,POLYGON,POLYGON,
+polygon geometry,polygon,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POLYGON does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr282 (id INTEGER NOT NULL PRIMARY KEY, c POLYGON)"
+polygon geometry,polygon,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+polygon geometry,polygon,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""POLYGON)"""
+polygon geometry,polygon,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POLYGON)' at line 1
+polygon geometry,polygon,Geometry,Object,SybaseASE,unsupported,,,Can't find type 'POLYGON'.
+polygon geometry,polygon,Geometry,Object,Spanner,unsupported,,,P0001: Type <polygon> is not supported.
+polygon geometry,polygon,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data type 'POLYGON'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+general geometry,geometry,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+general geometry,geometry,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
+general geometry,geometry,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
+general geometry,geometry,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR287 failed SQL error code = -607 Invalid command Specified domain or source column GEOMETRY does not exist
+general geometry,geometry,Geometry,Object,CockroachDb,declared,GEOMETRY,geometry,
+general geometry,geometry,Geometry,Object,MariaDb,declared,GEOMETRY,GEOMETRY,
+general geometry,geometry,Geometry,Object,MySql,declared,GEOMETRY,GEOMETRY,
+general geometry,geometry,Geometry,Object,Sqlite,declared,GEOMETRY,GEOMETRY,
+general geometry,geometry,Geometry,Object,DuckDB,unsupported,,,Unrecognised type 40 (40) for column c
+general geometry,geometry,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
+general geometry,geometry,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near ""GEOMETRY)"""
+general geometry,geometry,Geometry,Object,SingleStore,unsupported,,,Feature 'GEOMETRY types (try GEOGRAPHY or GEOGRAPHYPOINT)' is not supported by SingleStore.
+general geometry,geometry,Geometry,Object,SybaseASE,unsupported,,,Can't find type 'GEOMETRY'.
+general geometry,geometry,Geometry,Object,Spanner,unsupported,,,P0001: Type <geometry> does not exist.
+general geometry,geometry,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data type 'GEOMETRY'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+geography / geodetic,geography,Geography,Object,PostgreSql,unsupported,,,"42704: type ""geography"" does not exist POSITION: 56"
+geography / geodetic,geography,Geography,Object,SqlServer,declared,GEOGRAPHY,crud_test_d5c8b57230.sys.geography,
+geography / geodetic,geography,Geography,Object,Oracle,declared,SDO_GEOMETRY,Object,
+geography / geodetic,geography,Geography,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR291 failed SQL error code = -607 Invalid command Specified domain or source column GEOGRAPHY does not exist
+geography / geodetic,geography,Geography,Object,CockroachDb,declared,GEOGRAPHY,geography,
+geography / geodetic,geography,Geography,Object,MariaDb,unsupported,,,Unknown data type: 'GEOGRAPHY'
+geography / geodetic,geography,Geography,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GEOGRAPHY)' at line 1
+geography / geodetic,geography,Geography,Object,Sqlite,declared,GEOGRAPHY,GEOGRAPHY,
+geography / geodetic,geography,Geography,Object,DuckDB,unsupported,,,"Catalog Error: Type with name GEOGRAPHY does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr291 (id INTEGER NOT NULL PRIMARY KEY, c GEOGRAPHY)"
+geography / geodetic,geography,Geography,Object,YugabyteDb,unsupported,,,"42704: type ""geography"" does not exist POSITION: 56"
+geography / geodetic,geography,Geography,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near ""GEOGRAPHY)"""
+geography / geodetic,geography,Geography,Object,SingleStore,unsupported,,,Feature 'GEOGRAPHY column type in COLUMNAR TABLE' is not supported by SingleStore.
+geography / geodetic,geography,Geography,Object,SybaseASE,unsupported,,,Can't find type 'GEOGRAPHY'.
+geography / geodetic,geography,Geography,Object,Spanner,unsupported,,,P0001: Type <geography> does not exist.
+geography / geodetic,geography,Geography,Object,FlatFile,unsupported,,,"Unknown SQL data type 'GEOGRAPHY'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+fixed-length array,fixed_array,int[],Object,PostgreSql,declared,INTEGER ARRAY[10],integer[],
+fixed-length array,fixed_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
+fixed-length array,fixed_array,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+fixed-length array,fixed_array,int[],Object,Firebird,declared,INTEGER[10],ARRAY,
+fixed-length array,fixed_array,int[],Object,CockroachDb,declared,INTEGER ARRAY[10],bigint[],
+fixed-length array,fixed_array,int[],Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near '[10])' at line 1
+fixed-length array,fixed_array,int[],Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY[10])' at line 1
+fixed-length array,fixed_array,int[],Object,Sqlite,declared,INTEGER ARRAY[10],INTEGER ARRAY[10],
+fixed-length array,fixed_array,int[],Object,DuckDB,declared,INTEGER ARRAY[10],Array,
+fixed-length array,fixed_array,int[],Object,YugabyteDb,declared,INTEGER ARRAY[10],integer[],
+fixed-length array,fixed_array,int[],Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 68 near ""ARRAY[10])"""
+fixed-length array,fixed_array,int[],Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY[10])' at line 1
+fixed-length array,fixed_array,int[],Object,SybaseASE,unsupported,,,Incorrect syntax near 'ARRAY'.
+fixed-length array,fixed_array,int[],Object,Spanner,declared,INTEGER ARRAY[10],bigint[],
+fixed-length array,fixed_array,int[],Object,FlatFile,unsupported,,,Unexpected character '[' at position 68.
+list / multiset / set collection,list_collection,List<int>,Object,PostgreSql,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
+list / multiset / set collection,list_collection,List<int>,Object,SqlServer,unsupported,,,Incorrect syntax near 'MULTISET'.
+list / multiset / set collection,list_collection,List<int>,Object,Oracle,unsupported,,,ORA-03099: unexpected item MULTISET in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+list / multiset / set collection,list_collection,List<int>,Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 MULTISET"
+list / multiset / set collection,list_collection,List<int>,Object,CockroachDb,unsupported,,,"42601: at or near ""multiset"": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+list / multiset / set collection,list_collection,List<int>,Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
+list / multiset / set collection,list_collection,List<int>,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
+list / multiset / set collection,list_collection,List<int>,Object,Sqlite,declared,INTEGER MULTISET,INTEGER MULTISET,
+list / multiset / set collection,list_collection,List<int>,Object,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""MULTISET"" LINE 1: ... TABLE pr309 (id INTEGER NOT NULL PRIMARY KEY, c INTEGER MULTISET)"
+list / multiset / set collection,list_collection,List<int>,Object,YugabyteDb,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
+list / multiset / set collection,list_collection,List<int>,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 71 near ""MULTISET)"""
+list / multiset / set collection,list_collection,List<int>,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
+list / multiset / set collection,list_collection,List<int>,Object,SybaseASE,unsupported,,,Incorrect syntax near 'MULTISET'.
+list / multiset / set collection,list_collection,List<int>,Object,Spanner,unsupported,,,"P0001: syntax error at or near ""MULTISET""; failed to parse the DDL statements."
+list / multiset / set collection,list_collection,List<int>,Object,FlatFile,unsupported,,,"Expected token 'RightParen' at position 63, but found 'Identifier'."
+map / dictionary,map,"Dictionary<string,object>",Object,PostgreSql,unsupported,,,"42601: syntax error at or near "","" POSITION: 71"
+map / dictionary,map,"Dictionary<string,object>",Object,SqlServer,unsupported,,,Incorrect syntax near '('.
+map / dictionary,map,"Dictionary<string,object>",Object,Oracle,unsupported,,,ORA-03060: Data type MAP is invalid. https://docs.oracle.com/error-help/db/ora-03060/
+map / dictionary,map,"Dictionary<string,object>",Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 59 ("
+map / dictionary,map,"Dictionary<string,object>",Object,CockroachDb,unsupported,,,"42601: at or near ""("": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+map / dictionary,map,"Dictionary<string,object>",Object,MariaDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'VARCHAR(10),INTEGER))' at line 1"
+map / dictionary,map,"Dictionary<string,object>",Object,MySql,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MAP(VARCHAR(10),INTEGER))' at line 1"
+map / dictionary,map,"Dictionary<string,object>",Object,Sqlite,declared,HSTORE,HSTORE,
+map / dictionary,map,"Dictionary<string,object>",Object,DuckDB,declared,VARCHAR,VARCHAR,
+map / dictionary,map,"Dictionary<string,object>",Object,YugabyteDb,unsupported,,,"42601: syntax error at or near "","" POSITION: 71"
+map / dictionary,map,"Dictionary<string,object>",Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near ""MAP(VARCHAR(10),INTEGER))"""
+map / dictionary,map,"Dictionary<string,object>",Object,SingleStore,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MAP(VARCHAR(10),INTEGER))' at line 1"
+map / dictionary,map,"Dictionary<string,object>",Object,SybaseASE,unsupported,,,Incorrect syntax near 'VARCHAR'.
+map / dictionary,map,"Dictionary<string,object>",Object,Spanner,unsupported,,,"P0001: syntax error at or near "",""; failed to parse the DDL statements."
+map / dictionary,map,"Dictionary<string,object>",Object,FlatFile,unsupported,,,"Expected token 'NumericLiteral' at position 59, but found 'Identifier'."
+range,range,Range<int>,Object,PostgreSql,declared,INT4RANGE,int4range,
+range,range,Range<int>,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INT4RANGE."
+range,range,Range<int>,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+range,range,Range<int>,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR325 failed SQL error code = -607 Invalid command Specified domain or source column INT4RANGE does not exist
+range,range,Range<int>,Object,CockroachDb,unsupported,,,"42704: type ""int4range"" does not exist"
+range,range,Range<int>,Object,MariaDb,unsupported,,,Unknown data type: 'INT4RANGE'
+range,range,Range<int>,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4RANGE)' at line 1
+range,range,Range<int>,Object,Sqlite,declared,INT4RANGE,INT4RANGE,
+range,range,Range<int>,Object,DuckDB,unsupported,,,"Catalog Error: Type with name INT4RANGE does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr325 (id INTEGER NOT NULL PRIMARY KEY, c INT4RANGE)"
+range,range,Range<int>,Object,YugabyteDb,declared,INT4RANGE,int4range,
+range,range,Range<int>,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near ""INT4RANGE)"""
+range,range,Range<int>,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4RANGE)' at line 1
+range,range,Range<int>,Object,SybaseASE,unsupported,,,Can't find type 'INT4RANGE'.
+range,range,Range<int>,Object,Spanner,unsupported,,,P0001: Type <int4range> is not supported.
+range,range,Range<int>,Object,FlatFile,unsupported,,,"Unknown SQL data type 'INT4RANGE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+multirange,multirange,Range<int>[],Object,PostgreSql,declared,INT4MULTIRANGE,int4multirange,
+multirange,multirange,Range<int>[],Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INT4MULTIRANGE."
+multirange,multirange,Range<int>[],Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+multirange,multirange,Range<int>[],Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR329 failed SQL error code = -607 Invalid command Specified domain or source column INT4MULTIRANGE does not exist
+multirange,multirange,Range<int>[],Object,CockroachDb,unsupported,,,"42704: type ""int4multirange"" does not exist"
+multirange,multirange,Range<int>[],Object,MariaDb,unsupported,,,Unknown data type: 'INT4MULTIRANGE'
+multirange,multirange,Range<int>[],Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
+multirange,multirange,Range<int>[],Object,Sqlite,declared,INT4MULTIRANGE,INT4MULTIRANGE,
+multirange,multirange,Range<int>[],Object,DuckDB,unsupported,,,"Catalog Error: Type with name INT4MULTIRANGE does not exist! Did you mean ""int4""? LINE 1: CREATE TABLE pr329 (id INTEGER NOT NULL PRIMARY KEY, c INT4MULTIRANGE)"
+multirange,multirange,Range<int>[],Object,YugabyteDb,declared,INT4MULTIRANGE,int4multirange,
+multirange,multirange,Range<int>[],Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 69 near ""INT4MULTIRANGE)"""
+multirange,multirange,Range<int>[],Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
+multirange,multirange,Range<int>[],Object,SybaseASE,unsupported,,,Can't find type 'INT4MULTIRANGE'.
+multirange,multirange,Range<int>[],Object,Spanner,unsupported,,,P0001: Type <int4multirange> does not exist.
+multirange,multirange,Range<int>[],Object,FlatFile,unsupported,,,"Unknown SQL data type 'INT4MULTIRANGE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+user-defined enum / domain,domain,string,String,PostgreSql,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
+user-defined enum / domain,domain,string,String,SqlServer,unsupported,,,The definition for column 'c' must include a data type.
+user-defined enum / domain,domain,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+user-defined enum / domain,domain,string,String,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 CREATE"
+user-defined enum / domain,domain,string,String,CockroachDb,unsupported,,,"42601: at or near ""create"": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+user-defined enum / domain,domain,string,String,MariaDb,unsupported,,,Unknown data type: 'CREATE'
+user-defined enum / domain,domain,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
+user-defined enum / domain,domain,string,String,Sqlite,declared,ENUM,ENUM,
+user-defined enum / domain,domain,string,String,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""CREATE"" LINE 1: CREATE TABLE pr331 (id INTEGER NOT NULL PRIMARY KEY, c CREATE TYPE) ^"
+user-defined enum / domain,domain,string,String,YugabyteDb,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
+user-defined enum / domain,domain,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 61 near ""CREATE TYPE)"""
+user-defined enum / domain,domain,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
+user-defined enum / domain,domain,string,String,SybaseASE,unsupported,,,The definition for column 'c' must include a datatype.
+user-defined enum / domain,domain,string,String,Spanner,unsupported,,,"P0001: syntax error at or near ""CREATE""; failed to parse the DDL statements."
+user-defined enum / domain,domain,string,String,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Create'."
+full-text search vector / query,full_text,string,String,PostgreSql,declared,TSQUERY,tsquery,
+full-text search vector / query,full_text,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type TSVECTOR."
+full-text search vector / query,full_text,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+full-text search vector / query,full_text,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR336 failed SQL error code = -607 Invalid command Specified domain or source column TSVECTOR does not exist
+full-text search vector / query,full_text,string,String,CockroachDb,declared,TSQUERY,tsquery,
+full-text search vector / query,full_text,string,String,MariaDb,unsupported,,,Unknown data type: 'TSVECTOR'
+full-text search vector / query,full_text,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
+full-text search vector / query,full_text,string,String,Sqlite,declared,TSVECTOR,TSVECTOR,
+full-text search vector / query,full_text,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name TSVECTOR does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr336 (id INTEGER NOT NULL PRIMARY KEY, c TSVECTOR)"
+full-text search vector / query,full_text,string,String,YugabyteDb,declared,TSQUERY,tsquery,
+full-text search vector / query,full_text,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near ""TSVECTOR)"""
+full-text search vector / query,full_text,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
+full-text search vector / query,full_text,string,String,SybaseASE,unsupported,,,Can't find type 'TSVECTOR'.
+full-text search vector / query,full_text,string,String,Spanner,unsupported,,,P0001: Type <tsvector> is not supported.
+full-text search vector / query,full_text,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'TSVECTOR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+native point,native_point,PostgreSqlPoint,Object,PostgreSql,declared,POINT,point,
+native point,native_point,PostgreSqlPoint,Object,SqlServer,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,Oracle,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,Firebird,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,CockroachDb,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,MariaDb,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,MySql,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,Sqlite,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,DuckDB,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,YugabyteDb,declared,POINT,point,
+native point,native_point,PostgreSqlPoint,Object,TiDb,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,SingleStore,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,SybaseASE,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,Spanner,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,FlatFile,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,PostgreSql,declared,POLYGON,polygon,
+native polygon,native_polygon,PostgreSqlPolygon,Object,SqlServer,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,Oracle,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,Firebird,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,CockroachDb,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,MariaDb,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,MySql,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,Sqlite,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,DuckDB,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,YugabyteDb,declared,POLYGON,polygon,
+native polygon,native_polygon,PostgreSqlPolygon,Object,TiDb,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,SingleStore,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,SybaseASE,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,Spanner,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,FlatFile,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,PostgreSql,declared,XID,xid,
+32-bit transaction ID,xid32,uint,UInt32,SqlServer,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,Oracle,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,Firebird,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,CockroachDb,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,MariaDb,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,MySql,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,Sqlite,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,DuckDB,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,YugabyteDb,declared,XID,xid,
+32-bit transaction ID,xid32,uint,UInt32,TiDb,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,SingleStore,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,SybaseASE,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,Spanner,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,FlatFile,unsupported,,,no candidate was tried
+vector embedding,vector,float[],Object,PostgreSql,unsupported,,,"42704: type ""vector"" does not exist POSITION: 56"
+vector embedding,vector,float[],Object,SqlServer,declared,VECTOR(3),varchar,
+vector embedding,vector,float[],Object,Oracle,unsupported,,,"ORA-43853: VECTOR type cannot be used in non-automatic segment space management tablespace ""SYSTEM"" https://docs.oracle.com/error-help/db/ora-43853/"
+vector embedding,vector,float[],Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 62 ("
+vector embedding,vector,float[],Object,CockroachDb,declared,VECTOR(3),vector,
+vector embedding,vector,float[],Object,MariaDb,unsupported,,,Unknown data type: 'VECTOR'
+vector embedding,vector,float[],Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VECTOR(3))' at line 1
+vector embedding,vector,float[],Object,Sqlite,declared,VECTOR(3),VECTOR,
+vector embedding,vector,float[],Object,DuckDB,unsupported,,,"Catalog Error: Type with name VECTOR does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr338 (id INTEGER NOT NULL PRIMARY KEY, c VECTOR(3))"
+vector embedding,vector,float[],Object,YugabyteDb,unsupported,,,"42704: type ""vector"" does not exist POSITION: 56"
+vector embedding,vector,float[],Object,TiDb,declared,VECTOR(3),VARCHAR,
+vector embedding,vector,float[],Object,SingleStore,declared,VECTOR(3),BLOB,
+vector embedding,vector,float[],Object,SybaseASE,unsupported,,,Can't find type 'VECTOR'.
+vector embedding,vector,float[],Object,Spanner,unsupported,,,P0001: Type <vector> does not exist.
+vector embedding,vector,float[],Object,FlatFile,unsupported,,,"Unknown SQL data type 'VECTOR'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+hierarchical path,hierarchy,HierarchyId,Object,PostgreSql,unsupported,,,"42704: type ""hierarchyid"" does not exist POSITION: 56"
+hierarchical path,hierarchy,HierarchyId,Object,SqlServer,declared,HIERARCHYID,crud_test_d5c8b57230.sys.hierarchyid,
+hierarchical path,hierarchy,HierarchyId,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+hierarchical path,hierarchy,HierarchyId,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR344 failed SQL error code = -607 Invalid command Specified domain or source column HIERARCHYID does not exist
+hierarchical path,hierarchy,HierarchyId,Object,CockroachDb,unsupported,,,"42704: type ""hierarchyid"" does not exist"
+hierarchical path,hierarchy,HierarchyId,Object,MariaDb,unsupported,,,Unknown data type: 'HIERARCHYID'
+hierarchical path,hierarchy,HierarchyId,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
+hierarchical path,hierarchy,HierarchyId,Object,Sqlite,declared,HIERARCHYID,HIERARCHYID,
+hierarchical path,hierarchy,HierarchyId,Object,DuckDB,unsupported,,,"Catalog Error: Type with name HIERARCHYID does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr344 (id INTEGER NOT NULL PRIMARY KEY, c HIERARCHYID)"
+hierarchical path,hierarchy,HierarchyId,Object,YugabyteDb,unsupported,,,"42704: type ""hierarchyid"" does not exist POSITION: 56"
+hierarchical path,hierarchy,HierarchyId,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 66 near ""HIERARCHYID)"""
+hierarchical path,hierarchy,HierarchyId,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
+hierarchical path,hierarchy,HierarchyId,Object,SybaseASE,unsupported,,,Can't find type 'HIERARCHYID'.
+hierarchical path,hierarchy,HierarchyId,Object,Spanner,unsupported,,,P0001: Type <hierarchyid> does not exist.
+hierarchical path,hierarchy,HierarchyId,Object,FlatFile,unsupported,,,"Unknown SQL data type 'HIERARCHYID'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+external-file reference,file_reference,string,String,PostgreSql,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
+external-file reference,file_reference,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type BFILE."
+external-file reference,file_reference,string,String,Oracle,declared,BFILE,bfile,
+external-file reference,file_reference,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR348 failed SQL error code = -607 Invalid command Specified domain or source column BFILE does not exist
+external-file reference,file_reference,string,String,CockroachDb,unsupported,,,"42704: type ""bfile"" does not exist"
+external-file reference,file_reference,string,String,MariaDb,unsupported,,,Unknown data type: 'BFILE'
+external-file reference,file_reference,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
+external-file reference,file_reference,string,String,Sqlite,declared,BFILE,BFILE,
+external-file reference,file_reference,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name BFILE does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr348 (id INTEGER NOT NULL PRIMARY KEY, c BFILE)"
+external-file reference,file_reference,string,String,YugabyteDb,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
+external-file reference,file_reference,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 60 near ""BFILE)"""
+external-file reference,file_reference,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
+external-file reference,file_reference,string,String,SybaseASE,unsupported,,,Can't find type 'BFILE'.
+external-file reference,file_reference,string,String,Spanner,unsupported,,,P0001: Type <bfile> does not exist.
+external-file reference,file_reference,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'BFILE'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
+specialized security label,security_label,string,String,PostgreSql,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"
+specialized security label,security_label,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type IDSSECURITYLABEL."
+specialized security label,security_label,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
+specialized security label,security_label,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR355 failed SQL error code = -607 Invalid command Specified domain or source column IDSSECURITYLABEL does not exist
+specialized security label,security_label,string,String,CockroachDb,unsupported,,,"42704: type ""idssecuritylabel"" does not exist"
+specialized security label,security_label,string,String,MariaDb,unsupported,,,Unknown data type: 'IDSSECURITYLABEL'
+specialized security label,security_label,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1
+specialized security label,security_label,string,String,Sqlite,declared,IDSSECURITYLABEL,IDSSECURITYLABEL,
+specialized security label,security_label,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name IDSSECURITYLABEL does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr355 (id INTEGER NOT NULL PRIMARY KEY, c IDSSECURITYLABEL)"
+specialized security label,security_label,string,String,YugabyteDb,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"
+specialized security label,security_label,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 71 near ""IDSSECURITYLABEL)"""
+specialized security label,security_label,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1
+specialized security label,security_label,string,String,SybaseASE,unsupported,,,Can't find type 'IDSSECURITYLABEL'.
+specialized security label,security_label,string,String,Spanner,unsupported,,,P0001: Type <idssecuritylabel> does not exist.
+specialized security label,security_label,string,String,FlatFile,unsupported,,,"Unknown SQL data type 'IDSSECURITYLABEL'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."

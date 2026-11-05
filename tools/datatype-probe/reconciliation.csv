@@ -1,0 +1,1051 @@
+unified_id,concept,db,probe_database,workbook_status,probe_semantic,category,live_declarations
+B01,8-bit signed,PG,PostgreSql,X,signed 8-bit,"workbook unsupported, live accepted",SMALLINT; INT2
+B01,8-bit signed,MSSQL,SqlServer,X,signed 8-bit,"workbook unsupported, live accepted",TINYINT; SMALLINT
+B01,8-bit signed,ORA,Oracle,X,signed 8-bit,"workbook unsupported, live accepted","NUMBER(3,0); SMALLINT"
+B01,8-bit signed,FB,Firebird,X,signed 8-bit,"workbook unsupported, live accepted",SMALLINT
+B01,8-bit signed,CRDB,CockroachDb,X,signed 8-bit,"workbook unsupported, live accepted",SMALLINT; INT2
+B01,8-bit signed,MDB,MariaDb,N,signed 8-bit,agree: supported,TINYINT; INT1; SMALLINT
+B01,8-bit signed,MYSQL,MySql,N,signed 8-bit,agree: supported,TINYINT; INT1; SMALLINT
+B02,8-bit unsigned,PG,PostgreSql,X,unsigned 8-bit,agree: unsupported,
+B02,8-bit unsigned,MSSQL,SqlServer,N,unsigned 8-bit,agree: supported,TINYINT
+B02,8-bit unsigned,ORA,Oracle,X,unsigned 8-bit,agree: unsupported,
+B02,8-bit unsigned,FB,Firebird,X,unsigned 8-bit,agree: unsupported,
+B02,8-bit unsigned,CRDB,CockroachDb,X,unsigned 8-bit,agree: unsupported,
+B02,8-bit unsigned,MDB,MariaDb,N,unsigned 8-bit,agree: supported,TINYINT UNSIGNED; TINYINT
+B02,8-bit unsigned,MYSQL,MySql,N,unsigned 8-bit,agree: supported,TINYINT UNSIGNED; TINYINT
+B03,16-bit signed,PG,PostgreSql,N,signed 16-bit,agree: supported,SMALLINT; INT2; INT8
+B03,16-bit signed,MSSQL,SqlServer,N,signed 16-bit,agree: supported,SMALLINT
+B03,16-bit signed,ORA,Oracle,A,signed 16-bit,agree: supported,"SMALLINT; NUMBER(5,0)"
+B03,16-bit signed,FB,Firebird,N,signed 16-bit,agree: supported,SMALLINT
+B03,16-bit signed,CRDB,CockroachDb,N,signed 16-bit,agree: supported,SMALLINT; INT2; INT8
+B03,16-bit signed,MDB,MariaDb,N,signed 16-bit,agree: supported,SMALLINT; INT2; INT8
+B03,16-bit signed,MYSQL,MySql,N,signed 16-bit,agree: supported,SMALLINT; INT2; INT8
+B04,16-bit unsigned,PG,PostgreSql,X,unsigned 16-bit,agree: unsupported,
+B04,16-bit unsigned,MSSQL,SqlServer,X,unsigned 16-bit,agree: unsupported,
+B04,16-bit unsigned,ORA,Oracle,X,unsigned 16-bit,agree: unsupported,
+B04,16-bit unsigned,FB,Firebird,X,unsigned 16-bit,agree: unsupported,
+B04,16-bit unsigned,CRDB,CockroachDb,X,unsigned 16-bit,agree: unsupported,
+B04,16-bit unsigned,MDB,MariaDb,N,unsigned 16-bit,agree: supported,SMALLINT UNSIGNED
+B04,16-bit unsigned,MYSQL,MySql,N,unsigned 16-bit,agree: supported,SMALLINT UNSIGNED
+B06,32-bit signed,PG,PostgreSql,N,signed 32-bit,agree: supported,INTEGER; INT; INT4
+B06,32-bit signed,MSSQL,SqlServer,N,signed 32-bit,agree: supported,INTEGER; INT
+B06,32-bit signed,ORA,Oracle,A,signed 32-bit,agree: supported,"INTEGER; INT; NUMBER(10,0)"
+B06,32-bit signed,FB,Firebird,N,signed 32-bit,agree: supported,INTEGER; INT
+B06,32-bit signed,CRDB,CockroachDb,N,signed 32-bit,agree: supported,INTEGER; INT; INT4
+B06,32-bit signed,MDB,MariaDb,N,signed 32-bit,agree: supported,INTEGER; INT; INT4
+B06,32-bit signed,MYSQL,MySql,N,signed 32-bit,agree: supported,INTEGER; INT; INT4
+B07,32-bit unsigned,PG,PostgreSql,X,unsigned 32-bit,agree: unsupported,
+B07,32-bit unsigned,MSSQL,SqlServer,X,unsigned 32-bit,agree: unsupported,
+B07,32-bit unsigned,ORA,Oracle,X,unsigned 32-bit,agree: unsupported,
+B07,32-bit unsigned,FB,Firebird,X,unsigned 32-bit,agree: unsupported,
+B07,32-bit unsigned,CRDB,CockroachDb,X,unsigned 32-bit,agree: unsupported,
+B07,32-bit unsigned,MDB,MariaDb,N,unsigned 32-bit,agree: supported,INT UNSIGNED; INTEGER UNSIGNED
+B07,32-bit unsigned,MYSQL,MySql,N,unsigned 32-bit,agree: supported,INT UNSIGNED; INTEGER UNSIGNED
+B08,64-bit signed,PG,PostgreSql,N,signed 64-bit,agree: supported,BIGINT; INT8
+B08,64-bit signed,MSSQL,SqlServer,N,signed 64-bit,agree: supported,BIGINT
+B08,64-bit signed,ORA,Oracle,X,signed 64-bit,"workbook unsupported, live accepted","NUMBER(19,0)"
+B08,64-bit signed,FB,Firebird,N,signed 64-bit,agree: supported,BIGINT
+B08,64-bit signed,CRDB,CockroachDb,N,signed 64-bit,agree: supported,BIGINT; INT8; INT64
+B08,64-bit signed,MDB,MariaDb,N,signed 64-bit,agree: supported,BIGINT; INT8
+B08,64-bit signed,MYSQL,MySql,N,signed 64-bit,agree: supported,BIGINT; INT8
+B09,64-bit unsigned,PG,PostgreSql,X,unsigned 64-bit,agree: unsupported,
+B09,64-bit unsigned,MSSQL,SqlServer,X,unsigned 64-bit,agree: unsupported,
+B09,64-bit unsigned,ORA,Oracle,X,unsigned 64-bit,agree: unsupported,
+B09,64-bit unsigned,FB,Firebird,X,unsigned 64-bit,agree: unsupported,
+B09,64-bit unsigned,CRDB,CockroachDb,X,unsigned 64-bit,agree: unsupported,
+B09,64-bit unsigned,MDB,MariaDb,N,unsigned 64-bit,agree: supported,BIGINT UNSIGNED
+B09,64-bit unsigned,MYSQL,MySql,N,unsigned 64-bit,agree: supported,BIGINT UNSIGNED
+B10,128-bit signed,PG,PostgreSql,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B10,128-bit signed,MSSQL,SqlServer,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B10,128-bit signed,ORA,Oracle,X,signed 128-bit,"workbook unsupported, live accepted","NUMBER(38,0); NUMERIC(38,0)"
+B10,128-bit signed,FB,Firebird,V,signed 128-bit,agree: supported,"INT128; NUMERIC(38,0)"
+B10,128-bit signed,CRDB,CockroachDb,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B10,128-bit signed,MDB,MariaDb,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B10,128-bit signed,MYSQL,MySql,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B11,128-bit unsigned,PG,PostgreSql,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,MSSQL,SqlServer,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,ORA,Oracle,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,FB,Firebird,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,CRDB,CockroachDb,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,MDB,MariaDb,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,MYSQL,MySql,X,unsigned 128-bit,agree: unsupported,
+B12,Arbitrary-precision integer,PG,PostgreSql,X,arbitrary-size integer,"workbook unsupported, live accepted","NUMERIC(1000,0); DECIMAL(65,0); NUMERIC(38,0)"
+B12,Arbitrary-precision integer,MSSQL,SqlServer,X,arbitrary-size integer,"workbook unsupported, live accepted","NUMERIC(38,0); DECIMAL(38,0)"
+B12,Arbitrary-precision integer,ORA,Oracle,X,arbitrary-size integer,"workbook unsupported, live accepted","NUMBER; NUMERIC(38,0); DECIMAL(38,0)"
+B12,Arbitrary-precision integer,FB,Firebird,X,arbitrary-size integer,"workbook unsupported, live accepted","NUMERIC(38,0); DECIMAL(38,0)"
+B12,Arbitrary-precision integer,CRDB,CockroachDb,X,arbitrary-size integer,"workbook unsupported, live accepted","NUMERIC(1000,0); DECIMAL(65,0); NUMERIC(38,0)"
+B12,Arbitrary-precision integer,MDB,MariaDb,X,arbitrary-size integer,"workbook unsupported, live accepted","DECIMAL(65,0); NUMERIC(38,0); DECIMAL(38,0)"
+B12,Arbitrary-precision integer,MYSQL,MySql,X,arbitrary-size integer,"workbook unsupported, live accepted","DECIMAL(65,0); NUMERIC(38,0); DECIMAL(38,0)"
+B13,"Identity column (declaration, not a type)",PG,PostgreSql,R,auto-increment integer,agree: supported,INTEGER GENERATED BY DEFAULT AS IDENTITY; SERIAL
+B13,"Identity column (declaration, not a type)",MSSQL,SqlServer,R,auto-increment integer,agree: supported,INTEGER IDENTITY
+B13,"Identity column (declaration, not a type)",ORA,Oracle,R,auto-increment integer,agree: supported,INTEGER GENERATED BY DEFAULT AS IDENTITY
+B13,"Identity column (declaration, not a type)",FB,Firebird,R,auto-increment integer,agree: supported,INTEGER GENERATED BY DEFAULT AS IDENTITY
+B13,"Identity column (declaration, not a type)",CRDB,CockroachDb,R,auto-increment integer,agree: supported,INTEGER GENERATED BY DEFAULT AS IDENTITY; SERIAL
+B13,"Identity column (declaration, not a type)",MDB,MariaDb,R,auto-increment integer,agree: supported,SERIAL
+B13,"Identity column (declaration, not a type)",MYSQL,MySql,R,auto-increment integer,agree: supported,SERIAL
+B15,"Fixed-point DECIMAL(p,s)",PG,PostgreSql,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",MSSQL,SqlServer,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",ORA,Oracle,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",FB,Firebird,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",CRDB,CockroachDb,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",MDB,MariaDb,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",MYSQL,MySql,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B16,Decimal floating point,PG,PostgreSql,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,MSSQL,SqlServer,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,ORA,Oracle,A,decimal floating point,"workbook supported, live refused all candidates",
+B16,Decimal floating point,FB,Firebird,V,decimal floating point,agree: supported,DECFLOAT; DECFLOAT(34)
+B16,Decimal floating point,CRDB,CockroachDb,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,MDB,MariaDb,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,MYSQL,MySql,X,decimal floating point,agree: unsupported,
+B17,Money / currency,PG,PostgreSql,N,money / currency,agree: supported,MONEY
+B17,Money / currency,MSSQL,SqlServer,N,money / currency,agree: supported,MONEY; SMALLMONEY
+B17,Money / currency,ORA,Oracle,X,money / currency,agree: unsupported,
+B17,Money / currency,FB,Firebird,X,money / currency,agree: unsupported,
+B17,Money / currency,CRDB,CockroachDb,X,money / currency,agree: unsupported,
+B17,Money / currency,MDB,MariaDb,X,money / currency,agree: unsupported,
+B17,Money / currency,MYSQL,MySql,X,money / currency,agree: unsupported,
+B18,32-bit IEEE float,PG,PostgreSql,N,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B18,32-bit IEEE float,MSSQL,SqlServer,N,binary float32,agree: supported,REAL; FLOAT(24); FLOAT
+B18,32-bit IEEE float,ORA,Oracle,N,binary float32,agree: supported,REAL; BINARY_FLOAT; FLOAT(24)
+B18,32-bit IEEE float,FB,Firebird,N,binary float32,agree: supported,REAL; FLOAT(24); FLOAT
+B18,32-bit IEEE float,CRDB,CockroachDb,N,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B18,32-bit IEEE float,MDB,MariaDb,N,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B18,32-bit IEEE float,MYSQL,MySql,N,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B19,64-bit IEEE double,PG,PostgreSql,N,binary float64,agree: supported,DOUBLE PRECISION; FLOAT8; FLOAT
+B19,64-bit IEEE double,MSSQL,SqlServer,N,binary float64,agree: supported,DOUBLE PRECISION; FLOAT
+B19,64-bit IEEE double,ORA,Oracle,N,binary float64,agree: supported,DOUBLE PRECISION; BINARY_DOUBLE; FLOAT
+B19,64-bit IEEE double,FB,Firebird,N,binary float64,agree: supported,DOUBLE PRECISION; FLOAT
+B19,64-bit IEEE double,CRDB,CockroachDb,N,binary float64,agree: supported,DOUBLE PRECISION; FLOAT8; FLOAT
+B19,64-bit IEEE double,MDB,MariaDb,N,binary float64,agree: supported,DOUBLE PRECISION; DOUBLE; FLOAT8
+B19,64-bit IEEE double,MYSQL,MySql,N,binary float64,agree: supported,DOUBLE PRECISION; DOUBLE; FLOAT8
+B20,Boolean,PG,PostgreSql,N,boolean,agree: supported,BOOLEAN; BOOL; BIT
+B20,Boolean,MSSQL,SqlServer,A,boolean,agree: supported,BIT
+B20,Boolean,ORA,Oracle,V,boolean,agree: supported,BOOLEAN; BOOL
+B20,Boolean,FB,Firebird,V,boolean,agree: supported,BOOLEAN
+B20,Boolean,CRDB,CockroachDb,N,boolean,agree: supported,BOOLEAN; BOOL; BIT
+B20,Boolean,MDB,MariaDb,A,boolean,agree: supported,BOOLEAN; BOOL; BIT
+B20,Boolean,MYSQL,MySql,A,boolean,agree: supported,BOOLEAN; BOOL; BIT
+B21,Fixed-length CHAR(n),PG,PostgreSql,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),MSSQL,SqlServer,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),ORA,Oracle,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),FB,Firebird,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),CRDB,CockroachDb,N,fixed character,agree: supported,CHAR(10); CHARACTER(10)
+B21,Fixed-length CHAR(n),MDB,MariaDb,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),MYSQL,MySql,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B22,Variable-length VARCHAR(n),PG,PostgreSql,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); VARCHAR
+B22,Variable-length VARCHAR(n),MSSQL,SqlServer,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); NVARCHAR(100)
+B22,Variable-length VARCHAR(n),ORA,Oracle,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); VARCHAR2(100)
+B22,Variable-length VARCHAR(n),FB,Firebird,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100)
+B22,Variable-length VARCHAR(n),CRDB,CockroachDb,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); VARCHAR
+B22,Variable-length VARCHAR(n),MDB,MariaDb,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); NVARCHAR(100)
+B22,Variable-length VARCHAR(n),MYSQL,MySql,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); NVARCHAR(100)
+B23,Unbounded / long text,PG,PostgreSql,N,unbounded text,agree: supported,TEXT; VARCHAR
+B23,Unbounded / long text,MSSQL,SqlServer,N,unbounded text,agree: supported,TEXT; VARCHAR(MAX); VARCHAR
+B23,Unbounded / long text,ORA,Oracle,N,unbounded text,agree: supported,CLOB; NCLOB
+B23,Unbounded / long text,FB,Firebird,N,unbounded text,agree: supported,BLOB SUB_TYPE TEXT
+B23,Unbounded / long text,CRDB,CockroachDb,N,unbounded text,agree: supported,TEXT; STRING; VARCHAR
+B23,Unbounded / long text,MDB,MariaDb,N,unbounded text,agree: supported,TEXT; LONGTEXT
+B23,Unbounded / long text,MYSQL,MySql,N,unbounded text,agree: supported,TEXT; LONGTEXT
+B24,National fixed NCHAR(n),PG,PostgreSql,A,national / Unicode character,agree: supported,NCHAR(10); NATIONAL CHAR
+B24,National fixed NCHAR(n),MSSQL,SqlServer,N,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B24,National fixed NCHAR(n),ORA,Oracle,N,national / Unicode character,agree: supported,NCHAR(10); NVARCHAR2(100); NCLOB
+B24,National fixed NCHAR(n),FB,Firebird,A,national / Unicode character,agree: supported,NCHAR(10); NATIONAL CHAR
+B24,National fixed NCHAR(n),CRDB,CockroachDb,X,national / Unicode character,agree: unsupported,
+B24,National fixed NCHAR(n),MDB,MariaDb,A,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B24,National fixed NCHAR(n),MYSQL,MySql,A,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),PG,PostgreSql,A,national / Unicode character,agree: supported,NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),MSSQL,SqlServer,N,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),ORA,Oracle,N,national / Unicode character,agree: supported,NCHAR(10); NVARCHAR2(100); NCLOB
+B25,National varying NVARCHAR(n),FB,Firebird,A,national / Unicode character,agree: supported,NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),CRDB,CockroachDb,X,national / Unicode character,agree: unsupported,
+B25,National varying NVARCHAR(n),MDB,MariaDb,A,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),MYSQL,MySql,A,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,PG,PostgreSql,X,national / Unicode character,"workbook unsupported, live accepted",NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,MSSQL,SqlServer,N,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,ORA,Oracle,N,national / Unicode character,agree: supported,NCHAR(10); NVARCHAR2(100); NCLOB
+B26,National / Unicode LOB,FB,Firebird,X,national / Unicode character,"workbook unsupported, live accepted",NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,CRDB,CockroachDb,X,national / Unicode character,agree: unsupported,
+B26,National / Unicode LOB,MDB,MariaDb,X,national / Unicode character,"workbook unsupported, live accepted",NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,MYSQL,MySql,X,national / Unicode character,"workbook unsupported, live accepted",NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B32,Fixed-length BINARY(n),PG,PostgreSql,X,fixed binary,agree: unsupported,
+B32,Fixed-length BINARY(n),MSSQL,SqlServer,N,fixed binary,agree: supported,BINARY(16)
+B32,Fixed-length BINARY(n),ORA,Oracle,A,fixed binary,agree: supported,RAW(16)
+B32,Fixed-length BINARY(n),FB,Firebird,V,fixed binary,agree: supported,BINARY(16); BLOB SUB_TYPE 0
+B32,Fixed-length BINARY(n),CRDB,CockroachDb,X,fixed binary,agree: unsupported,
+B32,Fixed-length BINARY(n),MDB,MariaDb,N,fixed binary,agree: supported,BINARY(16)
+B32,Fixed-length BINARY(n),MYSQL,MySql,N,fixed binary,agree: supported,BINARY(16)
+B33,Variable-length VARBINARY(n),PG,PostgreSql,A,varying binary,agree: supported,BYTEA
+B33,Variable-length VARBINARY(n),MSSQL,SqlServer,N,varying binary,agree: supported,VARBINARY(16); BINARY VARYING(16); VARBINARY(MAX)
+B33,Variable-length VARBINARY(n),ORA,Oracle,N,varying binary,agree: supported,RAW(16); BLOB
+B33,Variable-length VARBINARY(n),FB,Firebird,V,varying binary,agree: supported,VARBINARY(16); BINARY VARYING(16); BLOB
+B33,Variable-length VARBINARY(n),CRDB,CockroachDb,A,varying binary,agree: supported,BYTEA; BLOB
+B33,Variable-length VARBINARY(n),MDB,MariaDb,N,varying binary,agree: supported,VARBINARY(16); BLOB
+B33,Variable-length VARBINARY(n),MYSQL,MySql,N,varying binary,agree: supported,VARBINARY(16); BLOB
+B34,Binary LOB,PG,PostgreSql,N,binary LOB,agree: supported,BYTEA
+B34,Binary LOB,MSSQL,SqlServer,N,binary LOB,agree: supported,IMAGE; VARBINARY(MAX); BINARY
+B34,Binary LOB,ORA,Oracle,N,binary LOB,agree: supported,BLOB
+B34,Binary LOB,FB,Firebird,N,binary LOB,agree: supported,BLOB; BINARY
+B34,Binary LOB,CRDB,CockroachDb,N,binary LOB,agree: supported,BLOB; BYTEA
+B34,Binary LOB,MDB,MariaDb,N,binary LOB,agree: supported,BLOB; LONGBLOB; BINARY
+B34,Binary LOB,MYSQL,MySql,N,binary LOB,agree: supported,BLOB; LONGBLOB; BINARY
+B37,Bit string BIT(n) / BIT VARYING,PG,PostgreSql,N,bit / bitstring,agree: supported,BIT(8); BIT VARYING(8); VARBIT(8)
+B37,Bit string BIT(n) / BIT VARYING,MSSQL,SqlServer,X,bit / bitstring,"workbook unsupported, live accepted",BIT
+B37,Bit string BIT(n) / BIT VARYING,ORA,Oracle,X,bit / bitstring,agree: unsupported,
+B37,Bit string BIT(n) / BIT VARYING,FB,Firebird,X,bit / bitstring,agree: unsupported,
+B37,Bit string BIT(n) / BIT VARYING,CRDB,CockroachDb,N,bit / bitstring,agree: supported,BIT(8); BIT VARYING(8); VARBIT(8)
+B37,Bit string BIT(n) / BIT VARYING,MDB,MariaDb,N,bit / bitstring,agree: supported,BIT(8); BIT
+B37,Bit string BIT(n) / BIT VARYING,MYSQL,MySql,N,bit / bitstring,agree: supported,BIT(8); BIT
+B38,Date only,PG,PostgreSql,N,calendar date,agree: supported,DATE
+B38,Date only,MSSQL,SqlServer,N,calendar date,agree: supported,DATE
+B38,Date only,ORA,Oracle,A,calendar date,agree: supported,DATE
+B38,Date only,FB,Firebird,N,calendar date,agree: supported,DATE
+B38,Date only,CRDB,CockroachDb,N,calendar date,agree: supported,DATE
+B38,Date only,MDB,MariaDb,N,calendar date,agree: supported,DATE
+B38,Date only,MYSQL,MySql,N,calendar date,agree: supported,DATE
+B39,Time of day,PG,PostgreSql,N,time without zone,agree: supported,TIME(6); TIME
+B39,Time of day,MSSQL,SqlServer,N,time without zone,agree: supported,TIME(6); TIME
+B39,Time of day,ORA,Oracle,X,time without zone,agree: unsupported,
+B39,Time of day,FB,Firebird,N,time without zone,agree: supported,TIME
+B39,Time of day,CRDB,CockroachDb,N,time without zone,agree: supported,TIME(6); TIME
+B39,Time of day,MDB,MariaDb,N,time without zone,agree: supported,TIME(6); TIME
+B39,Time of day,MYSQL,MySql,N,time without zone,agree: supported,TIME(6); TIME
+B40,Time with time zone,PG,PostgreSql,N,time with zone,agree: supported,TIME WITH TIME ZONE; TIMETZ; TIME(6) WITH TIME ZONE
+B40,Time with time zone,MSSQL,SqlServer,X,time with zone,agree: unsupported,
+B40,Time with time zone,ORA,Oracle,X,time with zone,agree: unsupported,
+B40,Time with time zone,FB,Firebird,V,time with zone,agree: supported,TIME WITH TIME ZONE
+B40,Time with time zone,CRDB,CockroachDb,N,time with zone,agree: supported,TIME WITH TIME ZONE; TIMETZ; TIME(6) WITH TIME ZONE
+B40,Time with time zone,MDB,MariaDb,X,time with zone,agree: unsupported,
+B40,Time with time zone,MYSQL,MySql,X,time with zone,agree: unsupported,
+B41,Timestamp without time zone,PG,PostgreSql,N,timestamp without zone,agree: supported,TIMESTAMP(6); TIMESTAMP
+B41,Timestamp without time zone,MSSQL,SqlServer,N,timestamp without zone,agree: supported,DATETIME2(6); DATETIME; TIMESTAMP
+B41,Timestamp without time zone,ORA,Oracle,N,timestamp without zone,agree: supported,TIMESTAMP(6); TIMESTAMP
+B41,Timestamp without time zone,FB,Firebird,N,timestamp without zone,agree: supported,TIMESTAMP
+B41,Timestamp without time zone,CRDB,CockroachDb,N,timestamp without zone,agree: supported,TIMESTAMP(6); TIMESTAMP
+B41,Timestamp without time zone,MDB,MariaDb,N,timestamp without zone,agree: supported,TIMESTAMP(6); DATETIME; DATETIME(6)
+B41,Timestamp without time zone,MYSQL,MySql,N,timestamp without zone,agree: supported,TIMESTAMP(6); DATETIME; DATETIME(6)
+B42,Timestamp with time zone (offset/zone retained),PG,PostgreSql,X,timestamp with zone,"workbook unsupported, live accepted",TIMESTAMP WITH TIME ZONE; TIMESTAMPTZ; TIMESTAMP(6) WITH TIME ZONE
+B42,Timestamp with time zone (offset/zone retained),MSSQL,SqlServer,N,timestamp with zone,agree: supported,DATETIMEOFFSET
+B42,Timestamp with time zone (offset/zone retained),ORA,Oracle,N,timestamp with zone,agree: supported,TIMESTAMP WITH TIME ZONE; TIMESTAMP(6) WITH TIME ZONE
+B42,Timestamp with time zone (offset/zone retained),FB,Firebird,V,timestamp with zone,agree: supported,TIMESTAMP WITH TIME ZONE
+B42,Timestamp with time zone (offset/zone retained),CRDB,CockroachDb,X,timestamp with zone,"workbook unsupported, live accepted",TIMESTAMP WITH TIME ZONE; TIMESTAMPTZ; TIMESTAMP(6) WITH TIME ZONE
+B42,Timestamp with time zone (offset/zone retained),MDB,MariaDb,X,timestamp with zone,agree: unsupported,
+B42,Timestamp with time zone (offset/zone retained),MYSQL,MySql,X,timestamp with zone,agree: unsupported,
+B44,Interval year–month,PG,PostgreSql,N,year-month interval,agree: supported,INTERVAL YEAR TO MONTH; INTERVAL
+B44,Interval year–month,MSSQL,SqlServer,X,year-month interval,agree: unsupported,
+B44,Interval year–month,ORA,Oracle,N,year-month interval,agree: supported,INTERVAL YEAR TO MONTH; INTERVAL YEAR(4) TO MONTH
+B44,Interval year–month,FB,Firebird,X,year-month interval,agree: unsupported,
+B44,Interval year–month,CRDB,CockroachDb,N,year-month interval,agree: supported,INTERVAL YEAR TO MONTH; INTERVAL
+B44,Interval year–month,MDB,MariaDb,X,year-month interval,agree: unsupported,
+B44,Interval year–month,MYSQL,MySql,X,year-month interval,agree: unsupported,
+B45,Interval day–second,PG,PostgreSql,N,day-time interval,agree: supported,INTERVAL DAY TO SECOND(6); INTERVAL DAY TO SECOND; INTERVAL
+B45,Interval day–second,MSSQL,SqlServer,X,day-time interval,agree: unsupported,
+B45,Interval day–second,ORA,Oracle,N,day-time interval,agree: supported,INTERVAL DAY TO SECOND(6); INTERVAL DAY(9) TO SECOND(6); INTERVAL DAY TO SECOND
+B45,Interval day–second,FB,Firebird,X,day-time interval,agree: unsupported,
+B45,Interval day–second,CRDB,CockroachDb,N,day-time interval,agree: supported,INTERVAL DAY TO SECOND(6); INTERVAL DAY TO SECOND; INTERVAL
+B45,Interval day–second,MDB,MariaDb,A,day-time interval,"workbook supported, live refused all candidates",
+B45,Interval day–second,MYSQL,MySql,A,day-time interval,"workbook supported, live refused all candidates",
+B46,Year,PG,PostgreSql,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B46,Year,MSSQL,SqlServer,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B46,Year,ORA,Oracle,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B46,Year,FB,Firebird,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B46,Year,CRDB,CockroachDb,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B46,Year,MDB,MariaDb,N,year-only,agree: supported,YEAR; SMALLINT
+B46,Year,MYSQL,MySql,N,year-only,agree: supported,YEAR; SMALLINT
+B47,Row version (not a time),PG,PostgreSql,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B47,Row version (not a time),MSSQL,SqlServer,N,rowversion / timestamp token,agree: supported,ROWVERSION; TIMESTAMP
+B47,Row version (not a time),ORA,Oracle,R,rowversion / timestamp token,agree: supported,TIMESTAMP
+B47,Row version (not a time),FB,Firebird,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B47,Row version (not a time),CRDB,CockroachDb,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B47,Row version (not a time),MDB,MariaDb,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B47,Row version (not a time),MYSQL,MySql,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B48,UUID / GUID,PG,PostgreSql,N,UUID / GUID,agree: supported,UUID; CHAR(36)
+B48,UUID / GUID,MSSQL,SqlServer,N,UUID / GUID,agree: supported,UNIQUEIDENTIFIER; CHAR(36); BINARY(16)
+B48,UUID / GUID,ORA,Oracle,X,UUID / GUID,"workbook unsupported, live accepted",RAW(16); CHAR(36)
+B48,UUID / GUID,FB,Firebird,X,UUID / GUID,"workbook unsupported, live accepted",CHAR(36); BINARY(16)
+B48,UUID / GUID,CRDB,CockroachDb,N,UUID / GUID,agree: supported,UUID; CHAR(36)
+B48,UUID / GUID,MDB,MariaDb,V,UUID / GUID,agree: supported,UUID; CHAR(36); BINARY(16)
+B48,UUID / GUID,MYSQL,MySql,X,UUID / GUID,"workbook unsupported, live accepted",CHAR(36); BINARY(16)
+B51,IP address / CIDR,PG,PostgreSql,N,IP address,agree: supported,INET; VARCHAR(45)
+B51,IP address / CIDR,MSSQL,SqlServer,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B51,IP address / CIDR,ORA,Oracle,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B51,IP address / CIDR,FB,Firebird,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B51,IP address / CIDR,CRDB,CockroachDb,N,IP address,agree: supported,INET; VARCHAR(45)
+B51,IP address / CIDR,MDB,MariaDb,V,IP address,agree: supported,VARCHAR(45)
+B51,IP address / CIDR,MYSQL,MySql,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B52,MAC address,PG,PostgreSql,N,MAC address,agree: supported,MACADDR; MACADDR8
+B52,MAC address,MSSQL,SqlServer,X,MAC address,agree: unsupported,
+B52,MAC address,ORA,Oracle,X,MAC address,agree: unsupported,
+B52,MAC address,FB,Firebird,X,MAC address,agree: unsupported,
+B52,MAC address,CRDB,CockroachDb,X,MAC address,agree: unsupported,
+B52,MAC address,MDB,MariaDb,X,MAC address,agree: unsupported,
+B52,MAC address,MYSQL,MySql,X,MAC address,agree: unsupported,
+B53,JSON (text-preserving),PG,PostgreSql,N,JSON text / JSON value,agree: supported,JSON; JSONB
+B53,JSON (text-preserving),MSSQL,SqlServer,V,JSON text / JSON value,agree: supported,JSON
+B53,JSON (text-preserving),ORA,Oracle,V,JSON text / JSON value,agree: supported,CLOB CHECK (c IS JSON)
+B53,JSON (text-preserving),FB,Firebird,X,JSON text / JSON value,agree: unsupported,
+B53,JSON (text-preserving),CRDB,CockroachDb,A,JSON text / JSON value,agree: supported,JSON; JSONB
+B53,JSON (text-preserving),MDB,MariaDb,A,JSON text / JSON value,agree: supported,JSON
+B53,JSON (text-preserving),MYSQL,MySql,N,JSON text / JSON value,agree: supported,JSON
+B54,Binary JSON,PG,PostgreSql,N,native binary JSON,agree: supported,JSONB; JSON
+B54,Binary JSON,MSSQL,SqlServer,X,native binary JSON,"workbook unsupported, live accepted",JSON
+B54,Binary JSON,ORA,Oracle,X,native binary JSON,agree: unsupported,
+B54,Binary JSON,FB,Firebird,X,native binary JSON,agree: unsupported,
+B54,Binary JSON,CRDB,CockroachDb,N,native binary JSON,agree: supported,JSONB; JSON
+B54,Binary JSON,MDB,MariaDb,X,native binary JSON,"workbook unsupported, live accepted",JSON
+B54,Binary JSON,MYSQL,MySql,X,native binary JSON,"workbook unsupported, live accepted",JSON
+B55,BSON,PG,PostgreSql,X,BSON,"workbook unsupported, live accepted",BYTEA
+B55,BSON,MSSQL,SqlServer,X,BSON,agree: unsupported,
+B55,BSON,ORA,Oracle,X,BSON,agree: unsupported,
+B55,BSON,FB,Firebird,X,BSON,agree: unsupported,
+B55,BSON,CRDB,CockroachDb,X,BSON,"workbook unsupported, live accepted",BYTEA
+B55,BSON,MDB,MariaDb,X,BSON,agree: unsupported,
+B55,BSON,MYSQL,MySql,X,BSON,agree: unsupported,
+B56,XML,PG,PostgreSql,N,XML,agree: supported,XML
+B56,XML,MSSQL,SqlServer,N,XML,agree: supported,XML
+B56,XML,ORA,Oracle,N,XML,agree: supported,CLOB; NCLOB
+B56,XML,FB,Firebird,X,XML,agree: unsupported,
+B56,XML,CRDB,CockroachDb,X,XML,agree: unsupported,
+B56,XML,MDB,MariaDb,X,XML,agree: unsupported,
+B56,XML,MYSQL,MySql,X,XML,agree: unsupported,
+B57,Variant / dynamic,PG,PostgreSql,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,MSSQL,SqlServer,N,variant / dynamic value,agree: supported,SQL_VARIANT
+B57,Variant / dynamic,ORA,Oracle,X,variant / dynamic value,"workbook unsupported, live accepted",ANYDATA
+B57,Variant / dynamic,FB,Firebird,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,CRDB,CockroachDb,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,MDB,MariaDb,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,MYSQL,MySql,X,variant / dynamic value,agree: unsupported,
+B58,Array,PG,PostgreSql,N,SQL array,agree: supported,INTEGER ARRAY; INTEGER[]; INT[]
+B58,Array,MSSQL,SqlServer,X,SQL array,agree: unsupported,
+B58,Array,ORA,Oracle,R,SQL array,"workbook supported, live refused all candidates",
+B58,Array,FB,Firebird,N,SQL array,"workbook supported, live refused all candidates",
+B58,Array,CRDB,CockroachDb,N,SQL array,agree: supported,INTEGER ARRAY; INTEGER[]; INT[]
+B58,Array,MDB,MariaDb,X,SQL array,agree: unsupported,
+B58,Array,MYSQL,MySql,X,SQL array,agree: unsupported,
+B62,Enumeration,PG,PostgreSql,N,enumeration,"workbook supported, live refused all candidates",
+B62,Enumeration,MSSQL,SqlServer,X,enumeration,agree: unsupported,
+B62,Enumeration,ORA,Oracle,X,enumeration,agree: unsupported,
+B62,Enumeration,FB,Firebird,X,enumeration,agree: unsupported,
+B62,Enumeration,CRDB,CockroachDb,N,enumeration,"workbook supported, live refused all candidates",
+B62,Enumeration,MDB,MariaDb,N,enumeration,agree: supported,"ENUM('a','b')"
+B62,Enumeration,MYSQL,MySql,N,enumeration,agree: supported,"ENUM('a','b')"
+B63,Multi-valued set,PG,PostgreSql,X,set-valued enum,agree: unsupported,
+B63,Multi-valued set,MSSQL,SqlServer,X,set-valued enum,agree: unsupported,
+B63,Multi-valued set,ORA,Oracle,X,set-valued enum,agree: unsupported,
+B63,Multi-valued set,FB,Firebird,X,set-valued enum,agree: unsupported,
+B63,Multi-valued set,CRDB,CockroachDb,X,set-valued enum,agree: unsupported,
+B63,Multi-valued set,MDB,MariaDb,N,set-valued enum,agree: supported,"SET('a','b')"
+B63,Multi-valued set,MYSQL,MySql,N,set-valued enum,agree: supported,"SET('a','b')"
+B64,Range,PG,PostgreSql,N,range,agree: supported,INT4RANGE; INT8RANGE; TSTZRANGE
+B64,Range,MSSQL,SqlServer,X,range,agree: unsupported,
+B64,Range,ORA,Oracle,X,range,agree: unsupported,
+B64,Range,FB,Firebird,X,range,agree: unsupported,
+B64,Range,CRDB,CockroachDb,X,range,agree: unsupported,
+B64,Range,MDB,MariaDb,X,range,agree: unsupported,
+B64,Range,MYSQL,MySql,X,range,agree: unsupported,
+B65,Multirange,PG,PostgreSql,V,multirange,agree: supported,INT4MULTIRANGE; INT8MULTIRANGE
+B65,Multirange,MSSQL,SqlServer,X,multirange,agree: unsupported,
+B65,Multirange,ORA,Oracle,X,multirange,agree: unsupported,
+B65,Multirange,FB,Firebird,X,multirange,agree: unsupported,
+B65,Multirange,CRDB,CockroachDb,X,multirange,agree: unsupported,
+B65,Multirange,MDB,MariaDb,X,multirange,agree: unsupported,
+B65,Multirange,MYSQL,MySql,X,multirange,agree: unsupported,
+B66,Domain / distinct type,PG,PostgreSql,N,user-defined enum / domain,"workbook supported, live refused all candidates",
+B66,Domain / distinct type,MSSQL,SqlServer,N,user-defined enum / domain,"workbook supported, live refused all candidates",
+B66,Domain / distinct type,ORA,Oracle,V,user-defined enum / domain,"workbook supported, live refused all candidates",
+B66,Domain / distinct type,FB,Firebird,N,user-defined enum / domain,"workbook supported, live refused all candidates",
+B66,Domain / distinct type,CRDB,CockroachDb,X,user-defined enum / domain,agree: unsupported,
+B66,Domain / distinct type,MDB,MariaDb,X,user-defined enum / domain,agree: unsupported,
+B66,Domain / distinct type,MYSQL,MySql,X,user-defined enum / domain,agree: unsupported,
+B67,Opaque / CLR / extension base type,PG,PostgreSql,N,opaque / special database type,"workbook supported, live refused all candidates",
+B67,Opaque / CLR / extension base type,MSSQL,SqlServer,N,opaque / special database type,agree: supported,SQL_VARIANT
+B67,Opaque / CLR / extension base type,ORA,Oracle,N,opaque / special database type,"workbook supported, live refused all candidates",
+B67,Opaque / CLR / extension base type,FB,Firebird,X,opaque / special database type,agree: unsupported,
+B67,Opaque / CLR / extension base type,CRDB,CockroachDb,X,opaque / special database type,agree: unsupported,
+B67,Opaque / CLR / extension base type,MDB,MariaDb,X,opaque / special database type,agree: unsupported,
+B67,Opaque / CLR / extension base type,MYSQL,MySql,X,opaque / special database type,agree: unsupported,
+B68,Planar geometry,PG,PostgreSql,E,point geometry,agree: supported,POINT
+B68,Planar geometry,MSSQL,SqlServer,N,point geometry,agree: supported,GEOMETRY
+B68,Planar geometry,ORA,Oracle,E,point geometry,agree: supported,POINT; SDO_GEOMETRY; GEOMETRY
+B68,Planar geometry,FB,Firebird,X,point geometry,agree: unsupported,
+B68,Planar geometry,CRDB,CockroachDb,N,point geometry,agree: supported,"GEOMETRY(POINT,4326); GEOMETRY(POINT); GEOMETRY"
+B68,Planar geometry,MDB,MariaDb,N,point geometry,agree: supported,POINT; GEOMETRY
+B68,Planar geometry,MYSQL,MySql,N,point geometry,agree: supported,POINT; GEOMETRY
+B69,Geodetic geography,PG,PostgreSql,E,geography / geodetic,"workbook supported, live refused all candidates",
+B69,Geodetic geography,MSSQL,SqlServer,N,geography / geodetic,agree: supported,GEOGRAPHY
+B69,Geodetic geography,ORA,Oracle,E,geography / geodetic,agree: supported,ST_GEOMETRY
+B69,Geodetic geography,FB,Firebird,X,geography / geodetic,agree: unsupported,
+B69,Geodetic geography,CRDB,CockroachDb,N,geography / geodetic,agree: supported,"GEOGRAPHY; GEOGRAPHY(POINT,4326)"
+B69,Geodetic geography,MDB,MariaDb,X,geography / geodetic,agree: unsupported,
+B69,Geodetic geography,MYSQL,MySql,A,geography / geodetic,"workbook supported, live refused all candidates",
+B71,Vector embedding,PG,PostgreSql,E,vector embedding,"workbook supported, live refused all candidates",
+B71,Vector embedding,MSSQL,SqlServer,V,vector embedding,agree: supported,"VECTOR(3); VECTOR(3,FLOAT32)"
+B71,Vector embedding,ORA,Oracle,V,vector embedding,"workbook supported, live refused all candidates",
+B71,Vector embedding,FB,Firebird,X,vector embedding,agree: unsupported,
+B71,Vector embedding,CRDB,CockroachDb,?,vector embedding,unverified (workbook),VECTOR(3); VECTOR
+B71,Vector embedding,MDB,MariaDb,V,vector embedding,"workbook supported, live refused all candidates",
+B71,Vector embedding,MYSQL,MySql,V,vector embedding,"workbook supported, live refused all candidates",
+B72,Full-text document/query,PG,PostgreSql,N,full-text search vector / query,agree: supported,TSVECTOR; TSQUERY
+B72,Full-text document/query,MSSQL,SqlServer,X,full-text search vector / query,agree: unsupported,
+B72,Full-text document/query,ORA,Oracle,X,full-text search vector / query,agree: unsupported,
+B72,Full-text document/query,FB,Firebird,X,full-text search vector / query,agree: unsupported,
+B72,Full-text document/query,CRDB,CockroachDb,V,full-text search vector / query,agree: supported,TSVECTOR; TSQUERY
+B72,Full-text document/query,MDB,MariaDb,X,full-text search vector / query,agree: unsupported,
+B72,Full-text document/query,MYSQL,MySql,X,full-text search vector / query,agree: unsupported,
+B73,Hierarchy path,PG,PostgreSql,E,hierarchical path,"workbook supported, live refused all candidates",
+B73,Hierarchy path,MSSQL,SqlServer,N,hierarchical path,agree: supported,HIERARCHYID
+B73,Hierarchy path,ORA,Oracle,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,FB,Firebird,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,CRDB,CockroachDb,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,MDB,MariaDb,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,MYSQL,MySql,X,hierarchical path,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,PG,PostgreSql,N,object identifier / OID,agree: supported,OID; REGCLASS
+B74,Object id / reg* / xid / lsn / snapshot,MSSQL,SqlServer,X,object identifier / OID,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,ORA,Oracle,X,object identifier / OID,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,FB,Firebird,X,object identifier / OID,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,CRDB,CockroachDb,R,object identifier / OID,agree: supported,OID; REGCLASS
+B74,Object id / reg* / xid / lsn / snapshot,MDB,MariaDb,X,object identifier / OID,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,MYSQL,MySql,X,object identifier / OID,agree: unsupported,
+A26,set-valued enum,PG,PostgreSql,?,set-valued enum,unverified (workbook),
+A26,set-valued enum,MSSQL,SqlServer,?,set-valued enum,unverified (workbook),
+A26,set-valued enum,ORA,Oracle,?,set-valued enum,unverified (workbook),
+A26,set-valued enum,FB,Firebird,?,set-valued enum,unverified (workbook),
+A26,set-valued enum,CRDB,CockroachDb,?,set-valued enum,unverified (workbook),
+A26,set-valued enum,MDB,MariaDb,N,set-valued enum,agree: supported,"SET('a','b')"
+A26,set-valued enum,MYSQL,MySql,N,set-valued enum,agree: supported,"SET('a','b')"
+A30,legacy long binary,PG,PostgreSql,?,legacy long binary,unverified (workbook),
+A30,legacy long binary,MSSQL,SqlServer,N,legacy long binary,agree: supported,IMAGE
+A30,legacy long binary,ORA,Oracle,N,legacy long binary,agree: supported,LONG RAW
+A30,legacy long binary,FB,Firebird,?,legacy long binary,unverified (workbook),
+A30,legacy long binary,CRDB,CockroachDb,?,legacy long binary,unverified (workbook),
+A30,legacy long binary,MDB,MariaDb,N,legacy long binary,agree: supported,TINYBLOB; MEDIUMBLOB; LONGBLOB
+A30,legacy long binary,MYSQL,MySql,N,legacy long binary,agree: supported,TINYBLOB; MEDIUMBLOB; LONGBLOB
+A38,second-precision datetime,PG,PostgreSql,?,second-precision datetime,unverified (workbook),DATE
+A38,second-precision datetime,MSSQL,SqlServer,A,second-precision datetime,agree: supported,SMALLDATETIME; DATETIME; DATE
+A38,second-precision datetime,ORA,Oracle,N,second-precision datetime,agree: supported,DATE
+A38,second-precision datetime,FB,Firebird,?,second-precision datetime,unverified (workbook),DATE
+A38,second-precision datetime,CRDB,CockroachDb,?,second-precision datetime,unverified (workbook),DATE
+A38,second-precision datetime,MDB,MariaDb,?,second-precision datetime,unverified (workbook),DATETIME(0); DATETIME; DATE
+A38,second-precision datetime,MYSQL,MySql,?,second-precision datetime,unverified (workbook),DATETIME(0); DATETIME; DATE
+A42,generic interval,PG,PostgreSql,N,year-month interval,agree: supported,INTERVAL YEAR TO MONTH; INTERVAL
+A42,generic interval,MSSQL,SqlServer,?,year-month interval,unverified (workbook),
+A42,generic interval,ORA,Oracle,?,year-month interval,unverified (workbook),INTERVAL YEAR TO MONTH; INTERVAL YEAR(4) TO MONTH
+A42,generic interval,FB,Firebird,?,year-month interval,unverified (workbook),
+A42,generic interval,CRDB,CockroachDb,?,year-month interval,unverified (workbook),INTERVAL YEAR TO MONTH; INTERVAL
+A42,generic interval,MDB,MariaDb,?,year-month interval,unverified (workbook),
+A42,generic interval,MYSQL,MySql,?,year-month interval,unverified (workbook),
+A45,object identifier / OID,PG,PostgreSql,N,object identifier / OID,agree: supported,OID; REGCLASS
+A45,object identifier / OID,MSSQL,SqlServer,?,object identifier / OID,unverified (workbook),
+A45,object identifier / OID,ORA,Oracle,?,object identifier / OID,unverified (workbook),
+A45,object identifier / OID,FB,Firebird,?,object identifier / OID,unverified (workbook),
+A45,object identifier / OID,CRDB,CockroachDb,?,object identifier / OID,unverified (workbook),OID; REGCLASS
+A45,object identifier / OID,MDB,MariaDb,?,object identifier / OID,unverified (workbook),
+A45,object identifier / OID,MYSQL,MySql,?,object identifier / OID,unverified (workbook),
+A46,transaction ID,PG,PostgreSql,N,transaction ID,agree: supported,XID; XID8
+A46,transaction ID,MSSQL,SqlServer,?,transaction ID,unverified (workbook),
+A46,transaction ID,ORA,Oracle,?,transaction ID,unverified (workbook),
+A46,transaction ID,FB,Firebird,?,transaction ID,unverified (workbook),
+A46,transaction ID,CRDB,CockroachDb,X,transaction ID,agree: unsupported,
+A46,transaction ID,MDB,MariaDb,?,transaction ID,unverified (workbook),
+A46,transaction ID,MYSQL,MySql,?,transaction ID,unverified (workbook),
+A47,WAL / log position,PG,PostgreSql,N,WAL / log position,agree: supported,PG_LSN
+A47,WAL / log position,MSSQL,SqlServer,?,WAL / log position,unverified (workbook),
+A47,WAL / log position,ORA,Oracle,?,WAL / log position,unverified (workbook),
+A47,WAL / log position,FB,Firebird,?,WAL / log position,unverified (workbook),
+A47,WAL / log position,CRDB,CockroachDb,X,WAL / log position,"workbook unsupported, live accepted",PG_LSN
+A47,WAL / log position,MDB,MariaDb,?,WAL / log position,unverified (workbook),
+A47,WAL / log position,MYSQL,MySql,?,WAL / log position,unverified (workbook),
+A53,IP address,PG,PostgreSql,N,IP address,agree: supported,INET; VARCHAR(45)
+A53,IP address,MSSQL,SqlServer,?,IP address,unverified (workbook),VARCHAR(45)
+A53,IP address,ORA,Oracle,?,IP address,unverified (workbook),VARCHAR(45)
+A53,IP address,FB,Firebird,?,IP address,unverified (workbook),VARCHAR(45)
+A53,IP address,CRDB,CockroachDb,?,IP address,unverified (workbook),INET; VARCHAR(45)
+A53,IP address,MDB,MariaDb,V,IP address,agree: supported,VARCHAR(45)
+A53,IP address,MYSQL,MySql,?,IP address,unverified (workbook),VARCHAR(45)
+A54,IP network / CIDR,PG,PostgreSql,N,IP network / CIDR,agree: supported,CIDR; INET
+A54,IP network / CIDR,MSSQL,SqlServer,?,IP network / CIDR,unverified (workbook),
+A54,IP network / CIDR,ORA,Oracle,?,IP network / CIDR,unverified (workbook),
+A54,IP network / CIDR,FB,Firebird,?,IP network / CIDR,unverified (workbook),
+A54,IP network / CIDR,CRDB,CockroachDb,A,IP network / CIDR,agree: supported,INET
+A54,IP network / CIDR,MDB,MariaDb,?,IP network / CIDR,unverified (workbook),
+A54,IP network / CIDR,MYSQL,MySql,?,IP network / CIDR,unverified (workbook),
+A56,point geometry,PG,PostgreSql,N,point geometry,agree: supported,POINT
+A56,point geometry,MSSQL,SqlServer,N,point geometry,agree: supported,GEOMETRY
+A56,point geometry,ORA,Oracle,?,point geometry,unverified (workbook),POINT; SDO_GEOMETRY; GEOMETRY
+A56,point geometry,FB,Firebird,?,point geometry,unverified (workbook),
+A56,point geometry,CRDB,CockroachDb,N,point geometry,agree: supported,"GEOMETRY(POINT,4326); GEOMETRY(POINT); GEOMETRY"
+A56,point geometry,MDB,MariaDb,N,point geometry,agree: supported,POINT; GEOMETRY
+A56,point geometry,MYSQL,MySql,N,point geometry,agree: supported,POINT; GEOMETRY
+A57,line / linestring geometry,PG,PostgreSql,N,line / linestring geometry,"workbook supported, live refused all candidates",
+A57,line / linestring geometry,MSSQL,SqlServer,N,line / linestring geometry,agree: supported,GEOMETRY
+A57,line / linestring geometry,ORA,Oracle,?,line / linestring geometry,unverified (workbook),LINESTRING; GEOMETRY; ST_GEOMETRY
+A57,line / linestring geometry,FB,Firebird,?,line / linestring geometry,unverified (workbook),
+A57,line / linestring geometry,CRDB,CockroachDb,N,line / linestring geometry,agree: supported,GEOMETRY(LINESTRING); GEOMETRY
+A57,line / linestring geometry,MDB,MariaDb,N,line / linestring geometry,agree: supported,LINESTRING; GEOMETRY
+A57,line / linestring geometry,MYSQL,MySql,N,line / linestring geometry,agree: supported,LINESTRING; GEOMETRY
+A58,polygon geometry,PG,PostgreSql,N,polygon geometry,agree: supported,POLYGON
+A58,polygon geometry,MSSQL,SqlServer,N,polygon geometry,agree: supported,GEOMETRY
+A58,polygon geometry,ORA,Oracle,?,polygon geometry,unverified (workbook),POLYGON; GEOMETRY; ST_GEOMETRY
+A58,polygon geometry,FB,Firebird,?,polygon geometry,unverified (workbook),
+A58,polygon geometry,CRDB,CockroachDb,N,polygon geometry,agree: supported,GEOMETRY(POLYGON); GEOMETRY
+A58,polygon geometry,MDB,MariaDb,N,polygon geometry,agree: supported,POLYGON; GEOMETRY
+A58,polygon geometry,MYSQL,MySql,N,polygon geometry,agree: supported,POLYGON; GEOMETRY
+A62,fixed-length array,PG,PostgreSql,A,fixed-length array,agree: supported,INTEGER ARRAY[10]; INTEGER[10]
+A62,fixed-length array,MSSQL,SqlServer,?,fixed-length array,unverified (workbook),
+A62,fixed-length array,ORA,Oracle,?,fixed-length array,unverified (workbook),
+A62,fixed-length array,FB,Firebird,N,fixed-length array,agree: supported,INTEGER[10]
+A62,fixed-length array,CRDB,CockroachDb,A,fixed-length array,agree: supported,INTEGER ARRAY[10]; INTEGER[10]
+A62,fixed-length array,MDB,MariaDb,?,fixed-length array,unverified (workbook),
+A62,fixed-length array,MYSQL,MySql,?,fixed-length array,unverified (workbook),
+A63,list / multiset / set collection,PG,PostgreSql,A,list / multiset / set collection,"workbook supported, live refused all candidates",
+A63,list / multiset / set collection,MSSQL,SqlServer,?,list / multiset / set collection,unverified (workbook),
+A63,list / multiset / set collection,ORA,Oracle,?,list / multiset / set collection,unverified (workbook),
+A63,list / multiset / set collection,FB,Firebird,?,list / multiset / set collection,unverified (workbook),
+A63,list / multiset / set collection,CRDB,CockroachDb,A,list / multiset / set collection,"workbook supported, live refused all candidates",
+A63,list / multiset / set collection,MDB,MariaDb,?,list / multiset / set collection,unverified (workbook),
+A63,list / multiset / set collection,MYSQL,MySql,?,list / multiset / set collection,unverified (workbook),
+A74,opaque / special database type,PG,PostgreSql,?,opaque / special database type,unverified (workbook),
+A74,opaque / special database type,MSSQL,SqlServer,N,opaque / special database type,agree: supported,SQL_VARIANT
+A74,opaque / special database type,ORA,Oracle,N,opaque / special database type,"workbook supported, live refused all candidates",
+A74,opaque / special database type,FB,Firebird,?,opaque / special database type,unverified (workbook),
+A74,opaque / special database type,CRDB,CockroachDb,?,opaque / special database type,unverified (workbook),
+A74,opaque / special database type,MDB,MariaDb,?,opaque / special database type,unverified (workbook),
+A74,opaque / special database type,MYSQL,MySql,?,opaque / special database type,unverified (workbook),
+A76,spatial raster / other extensions,PG,PostgreSql,E,spatial raster / other extensions,"workbook supported, live refused all candidates",
+A76,spatial raster / other extensions,MSSQL,SqlServer,?,spatial raster / other extensions,unverified (workbook),
+A76,spatial raster / other extensions,ORA,Oracle,?,spatial raster / other extensions,unverified (workbook),
+A76,spatial raster / other extensions,FB,Firebird,?,spatial raster / other extensions,unverified (workbook),
+A76,spatial raster / other extensions,CRDB,CockroachDb,E,spatial raster / other extensions,"workbook supported, live refused all candidates",
+A76,spatial raster / other extensions,MDB,MariaDb,?,spatial raster / other extensions,unverified (workbook),
+A76,spatial raster / other extensions,MYSQL,MySql,?,spatial raster / other extensions,unverified (workbook),
+A77,cursor / table variable,PG,PostgreSql,?,cursor / table variable,unverified (workbook),REFCURSOR
+A77,cursor / table variable,MSSQL,SqlServer,A,cursor / table variable,"workbook supported, live refused all candidates",
+A77,cursor / table variable,ORA,Oracle,A,cursor / table variable,"workbook supported, live refused all candidates",
+A77,cursor / table variable,FB,Firebird,?,cursor / table variable,unverified (workbook),
+A77,cursor / table variable,CRDB,CockroachDb,?,cursor / table variable,unverified (workbook),REFCURSOR
+A77,cursor / table variable,MDB,MariaDb,?,cursor / table variable,unverified (workbook),
+A77,cursor / table variable,MYSQL,MySql,?,cursor / table variable,unverified (workbook),
+B01,8-bit signed,DUCK,DuckDB,N,signed 8-bit,agree: supported,TINYINT; INT1; SMALLINT
+B01,8-bit signed,YB,YugabyteDb,X,signed 8-bit,"workbook unsupported, live accepted",SMALLINT; INT2
+B01,8-bit signed,TIDB,TiDb,N,signed 8-bit,agree: supported,TINYINT; INT1; SMALLINT
+B01,8-bit signed,FLAT,FlatFile,X,signed 8-bit,"workbook unsupported, live accepted",SMALLINT
+B02,8-bit unsigned,DUCK,DuckDB,N,unsigned 8-bit,agree: supported,UTINYINT; TINYINT
+B02,8-bit unsigned,YB,YugabyteDb,X,unsigned 8-bit,agree: unsupported,
+B02,8-bit unsigned,TIDB,TiDb,N,unsigned 8-bit,agree: supported,TINYINT UNSIGNED; TINYINT
+B02,8-bit unsigned,FLAT,FlatFile,X,unsigned 8-bit,agree: unsupported,
+B03,16-bit signed,DUCK,DuckDB,N,signed 16-bit,agree: supported,SMALLINT; INT2; INT8
+B03,16-bit signed,YB,YugabyteDb,N,signed 16-bit,agree: supported,SMALLINT; INT2; INT8
+B03,16-bit signed,TIDB,TiDb,N,signed 16-bit,agree: supported,SMALLINT; INT2; INT8
+B03,16-bit signed,FLAT,FlatFile,?,signed 16-bit,unverified (workbook),SMALLINT
+B04,16-bit unsigned,DUCK,DuckDB,N,unsigned 16-bit,agree: supported,USMALLINT; UINT16
+B04,16-bit unsigned,YB,YugabyteDb,X,unsigned 16-bit,agree: unsupported,
+B04,16-bit unsigned,TIDB,TiDb,N,unsigned 16-bit,agree: supported,SMALLINT UNSIGNED
+B04,16-bit unsigned,FLAT,FlatFile,X,unsigned 16-bit,agree: unsupported,
+B06,32-bit signed,DUCK,DuckDB,N,signed 32-bit,agree: supported,INTEGER; INT; INT4
+B06,32-bit signed,YB,YugabyteDb,N,signed 32-bit,agree: supported,INTEGER; INT; INT4
+B06,32-bit signed,TIDB,TiDb,N,signed 32-bit,agree: supported,INTEGER; INT; INT4
+B06,32-bit signed,FLAT,FlatFile,?,signed 32-bit,unverified (workbook),INTEGER; INT
+B07,32-bit unsigned,DUCK,DuckDB,N,unsigned 32-bit,agree: supported,UINTEGER; UINT32
+B07,32-bit unsigned,YB,YugabyteDb,X,unsigned 32-bit,agree: unsupported,
+B07,32-bit unsigned,TIDB,TiDb,N,unsigned 32-bit,agree: supported,INT UNSIGNED; INTEGER UNSIGNED
+B07,32-bit unsigned,FLAT,FlatFile,X,unsigned 32-bit,agree: unsupported,
+B08,64-bit signed,DUCK,DuckDB,N,signed 64-bit,agree: supported,BIGINT; INT8; INT64
+B08,64-bit signed,YB,YugabyteDb,N,signed 64-bit,agree: supported,BIGINT; INT8
+B08,64-bit signed,TIDB,TiDb,N,signed 64-bit,agree: supported,BIGINT; INT8
+B08,64-bit signed,FLAT,FlatFile,?,signed 64-bit,unverified (workbook),BIGINT
+B09,64-bit unsigned,DUCK,DuckDB,N,unsigned 64-bit,agree: supported,UBIGINT; UINT8; UINT64
+B09,64-bit unsigned,YB,YugabyteDb,X,unsigned 64-bit,agree: unsupported,
+B09,64-bit unsigned,TIDB,TiDb,N,unsigned 64-bit,agree: supported,BIGINT UNSIGNED
+B09,64-bit unsigned,FLAT,FlatFile,X,unsigned 64-bit,agree: unsupported,
+B10,128-bit signed,DUCK,DuckDB,N,signed 128-bit,agree: supported,"HUGEINT; INT128; NUMERIC(38,0)"
+B10,128-bit signed,YB,YugabyteDb,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B10,128-bit signed,TIDB,TiDb,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B10,128-bit signed,FLAT,FlatFile,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B11,128-bit unsigned,DUCK,DuckDB,N,unsigned 128-bit,agree: supported,UHUGEINT; UINT128
+B11,128-bit unsigned,YB,YugabyteDb,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,TIDB,TiDb,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,FLAT,FlatFile,X,unsigned 128-bit,agree: unsupported,
+B12,Arbitrary-precision integer,DUCK,DuckDB,V,arbitrary-size integer,agree: supported,"VARINT; BIGNUM; NUMERIC(38,0)"
+B12,Arbitrary-precision integer,YB,YugabyteDb,X,arbitrary-size integer,"workbook unsupported, live accepted","NUMERIC(1000,0); DECIMAL(65,0); NUMERIC(38,0)"
+B12,Arbitrary-precision integer,TIDB,TiDb,X,arbitrary-size integer,"workbook unsupported, live accepted","DECIMAL(65,0); NUMERIC(38,0); DECIMAL(38,0)"
+B12,Arbitrary-precision integer,FLAT,FlatFile,X,arbitrary-size integer,"workbook unsupported, live accepted","NUMERIC(1000,0); DECIMAL(65,0); NUMERIC(38,0)"
+B13,"Identity column (declaration, not a type)",DUCK,DuckDB,R,auto-increment integer,"workbook supported, live refused all candidates",
+B13,"Identity column (declaration, not a type)",YB,YugabyteDb,R,auto-increment integer,agree: supported,INTEGER GENERATED BY DEFAULT AS IDENTITY; SERIAL
+B13,"Identity column (declaration, not a type)",TIDB,TiDb,R,auto-increment integer,agree: supported,INT AUTO_INCREMENT; SERIAL
+B13,"Identity column (declaration, not a type)",FLAT,FlatFile,?,auto-increment integer,unverified (workbook),
+B15,"Fixed-point DECIMAL(p,s)",DUCK,DuckDB,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",YB,YugabyteDb,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",TIDB,TiDb,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",FLAT,FlatFile,?,fixed decimal,unverified (workbook),"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B16,Decimal floating point,DUCK,DuckDB,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,YB,YugabyteDb,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,TIDB,TiDb,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,FLAT,FlatFile,?,decimal floating point,unverified (workbook),
+B17,Money / currency,DUCK,DuckDB,X,money / currency,agree: unsupported,
+B17,Money / currency,YB,YugabyteDb,N,money / currency,agree: supported,MONEY
+B17,Money / currency,TIDB,TiDb,X,money / currency,agree: unsupported,
+B17,Money / currency,FLAT,FlatFile,X,money / currency,agree: unsupported,
+B18,32-bit IEEE float,DUCK,DuckDB,N,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B18,32-bit IEEE float,YB,YugabyteDb,N,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B18,32-bit IEEE float,TIDB,TiDb,N,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B18,32-bit IEEE float,FLAT,FlatFile,?,binary float32,unverified (workbook),REAL; FLOAT(24); FLOAT
+B19,64-bit IEEE double,DUCK,DuckDB,N,binary float64,agree: supported,DOUBLE PRECISION; DOUBLE; FLOAT8
+B19,64-bit IEEE double,YB,YugabyteDb,N,binary float64,agree: supported,DOUBLE PRECISION; FLOAT8; FLOAT
+B19,64-bit IEEE double,TIDB,TiDb,N,binary float64,agree: supported,DOUBLE PRECISION; DOUBLE; FLOAT8
+B19,64-bit IEEE double,FLAT,FlatFile,?,binary float64,unverified (workbook),DOUBLE PRECISION; DOUBLE; FLOAT
+B20,Boolean,DUCK,DuckDB,N,boolean,agree: supported,BOOLEAN; BOOL; BIT
+B20,Boolean,YB,YugabyteDb,N,boolean,agree: supported,BOOLEAN; BOOL; BIT
+B20,Boolean,TIDB,TiDb,A,boolean,agree: supported,BOOLEAN; BOOL; BIT
+B20,Boolean,FLAT,FlatFile,?,boolean,unverified (workbook),BOOLEAN
+B21,Fixed-length CHAR(n),DUCK,DuckDB,A,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),YB,YugabyteDb,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),TIDB,TiDb,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),FLAT,FlatFile,?,fixed character,unverified (workbook),CHAR(10); CHARACTER(10); NCHAR(10)
+B22,Variable-length VARCHAR(n),DUCK,DuckDB,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); NVARCHAR(100)
+B22,Variable-length VARCHAR(n),YB,YugabyteDb,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); VARCHAR
+B22,Variable-length VARCHAR(n),TIDB,TiDb,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); NVARCHAR(100)
+B22,Variable-length VARCHAR(n),FLAT,FlatFile,?,varying character,unverified (workbook),VARCHAR(100); CHARACTER VARYING(100); VARCHAR
+B23,Unbounded / long text,DUCK,DuckDB,N,unbounded text,agree: supported,TEXT; STRING; VARCHAR
+B23,Unbounded / long text,YB,YugabyteDb,N,unbounded text,agree: supported,TEXT; VARCHAR
+B23,Unbounded / long text,TIDB,TiDb,N,unbounded text,agree: supported,TEXT; LONGTEXT
+B23,Unbounded / long text,FLAT,FlatFile,?,unbounded text,unverified (workbook),CLOB; VARCHAR
+B24,National fixed NCHAR(n),DUCK,DuckDB,X,national / Unicode character,"workbook unsupported, live accepted",NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B24,National fixed NCHAR(n),YB,YugabyteDb,A,national / Unicode character,agree: supported,NCHAR(10); NATIONAL CHAR
+B24,National fixed NCHAR(n),TIDB,TiDb,A,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B24,National fixed NCHAR(n),FLAT,FlatFile,?,national / Unicode character,unverified (workbook),NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),DUCK,DuckDB,X,national / Unicode character,"workbook unsupported, live accepted",NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),YB,YugabyteDb,A,national / Unicode character,agree: supported,NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),TIDB,TiDb,A,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),FLAT,FlatFile,?,national / Unicode character,unverified (workbook),NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,DUCK,DuckDB,X,national / Unicode character,"workbook unsupported, live accepted",NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,YB,YugabyteDb,X,national / Unicode character,"workbook unsupported, live accepted",NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,TIDB,TiDb,X,national / Unicode character,"workbook unsupported, live accepted",NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,FLAT,FlatFile,?,national / Unicode character,unverified (workbook),NCHAR(10); NATIONAL CHAR
+B32,Fixed-length BINARY(n),DUCK,DuckDB,A,fixed binary,"workbook supported, live refused all candidates",
+B32,Fixed-length BINARY(n),YB,YugabyteDb,X,fixed binary,agree: unsupported,
+B32,Fixed-length BINARY(n),TIDB,TiDb,N,fixed binary,agree: supported,BINARY(16)
+B32,Fixed-length BINARY(n),FLAT,FlatFile,?,fixed binary,unverified (workbook),BINARY(16)
+B33,Variable-length VARBINARY(n),DUCK,DuckDB,A,varying binary,agree: supported,BYTEA; BLOB
+B33,Variable-length VARBINARY(n),YB,YugabyteDb,A,varying binary,agree: supported,BYTEA
+B33,Variable-length VARBINARY(n),TIDB,TiDb,N,varying binary,agree: supported,VARBINARY(16); BLOB
+B33,Variable-length VARBINARY(n),FLAT,FlatFile,?,varying binary,unverified (workbook),BLOB
+B34,Binary LOB,DUCK,DuckDB,N,binary LOB,agree: supported,BLOB; BYTEA; BINARY
+B34,Binary LOB,YB,YugabyteDb,N,binary LOB,agree: supported,BYTEA
+B34,Binary LOB,TIDB,TiDb,N,binary LOB,agree: supported,BLOB; LONGBLOB; BINARY
+B34,Binary LOB,FLAT,FlatFile,?,binary LOB,unverified (workbook),BLOB; BINARY
+B37,Bit string BIT(n) / BIT VARYING,DUCK,DuckDB,N,bit / bitstring,agree: supported,BIT(8); BIT
+B37,Bit string BIT(n) / BIT VARYING,YB,YugabyteDb,N,bit / bitstring,agree: supported,BIT(8); BIT VARYING(8); VARBIT(8)
+B37,Bit string BIT(n) / BIT VARYING,TIDB,TiDb,N,bit / bitstring,agree: supported,BIT(8); BIT
+B37,Bit string BIT(n) / BIT VARYING,FLAT,FlatFile,X,bit / bitstring,agree: unsupported,
+B38,Date only,DUCK,DuckDB,N,calendar date,agree: supported,DATE
+B38,Date only,YB,YugabyteDb,N,calendar date,agree: supported,DATE
+B38,Date only,TIDB,TiDb,N,calendar date,agree: supported,DATE
+B38,Date only,FLAT,FlatFile,?,calendar date,unverified (workbook),DATE
+B39,Time of day,DUCK,DuckDB,N,time without zone,agree: supported,TIME
+B39,Time of day,YB,YugabyteDb,N,time without zone,agree: supported,TIME(6); TIME
+B39,Time of day,TIDB,TiDb,N,time without zone,agree: supported,TIME(6); TIME
+B39,Time of day,FLAT,FlatFile,?,time without zone,unverified (workbook),TIME(6); TIME
+B40,Time with time zone,DUCK,DuckDB,N,time with zone,agree: supported,TIME WITH TIME ZONE; TIMETZ
+B40,Time with time zone,YB,YugabyteDb,N,time with zone,agree: supported,TIME WITH TIME ZONE; TIMETZ; TIME(6) WITH TIME ZONE
+B40,Time with time zone,TIDB,TiDb,X,time with zone,agree: unsupported,
+B40,Time with time zone,FLAT,FlatFile,?,time with zone,unverified (workbook),TIME WITH TIME ZONE; TIME(6) WITH TIME ZONE
+B41,Timestamp without time zone,DUCK,DuckDB,N,timestamp without zone,agree: supported,TIMESTAMP(6); DATETIME; DATETIME(6)
+B41,Timestamp without time zone,YB,YugabyteDb,N,timestamp without zone,agree: supported,TIMESTAMP(6); TIMESTAMP
+B41,Timestamp without time zone,TIDB,TiDb,N,timestamp without zone,agree: supported,TIMESTAMP(6); DATETIME; DATETIME(6)
+B41,Timestamp without time zone,FLAT,FlatFile,?,timestamp without zone,unverified (workbook),TIMESTAMP(6); TIMESTAMP
+B42,Timestamp with time zone (offset/zone retained),DUCK,DuckDB,X,timestamp with zone,"workbook unsupported, live accepted",TIMESTAMP WITH TIME ZONE; TIMESTAMPTZ
+B42,Timestamp with time zone (offset/zone retained),YB,YugabyteDb,X,timestamp with zone,"workbook unsupported, live accepted",TIMESTAMP WITH TIME ZONE; TIMESTAMPTZ; TIMESTAMP(6) WITH TIME ZONE
+B42,Timestamp with time zone (offset/zone retained),TIDB,TiDb,X,timestamp with zone,agree: unsupported,
+B42,Timestamp with time zone (offset/zone retained),FLAT,FlatFile,?,timestamp with zone,unverified (workbook),TIMESTAMP WITH TIME ZONE; TIMESTAMP(6) WITH TIME ZONE
+B44,Interval year–month,DUCK,DuckDB,N,year-month interval,agree: supported,INTERVAL YEAR TO MONTH; INTERVAL
+B44,Interval year–month,YB,YugabyteDb,N,year-month interval,agree: supported,INTERVAL YEAR TO MONTH; INTERVAL
+B44,Interval year–month,TIDB,TiDb,X,year-month interval,agree: unsupported,
+B44,Interval year–month,FLAT,FlatFile,?,year-month interval,unverified (workbook),
+B45,Interval day–second,DUCK,DuckDB,N,day-time interval,agree: supported,INTERVAL DAY TO SECOND; INTERVAL
+B45,Interval day–second,YB,YugabyteDb,N,day-time interval,agree: supported,INTERVAL DAY TO SECOND(6); INTERVAL DAY TO SECOND; INTERVAL
+B45,Interval day–second,TIDB,TiDb,X,day-time interval,agree: unsupported,
+B45,Interval day–second,FLAT,FlatFile,?,day-time interval,unverified (workbook),
+B46,Year,DUCK,DuckDB,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B46,Year,YB,YugabyteDb,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B46,Year,TIDB,TiDb,N,year-only,agree: supported,YEAR; SMALLINT
+B46,Year,FLAT,FlatFile,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B47,Row version (not a time),DUCK,DuckDB,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B47,Row version (not a time),YB,YugabyteDb,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B47,Row version (not a time),TIDB,TiDb,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B47,Row version (not a time),FLAT,FlatFile,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B48,UUID / GUID,DUCK,DuckDB,N,UUID / GUID,agree: supported,UUID; CHAR(36)
+B48,UUID / GUID,YB,YugabyteDb,N,UUID / GUID,agree: supported,UUID; CHAR(36)
+B48,UUID / GUID,TIDB,TiDb,X,UUID / GUID,"workbook unsupported, live accepted",CHAR(36); BINARY(16)
+B48,UUID / GUID,FLAT,FlatFile,X,UUID / GUID,"workbook unsupported, live accepted",UUID; CHAR(36); BINARY(16)
+B51,IP address / CIDR,DUCK,DuckDB,E,IP address,agree: supported,INET; VARCHAR(45)
+B51,IP address / CIDR,YB,YugabyteDb,N,IP address,agree: supported,INET; VARCHAR(45)
+B51,IP address / CIDR,TIDB,TiDb,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B51,IP address / CIDR,FLAT,FlatFile,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B52,MAC address,DUCK,DuckDB,X,MAC address,agree: unsupported,
+B52,MAC address,YB,YugabyteDb,N,MAC address,agree: supported,MACADDR; MACADDR8
+B52,MAC address,TIDB,TiDb,X,MAC address,agree: unsupported,
+B52,MAC address,FLAT,FlatFile,X,MAC address,agree: unsupported,
+B53,JSON (text-preserving),DUCK,DuckDB,E,JSON text / JSON value,agree: supported,JSON
+B53,JSON (text-preserving),YB,YugabyteDb,N,JSON text / JSON value,agree: supported,JSON; JSONB
+B53,JSON (text-preserving),TIDB,TiDb,N,JSON text / JSON value,agree: supported,JSON
+B53,JSON (text-preserving),FLAT,FlatFile,?,JSON text / JSON value,unverified (workbook),JSON
+B54,Binary JSON,DUCK,DuckDB,X,native binary JSON,"workbook unsupported, live accepted",JSON
+B54,Binary JSON,YB,YugabyteDb,N,native binary JSON,agree: supported,JSONB; JSON
+B54,Binary JSON,TIDB,TiDb,X,native binary JSON,"workbook unsupported, live accepted",JSON
+B54,Binary JSON,FLAT,FlatFile,X,native binary JSON,"workbook unsupported, live accepted",JSON
+B55,BSON,DUCK,DuckDB,X,BSON,"workbook unsupported, live accepted",BYTEA
+B55,BSON,YB,YugabyteDb,X,BSON,"workbook unsupported, live accepted",BYTEA
+B55,BSON,TIDB,TiDb,X,BSON,agree: unsupported,
+B55,BSON,FLAT,FlatFile,X,BSON,agree: unsupported,
+B56,XML,DUCK,DuckDB,X,XML,agree: unsupported,
+B56,XML,YB,YugabyteDb,X,XML,"workbook unsupported, live accepted",XML
+B56,XML,TIDB,TiDb,X,XML,agree: unsupported,
+B56,XML,FLAT,FlatFile,?,XML,unverified (workbook),CLOB
+B57,Variant / dynamic,DUCK,DuckDB,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,YB,YugabyteDb,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,TIDB,TiDb,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,FLAT,FlatFile,X,variant / dynamic value,agree: unsupported,
+B58,Array,DUCK,DuckDB,N,SQL array,agree: supported,INTEGER ARRAY; INTEGER[]; INT[]
+B58,Array,YB,YugabyteDb,N,SQL array,agree: supported,INTEGER ARRAY; INTEGER[]; INT[]
+B58,Array,TIDB,TiDb,X,SQL array,agree: unsupported,
+B58,Array,FLAT,FlatFile,?,SQL array,unverified (workbook),
+B62,Enumeration,DUCK,DuckDB,N,enumeration,agree: supported,"ENUM('a','b')"
+B62,Enumeration,YB,YugabyteDb,N,enumeration,"workbook supported, live refused all candidates",
+B62,Enumeration,TIDB,TiDb,N,enumeration,agree: supported,"ENUM('a','b')"
+B62,Enumeration,FLAT,FlatFile,X,enumeration,agree: unsupported,
+B63,Multi-valued set,DUCK,DuckDB,X,set-valued enum,agree: unsupported,
+B63,Multi-valued set,YB,YugabyteDb,X,set-valued enum,agree: unsupported,
+B63,Multi-valued set,TIDB,TiDb,N,set-valued enum,agree: supported,"SET('a','b')"
+B63,Multi-valued set,FLAT,FlatFile,X,set-valued enum,agree: unsupported,
+B64,Range,DUCK,DuckDB,X,range,agree: unsupported,
+B64,Range,YB,YugabyteDb,?,range,unverified (workbook),INT4RANGE; INT8RANGE; TSTZRANGE
+B64,Range,TIDB,TiDb,X,range,agree: unsupported,
+B64,Range,FLAT,FlatFile,X,range,agree: unsupported,
+B65,Multirange,DUCK,DuckDB,X,multirange,agree: unsupported,
+B65,Multirange,YB,YugabyteDb,?,multirange,unverified (workbook),INT4MULTIRANGE; INT8MULTIRANGE
+B65,Multirange,TIDB,TiDb,X,multirange,agree: unsupported,
+B65,Multirange,FLAT,FlatFile,X,multirange,agree: unsupported,
+B66,Domain / distinct type,DUCK,DuckDB,X,user-defined enum / domain,agree: unsupported,
+B66,Domain / distinct type,YB,YugabyteDb,N,user-defined enum / domain,"workbook supported, live refused all candidates",
+B66,Domain / distinct type,TIDB,TiDb,X,user-defined enum / domain,agree: unsupported,
+B66,Domain / distinct type,FLAT,FlatFile,?,user-defined enum / domain,unverified (workbook),
+B67,Opaque / CLR / extension base type,DUCK,DuckDB,X,opaque / special database type,agree: unsupported,
+B67,Opaque / CLR / extension base type,YB,YugabyteDb,X,opaque / special database type,agree: unsupported,
+B67,Opaque / CLR / extension base type,TIDB,TiDb,X,opaque / special database type,agree: unsupported,
+B67,Opaque / CLR / extension base type,FLAT,FlatFile,X,opaque / special database type,agree: unsupported,
+B68,Planar geometry,DUCK,DuckDB,E,point geometry,"workbook supported, live refused all candidates",
+B68,Planar geometry,YB,YugabyteDb,E,point geometry,agree: supported,POINT
+B68,Planar geometry,TIDB,TiDb,X,point geometry,agree: unsupported,
+B68,Planar geometry,FLAT,FlatFile,X,point geometry,agree: unsupported,
+B69,Geodetic geography,DUCK,DuckDB,X,geography / geodetic,agree: unsupported,
+B69,Geodetic geography,YB,YugabyteDb,E,geography / geodetic,"workbook supported, live refused all candidates",
+B69,Geodetic geography,TIDB,TiDb,X,geography / geodetic,agree: unsupported,
+B69,Geodetic geography,FLAT,FlatFile,X,geography / geodetic,agree: unsupported,
+B71,Vector embedding,DUCK,DuckDB,R,vector embedding,"workbook supported, live refused all candidates",
+B71,Vector embedding,YB,YugabyteDb,E,vector embedding,"workbook supported, live refused all candidates",
+B71,Vector embedding,TIDB,TiDb,V,vector embedding,agree: supported,VECTOR(3); VECTOR
+B71,Vector embedding,FLAT,FlatFile,X,vector embedding,agree: unsupported,
+B72,Full-text document/query,DUCK,DuckDB,X,full-text search vector / query,agree: unsupported,
+B72,Full-text document/query,YB,YugabyteDb,N,full-text search vector / query,agree: supported,TSVECTOR; TSQUERY
+B72,Full-text document/query,TIDB,TiDb,X,full-text search vector / query,agree: unsupported,
+B72,Full-text document/query,FLAT,FlatFile,X,full-text search vector / query,agree: unsupported,
+B73,Hierarchy path,DUCK,DuckDB,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,YB,YugabyteDb,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,TIDB,TiDb,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,FLAT,FlatFile,X,hierarchical path,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,DUCK,DuckDB,X,object identifier / OID,"workbook unsupported, live accepted",OID
+B74,Object id / reg* / xid / lsn / snapshot,YB,YugabyteDb,?,object identifier / OID,unverified (workbook),OID; REGCLASS
+B74,Object id / reg* / xid / lsn / snapshot,TIDB,TiDb,X,object identifier / OID,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,FLAT,FlatFile,X,object identifier / OID,agree: unsupported,
+A26,set-valued enum,DUCK,DuckDB,?,set-valued enum,unverified (workbook),
+A26,set-valued enum,YB,YugabyteDb,?,set-valued enum,unverified (workbook),
+A26,set-valued enum,TIDB,TiDb,N,set-valued enum,agree: supported,"SET('a','b')"
+A26,set-valued enum,FLAT,FlatFile,?,set-valued enum,unverified (workbook),
+A30,legacy long binary,DUCK,DuckDB,?,legacy long binary,unverified (workbook),
+A30,legacy long binary,YB,YugabyteDb,?,legacy long binary,unverified (workbook),
+A30,legacy long binary,TIDB,TiDb,N,legacy long binary,agree: supported,TINYBLOB; MEDIUMBLOB; LONGBLOB
+A30,legacy long binary,FLAT,FlatFile,?,legacy long binary,unverified (workbook),
+A38,second-precision datetime,DUCK,DuckDB,?,second-precision datetime,unverified (workbook),DATETIME(0); DATETIME; DATE
+A38,second-precision datetime,YB,YugabyteDb,?,second-precision datetime,unverified (workbook),DATE
+A38,second-precision datetime,TIDB,TiDb,?,second-precision datetime,unverified (workbook),DATETIME(0); DATETIME; DATE
+A38,second-precision datetime,FLAT,FlatFile,?,second-precision datetime,unverified (workbook),DATE
+A42,generic interval,DUCK,DuckDB,N,year-month interval,agree: supported,INTERVAL YEAR TO MONTH; INTERVAL
+A42,generic interval,YB,YugabyteDb,?,year-month interval,unverified (workbook),INTERVAL YEAR TO MONTH; INTERVAL
+A42,generic interval,TIDB,TiDb,?,year-month interval,unverified (workbook),
+A42,generic interval,FLAT,FlatFile,?,year-month interval,unverified (workbook),
+A45,object identifier / OID,DUCK,DuckDB,?,object identifier / OID,unverified (workbook),OID
+A45,object identifier / OID,YB,YugabyteDb,?,object identifier / OID,unverified (workbook),OID; REGCLASS
+A45,object identifier / OID,TIDB,TiDb,?,object identifier / OID,unverified (workbook),
+A45,object identifier / OID,FLAT,FlatFile,?,object identifier / OID,unverified (workbook),
+A46,transaction ID,DUCK,DuckDB,?,transaction ID,unverified (workbook),
+A46,transaction ID,YB,YugabyteDb,?,transaction ID,unverified (workbook),XID; XID8
+A46,transaction ID,TIDB,TiDb,?,transaction ID,unverified (workbook),
+A46,transaction ID,FLAT,FlatFile,?,transaction ID,unverified (workbook),
+A47,WAL / log position,DUCK,DuckDB,?,WAL / log position,unverified (workbook),
+A47,WAL / log position,YB,YugabyteDb,?,WAL / log position,unverified (workbook),PG_LSN
+A47,WAL / log position,TIDB,TiDb,?,WAL / log position,unverified (workbook),
+A47,WAL / log position,FLAT,FlatFile,?,WAL / log position,unverified (workbook),
+A53,IP address,DUCK,DuckDB,?,IP address,unverified (workbook),INET; VARCHAR(45)
+A53,IP address,YB,YugabyteDb,?,IP address,unverified (workbook),INET; VARCHAR(45)
+A53,IP address,TIDB,TiDb,?,IP address,unverified (workbook),VARCHAR(45)
+A53,IP address,FLAT,FlatFile,?,IP address,unverified (workbook),VARCHAR(45)
+A54,IP network / CIDR,DUCK,DuckDB,?,IP network / CIDR,unverified (workbook),INET
+A54,IP network / CIDR,YB,YugabyteDb,?,IP network / CIDR,unverified (workbook),CIDR; INET
+A54,IP network / CIDR,TIDB,TiDb,?,IP network / CIDR,unverified (workbook),
+A54,IP network / CIDR,FLAT,FlatFile,?,IP network / CIDR,unverified (workbook),
+A56,point geometry,DUCK,DuckDB,E,point geometry,"workbook supported, live refused all candidates",
+A56,point geometry,YB,YugabyteDb,?,point geometry,unverified (workbook),POINT
+A56,point geometry,TIDB,TiDb,X,point geometry,agree: unsupported,
+A56,point geometry,FLAT,FlatFile,?,point geometry,unverified (workbook),
+A57,line / linestring geometry,DUCK,DuckDB,E,line / linestring geometry,"workbook supported, live refused all candidates",
+A57,line / linestring geometry,YB,YugabyteDb,?,line / linestring geometry,unverified (workbook),
+A57,line / linestring geometry,TIDB,TiDb,X,line / linestring geometry,agree: unsupported,
+A57,line / linestring geometry,FLAT,FlatFile,?,line / linestring geometry,unverified (workbook),
+A58,polygon geometry,DUCK,DuckDB,E,polygon geometry,"workbook supported, live refused all candidates",
+A58,polygon geometry,YB,YugabyteDb,?,polygon geometry,unverified (workbook),POLYGON
+A58,polygon geometry,TIDB,TiDb,X,polygon geometry,agree: unsupported,
+A58,polygon geometry,FLAT,FlatFile,?,polygon geometry,unverified (workbook),
+A62,fixed-length array,DUCK,DuckDB,N,fixed-length array,agree: supported,INTEGER ARRAY[10]; INTEGER[10]
+A62,fixed-length array,YB,YugabyteDb,A,fixed-length array,agree: supported,INTEGER ARRAY[10]; INTEGER[10]
+A62,fixed-length array,TIDB,TiDb,?,fixed-length array,unverified (workbook),
+A62,fixed-length array,FLAT,FlatFile,?,fixed-length array,unverified (workbook),
+A63,list / multiset / set collection,DUCK,DuckDB,N,list / multiset / set collection,"workbook supported, live refused all candidates",
+A63,list / multiset / set collection,YB,YugabyteDb,A,list / multiset / set collection,"workbook supported, live refused all candidates",
+A63,list / multiset / set collection,TIDB,TiDb,?,list / multiset / set collection,unverified (workbook),
+A63,list / multiset / set collection,FLAT,FlatFile,?,list / multiset / set collection,unverified (workbook),
+A74,opaque / special database type,DUCK,DuckDB,?,opaque / special database type,unverified (workbook),
+A74,opaque / special database type,YB,YugabyteDb,?,opaque / special database type,unverified (workbook),
+A74,opaque / special database type,TIDB,TiDb,?,opaque / special database type,unverified (workbook),
+A74,opaque / special database type,FLAT,FlatFile,?,opaque / special database type,unverified (workbook),
+A76,spatial raster / other extensions,DUCK,DuckDB,?,spatial raster / other extensions,unverified (workbook),
+A76,spatial raster / other extensions,YB,YugabyteDb,E,spatial raster / other extensions,"workbook supported, live refused all candidates",
+A76,spatial raster / other extensions,TIDB,TiDb,?,spatial raster / other extensions,unverified (workbook),
+A76,spatial raster / other extensions,FLAT,FlatFile,?,spatial raster / other extensions,unverified (workbook),
+A77,cursor / table variable,DUCK,DuckDB,?,cursor / table variable,unverified (workbook),
+A77,cursor / table variable,YB,YugabyteDb,?,cursor / table variable,unverified (workbook),REFCURSOR
+A77,cursor / table variable,TIDB,TiDb,?,cursor / table variable,unverified (workbook),
+A77,cursor / table variable,FLAT,FlatFile,?,cursor / table variable,unverified (workbook),
+B01,8-bit signed,SS,SingleStore,N,signed 8-bit,agree: supported,TINYINT; INT1; SMALLINT
+B01,8-bit signed,ASE,SybaseASE,X,signed 8-bit,"workbook unsupported, live accepted",TINYINT; SMALLINT
+B01,8-bit signed,SPAN,Spanner,X,signed 8-bit,agree: unsupported,
+B02,8-bit unsigned,SS,SingleStore,N,unsigned 8-bit,agree: supported,TINYINT UNSIGNED; TINYINT
+B02,8-bit unsigned,ASE,SybaseASE,N,unsigned 8-bit,agree: supported,TINYINT
+B02,8-bit unsigned,SPAN,Spanner,X,unsigned 8-bit,agree: unsupported,
+B03,16-bit signed,SS,SingleStore,N,signed 16-bit,agree: supported,SMALLINT; INT2; INT8
+B03,16-bit signed,ASE,SybaseASE,N,signed 16-bit,agree: supported,SMALLINT
+B03,16-bit signed,SPAN,Spanner,X,signed 16-bit,"workbook unsupported, live accepted",INT8
+B04,16-bit unsigned,SS,SingleStore,N,unsigned 16-bit,agree: supported,SMALLINT UNSIGNED
+B04,16-bit unsigned,ASE,SybaseASE,N,unsigned 16-bit,agree: supported,UNSIGNED SMALLINT
+B04,16-bit unsigned,SPAN,Spanner,X,unsigned 16-bit,agree: unsupported,
+B06,32-bit signed,SS,SingleStore,N,signed 32-bit,agree: supported,INTEGER; INT; INT4
+B06,32-bit signed,ASE,SybaseASE,N,signed 32-bit,agree: supported,INTEGER; INT
+B06,32-bit signed,SPAN,Spanner,A,signed 32-bit,agree: supported,INTEGER; INT; INT8
+B07,32-bit unsigned,SS,SingleStore,N,unsigned 32-bit,agree: supported,INT UNSIGNED; INTEGER UNSIGNED
+B07,32-bit unsigned,ASE,SybaseASE,N,unsigned 32-bit,agree: supported,UNSIGNED INT
+B07,32-bit unsigned,SPAN,Spanner,X,unsigned 32-bit,agree: unsupported,
+B08,64-bit signed,SS,SingleStore,N,signed 64-bit,agree: supported,BIGINT; INT8
+B08,64-bit signed,ASE,SybaseASE,N,signed 64-bit,agree: supported,BIGINT
+B08,64-bit signed,SPAN,Spanner,N,signed 64-bit,agree: supported,BIGINT; INT8
+B09,64-bit unsigned,SS,SingleStore,N,unsigned 64-bit,agree: supported,BIGINT UNSIGNED
+B09,64-bit unsigned,ASE,SybaseASE,N,unsigned 64-bit,agree: supported,UNSIGNED BIGINT
+B09,64-bit unsigned,SPAN,Spanner,X,unsigned 64-bit,agree: unsupported,
+B10,128-bit signed,SS,SingleStore,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B10,128-bit signed,ASE,SybaseASE,X,signed 128-bit,"workbook unsupported, live accepted","NUMERIC(38,0)"
+B10,128-bit signed,SPAN,Spanner,X,signed 128-bit,agree: unsupported,
+B11,128-bit unsigned,SS,SingleStore,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,ASE,SybaseASE,X,unsigned 128-bit,agree: unsupported,
+B11,128-bit unsigned,SPAN,Spanner,X,unsigned 128-bit,agree: unsupported,
+B12,Arbitrary-precision integer,SS,SingleStore,X,arbitrary-size integer,"workbook unsupported, live accepted","DECIMAL(65,0); NUMERIC(38,0); DECIMAL(38,0)"
+B12,Arbitrary-precision integer,ASE,SybaseASE,X,arbitrary-size integer,"workbook unsupported, live accepted","NUMERIC(38,0); DECIMAL(38,0)"
+B12,Arbitrary-precision integer,SPAN,Spanner,X,arbitrary-size integer,agree: unsupported,
+B13,"Identity column (declaration, not a type)",SS,SingleStore,R,auto-increment integer,"workbook supported, live refused all candidates",
+B13,"Identity column (declaration, not a type)",ASE,SybaseASE,R,auto-increment integer,agree: supported,INTEGER IDENTITY
+B13,"Identity column (declaration, not a type)",SPAN,Spanner,?,auto-increment integer,unverified (workbook),INTEGER GENERATED BY DEFAULT AS IDENTITY; SERIAL
+B15,"Fixed-point DECIMAL(p,s)",SS,SingleStore,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",ASE,SybaseASE,N,fixed decimal,agree: supported,"DECIMAL(18,4); NUMERIC(18,4); NUMERIC"
+B15,"Fixed-point DECIMAL(p,s)",SPAN,Spanner,R,fixed decimal,agree: supported,NUMERIC
+B16,Decimal floating point,SS,SingleStore,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,ASE,SybaseASE,X,decimal floating point,agree: unsupported,
+B16,Decimal floating point,SPAN,Spanner,X,decimal floating point,agree: unsupported,
+B17,Money / currency,SS,SingleStore,X,money / currency,agree: unsupported,
+B17,Money / currency,ASE,SybaseASE,N,money / currency,agree: supported,MONEY; SMALLMONEY
+B17,Money / currency,SPAN,Spanner,X,money / currency,agree: unsupported,
+B18,32-bit IEEE float,SS,SingleStore,N,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B18,32-bit IEEE float,ASE,SybaseASE,N,binary float32,agree: supported,REAL; FLOAT(24); FLOAT
+B18,32-bit IEEE float,SPAN,Spanner,V,binary float32,agree: supported,REAL; FLOAT4; FLOAT(24)
+B19,64-bit IEEE double,SS,SingleStore,N,binary float64,agree: supported,DOUBLE PRECISION; DOUBLE; FLOAT8
+B19,64-bit IEEE double,ASE,SybaseASE,N,binary float64,agree: supported,DOUBLE PRECISION; FLOAT
+B19,64-bit IEEE double,SPAN,Spanner,N,binary float64,agree: supported,DOUBLE PRECISION; FLOAT8; FLOAT
+B20,Boolean,SS,SingleStore,A,boolean,agree: supported,BOOLEAN; BOOL; BIT
+B20,Boolean,ASE,SybaseASE,A,boolean,"workbook supported, live refused all candidates",
+B20,Boolean,SPAN,Spanner,N,boolean,agree: supported,BOOLEAN; BOOL
+B21,Fixed-length CHAR(n),SS,SingleStore,N,fixed character,agree: supported,CHAR(10); CHARACTER(10)
+B21,Fixed-length CHAR(n),ASE,SybaseASE,N,fixed character,agree: supported,CHAR(10); CHARACTER(10); NCHAR(10)
+B21,Fixed-length CHAR(n),SPAN,Spanner,X,fixed character,agree: unsupported,
+B22,Variable-length VARCHAR(n),SS,SingleStore,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); NVARCHAR(100)
+B22,Variable-length VARCHAR(n),ASE,SybaseASE,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); NVARCHAR(100)
+B22,Variable-length VARCHAR(n),SPAN,Spanner,N,varying character,agree: supported,VARCHAR(100); CHARACTER VARYING(100); VARCHAR
+B23,Unbounded / long text,SS,SingleStore,N,unbounded text,agree: supported,TEXT; LONGTEXT
+B23,Unbounded / long text,ASE,SybaseASE,N,unbounded text,agree: supported,TEXT; VARCHAR
+B23,Unbounded / long text,SPAN,Spanner,N,unbounded text,agree: supported,TEXT; VARCHAR
+B24,National fixed NCHAR(n),SS,SingleStore,?,national / Unicode character,unverified (workbook),NVARCHAR(100)
+B24,National fixed NCHAR(n),ASE,SybaseASE,N,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B24,National fixed NCHAR(n),SPAN,Spanner,X,national / Unicode character,agree: unsupported,
+B25,National varying NVARCHAR(n),SS,SingleStore,?,national / Unicode character,unverified (workbook),NVARCHAR(100)
+B25,National varying NVARCHAR(n),ASE,SybaseASE,N,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B25,National varying NVARCHAR(n),SPAN,Spanner,X,national / Unicode character,agree: unsupported,
+B26,National / Unicode LOB,SS,SingleStore,X,national / Unicode character,"workbook unsupported, live accepted",NVARCHAR(100)
+B26,National / Unicode LOB,ASE,SybaseASE,N,national / Unicode character,agree: supported,NVARCHAR(100); NCHAR(10); NATIONAL CHAR
+B26,National / Unicode LOB,SPAN,Spanner,X,national / Unicode character,agree: unsupported,
+B32,Fixed-length BINARY(n),SS,SingleStore,N,fixed binary,agree: supported,BINARY(16)
+B32,Fixed-length BINARY(n),ASE,SybaseASE,N,fixed binary,agree: supported,BINARY(16)
+B32,Fixed-length BINARY(n),SPAN,Spanner,X,fixed binary,agree: unsupported,
+B33,Variable-length VARBINARY(n),SS,SingleStore,N,varying binary,agree: supported,VARBINARY(16); BLOB
+B33,Variable-length VARBINARY(n),ASE,SybaseASE,N,varying binary,agree: supported,VARBINARY(16); BINARY VARYING(16)
+B33,Variable-length VARBINARY(n),SPAN,Spanner,A,varying binary,agree: supported,BYTEA
+B34,Binary LOB,SS,SingleStore,N,binary LOB,agree: supported,BLOB; LONGBLOB; BINARY
+B34,Binary LOB,ASE,SybaseASE,N,binary LOB,agree: supported,IMAGE; BINARY
+B34,Binary LOB,SPAN,Spanner,N,binary LOB,agree: supported,BYTEA
+B37,Bit string BIT(n) / BIT VARYING,SS,SingleStore,N,bit / bitstring,agree: supported,BIT(8); BIT
+B37,Bit string BIT(n) / BIT VARYING,ASE,SybaseASE,X,bit / bitstring,agree: unsupported,
+B37,Bit string BIT(n) / BIT VARYING,SPAN,Spanner,X,bit / bitstring,agree: unsupported,
+B38,Date only,SS,SingleStore,N,calendar date,agree: supported,DATE
+B38,Date only,ASE,SybaseASE,N,calendar date,agree: supported,DATE
+B38,Date only,SPAN,Spanner,N,calendar date,agree: supported,DATE
+B39,Time of day,SS,SingleStore,N,time without zone,agree: supported,TIME(6); TIME
+B39,Time of day,ASE,SybaseASE,N,time without zone,agree: supported,TIME
+B39,Time of day,SPAN,Spanner,X,time without zone,agree: unsupported,
+B40,Time with time zone,SS,SingleStore,X,time with zone,agree: unsupported,
+B40,Time with time zone,ASE,SybaseASE,X,time with zone,agree: unsupported,
+B40,Time with time zone,SPAN,Spanner,X,time with zone,agree: unsupported,
+B41,Timestamp without time zone,SS,SingleStore,N,timestamp without zone,agree: supported,TIMESTAMP(6); DATETIME; DATETIME(6)
+B41,Timestamp without time zone,ASE,SybaseASE,N,timestamp without zone,agree: supported,DATETIME
+B41,Timestamp without time zone,SPAN,Spanner,X,timestamp without zone,agree: unsupported,
+B42,Timestamp with time zone (offset/zone retained),SS,SingleStore,X,timestamp with zone,agree: unsupported,
+B42,Timestamp with time zone (offset/zone retained),ASE,SybaseASE,X,timestamp with zone,agree: unsupported,
+B42,Timestamp with time zone (offset/zone retained),SPAN,Spanner,X,timestamp with zone,"workbook unsupported, live accepted",TIMESTAMP WITH TIME ZONE; TIMESTAMPTZ
+B44,Interval year–month,SS,SingleStore,X,year-month interval,agree: unsupported,
+B44,Interval year–month,ASE,SybaseASE,X,year-month interval,agree: unsupported,
+B44,Interval year–month,SPAN,Spanner,R,year-month interval,"workbook supported, live refused all candidates",
+B45,Interval day–second,SS,SingleStore,X,day-time interval,agree: unsupported,
+B45,Interval day–second,ASE,SybaseASE,X,day-time interval,agree: unsupported,
+B45,Interval day–second,SPAN,Spanner,R,day-time interval,"workbook supported, live refused all candidates",
+B46,Year,SS,SingleStore,N,year-only,agree: supported,YEAR; SMALLINT
+B46,Year,ASE,SybaseASE,X,year-only,"workbook unsupported, live accepted",SMALLINT
+B46,Year,SPAN,Spanner,X,year-only,agree: unsupported,
+B47,Row version (not a time),SS,SingleStore,X,rowversion / timestamp token,"workbook unsupported, live accepted",TIMESTAMP
+B47,Row version (not a time),ASE,SybaseASE,N,rowversion / timestamp token,"workbook supported, live refused all candidates",
+B47,Row version (not a time),SPAN,Spanner,X,rowversion / timestamp token,agree: unsupported,
+B48,UUID / GUID,SS,SingleStore,X,UUID / GUID,"workbook unsupported, live accepted",CHAR(36); BINARY(16)
+B48,UUID / GUID,ASE,SybaseASE,X,UUID / GUID,"workbook unsupported, live accepted",CHAR(36); BINARY(16)
+B48,UUID / GUID,SPAN,Spanner,V,UUID / GUID,agree: supported,UUID
+B51,IP address / CIDR,SS,SingleStore,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B51,IP address / CIDR,ASE,SybaseASE,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B51,IP address / CIDR,SPAN,Spanner,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+B52,MAC address,SS,SingleStore,X,MAC address,agree: unsupported,
+B52,MAC address,ASE,SybaseASE,X,MAC address,agree: unsupported,
+B52,MAC address,SPAN,Spanner,X,MAC address,agree: unsupported,
+B53,JSON (text-preserving),SS,SingleStore,N,JSON text / JSON value,agree: supported,JSON
+B53,JSON (text-preserving),ASE,SybaseASE,X,JSON text / JSON value,agree: unsupported,
+B53,JSON (text-preserving),SPAN,Spanner,X,JSON text / JSON value,"workbook unsupported, live accepted",JSONB
+B54,Binary JSON,SS,SingleStore,X,native binary JSON,"workbook unsupported, live accepted",BSON; JSON
+B54,Binary JSON,ASE,SybaseASE,X,native binary JSON,agree: unsupported,
+B54,Binary JSON,SPAN,Spanner,N,native binary JSON,agree: supported,JSONB
+B55,BSON,SS,SingleStore,V,BSON,agree: supported,BSON
+B55,BSON,ASE,SybaseASE,X,BSON,agree: unsupported,
+B55,BSON,SPAN,Spanner,X,BSON,"workbook unsupported, live accepted",BYTEA
+B56,XML,SS,SingleStore,X,XML,agree: unsupported,
+B56,XML,ASE,SybaseASE,R,XML,"workbook supported, live refused all candidates",
+B56,XML,SPAN,Spanner,X,XML,agree: unsupported,
+B57,Variant / dynamic,SS,SingleStore,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,ASE,SybaseASE,X,variant / dynamic value,agree: unsupported,
+B57,Variant / dynamic,SPAN,Spanner,X,variant / dynamic value,agree: unsupported,
+B58,Array,SS,SingleStore,X,SQL array,agree: unsupported,
+B58,Array,ASE,SybaseASE,X,SQL array,agree: unsupported,
+B58,Array,SPAN,Spanner,N,SQL array,agree: supported,INTEGER ARRAY; INTEGER[]; INT[]
+B62,Enumeration,SS,SingleStore,N,enumeration,agree: supported,"ENUM('a','b')"
+B62,Enumeration,ASE,SybaseASE,X,enumeration,agree: unsupported,
+B62,Enumeration,SPAN,Spanner,X,enumeration,agree: unsupported,
+B63,Multi-valued set,SS,SingleStore,N,set-valued enum,agree: supported,"SET('a','b')"
+B63,Multi-valued set,ASE,SybaseASE,X,set-valued enum,agree: unsupported,
+B63,Multi-valued set,SPAN,Spanner,X,set-valued enum,agree: unsupported,
+B64,Range,SS,SingleStore,X,range,agree: unsupported,
+B64,Range,ASE,SybaseASE,X,range,agree: unsupported,
+B64,Range,SPAN,Spanner,X,range,agree: unsupported,
+B65,Multirange,SS,SingleStore,X,multirange,agree: unsupported,
+B65,Multirange,ASE,SybaseASE,X,multirange,agree: unsupported,
+B65,Multirange,SPAN,Spanner,X,multirange,agree: unsupported,
+B66,Domain / distinct type,SS,SingleStore,X,user-defined enum / domain,agree: unsupported,
+B66,Domain / distinct type,ASE,SybaseASE,X,user-defined enum / domain,agree: unsupported,
+B66,Domain / distinct type,SPAN,Spanner,X,user-defined enum / domain,agree: unsupported,
+B67,Opaque / CLR / extension base type,SS,SingleStore,X,opaque / special database type,agree: unsupported,
+B67,Opaque / CLR / extension base type,ASE,SybaseASE,X,opaque / special database type,agree: unsupported,
+B67,Opaque / CLR / extension base type,SPAN,Spanner,X,opaque / special database type,agree: unsupported,
+B68,Planar geometry,SS,SingleStore,X,point geometry,agree: unsupported,
+B68,Planar geometry,ASE,SybaseASE,X,point geometry,agree: unsupported,
+B68,Planar geometry,SPAN,Spanner,X,point geometry,agree: unsupported,
+B69,Geodetic geography,SS,SingleStore,N,geography / geodetic,"workbook supported, live refused all candidates",
+B69,Geodetic geography,ASE,SybaseASE,X,geography / geodetic,agree: unsupported,
+B69,Geodetic geography,SPAN,Spanner,X,geography / geodetic,agree: unsupported,
+B71,Vector embedding,SS,SingleStore,V,vector embedding,agree: supported,VECTOR(3)
+B71,Vector embedding,ASE,SybaseASE,X,vector embedding,agree: unsupported,
+B71,Vector embedding,SPAN,Spanner,X,vector embedding,agree: unsupported,
+B72,Full-text document/query,SS,SingleStore,X,full-text search vector / query,agree: unsupported,
+B72,Full-text document/query,ASE,SybaseASE,X,full-text search vector / query,agree: unsupported,
+B72,Full-text document/query,SPAN,Spanner,X,full-text search vector / query,agree: unsupported,
+B73,Hierarchy path,SS,SingleStore,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,ASE,SybaseASE,X,hierarchical path,agree: unsupported,
+B73,Hierarchy path,SPAN,Spanner,X,hierarchical path,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,SS,SingleStore,X,object identifier / OID,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,ASE,SybaseASE,X,object identifier / OID,agree: unsupported,
+B74,Object id / reg* / xid / lsn / snapshot,SPAN,Spanner,X,object identifier / OID,agree: unsupported,
+A26,set-valued enum,SS,SingleStore,N,set-valued enum,agree: supported,"SET('a','b')"
+A26,set-valued enum,ASE,SybaseASE,?,set-valued enum,unverified (workbook),
+A26,set-valued enum,SPAN,Spanner,?,set-valued enum,unverified (workbook),
+A30,legacy long binary,SS,SingleStore,N,legacy long binary,agree: supported,TINYBLOB; MEDIUMBLOB; LONGBLOB
+A30,legacy long binary,ASE,SybaseASE,N,legacy long binary,agree: supported,IMAGE
+A30,legacy long binary,SPAN,Spanner,?,legacy long binary,unverified (workbook),
+A38,second-precision datetime,SS,SingleStore,?,second-precision datetime,unverified (workbook),DATETIME(0); DATETIME; DATE
+A38,second-precision datetime,ASE,SybaseASE,A,second-precision datetime,agree: supported,SMALLDATETIME; DATETIME; DATE
+A38,second-precision datetime,SPAN,Spanner,?,second-precision datetime,unverified (workbook),DATE
+A42,generic interval,SS,SingleStore,?,year-month interval,unverified (workbook),
+A42,generic interval,ASE,SybaseASE,?,year-month interval,unverified (workbook),
+A42,generic interval,SPAN,Spanner,A,year-month interval,"workbook supported, live refused all candidates",
+A45,object identifier / OID,SS,SingleStore,?,object identifier / OID,unverified (workbook),
+A45,object identifier / OID,ASE,SybaseASE,?,object identifier / OID,unverified (workbook),
+A45,object identifier / OID,SPAN,Spanner,X,object identifier / OID,agree: unsupported,
+A46,transaction ID,SS,SingleStore,?,transaction ID,unverified (workbook),
+A46,transaction ID,ASE,SybaseASE,?,transaction ID,unverified (workbook),
+A46,transaction ID,SPAN,Spanner,X,transaction ID,agree: unsupported,
+A47,WAL / log position,SS,SingleStore,?,WAL / log position,unverified (workbook),
+A47,WAL / log position,ASE,SybaseASE,?,WAL / log position,unverified (workbook),
+A47,WAL / log position,SPAN,Spanner,X,WAL / log position,agree: unsupported,
+A53,IP address,SS,SingleStore,?,IP address,unverified (workbook),VARCHAR(45)
+A53,IP address,ASE,SybaseASE,?,IP address,unverified (workbook),VARCHAR(45)
+A53,IP address,SPAN,Spanner,X,IP address,"workbook unsupported, live accepted",VARCHAR(45)
+A54,IP network / CIDR,SS,SingleStore,?,IP network / CIDR,unverified (workbook),
+A54,IP network / CIDR,ASE,SybaseASE,?,IP network / CIDR,unverified (workbook),
+A54,IP network / CIDR,SPAN,Spanner,X,IP network / CIDR,agree: unsupported,
+A56,point geometry,SS,SingleStore,N,point geometry,"workbook supported, live refused all candidates",
+A56,point geometry,ASE,SybaseASE,N,point geometry,"workbook supported, live refused all candidates",
+A56,point geometry,SPAN,Spanner,X,point geometry,agree: unsupported,
+A57,line / linestring geometry,SS,SingleStore,N,line / linestring geometry,"workbook supported, live refused all candidates",
+A57,line / linestring geometry,ASE,SybaseASE,N,line / linestring geometry,"workbook supported, live refused all candidates",
+A57,line / linestring geometry,SPAN,Spanner,X,line / linestring geometry,agree: unsupported,
+A58,polygon geometry,SS,SingleStore,N,polygon geometry,"workbook supported, live refused all candidates",
+A58,polygon geometry,ASE,SybaseASE,N,polygon geometry,"workbook supported, live refused all candidates",
+A58,polygon geometry,SPAN,Spanner,X,polygon geometry,agree: unsupported,
+A62,fixed-length array,SS,SingleStore,?,fixed-length array,unverified (workbook),
+A62,fixed-length array,ASE,SybaseASE,?,fixed-length array,unverified (workbook),
+A62,fixed-length array,SPAN,Spanner,X,fixed-length array,"workbook unsupported, live accepted",INTEGER ARRAY[10]; INTEGER[10]
+A63,list / multiset / set collection,SS,SingleStore,?,list / multiset / set collection,unverified (workbook),
+A63,list / multiset / set collection,ASE,SybaseASE,?,list / multiset / set collection,unverified (workbook),
+A63,list / multiset / set collection,SPAN,Spanner,A,list / multiset / set collection,"workbook supported, live refused all candidates",
+A74,opaque / special database type,SS,SingleStore,?,opaque / special database type,unverified (workbook),
+A74,opaque / special database type,ASE,SybaseASE,N,opaque / special database type,"workbook supported, live refused all candidates",
+A74,opaque / special database type,SPAN,Spanner,?,opaque / special database type,unverified (workbook),
+A76,spatial raster / other extensions,SS,SingleStore,?,spatial raster / other extensions,unverified (workbook),
+A76,spatial raster / other extensions,ASE,SybaseASE,?,spatial raster / other extensions,unverified (workbook),
+A76,spatial raster / other extensions,SPAN,Spanner,E,spatial raster / other extensions,"workbook supported, live refused all candidates",
+A77,cursor / table variable,SS,SingleStore,?,cursor / table variable,unverified (workbook),
+A77,cursor / table variable,ASE,SybaseASE,A,cursor / table variable,"workbook supported, live refused all candidates",
+A77,cursor / table variable,SPAN,Spanner,?,cursor / table variable,unverified (workbook),

@@ -63,10 +63,12 @@ namespace pengdows.crud.Tests
         }
 
         [Fact]
-        public void TryConvertFromProvider_Invalid_ReturnsFalse()
+        public void TryConvertFromProvider_Invalid_ThrowsWithoutEchoingTheValue()
         {
             var converter = new PostgreSqlRangeConverter<int>();
-            Assert.False(converter.TryConvertFromProvider("not-a-range", SupportedDatabase.PostgreSql, out _));
+            var ex = Assert.Throws<FormatException>(() =>
+                converter.TryConvertFromProvider("not-a-range", SupportedDatabase.PostgreSql, out _));
+            Assert.DoesNotContain("not-a-range", ex.Message, StringComparison.Ordinal);
         }
     }
 }

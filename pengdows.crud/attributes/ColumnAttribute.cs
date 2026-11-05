@@ -80,4 +80,15 @@ public sealed class ColumnAttribute : Attribute
     /// Lower values appear first in SELECT statements and parameter lists.
     /// </remarks>
     public int Ordinal { get; set; }
+
+    /// <summary>
+    /// Gets or sets the column's native database type when a CLR type cannot say it: a decimal is NUMERIC or DECFLOAT,
+    /// a string is text or xml or a PostgreSQL vector. A dialect that sends the value as text casts it to this type in the
+    /// statement (Firebird: <c>CAST(CAST(p AS VARCHAR(100)) AS DECFLOAT)</c>). Null leaves the column as its DbType says.
+    /// </summary>
+    /// <remarks>
+    /// The text must be a type name the database accepts in a CAST (for example <c>DECFLOAT</c> or <c>NUMERIC(38,0)</c>).
+    /// It is written into the SQL as given, so it must come from the entity's own code, never from input.
+    /// </remarks>
+    public string? NativeType { get; set; }
 }

@@ -17,6 +17,9 @@
 //   MySql.Data appends SELECT LAST_INSERT_ID() as a compound statement.
 // =============================================================================
 
+using pengdows.crud.@internal;
+using pengdows.crud;
+using System.Linq.Expressions;
 using System.Collections.Concurrent;
 using System.Data;
 using System.Data.Common;
@@ -57,6 +60,12 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class MySqlDialect : SqlDialect
 {
+
+    // A fixed-width BIT(n) column stores an integer: the bit text is read as base 2, which makes the number the column keeps.
+    internal override string? NativeTypeArgument(string parameterMarker, string nativeType) =>
+        nativeType.StartsWith("BIT(", StringComparison.OrdinalIgnoreCase)
+            ? $"CONV({parameterMarker}, 2, 10) + 0"
+            : null;
     private static readonly Regex AuroraBanner =
         new(@"^(\d+)\.(\d+)\.mysql_aurora\.(\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
@@ -220,6 +229,14 @@ internal class MySqlDialect : SqlDialect
     // ("... near ''13:45:30.000000', time '6:00:01.000000')'", confirmed live; MySQL, MariaDB and
     // TiDB accept it), so a time of day binds there as text (TYPE-001).
     private bool BindsTimeAsText => DatabaseType == SupportedDatabase.SingleStore;
+
+    // SingleStore's driver (MySqlConnector) has no parameter type for a BigInteger or Int128; the exact text is bound.
+    // The MySQL family has no 128-bit or arbitrary-size integer parameter (MySqlConnector refuses a BigInteger, TiDB
+    // reports "unknown field type 242"); the decimal text is bound and stored in its DECIMAL column without loss.
+    internal override bool BindsWideIntegersAsText => true;
+
+    // MySqlConnector cannot return a DECIMAL wider than decimal as a number: the digits are selected as text.
+    internal override string WideIntegerTextCast(string columnReference) => $"CAST({columnReference} AS CHAR)";
 
     protected override DbType RemapDbType(DbType type) => type switch
     {
@@ -580,7 +597,8 @@ internal class MySqlDialect : SqlDialect
         exception.GetType().Name == "MySqlConversionException";
 
     // SingleStore's VECTOR takes a JSON array as text; MySqlConnector refuses a float[] (TYPE-002).
-    internal override bool BindsVectorsAsText => DatabaseType == SupportedDatabase.SingleStore;
+    // SingleStore and TiDB take a VECTOR as its bracketed text (and read the text back), not as a parameter.
+    internal override bool BindsVectorsAsText => DatabaseType is SupportedDatabase.SingleStore or SupportedDatabase.TiDb;
 
     // Aurora MySQL is a detection label for the MySQL engine (VAR-001): same type mappings.
     internal override SupportedDatabase TypeMappingProvider =>
@@ -884,14 +902,67 @@ internal class MySqlDialect : SqlDialect
         public const string Json = "JSON";
     }
 
+    // A BitArray property is written only to a column declared with its width: without it the bit text would be stored as
+    // characters, a wrong value reported as a success. The write refuses it and names the declaration that fixes it.
+    public override bool RendersColumnArgument(IColumnInfo column) =>
+        IsBitArrayColumn(column) || base.RendersColumnArgument(column);
+
+    public override string RenderColumnArgument(string parameterMarker, IColumnInfo column)
+    {
+        if (IsBitArrayColumn(column) && @internal.BitFieldReader.WidthOf(column.NativeType) is null)
+        {
+            throw new NotSupportedException(
+                $"Column '{column.Name}' is a BitArray with no declared width. Declare its fixed width with NativeType = \"BIT(n)\" " +
+                "(MySQL, MariaDB, TiDB and SingleStore store a bit string as an integer in a BIT(n) column).");
+        }
+
+        return base.RenderColumnArgument(parameterMarker, column);
+    }
+
+    private static bool IsBitArrayColumn(IColumnInfo column) =>
+        column.PropertyInfo?.PropertyType is { } type &&
+        (Nullable.GetUnderlyingType(type) ?? type) == typeof(System.Collections.BitArray);
+
+    // A fixed-width BIT(n) column is read as its integer or its bytes (the driver's form), converted to the declared width.
+    internal static Expression? MySqlNativeColumnRead(Expression reader, Expression ordinal, string nativeType,
+        Type targetType, TypeCoercionOptions? options)
+    {
+        if (@internal.BitFieldReader.WidthOf(nativeType) is not { } width ||
+            (Nullable.GetUnderlyingType(targetType) ?? targetType) != typeof(System.Collections.BitArray))
+        {
+            return null;
+        }
+
+        var raw = Expression.Call(reader, typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetValue), new[] { typeof(int) })!, ordinal);
+        return Expression.Call(@internal.BitFieldReader.ReadMethod, raw, Expression.Constant(width));
+    }
+
+    // A BIT(n) bit string is bound as its 0/1 text: MySqlConnector refuses a BitArray parameter, and CONV reads the text back as
+    // the integer the fixed-width column keeps.
+    internal static void RegisterBitStringMapping(pengdows.crud.types.AdvancedTypeRegistry registry, SupportedDatabase database) =>
+        registry.RegisterMapping<System.Collections.BitArray>(database, new ProviderTypeMapping
+        {
+            DbType = DbType.String,
+            ConfigureParameter = (param, value) =>
+            {
+                param.DbType = DbType.String;
+                if (value is System.Collections.BitArray bits)
+                {
+                    param.Value = @internal.BitStringFormat.Format(bits);
+                }
+            }
+        });
+
     internal static DatabaseTraits CreateMySqlTraits() =>
         new(SupportedDatabase.MySql, MySqlFamilyExceptionTranslator)
         {
+            NativeColumnRead = MySqlNativeColumnRead,
             SpatialFormat = SpatialWireFormat.LittleEndianSridPrefixedWkb,
             RegisterTypeMappings = registry =>
             {
                 RegisterJsonMapping(registry, SupportedDatabase.MySql);
                 RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.MySql);
+                RegisterBitStringMapping(registry, SupportedDatabase.MySql);
             }
         };
 
@@ -900,9 +971,13 @@ internal class MySqlDialect : SqlDialect
     internal static DatabaseTraits CreateAuroraMySqlTraits() =>
         new(SupportedDatabase.AuroraMySql, MySqlFamilyExceptionTranslator)
         {
+            NativeColumnRead = MySqlNativeColumnRead,
             SpatialFormat = SpatialWireFormat.LittleEndianSridPrefixedWkb,
             RegisterTypeMappings = registry =>
-                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.AuroraMySql)
+            {
+                RegisterInternalFormatSpatialMappings(registry, SupportedDatabase.AuroraMySql);
+                RegisterBitStringMapping(registry, SupportedDatabase.AuroraMySql);
+            }
         };
 
     // SingleStore: GEOGRAPHY/GEOGRAPHYPOINT take WKT text (TYPE-002), not MySQL's internal format,
@@ -910,7 +985,10 @@ internal class MySqlDialect : SqlDialect
     internal static DatabaseTraits CreateSingleStoreTraits() =>
         new(SupportedDatabase.SingleStore, MySqlFamilyExceptionTranslator)
         {
+            NativeColumnRead = MySqlNativeColumnRead,
             SpatialFormat = SpatialWireFormat.WellKnownText,
+            // A BSON column returns the binary document: read as its JSON.
+            BinaryJsonIsBson = true,
             RegisterTypeMappings = registry =>
             {
                 var textSpatial = new ProviderTypeMapping
@@ -918,8 +996,16 @@ internal class MySqlDialect : SqlDialect
                     DbType = DbType.String,
                     ConfigureParameter = (param, value) => param.DbType = DbType.String
                 };
-                registry.RegisterMapping<Geometry>(SupportedDatabase.SingleStore, textSpatial);
+                // SingleStore has no GEOMETRY type, and its GEOGRAPHY is WGS 84 only: a geometry's SRID cannot be kept there,
+                // so a geometry is refused rather than stored without it.
+                registry.RegisterMapping<Geometry>(SupportedDatabase.SingleStore, new ProviderTypeMapping
+                {
+                    DbType = DbType.String,
+                    ConfigureParameter = (param, value) => throw new NotSupportedException(
+                        "SingleStore has no GEOMETRY type, and its GEOGRAPHY is WGS 84 only: a geometry's SRID cannot be stored. Use Geography.")
+                });
                 registry.RegisterMapping<Geography>(SupportedDatabase.SingleStore, textSpatial);
+                RegisterBitStringMapping(registry, SupportedDatabase.SingleStore);
             },
             RegisterCoercions = registry =>
                 registry.Register(SupportedDatabase.SingleStore, new PackedFloat32VectorCoercion())

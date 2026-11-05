@@ -147,7 +147,8 @@ internal static class ProviderValueFieldReader
     public static T[]? ReadCollectionLiteralOrNull<T>(IDataRecord record, int ordinal)
     {
         var stored = record.GetValue(ordinal);
-        return stored is DBNull ? null : CollectionLiteralFormat.Parse<T>(SingleReadColumns.StringFromValue(stored, null));
+        var text = SingleReadColumns.StringFromValue(stored, null);
+        return stored is DBNull || text is null ? null : CollectionLiteralFormat.Parse<T>(text);
     }
 
     internal static readonly MethodInfo ReadCollectionLiteralOrNullDefinition =

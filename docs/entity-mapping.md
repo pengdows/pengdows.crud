@@ -91,6 +91,24 @@ property left at the default `0` participates in ordering by discovery order (de
 interleaved after any explicitly-ordinaled columns — leave `ordinal` unset unless you specifically
 need to override the default column order (e.g. matching a legacy schema's physical column order).
 
+## `NativeType` on `[Column]`
+
+`[Column(name, DbType, NativeType = "...")]` declares the column's native database type when the CLR type cannot say
+it: a `decimal` is `NUMERIC` or `DECFLOAT`, a `string` is text, `xml` or a PostgreSQL vector. It is a property of the
+attribute (not a separate attribute), so the summary matrix above is unchanged.
+
+What a dialect does with it:
+
+| Database | `NativeType` | Effect |
+|---|---|---|
+| PostgreSQL, YugabyteDB, CockroachDB | `xml`, `pg_lsn`, `tsquery`, `xid8`, `xid`, `point`, `polygon` | The value goes through `text` and is cast to the type. A text type (`varchar(n)`, `char(n)`, `text`) takes its text unchanged, so a value too long for the column is refused, not cut. |
+| Firebird | `DECFLOAT`, `NUMERIC(p,s)` and other numeric types | The value is sent as text and cast. A text type is written unchanged. A `BigInteger` is cast to `NUMERIC(38,0)`. |
+| MySQL, MariaDB, TiDB, SingleStore | `BIT(n)` | A `BitArray` is written as the integer of its bits and read back with width `n`. A `BitArray` column with no width is refused with an error that names this attribute. |
+| Oracle | `BFILE` | A `string` of `DIRECTORY/file` is written as `BFILENAME(directory, file)`, and read back as its locator in the same form. The directory object is fixed by the application, and the file must exist on the server. A value with no `/` fails the statement (ORA-01476). A NULL stays NULL. |
+
+The library does not check the declared type name. Write it as a type name the database accepts in a `CAST` (for
+example `DECFLOAT` or `NUMERIC(38,0)`), from your own code and never from user input, since it is written into the SQL.
+
 ## `[Id]` vs `[PrimaryKey]`
 
 See CLAUDE.md's "CRITICAL: Pseudo Key (Row ID) vs Primary Key (Business Key)" section for the
@@ -168,7 +186,7 @@ stale version must be refused.
   version (`current + 1`) back into the entity, so reusing the same instance for another update
   works; a failed or conflicting update leaves the entity's version untouched. The write-back happens when the UPDATE succeeds, not at commit: if an enclosing transaction then rolls back, the entity keeps the incremented version while the row keeps the old one, so re-read the row (or restore the version) before retrying. Opaque
   `byte[]`/`RowVersion` versions are DB-generated and are not written back — re-read the row to
-  get the new token. `UpsertAsync`/`BatchUpsertAsync` don't write back (rows affected can't tell
+  get the new token. **Cost:** a versioned `TableGateway` `UpdateAsync` first reads the row by its `[Id]` to compute the changed columns (one extra SELECT per update); an unversioned one sends every updatable column without that read. `PrimaryKeyTableGateway` never pre-reads. get the new token. `UpsertAsync`/`BatchUpsertAsync` don't write back (rows affected can't tell
   an insert from an update). (`UpsertAsync` and `BatchUpsertAsync` on both gateways throw `ConcurrencyConflictException` on a version
   mismatch wherever the upsert syntax can carry the check: MERGE, and ON CONFLICT ... DO UPDATE
   ... WHERE — the PostgreSQL family, SQLite and DuckDB. MySQL/MariaDB/TiDB `ON DUPLICATE KEY

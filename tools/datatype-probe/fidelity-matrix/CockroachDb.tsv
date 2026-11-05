@@ -1,0 +1,75 @@
+CockroachDb	signed 8-bit	signed_8_bit	PASS
+CockroachDb	signed 16-bit	signed_16_bit	PASS
+CockroachDb	signed 32-bit	signed_32_bit	PASS
+CockroachDb	signed 64-bit	signed_64_bit	PASS
+CockroachDb	signed 128-bit	signed_128_bit	PASS
+CockroachDb	unsigned 8-bit	unsigned_8_bit	PASS
+CockroachDb	unsigned 16-bit	unsigned_16_bit	PASS
+CockroachDb	unsigned 32-bit	unsigned_32_bit	PASS
+CockroachDb	unsigned 64-bit	unsigned_64_bit	PASS
+CockroachDb	arbitrary-size integer	arbitrary_integer	PASS
+CockroachDb	binary float32	binary_float32	PASS
+CockroachDb	binary float64	binary_float64	PASS
+CockroachDb	fixed decimal	fixed_decimal	PASS
+CockroachDb	boolean	boolean	PASS
+CockroachDb	bit / bitstring	bit_string	PASS
+CockroachDb	varying character	varying_character	PASS
+CockroachDb	unbounded text	unbounded_text	PASS
+CockroachDb	UUID / GUID	uuid	PASS
+CockroachDb	calendar date	calendar_date	PASS
+CockroachDb	time without zone	time_of_day	PASS
+CockroachDb	time without zone	time_span	PASS
+CockroachDb	day-time interval	day_time_interval	PASS
+CockroachDb	timestamp without zone	timestamp	PASS
+CockroachDb	timestamp with zone	timestamp_with_zone	PASS
+CockroachDb	binary LOB	binary	PASS
+CockroachDb	JSON text / JSON value	json	PASS
+CockroachDb	IP address	ip_address	PASS
+CockroachDb	SQL array	int_array	PASS
+CockroachDb	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: 42704: type "uhugeint" does not exist
+CockroachDb	decimal floating point	decimal_float	UNSUPPORTED refused: 42704: type "decfloat" does not exist
+CockroachDb	money / currency	money	UNSUPPORTED refused: 0A000: at or near ")": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include
+CockroachDb	fixed character	fixed_character	PASS
+CockroachDb	national / Unicode character	national_text	UNSUPPORTED refused: 42601: at or near "(": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	long text LOB	long_text	PASS
+CockroachDb	enumeration	enumeration	UNSUPPORTED refused: 42601: at or near "(": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	set-valued enum	set_value	UNSUPPORTED refused: 42601: at or near "(": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	fixed binary	fixed_binary	UNSUPPORTED refused: 42601: at or near "(": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	varying binary	varying_binary	PASS
+CockroachDb	legacy long binary	legacy_binary	UNSUPPORTED refused: 42601: at or near "raw": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	rowversion / timestamp token	rowversion	PASS
+CockroachDb	local-zone timestamp	local_timestamp	UNSUPPORTED refused: 42601: at or near "with": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	second-precision datetime	second_datetime	PASS
+CockroachDb	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+CockroachDb	year-only	year_only	PASS
+CockroachDb	year-month interval	year_month_interval	PASS
+CockroachDb	generic interval	generic_interval	PASS
+CockroachDb	row identifier / ROWID	row_identifier	PASS
+CockroachDb	object identifier / OID	oid	PASS
+CockroachDb	transaction ID	transaction_id	UNSUPPORTED refused: 42704: type "xid" does not exist
+CockroachDb	WAL / log position	wal_position	PASS
+CockroachDb	native binary JSON	binary_json	PASS
+CockroachDb	XML	xml	UNSUPPORTED refused: server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application
+CockroachDb	BSON	bson	PASS
+CockroachDb	variant / dynamic value	variant	UNSUPPORTED refused: 42704: type "variant" does not exist
+CockroachDb	IP network / CIDR	cidr	PASS
+CockroachDb	MAC address	mac_address	UNSUPPORTED refused: 0A000: at or near ")": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include
+CockroachDb	point geometry	point	PASS
+CockroachDb	line / linestring geometry	linestring	PASS
+CockroachDb	polygon geometry	polygon	PASS
+CockroachDb	general geometry	geometry	PASS
+CockroachDb	geography / geodetic	geography	PASS
+CockroachDb	fixed-length array	fixed_array	PASS
+CockroachDb	list / multiset / set collection	list_collection	UNSUPPORTED refused: 42601: at or near "multiset": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	map / dictionary	map	UNSUPPORTED refused: 42601: at or near "(": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	range	range	UNSUPPORTED refused: 42704: type "int4range" does not exist
+CockroachDb	multirange	multirange	UNSUPPORTED refused: 42704: type "int4multirange" does not exist
+CockroachDb	user-defined enum / domain	domain	UNSUPPORTED refused: 42601: at or near "create": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
+CockroachDb	full-text search vector / query	full_text	PASS
+CockroachDb	native point	native_point	UNSUPPORTED refused: no candidate was tried
+CockroachDb	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+CockroachDb	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+CockroachDb	vector embedding	vector	PASS
+CockroachDb	hierarchical path	hierarchy	UNSUPPORTED refused: 42704: type "hierarchyid" does not exist
+CockroachDb	external-file reference	file_reference	UNSUPPORTED refused: 42704: type "bfile" does not exist
+CockroachDb	specialized security label	security_label	UNSUPPORTED refused: 42704: type "idssecuritylabel" does not exist

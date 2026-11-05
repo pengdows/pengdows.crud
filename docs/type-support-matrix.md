@@ -45,28 +45,34 @@ its trailing zeros, is the data (every dialect sends it without them).
 | `TextReader` | `DbType.String` | every database |  |
 | `BitArray` | `DbType.Object` | every database |  |
 | `int[]` | `DbType.Object` | every database |  |
-| `int?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text the statement builds the ARRAY from (JSON_TABLE); read from the ARRAY's wire encoding (HanaArrayCoercion), verified live |
+| `int?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text that the statement turns into the ARRAY (JSON_TABLE); this check reads the text, the round-trip test reads the ARRAY's wire encoding |
 | `long[]` | `DbType.Object` | every database |  |
-| `long?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text the statement builds the ARRAY from (JSON_TABLE); read from the ARRAY's wire encoding (HanaArrayCoercion), verified live |
+| `long?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text that the statement turns into the ARRAY (JSON_TABLE); this check reads the text, the round-trip test reads the ARRAY's wire encoding |
 | `short[]` | `DbType.Object` | every database |  |
-| `short?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text the statement builds the ARRAY from (JSON_TABLE); read from the ARRAY's wire encoding (HanaArrayCoercion), verified live |
+| `short?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text that the statement turns into the ARRAY (JSON_TABLE); this check reads the text, the round-trip test reads the ARRAY's wire encoding |
 | `double[]` | `DbType.Object` | every database |  |
-| `double?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text the statement builds the ARRAY from (JSON_TABLE); read from the ARRAY's wire encoding (HanaArrayCoercion), verified live |
+| `double?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text that the statement turns into the ARRAY (JSON_TABLE); this check reads the text, the round-trip test reads the ARRAY's wire encoding |
 | `float[]` | `DbType.Object` | every database |  |
-| `float?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text the statement builds the ARRAY from (JSON_TABLE); read from the ARRAY's wire encoding (HanaArrayCoercion), verified live |
-| `string[]` | `DbType.Object` | all but 1 | SapHana: bound as JSON text the statement builds the ARRAY from (JSON_TABLE); read from the ARRAY's wire encoding (HanaArrayCoercion), verified live |
+| `float?[]` | `DbType.Object` | all but 2 | Informix: an Informix collection can't hold a NULL element: the write is refused<br>SapHana: bound as JSON text that the statement turns into the ARRAY (JSON_TABLE); this check reads the text, the round-trip test reads the ARRAY's wire encoding |
+| `string[]` | `DbType.Object` | all but 1 | SapHana: bound as JSON text that the statement turns into the ARRAY (JSON_TABLE); this check reads the text, the round-trip test reads the ARRAY's wire encoding |
 | `JsonDocument` | `DbType.Object` | every database |  |
 | `JsonElement` | `DbType.Object` | every database |  |
 | `JsonValue` | `DbType.Object` | every database |  |
 | `HStore` | `DbType.Object` | every database |  |
 | `HierarchyId` | `DbType.Object` | every database |  |
-| `Geometry` | `DbType.Object` | all but 3 | SqlServer: bound as SRID-prefixed WKB the statement builds the value from (STGeomFromWKB); read from the stored encoding, verified live<br>Snowflake: bound as EWKB hex the statement builds the value from; read in the session's output format, verified live<br>SingleStore: written as WKT, which carries no SRID: a Geometry reads back with SRID 0 (GEOGRAPHY is always 4326) |
-| `Geography` | `DbType.Object` | all but 2 | SqlServer: bound as SRID-prefixed WKB the statement builds the value from (STGeomFromWKB); read from the stored encoding, verified live<br>Snowflake: bound as EWKB hex the statement builds the value from; read in the session's output format, verified live |
+| `Geometry` | `DbType.Object` | all but 2 | SqlServer: bound as SRID-prefixed WKB that the statement turns into the native value; this check reads the bound bytes, the round-trip test reads the native encoding<br>SingleStore: refused: SingleStore has no GEOMETRY type, and its GEOGRAPHY is WGS 84 only, so the SRID cannot be kept (the library refuses it) |
+| `Geography` | `DbType.Object` | all but 1 | SqlServer: bound as SRID-prefixed WKB that the statement turns into the native value; this check reads the bound bytes, the round-trip test reads the native encoding |
 | `Inet` | `DbType.Object` | every database |  |
 | `Cidr` | `DbType.Object` | every database |  |
+| `IPAddress` | `DbType.Object` | every database |  |
+| `PostgreSqlPoint` | `DbType.Object` | every database |  |
+| `PostgreSqlPolygon` | `DbType.Object` | every database |  |
+| `List<int>` | `DbType.Object` | every database |  |
+| `Dictionary<string,object>` | `DbType.Object` | every database |  |
+| `Range<int>[]` | `DbType.Object` | every database |  |
 | `MacAddress` | `DbType.Object` | every database |  |
 | `IntervalYearMonth` | `DbType.Object` | every database |  |
-| `IntervalDaySecond` | `DbType.Object` | all but 1 | Oracle: INTERVAL DAY TO SECOND(6) holds microseconds: the 7th fraction digit is truncated, never rounded |
+| `IntervalDaySecond` | `DbType.Object` | all but 4 | PostgreSql, YugabyteDb, AuroraPostgreSql: interval holds microseconds: the 7th fraction digit is truncated, never rounded<br>Oracle: INTERVAL DAY TO SECOND(6) holds microseconds: the 7th fraction digit is truncated, never rounded |
 | `PostgreSqlInterval` | `DbType.Object` | every database |  |
 | `Range<int>` | `DbType.Object` | every database |  |
 | `Range<long>` | `DbType.Object` | every database |  |

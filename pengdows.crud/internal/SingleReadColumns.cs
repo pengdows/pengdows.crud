@@ -13,19 +13,37 @@
 // =============================================================================
 
 using System.Reflection;
+using pengdows.crud.types.converters;
 
 namespace pengdows.crud.@internal;
 
 internal static class SingleReadColumns
 {
+    internal static readonly MethodInfo JsonTextFromValueMethod =
+        typeof(SingleReadColumns).GetMethod(nameof(JsonTextFromValue))!;
+
     internal static readonly MethodInfo StringFromValueMethod =
         typeof(SingleReadColumns).GetMethod(nameof(StringFromValue), BindingFlags.Public | BindingFlags.Static)!;
 
     internal static readonly MethodInfo BytesFromValueMethod =
         typeof(SingleReadColumns).GetMethod(nameof(BytesFromValue), BindingFlags.Public | BindingFlags.Static)!;
 
-    public static string StringFromValue(object value, TypeCoercionOptions? options) =>
-        value as string ?? (string)TypeCoercionHelper.Coerce(value, value.GetType(), typeof(string), options)!;
+    public static string? StringFromValue(object? value, TypeCoercionOptions? options) =>
+        value switch
+        {
+            null => null,
+            string text => text,
+            _ => (string?)TypeCoercionHelper.Coerce(value, value.GetType(), typeof(string), options),
+        };
+
+    /// <summary>
+    /// The JSON text of a JSON column's value: a BSON document (a dialect whose binary JSON is BSON) as its JSON, anything else
+    /// as text.
+    /// </summary>
+    public static string? JsonTextFromValue(object value, TypeCoercionOptions? options) =>
+        value is byte[] bytes && options is { BinaryJsonIsBson: true } && BsonJson.IsDocument(bytes)
+            ? BsonJson.ToJson(bytes)
+            : StringFromValue(value, options);
 
     public static byte[] BytesFromValue(object value, TypeCoercionOptions? options) =>
         value as byte[] ?? (byte[])TypeCoercionHelper.Coerce(value, value.GetType(), typeof(byte[]), options)!;

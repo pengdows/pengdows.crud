@@ -1,6 +1,7 @@
 using System.Data;
 using System.Linq.Expressions;
 using System.Reflection;
+using pengdows.crud.types.converters;
 using pengdows.crud.types.valueobjects;
 
 namespace pengdows.crud.@internal;
@@ -23,6 +24,9 @@ internal static class ColumnQuirkReads
         {
             var t when t == typeof(Inet) => NpgsqlTypedFieldReader.Inet.AppliesTo(schema, ordinal),
             var t when t == typeof(PostgreSqlInterval) => NpgsqlTypedFieldReader.Interval.AppliesTo(schema, ordinal),
+            var t when t == typeof(IntervalYearMonth) => NpgsqlTypedFieldReader.Interval.AppliesTo(schema, ordinal),
+            // A CIDR on a database that types the column as inet (CockroachDB): Npgsql's plain read drops the prefix.
+            var t when t == typeof(Cidr) => NpgsqlTypedFieldReader.Inet.AppliesTo(schema, ordinal),
             _ => false
         };
 
@@ -37,6 +41,13 @@ internal static class ColumnQuirkReads
         if (underlying == typeof(Inet))
         {
             return Npgsql(NpgsqlTypedFieldReader.Inet, record, ordinalExpr, ordinal, targetType, options, npgsqlTyped);
+        }
+
+        if (underlying == typeof(Cidr) && npgsqlTyped && NpgsqlTypedFieldReader.Inet.BuildTypedValue(record, ordinal) is { } inetValue)
+        {
+            // The typed inet carries the prefix: the CIDR is the network it names.
+            Expression cidr = Expression.Call(typeof(ColumnQuirkReads).GetMethod(nameof(CidrOf), BindingFlags.NonPublic | BindingFlags.Static)!, inetValue);
+            return targetType == typeof(Cidr) ? cidr : Expression.Convert(cidr, targetType);
         }
 
         if (fieldType == typeof(DateTime) && underlying == typeof(DateTimeOffset) &&
@@ -86,6 +97,15 @@ internal static class ColumnQuirkReads
             return ColumnConversion.Build(raw, underlying, targetType, options);
         }
 
+        if (fieldType == typeof(decimal) && WideIntegerFieldReader.IsWiderThanDecimal(targetType))
+        {
+            // Npgsql reports NUMERIC as decimal and its typed read throws beyond decimal's range; the number's text
+            // is the exact value, read through the same fallback as an Int64-reported column.
+            var raw = Expression.Call(typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.Read))!,
+                record, ordinalExpr);
+            return ColumnConversion.Build(raw, typeof(object), targetType, options);
+        }
+
         if (fieldType == typeof(long) && WideIntegerFieldReader.IsWiderThanInt64(targetType))
         {
             // Snowflake.Data reports every scale-0 NUMBER as Int64 and overflows beyond it; read it as BigInteger when
@@ -98,8 +118,24 @@ internal static class ColumnQuirkReads
         if (underlying == typeof(PostgreSqlInterval))
         {
             // Npgsql's GetValue() returns TimeSpan for interval columns, which cannot hold months and renormalizes
-            // days/time; read the full-fidelity NpgsqlInterval instead.
+            // days/time; read the full-fidelity NpgsqlInterval instead. Another provider's interval (DuckDB's struct)
+            // is read by its members.
+            if (!npgsqlTyped)
+            {
+                return ColumnConversion.Build(Expression.Call(DuckDbIntervalReadMethod, record, ordinalExpr), typeof(object), targetType, options);
+            }
+
             return Npgsql(NpgsqlTypedFieldReader.Interval, record, ordinalExpr, ordinal, targetType, options, npgsqlTyped);
+        }
+
+        if (underlying == typeof(IntervalYearMonth))
+        {
+            // A year-month interval's months are the value, which GetValue's TimeSpan cannot hold: read the Npgsql
+            // interval as an object and convert it, the way the year-month converter reads it.
+            Expression raw = npgsqlTyped
+                ? Expression.Call(Expression.Constant(NpgsqlTypedFieldReader.Interval), NpgsqlTypedFieldReader.ReadTypedMethod, record, ordinalExpr)
+                : Expression.Call(DuckDbIntervalReadMethod, record, ordinalExpr);
+            return ColumnConversion.Build(raw, typeof(object), targetType, options);
         }
 
         // The provider's own value type into the portable value, one typed expression (no boxing, no coercer).
@@ -110,6 +146,12 @@ internal static class ColumnQuirkReads
 
         return null;
     }
+
+    private static readonly MethodInfo DuckDbIntervalReadMethod =
+        typeof(DuckDbIntervalReader).GetMethod(nameof(DuckDbIntervalReader.ReadValue))!;
+
+    private static Cidr CidrOf(Inet inet) =>
+        CidrConverter.TryFromInet(inet, out var cidr) ? cidr : throw new FormatException("An inet without a prefix is not a CIDR.");
 
     // Npgsql's inet (which GetValue returns as an IPAddress, dropping the netmask) and interval (as a TimeSpan, which
     // cannot hold months): the typed struct when the column is that Npgsql type and the shape is known, otherwise the

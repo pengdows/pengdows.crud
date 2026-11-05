@@ -208,6 +208,9 @@ internal class ColumnInfo : IColumnInfo
     /// </summary>
     public DbType DbType { get; set; }
 
+    /// <summary>The declared native column type (<see cref="pengdows.crud.attributes.ColumnAttribute.NativeType"/>), or null.</summary>
+    public string? NativeType { get; set; }
+
     /// <summary>
     /// Gets or sets whether this column is excluded from UPDATE statements.
     /// </summary>
