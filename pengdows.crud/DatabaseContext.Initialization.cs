@@ -589,6 +589,7 @@ public partial class DatabaseContext
     /// <param name="dataSource">Data source for creating connections (e.g., NpgsqlDataSource)</param>
     /// <param name="factory">Provider factory for creating parameters and other objects</param>
     /// <param name="loggerFactory">Optional logger factory</param>
+    [Obsolete("Passing a DbDataSource leaves a handle that can open connections outside the pool governor and leaves its disposal unclear, so 3.0 removes it: nothing public may expose or hand in something that can open a connection. This constructor will be removed in 3.0.")]
     public DatabaseContext(
         IDatabaseContextConfiguration configuration,
         DbDataSource dataSource,
