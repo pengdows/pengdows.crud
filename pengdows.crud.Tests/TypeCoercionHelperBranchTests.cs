@@ -144,14 +144,16 @@ public class TypeCoercionHelperBranchTests
 
     private static T InvokePrivate<T>(string name, params object?[] args)
     {
-        var method = typeof(TypeCoercionHelper).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
+        var method = typeof(TypeCoercionHelper).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)
+            ?? typeof(pengdows.crud.types.coercion.DateTimeCoercion).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
         return (T)method!.Invoke(null, args)!;
     }
 
     private static Exception InvokePrivateThrows(string name, params object?[] args)
     {
-        var method = typeof(TypeCoercionHelper).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
+        var method = typeof(TypeCoercionHelper).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static)
+            ?? typeof(pengdows.crud.types.coercion.DateTimeCoercion).GetMethod(name, BindingFlags.NonPublic | BindingFlags.Static);
         Assert.NotNull(method);
         var ex = Assert.Throws<TargetInvocationException>(() => method!.Invoke(null, args));
         return ex.InnerException!;
@@ -194,13 +196,13 @@ public class TypeCoercionHelperBranchTests
             SupportedDatabase.Unknown);
         var dto = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
-        Assert.Equal(dto, InvokePrivate<DateTimeOffset>("CoerceDateTimeOffset", dto, options));
+        Assert.Equal(dto, (DateTimeOffset)pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffset(dto, options));
 
         var utcDateTime = new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc);
-        var forced = InvokePrivate<DateTimeOffset>("CoerceDateTimeOffset", utcDateTime, forceOptions);
+        var forced = (DateTimeOffset)pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffset(utcDateTime, forceOptions);
         Assert.Equal(TimeSpan.Zero, forced.Offset);
 
-        var parsed = InvokePrivate<DateTimeOffset>("CoerceDateTimeOffset", "2024-01-01T12:00:00+00:00", options);
+        var parsed = (DateTimeOffset)pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffset("2024-01-01T12:00:00+00:00", options);
         Assert.Equal(dto, parsed);
 
         var ex = InvokePrivateThrows("CoerceDateTimeOffset", "not-a-date", options);
@@ -214,13 +216,13 @@ public class TypeCoercionHelperBranchTests
         var dt = new DateTime(2024, 2, 1, 8, 0, 0, DateTimeKind.Local);
         var dto = new DateTimeOffset(2024, 2, 1, 8, 0, 0, TimeSpan.Zero);
 
-        Assert.Equal(DateTimeKind.Utc, InvokePrivate<DateTime>("CoerceDateTime", dt, options).Kind);
-        Assert.Equal(DateTimeKind.Utc, InvokePrivate<DateTime>("CoerceDateTime", dto, options).Kind);
+        Assert.Equal(DateTimeKind.Utc, ((DateTime)pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTime(dt, options)).Kind);
+        Assert.Equal(DateTimeKind.Utc, ((DateTime)pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTime(dto, options)).Kind);
 
         var ex = InvokePrivateThrows("CoerceDateTime", "   ", options);
         Assert.IsType<InvalidCastException>(ex);
 
-        var parsed = InvokePrivate<DateTime>("CoerceDateTime", "2024-02-01T08:00:00+00:00", options);
+        var parsed = (DateTime)pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTime("2024-02-01T08:00:00+00:00", options);
         Assert.Equal(DateTimeKind.Utc, parsed.Kind);
     }
 
@@ -231,9 +233,9 @@ public class TypeCoercionHelperBranchTests
         var local = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Local);
         var unspecified = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
-        Assert.Equal(DateTimeKind.Utc, InvokePrivate<DateTime>("ConvertToUtc", utc).Kind);
-        Assert.Equal(DateTimeKind.Utc, InvokePrivate<DateTime>("ConvertToUtc", local).Kind);
-        Assert.Equal(DateTimeKind.Utc, InvokePrivate<DateTime>("ConvertToUtc", unspecified).Kind);
+        Assert.Equal(DateTimeKind.Utc, pengdows.crud.types.coercion.DateTimeCoercion.ConvertToUtc(utc).Kind);
+        Assert.Equal(DateTimeKind.Utc, pengdows.crud.types.coercion.DateTimeCoercion.ConvertToUtc(local).Kind);
+        Assert.Equal(DateTimeKind.Utc, pengdows.crud.types.coercion.DateTimeCoercion.ConvertToUtc(unspecified).Kind);
     }
 
     [Fact]
@@ -243,25 +245,19 @@ public class TypeCoercionHelperBranchTests
         var local = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Local);
         var unspecified = new DateTime(2024, 3, 1, 0, 0, 0, DateTimeKind.Unspecified);
 
-        Assert.Equal(TimeSpan.Zero, InvokePrivate<DateTimeOffset>("CreateFlexibleOffset", utc).Offset);
+        Assert.Equal(TimeSpan.Zero, pengdows.crud.types.coercion.DateTimeCoercion.CreateFlexibleOffset(utc).Offset);
         var expectedLocalOffset = TimeZoneInfo.Local.GetUtcOffset(local);
-        Assert.Equal(expectedLocalOffset, InvokePrivate<DateTimeOffset>("CreateFlexibleOffset", local).Offset);
-        Assert.Equal(TimeSpan.Zero, InvokePrivate<DateTimeOffset>("CreateFlexibleOffset", unspecified).Offset);
+        Assert.Equal(expectedLocalOffset, pengdows.crud.types.coercion.DateTimeCoercion.CreateFlexibleOffset(local).Offset);
+        Assert.Equal(TimeSpan.Zero, pengdows.crud.types.coercion.DateTimeCoercion.CreateFlexibleOffset(unspecified).Offset);
     }
 
     [Fact]
-    public void TryGetEnumType_PrivateReportsEnum()
+    public void TryGetEnumType_ReportsEnumTargets()
     {
-        var enumArgs = new object?[] { typeof(SampleEnum), null };
-        var result = InvokePrivate<bool>("TryGetEnumType", enumArgs);
-        var enumType = (Type)enumArgs[1]!;
-        Assert.True(result);
+        Assert.True(pengdows.crud.types.coercion.EnumCoercion.TryGetEnumType(typeof(SampleEnum), out var enumType));
         Assert.Equal(typeof(SampleEnum), enumType);
 
-        var nonEnumArgs = new object?[] { typeof(string), null };
-        var nonEnum = InvokePrivate<bool>("TryGetEnumType", nonEnumArgs);
-        var otherType = (Type)nonEnumArgs[1]!;
-        Assert.False(nonEnum);
+        Assert.False(pengdows.crud.types.coercion.EnumCoercion.TryGetEnumType(typeof(string), out var otherType));
         Assert.Equal(typeof(string), otherType);
     }
 
@@ -270,46 +266,46 @@ public class TypeCoercionHelperBranchTests
     {
         var options = new JsonSerializerOptions();
         using var jsonDoc = JsonDocument.Parse("{\"root\":true}");
-        using var docDoc = InvokePrivate<JsonDocument>("ToJsonDocument", jsonDoc, options);
+        using var docDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(jsonDoc, options);
         Assert.Equal(JsonValueKind.Object, docDoc.RootElement.ValueKind);
 
         var element = jsonDoc.RootElement.Clone();
-        using var elementDoc = InvokePrivate<JsonDocument>("ToJsonDocument", element, options);
+        using var elementDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(element, options);
         Assert.True(elementDoc.RootElement.TryGetProperty("root", out _));
 
-        using var nodeDoc = InvokePrivate<JsonDocument>("ToJsonDocument", JsonNode.Parse("{\"a\":1}")!, options);
+        using var nodeDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(JsonNode.Parse("{\"a\":1}")!, options);
         Assert.Equal("1", nodeDoc.RootElement.GetProperty("a").GetRawText());
 
-        using var stringDoc = InvokePrivate<JsonDocument>("ToJsonDocument", "   ", options);
+        using var stringDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument("   ", options);
         Assert.Equal(JsonValueKind.Null, stringDoc.RootElement.ValueKind);
 
-        using var emptyBytesDoc = InvokePrivate<JsonDocument>("ToJsonDocument", Array.Empty<byte>(), options);
+        using var emptyBytesDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(Array.Empty<byte>(), options);
         Assert.Equal(JsonValueKind.Null, emptyBytesDoc.RootElement.ValueKind);
 
         using var bytesDoc =
-            InvokePrivate<JsonDocument>("ToJsonDocument", Encoding.UTF8.GetBytes("{\"b\":2}"), options);
+            pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(Encoding.UTF8.GetBytes("{\"b\":2}"), options);
         Assert.Equal("2", bytesDoc.RootElement.GetProperty("b").GetRawText());
 
         var segment = new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"c\":3}"));
-        using var segmentDoc = InvokePrivate<JsonDocument>("ToJsonDocument", segment, options);
+        using var segmentDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(segment, options);
         Assert.Equal("3", segmentDoc.RootElement.GetProperty("c").GetRawText());
 
         var memory = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("{\"d\":4}"));
-        using var memoryDoc = InvokePrivate<JsonDocument>("ToJsonDocument", memory, options);
+        using var memoryDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(memory, options);
         Assert.Equal("4", memoryDoc.RootElement.GetProperty("d").GetRawText());
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{\"e\":5}"));
-        using var streamDoc = InvokePrivate<JsonDocument>("ToJsonDocument", stream, options);
+        using var streamDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(stream, options);
         Assert.Equal("5", streamDoc.RootElement.GetProperty("e").GetRawText());
 
         using var emptyStream = new MemoryStream(Encoding.UTF8.GetBytes("   "));
-        using var emptyStreamDoc = InvokePrivate<JsonDocument>("ToJsonDocument", emptyStream, options);
+        using var emptyStreamDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(emptyStream, options);
         Assert.Equal(JsonValueKind.Null, emptyStreamDoc.RootElement.ValueKind);
 
-        using var charsDoc = InvokePrivate<JsonDocument>("ToJsonDocument", "{\"f\":6}".ToCharArray(), options);
+        using var charsDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument("{\"f\":6}".ToCharArray(), options);
         Assert.Equal("6", charsDoc.RootElement.GetProperty("f").GetRawText());
 
-        using var defaultDoc = InvokePrivate<JsonDocument>("ToJsonDocument", new { g = 7 }, options);
+        using var defaultDoc = pengdows.crud.types.coercion.JsonCoercion.ToJsonDocument(new { g = 7 }, options);
         Assert.Equal("7", defaultDoc.RootElement.GetProperty("g").GetRawText());
     }
 
@@ -321,28 +317,28 @@ public class TypeCoercionHelperBranchTests
         var element = document.RootElement.Clone();
         var node = JsonNode.Parse("{\"b\":2}")!;
 
-        Assert.Equal("{\"a\":1}", InvokePrivate<string>("ExtractJsonString", document, options));
-        Assert.Equal("{\"a\":1}", InvokePrivate<string>("ExtractJsonString", element, options));
-        Assert.Equal("{\"b\":2}", InvokePrivate<string>("ExtractJsonString", node, options));
+        Assert.Equal("{\"a\":1}", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(document, options));
+        Assert.Equal("{\"a\":1}", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(element, options));
+        Assert.Equal("{\"b\":2}", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(node, options));
 
-        Assert.Equal(string.Empty, InvokePrivate<string>("ExtractJsonString", Array.Empty<byte>(), options));
+        Assert.Equal(string.Empty, pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(Array.Empty<byte>(), options));
         var segment = new ArraySegment<byte>(Encoding.UTF8.GetBytes("{\"c\":3}"));
-        Assert.Equal("{\"c\":3}", InvokePrivate<string>("ExtractJsonString", segment, options));
+        Assert.Equal("{\"c\":3}", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(segment, options));
 
         var memory = new ReadOnlyMemory<byte>(Encoding.UTF8.GetBytes("{\"d\":4}"));
-        Assert.Equal("{\"d\":4}", InvokePrivate<string>("ExtractJsonString", memory, options));
+        Assert.Equal("{\"d\":4}", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(memory, options));
 
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{\"e\":5}"));
-        Assert.Equal("{\"e\":5}", InvokePrivate<string>("ExtractJsonString", stream, options));
+        Assert.Equal("{\"e\":5}", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(stream, options));
 
         using var nonSeekable = new NonSeekableStream("{\"f\":6}");
-        Assert.Equal("{\"f\":6}", InvokePrivate<string>("ExtractJsonString", nonSeekable, options));
+        Assert.Equal("{\"f\":6}", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(nonSeekable, options));
 
-        Assert.Equal("{\"g\":7}", InvokePrivate<string>("ExtractJsonString", "{\"g\":7}".ToCharArray(), options));
-        Assert.Contains("\"h\":8", InvokePrivate<string>("ExtractJsonString", new { h = 8 }, options));
+        Assert.Equal("{\"g\":7}", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString("{\"g\":7}".ToCharArray(), options));
+        Assert.Contains("\"h\":8", pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(new { h = 8 }, options));
 
-        Assert.Equal(string.Empty, TypeCoercionHelper.GetJsonText(Array.Empty<byte>(), options));
-        Assert.Equal("{\"i\":9}", TypeCoercionHelper.GetJsonText(Encoding.UTF8.GetBytes("{\"i\":9}"), options));
+        Assert.Equal(string.Empty, pengdows.crud.types.coercion.JsonCoercion.GetJsonText(Array.Empty<byte>(), options));
+        Assert.Equal("{\"i\":9}", pengdows.crud.types.coercion.JsonCoercion.GetJsonText(Encoding.UTF8.GetBytes("{\"i\":9}"), options));
     }
 
 }

@@ -148,12 +148,12 @@ internal class PostgreSqlDialect : SqlDialect
         if (type == DbType.DateTime2 && value is DateTime { Kind: not DateTimeKind.Unspecified } timestamp)
         {
             return base.CreateDbParameter(name, type,
-                DateTime.SpecifyKind(TypeCoercionHelper.NormalizeDateTime(timestamp), DateTimeKind.Unspecified));
+                DateTime.SpecifyKind(pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime(timestamp), DateTimeKind.Unspecified));
         }
 
         if (type == DbType.DateTime && value is DateTime { Kind: not DateTimeKind.Utc } timestamptz)
         {
-            return base.CreateDbParameter(name, type, TypeCoercionHelper.NormalizeDateTime(timestamptz));
+            return base.CreateDbParameter(name, type, pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime(timestamptz));
         }
 
         // TYPE-002: a DateTimeOffset declared DbType.Time is a time with an offset (timetz), sent with
@@ -542,7 +542,7 @@ internal class PostgreSqlDialect : SqlDialect
 
     internal override object ReadUnresolvedColumn(IDataRecord record, int ordinal, Type type)
     {
-        var bytes = TypeCoercionHelper.ReadBytes(record, ordinal);
+        var bytes = pengdows.crud.types.coercion.BinaryCoercion.ReadBytes(record, ordinal);
         if (type == typeof(float[]))
         {
             // pgvector's binary format: int16 dimensions, int16 unused, then big-endian float4s.

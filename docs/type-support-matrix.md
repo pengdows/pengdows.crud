@@ -72,7 +72,7 @@ its trailing zeros, is the data (every dialect sends it without them).
 | `Range<int>[]` | `DbType.Object` | every database |  |
 | `MacAddress` | `DbType.Object` | every database |  |
 | `IntervalYearMonth` | `DbType.Object` | every database |  |
-| `IntervalDaySecond` | `DbType.Object` | all but 4 | PostgreSql, YugabyteDb, AuroraPostgreSql: interval holds microseconds: the 7th fraction digit is truncated, never rounded<br>Oracle: INTERVAL DAY TO SECOND(6) holds microseconds: the 7th fraction digit is truncated, never rounded |
+| `IntervalDaySecond` | `DbType.Object` | all but 5 | PostgreSql, YugabyteDb, AuroraPostgreSql: interval holds microseconds: the 7th fraction digit is truncated, never rounded<br>Oracle: INTERVAL DAY TO SECOND(6) holds microseconds: the 7th fraction digit is truncated, never rounded<br>Informix: INTERVAL DAY TO SECOND holds microseconds: the 7th fraction digit is truncated, never rounded |
 | `PostgreSqlInterval` | `DbType.Object` | every database |  |
 | `Range<int>` | `DbType.Object` | every database |  |
 | `Range<long>` | `DbType.Object` | every database |  |

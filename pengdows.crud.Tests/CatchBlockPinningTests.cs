@@ -55,7 +55,7 @@ public sealed class CatchBlockPinningTests
     {
         WithThrowingLogger(() =>
         {
-            TypeCoercionHelper.LogEnumFailure(typeof(Color));
+            pengdows.crud.types.coercion.EnumCoercion.LogEnumFailure(typeof(Color));
             return 0;
         });
     }
@@ -63,7 +63,7 @@ public sealed class CatchBlockPinningTests
     [Fact]
     public void BadJsonPayload_BrokenLoggingSink_StillThrowsTheJsonException()
     {
-        var method = typeof(TypeCoercionHelper).GetMethod("CoerceJsonValue", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var method = typeof(pengdows.crud.types.coercion.JsonCoercion).GetMethod("CoerceJsonValue", BindingFlags.NonPublic | BindingFlags.Static)!;
 
         var ex = Assert.Throws<TargetInvocationException>(() => WithThrowingLogger(() =>
             method.Invoke(null, new object?[] { "{not json", typeof(Payload), TypeCoercionOptions.Default })));

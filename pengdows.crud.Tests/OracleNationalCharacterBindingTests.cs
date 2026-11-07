@@ -46,7 +46,7 @@ public sealed class OracleNationalCharacterBindingTests
         var column = new TypeMapRegistry().GetTableInfo<Row>().Columns["txt"];
         if (declared != null)
         {
-            dialect.RecordDeclaredTypes("\"nchar_t\"", new[] { (column, declared) });
+            dialect.RecordDeclaredTypes(new[] { (column, declared) });
         }
 
         return (dialect, column);

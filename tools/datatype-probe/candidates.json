@@ -237,7 +237,7 @@
     "LONGBLOB",
     "BYTE"
   ],
-  "rowversion / timestamp token": [
+  "rowversion / timestamp token": ["BINARY(8)", "CHAR(8) FOR BIT DATA", 
     "ROWVERSION",
     "TIMESTAMP",
     "no direct SQL rowversion type"
@@ -277,7 +277,7 @@
     "TIMESTAMP(6) WITH LOCAL TIME ZONE",
     "TIMESTAMP_LTZ"
   ],
-  "second-precision datetime": [
+  "second-precision datetime": ["DATETIME YEAR TO SECOND", 
     "DATETIME(0)",
     "SMALLDATETIME",
     "DATETIME",

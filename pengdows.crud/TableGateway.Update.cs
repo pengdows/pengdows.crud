@@ -194,7 +194,7 @@ public partial class TableGateway<TEntity, TRowID>
             var converted = underlying switch
             {
                 _ when underlying == typeof(Guid) => ConvertToGuid(idValue),
-                _ => TypeCoercionHelper.ConvertWithCache(idValue!, underlying)
+                _ => pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(idValue!, underlying)
             };
 
             if (converted == null)
@@ -318,8 +318,8 @@ public partial class TableGateway<TEntity, TRowID>
                     Convert.ToDecimal(originalValue, CultureInfo.InvariantCulture)) == 0;
             case DbType.DateTime:
             case DbType.DateTime2:
-                return TypeCoercionHelper.NormalizeDateTime(Convert.ToDateTime(newValue, CultureInfo.InvariantCulture)) ==
-                       TypeCoercionHelper.NormalizeDateTime(Convert.ToDateTime(originalValue, CultureInfo.InvariantCulture));
+                return pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime(Convert.ToDateTime(newValue, CultureInfo.InvariantCulture)) ==
+                       pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime(Convert.ToDateTime(originalValue, CultureInfo.InvariantCulture));
             case DbType.DateTimeOffset:
                 return NormalizeDateTimeOffset(newValue).UtcDateTime ==
                        NormalizeDateTimeOffset(originalValue).UtcDateTime;
@@ -329,7 +329,7 @@ public partial class TableGateway<TEntity, TRowID>
     }
 
     // As every read path normalizes them (DRY-010): a DateTime keeps a Local offset and is otherwise UTC;
-    // timestamp text reads through TypeCoercionHelper.TryParseTimestampText.
+    // timestamp text reads through pengdows.crud.types.coercion.DateTimeCoercion.TryParseTimestampText.
     internal static DateTimeOffset NormalizeDateTimeOffset(object value)
     {
         switch (value)
@@ -337,14 +337,14 @@ public partial class TableGateway<TEntity, TRowID>
             case DateTimeOffset dto:
                 return dto;
             case DateTime dt:
-                return TypeCoercionHelper.DateTimeOffsetFromDateTime(dt, TypeCoercionOptions.Default);
+                return pengdows.crud.types.coercion.DateTimeCoercion.DateTimeOffsetFromDateTime(dt, TypeCoercionOptions.Default);
             case string s:
-                return TypeCoercionHelper.TryParseTimestampText(s.Trim(), out var parsed)
+                return pengdows.crud.types.coercion.DateTimeCoercion.TryParseTimestampText(s.Trim(), out var parsed)
                     ? parsed
                     : throw new FormatException("The value is not a timestamp.");
             default:
                 var converted = Convert.ToDateTime(value, CultureInfo.InvariantCulture);
-                return new DateTimeOffset(TypeCoercionHelper.NormalizeDateTime(converted), TimeSpan.Zero);
+                return new DateTimeOffset(pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime(converted), TimeSpan.Zero);
         }
     }
 }

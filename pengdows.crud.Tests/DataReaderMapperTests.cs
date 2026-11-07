@@ -81,8 +81,9 @@ public class DataReaderMapperTests
     }
 
     [Fact]
-    public async Task LoadObjectsFromDataReaderAsync_HandlesDbNullsGracefully()
+    public async Task LoadObjectsFromDataReaderAsync_NullIntoANonNullableValue_Throws_NotADefault()
     {
+        // Age is a non-nullable int: a NULL is refused, naming the column, rather than becoming 0 (TYPE-008).
         var reader = new fakeDbDataReader(new[]
         {
             new Dictionary<string, object>
@@ -93,12 +94,24 @@ public class DataReaderMapperTests
             }
         });
 
+        var ex = await Assert.ThrowsAsync<pengdows.crud.exceptions.DataMappingException>(async () =>
+            await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader));
+
+        Assert.Contains("'Age'", ex.Message);
+    }
+
+    [Fact]
+    public async Task LoadObjectsFromDataReaderAsync_NullIntoANullableOrReferenceProperty_IsNull()
+    {
+        var reader = new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["Name"] = DBNull.Value, ["Age"] = 3, ["IsActive"] = true }
+        });
+
         var result = await DataReaderMapper.LoadObjectsFromDataReaderAsync<SampleEntity>(reader);
 
-        Assert.Single(result);
         Assert.Null(result[0].Name);
-        Assert.Equal(0, result[0].Age); // default(int)
-        Assert.False(result[0].IsActive); // default(bool)
+        Assert.Equal(3, result[0].Age);
     }
 
     [Fact]

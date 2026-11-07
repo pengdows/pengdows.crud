@@ -29,7 +29,7 @@ internal static class DuckDbIntervalReader
 
     /// <summary>Whether a reader type is DuckDB.NET's.</summary>
     internal static bool IsDuckDbReaderTypeName(string? readerTypeName) =>
-        readerTypeName != null && readerTypeName.StartsWith("DuckDB", StringComparison.Ordinal);
+        ProviderTypeNames.IsDuckDbReaderTypeName(readerTypeName);
 
     /// <summary>The column's value: a DuckDB interval as a <see cref="PostgreSqlInterval"/>; anything else as GetValue.</summary>
     public static object ReadValue(IDataRecord record, int ordinal)

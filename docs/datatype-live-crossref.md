@@ -436,8 +436,10 @@ The 66 remaining FAIL cells, by cause:
   CockroachDB, MySQL, MariaDB, TiDB, SingleStore, SQL Server, Oracle, FlatFile, Firebird and Sybase: Npgsql's decimal read
   overflows and refuses GetString on numeric, and the other drivers do not return the digits as text. A text SELECT for
   wide-integer targets would fix it, which changes the read SQL.
-- *Zone-less time (design decision).* `time with zone` (PostgreSQL, YugabyteDB, CockroachDB, DuckDB, Firebird, FlatFile):
-  a TIME has no date, and the library's DateTimeOffset carries one.
+- *Time with zone (design decision).* A `DateTimeOffset` declared `DbType.Time` is a time with its offset. PostgreSQL-family
+  `timetz`, Firebird (whole-hour offsets, as an `Etc/GMT` zone), FlatFile and SQLite keep the offset. DuckDB has no column that
+  holds it, so it is refused there. A TIME has no date, and the library's DateTimeOffset carries one; the read is compared by
+  its time of day and offset.
 - *Geometry without a native type.* SQLite has no spatial type (its SRID needs an EWKB blob); Oracle's SDO_GEOMETRY does not
   bind (ORA-00932). The PostgreSQL point and polygon columns are the native types above.
 - *Bit strings.* MySQL, MariaDB, TiDB and SingleStore have only fixed-width BIT(n); SQL Server's BIT holds one bit.
@@ -481,7 +483,7 @@ matrix had 66 FAIL. 39 of them now pass on a real fix; 27 are UNSUPPORTED by a s
   round-trip.
 - Firebird DECFLOAT (the driver binds FbDecFloat, not a decimal), and a 30-digit integer on Firebird or FlatFile (both
   parse a numeric as decimal, 28 digits).
-- FlatFile: its only date type is DATE (no time of day) and it has no zoned time type.
+- FlatFile: its only date type is DATE (no time of day); its zoned time is a `DateTimeOffset` that keeps the offset (live, 2026-11-06).
 - Oracle: ANYDATA (built by its constructor functions) and BFILE (set by BFILENAME), neither bound as a value; ROWID (a
   pseudo-column; a ROWID column reads back NULL for the value written).
 
@@ -501,12 +503,7 @@ matrix had 66 FAIL. 39 of them now pass on a real fix; 27 are UNSUPPORTED by a s
 *Still open:* the unit suite is green (12,653 tests); the TenantTests race (DisposeAsync_RacingWithInFlightCreate) is
 load-sensitive and passes alone. Documented refusals are decisions, so they are only as good as their reasons.
 
-**Current state (2026-11-05, supersedes the counts above).** The live matrix is 1,125 cells (75 types, 15 databases):
-**655 PASS, 5 FAIL, 465 UNSUPPORTED**. The per-cell verdicts, and the reason for each unsupported cell, are in
-[`type-representation-matrix.md`](type-representation-matrix.md), generated from the probe results and the generator's
-tables. The five FAIL cells are the time-with-zone cell on PostgreSQL, YugabyteDB, CockroachDB, Firebird and SQLite: each
-returns the instant with its offset dropped (the offset is 2 hours when written and 0 when read). That is an open defect,
-not a settled limit. Earlier sections above are the dated history of the cycle and are kept as written.
+**Current state (2026-11-06, supersedes the counts above).** The live matrix is 1,350 cells (75 types, 18 databases): **755 PASS, 0 FAIL, 595 UNSUPPORTED**. Every UNSUPPORTED cell is a refusal with its reason: the server refuses the type, or the library refuses it by design. The per-cell verdicts are in [`type-representation-matrix.md`](type-representation-matrix.md), generated from the probe results and the generator's tables. The five time-with-zone FAIL cells of 2026-11-05 are fixed: a `DateTimeOffset` declared `DbType.Time` keeps its offset on PostgreSQL-family, Firebird, FlatFile and SQLite, and DuckDB refuses it. Db2 LUW and Informix (local containers) were added to the matrix this round and pass. Earlier sections above are the dated history of the cycle and are kept as written.
 
 **Access (2026-11-05).** The probe now runs against Access (355 declarations, 68 accepted) and the fidelity test covers it on
 net8.0 and net10.0: 32 cells store and read the value back, 2 are refused by design, and the rest have no Access column type. The

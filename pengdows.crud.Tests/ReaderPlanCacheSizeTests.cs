@@ -16,6 +16,7 @@ namespace pengdows.crud.Tests;
 /// Tests that IDatabaseContext.ReaderPlanCacheSize is configurable and that
 /// TableGateway respects the configured limit when caching reader plans.
 /// </summary>
+[Collection("TypeRegistry")]
 public class ReaderPlanCacheSizeTests
 {
     // Three minimal entities that differ only in column shape so each produces

@@ -80,7 +80,7 @@ public class TableGatewayUpdateBranchTests : SqlLiteContextTestBase
         Assert.Throws<FormatException>(() => TableGateway<TestEntity, int>.NormalizeDateTimeOffset("not-a-date"));
     }
 
-    // The dirty check reads timestamp text as every read path does (TypeCoercionHelper.TryParseTimestampText):
+    // The dirty check reads timestamp text as every read path does (pengdows.crud.types.coercion.DateTimeCoercion.TryParseTimestampText):
     // a stated offset keeps its instant, text without one is UTC, and a time of day alone is no timestamp.
     [Theory]
     [InlineData("2024-01-01Z", "2024-01-01T00:00:00+00:00")]

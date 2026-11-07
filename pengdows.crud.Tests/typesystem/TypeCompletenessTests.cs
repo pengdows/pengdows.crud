@@ -144,6 +144,7 @@ public class TypeCompletenessTests
         [("IntervalDaySecond", "Oracle")] = "INTERVAL DAY TO SECOND(6) " + Microseconds,
         [("IntervalDaySecond", "PostgreSql")] = "interval " + Microseconds,
         [("IntervalDaySecond", "YugabyteDb")] = "interval " + Microseconds,
+        [("IntervalDaySecond", "Informix")] = "INTERVAL DAY TO SECOND " + Microseconds,
         [("IntervalDaySecond", "AuroraPostgreSql")] = "interval " + Microseconds,
         [("int?[]", "Informix")] = NoNullElements,
         [("long?[]", "Informix")] = NoNullElements,
@@ -169,7 +170,7 @@ public class TypeCompletenessTests
     {
         Stream stream => "Stream:" + Convert.ToHexString(ReadAll(stream)),
         TextReader reader => "Text:\"" + reader.ReadToEnd() + "\"",
-        DateTime dt => TypeSystemCharacterizationTests.Show(TypeCoercionHelper.NormalizeDateTime(dt)),
+        DateTime dt => TypeSystemCharacterizationTests.Show(pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime(dt)),
         // Every dialect sends a decimal without trailing zeros (its value, not its scale, is the data).
         decimal m => "decimal:" + m.ToString("G29", System.Globalization.CultureInfo.InvariantCulture),
         // The same shape whether held as WKB or WKT (the library's own EWKT writer decodes WKB).

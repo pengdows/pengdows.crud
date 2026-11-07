@@ -96,6 +96,18 @@ internal class FlatFileDialect : SqlDialect
     /// </summary>
     public override bool SupportsNamedParameters => true;
 
+    // TIME WITH TIME ZONE: the engine stores it as DateTimeOffset and keeps the offset (pengdows.flatfile 0.2.1-preview.24),
+    // so a DateTimeOffset declared as a time binds as that value rather than being refused as a TimeOnly.
+    public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
+    {
+        if (type == DbType.Time && value is DateTimeOffset zonedTime)
+        {
+            return base.CreateDbParameter<object?>(name, DbType.DateTimeOffset, zonedTime);
+        }
+
+        return base.CreateDbParameter(name, type, value);
+    }
+
     // DATE and TIME bind as DateTime and TimeSpan, as on every other dialect: pengdows.flatfile 0.2.1-preview.2 and
     // preview.5 store those however the parameter is typed, and preview.5 refuses DateOnly/TimeOnly parameters
     // (confirmed live 2026-10-23; pengdows/pengdows.flatfile#1 accepts them again).

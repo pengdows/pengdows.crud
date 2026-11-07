@@ -13,94 +13,94 @@ The **open** cells are the work that remains; a `—` cell becomes work if a spe
 
 ## Status
 
-- 75 types, 16 databases, 1200 cells.
-- 687 cells store and read the value back.
+- 75 types, 18 databases, 1350 cells.
+- 755 cells store and read the value back.
 - 0 open: the database has a type and the library does not handle it yet.
-- 9 unsupported by design: a stated decision (reason in the table below).
-- 2 unsupported by server: the database lacks a working feature for the value.
+- 11 unsupported by design: a stated decision (reason in the table below).
+- 3 unsupported by server: the database lacks a working feature for the value.
 - 1 upstream defect: the database's own bug, reproduced live.
-- 496 with no column type on that database (`—`): no candidate spelling was accepted.
-- 5 cells fail.
+- 580 with no column type on that database (`—`): no candidate spelling was accepted.
+- 0 cells fail.
 
 ## Types by database
 
-| Type | CLR type | DbType | PostgreSQL | SQL Server | Oracle | Firebird | CockroachDB | MariaDB | MySQL | SQLite | DuckDB | YugabyteDB | TiDB | SingleStore | Sybase ASE | Spanner | FlatFile | Access |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| signed 8-bit | `sbyte` | SByte | `SMALLINT` | `SMALLINT` | `NUMBER(3,0)` | `SMALLINT` | `SMALLINT` | `TINYINT` | `TINYINT` | `TINYINT` | `TINYINT` | `SMALLINT` | `TINYINT` | `TINYINT` | `SMALLINT` | `BIGINT` | `SMALLINT` | `SMALLINT` |
-| signed 16-bit | `short` | Int16 | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `INT8` | `SMALLINT` | `SMALLINT` |
-| signed 32-bit | `int` | Int32 | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` |
-| signed 64-bit | `long` | Int64 | `BIGINT` | `BIGINT` | `NUMBER(19,0)` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` |
-| signed 128-bit | `Int128` | Object | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `NUMBER(38,0)` | `INT128` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `TEXT` | `HUGEINT` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | — | `NUMERIC(38,0)` | — |
-| unsigned 8-bit | `byte` | Byte | `SMALLINT` | `TINYINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `TINYINT UNSIGNED` | `TINYINT UNSIGNED` | `TINYINT UNSIGNED` | `UTINYINT` | `SMALLINT` | `TINYINT UNSIGNED` | `TINYINT UNSIGNED` | `TINYINT` | `BIGINT` | `SMALLINT` | `BYTE` |
-| unsigned 16-bit | `ushort` | UInt16 | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `SMALLINT UNSIGNED` | `SMALLINT UNSIGNED` | `SMALLINT UNSIGNED` | `USMALLINT` | `INTEGER` | `SMALLINT UNSIGNED` | `SMALLINT UNSIGNED` | `UNSIGNED SMALLINT` | `INTEGER` | `INTEGER` | `INTEGER` |
-| unsigned 32-bit | `uint` | UInt32 | `BIGINT` | `BIGINT` | `NUMBER(10,0)` | `BIGINT` | `BIGINT` | `INT UNSIGNED` | `INT UNSIGNED` | `INT UNSIGNED` | `UINTEGER` | `BIGINT` | `INT UNSIGNED` | `INT UNSIGNED` | `UNSIGNED INT` | `BIGINT` | `BIGINT` | `BIGINT` |
-| unsigned 64-bit | `ulong` | UInt64 | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `BIGINT UNSIGNED` | `BIGINT UNSIGNED` | `TEXT` | `UBIGINT` | `NUMERIC(20,0)` | `BIGINT UNSIGNED` | `BIGINT UNSIGNED` | `UNSIGNED BIGINT` | `NUMERIC` | `NUMERIC(20,0)` | `NUMERIC(20,0)` |
-| arbitrary-size integer | `BigInteger` | Object | `NUMERIC(1000,0)` | `NUMERIC(38,0)` | `NUMBER` | `NUMERIC(38,0)` | `NUMERIC(1000,0)` | `DECIMAL(65,0)` | `DECIMAL(65,0)` | `TEXT` | `VARINT` | `NUMERIC(1000,0)` | `DECIMAL(65,0)` | `DECIMAL(65,0)` | `NUMERIC(38,0)` | — | `NUMERIC(1000,0)` | design |
-| binary float32 | `float` | Single | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` |
-| binary float64 | `double` | Double | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` |
-| fixed decimal | `decimal` | Decimal | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `NUMERIC` | `DECIMAL(18,4)` | `DECIMAL(18,4)` |
-| boolean | `bool` | Boolean | `BOOLEAN` | `BIT` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | — | `BOOLEAN` | `BOOLEAN` | `BIT` |
-| bit / bitstring | `BitArray` | Object | `BIT VARYING(8)` | design | — | — | `BIT VARYING(8)` | `BIT(3)` | `BIT(3)` | `VARCHAR(100)` | `BIT(8)` | `BIT VARYING(8)` | `BIT(3)` | `BIT(3)` | — | — | — | design |
-| varying character | `string` | String | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` |
-| unbounded text | `string` | String | `TEXT` | `TEXT` | `CLOB` | `BLOB SUB_TYPE TEXT` | `TEXT` | `TEXT` | `TEXT` | `CLOB` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `CLOB` | `TEXT` |
-| UUID / GUID | `Guid` | Guid | `UUID` | `UNIQUEIDENTIFIER` | `VARCHAR2(36)` | `CHAR(16) CHARACTER SET OCTETS` | `UUID` | `UUID` | `CHAR(36)` | `UUID` | `UUID` | `UUID` | `CHAR(36)` | `CHAR(36)` | `BINARY(16)` | `UUID` | `UUID` | `UNIQUEIDENTIFIER` |
-| calendar date | `DateOnly` | Date | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` |
-| time without zone | `TimeOnly` | Time | `TIME(6)` | `TIME(6)` | — | `TIME` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME` | — | `TIME(6)` | `TIME` |
-| time without zone | `TimeSpan` | Time | `TIME(6)` | `TIME(6)` | — | `TIME` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME` | — | `TIME(6)` | `TIME` |
-| day-time interval | `IntervalDaySecond` | Object | `INTERVAL DAY TO SECOND(6)` | — | `INTERVAL DAY TO SECOND(6)` | — | `INTERVAL DAY TO SECOND(6)` | — | — | `INTERVAL` | `INTERVAL DAY TO SECOND` | `INTERVAL DAY TO SECOND(6)` | — | — | — | — | — | — |
-| timestamp without zone | `DateTime` | DateTime2 | `TIMESTAMP(6)` | `DATETIME2(6)` | `TIMESTAMP(6)` | `TIMESTAMP` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `DATETIME` | — | `TIMESTAMP(6)` | `DATETIME` |
-| timestamp with zone | `DateTimeOffset` | DateTimeOffset | `TIMESTAMP WITH TIME ZONE` | `DATETIMEOFFSET` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | — | — | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | — | — | — | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | — |
-| binary LOB | `byte[]` | Binary | `BYTEA` | `IMAGE` | `BLOB` | `BLOB` | `BLOB` | `BLOB` | `BLOB` | `BLOB` | `BLOB` | `BYTEA` | `BLOB` | `BLOB` | `IMAGE` | `BYTEA` | `BLOB` | `IMAGE` |
-| JSON text / JSON value | `JsonDocument` | Object | `JSON` | `JSON` | `CLOB` | — | `JSON` | `JSON` | `JSON` | `JSON` | `JSON` | `JSON` | `JSON` | `JSON` | — | `JSONB` | `JSON` | — |
-| IP address | `IPAddress` | Object | `INET` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `INET` | `VARCHAR(45)` | `VARCHAR(45)` | `INET` | `VARCHAR(45)` | `INET` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` |
-| SQL array | `int[]` | Object | `INTEGER ARRAY` | — | — | — | `INTEGER ARRAY` | — | — | `INTEGER ARRAY` | `INTEGER ARRAY` | `INTEGER ARRAY` | — | — | — | `INTEGER ARRAY` | — | — |
-| unsigned 128-bit | `UInt128` | Object | — | — | — | — | — | — | — | `TEXT` | `UHUGEINT` | — | — | — | — | — | — | — |
-| decimal floating point | `decimal` | Decimal | — | — | — | `DECFLOAT` | — | — | — | `DECFLOAT` | — | — | — | — | — | — | — | — |
-| money / currency | `decimal` | Decimal | `MONEY` | `MONEY` | — | — | — | — | — | `MONEY` | — | `MONEY` | — | — | `MONEY` | — | — | `MONEY` |
-| fixed character | `string` | String | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | — | `CHAR(10)` | `CHAR(10)` |
-| national / Unicode character | `string` | String | `VARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR2(100)` | `VARCHAR(100)` | — | `NVARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` | `VARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` | — | `NCHAR(10)` | `NVARCHAR(100)` |
-| long text LOB | `string` | String | `TEXT` | `TEXT` | `CLOB` | `BLOB SUB_TYPE TEXT` | `TEXT` | `TEXT` | `TEXT` | `CLOB` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `CLOB` | `TEXT` |
-| enumeration | `string` | String | — | — | — | — | — | `ENUM('active','inactive')` | `ENUM('active','inactive')` | `ENUM` | `VARCHAR(20)` | — | `ENUM('active','inactive')` | `ENUM('active','inactive')` | — | — | — | — |
-| set-valued enum | `string` | String | — | — | — | — | — | `SET('a','b')` | `SET('a','b')` | — | — | — | `SET('a','b')` | `SET('a','b')` | — | — | — | — |
-| fixed binary | `byte[]` | Binary | — | `BINARY(16)` | `RAW(16)` | `BINARY(16)` | — | `BINARY(16)` | `BINARY(16)` | `BINARY(16)` | — | — | `BINARY(16)` | `BINARY(16)` | `BINARY(16)` | — | `BINARY(16)` | `BINARY(16)` |
-| varying binary | `byte[]` | Binary | `BYTEA` | `VARBINARY(16)` | `RAW(16)` | `VARBINARY(32)` | `BYTEA` | `VARBINARY(16)` | `VARBINARY(16)` | `VARBINARY(16)` | `BYTEA` | `BYTEA` | `VARBINARY(16)` | `VARBINARY(16)` | `VARBINARY(16)` | `BYTEA` | `BLOB` | `VARBINARY(16)` |
-| legacy long binary | `byte[]` | Binary | — | `IMAGE` | `LONG RAW` | — | — | `TINYBLOB` | `TINYBLOB` | `LONG RAW` | — | — | `TINYBLOB` | `TINYBLOB` | `IMAGE` | — | — | `IMAGE` |
-| rowversion / timestamp token | `byte[]` | Binary | `BYTEA` | `ROWVERSION` | `RAW(16)` | `VARBINARY(32)` | `BYTEA` | `VARBINARY(16)` | `VARBINARY(16)` | `ROWVERSION` | `BYTEA` | `BYTEA` | `VARBINARY(16)` | `VARBINARY(16)` | — | — | `BLOB` | `VARBINARY(16)` |
-| local-zone timestamp | `DateTime` | DateTime | — | — | `TIMESTAMP WITH LOCAL TIME ZONE` | — | — | — | — | `TIMESTAMP WITH LOCAL TIME ZONE` | — | — | — | — | — | — | — | — |
-| second-precision datetime | `DateTime` | DateTime | `TIMESTAMP(0)` | `DATETIME2(0)` | `DATE` | `TIMESTAMP` | `TIMESTAMP(0)` | `DATETIME(0)` | `DATETIME(0)` | `DATETIME(0)` | `DATETIME(0)` | `TIMESTAMP(0)` | `DATETIME(0)` | `DATETIME(0)` | `DATETIME` | `TIMESTAMPTZ` | `TIMESTAMP` | `SMALLDATETIME` |
-| time with zone | `DateTimeOffset` | DateTimeOffset | FAIL | — | — | FAIL | FAIL | — | — | FAIL | `TIME WITH TIME ZONE` | FAIL | — | — | — | — | `TIME WITH TIME ZONE` | — |
-| year-only | `short` | Int16 | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `YEAR` | `YEAR` | `YEAR` | `SMALLINT` | `SMALLINT` | `YEAR` | `YEAR` | `SMALLINT` | — | `SMALLINT` | `SMALLINT` |
-| year-month interval | `IntervalYearMonth` | Object | `INTERVAL YEAR TO MONTH` | — | `INTERVAL YEAR TO MONTH` | — | `INTERVAL YEAR TO MONTH` | — | — | `INTERVAL` | `INTERVAL YEAR TO MONTH` | `INTERVAL YEAR TO MONTH` | — | — | — | — | — | — |
-| generic interval | `PostgreSqlInterval` | Object | `INTERVAL` | — | — | — | `INTERVAL` | — | — | `INTERVAL` | `INTERVAL` | `INTERVAL` | — | — | — | — | — | — |
-| row identifier / ROWID | `string` | String | `CHAR(18)` | `CHAR(18)` | design | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `ROWID` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | — | `CHAR(18)` | `CHAR(18)` |
-| object identifier / OID | `uint` | UInt32 | `OID` | — | — | — | `OID` | — | — | `OID` | `OID` | `OID` | — | — | — | — | — | — |
-| transaction ID | `ulong` | UInt64 | `XID8` | — | — | — | — | — | — | `XID` | — | upstream | — | — | — | — | — | — |
-| WAL / log position | `string` | String | `PG_LSN` | — | — | — | `PG_LSN` | — | — | `PG_LSN` | — | `PG_LSN` | — | — | — | — | — | — |
-| native binary JSON | `JsonDocument` | Object | `JSONB` | `JSON` | — | — | `JSONB` | `JSON` | `JSON` | `JSONB` | `JSON` | `JSONB` | `JSON` | `BSON` | — | `JSONB` | `JSON` | — |
-| XML | `string` | String | `XML` | `XML` | `CLOB` | — | server | — | — | `XML` | — | server | — | — | — | — | `CLOB` | — |
-| BSON | `byte[]` | Binary | `BYTEA` | — | — | — | `BYTEA` | — | — | `BSON` | `BYTEA` | `BYTEA` | — | `BSON` | — | `BYTEA` | — | — |
-| variant / dynamic value | `object` | Object | — | `SQL_VARIANT` | design | — | — | — | — | `VARIANT` | — | — | — | — | — | — | — | — |
-| IP network / CIDR | `Cidr` | Object | `CIDR` | — | — | — | `INET` | — | — | `CIDR` | `VARCHAR(50)` | `CIDR` | — | — | — | — | — | — |
-| MAC address | `MacAddress` | Object | `MACADDR` | — | — | — | — | — | — | `MACADDR` | — | `MACADDR` | — | — | — | — | — | — |
-| point geometry | `Geometry` | Object | design | `GEOMETRY` | `SDO_GEOMETRY` | — | `GEOMETRY(POINT,4326)` | `POINT` | `POINT` | `POINT` | — | design | — | — | — | — | — | — |
-| line / linestring geometry | `Geometry` | Object | — | `GEOMETRY` | `SDO_GEOMETRY` | — | `GEOMETRY(LINESTRING)` | `LINESTRING` | `LINESTRING` | `LINESTRING` | — | — | — | — | — | — | — | — |
-| polygon geometry | `Geometry` | Object | design | `GEOMETRY` | `SDO_GEOMETRY` | — | `GEOMETRY(POLYGON)` | `POLYGON` | `POLYGON` | `POLYGON` | — | design | — | — | — | — | — | — |
-| general geometry | `Geometry` | Object | — | `GEOMETRY` | `SDO_GEOMETRY` | — | `GEOMETRY` | `GEOMETRY` | `GEOMETRY` | `GEOMETRY` | — | — | — | — | — | — | — | — |
-| geography / geodetic | `Geography` | Object | — | `GEOGRAPHY` | `SDO_GEOMETRY` | — | `GEOGRAPHY` | — | — | `GEOGRAPHY` | — | — | — | — | — | — | — | — |
-| fixed-length array | `int[]` | Object | `INTEGER ARRAY[10]` | — | — | `INTEGER[10]` | `INTEGER ARRAY[10]` | — | — | `INTEGER ARRAY[10]` | `INTEGER ARRAY[10]` | `INTEGER ARRAY[10]` | — | — | — | `INTEGER ARRAY[10]` | — | — |
-| list / multiset / set collection | `List<int>` | Object | — | — | — | — | — | — | — | `INTEGER MULTISET` | — | — | — | — | — | — | — | — |
-| map / dictionary | `Dictionary<string,object>` | Object | — | — | — | — | — | — | — | `HSTORE` | `VARCHAR` | — | — | — | — | — | — | — |
-| range | `Range<int>` | Object | `INT4RANGE` | — | — | — | — | — | — | `INT4RANGE` | — | `INT4RANGE` | — | — | — | — | — | — |
-| multirange | `Range<int>[]` | Object | `INT4MULTIRANGE` | — | — | — | — | — | — | `INT4MULTIRANGE` | — | `INT4MULTIRANGE` | — | — | — | — | — | — |
-| user-defined enum / domain | `string` | String | — | — | — | — | — | — | — | `ENUM` | — | — | — | — | — | — | — | — |
-| full-text search vector / query | `string` | String | `TSQUERY` | — | — | — | `TSQUERY` | — | — | `TSVECTOR` | — | `TSQUERY` | — | — | — | — | — | — |
-| native point | `PostgreSqlPoint` | Object | `POINT` | — | — | — | — | — | — | — | — | `POINT` | — | — | — | — | — | — |
-| native polygon | `PostgreSqlPolygon` | Object | `POLYGON` | — | — | — | — | — | — | — | — | `POLYGON` | — | — | — | — | — | — |
-| 32-bit transaction ID | `uint` | UInt32 | `XID` | — | — | — | — | — | — | — | — | `XID` | — | — | — | — | — | — |
-| vector embedding | `float[]` | Object | — | `VECTOR(3)` | — | — | `VECTOR(3)` | — | — | `VECTOR(3)` | — | — | `VECTOR(3)` | `VECTOR(3)` | — | — | — | — |
-| hierarchical path | `HierarchyId` | Object | — | `HIERARCHYID` | — | — | — | — | — | `HIERARCHYID` | — | — | — | — | — | — | — | — |
-| external-file reference | `string` | String | — | — | `BFILE` | — | — | — | — | `BFILE` | — | — | — | — | — | — | — | — |
-| specialized security label | `string` | String | — | — | — | — | — | — | — | `IDSSECURITYLABEL` | — | — | — | — | — | — | — | — |
+| Type | CLR type | DbType | PostgreSQL | SQL Server | Oracle | Firebird | CockroachDB | MariaDB | MySQL | SQLite | DuckDB | YugabyteDB | TiDB | SingleStore | Sybase ASE | Spanner | FlatFile | Access | Db2 LUW | Informix |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| signed 8-bit | `sbyte` | SByte | `SMALLINT` | `SMALLINT` | `NUMBER(3,0)` | `SMALLINT` | `SMALLINT` | `TINYINT` | `TINYINT` | `TINYINT` | `TINYINT` | `SMALLINT` | `TINYINT` | `TINYINT` | `SMALLINT` | `BIGINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` |
+| signed 16-bit | `short` | Int16 | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `INT8` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` |
+| signed 32-bit | `int` | Int32 | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` |
+| signed 64-bit | `long` | Int64 | `BIGINT` | `BIGINT` | `NUMBER(19,0)` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | server |
+| signed 128-bit | `Int128` | Object | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `NUMBER(38,0)` | `INT128` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `TEXT` | `HUGEINT` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | `NUMERIC(38,0)` | — | `NUMERIC(38,0)` | — | — | — |
+| unsigned 8-bit | `byte` | Byte | `SMALLINT` | `TINYINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `TINYINT UNSIGNED` | `TINYINT UNSIGNED` | `TINYINT UNSIGNED` | `UTINYINT` | `SMALLINT` | `TINYINT UNSIGNED` | `TINYINT UNSIGNED` | `TINYINT` | `BIGINT` | `SMALLINT` | `BYTE` | `SMALLINT` | `SMALLINT` |
+| unsigned 16-bit | `ushort` | UInt16 | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `SMALLINT UNSIGNED` | `SMALLINT UNSIGNED` | `SMALLINT UNSIGNED` | `USMALLINT` | `INTEGER` | `SMALLINT UNSIGNED` | `SMALLINT UNSIGNED` | `UNSIGNED SMALLINT` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` | `INTEGER` |
+| unsigned 32-bit | `uint` | UInt32 | `BIGINT` | `BIGINT` | `NUMBER(10,0)` | `BIGINT` | `BIGINT` | `INT UNSIGNED` | `INT UNSIGNED` | `INT UNSIGNED` | `UINTEGER` | `BIGINT` | `INT UNSIGNED` | `INT UNSIGNED` | `UNSIGNED INT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` | `BIGINT` |
+| unsigned 64-bit | `ulong` | UInt64 | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `BIGINT UNSIGNED` | `BIGINT UNSIGNED` | `TEXT` | `UBIGINT` | `NUMERIC(20,0)` | `BIGINT UNSIGNED` | `BIGINT UNSIGNED` | `UNSIGNED BIGINT` | `NUMERIC` | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `NUMERIC(20,0)` | `NUMERIC(20,0)` |
+| arbitrary-size integer | `BigInteger` | Object | `NUMERIC(1000,0)` | `NUMERIC(38,0)` | `NUMBER` | `NUMERIC(38,0)` | `NUMERIC(1000,0)` | `DECIMAL(65,0)` | `DECIMAL(65,0)` | `TEXT` | `VARINT` | `NUMERIC(1000,0)` | `DECIMAL(65,0)` | `DECIMAL(65,0)` | `NUMERIC(38,0)` | — | `NUMERIC(1000,0)` | design | — | — |
+| binary float32 | `float` | Single | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` | `REAL` |
+| binary float64 | `double` | Double | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` | `DOUBLE PRECISION` |
+| fixed decimal | `decimal` | Decimal | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `NUMERIC` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` | `DECIMAL(18,4)` |
+| boolean | `bool` | Boolean | `BOOLEAN` | `BIT` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | `BOOLEAN` | — | `BOOLEAN` | `BOOLEAN` | `BIT` | `BOOLEAN` | `BOOLEAN` |
+| bit / bitstring | `BitArray` | Object | `BIT VARYING(8)` | design | — | — | `BIT VARYING(8)` | `BIT(3)` | `BIT(3)` | `VARCHAR(100)` | `BIT(8)` | `BIT VARYING(8)` | `BIT(3)` | `BIT(3)` | — | — | — | design | — | — |
+| varying character | `string` | String | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` | `VARCHAR(100)` |
+| unbounded text | `string` | String | `TEXT` | `TEXT` | `CLOB` | `BLOB SUB_TYPE TEXT` | `TEXT` | `TEXT` | `TEXT` | `CLOB` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `CLOB` | `TEXT` | `CLOB` | `CLOB` |
+| UUID / GUID | `Guid` | Guid | `UUID` | `UNIQUEIDENTIFIER` | `VARCHAR2(36)` | `CHAR(16) CHARACTER SET OCTETS` | `UUID` | `UUID` | `CHAR(36)` | `UUID` | `UUID` | `UUID` | `CHAR(36)` | `CHAR(36)` | `BINARY(16)` | `UUID` | `UUID` | `UNIQUEIDENTIFIER` | `CHAR(36)` | `CHAR(36)` |
+| calendar date | `DateOnly` | Date | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` | `DATE` |
+| time without zone | `TimeOnly` | Time | `TIME(6)` | `TIME(6)` | — | `TIME` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME` | — | `TIME(6)` | `TIME` | `TIME` | — |
+| time without zone | `TimeSpan` | Time | `TIME(6)` | `TIME(6)` | — | `TIME` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME` | `TIME(6)` | `TIME(6)` | `TIME(6)` | `TIME` | — | `TIME(6)` | `TIME` | `TIME` | — |
+| day-time interval | `IntervalDaySecond` | Object | `INTERVAL DAY TO SECOND(6)` | — | `INTERVAL DAY TO SECOND(6)` | — | `INTERVAL DAY TO SECOND(6)` | — | — | `INTERVAL` | `INTERVAL DAY TO SECOND` | `INTERVAL DAY TO SECOND(6)` | — | — | — | — | — | — | — | `INTERVAL DAY TO SECOND` |
+| timestamp without zone | `DateTime` | DateTime2 | `TIMESTAMP(6)` | `DATETIME2(6)` | `TIMESTAMP(6)` | `TIMESTAMP` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `TIMESTAMP(6)` | `DATETIME` | — | `TIMESTAMP(6)` | `DATETIME` | `TIMESTAMP(6)` | `DATETIME YEAR TO FRACTION` |
+| timestamp with zone | `DateTimeOffset` | DateTimeOffset | `TIMESTAMP WITH TIME ZONE` | `DATETIMEOFFSET` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | — | — | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | — | — | — | `TIMESTAMP WITH TIME ZONE` | `TIMESTAMP WITH TIME ZONE` | — | — | — |
+| binary LOB | `byte[]` | Binary | `BYTEA` | `IMAGE` | `BLOB` | `BLOB` | `BLOB` | `BLOB` | `BLOB` | `BLOB` | `BLOB` | `BYTEA` | `BLOB` | `BLOB` | `IMAGE` | `BYTEA` | `BLOB` | `IMAGE` | `BLOB` | `BLOB` |
+| JSON text / JSON value | `JsonDocument` | Object | `JSON` | `JSON` | `CLOB` | — | `JSON` | `JSON` | `JSON` | `JSON` | `JSON` | `JSON` | `JSON` | `JSON` | — | `JSONB` | `JSON` | — | — | `JSON` |
+| IP address | `IPAddress` | Object | `INET` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `INET` | `VARCHAR(45)` | `VARCHAR(45)` | `INET` | `VARCHAR(45)` | `INET` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` | `VARCHAR(45)` |
+| SQL array | `int[]` | Object | `INTEGER ARRAY` | — | — | — | `INTEGER ARRAY` | — | — | `INTEGER ARRAY` | `INTEGER ARRAY` | `INTEGER ARRAY` | — | — | — | `INTEGER ARRAY` | — | — | — | — |
+| unsigned 128-bit | `UInt128` | Object | — | — | — | — | — | — | — | `TEXT` | `UHUGEINT` | — | — | — | — | — | — | — | — | — |
+| decimal floating point | `decimal` | Decimal | — | — | — | `DECFLOAT` | — | — | — | `DECFLOAT` | — | — | — | — | — | — | — | — | `DECFLOAT` | — |
+| money / currency | `decimal` | Decimal | `MONEY` | `MONEY` | — | — | — | — | — | `MONEY` | — | `MONEY` | — | — | `MONEY` | — | — | `MONEY` | — | `MONEY` |
+| fixed character | `string` | String | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | — | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` | `CHAR(10)` |
+| national / Unicode character | `string` | String | `VARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR2(100)` | `VARCHAR(100)` | — | `NVARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` | `VARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` | — | `NCHAR(10)` | `NVARCHAR(100)` | `NVARCHAR(100)` | `NVARCHAR(100)` |
+| long text LOB | `string` | String | `TEXT` | `TEXT` | `CLOB` | `BLOB SUB_TYPE TEXT` | `TEXT` | `TEXT` | `TEXT` | `CLOB` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `TEXT` | `CLOB` | `TEXT` | `CLOB` | `CLOB` |
+| enumeration | `string` | String | — | — | — | — | — | `ENUM('active','inactive')` | `ENUM('active','inactive')` | `ENUM` | `VARCHAR(20)` | — | `ENUM('active','inactive')` | `ENUM('active','inactive')` | — | — | — | — | — | — |
+| set-valued enum | `string` | String | — | — | — | — | — | `SET('a','b')` | `SET('a','b')` | — | — | — | `SET('a','b')` | `SET('a','b')` | — | — | — | — | — | — |
+| fixed binary | `byte[]` | Binary | — | `BINARY(16)` | `RAW(16)` | `BINARY(16)` | — | `BINARY(16)` | `BINARY(16)` | `BINARY(16)` | — | — | `BINARY(16)` | `BINARY(16)` | `BINARY(16)` | — | `BINARY(16)` | `BINARY(16)` | `BINARY(16)` | — |
+| varying binary | `byte[]` | Binary | `BYTEA` | `VARBINARY(16)` | `RAW(16)` | `VARBINARY(32)` | `BYTEA` | `VARBINARY(16)` | `VARBINARY(16)` | `VARBINARY(16)` | `BYTEA` | `BYTEA` | `VARBINARY(16)` | `VARBINARY(16)` | `VARBINARY(16)` | `BYTEA` | `BLOB` | `VARBINARY(16)` | `VARBINARY(16)` | `BLOB` |
+| legacy long binary | `byte[]` | Binary | — | `IMAGE` | `LONG RAW` | — | — | `TINYBLOB` | `TINYBLOB` | `LONG RAW` | — | — | `TINYBLOB` | `TINYBLOB` | `IMAGE` | — | — | `IMAGE` | — | `BYTE` |
+| rowversion / timestamp token | `byte[]` | Binary | `BYTEA` | `ROWVERSION` | `RAW(16)` | `VARBINARY(32)` | `BYTEA` | `VARBINARY(16)` | `VARBINARY(16)` | `ROWVERSION` | `BYTEA` | `BYTEA` | `VARBINARY(16)` | `VARBINARY(16)` | — | — | `BLOB` | `VARBINARY(16)` | `BINARY(8)` | — |
+| local-zone timestamp | `DateTime` | DateTime | — | — | `TIMESTAMP WITH LOCAL TIME ZONE` | — | — | — | — | `TIMESTAMP WITH LOCAL TIME ZONE` | — | — | — | — | — | — | — | — | — | — |
+| second-precision datetime | `DateTime` | DateTime | `TIMESTAMP(0)` | `DATETIME2(0)` | `DATE` | `TIMESTAMP` | `TIMESTAMP(0)` | `DATETIME(0)` | `DATETIME(0)` | `DATETIME(0)` | `DATETIME(0)` | `TIMESTAMP(0)` | `DATETIME(0)` | `DATETIME(0)` | `DATETIME` | `TIMESTAMPTZ` | `TIMESTAMP` | `SMALLDATETIME` | `DATETIME` | `DATETIME YEAR TO SECOND` |
+| time with zone | `DateTimeOffset` | Time | `TIME WITH TIME ZONE` | — | — | `TIME WITH TIME ZONE` | `TIME WITH TIME ZONE` | — | — | `TIME WITH TIME ZONE` | design | `TIME WITH TIME ZONE` | — | — | — | — | `TIME WITH TIME ZONE` | — | — | — |
+| year-only | `short` | Int16 | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` | `YEAR` | `YEAR` | `YEAR` | `SMALLINT` | `SMALLINT` | `YEAR` | `YEAR` | `SMALLINT` | — | `SMALLINT` | `SMALLINT` | `SMALLINT` | `SMALLINT` |
+| year-month interval | `IntervalYearMonth` | Object | `INTERVAL YEAR TO MONTH` | — | `INTERVAL YEAR TO MONTH` | — | `INTERVAL YEAR TO MONTH` | — | — | `INTERVAL` | `INTERVAL YEAR TO MONTH` | `INTERVAL YEAR TO MONTH` | — | — | — | — | — | — | — | `INTERVAL YEAR TO MONTH` |
+| generic interval | `PostgreSqlInterval` | Object | `INTERVAL` | — | — | — | `INTERVAL` | — | — | `INTERVAL` | `INTERVAL` | `INTERVAL` | — | — | — | — | — | — | — | — |
+| row identifier / ROWID | `string` | String | `CHAR(18)` | `CHAR(18)` | design | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `ROWID` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | — | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` | `CHAR(18)` |
+| object identifier / OID | `uint` | UInt32 | `OID` | — | — | — | `OID` | — | — | `OID` | `OID` | `OID` | — | — | — | — | — | — | — | — |
+| transaction ID | `ulong` | UInt64 | `XID8` | — | — | — | — | — | — | `XID` | — | upstream | — | — | — | — | — | — | — | — |
+| WAL / log position | `string` | String | `PG_LSN` | — | — | — | `PG_LSN` | — | — | `PG_LSN` | — | `PG_LSN` | — | — | — | — | — | — | — | — |
+| native binary JSON | `JsonDocument` | Object | `JSONB` | `JSON` | — | — | `JSONB` | `JSON` | `JSON` | `JSONB` | `JSON` | `JSONB` | `JSON` | `BSON` | — | `JSONB` | `JSON` | — | — | `BSON` |
+| XML | `string` | String | `XML` | `XML` | `CLOB` | — | server | — | — | `XML` | — | server | — | — | — | — | `CLOB` | — | `XML` | `CLOB` |
+| BSON | `byte[]` | Binary | `BYTEA` | — | — | — | `BYTEA` | — | — | `BSON` | `BYTEA` | `BYTEA` | — | `BSON` | — | `BYTEA` | — | — | — | design |
+| variant / dynamic value | `object` | Object | — | `SQL_VARIANT` | design | — | — | — | — | `VARIANT` | — | — | — | — | — | — | — | — | — | — |
+| IP network / CIDR | `Cidr` | Object | `CIDR` | — | — | — | `INET` | — | — | `CIDR` | `VARCHAR(50)` | `CIDR` | — | — | — | — | — | — | — | — |
+| MAC address | `MacAddress` | Object | `MACADDR` | — | — | — | — | — | — | `MACADDR` | — | `MACADDR` | — | — | — | — | — | — | — | — |
+| point geometry | `Geometry` | Object | design | `GEOMETRY` | `SDO_GEOMETRY` | — | `GEOMETRY(POINT,4326)` | `POINT` | `POINT` | `POINT` | — | design | — | — | — | — | — | — | — | — |
+| line / linestring geometry | `Geometry` | Object | — | `GEOMETRY` | `SDO_GEOMETRY` | — | `GEOMETRY(LINESTRING)` | `LINESTRING` | `LINESTRING` | `LINESTRING` | — | — | — | — | — | — | — | — | — | — |
+| polygon geometry | `Geometry` | Object | design | `GEOMETRY` | `SDO_GEOMETRY` | — | `GEOMETRY(POLYGON)` | `POLYGON` | `POLYGON` | `POLYGON` | — | design | — | — | — | — | — | — | — | — |
+| general geometry | `Geometry` | Object | — | `GEOMETRY` | `SDO_GEOMETRY` | — | `GEOMETRY` | `GEOMETRY` | `GEOMETRY` | `GEOMETRY` | — | — | — | — | — | — | — | — | — | — |
+| geography / geodetic | `Geography` | Object | — | `GEOGRAPHY` | `SDO_GEOMETRY` | — | `GEOGRAPHY` | — | — | `GEOGRAPHY` | — | — | — | — | — | — | — | — | — | — |
+| fixed-length array | `int[]` | Object | `INTEGER ARRAY[10]` | — | — | `INTEGER[10]` | `INTEGER ARRAY[10]` | — | — | `INTEGER ARRAY[10]` | `INTEGER ARRAY[10]` | `INTEGER ARRAY[10]` | — | — | — | `INTEGER ARRAY[10]` | — | — | — | — |
+| list / multiset / set collection | `List<int>` | Object | — | — | — | — | — | — | — | `INTEGER MULTISET` | — | — | — | — | — | — | — | — | — | — |
+| map / dictionary | `Dictionary<string,object>` | Object | — | — | — | — | — | — | — | `HSTORE` | `VARCHAR` | — | — | — | — | — | — | — | — | — |
+| range | `Range<int>` | Object | `INT4RANGE` | — | — | — | — | — | — | `INT4RANGE` | — | `INT4RANGE` | — | — | — | — | — | — | — | — |
+| multirange | `Range<int>[]` | Object | `INT4MULTIRANGE` | — | — | — | — | — | — | `INT4MULTIRANGE` | — | `INT4MULTIRANGE` | — | — | — | — | — | — | — | — |
+| user-defined enum / domain | `string` | String | — | — | — | — | — | — | — | `ENUM` | — | — | — | — | — | — | — | — | — | — |
+| full-text search vector / query | `string` | String | `TSQUERY` | — | — | — | `TSQUERY` | — | — | `TSVECTOR` | — | `TSQUERY` | — | — | — | — | — | — | — | — |
+| native point | `PostgreSqlPoint` | Object | `POINT` | — | — | — | — | — | — | — | — | `POINT` | — | — | — | — | — | — | — | — |
+| native polygon | `PostgreSqlPolygon` | Object | `POLYGON` | — | — | — | — | — | — | — | — | `POLYGON` | — | — | — | — | — | — | — | — |
+| 32-bit transaction ID | `uint` | UInt32 | `XID` | — | — | — | — | — | — | — | — | `XID` | — | — | — | — | — | — | — | — |
+| vector embedding | `float[]` | Object | — | `VECTOR(3)` | — | — | `VECTOR(3)` | — | — | `VECTOR(3)` | — | — | `VECTOR(3)` | `VECTOR(3)` | — | — | — | — | — | — |
+| hierarchical path | `HierarchyId` | Object | — | `HIERARCHYID` | — | — | — | — | — | `HIERARCHYID` | — | — | — | — | — | — | — | — | — | — |
+| external-file reference | `string` | String | — | — | `BFILE` | — | — | — | — | `BFILE` | — | — | — | — | — | — | — | — | — | — |
+| specialized security label | `string` | String | — | — | — | — | — | — | — | `IDSSECURITYLABEL` | — | — | — | — | — | — | — | — | — | — |
 
 ## Cells that can't be represented
 
@@ -116,9 +116,12 @@ a database that has the type can be supported. The `—` cells are not listed: t
 | Oracle | row identifier / ROWID | unsupported by design | by design: ROWID is a pseudo-column that identifies a row: a ROWID column keeps no value the library writes (it reads back NULL) |
 | Oracle | variant / dynamic value | unsupported by design | by design: ANYDATA is built by its type's constructor functions (ANYDATA.ConvertVarchar2), not bound as a value |
 | CockroachDB | XML | unsupported by server | server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application |
+| DuckDB | time with zone | unsupported by design | by design: DuckDB has no time-with-zone column the library can hold its offset in; a DateTimeOffset declared DbType.Time is refused (ArgumentException, DbTypeValidator) |
 | YugabyteDB | transaction ID | upstream defect | upstream: YugabyteDB's xid8 adds high bits on write: 4294967296 (0x100000000) reads back as 18700287606784 (0x110200000000), so no raw integer round-trips |
 | YugabyteDB | XML | unsupported by server | server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application |
 | YugabyteDB | point geometry | unsupported by design | by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row) |
 | YugabyteDB | polygon geometry | unsupported by design | by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPolygon (the native polygon row) |
 | Access | arbitrary-size integer | unsupported by design | by design: Access has no integer beyond DECIMAL(28), and NUMBER is a double that loses digits; a BigInteger is not a type the OLE DB provider can marshal |
 | Access | bit / bitstring | unsupported by design | by design: a BIT (YESNO) column holds one bit; a bit string of any length is not representable without a length-bearing column |
+| Informix | signed 64-bit | unsupported by server | server: Informix's BIGINT and INT8 exclude -9223372036854775808, their NULL sentinel; the server refuses the value (Value will not fit in a BIGINT or an INT8, confirmed live 2026-11-06) |
+| Informix | BSON | unsupported by design | by design: Informix writes a BSON document from its JSON text, and the server refuses raw bytes as BSON (No cast from byte to json, confirmed live 2026-11-06) |

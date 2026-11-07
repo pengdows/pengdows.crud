@@ -175,7 +175,7 @@ internal class SnowflakeDialect : SqlDialect
         if (parameter.Value is Array array)
         {
             parameter.DbType = DbType.String;
-            parameter.Value = TypeCoercionHelper.GetJsonText(array);
+            parameter.Value = pengdows.crud.types.coercion.JsonCoercion.GetJsonText(array);
         }
 
         parameter.SourceColumn = VectorMarker;

@@ -28,7 +28,7 @@ public sealed class CoveragePush_TypeCoercionAndCompiledMapperTests
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static readonly MethodInfo ResolveCoercerTypePairMethod =
-        typeof(TypeCoercionHelper).GetMethod("ResolveCoercer",
+        typeof(pengdows.crud.types.coercion.ConverterResolution).GetMethod("ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
             new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode), typeof(TypeCoercionOptions) },

@@ -64,7 +64,7 @@ SPEC = [
     ("rowversion", "rowversion / timestamp token", "byte[]", "Binary", "new byte[] { 0, 0, 0, 0, 0, 0, 0, 9 }", "bytes"),
     ("local_timestamp", "local-zone timestamp", "DateTime", "DateTime", "new DateTime(2026, 10, 5, 13, 45, 30, DateTimeKind.Utc)", "instant"),
     ("second_datetime", "second-precision datetime", "DateTime", "DateTime", "new DateTime(2026, 10, 5, 13, 45, 30, DateTimeKind.Utc)", "instant"),
-    ("time_zoned", "time with zone", "DateTimeOffset", "DateTimeOffset", "new DateTimeOffset(2026, 10, 5, 13, 45, 30, TimeSpan.FromHours(2))", "instant"),
+    ("time_zoned", "time with zone", "DateTimeOffset", "Time", "new DateTimeOffset(2026, 10, 5, 13, 45, 30, TimeSpan.FromHours(2))", "instant"),
     ("year_only", "year-only", "short", "Int16", "(short)2026", "eq"),
     ("year_month_interval", "year-month interval", "IntervalYearMonth", "Object", "new IntervalYearMonth(2, 3)", "eq"),
     ("generic_interval", "generic interval", "PostgreSqlInterval", "Object", "new PostgreSqlInterval(14, 3, 1234567)", "eq"),
@@ -122,6 +122,9 @@ PREFER = {
 # 39-digit integer becomes a REAL (lossy). It also accepts any type name, so HUGEINT or BIGINT UNSIGNED get integer
 # affinity (64-bit) and are no place for a 128-bit value. A TEXT-affinity column keeps the text the library writes exactly.
 DB_PREFER = {
+    # Informix's BYTE is a binary blob type: the driver refuses an integer in it ("Illegal attempt to convert Text/Byte blob type",
+    # confirmed live 2026-11-06). SMALLINT holds the 0..255 range of an unsigned 8-bit value.
+    ("Informix", "unsigned 8-bit"): ("SMALLINT", "SMALLINT"),
     ("Oracle", "external-file reference"): ("BFILE", "bfile"),
     ("FlatFile", "second-precision datetime"): ("TIMESTAMP", "timestamp"),
     # A fixed-width BIT(3) for the 3-bit sample: the column keeps its width, which the entity's NativeType supplies on read.
@@ -224,10 +227,17 @@ DB_REFUSED = {
     ("YugabyteDb", "transaction ID"): "upstream: YugabyteDB's xid8 adds high bits on write: 4294967296 (0x100000000) reads back as 18700287606784 (0x110200000000), so no raw integer round-trips",
     ("YugabyteDb", "XML"): "server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application",
     ("CockroachDb", "XML"): "server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application",
-    # FlatFile's only date type is DATE, which holds no time of day, and it has no zoned time type.
+    # FlatFile's only date type is DATE, which holds no time of day (its zoned time is a DateTimeOffset, keeping the offset).
     # A ROWID is a pseudo-column that identifies a row: a table column of that type keeps no value the library writes (ODP.NET
     # reads the written text back as NULL), so the cell is refused rather than passed on a NULL.
     ("Oracle", "row identifier / ROWID"): "by design: ROWID is a pseudo-column that identifies a row: a ROWID column keeps no value the library writes (it reads back NULL)",
+    # Informix's BIGINT and INT8 exclude -9223372036854775808, their NULL sentinel: the server refuses the value (confirmed live).
+    ("Informix", "signed 64-bit"): "server: Informix's BIGINT and INT8 exclude -9223372036854775808, their NULL sentinel; the server refuses the value (Value will not fit in a BIGINT or an INT8, confirmed live 2026-11-06)",
+    # Informix writes a BSON document from its JSON text (the JSON-to-BSON cast); the server refuses raw BSON bytes (No cast from byte to json).
+    ("Informix", "BSON"): "by design: Informix writes a BSON document from its JSON text, and the server refuses raw bytes as BSON (No cast from byte to json, confirmed live 2026-11-06)",
+    # A DateTimeOffset declared DbType.Time is a time with its offset (the PostgreSQL timetz and Firebird rule). DuckDB and
+    # FlatFile have no time-with-zone type to hold the offset, so the parameter is refused at the validator.
+    ("DuckDB", "time with zone"): "by design: DuckDB has no time-with-zone column the library can hold its offset in; a DateTimeOffset declared DbType.Time is refused (ArgumentException, DbTypeValidator)",
 }
 
 # A (database, type) whose column the server generates (a rowversion token, a ROWID): the library never writes it, so the
@@ -238,7 +248,7 @@ DB_GENERATED = {
 
 DB_ENUM = [
     "PostgreSql", "SqlServer", "Oracle", "Firebird", "CockroachDb", "MariaDb", "MySql", "Sqlite", "DuckDB",
-    "YugabyteDb", "TiDb", "SingleStore", "SybaseASE", "Spanner", "FlatFile", "Access",
+    "YugabyteDb", "TiDb", "SingleStore", "SybaseASE", "Spanner", "FlatFile", "Access", "Db2", "Informix",
 ]
 
 

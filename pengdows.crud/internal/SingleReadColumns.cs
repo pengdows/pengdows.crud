@@ -25,6 +25,27 @@ internal static class SingleReadColumns
     internal static readonly MethodInfo StringFromValueMethod =
         typeof(SingleReadColumns).GetMethod(nameof(StringFromValue), BindingFlags.Public | BindingFlags.Static)!;
 
+    internal static readonly MethodInfo TrimmedStringFromValueMethod =
+        typeof(SingleReadColumns).GetMethod(nameof(TrimmedStringFromValue), BindingFlags.Public | BindingFlags.Static)!;
+
+    /// <summary>
+    /// The string read a statement uses for this provider: the trailing-NUL trim where the provider's text can end in padding
+    /// (<see cref="pengdows.crud.dialects.DatabaseTraits.TextHasTrailingNul"/>), otherwise the plain read. Chosen when the plan is
+    /// built, so a provider without the padding pays nothing per value.
+    /// </summary>
+    internal static MethodInfo StringReadFor(TypeCoercionOptions? options) =>
+        options is { Provider: var provider } && pengdows.crud.dialects.DatabaseTraits.For(provider).TextHasTrailingNul
+            ? TrimmedStringFromValueMethod
+            : StringFromValueMethod;
+
+    /// <summary>A text value that keeps no trailing padding NUL: the read of a provider whose text can end in one, which SQL text never does.</summary>
+    public static string? TrimmedStringFromValue(object? value, TypeCoercionOptions? options)
+    {
+        // Converted once: a conversion may not be repeatable, and the trim must see the same text the read returns.
+        var text = StringFromValue(value, options);
+        return text is { Length: > 0 } && text[^1] == '\0' ? text.TrimEnd('\0') : text;
+    }
+
     internal static readonly MethodInfo BytesFromValueMethod =
         typeof(SingleReadColumns).GetMethod(nameof(BytesFromValue), BindingFlags.Public | BindingFlags.Static)!;
 

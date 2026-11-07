@@ -10,6 +10,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests.tenant;
 
+[Collection("TypeRegistry")]
 public class TenantConnectionResolverTests
 {
     [Fact]

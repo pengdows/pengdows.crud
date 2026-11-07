@@ -176,7 +176,7 @@ internal sealed class HanaDialect : SqlDialect
         // the ARRAY with ARRAY(SELECT V FROM JSON_TABLE(?, ...) ORDER BY O), as the gateways do.
         if (value is Array array and not byte[] && ArrayElementSqlType(array.GetType()) != null)
         {
-            return base.CreateDbParameter<object?>(name, DbType.String, TypeCoercionHelper.GetJsonText(array));
+            return base.CreateDbParameter<object?>(name, DbType.String, pengdows.crud.types.coercion.JsonCoercion.GetJsonText(array));
         }
 
         if (type is DbType.DateTime or DbType.DateTime2)
@@ -264,7 +264,7 @@ internal sealed class HanaDialect : SqlDialect
         if (parameter.Value is Array array and not byte[])
         {
             parameter.DbType = DbType.String;
-            parameter.Value = TypeCoercionHelper.GetJsonText(array);
+            parameter.Value = pengdows.crud.types.coercion.JsonCoercion.GetJsonText(array);
         }
 
         parameter.SourceColumn = ArrayMarker;

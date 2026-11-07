@@ -12,8 +12,8 @@ namespace pengdows.crud.@internal;
 /// </summary>
 internal static class ColumnStatementReads
 {
-    private static readonly MethodInfo GuidFromBinary = typeof(TypeCoercionHelper).GetMethod(
-        nameof(TypeCoercionHelper.GuidFromBinary), BindingFlags.NonPublic | BindingFlags.Static)!;
+    private static readonly MethodInfo GuidFromBinary = typeof(pengdows.crud.types.coercion.BinaryCoercion).GetMethod(
+        nameof(pengdows.crud.types.coercion.BinaryCoercion.GuidFromBinary), BindingFlags.NonPublic | BindingFlags.Static)!;
 
     /// <param name="reader">The reader the mapper's lambda holds, any type that has GetValue.</param>
     /// <param name="property">The property being assigned.</param>
@@ -28,7 +28,7 @@ internal static class ColumnStatementReads
             // One GetValue per string column; its DBNull result is the null check. IsDBNull and then GetString cost a
             // second round of driver work per column on some providers (Npgsql: ~0.12 µs each, measured 2026-10-04).
             return FromValue(reader, ordinalExpr, property,
-                stored => Expression.Call(SingleReadColumns.StringFromValueMethod, stored, optionsExpr));
+                stored => Expression.Call(SingleReadColumns.StringReadFor(options), stored, optionsExpr));
         }
 
         if (fieldType == typeof(byte[]))

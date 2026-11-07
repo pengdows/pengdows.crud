@@ -243,7 +243,7 @@ internal sealed class PostgreSqlRangeConverter<T> : AdvancedTypeConverter<Range<
         }
 
         var type = value.GetType();
-        if (type.FullName?.StartsWith("NpgsqlTypes.NpgsqlRange", StringComparison.Ordinal) == true)
+        if (pengdows.crud.@internal.ProviderTypeNames.IsNpgsqlRange(type))
         {
             var accessors = AccessorsFor(type);
             if (accessors.IsEmpty?.Invoke(value) is true)

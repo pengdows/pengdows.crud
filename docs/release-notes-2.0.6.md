@@ -32,6 +32,38 @@ observes, so each is listed here with its reason.
   delta that was already counted.
 * **Registry disposal.** `TenantContextRegistry` disposes every context it constructed when it is
   disposed, including contexts a caller still holds. The documentation now says so.
+* **NULL into a non-nullable property is always an error.** A NULL column read into a non-nullable property throws
+  `DataMappingException` naming the column, on every path (`DataReaderMapper` and `TableGateway` hydration), in strict
+  and lenient mode alike. It used to be silent for a non-nullable reference type (a `string` annotated `string`, not
+  `string?`), which stayed at its initial value, and a non-nullable enum took its default in lenient mode. A property
+  is non-nullable when it is a non-nullable value type, or a reference type whose nullability is annotated not-null;
+  an oblivious reference type (no nullable annotations) is still treated as nullable. Nullable properties take NULL as
+  null, as before.
+
+* **NULL into a non-nullable enum is an error in every enum mode.** The gateway's lenient modes (`SetDefaultValue`, `SetNullAndLog`)
+  used to store the enum's default for a NULL column. They now throw `DataMappingException` for a NULL; they still substitute a
+  default for a stored value that is not a member.
+* **A TIME WITH TIME ZONE keeps its offset on Firebird and SQLite.** Firebird sends the UTC time in the `Etc/GMT` zone of a
+  whole-hour offset (`+02:00` is `Etc/GMT-2`) and reads it back at that offset; an offset that is not whole hours throws
+  `NotSupportedException` instead of being sent as UTC. SQLite binds a `DateTimeOffset` declared `DbType.Time` as
+  `HH:mm:ss.fffffff+hh:mm` text, where it used to bind the UTC instant. Columns declared `DbType.DateTimeOffset` are unchanged.
+
+* **Db2 and Informix type fixes (live, 2026-11-06).** Db2 and Informix reject `DbType.DateTime2`, so it binds as `DbType.DateTime`.
+  Db2 and Informix bind `DbType.Byte` as a signed 16-bit value, because the driver reads a byte as binary. Informix binds an
+  `INTERVAL DAY TO SECOND` or `INTERVAL YEAR TO MONTH` as its literal (`1 02:03:04`, `2-03`) and refuses the ISO 8601 form.
+  A JSON document column learns its declared type like a string column, so a BSON column is written through `::JSON::BSON`.
+  Informix's unsigned 8-bit column is `SMALLINT`, not `BYTE`, which holds binary data. A text value that Informix returns with a
+  trailing NUL padding is read without it. Informix refuses `-9223372036854775808` in a 64-bit column (its NULL sentinel) and raw
+  bytes as BSON (it writes a BSON document from its JSON text); the fidelity matrix records both as refusals.
+* **Fraction precision on Db2 and Informix.** Both servers keep a timestamp's fraction to the column's declared precision and
+  truncate a finer one (never round). Db2's `TIMESTAMP(6)` and `TIMESTAMP(7)` columns and Informix's `DATETIME YEAR TO FRACTION(3)`
+  each keep what their declaration holds. The library passes the value through, because the precision is per column.
+* **Declared column types are learned per column.** A table name shared by two row types no longer stops the second row's columns
+  being probed for their declared types.
+* **Zoned time on DuckDB and FlatFile.** A `DateTimeOffset` declared `DbType.Time` is refused on DuckDB, which has no
+  time-with-zone column to hold the offset. FlatFile keeps the offset: the crud FlatFile dialect binds it as a `DateTimeOffset`, which
+  the engine stores with its offset (pengdows.flatfile 0.2.1-preview.24).
+
 * **Collection element coercion.** A NULL element that cannot be stored in a non-nullable element type
   throws `InvalidCastException`, which hydration reports as `DataMappingException`, instead of
   `ArgumentNullException`.

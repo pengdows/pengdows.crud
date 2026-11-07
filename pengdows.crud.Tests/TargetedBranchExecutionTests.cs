@@ -160,11 +160,11 @@ public sealed class TargetedBranchExecutionTests
     [Fact]
     public void TypeCoercion_DateTimeOffsetHelpers_CoverFallbackAndErrorBranches()
     {
-        var fromDateTime = TypeCoercionHelper.CoerceDateTimeOffsetFromString("2026-02-07 03:04:05");
+        var fromDateTime = pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffsetFromString("2026-02-07 03:04:05", pengdows.crud.TypeCoercionOptions.Default);
         Assert.NotEqual(default, fromDateTime);
 
         Assert.Throws<InvalidCastException>(() =>
-            TypeCoercionHelper.CoerceDateTimeOffsetFromString("not-a-date"));
+            pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffsetFromString("not-a-date", pengdows.crud.TypeCoercionOptions.Default));
 
         Assert.Throws<InvalidCastException>(() =>
             TypeCoercionHelper.Coerce(12345, typeof(int), typeof(DateTimeOffset)));
@@ -173,7 +173,7 @@ public sealed class TargetedBranchExecutionTests
     [Fact]
     public void TypeCoercion_ResolveCoercer_ForDateTypes_UsesDedicatedPaths()
     {
-        var resolve = typeof(TypeCoercionHelper).GetMethod(
+        var resolve = typeof(pengdows.crud.types.coercion.ConverterResolution).GetMethod(
             "ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,

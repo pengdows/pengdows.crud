@@ -40,7 +40,7 @@ PostgreSql	legacy long binary	legacy_binary	UNSUPPORTED refused: 42601: syntax e
 PostgreSql	rowversion / timestamp token	rowversion	PASS
 PostgreSql	local-zone timestamp	local_timestamp	UNSUPPORTED refused: 42601: syntax error at or near "WITH" POSITION: 66
 PostgreSql	second-precision datetime	second_datetime	PASS
-PostgreSql	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+PostgreSql	time with zone	time_zoned	PASS
 PostgreSql	year-only	year_only	PASS
 PostgreSql	year-month interval	year_month_interval	PASS
 PostgreSql	generic interval	generic_interval	PASS

@@ -51,7 +51,7 @@ public abstract partial class BaseTableGateway<TEntity>
         {
             var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
                          _versionColumn.PropertyInfo.PropertyType;
-            SetColumnValue(_versionColumn, entity, TypeCoercionHelper.ConvertWithCache(1, target));
+            SetColumnValue(_versionColumn, entity, pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(1, target));
         }
     }
 
@@ -128,7 +128,7 @@ public abstract partial class BaseTableGateway<TEntity>
 
         var target = Nullable.GetUnderlyingType(_versionColumn.PropertyInfo.PropertyType) ??
                      _versionColumn.PropertyInfo.PropertyType;
-        var next = TypeCoercionHelper.ConvertWithCache(currentNumeric + 1, target);
+        var next = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(currentNumeric + 1, target);
         SetColumnValue(_versionColumn, entity, next);
     }
 }

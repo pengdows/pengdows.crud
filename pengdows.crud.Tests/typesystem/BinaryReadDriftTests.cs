@@ -57,6 +57,6 @@ public class BinaryReadDriftTests
         Assert.Throws<pengdows.crud.exceptions.InvalidValueException>(() =>
             new ProviderValueFieldReader.GuidColumnReader(false).Read(record, 0));
         Assert.Throws<pengdows.crud.exceptions.InvalidValueException>(() =>
-            TypeCoercionHelper.ReadGuidFromBytes(record, 0, false));
+            pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes(record, 0, false));
     }
 }

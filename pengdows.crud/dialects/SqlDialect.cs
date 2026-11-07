@@ -478,8 +478,9 @@ internal abstract class SqlDialect : IInternalSqlDialect
     // GetDataTypeName) for the columns this dialect asks for, kept per dialect instance (one per
     // context) and keyed by column object.
     private readonly System.Runtime.CompilerServices.ConditionalWeakTable<IColumnInfo, string> _declaredTypes = new();
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, byte> _declaredTypeTables =
-        new(StringComparer.Ordinal);
+    private readonly System.Runtime.CompilerServices.ConditionalWeakTable<IColumnInfo, object> _declaredTypesProbed = new();
+    private static readonly object ProbedMarker = new();
+
 
     /// <summary>
     /// True when writing (<paramref name="forRead"/> false) or reading this column correctly depends on
@@ -492,16 +493,26 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal string? DeclaredTypeOf(IColumnInfo column) =>
         _declaredTypes.TryGetValue(column, out var declared) ? declared : null;
 
-    internal bool HasProbedDeclaredTypes(string wrappedTableName) => _declaredTypeTables.ContainsKey(wrappedTableName);
+    /// <summary>True when every column in <paramref name="columns"/> already has its declared type learned (per column, so a
+    /// column learned for one row type does not stop another row type's columns on the same table being probed).</summary>
+    internal bool HasProbedDeclaredTypes(IEnumerable<IColumnInfo> columns) =>
+        columns.All(column => _declaredTypes.TryGetValue(column, out _) || _declaredTypesProbed.TryGetValue(column, out _));
 
-    internal void RecordDeclaredTypes(string wrappedTableName, IEnumerable<(IColumnInfo Column, string DeclaredType)> types)
+    /// <summary>Marks columns as probed whether or not the metadata named a type for them, so an unnamed column is not asked again.</summary>
+    internal void MarkDeclaredTypesProbed(IEnumerable<IColumnInfo> columns)
+    {
+        foreach (var column in columns)
+        {
+            _declaredTypesProbed.AddOrUpdate(column, ProbedMarker);
+        }
+    }
+
+    internal void RecordDeclaredTypes(IEnumerable<(IColumnInfo Column, string DeclaredType)> types)
     {
         foreach (var (column, declared) in types)
         {
             _declaredTypes.AddOrUpdate(column, declared);
         }
-
-        _declaredTypeTables[wrappedTableName] = 0;
     }
 
     /// <summary>
@@ -1424,10 +1435,10 @@ internal abstract class SqlDialect : IInternalSqlDialect
                 instant = dto;
                 return true;
             case DateTime dt:
-                instant = new DateTimeOffset(TypeCoercionHelper.NormalizeDateTime(dt), TimeSpan.Zero);
+                instant = new DateTimeOffset(pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime(dt), TimeSpan.Zero);
                 return true;
             case string s:
-                return TypeCoercionHelper.TryParseTimestampText(s.Trim(), out instant);
+                return pengdows.crud.types.coercion.DateTimeCoercion.TryParseTimestampText(s.Trim(), out instant);
             default:
                 instant = default;
                 return false;
@@ -2655,7 +2666,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
             var mappedType = runtimeType == null ? null : AdvancedTypeRegistry.WriteType(runtimeType);
             handled = mappedType != null &&
                       ((AdvancedTypes.IsMappedType(mappedType) &&
-                        AdvancedTypes.TryConfigureParameter(parameter, mappedType, boxedValue ??= value, TypeMappingProvider)) ||
+                        AdvancedTypes.TryConfigureParameter(parameter, mappedType, boxedValue ??= value, TypeMappingProvider,
+                            AssignsObjectDbType)) ||
                        // A database with no LOB mapping gets the bytes or text, never a raw instance
                        // it cannot bind. A value type is never a Stream or TextReader, and passing it as an
                        // object would box it (a Guid, DateTime or bool parameter paid 32 B for the answer no).

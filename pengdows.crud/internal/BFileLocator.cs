@@ -23,6 +23,18 @@ internal static class BFileLocator
         return reader is null ? record.GetValue(ordinal) : reader.GetProviderSpecificValue(ordinal);
     }
 
+    /// <summary>A locator as the text a BFILE column is written from: "DIRECTORY/file".</summary>
+    public static string ToText(object locator)
+    {
+        var type = locator.GetType();
+        var directory = type.GetProperty("DirectoryName")?.GetValue(locator) as string;
+        var file = type.GetProperty("FileName")?.GetValue(locator) as string;
+        return directory + "/" + file;
+    }
+
     /// <summary>The method the mapper calls for a column declared BFILE.</summary>
     public static readonly System.Reflection.MethodInfo ReadMethod = typeof(BFileLocator).GetMethod(nameof(Read))!;
+
+    /// <summary>The method that turns a locator into its text.</summary>
+    public static readonly System.Reflection.MethodInfo ToTextMethod = typeof(BFileLocator).GetMethod(nameof(ToText))!;
 }

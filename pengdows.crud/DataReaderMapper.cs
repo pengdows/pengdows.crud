@@ -409,6 +409,16 @@ public sealed class DataReaderMapper : IDataReaderMapper
     private static void HandleColumnFailure(Exception ex, bool strict, DbDataReader rdr, int ordinal,
         PropertyInfo property)
     {
+        // A NULL into a non-nullable value type is never a default, in either mode: the property would hold a value the
+        // database did not store (0, false, the empty Guid). It fails with the column named, as strict mode always did.
+        if (IsNullIntoNonNullableValue(rdr, ordinal, property))
+        {
+            throw new DataMappingException(
+                $"Column '{rdr.GetName(ordinal)}' is NULL, but property '{property.Name}' is a non-nullable {property.PropertyType.Name}.",
+                SupportedDatabase.Unknown,
+                ex);
+        }
+
         if (strict)
         {
             throw new DataMappingException(
@@ -423,6 +433,9 @@ public sealed class DataReaderMapper : IDataReaderMapper
             rdr.GetName(ordinal),
             property.Name);
     }
+
+    private static bool IsNullIntoNonNullableValue(DbDataReader rdr, int ordinal, PropertyInfo property) =>
+        NullabilityRules.IsNonNullable(property) && rdr.IsDBNull(ordinal);
 
     private static readonly MethodInfo _handleColumnFailureMethod =
         typeof(DataReaderMapper).GetMethod(nameof(HandleColumnFailure), BindingFlags.NonPublic | BindingFlags.Static)!;
@@ -573,26 +586,13 @@ public sealed class DataReaderMapper : IDataReaderMapper
         var targetType = key.Property.PropertyType;
         var underlyingTarget = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
-        if (key.NativeType is { } declaredNative && key.Coercion is { } nativeOptions &&
-            DatabaseTraits.For(nativeOptions.Provider).NativeColumnRead is { } nativeRule &&
-            nativeRule(readerParam, Expression.Constant(key.Ordinal), declaredNative, targetType, nativeOptions) is { } nativeRead)
+        // The primary rules shared with CompiledMapperFactory: the dialect's native-column rule, the statement reads, the
+        // quirk reads. The assignment they return checks NULL itself only when it says so.
+        if (ColumnReadRules.TryBuild(readerParam, key.Ordinal, key.FieldType, targetType, key.Coercion, key.NpgsqlTyped,
+                key.NativeType, propertyAccess, out var selfGuarded) is { } primary)
         {
-            handlesNull = false;
-            return Expression.Assign(propertyAccess, nativeRead);
-        }
-
-        if (ColumnStatementReads.TryBuild(readerParam, key.Ordinal, key.FieldType, targetType, key.Coercion,
-                propertyAccess) is { } statement)
-        {
-            // Its one GetValue is also the null check (BuildRowBody adds no IsDBNull for this column).
-            handlesNull = true;
-            return statement;
-        }
-
-        if (ColumnQuirkReads.TryBuild(Expression.Convert(readerParam, typeof(IDataRecord)), key.Ordinal, key.FieldType,
-                targetType, key.Coercion, key.NpgsqlTyped) is { } quirk)
-        {
-            return Expression.Assign(propertyAccess, quirk);
+            handlesNull = selfGuarded;
+            return primary;
         }
 
         Expression valueExpression;
@@ -615,7 +615,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
                                              _getFieldValueGenericMethod.MakeGenericMethod(key.FieldType),
                     Expression.Constant(key.Ordinal)),
                 typeof(long));
-            var fullConversion = TypeCoercionHelper.ResolveCoercer(key.FieldType, targetType, key.EnumMode, key.Coercion);
+            var fullConversion = pengdows.crud.types.coercion.ConverterResolution.ResolveCoercer(key.FieldType, targetType, key.EnumMode, key.Coercion);
             var resolve = (targetType == underlyingTarget ? EnumFastPath.ResolveMethod : EnumFastPath.ResolveNullableMethod)
                 .MakeGenericMethod(underlyingTarget);
             valueExpression = Expression.Call(resolve, integer, Expression.Constant(fullConversion));
@@ -627,15 +627,17 @@ public sealed class DataReaderMapper : IDataReaderMapper
                 // Fallback: one GetValue (DBNull is the null check), the coercer's boxed result, then unbox.
                 var getValueMethod = typeof(DbDataReader).GetMethod(nameof(DbDataReader.GetValue))!;
                 var stored = Expression.Variable(typeof(object), "value");
-                var coercer = TypeCoercionHelper.ResolveCoercer(key.FieldType, targetType, key.EnumMode, key.Coercion);
+                var coercer = pengdows.crud.types.coercion.ConverterResolution.ResolveCoercer(key.FieldType, targetType, key.EnumMode, key.Coercion);
                 handlesNull = true;
+                var assign = Expression.Assign(propertyAccess,
+                    Expression.Convert(Expression.Invoke(Expression.Constant(coercer), stored), targetType));
                 return Expression.Block(
                     new[] { stored },
                     Expression.Assign(stored, Expression.Call(readerParam, getValueMethod, Expression.Constant(key.Ordinal))),
-                    Expression.IfThen(
-                        Expression.Not(Expression.TypeIs(stored, typeof(DBNull))),
-                        Expression.Assign(propertyAccess,
-                            Expression.Convert(Expression.Invoke(Expression.Constant(coercer), stored), targetType))));
+                    Expression.IfThenElse(
+                        Expression.TypeIs(stored, typeof(DBNull)),
+                        NullIntoNonNullable(readerParam, key, targetType),
+                        assign));
             }
         }
         else if (!key.FieldType.IsValueType && key.FieldType != typeof(string) && !targetType.IsValueType)
@@ -774,15 +776,24 @@ public sealed class DataReaderMapper : IDataReaderMapper
         EnumParseFailureMode enumMode, int ordinal, TypeCoercionOptions? coercion,
         Func<IDataRecord, int, Type, object>? unresolvedReader)
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(fieldType, prop.PropertyType, enumMode, coercion);
+        var coercer = pengdows.crud.types.coercion.ConverterResolution.ResolveCoercer(fieldType, prop.PropertyType, enumMode, coercion);
         var read = unresolvedReader ?? UnresolvedColumnReader.Read;
         // A NULL leaves the property alone, as every other column path does: writing null stored a
         // struct property's default and overwrote initializers (REV-065).
+        var nonNullableValue = prop.PropertyType.IsValueType && Nullable.GetUnderlyingType(prop.PropertyType) == null;
         return (target, reader) =>
         {
             if (!reader.IsDBNull(ordinal))
             {
                 prop.SetValue(target, coercer(read(reader, ordinal, fieldType)));
+            }
+            else if (nonNullableValue)
+            {
+                // Leaving it alone would keep the property's default (0, false, the empty Guid): a NULL into a
+                // non-nullable value type fails, naming the column, in either mode.
+                throw new DataMappingException(
+                    $"Column '{reader.GetName(ordinal)}' is NULL, but property '{prop.Name}' is a non-nullable {prop.PropertyType.Name}.",
+                    SupportedDatabase.Unknown);
             }
         };
     }
@@ -866,6 +877,24 @@ public sealed class DataReaderMapper : IDataReaderMapper
     /// </returns>
     // The conversions both mappers share (DRY-003): Guid bytes through the gateway's reader, and the
     // typed date, time and Guid coercions of TypedCoercions, read from the column's typed getter.
+    // A NULL into a non-nullable value type: a fresh property keeps its default otherwise (0, false, the empty Guid), which
+    // is data the database never stored. The statement throws, naming the column, in either mode. A nullable or reference
+    // property takes NULL as "leave it alone", as before.
+    private static Expression NullIntoNonNullable(ParameterExpression readerParam, SetterCacheKey key, Type targetType)
+    {
+        if (!NullabilityRules.IsNonNullable(key.Property))
+        {
+            return Expression.Empty();
+        }
+
+        return Expression.Throw(Expression.Call(_nullIntoNonNullableMethod, readerParam,
+            Expression.Constant(key.Ordinal), Expression.Constant(key.Property.Name), Expression.Constant(targetType)));
+    }
+
+
+    private static readonly MethodInfo _nullIntoNonNullableMethod = typeof(NullabilityRules).GetMethod(
+        nameof(NullabilityRules.NullIntoNonNullableException), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!;
+
     private static bool TryBuildDirectReadExpression(
         SetterCacheKey key,
         ParameterExpression readerParam,
@@ -899,7 +928,7 @@ public sealed class DataReaderMapper : IDataReaderMapper
         return true;
     }
 
-    private static readonly MethodInfo _readGuidFromBytesMethod = typeof(TypeCoercionHelper).GetMethod(
-        nameof(TypeCoercionHelper.ReadGuidFromBytes), new[] { typeof(IDataRecord), typeof(int), typeof(bool) })!;
+    private static readonly MethodInfo _readGuidFromBytesMethod = typeof(pengdows.crud.types.coercion.BinaryCoercion).GetMethod(
+        nameof(pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes), new[] { typeof(IDataRecord), typeof(int), typeof(bool) })!;
 
 }

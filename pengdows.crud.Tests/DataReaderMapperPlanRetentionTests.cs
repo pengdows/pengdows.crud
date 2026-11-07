@@ -17,6 +17,7 @@ namespace pengdows.crud.Tests;
 /// a delegate bound to the TrackedReader it first mapped, so that reader (with its command and
 /// connection wrapper) stayed reachable for the life of the process.
 /// </summary>
+[Collection("TypeRegistry")]
 public class DataReaderMapperPlanRetentionTests
 {
     public sealed class RetentionRow

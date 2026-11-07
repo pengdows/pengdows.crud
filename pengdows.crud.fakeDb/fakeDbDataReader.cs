@@ -656,8 +656,8 @@ public class fakeDbDataReader : DbDataReader
             throw new OverflowException("Value was either too large or too small for a Decimal.");
         }
 
-        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsHandlerlessColumn(i) || IsDoubleBeyondDecimal(i) ||
-                    IsUnknownTypeColumn(i) || IsNullableElementArray(i) || RawValue(i) is fakeDbInterval
+        var value = IsUnloadableUdt(i) || IsInt64TextColumn(i) || IsDecimalTextColumn(i) || IsHandlerlessColumn(i) ||
+                    IsDoubleBeyondDecimal(i) || IsUnknownTypeColumn(i) || IsNullableElementArray(i) || RawValue(i) is fakeDbInterval
             ? RawValue(i)
             : GetValue(i);
         return value is null || value == DBNull.Value;

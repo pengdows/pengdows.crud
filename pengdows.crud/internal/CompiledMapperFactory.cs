@@ -17,6 +17,26 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
 {
     private static readonly MethodInfo IsDbNullMethod = typeof(IDataRecord).GetMethod(nameof(IDataRecord.IsDBNull))!;
 
+    private static readonly MethodInfo NullabilityRulesRejectNullOnFailureMethod = typeof(NullabilityRules).GetMethod(
+        nameof(NullabilityRules.RejectNullOnFailure), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    private static readonly MethodInfo NullIntoNonNullableMethod = typeof(NullabilityRules).GetMethod(
+        nameof(NullabilityRules.NullIntoNonNullableException), BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static)!;
+
+    // The one NULL decision for a gateway read: a present value is assigned; a NULL into a non-nullable property throws the
+    // mapper's DataMappingException (naming the column); a NULL into a nullable property leaves it alone.
+    private static Expression NullGuard(Expression isPresent, Expression assignment, ParameterExpression readerParam,
+        Expression ordinal, PropertyInfo property, Type targetType)
+    {
+        if (!NullabilityRules.IsNonNullable(property))
+        {
+            return Expression.IfThen(isPresent, assignment);
+        }
+
+        return Expression.IfThenElse(isPresent, assignment, Expression.Throw(Expression.Call(NullIntoNonNullableMethod,
+            readerParam, ordinal, Expression.Constant(property.Name), Expression.Constant(targetType))));
+    }
+
     public static Func<TReader, TEntity> Create<TReader>(
         TReader reader,
         IReadOnlyDictionary<string, IColumnInfo> columnsByName,
@@ -68,7 +88,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                 var getString = typeof(IDataRecord).GetMethod(nameof(IDataRecord.GetString))!;
                 // Blank text is the JSON literal null (COR-007).
                 var jsonStr = Expression.Call(
-                    typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.JsonTextOrNullLiteral),
+                    typeof(pengdows.crud.types.coercion.JsonCoercion).GetMethod(nameof(pengdows.crud.types.coercion.JsonCoercion.JsonTextOrNullLiteral),
                         BindingFlags.NonPublic | BindingFlags.Static)!,
                     Expression.Call(readerParam, getString, ordinalExpr));
 
@@ -96,7 +116,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     // DBNull is the null check, and the text is the one GetValue result (a string or anything convertible).
                     var jsonStored = Expression.Variable(typeof(object), "value");
                     var jsonText = Expression.Call(
-                        typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.JsonTextOrNullLiteral),
+                        typeof(pengdows.crud.types.coercion.JsonCoercion).GetMethod(nameof(pengdows.crud.types.coercion.JsonCoercion.JsonTextOrNullLiteral),
                             BindingFlags.NonPublic | BindingFlags.Static)!,
                         Expression.Call(SingleReadColumns.JsonTextFromValueMethod, jsonStored,
                             Expression.Constant(coercionOptions, typeof(TypeCoercionOptions))));
@@ -115,21 +135,20 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     continue;
                 }
             }
-            else if (column.NativeType is { } declaredNative && coercionOptions is not null &&
-                     DatabaseTraits.For(coercionOptions.Provider).NativeColumnRead is { } nativeRule &&
-                     nativeRule(readerParam, ordinalExpr, declaredNative, targetType, coercionOptions) is { } nativeRead)
+            else if (ColumnReadRules.TryBuild(readerParam, i, fieldType, targetType, coercionOptions,
+                         ColumnQuirkReads.NpgsqlTypedFor(reader, i, targetType), column.NativeType,
+                         Expression.Property(entityVar, property), out var selfGuarded) is { } primary)
             {
-                // A column declared with a native type that its database reads in a provider-specific way (a BIT(n) width,
-                // an Oracle BFILE locator): the dialect's rule reads it, ahead of the general reads.
+                // The shared primary rules (ColumnReadRules). A read that checks NULL itself is used as it is. A read that does
+                // not is guarded here: a NULL into a non-nullable property throws (the same error the mapper raises, naming the
+                // column), and a nullable property leaves itself alone.
                 expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
-                expressions.Add(Expression.Assign(Expression.Property(entityVar, property), nativeRead));
-                continue;
-            }
-            else if (ColumnStatementReads.TryBuild(readerParam, i, fieldType, targetType, coercionOptions,
-                         Expression.Property(entityVar, property)) is { } statement)
-            {
-                expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
-                expressions.Add(statement);
+                // A non-nullable value type has no guard: its typed read throws on NULL (one reader call per column, which
+                // the shape cost tests hold the gateway to), and the gateway tags that failure with the column.
+                var nonNullableValue = targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null;
+                expressions.Add(selfGuarded || nonNullableValue
+                    ? primary
+                    : NullGuard(notDbNull, primary, readerParam, ordinalExpr, property, targetType));
                 continue;
             }
             else if (column.IsEnum)
@@ -176,18 +195,26 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     if (enumMode == EnumParseFailureMode.SetNullAndLog)
                     {
                         fallback = Expression.Block(
-                            Expression.Call(typeof(TypeCoercionHelper).GetMethod(nameof(TypeCoercionHelper.LogEnumFailure),
+                            Expression.Call(typeof(pengdows.crud.types.coercion.EnumCoercion).GetMethod(nameof(pengdows.crud.types.coercion.EnumCoercion.LogEnumFailure),
                                 BindingFlags.NonPublic | BindingFlags.Static)!, Expression.Constant(underlyingTarget)),
                             fallback);
                     }
 
-                    valueReadExpr = Expression.TryCatch(finalEnumExpr, Expression.Catch(typeof(Exception), fallback));
+                    // A non-nullable enum's typed read throws on NULL too, and that throw lands here. Only this failure path checks
+                    // for NULL, so the success path keeps its single read and a NULL is never a default.
+                    if (skipNullGuard)
+                    {
+                        var failureParam = Expression.Parameter(typeof(Exception), "failure");
+                        var rejectNull = Expression.Call(NullabilityRulesRejectNullOnFailureMethod, readerParam, ordinalExpr,
+                            Expression.Constant(property.Name), Expression.Constant(targetType), failureParam);
+                        valueReadExpr = Expression.TryCatch(finalEnumExpr,
+                            Expression.Catch(failureParam, Expression.Block(rejectNull, fallback)));
+                    }
+                    else
+                    {
+                        valueReadExpr = Expression.TryCatch(finalEnumExpr, Expression.Catch(typeof(Exception), fallback));
+                    }
                 }
-            }
-            else if (ColumnQuirkReads.TryBuild(Expression.Convert(readerParam, typeof(IDataRecord)), i, fieldType, targetType,
-                         coercionOptions, ColumnQuirkReads.NpgsqlTypedFor(reader, i, targetType)) is { } quirk)
-            {
-                valueReadExpr = quirk;
             }
             else
             {
@@ -231,16 +258,16 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
                     // value, text into an array or a TextReader): one GetValue, whose DBNull is the null check.
                     var stored = Expression.Variable(typeof(object), "value");
                     Expression raw = fieldType == typeof(string)
-                        ? Expression.Call(SingleReadColumns.StringFromValueMethod, stored,
+                        ? Expression.Call(SingleReadColumns.StringReadFor(coercionOptions), stored,
                             Expression.Constant(coercionOptions, typeof(TypeCoercionOptions)))
                         : fieldType == typeof(object) ? stored : Expression.Convert(stored, fieldType);
                     expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
+                    var present = Expression.Assign(Expression.Property(entityVar, property), ConvertRead(raw));
+                    var isPresent = Expression.Not(Expression.TypeIs(stored, typeof(DBNull)));
                     expressions.Add(Expression.Block(
                         new[] { stored },
                         Expression.Assign(stored, Expression.Call(readerParam, GetValueMethod, ordinalExpr)),
-                        Expression.IfThen(
-                            Expression.Not(Expression.TypeIs(stored, typeof(DBNull))),
-                            Expression.Assign(Expression.Property(entityVar, property), ConvertRead(raw)))));
+                        NullGuard(isPresent, present, readerParam, ordinalExpr, property, targetType)));
                     continue;
                 }
 
@@ -267,7 +294,7 @@ internal static class CompiledMapperFactory<TEntity> where TEntity : class, new(
             expressions.Add(Expression.Assign(ordinalVar, ordinalExpr));
             expressions.Add(skipNullGuard
                 ? assignment
-                : Expression.IfThen(notDbNull, assignment));
+                : NullGuard(notDbNull, assignment, readerParam, ordinalExpr, property, targetType));
         }
 
         // Conversion failures leave tagged with the ordinal; anything else (cancellation, provider

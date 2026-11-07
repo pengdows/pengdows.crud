@@ -302,6 +302,7 @@ Read-side failure policy (what happens when a stored value doesn't parse back to
 member) is a *mapper* concern, not an attribute — `IMapperOptions.EnumMode`
 (`EnumParseFailureMode`: `Throw`, `SetNullAndLog`, or `SetDefaultValue`), passed to
 `DataReaderMapper`/gateway hydration, not declared per-property.
+A NULL into a non-nullable enum throws in every mode; the lenient modes apply only to a stored value that is not a member.
 
 ## `[EnumLiteral]`
 

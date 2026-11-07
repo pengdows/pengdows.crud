@@ -20,14 +20,14 @@ public class TypeCoercionHelperBehaviorTests
     [Fact]
     public void ConvertWithCache_NullValue_ThrowsArgumentNullException()
     {
-        Assert.Throws<ArgumentNullException>(() => TypeCoercionHelper.ConvertWithCache(null!, typeof(int)));
+        Assert.Throws<ArgumentNullException>(() => pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(null!, typeof(int)));
     }
 
     [Fact]
     public void ConvertWithCache_DateTimeOffsetToDateTime_ReturnsKind()
     {
         var dto = new DateTimeOffset(2026, 2, 7, 12, 0, 0, TimeSpan.Zero);
-        var result = (DateTime)TypeCoercionHelper.ConvertWithCache(dto, typeof(DateTime));
+        var result = (DateTime)pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(dto, typeof(DateTime));
         Assert.Equal(dto.UtcDateTime, result);
     }
 

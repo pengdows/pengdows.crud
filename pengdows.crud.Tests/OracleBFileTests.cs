@@ -94,7 +94,7 @@ namespace pengdows.crud.Tests
         {
             var locator = new Oracle.ManagedDataAccess.Types.OracleBFile("DATA_DIR", "hello.txt");
 
-            var text = TypeCoercionHelper.Coerce(locator, locator.GetType(), typeof(string), null);
+            var text = pengdows.crud.@internal.BFileLocator.ToText(locator);
 
             Assert.Equal("DATA_DIR/hello.txt", text);
         }

@@ -48,7 +48,7 @@ internal static class ProviderValueFieldReader
         {
             if (_readBytes)
             {
-                return record.IsDBNull(ordinal) ? DBNull.Value : TypeCoercionHelper.ReadGuidFromBytes(record, ordinal, _bigEndian);
+                return record.IsDBNull(ordinal) ? DBNull.Value : pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes(record, ordinal, _bigEndian);
             }
 
             try
@@ -57,7 +57,7 @@ internal static class ProviderValueFieldReader
             }
             catch (InvalidCastException)
             {
-                var guid = TypeCoercionHelper.ReadGuidFromBytes(record, ordinal, _bigEndian);
+                var guid = pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes(record, ordinal, _bigEndian);
                 _readBytes = true;
                 return guid;
             }

@@ -503,13 +503,13 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     public void GetJsonText_WithNull_ThrowsArgumentNullException()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            TypeCoercionHelper.GetJsonText(null!));
+            pengdows.crud.types.coercion.JsonCoercion.GetJsonText(null!));
     }
 
     [Fact]
     public void GetJsonText_WithString_ReturnsString()
     {
-        var result = TypeCoercionHelper.GetJsonText("test");
+        var result = pengdows.crud.types.coercion.JsonCoercion.GetJsonText("test");
         Assert.Equal("test", result);
     }
 
@@ -517,7 +517,7 @@ public class TypeCoercionHelperExtensiveTests : IDisposable
     public void GetJsonText_WithJsonDocument_ReturnsRawText()
     {
         var doc = JsonDocument.Parse("{\"name\":\"test\"}");
-        var result = TypeCoercionHelper.GetJsonText(doc);
+        var result = pengdows.crud.types.coercion.JsonCoercion.GetJsonText(doc);
         Assert.Contains("test", result);
     }
 

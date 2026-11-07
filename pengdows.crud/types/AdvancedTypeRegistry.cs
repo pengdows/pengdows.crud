@@ -222,7 +222,9 @@ internal class AdvancedTypeRegistry
         };
     }
 
-    public bool TryConfigureParameter(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider)
+    /// <param name="assignsObjectDbType">False when the dialect rejects <see cref="DbType.Object"/> (Informix): an Object mapping then leaves the DbType for the provider to infer.</param>
+    public bool TryConfigureParameter(DbParameter parameter, Type clrType, object? value, SupportedDatabase provider,
+        bool assignsObjectDbType = true)
     {
         // Unwrap nullable to ensure DateTime? matches DateTime mapping, etc.
         clrType = Nullable.GetUnderlyingType(clrType) ?? clrType;
@@ -279,8 +281,12 @@ internal class AdvancedTypeRegistry
                 $"AdvancedTypeRegistry: converted {clrType.Name} for {provider} to {value?.GetType().FullName ?? "null"}");
         }
 
-        // Initialize parameter with default mapping values
-        parameter.DbType = config.Mapping.DbType;
+        // Initialize parameter with default mapping values (an Object mapping is left unset for a dialect that rejects it)
+        if (config.Mapping.DbType != DbType.Object || assignsObjectDbType)
+        {
+            parameter.DbType = config.Mapping.DbType;
+        }
+
         parameter.Value = value ?? DBNull.Value;
 
         // Apply provider-specific configuration

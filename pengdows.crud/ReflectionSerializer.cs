@@ -160,7 +160,7 @@ internal static class ReflectionSerializer
 
         if (IsSimpleType(targetType))
         {
-            return TypeCoercionHelper.ConvertWithCache(data, Nullable.GetUnderlyingType(targetType) ?? targetType);
+            return pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(data, Nullable.GetUnderlyingType(targetType) ?? targetType);
         }
 
         if (typeof(string) == targetType)

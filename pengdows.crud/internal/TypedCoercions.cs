@@ -34,7 +34,7 @@ internal static class TypedCoercions
 
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     private static DateTimeOffset DateTimeOffsetFromDateTime(DateTime value, TypeCoercionOptions options) =>
-        TypeCoercionHelper.DateTimeOffsetFromDateTime(value, options);
+        pengdows.crud.types.coercion.DateTimeCoercion.DateTimeOffsetFromDateTime(value, options);
 
     private static Guid GuidFromText(string value, TypeCoercionOptions options) =>
         string.IsNullOrWhiteSpace(value) ? throw TypeCoercionHelper.BlankText(typeof(Guid)) : Guid.Parse(value);
@@ -54,12 +54,12 @@ internal static class TypedCoercions
     private static DateTime DateTimeFromText(string value, TypeCoercionOptions options) =>
         string.IsNullOrWhiteSpace(value)
             ? throw TypeCoercionHelper.BlankText(typeof(DateTime))
-            : TypeCoercionHelper.CoerceDateTimeFromString(value);
+            : pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeFromString(value);
 
     private static DateTimeOffset DateTimeOffsetFromText(string value, TypeCoercionOptions options) =>
         string.IsNullOrWhiteSpace(value)
             ? throw TypeCoercionHelper.BlankText(typeof(DateTimeOffset))
-            : TypeCoercionHelper.CoerceDateTimeOffsetFromString(value);
+            : pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffsetFromString(value, options);
 
     private static DateOnly DateOnlyFromText(string value, TypeCoercionOptions options) =>
         FromText<DateOnly>(value, options);

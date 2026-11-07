@@ -40,7 +40,7 @@ Firebird	legacy long binary	legacy_binary	UNSUPPORTED refused: Dynamic SQL Error
 Firebird	rowversion / timestamp token	rowversion	PASS
 Firebird	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 71 LOCAL
 Firebird	second-precision datetime	second_datetime	PASS
-Firebird	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+Firebird	time with zone	time_zoned	PASS
 Firebird	year-only	year_only	PASS
 Firebird	year-month interval	year_month_interval	UNSUPPORTED refused: Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 YEAR
 Firebird	generic interval	generic_interval	UNSUPPORTED refused: unsuccessful metadata update CREATE TABLE PR221 failed SQL error code = -607 Invalid command Specified domain or source column INTERVAL does not exist

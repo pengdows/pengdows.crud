@@ -26,13 +26,13 @@ internal static class ProviderTypedConversions
     {
         var target = Nullable.GetUnderlyingType(targetType) ?? targetType;
 
-        if (fieldType.IsGenericType && fieldType.GetGenericTypeDefinition().FullName == "NpgsqlTypes.NpgsqlRange`1" &&
+        if (fieldType.IsGenericType && ProviderTypeNames.IsNpgsqlRangeDefinition(fieldType.GetGenericTypeDefinition()) &&
             target.IsGenericType && target.GetGenericTypeDefinition() == typeof(Range<>))
         {
             return BuildRange(fieldType, target, record, ordinal);
         }
 
-        if (fieldType.FullName == "NpgsqlTypes.NpgsqlCidr" && target == typeof(Cidr))
+        if (ProviderTypeNames.IsNpgsqlCidr(fieldType) && target == typeof(Cidr))
         {
             return BuildCidr(fieldType, record, ordinal);
         }

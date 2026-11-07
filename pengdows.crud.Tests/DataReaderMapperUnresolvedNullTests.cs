@@ -40,13 +40,14 @@ public sealed class DataReaderMapperUnresolvedNullTests
     }
 
     [Fact]
-    public void NullColumn_LeavesAStructPropertyAlone()
+    public void NullColumn_IntoANonNullableStructProperty_Throws_NamingTheColumn()
     {
+        // A NULL is never the property's default or its initializer: a non-nullable value type refuses it (TYPE-008).
         var row = new Row();
 
-        Setter(nameof(Row.Count))(row, NullRow());
+        var ex = Assert.Throws<pengdows.crud.exceptions.DataMappingException>(() => Setter(nameof(Row.Count))(row, NullRow()));
 
-        Assert.Equal(7, row.Count);
+        Assert.Contains("'count'", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

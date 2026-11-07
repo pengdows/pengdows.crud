@@ -22,6 +22,8 @@ using testbed.Sybase;
 using testbed.Spanner;
 using testbed.FlatFile;
 using testbed.Access;
+using testbed.Db2;
+using testbed.Informix;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -48,6 +50,8 @@ ITestContainer Make(string name) => name switch
     "Spanner" => new SpannerOmniTestContainer(),
     "FlatFile" => new FlatFileTestContainer(),
     "Access" => new AccessTestContainer(),
+    "Db2" => new Db2TestContainer(image),
+    "Informix" => new InformixTestContainer(image),
     _ => throw new ArgumentException($"no container for {name}")
 };
 

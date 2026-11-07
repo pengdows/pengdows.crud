@@ -44,7 +44,7 @@ public sealed class OffsetlessTimestampTextTests : IDisposable
     public void OffsetlessText_ToDateTime_IsUtc()
     {
         var viaCoerce = (DateTime)TypeCoercionHelper.Coerce("2024-01-02T03:04:05", typeof(string), typeof(DateTime))!;
-        var viaTyped = TypeCoercionHelper.CoerceDateTimeFromString("2024-01-02T03:04:05");
+        var viaTyped = pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeFromString("2024-01-02T03:04:05");
 
         Assert.Equal(Utc, viaCoerce);
         Assert.Equal(DateTimeKind.Utc, viaCoerce.Kind);
@@ -56,7 +56,7 @@ public sealed class OffsetlessTimestampTextTests : IDisposable
     public void OffsetlessText_ToDateTimeOffset_IsUtc()
     {
         var viaCoerce = (DateTimeOffset)TypeCoercionHelper.Coerce("2024-01-02T03:04:05", typeof(string), typeof(DateTimeOffset))!;
-        var viaTyped = TypeCoercionHelper.CoerceDateTimeOffsetFromString("2024-01-02T03:04:05");
+        var viaTyped = pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffsetFromString("2024-01-02T03:04:05", pengdows.crud.TypeCoercionOptions.Default);
 
         Assert.Equal(new DateTimeOffset(Utc), viaCoerce);
         Assert.Equal(TimeSpan.Zero, viaCoerce.Offset);
@@ -71,10 +71,10 @@ public sealed class OffsetlessTimestampTextTests : IDisposable
         var instant = new DateTime(2024, 1, 2, 9, 4, 5, DateTimeKind.Utc);
 
         Assert.Equal(instant, (DateTime)TypeCoercionHelper.Coerce(text, typeof(string), typeof(DateTime))!);
-        Assert.Equal(instant, TypeCoercionHelper.CoerceDateTimeFromString(text));
-        var dto = TypeCoercionHelper.CoerceDateTimeOffsetFromString(text);
+        Assert.Equal(instant, pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeFromString(text));
+        var dto = pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffsetFromString(text, pengdows.crud.TypeCoercionOptions.Default);
         Assert.Equal(TimeSpan.FromHours(-6), dto.Offset);
         Assert.Equal(instant, dto.UtcDateTime);
-        Assert.Equal(instant, TypeCoercionHelper.CoerceDateTimeFromString("2024-01-02T09:04:05Z"));
+        Assert.Equal(instant, pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeFromString("2024-01-02T09:04:05Z"));
     }
 }

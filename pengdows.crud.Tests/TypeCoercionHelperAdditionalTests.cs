@@ -49,7 +49,7 @@ public class TypeCoercionHelperAdditionalTests
     public void GetJsonText_SerializesObject()
     {
         var payload = new { Value = 123 };
-        var json = TypeCoercionHelper.GetJsonText(payload);
+        var json = pengdows.crud.types.coercion.JsonCoercion.GetJsonText(payload);
         Assert.Contains("\"Value\":123", json);
     }
 }

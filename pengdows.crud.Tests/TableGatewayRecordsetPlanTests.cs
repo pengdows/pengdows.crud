@@ -11,6 +11,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
+[Collection("TypeRegistry")]
 public class TableGatewayRecordsetPlanTests : SqlLiteContextTestBase
 {
     public TableGatewayRecordsetPlanTests()

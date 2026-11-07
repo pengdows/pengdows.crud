@@ -98,6 +98,8 @@ public class FakeDbSampleRoundTripTests
             // The PostgreSQL family's interval holds microseconds (the Npgsql interval, and the ISO text without Npgsql).
             SupportedDatabase.PostgreSql or SupportedDatabase.YugabyteDb or SupportedDatabase.AuroraPostgreSql =>
                 clr == typeof(IntervalDaySecond),
+            // Informix's INTERVAL DAY TO SECOND literal writes at most six fraction digits.
+            SupportedDatabase.Informix => clr == typeof(IntervalDaySecond),
             _ => false,
         };
     }

@@ -23,7 +23,7 @@ public sealed class EnumStringCoercionCostTests
     [Fact]
     public void MapperCoercer_StringToEnum_AllocatesOnlyTheBoxedResult()
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(string), typeof(Mood), EnumParseFailureMode.Throw, null);
+        var coercer = pengdows.crud.types.coercion.ConverterResolution.ResolveCoercer(typeof(string), typeof(Mood), EnumParseFailureMode.Throw, null);
         string[] literals = { "Happy", "Sad", "Ok" };
         for (var i = 0; i < 100; i++)
         {
@@ -48,7 +48,7 @@ public sealed class EnumStringCoercionCostTests
     [InlineData("OK", Mood.Ok)]
     public void MapperCoercer_StringToEnum_ParsesNamesCaseInsensitively(string literal, Mood expected)
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(string), typeof(Mood), EnumParseFailureMode.Throw, null);
+        var coercer = pengdows.crud.types.coercion.ConverterResolution.ResolveCoercer(typeof(string), typeof(Mood), EnumParseFailureMode.Throw, null);
 
         Assert.Equal(expected, coercer(literal));
     }
@@ -56,7 +56,7 @@ public sealed class EnumStringCoercionCostTests
     [Fact]
     public void MapperCoercer_StringToEnum_UnknownLiteralStillFails()
     {
-        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(string), typeof(Mood), EnumParseFailureMode.Throw, null);
+        var coercer = pengdows.crud.types.coercion.ConverterResolution.ResolveCoercer(typeof(string), typeof(Mood), EnumParseFailureMode.Throw, null);
 
         Assert.ThrowsAny<Exception>(() => coercer("Furious"));
     }

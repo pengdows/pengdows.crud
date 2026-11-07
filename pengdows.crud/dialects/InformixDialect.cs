@@ -164,8 +164,11 @@ internal sealed class InformixDialect : SqlDialect
         return type == typeof(string) || type == typeof(byte[]);
     }
 
+    // A JSON document is written as its text, so its column is learned like a string column: a BSON column is written through
+    // its JSON cast only once the declared type is known.
     internal override bool NeedsDeclaredType(IColumnInfo column, bool forRead) =>
-        forRead ? !column.IsEnum && IsStringOrBytes(column) : (!column.IsEnum && IsStringOrBytes(column)) || column.DbType == DbType.Time;
+        forRead ? !column.IsEnum && (IsStringOrBytes(column) || column.IsJsonType)
+            : (!column.IsEnum && (IsStringOrBytes(column) || column.IsJsonType)) || column.DbType == DbType.Time;
 
     private bool DeclaredAs(IColumnInfo column, string type) =>
         string.Equals(DeclaredTypeOf(column), type, StringComparison.OrdinalIgnoreCase);
@@ -594,6 +597,14 @@ internal sealed class InformixDialect : SqlDialect
     // driver infer it from the value, which PrepareParameterValue materializes to byte[]/string.
     internal override bool AssignsObjectDbType => false;
 
+    // CONFIRMED live : the driver treats DbType.Byte as binary data ("Illegal attempt to convert Text/Byte blob
+    // type"), so a byte binds as the smallest signed type that holds it (as Db2 does).
+    internal override bool BindsByteAsBinary => true;
+
+    // CONFIRMED live : IfxParameter rejects DbType.DateTime2 ("No mapping exists from DbType DateTime2 to a known
+    // IfxType"); DATETIME holds the same value as a DateTime.
+    protected override DbType RemapDbType(DbType type) => type == DbType.DateTime2 ? DbType.DateTime : base.RemapDbType(type);
+
     public override object? PrepareParameterValue(object? value, DbType dbType)
     {
         if (dbType == DbType.Object)
@@ -605,6 +616,13 @@ internal sealed class InformixDialect : SqlDialect
                 case TextReader reader:
                     return reader.ReadToEnd();
             }
+        }
+
+        // A byte held by an Int16 parameter (the binary-byte rule's type) goes to the driver as a short, at creation and on every
+        // later SetParameterValue or template clone.
+        if (dbType == DbType.Int16 && value is byte smallValue)
+        {
+            return (short)smallValue;
         }
 
         return base.PrepareParameterValue(value, dbType);
@@ -711,5 +729,9 @@ internal sealed class InformixDialect : SqlDialect
     // REV-039: the translator for this database's provider exceptions; no type mappings or
     // value formats of its own.
     internal static DatabaseTraits CreateInformixTraits() =>
-        new(SupportedDatabase.Informix, new InformixExceptionTranslator());
+        new(SupportedDatabase.Informix, new InformixExceptionTranslator())
+        {
+            IntervalFormat = IntervalWireFormat.InformixLiteral,
+            TextHasTrailingNul = true,
+        };
 }

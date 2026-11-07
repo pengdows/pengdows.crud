@@ -113,7 +113,7 @@ public sealed class SecurityRegressionTests
     public void ConvertWithCache_InvalidValue_DoesNotExposePayloadInException()
     {
         var ex = Assert.Throws<InvalidCastException>(() =>
-            TypeCoercionHelper.ConvertWithCache("top-secret-value", typeof(int)));
+            pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache("top-secret-value", typeof(int)));
 
         Assert.DoesNotContain("top-secret-value", ex.Message, StringComparison.Ordinal);
     }

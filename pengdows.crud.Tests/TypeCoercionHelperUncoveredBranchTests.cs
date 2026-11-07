@@ -105,16 +105,16 @@ public class TypeCoercionHelperUncoveredBranchTests
     // public Coerce entry point. Left as an acknowledged verification gap rather than forcing a
     // brittle test around undocumented parser edge-case behavior.
 
-    // TypeCoercionHelper.CoerceDateTime: DateTime-string fallback branch (line ~647) — a string that
+    // pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTime: DateTime-string fallback branch (line ~647) — a string that
     // DateTimeOffset.TryParse rejects (no offset/zone info accepted as DateTimeOffset in this culture
     // is still typically accepted; use a format DateTime.TryParse accepts but drop through by using
     // the DateTime.TryParse-only overload path directly instead, which is unambiguous).
     [Fact]
     public void CoerceDateTimeFromString_PlainDateTimeString_ConvertsToUtc()
     {
-        var method = typeof(TypeCoercionHelper).GetMethod(
+        var method = typeof(pengdows.crud.types.coercion.DateTimeCoercion).GetMethod(
             "CoerceDateTimeFromString", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? typeof(TypeCoercionHelper).GetMethod("CoerceDateTimeFromString");
+            ?? typeof(pengdows.crud.types.coercion.DateTimeCoercion).GetMethod("CoerceDateTimeFromString");
         Assert.NotNull(method);
 
         var result = (DateTime)method!.Invoke(null, new object?[] { "2024-01-15 10:00:00" })!;
@@ -122,16 +122,16 @@ public class TypeCoercionHelperUncoveredBranchTests
         Assert.Equal(DateTimeKind.Utc, result.Kind);
     }
 
-    // TypeCoercionHelper.CoerceDateTimeOffsetFromString: DateTime.TryParse fallback (line ~691).
+    // pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeOffsetFromString: DateTime.TryParse fallback (line ~691).
     [Fact]
     public void CoerceDateTimeOffsetFromString_PlainDateTimeString_UsesFlexibleOffset()
     {
-        var method = typeof(TypeCoercionHelper).GetMethod(
+        var method = typeof(pengdows.crud.types.coercion.DateTimeCoercion).GetMethod(
             "CoerceDateTimeOffsetFromString", BindingFlags.NonPublic | BindingFlags.Static)
-            ?? typeof(TypeCoercionHelper).GetMethod("CoerceDateTimeOffsetFromString");
+            ?? typeof(pengdows.crud.types.coercion.DateTimeCoercion).GetMethod("CoerceDateTimeOffsetFromString");
         Assert.NotNull(method);
 
-        var result = (DateTimeOffset)method!.Invoke(null, new object?[] { "2024-01-15 10:00:00" })!;
+        var result = (DateTimeOffset)method!.Invoke(null, new object?[] { "2024-01-15 10:00:00", pengdows.crud.TypeCoercionOptions.Default })!;
 
         Assert.Equal(2024, result.Year);
     }

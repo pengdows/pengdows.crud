@@ -58,8 +58,9 @@ internal class OracleDialect : SqlDialect
             return null;
         }
 
-        return @internal.ColumnConversion.Build(Expression.Call(@internal.BFileLocator.ReadMethod, reader, ordinal),
-            typeof(object), targetType, options);
+        // The locator is read and its text is the value; a locator is never converted by the general conversions.
+        return Expression.Call(@internal.BFileLocator.ToTextMethod,
+            Expression.Call(@internal.BFileLocator.ReadMethod, reader, ordinal));
     }
 
     // A BFILE locator is built by BFILENAME(directory, file). The value is "DIRECTORY/file" and is bound once: a single-row

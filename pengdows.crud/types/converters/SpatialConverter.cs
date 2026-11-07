@@ -347,8 +347,7 @@ internal abstract class SpatialConverter<TSpatial> : AdvancedTypeConverter<TSpat
         var type = value.GetType();
         var typeName = type.FullName ?? string.Empty;
 
-        if (typeName.Contains("SqlGeometry", StringComparison.OrdinalIgnoreCase) ||
-            typeName.Contains("SqlGeography", StringComparison.OrdinalIgnoreCase))
+        if (pengdows.crud.@internal.ProviderTypeNames.IsSqlSpatial(type))
         {
             // STAsBinary() returns SqlBytes and STSrid is a SqlInt32 (Microsoft.SqlServer.Types).
             var binary = type.GetMethod("STAsBinary", Type.EmptyTypes)?.Invoke(value, Array.Empty<object>());

@@ -1,0 +1,75 @@
+Informix	signed 8-bit	signed_8_bit	PASS
+Informix	signed 16-bit	signed_16_bit	PASS
+Informix	signed 32-bit	signed_32_bit	PASS
+Informix	signed 64-bit	signed_64_bit	UNSUPPORTED refused: server: Informix's BIGINT and INT8 exclude -9223372036854775808, their NULL sentinel; the server refuses the value (Value will not fit in a BIGINT or an INT8, confirmed live 2026-11-06)
+Informix	signed 128-bit	signed_128_bit	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (hugeint) not found.
+Informix	unsigned 8-bit	unsigned_8_bit	PASS
+Informix	unsigned 16-bit	unsigned_16_bit	PASS
+Informix	unsigned 32-bit	unsigned_32_bit	PASS
+Informix	unsigned 64-bit	unsigned_64_bit	PASS
+Informix	arbitrary-size integer	arbitrary_integer	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]The scale exceeds the maximum precision specified.
+Informix	binary float32	binary_float32	PASS
+Informix	binary float64	binary_float64	PASS
+Informix	fixed decimal	fixed_decimal	PASS
+Informix	boolean	boolean	PASS
+Informix	bit / bitstring	bit_string	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (bit) not found.
+Informix	varying character	varying_character	PASS
+Informix	unbounded text	unbounded_text	PASS
+Informix	UUID / GUID	uuid	PASS
+Informix	calendar date	calendar_date	PASS
+Informix	time without zone	time_of_day	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (time) not found.
+Informix	time without zone	time_span	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (time) not found.
+Informix	day-time interval	day_time_interval	PASS
+Informix	timestamp without zone	timestamp	PASS
+Informix	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	binary LOB	binary	PASS
+Informix	JSON text / JSON value	json	PASS
+Informix	IP address	ip_address	PASS
+Informix	SQL array	int_array	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (uhugeint) not found.
+Informix	decimal floating point	decimal_float	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (decfloat) not found.
+Informix	money / currency	money	PASS
+Informix	fixed character	fixed_character	PASS
+Informix	national / Unicode character	national_text	PASS
+Informix	long text LOB	long_text	PASS
+Informix	enumeration	enumeration	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	set-valued enum	set_value	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	fixed binary	fixed_binary	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (binary) not found.
+Informix	varying binary	varying_binary	PASS
+Informix	legacy long binary	legacy_binary	PASS
+Informix	rowversion / timestamp token	rowversion	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (binary) not found.
+Informix	local-zone timestamp	local_timestamp	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	second-precision datetime	second_datetime	PASS
+Informix	time with zone	time_zoned	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	year-only	year_only	PASS
+Informix	year-month interval	year_month_interval	PASS
+Informix	generic interval	generic_interval	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	row identifier / ROWID	row_identifier	PASS
+Informix	object identifier / OID	oid	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (oid) not found.
+Informix	transaction ID	transaction_id	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (xid) not found.
+Informix	WAL / log position	wal_position	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (pg_lsn) not found.
+Informix	native binary JSON	binary_json	PASS
+Informix	XML	xml	PASS
+Informix	BSON	bson	UNSUPPORTED refused: by design: Informix writes a BSON document from its JSON text, and the server refuses raw bytes as BSON (No cast from byte to json, confirmed live 2026-11-06)
+Informix	variant / dynamic value	variant	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (variant) not found.
+Informix	IP network / CIDR	cidr	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (cidr) not found.
+Informix	MAC address	mac_address	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (macaddr) not found.
+Informix	point geometry	point	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (point) not found.
+Informix	line / linestring geometry	linestring	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (linestring) not found.
+Informix	polygon geometry	polygon	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (polygon) not found.
+Informix	general geometry	geometry	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (geometry) not found.
+Informix	geography / geodetic	geography	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (geography) not found.
+Informix	fixed-length array	fixed_array	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	list / multiset / set collection	list_collection	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	map / dictionary	map	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	range	range	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (int4range) not found.
+Informix	multirange	multirange	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (int4multirange) not found.
+Informix	user-defined enum / domain	domain	UNSUPPORTED refused: ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+Informix	full-text search vector / query	full_text	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (tsvector) not found.
+Informix	native point	native_point	UNSUPPORTED refused: no candidate was tried
+Informix	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+Informix	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+Informix	vector embedding	vector	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (vector) not found.
+Informix	hierarchical path	hierarchy	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (hierarchyid) not found.
+Informix	external-file reference	file_reference	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (bfile) not found.
+Informix	specialized security label	security_label	UNSUPPORTED refused: ERROR [HY000] [Informix][Informix ODBC Driver][Informix]User (informix) does not have DBSECADM authority.

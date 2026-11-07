@@ -102,9 +102,24 @@ internal sealed class Db2Dialect : SqlDialect
     // from DbType Guid to a known DB2Type") the instant DbType.Guid is assigned — before
     // GuidFormat's ApplyGuidFormat conversion ever runs. Remap here (same pattern as Oracle)
     // so the parameter is created with DbType.String from the start.
+    // The driver rejects DbType.DateTime2 ("No mapping exists from DbType DateTime2 to a known DB2Type", confirmed live);
+    // TIMESTAMP holds the same value as a DateTime.
+    public override object? PrepareParameterValue(object? value, DbType dbType)
+    {
+        // A byte held by an Int16 parameter (the binary-byte rule's type) goes to the driver as a short, at creation and on every
+        // later SetParameterValue or template clone.
+        if (dbType == DbType.Int16 && value is byte smallValue)
+        {
+            return (short)smallValue;
+        }
+
+        return base.PrepareParameterValue(value, dbType);
+    }
+
     protected override DbType RemapDbType(DbType type) => type switch
     {
         DbType.Guid => DbType.String,
+        DbType.DateTime2 => DbType.DateTime,
         _ => type
     };
 

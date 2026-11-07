@@ -8,7 +8,9 @@ using System.Threading.Tasks;
 using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using pengdows.crud.dialects;
+using pengdows.crud.attributes;
 using pengdows.crud.enums;
+using pengdows.crud.types.valueobjects;
 using pengdows.crud.fakeDb;
 using pengdows.crud.infrastructure;
 using pengdows.crud.isolation;
@@ -620,5 +622,143 @@ public class InformixDialectTests
         }
 
         public override string? SqlState { get; }
+    }
+
+    // CONFIRMED live (Informix 15 developer image): an INTERVAL DAY TO SECOND is bound as its literal, "D HH:MM:SS"
+    // with a space between the day and the time. The ISO 8601 text the default interval wire format sends (P1DT2H3M4S) is
+    // refused ("Non-numeric character in datetime or interval").
+    [Fact]
+    public void IntervalDaySecond_IsBoundAsInformixLiteral()
+    {
+        var interval = IntervalDaySecond.FromTimeSpan(new TimeSpan(1, 2, 3, 4));
+        var dialect = CreateDialect();
+
+        var parameter = dialect.CreateDbParameter("i", DbType.Object, interval);
+
+        Assert.Equal("1 02:03:04", parameter.Value);
+    }
+
+    // CONFIRMED live (Informix 15 developer image): IfxParameter rejects DbType.DateTime2 ("No mapping exists from
+    // DbType DateTime2 to a known IfxType"); DATETIME holds the same value as a DateTime, so the parameter is remapped.
+    [Fact]
+    public void CreateDbParameter_DateTime2_IsRemappedToDateTime()
+    {
+        var value = new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Unspecified);
+
+        var parameter = CreateDialect().CreateDbParameter("v", DbType.DateTime2, value);
+
+        Assert.Equal(DbType.DateTime, parameter.DbType);
+        Assert.Equal(value, parameter.Value);
+    }
+
+    // CONFIRMED live : the driver treats DbType.Byte as binary data ("Illegal attempt to convert Text/Byte blob
+    // type"), so a byte binds as the smallest signed type that holds it, as Db2 does.
+    [Fact]
+    public void CreateDbParameter_Byte_BindsAsAnInt16()
+    {
+        var parameter = CreateDialect().CreateDbParameter("b", DbType.Byte, (byte)200);
+
+        Assert.Equal(DbType.Int16, parameter.DbType);
+        Assert.Equal((short)200, parameter.Value);
+    }
+
+    // CONFIRMED live : an INTERVAL YEAR TO MONTH is bound as Informix's "Y-MM" literal; the ISO 8601 form is refused.
+    [Fact]
+    public void IntervalYearMonth_IsBoundAsInformixLiteral()
+    {
+        var parameter = CreateDialect().CreateDbParameter("i", DbType.Object, new IntervalYearMonth(2, 3));
+
+        Assert.Equal("2-03", parameter.Value);
+    }
+
+    // The template clone re-creates a parameter from its stored DbType (already Int16 after the byte rule) and its value. A
+    // byte value still held by that Int16 parameter must go to the driver as a short, or the driver reads it as binary.
+    [Fact]
+    public void CreateDbParameter_Int16HoldingAByte_CarriesAShort()
+    {
+        var parameter = CreateDialect().CreateDbParameter("s", DbType.Int16, (byte)200);
+
+        Assert.Equal(DbType.Int16, parameter.DbType);
+        Assert.Equal((short)200, parameter.Value);
+    }
+
+    // A value set on an Int16 parameter (the byte rule's type) is prepared as a short too, not only at creation.
+    [Fact]
+    public void PrepareParameterValue_ByteForAnInt16Parameter_IsAShort()
+    {
+        var prepared = CreateDialect().PrepareParameterValue((byte)200, DbType.Int16);
+
+        Assert.Equal((short)200, prepared);
+    }
+
+    // CONFIRMED live : a TEXT/CLOB read of a multi-byte value comes back with a trailing NUL ("héllo, world\0").
+    // SQL text does not end in one, so the read drops it, and only for a provider that declares the padding.
+    [Fact]
+    public void StringRead_OnInformix_DropsTheTrailingNul()
+    {
+        var options = pengdows.crud.TypeCoercionOptions.Default with { Provider = SupportedDatabase.Informix };
+
+        Assert.Equal("h\u00e9llo, world", pengdows.crud.@internal.SingleReadColumns.TrimmedStringFromValue("h\u00e9llo, world\0", options));
+    }
+
+    [Fact]
+    public void StringRead_OnAProviderWithoutThePadding_KeepsAForeignNul()
+    {
+        var options = pengdows.crud.TypeCoercionOptions.Default with { Provider = SupportedDatabase.PostgreSql };
+
+        Assert.Equal("a\0", pengdows.crud.@internal.SingleReadColumns.StringFromValue("a\0", options));
+    }
+
+    [Table("bson_doc")]
+    public sealed class BsonDocRow
+    {
+        [Id] [Column("id", DbType.Int32)] public int Id { get; set; }
+        [Column("b", DbType.Object, NativeType = "BSON")] public System.Text.Json.JsonDocument B { get; set; } = System.Text.Json.JsonDocument.Parse("{}");
+    }
+
+    // A JSON document column is written into and read from its declared type like a string column: a BSON column needs the
+    // declared type learned, or the value goes to the server untyped and the server refuses the text (bson_in, confirmed live).
+    [Fact]
+    public void NeedsDeclaredType_ForAJsonDocumentColumn_IsTrue()
+    {
+        var column = new TypeMapRegistry().GetTableInfo<BsonDocRow>().Columns["b"];
+
+        Assert.True(CreateDialect().NeedsDeclaredType(column, forRead: false));
+        Assert.True(CreateDialect().NeedsDeclaredType(column, forRead: true));
+    }
+
+    [Fact]
+    public void RenderColumnArgument_ForALearnedBsonColumn_CastsThroughJson()
+    {
+        var dialect = CreateDialect();
+        var column = new TypeMapRegistry().GetTableInfo<BsonDocRow>().Columns["b"];
+        dialect.RecordDeclaredTypes(new[] { (column, "BSON") });
+
+        Assert.Equal("?::JSON::BSON", dialect.RenderColumnArgument("?", column));
+    }
+
+    // The trailing-NUL trim is chosen once per statement read, from the provider's trait, so no other provider's string read pays
+    // for it.
+    [Fact]
+    public void StringRead_ChoosesTheTrimOnlyForAProviderWithTheTrailingNul()
+    {
+        var informix = pengdows.crud.TypeCoercionOptions.Default with { Provider = SupportedDatabase.Informix };
+        var postgres = pengdows.crud.TypeCoercionOptions.Default with { Provider = SupportedDatabase.PostgreSql };
+
+        Assert.Equal(nameof(pengdows.crud.@internal.SingleReadColumns.TrimmedStringFromValue),
+            pengdows.crud.@internal.SingleReadColumns.StringReadFor(informix).Name);
+        Assert.Equal(nameof(pengdows.crud.@internal.SingleReadColumns.StringFromValue),
+            pengdows.crud.@internal.SingleReadColumns.StringReadFor(postgres).Name);
+    }
+
+    // A non-string value is converted once, and its trimmed text is the value the plain read would give.
+    [Fact]
+    public void TrimmedStringRead_OfANonStringValue_ReturnsItsTrimmedText()
+    {
+        var options = pengdows.crud.TypeCoercionOptions.Default with { Provider = SupportedDatabase.Informix };
+        var guid = System.Guid.Parse("0a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9");
+
+        Assert.Equal(pengdows.crud.@internal.SingleReadColumns.StringFromValue(guid, options),
+            pengdows.crud.@internal.SingleReadColumns.TrimmedStringFromValue(guid, options));
     }
 }

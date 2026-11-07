@@ -43,6 +43,21 @@ public class Db2DialectTests
         Assert.Equal(SupportedDatabase.Db2, CreateDialect().DatabaseType);
     }
 
+    // CONFIRMED live (Net.IBM.Data.Db2): the driver rejects DbType.DateTime2 ("No mapping exists from DbType
+    // DateTime2 to a known DB2Type"). Db2's TIMESTAMP holds it as a DateTime, so the parameter is remapped to DbType.DateTime.
+    [Fact]
+    public void CreateDbParameter_DateTime2_IsRemappedToDateTime()
+    {
+        var factory = new pengdows.crud.fakeDb.fakeDbFactory(SupportedDatabase.Db2);
+        var dialect = new Db2Dialect(factory, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var value = new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Unspecified);
+
+        var parameter = dialect.CreateDbParameter("v", System.Data.DbType.DateTime2, value);
+
+        Assert.Equal(System.Data.DbType.DateTime, parameter.DbType);
+        Assert.Equal(value, parameter.Value);
+    }
+
     [Fact]
     public void ParameterMarker_IsAtSign()
     {
@@ -404,5 +419,30 @@ public class Db2DialectTests
         public PlainMessageDbException(string message) : base(message)
         {
         }
+    }
+
+    // Db2's TIMESTAMP precision is per column (TIMESTAMP(6), TIMESTAMP(7), ...), and the server truncates a finer fraction to the
+    // declared precision. The library does not cut the value itself: a fixed cut would drop the digits a TIMESTAMP(7) column keeps.
+    [Fact]
+    public void CreateDbParameter_DateTime2_PassesTheFractionThrough()
+    {
+        var factory = new pengdows.crud.fakeDb.fakeDbFactory(SupportedDatabase.Db2);
+        var dialect = new Db2Dialect(factory, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+        var value = new DateTime(2026, 11, 6, 12, 0, 0, DateTimeKind.Unspecified).AddTicks(1236789);
+
+        var parameter = dialect.CreateDbParameter("v", System.Data.DbType.DateTime2, value);
+
+        Assert.Equal(value, parameter.Value);
+    }
+
+    // A byte held by an Int16 parameter goes to the driver as a short (the binary-byte rule), on Db2 only among the dialects that
+    // bind a byte as binary.
+    [Fact]
+    public void PrepareParameterValue_ByteForAnInt16Parameter_IsAShort()
+    {
+        var factory = new pengdows.crud.fakeDb.fakeDbFactory(SupportedDatabase.Db2);
+        var dialect = new Db2Dialect(factory, Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance);
+
+        Assert.Equal((short)200, dialect.PrepareParameterValue((byte)200, System.Data.DbType.Int16));
     }
 }

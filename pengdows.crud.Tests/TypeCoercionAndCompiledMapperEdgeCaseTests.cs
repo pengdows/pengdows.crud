@@ -28,7 +28,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
             BindingFlags.NonPublic | BindingFlags.Static)!;
 
     private static readonly MethodInfo ResolveCoercerTypePairMethod =
-        typeof(TypeCoercionHelper).GetMethod("ResolveCoercer",
+        typeof(pengdows.crud.types.coercion.ConverterResolution).GetMethod("ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
             new[] { typeof(Type), typeof(Type), typeof(EnumParseFailureMode), typeof(TypeCoercionOptions) },
@@ -62,10 +62,10 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
     [Fact]
     public void CoerceDateTimeFromString_CoversWhitespaceParseAndFailureBranches()
     {
-        Assert.Throws<InvalidCastException>(() => TypeCoercionHelper.CoerceDateTimeFromString("   "));
-        Assert.Throws<InvalidCastException>(() => TypeCoercionHelper.CoerceDateTimeFromString("not-a-date"));
+        Assert.Throws<InvalidCastException>(() => pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeFromString("   "));
+        Assert.Throws<InvalidCastException>(() => pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeFromString("not-a-date"));
 
-        var parsed = TypeCoercionHelper.CoerceDateTimeFromString("2026-01-02T03:04:05");
+        var parsed = pengdows.crud.types.coercion.DateTimeCoercion.CoerceDateTimeFromString("2026-01-02T03:04:05");
         Assert.Equal(DateTimeKind.Utc, parsed.Kind);
     }
 
@@ -98,7 +98,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         });
         Assert.True(reader.Read());
 
-        var bytes = TypeCoercionHelper.ReadBytes(reader, 0);
+        var bytes = pengdows.crud.types.coercion.BinaryCoercion.ReadBytes(reader, 0);
         Assert.Equal(data, bytes);
     }
 
@@ -124,7 +124,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         };
         Assert.True(reader.Read());
 
-        Assert.Equal(data, TypeCoercionHelper.ReadBytes(reader, 0));
+        Assert.Equal(data, pengdows.crud.types.coercion.BinaryCoercion.ReadBytes(reader, 0));
     }
 
     // COR-014: COR-003 asked for a 17th byte to prove a value held exactly 16; MySql.Data throws
@@ -143,7 +143,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         };
         Assert.True(reader.Read());
 
-        Assert.Equal(guid, TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
+        Assert.Equal(guid, pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes(reader, 0));
     }
 
     [Theory]
@@ -160,7 +160,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         };
         Assert.True(reader.Read());
 
-        Assert.Throws<InvalidValueException>(() => TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
+        Assert.Throws<InvalidValueException>(() => pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes(reader, 0));
     }
 
     [Fact]
@@ -194,7 +194,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         };
         Assert.True(reader.Read());
 
-        Assert.Equal(guid, TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
+        Assert.Equal(guid, pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes(reader, 0));
     }
 
     [Fact]
@@ -224,7 +224,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         });
         Assert.True(reader.Read());
 
-        Assert.Throws<InvalidValueException>(() => TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
+        Assert.Throws<InvalidValueException>(() => pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes(reader, 0));
     }
 
     [Fact]
@@ -236,7 +236,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         });
         Assert.True(reader.Read());
 
-        Assert.Throws<InvalidValueException>(() => TypeCoercionHelper.ReadGuidFromBytes(reader, 0));
+        Assert.Throws<InvalidValueException>(() => pengdows.crud.types.coercion.BinaryCoercion.ReadGuidFromBytes(reader, 0));
     }
 
     // COR-011: the coercer DataReaderMapper resolves per column converted DateTime/DateTimeOffset
@@ -250,7 +250,7 @@ public sealed class TypeCoercionAndCompiledMapperEdgeCaseTests
         var forceUtc = TypeCoercionOptions.Default with { TimePolicy = TimeMappingPolicy.ForceUtcDateTime };
         var local = new DateTime(2026, 10, 4, 7, 30, 0, DateTimeKind.Local);
 
-        var coercer = TypeCoercionHelper.ResolveCoercer(typeof(DateTime), typeof(DateTimeOffset),
+        var coercer = pengdows.crud.types.coercion.ConverterResolution.ResolveCoercer(typeof(DateTime), typeof(DateTimeOffset),
             EnumParseFailureMode.Throw, forceUtc);
 
         var expected = TypeCoercionHelper.Coerce(local, typeof(DateTime), typeof(DateTimeOffset), forceUtc);

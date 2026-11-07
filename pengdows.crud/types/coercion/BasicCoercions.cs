@@ -168,7 +168,7 @@ internal class DateOnlyCoercion : DbCoercion<DateOnly>
                 return true;
             // Keep the string's own wall-clock date: parsing to DateTime would convert an explicit
             // offset ("...Z", SQLite's stored form) to local time and move the date.
-            case string s when TypeCoercionHelper.TryParseTimestampText(s, out var dto):
+            case string s when pengdows.crud.types.coercion.DateTimeCoercion.TryParseTimestampText(s, out var dto):
                 value = DateOnly.FromDateTime(dto.DateTime);
                 return true;
             default:
@@ -591,7 +591,7 @@ internal class BitArrayCoercion : DbCoercion<System.Collections.BitArray>
 }
 
 // DRY-015: the three JSON targets read the same inputs: their own DOM types, and anything carrying JSON
-// text through TypeCoercionHelper.ExtractJsonString, blank as the JSON null (COR-007).
+// text through pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString, blank as the JSON null (COR-007).
 internal class JsonValueCoercion : DbCoercion<JsonValue>
 {
     public override bool TryRead(in DbValue src, out JsonValue value)
@@ -609,9 +609,9 @@ internal class JsonValueCoercion : DbCoercion<JsonValue>
                 case JsonElement element:
                     value = new JsonValue(element);
                     return true;
-                case var raw when TypeCoercionHelper.CarriesJsonText(raw):
-                    value = JsonValue.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(
-                        TypeCoercionHelper.ExtractJsonString(raw, JsonSerializerOptions.Default)));
+                case var raw when pengdows.crud.types.coercion.JsonCoercion.CarriesJsonText(raw):
+                    value = JsonValue.Parse(pengdows.crud.types.coercion.JsonCoercion.JsonTextOrNullLiteral(
+                        pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(raw, JsonSerializerOptions.Default)));
                     return true;
                 default:
                     return false;
@@ -642,9 +642,9 @@ internal class JsonElementCoercion : DbCoercion<JsonElement>
                 case JsonDocument doc:
                     value = doc.RootElement.Clone();
                     return true;
-                case var raw when TypeCoercionHelper.CarriesJsonText(raw):
-                    using (var parsed = JsonDocument.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(
-                               TypeCoercionHelper.ExtractJsonString(raw, JsonSerializerOptions.Default))))
+                case var raw when pengdows.crud.types.coercion.JsonCoercion.CarriesJsonText(raw):
+                    using (var parsed = JsonDocument.Parse(pengdows.crud.types.coercion.JsonCoercion.JsonTextOrNullLiteral(
+                               pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(raw, JsonSerializerOptions.Default))))
                     {
                         value = parsed.RootElement.Clone();
                     }

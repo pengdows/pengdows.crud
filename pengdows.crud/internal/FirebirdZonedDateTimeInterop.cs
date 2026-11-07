@@ -37,7 +37,54 @@ internal static class FirebirdZonedDateTimeInterop
     {
         var type = providerAssembly?.GetType(TimeTypeName, throwOnError: false) ?? TimeByName.Value;
         var ctor = type?.GetConstructor(new[] { typeof(TimeSpan), typeof(string) });
-        return ctor?.Invoke(new object[] { value.UtcDateTime.TimeOfDay, "UTC" });
+        if (ctor is null)
+        {
+            return null;
+        }
+
+        // Firebird stores the UTC time with the zone. The zone is the Etc/GMT zone of the offset, so the offset is kept; an
+        // offset that is not whole hours has no such zone and is refused rather than sent as UTC.
+        var zone = ZoneNameFor(value.Offset) ?? throw new NotSupportedException(
+            $"Firebird TIME WITH TIME ZONE takes whole-hour offsets only; {value.Offset} has no named zone.");
+        return ctor.Invoke(new object[] { value.UtcDateTime.TimeOfDay, zone });
+    }
+
+    /// <summary>
+    /// The Etc/GMT zone name for a whole-hour offset ("UTC" for zero; note the sign is the inverse: +02:00 is Etc/GMT-2), or
+    /// null for an offset that is not whole hours or is outside ±14.
+    /// </summary>
+    internal static string? ZoneNameFor(TimeSpan offset)
+    {
+        if (offset == TimeSpan.Zero)
+        {
+            return "UTC";
+        }
+
+        if (offset.Minutes != 0 || offset.Seconds != 0 || offset.Milliseconds != 0 || Math.Abs(offset.TotalHours) > 14)
+        {
+            return null;
+        }
+
+        var hours = Math.Abs((int)offset.TotalHours);
+        return offset > TimeSpan.Zero ? $"Etc/GMT-{hours}" : $"Etc/GMT+{hours}";
+    }
+
+    /// <summary>The offset a zone name stands for: "UTC" is zero, Etc/GMT±h is the inverse-signed h hours; otherwise null.</summary>
+    internal static TimeSpan? OffsetOfZoneName(string? zone)
+    {
+        if (zone == "UTC")
+        {
+            return TimeSpan.Zero;
+        }
+
+        var match = System.Text.RegularExpressions.Regex.Match(zone ?? string.Empty, @"^Etc/GMT([+-])(\d{1,2})$");
+        if (!match.Success)
+        {
+            return null;
+        }
+
+        var hours = int.Parse(match.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture);
+        return match.Groups[1].Value == "-" ? TimeSpan.FromHours(hours) : TimeSpan.FromHours(-hours);
     }
 
     /// <summary>
@@ -47,14 +94,18 @@ internal static class FirebirdZonedDateTimeInterop
     internal static bool TryGetTime(object value, out DateTimeOffset time)
     {
         var type = value.GetType();
-        if (!string.Equals(type.FullName, TimeTypeName, StringComparison.Ordinal)
+        if (!ProviderTypeNames.IsFirebirdZonedTime(type)
             || type.GetProperty("Time")?.GetValue(value) is not TimeSpan utcTime)
         {
             time = default;
             return false;
         }
 
-        var offset = type.GetProperty("Offset")?.GetValue(value) is TimeSpan stated ? stated : TimeSpan.Zero;
+        // The stated offset when the driver carries one; otherwise the offset the zone name stands for (a read from the server
+        // carries the zone); otherwise UTC.
+        var stated = type.GetProperty("Offset")?.GetValue(value) as TimeSpan?;
+        var zone = type.GetProperty("TimeZone")?.GetValue(value) as string;
+        var offset = stated is { } s && s != TimeSpan.Zero ? s : OffsetOfZoneName(zone) ?? TimeSpan.Zero;
         // Anchored on 0001-01-01 UTC; one day later only when the offset would otherwise land
         // before DateTime.MinValue, which threw for a negative offset (REV-065).
         var anchor = utcTime + offset < TimeSpan.Zero ? DateTime.MinValue.AddDays(1) : DateTime.MinValue;
@@ -81,7 +132,7 @@ internal static class FirebirdZonedDateTimeInterop
     /// <summary>True when <paramref name="value"/> is an FbZonedDateTime.</summary>
     internal static bool IsZoned(object? value)
     {
-        return value != null && value.GetType().FullName is TypeName or TimeTypeName;
+        return value != null && (ProviderTypeNames.IsFirebirdZonedDateTime(value.GetType()) || ProviderTypeNames.IsFirebirdZonedTime(value.GetType()));
     }
 
     /// <summary>
@@ -96,7 +147,7 @@ internal static class FirebirdZonedDateTimeInterop
     {
         internal static readonly bool IsExact = typeof(T).IsValueType || typeof(T).IsSealed;
 
-        internal static readonly bool IsZonedType = typeof(T).FullName is TypeName or TimeTypeName;
+        internal static readonly bool IsZonedType = ProviderTypeNames.IsFirebirdZonedDateTime(typeof(T)) || ProviderTypeNames.IsFirebirdZonedTime(typeof(T));
     }
 
     /// <summary>
@@ -106,7 +157,7 @@ internal static class FirebirdZonedDateTimeInterop
     internal static bool TryGetInstant(object value, out DateTimeOffset instant)
     {
         var type = value.GetType();
-        if (!string.Equals(type.FullName, TypeName, StringComparison.Ordinal)
+        if (!ProviderTypeNames.IsFirebirdZonedDateTime(type)
             || type.GetProperty("DateTime")?.GetValue(value) is not DateTime utc)
         {
             instant = default;

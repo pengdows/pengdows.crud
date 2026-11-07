@@ -50,6 +50,27 @@ public class FakeDbDecimalTextColumnTests
         Assert.Throws<OverflowException>(() => reader.GetDecimal(0));
     }
 
+    // Npgsql's IsDBNull reads the row's NULL flag and never decodes the number, so a NUMERIC beyond decimal is not NULL
+    // and asking whether it is NULL does not throw. Only the typed getters throw.
+    [Fact]
+    public void DecimalTextColumn_IsDBNullBeyondDecimal_IsFalseAndDoesNotThrow()
+    {
+        using var reader = ReaderFor(Wide);
+        Assert.True(reader.Read());
+
+        Assert.False(reader.IsDBNull(0));
+    }
+
+    [Fact]
+    public void DecimalTextColumn_IsDBNullOnANullCell_IsTrue()
+    {
+        var rows = new List<Dictionary<string, object>> { new() { ["n"] = DBNull.Value } };
+        using var reader = new fakeDbDataReader(rows) { DecimalTextColumns = new HashSet<string> { "n" } };
+        Assert.True(reader.Read());
+
+        Assert.True(reader.IsDBNull(0));
+    }
+
     [Fact]
     public void DecimalTextColumn_GetStringReturnsTheDigits()
     {

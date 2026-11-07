@@ -77,7 +77,7 @@ internal class HierarchyIdCoercion : DbCoercion<HierarchyId>
                 case byte[] bytes:
                     value = HierarchyId.FromSqlServerBytes(bytes);
                     return true;
-                case { } other when other.GetType().Name == "SqlHierarchyId":
+                case { } other when pengdows.crud.@internal.ProviderTypeNames.IsSqlHierarchyId(other.GetType()):
                     return HierarchyId.TryParse(other.ToString(), out value);
                 default:
                     return false;

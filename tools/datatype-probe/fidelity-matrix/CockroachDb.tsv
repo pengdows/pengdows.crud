@@ -40,7 +40,7 @@ CockroachDb	legacy long binary	legacy_binary	UNSUPPORTED refused: 42601: at or n
 CockroachDb	rowversion / timestamp token	rowversion	PASS
 CockroachDb	local-zone timestamp	local_timestamp	UNSUPPORTED refused: 42601: at or near "with": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information.
 CockroachDb	second-precision datetime	second_datetime	PASS
-CockroachDb	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+CockroachDb	time with zone	time_zoned	PASS
 CockroachDb	year-only	year_only	PASS
 CockroachDb	year-month interval	year_month_interval	PASS
 CockroachDb	generic interval	generic_interval	PASS

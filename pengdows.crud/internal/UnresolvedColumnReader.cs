@@ -22,7 +22,7 @@ internal static class UnresolvedColumnReader
         {
             // SqlClient without Microsoft.SqlServer.Types: GetValue throws, GetBytes returns
             // SQL Server's stored encoding (confirmed live).
-            return HierarchyId.FromSqlServerBytes(TypeCoercionHelper.ReadBytes(record, ordinal));
+            return HierarchyId.FromSqlServerBytes(pengdows.crud.types.coercion.BinaryCoercion.ReadBytes(record, ordinal));
         }
 
         throw new NotSupportedException($"No reader for an unresolved column read as {type.Name}.");

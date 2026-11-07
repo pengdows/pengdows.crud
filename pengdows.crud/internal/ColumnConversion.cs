@@ -17,8 +17,8 @@ internal static class ColumnConversion
         new[] { typeof(object), typeof(Type), typeof(Type), typeof(TypeCoercionOptions) },
         null)!;
 
-    internal static readonly MethodInfo NormalizeDateTime = typeof(TypeCoercionHelper).GetMethod(
-        nameof(TypeCoercionHelper.NormalizeDateTime),
+    internal static readonly MethodInfo NormalizeDateTime = typeof(pengdows.crud.types.coercion.DateTimeCoercion).GetMethod(
+        nameof(pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime),
         BindingFlags.NonPublic | BindingFlags.Static,
         null,
         new[] { typeof(DateTime) },
@@ -74,6 +74,21 @@ internal static class ColumnConversion
             Expression.Constant(sourceType),
             Expression.Constant(targetType),
             Expression.Constant(coercionOptions, typeof(TypeCoercionOptions)));
+
+        // A NULL has no value of a non-nullable value type: unboxing it would throw a NullReferenceException, and a default
+        // would be data the database never stored. The conversion fails instead, naming the type; the mapper names the column.
+        if (targetType.IsValueType && Nullable.GetUnderlyingType(targetType) == null)
+        {
+            var coerced = Expression.Variable(typeof(object), "coerced");
+            return Expression.Block(targetType, new[] { coerced },
+                Expression.Assign(coerced, coerceCall),
+                Expression.Condition(
+                    Expression.Equal(coerced, Expression.Constant(null, typeof(object))),
+                    Expression.Throw(Expression.New(typeof(InvalidCastException).GetConstructor(new[] { typeof(string) })!,
+                        Expression.Constant($"NULL cannot be read into the non-nullable type {targetType.Name}.")), targetType),
+                    Expression.Convert(coerced, targetType),
+                    targetType));
+        }
 
         return Expression.Convert(coerceCall, targetType);
     }

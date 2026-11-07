@@ -153,7 +153,7 @@ internal sealed class PostgreSqlIntervalConverter : AdvancedTypeConverter<Postgr
             default:
                 {
                     var type = value.GetType();
-                    if (type.FullName == "NpgsqlTypes.NpgsqlInterval")
+                    if (pengdows.crud.@internal.ProviderTypeNames.IsNpgsqlInterval(type))
                     {
                         // Npgsql's full-fidelity interval (months, days, microseconds), read by
                         // NpgsqlTypedFieldReader.Interval so months and the stored days/time split survive.

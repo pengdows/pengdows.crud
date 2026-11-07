@@ -1,0 +1,375 @@
+Int32:1 -> Int32 [mapper] Int32:1 [gateway] Int32:1
+Int32:1 -> Int64 [mapper] Int64:1 [gateway] Int64:1
+Int32:1 -> Int16 [mapper] Int16:1 [gateway] Int16:1
+Int32:1 -> Byte [mapper] Byte:1 [gateway] Byte:1
+Int32:1 -> Double [mapper] double:1 [gateway] double:1
+Int32:1 -> Single [mapper] float:1 [gateway] float:1
+Int32:1 -> Decimal [mapper] decimal:1 [gateway] decimal:1
+Int32:1 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+Int32:1 -> UInt64 [mapper] UInt64:1 [gateway] UInt64:1
+Int32:1 -> Nullable`1? [mapper] Int32:1 [gateway] Int32:1
+Int64:1 -> Int32 [mapper] Int32:1 [gateway] Int32:1
+Int64:1 -> Int64 [mapper] Int64:1 [gateway] Int64:1
+Int64:1 -> Int16 [mapper] Int16:1 [gateway] Int16:1
+Int64:1 -> Byte [mapper] Byte:1 [gateway] Byte:1
+Int64:1 -> Double [mapper] double:1 [gateway] double:1
+Int64:1 -> Single [mapper] float:1 [gateway] float:1
+Int64:1 -> Decimal [mapper] decimal:1 [gateway] decimal:1
+Int64:1 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+Int64:1 -> UInt64 [mapper] UInt64:1 [gateway] UInt64:1
+Int64:1 -> Nullable`1? [mapper] Int32:1 [gateway] Int32:1
+Int16:1 -> Int32 [mapper] Int32:1 [gateway] Int32:1
+Int16:1 -> Int64 [mapper] Int64:1 [gateway] Int64:1
+Int16:1 -> Int16 [mapper] Int16:1 [gateway] Int16:1
+Int16:1 -> Byte [mapper] Byte:1 [gateway] Byte:1
+Int16:1 -> Double [mapper] double:1 [gateway] double:1
+Int16:1 -> Single [mapper] float:1 [gateway] float:1
+Int16:1 -> Decimal [mapper] decimal:1 [gateway] decimal:1
+Int16:1 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+Int16:1 -> UInt64 [mapper] UInt64:1 [gateway] UInt64:1
+Int16:1 -> Nullable`1? [mapper] Int32:1 [gateway] Int32:1
+Byte:1 -> Int32 [mapper] Int32:1 [gateway] Int32:1
+Byte:1 -> Int64 [mapper] Int64:1 [gateway] Int64:1
+Byte:1 -> Int16 [mapper] Int16:1 [gateway] Int16:1
+Byte:1 -> Byte [mapper] Byte:1 [gateway] Byte:1
+Byte:1 -> Double [mapper] double:1 [gateway] double:1
+Byte:1 -> Single [mapper] float:1 [gateway] float:1
+Byte:1 -> Decimal [mapper] decimal:1 [gateway] decimal:1
+Byte:1 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+Byte:1 -> UInt64 [mapper] UInt64:1 [gateway] UInt64:1
+Byte:1 -> Nullable`1? [mapper] Int32:1 [gateway] Int32:1
+double:1 -> Int32 [mapper] Int32:1 [gateway] Int32:1
+double:1 -> Int64 [mapper] Int64:1 [gateway] Int64:1
+double:1 -> Int16 [mapper] Int16:1 [gateway] Int16:1
+double:1 -> Byte [mapper] Byte:1 [gateway] Byte:1
+double:1 -> Double [mapper] double:1 [gateway] double:1
+double:1 -> Single [mapper] float:1 [gateway] float:1
+double:1 -> Decimal [mapper] decimal:1 [gateway] decimal:1
+double:1 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+double:1 -> UInt64 [mapper] UInt64:1 [gateway] UInt64:1
+double:1 -> Nullable`1? [mapper] Int32:1 [gateway] Int32:1
+double:1.5 -> Int32 [mapper] Int32:0 [gateway] throws DataMappingException
+double:1.5 -> Int64 [mapper] Int64:0 [gateway] throws DataMappingException
+double:1.5 -> Int16 [mapper] Int16:0 [gateway] throws DataMappingException
+double:1.5 -> Byte [mapper] Byte:0 [gateway] throws DataMappingException
+double:1.5 -> Double [mapper] double:1.5 [gateway] double:1.5
+double:1.5 -> Single [mapper] float:1.5 [gateway] float:1.5
+double:1.5 -> Decimal [mapper] decimal:1.5 [gateway] decimal:1.5
+double:1.5 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+double:1.5 -> UInt64 [mapper] UInt64:0 [gateway] throws DataMappingException
+double:1.5 -> Nullable`1? [mapper] null [gateway] throws DataMappingException
+float:1.5 -> Int32 [mapper] Int32:0 [gateway] throws DataMappingException
+float:1.5 -> Int64 [mapper] Int64:0 [gateway] throws DataMappingException
+float:1.5 -> Int16 [mapper] Int16:0 [gateway] throws DataMappingException
+float:1.5 -> Byte [mapper] Byte:0 [gateway] throws DataMappingException
+float:1.5 -> Double [mapper] double:1.5 [gateway] double:1.5
+float:1.5 -> Single [mapper] float:1.5 [gateway] float:1.5
+float:1.5 -> Decimal [mapper] decimal:1.5 [gateway] decimal:1.5
+float:1.5 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+float:1.5 -> UInt64 [mapper] UInt64:0 [gateway] throws DataMappingException
+float:1.5 -> Nullable`1? [mapper] null [gateway] throws DataMappingException
+decimal:1 -> Int32 [mapper] Int32:1 [gateway] Int32:1
+decimal:1 -> Int64 [mapper] Int64:1 [gateway] Int64:1
+decimal:1 -> Int16 [mapper] Int16:1 [gateway] Int16:1
+decimal:1 -> Byte [mapper] Byte:1 [gateway] Byte:1
+decimal:1 -> Double [mapper] double:1 [gateway] double:1
+decimal:1 -> Single [mapper] float:1 [gateway] float:1
+decimal:1 -> Decimal [mapper] decimal:1 [gateway] decimal:1
+decimal:1 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+decimal:1 -> UInt64 [mapper] UInt64:1 [gateway] UInt64:1
+decimal:1 -> Nullable`1? [mapper] Int32:1 [gateway] Int32:1
+decimal:2.7 -> Int32 [mapper] Int32:0 [gateway] throws DataMappingException
+decimal:2.7 -> Int64 [mapper] Int64:0 [gateway] throws DataMappingException
+decimal:2.7 -> Int16 [mapper] Int16:0 [gateway] throws DataMappingException
+decimal:2.7 -> Byte [mapper] Byte:0 [gateway] throws DataMappingException
+decimal:2.7 -> Double [mapper] double:2.7 [gateway] double:2.7
+decimal:2.7 -> Single [mapper] float:2.7 [gateway] float:2.7
+decimal:2.7 -> Decimal [mapper] decimal:2.7 [gateway] decimal:2.7
+decimal:2.7 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+decimal:2.7 -> UInt64 [mapper] UInt64:0 [gateway] throws DataMappingException
+decimal:2.7 -> Nullable`1? [mapper] null [gateway] throws DataMappingException
+"1" -> Int32 [mapper] Int32:1 [gateway] Int32:1
+"1" -> Int64 [mapper] Int64:1 [gateway] Int64:1
+"1" -> Int16 [mapper] Int16:1 [gateway] Int16:1
+"1" -> Byte [mapper] Byte:1 [gateway] Byte:1
+"1" -> Double [mapper] double:1 [gateway] double:1
+"1" -> Single [mapper] float:1 [gateway] float:1
+"1" -> Decimal [mapper] decimal:1 [gateway] decimal:1
+"1" -> Boolean [mapper] Boolean:False [gateway] throws DataMappingException
+"1" -> UInt64 [mapper] UInt64:1 [gateway] UInt64:1
+"1" -> Nullable`1? [mapper] Int32:1 [gateway] Int32:1
+"2.7" -> Int32 [mapper] Int32:0 [gateway] throws DataMappingException
+"2.7" -> Int64 [mapper] Int64:0 [gateway] throws DataMappingException
+"2.7" -> Int16 [mapper] Int16:0 [gateway] throws DataMappingException
+"2.7" -> Byte [mapper] Byte:0 [gateway] throws DataMappingException
+"2.7" -> Double [mapper] double:2.7 [gateway] double:2.7
+"2.7" -> Single [mapper] float:2.7 [gateway] float:2.7
+"2.7" -> Decimal [mapper] decimal:2.7 [gateway] decimal:2.7
+"2.7" -> Boolean [mapper] Boolean:False [gateway] throws DataMappingException
+"2.7" -> UInt64 [mapper] UInt64:0 [gateway] throws DataMappingException
+"2.7" -> Nullable`1? [mapper] null [gateway] throws DataMappingException
+Boolean:True -> Int32 [mapper] Int32:1 [gateway] Int32:1
+Boolean:True -> Int64 [mapper] Int64:1 [gateway] Int64:1
+Boolean:True -> Int16 [mapper] Int16:1 [gateway] Int16:1
+Boolean:True -> Byte [mapper] Byte:1 [gateway] Byte:1
+Boolean:True -> Double [mapper] double:1 [gateway] double:1
+Boolean:True -> Single [mapper] float:1 [gateway] float:1
+Boolean:True -> Decimal [mapper] decimal:1 [gateway] decimal:1
+Boolean:True -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+Boolean:True -> UInt64 [mapper] UInt64:1 [gateway] UInt64:1
+Boolean:True -> Nullable`1? [mapper] Int32:1 [gateway] Int32:1
+Int64:9223372036854775807 -> Int32 [mapper] Int32:0 [gateway] throws DataMappingException
+Int64:9223372036854775807 -> Int64 [mapper] Int64:9223372036854775807 [gateway] Int64:9223372036854775807
+Int64:9223372036854775807 -> Int16 [mapper] Int16:0 [gateway] throws DataMappingException
+Int64:9223372036854775807 -> Byte [mapper] Byte:0 [gateway] throws DataMappingException
+Int64:9223372036854775807 -> Double [mapper] double:9.223372036854776E+18 [gateway] double:9.223372036854776E+18
+Int64:9223372036854775807 -> Single [mapper] float:9.223372E+18 [gateway] float:9.223372E+18
+Int64:9223372036854775807 -> Decimal [mapper] decimal:9223372036854775807 [gateway] decimal:9223372036854775807
+Int64:9223372036854775807 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+Int64:9223372036854775807 -> UInt64 [mapper] UInt64:9223372036854775807 [gateway] UInt64:9223372036854775807
+Int64:9223372036854775807 -> Nullable`1? [mapper] null [gateway] throws DataMappingException
+UInt64:18446744073709551615 -> Int32 [mapper] Int32:0 [gateway] throws DataMappingException
+UInt64:18446744073709551615 -> Int64 [mapper] Int64:0 [gateway] throws DataMappingException
+UInt64:18446744073709551615 -> Int16 [mapper] Int16:0 [gateway] throws DataMappingException
+UInt64:18446744073709551615 -> Byte [mapper] Byte:0 [gateway] throws DataMappingException
+UInt64:18446744073709551615 -> Double [mapper] double:1.8446744073709552E+19 [gateway] double:1.8446744073709552E+19
+UInt64:18446744073709551615 -> Single [mapper] float:1.8446744E+19 [gateway] float:1.8446744E+19
+UInt64:18446744073709551615 -> Decimal [mapper] decimal:18446744073709551615 [gateway] decimal:18446744073709551615
+UInt64:18446744073709551615 -> Boolean [mapper] Boolean:True [gateway] Boolean:True
+UInt64:18446744073709551615 -> UInt64 [mapper] UInt64:18446744073709551615 [gateway] UInt64:18446744073709551615
+UInt64:18446744073709551615 -> Nullable`1? [mapper] null [gateway] throws DataMappingException
+"Sad" -> Mood [mapper] Mood:Sad [gateway] throws SqlGenerationException
+"Sad" -> Nullable`1? [mapper] Mood:Sad [gateway] throws SqlGenerationException
+"2" -> Mood [mapper] Mood:Sad [gateway] throws SqlGenerationException
+"2" -> Nullable`1? [mapper] Mood:Sad [gateway] throws SqlGenerationException
+Int32:2 -> Mood [mapper] Mood:Sad [gateway] throws SqlGenerationException
+Int32:2 -> Nullable`1? [mapper] Mood:Sad [gateway] throws SqlGenerationException
+Int64:2 -> Mood [mapper] Mood:Sad [gateway] throws SqlGenerationException
+Int64:2 -> Nullable`1? [mapper] Mood:Sad [gateway] throws SqlGenerationException
+"sad" -> Mood [mapper] Mood:Sad [gateway] throws SqlGenerationException
+"sad" -> Nullable`1? [mapper] Mood:Sad [gateway] throws SqlGenerationException
+"Nope" -> Mood [mapper] Mood:0 [gateway] throws SqlGenerationException
+"Nope" -> Nullable`1? [mapper] null [gateway] throws SqlGenerationException
+Int32:9 -> Mood [mapper] Mood:0 [gateway] throws SqlGenerationException
+Int32:9 -> Nullable`1? [mapper] null [gateway] throws SqlGenerationException
+Guid:0f8fad5b-d9cb-469f-a165-70867728950e -> Guid [mapper] Guid:0f8fad5b-d9cb-469f-a165-70867728950e [gateway] Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+Guid:0f8fad5b-d9cb-469f-a165-70867728950e -> String [mapper] "0f8fad5b-d9cb-469f-a165-70867728950e" [gateway] "0f8fad5b-d9cb-469f-a165-70867728950e"
+"0f8fad5b-d9cb-469f-a165-70867728950e" -> Guid [mapper] Guid:0f8fad5b-d9cb-469f-a165-70867728950e [gateway] Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+"0f8fad5b-d9cb-469f-a165-70867728950e" -> String [mapper] "0f8fad5b-d9cb-469f-a165-70867728950e" [gateway] "0f8fad5b-d9cb-469f-a165-70867728950e"
+0x5BAD8F0FCBD99F46A16570867728950E -> Guid [mapper] Guid:5bad8f0f-cbd9-9f46-a165-70867728950e on PostgreSql,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,Spanner,Informix,SapHana,InterBase,Access | Guid:0f8fad5b-d9cb-469f-a165-70867728950e on SqlServer,Oracle,SybaseASE [gateway] Guid:5bad8f0f-cbd9-9f46-a165-70867728950e on PostgreSql,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,Spanner,Informix,SapHana,InterBase,Access | Guid:0f8fad5b-d9cb-469f-a165-70867728950e on SqlServer,Oracle,SybaseASE
+0x5BAD8F0FCBD99F46A16570867728950E -> String [mapper] null [gateway] throws DataMappingException
+"{0f8fad5b-d9cb-469f-a165-70867728950e}" -> Guid [mapper] Guid:0f8fad5b-d9cb-469f-a165-70867728950e [gateway] Guid:0f8fad5b-d9cb-469f-a165-70867728950e
+"{0f8fad5b-d9cb-469f-a165-70867728950e}" -> String [mapper] "{0f8fad5b-d9cb-469f-a165-70867728950e}" [gateway] "{0f8fad5b-d9cb-469f-a165-70867728950e}"
+"nope" -> Guid [mapper] Guid:00000000-0000-0000-0000-000000000000 [gateway] throws DataMappingException
+"nope" -> String [mapper] "nope" [gateway] "nope"
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateTime [mapper] DateTime:2026-10-05T13:45:30.1234567Z/Utc [gateway] DateTime:2026-10-05T13:45:30.1234567Z/Utc
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateTimeOffset [mapper] DateTimeOffset:2026-10-05T13:45:30.1234567+00:00 [gateway] DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> DateOnly [mapper] DateOnly:2026-10-05 [gateway] DateOnly:2026-10-05
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> TimeOnly [mapper] TimeOnly:13:45:30.1234567 [gateway] TimeOnly:13:45:30.1234567
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> TimeSpan [mapper] TimeSpan:13:45:30.1234567 [gateway] TimeSpan:13:45:30.1234567
+DateTime:2026-10-05T13:45:30.1234567Z/Utc -> String [mapper] "2026-10-05T13:45:30.1234567Z" [gateway] "2026-10-05T13:45:30.1234567Z"
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateTime [mapper] DateTime:2026-10-05T13:45:30.1234567Z/Utc [gateway] DateTime:2026-10-05T13:45:30.1234567Z/Utc
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateTimeOffset [mapper] DateTimeOffset:2026-10-05T13:45:30.1234567+00:00 [gateway] DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> DateOnly [mapper] DateOnly:2026-10-05 [gateway] DateOnly:2026-10-05
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> TimeOnly [mapper] TimeOnly:13:45:30.1234567 [gateway] TimeOnly:13:45:30.1234567
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> TimeSpan [mapper] TimeSpan:13:45:30.1234567 [gateway] TimeSpan:13:45:30.1234567
+DateTime:2026-10-05T13:45:30.1234567/Unspecified -> String [mapper] "2026-10-05T13:45:30.1234567" [gateway] "2026-10-05T13:45:30.1234567"
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateTime [mapper] DateTime:2026-10-05T13:45:30.1234567Z/Utc [gateway] DateTime:2026-10-05T13:45:30.1234567Z/Utc
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateTimeOffset [mapper] DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 [gateway] DateTimeOffset:2026-10-05T15:45:30.1234567+02:00
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> DateOnly [mapper] DateOnly:2026-10-05 [gateway] DateOnly:2026-10-05
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> TimeOnly [mapper] TimeOnly:15:45:30.1234567 [gateway] TimeOnly:15:45:30.1234567
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> TimeSpan [mapper] TimeSpan:00:00:00 [gateway] throws DataMappingException
+DateTimeOffset:2026-10-05T15:45:30.1234567+02:00 -> String [mapper] "2026-10-05T15:45:30.1234567+02:00" [gateway] "2026-10-05T15:45:30.1234567+02:00"
+"2026-10-05 13:45:30.1234567" -> DateTime [mapper] DateTime:2026-10-05T13:45:30.1234567Z/Utc [gateway] DateTime:2026-10-05T13:45:30.1234567Z/Utc
+"2026-10-05 13:45:30.1234567" -> DateTimeOffset [mapper] DateTimeOffset:2026-10-05T13:45:30.1234567+00:00 [gateway] DateTimeOffset:2026-10-05T13:45:30.1234567+00:00
+"2026-10-05 13:45:30.1234567" -> DateOnly [mapper] DateOnly:2026-10-05 [gateway] DateOnly:2026-10-05
+"2026-10-05 13:45:30.1234567" -> TimeOnly [mapper] TimeOnly:13:45:30.1234567 [gateway] TimeOnly:13:45:30.1234567
+"2026-10-05 13:45:30.1234567" -> TimeSpan [mapper] TimeSpan:00:00:00 [gateway] throws DataMappingException
+"2026-10-05 13:45:30.1234567" -> String [mapper] "2026-10-05 13:45:30.1234567" [gateway] "2026-10-05 13:45:30.1234567"
+"2026-10-05T13:45:30.1234567+02:00" -> DateTime [mapper] DateTime:2026-10-05T11:45:30.1234567Z/Utc [gateway] DateTime:2026-10-05T11:45:30.1234567Z/Utc
+"2026-10-05T13:45:30.1234567+02:00" -> DateTimeOffset [mapper] DateTimeOffset:2026-10-05T13:45:30.1234567+02:00 [gateway] DateTimeOffset:2026-10-05T13:45:30.1234567+02:00
+"2026-10-05T13:45:30.1234567+02:00" -> DateOnly [mapper] DateOnly:2026-10-05 [gateway] DateOnly:2026-10-05
+"2026-10-05T13:45:30.1234567+02:00" -> TimeOnly [mapper] TimeOnly:13:45:30.1234567 [gateway] TimeOnly:13:45:30.1234567
+"2026-10-05T13:45:30.1234567+02:00" -> TimeSpan [mapper] TimeSpan:00:00:00 [gateway] throws DataMappingException
+"2026-10-05T13:45:30.1234567+02:00" -> String [mapper] "2026-10-05T13:45:30.1234567+02:00" [gateway] "2026-10-05T13:45:30.1234567+02:00"
+"2026-10-05" -> DateTime [mapper] DateTime:2026-10-05T00:00:00.0000000Z/Utc [gateway] DateTime:2026-10-05T00:00:00.0000000Z/Utc
+"2026-10-05" -> DateTimeOffset [mapper] DateTimeOffset:2026-10-05T00:00:00.0000000+00:00 [gateway] DateTimeOffset:2026-10-05T00:00:00.0000000+00:00
+"2026-10-05" -> DateOnly [mapper] DateOnly:2026-10-05 [gateway] DateOnly:2026-10-05
+"2026-10-05" -> TimeOnly [mapper] TimeOnly:00:00:00.0000000 [gateway] TimeOnly:00:00:00.0000000
+"2026-10-05" -> TimeSpan [mapper] TimeSpan:00:00:00 [gateway] throws DataMappingException
+"2026-10-05" -> String [mapper] "2026-10-05" [gateway] "2026-10-05"
+"13:45:30.5" -> DateTime [mapper] DateTime:0001-01-01T00:00:00.0000000/Unspecified [gateway] throws DataMappingException
+"13:45:30.5" -> DateTimeOffset [mapper] DateTimeOffset:0001-01-01T00:00:00.0000000+00:00 [gateway] throws DataMappingException
+"13:45:30.5" -> DateOnly [mapper] DateOnly:0001-01-01 [gateway] throws DataMappingException
+"13:45:30.5" -> TimeOnly [mapper] TimeOnly:13:45:30.5000000 [gateway] TimeOnly:13:45:30.5000000
+"13:45:30.5" -> TimeSpan [mapper] TimeSpan:13:45:30.5000000 [gateway] TimeSpan:13:45:30.5000000
+"13:45:30.5" -> String [mapper] "13:45:30.5" [gateway] "13:45:30.5"
+TimeSpan:13:45:30 -> DateTime [mapper] DateTime:0001-01-01T00:00:00.0000000/Unspecified [gateway] throws DataMappingException
+TimeSpan:13:45:30 -> DateTimeOffset [mapper] DateTimeOffset:0001-01-01T00:00:00.0000000+00:00 [gateway] throws DataMappingException
+TimeSpan:13:45:30 -> DateOnly [mapper] DateOnly:0001-01-01 [gateway] throws DataMappingException
+TimeSpan:13:45:30 -> TimeOnly [mapper] TimeOnly:13:45:30.0000000 [gateway] TimeOnly:13:45:30.0000000
+TimeSpan:13:45:30 -> TimeSpan [mapper] TimeSpan:13:45:30 [gateway] TimeSpan:13:45:30
+TimeSpan:13:45:30 -> String [mapper] "13:45:30" [gateway] "13:45:30"
+DateOnly:2026-10-05 -> DateTime [mapper] DateTime:0001-01-01T00:00:00.0000000/Unspecified [gateway] throws DataMappingException
+DateOnly:2026-10-05 -> DateTimeOffset [mapper] DateTimeOffset:0001-01-01T00:00:00.0000000+00:00 [gateway] throws DataMappingException
+DateOnly:2026-10-05 -> DateOnly [mapper] DateOnly:2026-10-05 [gateway] DateOnly:2026-10-05
+DateOnly:2026-10-05 -> TimeOnly [mapper] TimeOnly:00:00:00.0000000 [gateway] throws DataMappingException
+DateOnly:2026-10-05 -> TimeSpan [mapper] TimeSpan:00:00:00 [gateway] throws DataMappingException
+DateOnly:2026-10-05 -> String [mapper] "2026-10-05" [gateway] "2026-10-05"
+TimeOnly:13:45:30.0000000 -> DateTime [mapper] DateTime:0001-01-01T00:00:00.0000000/Unspecified [gateway] throws DataMappingException
+TimeOnly:13:45:30.0000000 -> DateTimeOffset [mapper] DateTimeOffset:0001-01-01T00:00:00.0000000+00:00 [gateway] throws DataMappingException
+TimeOnly:13:45:30.0000000 -> DateOnly [mapper] DateOnly:0001-01-01 [gateway] throws DataMappingException
+TimeOnly:13:45:30.0000000 -> TimeOnly [mapper] TimeOnly:13:45:30.0000000 [gateway] TimeOnly:13:45:30.0000000
+TimeOnly:13:45:30.0000000 -> TimeSpan [mapper] TimeSpan:13:45:30 [gateway] TimeSpan:13:45:30
+TimeOnly:13:45:30.0000000 -> String [mapper] "13:45:30" [gateway] "13:45:30"
+Int64:1759671930 -> DateTime [mapper] DateTime:0001-01-01T00:00:00.0000000/Unspecified [gateway] throws DataMappingException
+Int64:1759671930 -> DateTimeOffset [mapper] DateTimeOffset:0001-01-01T00:00:00.0000000+00:00 [gateway] throws DataMappingException
+Int64:1759671930 -> DateOnly [mapper] DateOnly:0001-01-01 [gateway] throws DataMappingException
+Int64:1759671930 -> TimeOnly [mapper] TimeOnly:00:00:00.0000000 [gateway] throws DataMappingException
+Int64:1759671930 -> TimeSpan [mapper] TimeSpan:00:00:00 [gateway] throws DataMappingException
+Int64:1759671930 -> String [mapper] "1759671930" [gateway] "1759671930"
+"abc" -> String [mapper] "abc" [gateway] "abc"
+"abc" -> Byte[] [mapper] null [gateway] throws DataMappingException
+"abc" -> Char [mapper] ' ' [gateway] throws DataMappingException
+Char[]{'a','b'} -> String [mapper] "ab" [gateway] "ab"
+Char[]{'a','b'} -> Byte[] [mapper] 0x6162 [gateway] 0x6162
+Char[]{'a','b'} -> Char [mapper] ' ' [gateway] throws DataMappingException
+0x6869 -> String [mapper] null [gateway] throws DataMappingException
+0x6869 -> Byte[] [mapper] 0x6869 [gateway] 0x6869
+0x6869 -> Char [mapper] ' ' [gateway] throws DataMappingException
+'z' -> String [mapper] "z" [gateway] "z"
+'z' -> Byte[] [mapper] null [gateway] throws DataMappingException
+'z' -> Char [mapper] 'z' [gateway] 'z'
+"[1,2,3]" -> Int32[] [mapper] Int32[]{Int32:1,Int32:2,Int32:3} on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access | null on Informix [gateway] Int32[]{Int32:1,Int32:2,Int32:3} on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access | throws DataMappingException on Informix
+"[1,2,3]" -> Single[] [mapper] Single[]{float:1,float:2,float:3} on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access | null on Informix [gateway] Single[]{float:1,float:2,float:3} on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access | throws DataMappingException on Informix
+"[1,2,3]" -> String[] [mapper] null [gateway] throws DataMappingException
+"[1,2,3]" -> List`1 [mapper] List`1{Int32:1,Int32:2,Int32:3} [gateway] List`1{Int32:1,Int32:2,Int32:3}
+"{1,2,3}" -> Int32[] [mapper] null [gateway] throws DataMappingException
+"{1,2,3}" -> Single[] [mapper] null [gateway] throws DataMappingException
+"{1,2,3}" -> String[] [mapper] null [gateway] throws DataMappingException
+"{1,2,3}" -> List`1 [mapper] null [gateway] throws DataMappingException
+Int32[]{Int32:1,Int32:2} -> Int32[] [mapper] Int32[]{Int32:1,Int32:2} [gateway] Int32[]{Int32:1,Int32:2}
+Int32[]{Int32:1,Int32:2} -> Single[] [mapper] Single[]{float:1,float:2} [gateway] Single[]{float:1,float:2}
+Int32[]{Int32:1,Int32:2} -> String[] [mapper] String[]{"1","2"} [gateway] String[]{"1","2"}
+Int32[]{Int32:1,Int32:2} -> List`1 [mapper] List`1{Int32:1,Int32:2} [gateway] List`1{Int32:1,Int32:2}
+Int64[]{Int64:1,Int64:2} -> Int32[] [mapper] Int32[]{Int32:1,Int32:2} [gateway] Int32[]{Int32:1,Int32:2}
+Int64[]{Int64:1,Int64:2} -> Single[] [mapper] Single[]{float:1,float:2} [gateway] Single[]{float:1,float:2}
+Int64[]{Int64:1,Int64:2} -> String[] [mapper] String[]{"1","2"} [gateway] String[]{"1","2"}
+Int64[]{Int64:1,Int64:2} -> List`1 [mapper] List`1{Int32:1,Int32:2} [gateway] List`1{Int32:1,Int32:2}
+Object[]{Int32:1,"2"} -> Int32[] [mapper] Int32[]{Int32:1,Int32:2} [gateway] Int32[]{Int32:1,Int32:2}
+Object[]{Int32:1,"2"} -> Single[] [mapper] Single[]{float:1,float:2} [gateway] Single[]{float:1,float:2}
+Object[]{Int32:1,"2"} -> String[] [mapper] String[]{"1","2"} [gateway] String[]{"1","2"}
+Object[]{Int32:1,"2"} -> List`1 [mapper] List`1{Int32:1,Int32:2} [gateway] List`1{Int32:1,Int32:2}
+"{"a":1}" -> JsonDocument [mapper] JsonDocument:{"a":1} [gateway] JsonDocument:{"a":1}
+"{"a":1}" -> JsonElement [mapper] JsonElement:{"a":1} [gateway] JsonElement:{"a":1}
+"{"a":1}" -> JsonValue [mapper] JsonValue:{"a":1} [gateway] JsonValue:{"a":1}
+"" -> JsonDocument [mapper] JsonDocument:null [gateway] JsonDocument:null
+"" -> JsonElement [mapper] JsonElement:null [gateway] JsonElement:null
+"" -> JsonValue [mapper] JsonValue:null [gateway] JsonValue:null
+"  " -> JsonDocument [mapper] JsonDocument:null [gateway] JsonDocument:null
+"  " -> JsonElement [mapper] JsonElement:null [gateway] JsonElement:null
+"  " -> JsonValue [mapper] JsonValue:null [gateway] JsonValue:null
+0x7B7D -> JsonDocument [mapper] JsonDocument:{} [gateway] throws DataMappingException
+0x7B7D -> JsonElement [mapper] JsonElement:{} [gateway] throws DataMappingException
+0x7B7D -> JsonValue [mapper] JsonValue:{} [gateway] throws DataMappingException
+"null" -> JsonDocument [mapper] JsonDocument:null [gateway] JsonDocument:null
+"null" -> JsonElement [mapper] JsonElement:null [gateway] JsonElement:null
+"null" -> JsonValue [mapper] JsonValue:null [gateway] JsonValue:null
+"POINT(1 2)" -> Geometry [mapper] Geometry:srid=0:wkb= [gateway] Geometry:srid=0:wkb=
+"POINT(1 2)" -> Geography [mapper] Geography:srid=4326:wkb= [gateway] Geography:srid=4326:wkb=
+"SRID=4326;POINT(1 2)" -> Geometry [mapper] Geometry:srid=4326:wkb= [gateway] Geometry:srid=4326:wkb=
+"SRID=4326;POINT(1 2)" -> Geography [mapper] Geography:srid=4326:wkb= [gateway] Geography:srid=4326:wkb=
+0x0101000000000000000000F03F0000000000000040 -> Geometry [mapper] Geometry:srid=0:wkb=0101000000000000000000F03F0000000000000040 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | Geometry:srid=257:wkb=00000000000000F03F0000000000000040 on MariaDb,MySql,AuroraMySql [gateway] Geometry:srid=0:wkb=0101000000000000000000F03F0000000000000040 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | Geometry:srid=257:wkb=00000000000000F03F0000000000000040 on MariaDb,MySql,AuroraMySql
+0x0101000000000000000000F03F0000000000000040 -> Geography [mapper] Geography:srid=4326:wkb=0101000000000000000000F03F0000000000000040 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | Geography:srid=257:wkb=00000000000000F03F0000000000000040 on MariaDb,MySql,AuroraMySql [gateway] Geography:srid=4326:wkb=0101000000000000000000F03F0000000000000040 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | Geography:srid=257:wkb=00000000000000F03F0000000000000040 on MariaDb,MySql,AuroraMySql
+0x0101000020E6100000000000000000F03F0000000000000040 -> Geometry [mapper] Geometry:srid=4326:wkb=0101000000000000000000F03F0000000000000040 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | Geometry:srid=257:wkb=20E6100000000000000000F03F0000000000000040 on MariaDb,MySql,AuroraMySql [gateway] Geometry:srid=4326:wkb=0101000000000000000000F03F0000000000000040 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | Geometry:srid=257:wkb=20E6100000000000000000F03F0000000000000040 on MariaDb,MySql,AuroraMySql
+0x0101000020E6100000000000000000F03F0000000000000040 -> Geography [mapper] Geography:srid=4326:wkb=0101000000000000000000F03F0000000000000040 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | Geography:srid=257:wkb=20E6100000000000000000F03F0000000000000040 on MariaDb,MySql,AuroraMySql [gateway] Geography:srid=4326:wkb=0101000000000000000000F03F0000000000000040 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | Geography:srid=257:wkb=20E6100000000000000000F03F0000000000000040 on MariaDb,MySql,AuroraMySql
+"{"type":"Point","coordinates":[1,2]}" -> Geometry [mapper] Geometry:srid=0:wkb= [gateway] Geometry:srid=0:wkb=
+"{"type":"Point","coordinates":[1,2]}" -> Geography [mapper] Geography:srid=4326:wkb= [gateway] Geography:srid=4326:wkb=
+"192.168.0.1/24" -> Inet [mapper] Inet:192.168.0.1/24 [gateway] Inet:192.168.0.1/24
+"192.168.0.1/24" -> Cidr [mapper] Cidr:192.168.0.0/24 [gateway] Cidr:192.168.0.0/24
+"192.168.0.1/24" -> MacAddress [mapper] throws NullReferenceException [gateway] throws DataMappingException
+"10.0.0.0/8" -> Inet [mapper] Inet:10.0.0.0/8 [gateway] Inet:10.0.0.0/8
+"10.0.0.0/8" -> Cidr [mapper] Cidr:10.0.0.0/8 [gateway] Cidr:10.0.0.0/8
+"10.0.0.0/8" -> MacAddress [mapper] throws NullReferenceException [gateway] throws DataMappingException
+"08:00:2b:01:02:03" -> Inet [mapper] throws NullReferenceException [gateway] throws DataMappingException
+"08:00:2b:01:02:03" -> Cidr [mapper] Cidr:/0 [gateway] throws DataMappingException
+"08:00:2b:01:02:03" -> MacAddress [mapper] MacAddress:08:00:2B:01:02:03 [gateway] MacAddress:08:00:2B:01:02:03
+"::1" -> Inet [mapper] Inet:::1 [gateway] Inet:::1
+"::1" -> Cidr [mapper] Cidr:/0 [gateway] throws DataMappingException
+"::1" -> MacAddress [mapper] throws NullReferenceException [gateway] throws DataMappingException
+"P1Y2M" -> IntervalYearMonth [mapper] IntervalYearMonth:1 years 2 months [gateway] IntervalYearMonth:1 years 2 months
+"P1Y2M" -> IntervalDaySecond [mapper] IntervalDaySecond:0 days 00:00:00 [gateway] throws DataMappingException
+"p1y2m" -> IntervalYearMonth [mapper] IntervalYearMonth:1 years 2 months [gateway] IntervalYearMonth:1 years 2 months
+"p1y2m" -> IntervalDaySecond [mapper] IntervalDaySecond:0 days 00:00:00 [gateway] throws DataMappingException
+"1-2" -> IntervalYearMonth [mapper] IntervalYearMonth:1 years 2 months [gateway] IntervalYearMonth:1 years 2 months
+"1-2" -> IntervalDaySecond [mapper] IntervalDaySecond:0 days 00:00:00 [gateway] throws DataMappingException
+"P1DT2H3M4S" -> IntervalYearMonth [mapper] IntervalYearMonth:0 years 0 months [gateway] throws DataMappingException
+"P1DT2H3M4S" -> IntervalDaySecond [mapper] IntervalDaySecond:1 days 02:03:04 [gateway] IntervalDaySecond:1 days 02:03:04
+"p1dt2h3m4s" -> IntervalYearMonth [mapper] IntervalYearMonth:0 years 0 months [gateway] throws DataMappingException
+"p1dt2h3m4s" -> IntervalDaySecond [mapper] IntervalDaySecond:1 days 02:03:04 [gateway] IntervalDaySecond:1 days 02:03:04
+TimeSpan:1.02:00:00 -> IntervalYearMonth [mapper] IntervalYearMonth:0 years 0 months [gateway] throws DataMappingException
+TimeSpan:1.02:00:00 -> IntervalDaySecond [mapper] IntervalDaySecond:1 days 02:00:00 [gateway] IntervalDaySecond:1 days 02:00:00
+"[1,5)" -> Range`1 [mapper] Range`1:[1, 5) [gateway] Range`1:[1, 5)
+"[1,5)" -> Range`1 [mapper] Range`1:[1, 5) [gateway] Range`1:[1, 5)
+"(,5]" -> Range`1 [mapper] Range`1:(, 5] [gateway] Range`1:(, 5]
+"(,5]" -> Range`1 [mapper] Range`1:(, 5] [gateway] Range`1:(, 5]
+"empty" -> Range`1 [mapper] Range`1:empty [gateway] Range`1:empty
+"empty" -> Range`1 [mapper] Range`1:empty [gateway] Range`1:empty
+"[1,x)" -> Range`1 [mapper] Range`1:(, ) [gateway] throws DataMappingException
+"[1,x)" -> Range`1 [mapper] Range`1:(, ) [gateway] throws DataMappingException
+0x0000000000000009 -> RowVersion [mapper] RowVersion:0000000000000009 [gateway] RowVersion:0000000000000009
+UInt64:9 -> RowVersion [mapper] RowVersion:0000000000000009 [gateway] RowVersion:0000000000000009
+0x0102 -> RowVersion [mapper] throws ArgumentNullException [gateway] throws DataMappingException
+"10110" -> BitArray [mapper] BitArray:10110 [gateway] BitArray:10110 on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | throws TemplateInitializationException on MariaDb,MySql,TiDb,AuroraMySql,SingleStore
+0x05 -> BitArray [mapper] null [gateway] throws DataMappingException on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | throws TemplateInitializationException on MariaDb,MySql,TiDb,AuroraMySql,SingleStore
+"/1/2/" -> HierarchyId [mapper] HierarchyId:/1/2/ [gateway] HierarchyId:/1/2/
+"/1/2/" -> Int128 [mapper] Int128:0 [gateway] throws DataMappingException
+"/1/2/" -> BigInteger [mapper] BigInteger:0 [gateway] throws DataMappingException
+"170141183460469231731687303715884105727" -> HierarchyId [mapper] HierarchyId:/ [gateway] throws DataMappingException
+"170141183460469231731687303715884105727" -> Int128 [mapper] Int128:170141183460469231731687303715884105727 [gateway] Int128:170141183460469231731687303715884105727
+"170141183460469231731687303715884105727" -> BigInteger [mapper] BigInteger:170141183460469231731687303715884105727 [gateway] BigInteger:170141183460469231731687303715884105727
+Int64:5 -> HierarchyId [mapper] HierarchyId:/ [gateway] throws DataMappingException
+Int64:5 -> Int128 [mapper] Int128:5 [gateway] Int128:5
+Int64:5 -> BigInteger [mapper] BigInteger:5 [gateway] BigInteger:5
+DBNull -> Int32 [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Int64 [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Int16 [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Byte [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Double [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Single [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Decimal [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Boolean [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> UInt64 [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Nullable`1? [mapper] null [gateway] null
+DBNull -> Mood [mapper] throws DataMappingException [gateway] throws SqlGenerationException
+DBNull -> Nullable`1? [mapper] null [gateway] throws SqlGenerationException
+DBNull -> Guid [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> String [mapper] null [gateway] null
+DBNull -> DateTime [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> DateTimeOffset [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> DateOnly [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> TimeOnly [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> TimeSpan [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Byte[] [mapper] null [gateway] null
+DBNull -> Char [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Int32[] [mapper] null [gateway] null
+DBNull -> Single[] [mapper] null [gateway] null
+DBNull -> String[] [mapper] null [gateway] null
+DBNull -> List`1 [mapper] null [gateway] null
+DBNull -> JsonDocument [mapper] null [gateway] null
+DBNull -> JsonElement [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> JsonValue [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Geometry [mapper] null [gateway] null
+DBNull -> Geography [mapper] null [gateway] null
+DBNull -> Inet [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Cidr [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> MacAddress [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> IntervalYearMonth [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> IntervalDaySecond [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Range`1 [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Range`1 [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> RowVersion [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> BitArray [mapper] null [gateway] null on PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,Sqlite,DuckDB,YugabyteDb,Snowflake,AuroraPostgreSql,Db2,FlatFile,SybaseASE,Spanner,Informix,SapHana,InterBase,Access | throws TemplateInitializationException on MariaDb,MySql,TiDb,AuroraMySql,SingleStore
+DBNull -> HierarchyId [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> Int128 [mapper] throws DataMappingException [gateway] throws DataMappingException
+DBNull -> BigInteger [mapper] throws DataMappingException [gateway] throws DataMappingException

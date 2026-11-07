@@ -118,7 +118,7 @@ public class TypeCoercionHelperTests
     public void GetJsonText_ReadsFromStream()
     {
         using var stream = new MemoryStream(Encoding.UTF8.GetBytes("{\"a\":1}"));
-        var text = TypeCoercionHelper.GetJsonText(stream);
+        var text = pengdows.crud.types.coercion.JsonCoercion.GetJsonText(stream);
         Assert.Equal("{\"a\":1}", text);
     }
 }

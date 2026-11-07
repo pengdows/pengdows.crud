@@ -1,0 +1,75 @@
+Db2	signed 8-bit	signed_8_bit	PASS
+Db2	signed 16-bit	signed_16_bit	PASS
+Db2	signed 32-bit	signed_32_bit	PASS
+Db2	signed 64-bit	signed_64_bit	PASS
+Db2	signed 128-bit	signed_128_bit	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "HUGEINT" is an undefined name.
+Db2	unsigned 8-bit	unsigned_8_bit	PASS
+Db2	unsigned 16-bit	unsigned_16_bit	PASS
+Db2	unsigned 32-bit	unsigned_32_bit	PASS
+Db2	unsigned 64-bit	unsigned_64_bit	PASS
+Db2	arbitrary-size integer	arbitrary_integer	UNSUPPORTED refused: ERROR [42611] [IBM][DB2/LINUXX8664] SQL0604N The length, precision, or scale attribute for column, distinct type, structured type, array type, attribute of structured type, routine, cast target ty
+Db2	binary float32	binary_float32	PASS
+Db2	binary float64	binary_float64	PASS
+Db2	fixed decimal	fixed_decimal	PASS
+Db2	boolean	boolean	PASS
+Db2	bit / bitstring	bit_string	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "BIT" was found following "NULL PRIMARY KEY, c". Expected tokens may include: "BINARY".
+Db2	varying character	varying_character	PASS
+Db2	unbounded text	unbounded_text	PASS
+Db2	UUID / GUID	uuid	PASS
+Db2	calendar date	calendar_date	PASS
+Db2	time without zone	time_of_day	PASS
+Db2	time without zone	time_span	PASS
+Db2	day-time interval	day_time_interval	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "DAY TO SECOND" was found following "MARY KEY, c INTERVAL". Expected tokens may include: "<national_clob_type>".
+Db2	timestamp without zone	timestamp	PASS
+Db2	timestamp with zone	timestamp_with_zone	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "TIME" was found following "EY, c TIMESTAMP WITH". Expected tokens may include: "REFERENCES".
+Db2	binary LOB	binary	PASS
+Db2	JSON text / JSON value	json	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "JSON" is an undefined name.
+Db2	IP address	ip_address	PASS
+Db2	SQL array	int_array	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ")" was found following "KEY, c INTEGER ARRAY". Expected tokens may include: "<references_spec>".
+Db2	unsigned 128-bit	unsigned_128_bit	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "UHUGEINT" is an undefined name.
+Db2	decimal floating point	decimal_float	PASS
+Db2	money / currency	money	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "MONEY" is an undefined name.
+Db2	fixed character	fixed_character	PASS
+Db2	national / Unicode character	national_text	PASS
+Db2	long text LOB	long_text	PASS
+Db2	enumeration	enumeration	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "(" was found following "PRIMARY KEY, c ENUM". Expected tokens may include: "DEFAULT".
+Db2	set-valued enum	set_value	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "(" was found following "L PRIMARY KEY, c SET". Expected tokens may include: "DEFAULT".
+Db2	fixed binary	fixed_binary	PASS
+Db2	varying binary	varying_binary	PASS
+Db2	legacy long binary	legacy_binary	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ")" was found following "MARY KEY, c LONG RAW". Expected tokens may include: "<references_spec>".
+Db2	rowversion / timestamp token	rowversion	PASS
+Db2	local-zone timestamp	local_timestamp	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "LOCAL TIME ZONE)" was found following "EY, c TIMESTAMP WITH". Expected tokens may include: "<space>".
+Db2	second-precision datetime	second_datetime	PASS
+Db2	time with zone	time_zoned	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "TIME" was found following "ARY KEY, c TIME WITH". Expected tokens may include: "REFERENCES".
+Db2	year-only	year_only	PASS
+Db2	year-month interval	year_month_interval	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "TO MONTH)" was found following "KEY, c INTERVAL YEAR". Expected tokens may include: "<space>".
+Db2	generic interval	generic_interval	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "INTERVAL" is an undefined name.
+Db2	row identifier / ROWID	row_identifier	PASS
+Db2	object identifier / OID	oid	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "OID" is an undefined name.
+Db2	transaction ID	transaction_id	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "XID" is an undefined name.
+Db2	WAL / log position	wal_position	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "PG_LSN" is an undefined name.
+Db2	native binary JSON	binary_json	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "JSONB" is an undefined name.
+Db2	XML	xml	PASS
+Db2	BSON	bson	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "BSON" is an undefined name.
+Db2	variant / dynamic value	variant	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "VARIANT" is an undefined name.
+Db2	IP network / CIDR	cidr	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "CIDR" is an undefined name.
+Db2	MAC address	mac_address	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "MACADDR" is an undefined name.
+Db2	point geometry	point	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "POINT" is an undefined name.
+Db2	line / linestring geometry	linestring	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "LINESTRING" is an undefined name.
+Db2	polygon geometry	polygon	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "POLYGON" is an undefined name.
+Db2	general geometry	geometry	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "GEOMETRY" is an undefined name.
+Db2	geography / geodetic	geography	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "GEOGRAPHY" is an undefined name.
+Db2	fixed-length array	fixed_array	UNSUPPORTED refused: ERROR [428H2] [IBM][DB2/LINUXX8664] SQL20441N A "ARRAY" data type is not supported in the context where it is being used.
+Db2	list / multiset / set collection	list_collection	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ")" was found following ", c INTEGER MULTISET". Expected tokens may include: "<references_spec>".
+Db2	map / dictionary	map	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "(" was found following "L PRIMARY KEY, c MAP". Expected tokens may include: ".".
+Db2	range	range	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "INT4RANGE" is an undefined name.
+Db2	multirange	multirange	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "INT4MULTIRANGE" is an undefined name.
+Db2	user-defined enum / domain	domain	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ")" was found following "Y KEY, c CREATE TYPE". Expected tokens may include: "<references_spec>".
+Db2	full-text search vector / query	full_text	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "TSVECTOR" is an undefined name.
+Db2	native point	native_point	UNSUPPORTED refused: no candidate was tried
+Db2	native polygon	native_polygon	UNSUPPORTED refused: no candidate was tried
+Db2	32-bit transaction ID	xid32	UNSUPPORTED refused: no candidate was tried
+Db2	vector embedding	vector	UNSUPPORTED refused: ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "(" was found following "RIMARY KEY, c VECTOR". Expected tokens may include: "CHECK".
+Db2	hierarchical path	hierarchy	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "HIERARCHYID" is an undefined name.
+Db2	external-file reference	file_reference	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "BFILE" is an undefined name.
+Db2	specialized security label	security_label	UNSUPPORTED refused: ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N "IDSSECURITYLABEL" is an undefined name.

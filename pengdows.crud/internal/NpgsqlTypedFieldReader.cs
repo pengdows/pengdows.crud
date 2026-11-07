@@ -99,7 +99,7 @@ internal sealed class NpgsqlTypedFieldReader
         var value = Expression.Variable(valueType, "provider");
 
         Expression? build = null;
-        if (valueType.FullName == "NpgsqlTypes.NpgsqlInterval" &&
+        if (ProviderTypeNames.IsNpgsqlInterval(valueType) &&
             valueType.GetProperty("Months") is { } months && valueType.GetProperty("Days") is { } days &&
             valueType.GetProperty("Time") is { } time)
         {
@@ -109,7 +109,7 @@ internal sealed class NpgsqlTypedFieldReader
                 Expression.ConvertChecked(Expression.Property(value, days), typeof(int)),
                 Expression.ConvertChecked(Expression.Property(value, time), typeof(long)));
         }
-        else if (valueType.FullName == "NpgsqlTypes.NpgsqlInet" &&
+        else if (ProviderTypeNames.IsNpgsqlInet(valueType) &&
                  valueType.GetProperty("Address")?.PropertyType == typeof(System.Net.IPAddress) &&
                  valueType.GetProperty("Netmask") is { } netmask)
         {

@@ -519,10 +519,11 @@ public abstract partial class BaseTableGateway<TEntity> : ITableGatewayInfrastru
             .Where(c => dialect.NeedsDeclaredType(c, forRead: true) || dialect.NeedsDeclaredType(c, forRead: false))
             .ToList();
         var table = BuildWrappedTableName(dialect);
-        if (!dialect.HasProbedDeclaredTypes(table))
+        if (!dialect.HasProbedDeclaredTypes(needed))
         {
-            dialect.RecordDeclaredTypes(table, await ProbeDeclaredTypesAsync(ctx, dialect, table, needed, cancellationToken)
+            dialect.RecordDeclaredTypes(await ProbeDeclaredTypesAsync(ctx, dialect, table, needed, cancellationToken)
                 .ConfigureAwait(false));
+            dialect.MarkDeclaredTypesProbed(needed);
         }
 
         ResetDialectCaches(dialect);

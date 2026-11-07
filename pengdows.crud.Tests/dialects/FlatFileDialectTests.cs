@@ -279,6 +279,18 @@ public class FlatFileDialectTests
         Assert.Equal(true, p.Value);
     }
 
+    // The engine stores TIME WITH TIME ZONE as DateTimeOffset (pengdows.flatfile 0.2.1-preview.24: the offset survives), so a
+    // DateTimeOffset declared as a time is bound as that value, offset kept, rather than refused by the validator.
+    [Fact]
+    public void CreateDbParameter_DateTimeOffsetDeclaredTime_KeepsItsOffset()
+    {
+        var value = new DateTimeOffset(2026, 10, 5, 13, 45, 30, TimeSpan.FromHours(2));
+
+        var p = Dialect().CreateDbParameter("t", DbType.Time, value);
+
+        Assert.Equal(value, Assert.IsType<DateTimeOffset>(p.Value));
+    }
+
     [Fact]
     public void CreateDbParameter_Guid_StaysGuid()
     {

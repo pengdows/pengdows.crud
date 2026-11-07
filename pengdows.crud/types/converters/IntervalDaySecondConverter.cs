@@ -93,6 +93,7 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
             IntervalWireFormat.PostgreSqlInterval => PostgreSqlIntervalConverter.ToProvider(
                 new PostgreSqlInterval(0, value.Days, value.Time.Ticks / 10), provider),
             IntervalWireFormat.DayTimeSpan => value.TotalTime,
+            IntervalWireFormat.InformixLiteral => FormatDaySecondLiteral(value),
             // A database with no interval type takes the ISO 8601 text, which reads back exactly. A TimeSpan would be a time
             // of day to it (Access, SQL Server, MySQL's TIME): the day count is lost or refused.
             _ => FormatIso(value)
@@ -130,6 +131,21 @@ internal sealed class IntervalDaySecondConverter : AdvancedTypeConverter<Interva
                 result = default!;
                 return false;
         }
+    }
+
+    // Informix's INTERVAL DAY TO SECOND literal: "D HH:MM:SS", with the day and the time separated by a space. The fraction is
+    // written only when the value has one, so a column without one refuses the value rather than losing it.
+    private static string FormatDaySecondLiteral(IntervalDaySecond value)
+    {
+        var sign = value.TotalTime < TimeSpan.Zero ? "-" : string.Empty;
+        var absolute = value.TotalTime.Duration();
+        var fraction = absolute.Ticks % TimeSpan.TicksPerSecond;
+        return string.Concat(sign,
+            absolute.Days.ToString(CultureInfo.InvariantCulture), " ",
+            absolute.Hours.ToString("D2", CultureInfo.InvariantCulture), ":",
+            absolute.Minutes.ToString("D2", CultureInfo.InvariantCulture), ":",
+            absolute.Seconds.ToString("D2", CultureInfo.InvariantCulture),
+            fraction == 0 ? string.Empty : "." + (fraction / 10).ToString("D6", CultureInfo.InvariantCulture));
     }
 
     // ODP.NET binds INTERVAL DAY TO SECOND from Oracle's literal format

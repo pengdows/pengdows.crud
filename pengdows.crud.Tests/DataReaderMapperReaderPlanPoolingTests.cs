@@ -17,7 +17,7 @@ namespace pengdows.crud.Tests;
 // for wider schemas (>64 fields), and repeated calls with the same shape, to catch any
 // rent/return lifecycle bug (e.g. a returned buffer's contents corrupting a later lookup)
 // introduced by bringing DataReaderMapper in line with that pattern.
-[Collection("MapperCacheSerial")]
+[Collection("TypeRegistry")]
 public class DataReaderMapperReaderPlanPoolingTests
 {
     [Fact]

@@ -64,7 +64,7 @@ public class TypeHandlingBenchmarks
         _timeSpan = TimeSpan.FromHours(2.5);
         _dateTimeOffset = DateTimeOffset.Now;
         _dateTimeString = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
-        _dateTimeStringCoercer = TypeCoercionHelper.ResolveCoercer(
+        _dateTimeStringCoercer = pengdows.crud.types.coercion.ConverterResolution.ResolveCoercer(
             typeof(string),
             typeof(DateTime),
             EnumParseFailureMode.Throw,

@@ -6,7 +6,7 @@
 // - Converts between JsonDocument and string for database storage.
 // - ConvertToProvider(): Serializes JsonDocument to JSON string via JsonSerializer.
 // - TryConvertFromProvider(): JsonDocument pass-through, JsonElement, and any JSON-carrying input
-//   (text, UTF-8 bytes, streams...) through TypeCoercionHelper.ExtractJsonString.
+//   (text, UTF-8 bytes, streams...) through pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString.
 // - Registered by default in AdvancedTypeRegistry for JSON column support.
 // - Thread-safe and stateless.
 // =============================================================================
@@ -51,12 +51,12 @@ internal sealed class JsonDocumentConverter : AdvancedTypeConverter<JsonDocument
             return true;
         }
 
-        if (TypeCoercionHelper.CarriesJsonText(value))
+        if (pengdows.crud.types.coercion.JsonCoercion.CarriesJsonText(value))
         {
             try
             {
-                result = JsonDocument.Parse(TypeCoercionHelper.JsonTextOrNullLiteral(
-                    TypeCoercionHelper.ExtractJsonString(value, JsonSerializerOptions.Default)));
+                result = JsonDocument.Parse(pengdows.crud.types.coercion.JsonCoercion.JsonTextOrNullLiteral(
+                    pengdows.crud.types.coercion.JsonCoercion.ExtractJsonString(value, JsonSerializerOptions.Default)));
                 return true;
             }
             catch (JsonException)

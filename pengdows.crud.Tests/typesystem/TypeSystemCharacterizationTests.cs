@@ -143,7 +143,7 @@ public class TypeSystemCharacterizationTests
 
     // ── Reads: Coerce(stored, target) ───────────────────────────────────────────────────
 
-    private static IEnumerable<(object Raw, Type Target)> ReadSamples()
+    internal static IEnumerable<(object Raw, Type Target)> ReadSamples()
     {
         object[] numbers = { 1, 1L, (short)1, (byte)1, 1.0, 1.5, 1.5f, 1m, 2.7m, "1", "2.7", true, long.MaxValue, ulong.MaxValue };
         Type[] numericTargets = { typeof(int), typeof(long), typeof(short), typeof(byte), typeof(double), typeof(float), typeof(decimal), typeof(bool), typeof(ulong), typeof(int?) };
@@ -279,7 +279,7 @@ public class TypeSystemCharacterizationTests
         _ => value.GetType().Name + ":" + value
     };
 
-    private static string Outcome(Func<string> f)
+    internal static string Outcome(Func<string> f)
     {
         try
         {
@@ -342,7 +342,7 @@ public class TypeSystemCharacterizationTests
         return factory;
     }
 
-    private static IEnumerable<SupportedDatabase> Products() =>
+    internal static IEnumerable<SupportedDatabase> Products() =>
         Enum.GetValues<SupportedDatabase>().Where(p => p != SupportedDatabase.Unknown);
 
     internal static string DescribeWrites()

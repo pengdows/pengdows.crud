@@ -43,7 +43,7 @@ public abstract partial class BaseTableGateway<TEntity>
             return parsed;
         }
 
-        return TypeCoercionHelper.ConvertWithCache(value, t);
+        return pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(value, t);
     }
 
     /// <summary>

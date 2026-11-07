@@ -228,7 +228,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
-                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn!.PropertyInfo.PropertyType);
+                var converted = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(generatedId, _idColumn!.PropertyInfo.PropertyType);
                 SetColumnValue(_idColumn, entity, converted);
                 return true;
             }
@@ -274,7 +274,7 @@ public partial class TableGateway<TEntity, TRowID> :
             using var seqSc = ctx.CreateSqlContainer(seqQuery);
             // Advancing a sequence is a write: a read-only connection rejects it (pengdows.flatfile).
             var nextVal = await seqSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Write, CommandType.Text, cancellationToken).ConfigureAwait(false);
-            var converted = TypeCoercionHelper.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
+            var converted = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(nextVal, _idColumn.PropertyInfo.PropertyType);
             SetColumnValue(_idColumn, entity, converted);
 
             await using var sc = BuildCreateWithPrefetchedId(entity, ctx, dialect);
@@ -325,7 +325,7 @@ public partial class TableGateway<TEntity, TRowID> :
             lookupSc.AddParameterWithValue("p1", _tableInfo.CorrelationColumn.DbType, token);
 
             var generatedId = await lookupSc.ExecuteScalarRequiredAsync<object>(ExecutionType.Read, CommandType.Text, cancellationToken).ConfigureAwait(false);
-            var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
+            var converted = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
             SetColumnValue(_idColumn, entity, converted);
             return true;
         }
@@ -361,7 +361,7 @@ public partial class TableGateway<TEntity, TRowID> :
 
             if (generatedId != null && generatedId != DBNull.Value)
             {
-                var converted = TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
+                var converted = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(generatedId, _idColumn.PropertyInfo.PropertyType);
                 SetColumnValue(_idColumn, entity, converted);
                 return true;
             }
@@ -466,7 +466,7 @@ public partial class TableGateway<TEntity, TRowID> :
         if (generatedId is not null && generatedId != DBNull.Value)
         {
             SetColumnValue(_idColumn!, entity,
-                TypeCoercionHelper.ConvertWithCache(generatedId, _idColumn!.PropertyInfo.PropertyType));
+                pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(generatedId, _idColumn!.PropertyInfo.PropertyType));
         }
         else
         {
@@ -570,7 +570,7 @@ public partial class TableGateway<TEntity, TRowID> :
                 else
                 {
                     // Convert the ID to the appropriate type and set it on the entity
-                    var convertedId = TypeCoercionHelper.ConvertWithCache(generatedId, targetType);
+                    var convertedId = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(generatedId, targetType);
                     SetColumnValue(_idColumn, entity, convertedId);
                 }
             }

@@ -93,6 +93,7 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
             IntervalWireFormat.Iso8601 => FormatIso(value),
             IntervalWireFormat.PostgreSqlInterval => PostgreSqlIntervalConverter.ToProvider(
                 new PostgreSqlInterval(value.TotalMonths, 0, 0), provider),
+            IntervalWireFormat.InformixLiteral => FormatInformixLiteral(value),
             _ => value
         };
     }
@@ -150,6 +151,16 @@ internal sealed class IntervalYearMonthConverter : AdvancedTypeConverter<Interva
 
         result = default!;
         return false;
+    }
+
+    // Informix's INTERVAL YEAR TO MONTH literal: "Y-MM" (a leading minus for a negative interval).
+    private static string FormatInformixLiteral(IntervalYearMonth value)
+    {
+        var sign = value.TotalMonths < 0 ? "-" : string.Empty;
+        var absoluteMonths = Math.Abs(value.TotalMonths);
+        return string.Concat(sign,
+            (absoluteMonths / 12).ToString(CultureInfo.InvariantCulture), "-",
+            (absoluteMonths % 12).ToString("D2", CultureInfo.InvariantCulture));
     }
 
     // ODP.NET binds INTERVAL YEAR TO MONTH from Oracle's literal format (+YYYY-MM), not ISO-8601.

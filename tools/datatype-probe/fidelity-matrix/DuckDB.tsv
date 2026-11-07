@@ -40,7 +40,7 @@ DuckDB	legacy long binary	legacy_binary	UNSUPPORTED refused: Parser Error: synta
 DuckDB	rowversion / timestamp token	rowversion	PASS
 DuckDB	local-zone timestamp	local_timestamp	UNSUPPORTED refused: Parser Error: syntax error at or near "WITH" LINE 1: ... TABLE pr202 (id INTEGER NOT NULL PRIMARY KEY, c TIMESTAMP WITH LOCAL TIME ZONE)
 DuckDB	second-precision datetime	second_datetime	PASS
-DuckDB	time with zone	time_zoned	PASS
+DuckDB	time with zone	time_zoned	UNSUPPORTED refused: by design: DuckDB has no time-with-zone column the library can hold its offset in; a DateTimeOffset declared DbType.Time is refused (ArgumentException, DbTypeValidator)
 DuckDB	year-only	year_only	PASS
 DuckDB	year-month interval	year_month_interval	PASS
 DuckDB	generic interval	generic_interval	PASS

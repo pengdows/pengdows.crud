@@ -81,7 +81,13 @@ internal enum IntervalWireFormat
     /// <summary>
     /// A native day-time interval that takes the value as a <see cref="TimeSpan"/> (DuckDB's INTERVAL, whose days are kept).
     /// </summary>
-    DayTimeSpan
+    DayTimeSpan,
+
+    /// <summary>
+    /// Informix's interval literals: "D HH:MM:SS" (a fraction only when the value has one) for INTERVAL DAY TO SECOND, and
+    /// "Y-MM" for INTERVAL YEAR TO MONTH. Both refuse the ISO 8601 form.
+    /// </summary>
+    InformixLiteral
 }
 
 /// <summary>
@@ -116,6 +122,18 @@ internal sealed class DatabaseTraits
     public SpatialWireFormat SpatialFormat { get; init; }
 
     public IntervalWireFormat IntervalFormat { get; init; }
+
+    /// <summary>
+    /// True when the provider's text reads can end in a NUL that is padding, not data (Informix's TEXT and CLOB, confirmed
+    /// live): a string read drops that trailing NUL. SQL text never ends in one.
+    /// </summary>
+    public bool TextHasTrailingNul { get; init; }
+
+    /// <summary>
+    /// True when the provider writes a time with its offset as text (SQLite: "HH:mm:ss.fffffff+hh:mm"), so a time-only text is that
+    /// time and reads back as one. Other providers' time-only text is not a value the library can date.
+    /// </summary>
+    public bool TimeWithZoneIsText { get; init; }
 
     /// <summary>
     /// Inet, Cidr, PostgreSqlInterval and Range values are sent as Npgsql's own types

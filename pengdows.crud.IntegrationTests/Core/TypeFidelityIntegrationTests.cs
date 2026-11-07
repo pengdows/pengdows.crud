@@ -157,8 +157,10 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
         }
         catch (Exception ex)
         {
-            var message = ex.Message.ReplaceLineEndings(" ");
-            return "FAIL " + ex.GetType().Name + ": " + (message.Length > 240 ? message[..240] : message);
+            // The cause is the inner exception for a wrapper (TemplateInitializationException, DataMappingException): name it too.
+            var cause = ex.InnerException is { } inner ? " <- " + inner.GetType().Name + ": " + inner.Message : string.Empty;
+            var message = (ex.Message + cause).ReplaceLineEndings(" ");
+            return "FAIL " + ex.GetType().Name + ": " + (message.Length > 360 ? message[..360] : message);
         }
     }
 
@@ -200,8 +202,10 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
         }
         catch (Exception ex)
         {
-            var message = ex.Message.ReplaceLineEndings(" ");
-            return "FAIL " + ex.GetType().Name + ": " + (message.Length > 240 ? message[..240] : message);
+            // The cause is the inner exception for a wrapper (TemplateInitializationException, DataMappingException): name it too.
+            var cause = ex.InnerException is { } inner ? " <- " + inner.GetType().Name + ": " + inner.Message : string.Empty;
+            var message = (ex.Message + cause).ReplaceLineEndings(" ");
+            return "FAIL " + ex.GetType().Name + ": " + (message.Length > 360 ? message[..360] : message);
         }
     }
 

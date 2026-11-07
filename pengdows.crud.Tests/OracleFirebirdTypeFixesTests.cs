@@ -167,7 +167,7 @@ public sealed class OracleFirebirdTypeFixesTests
         };
 
     [Fact]
-    public async Task Firebird_DateTimeOffsetDeclaredTime_IsAZonedUtcTime()
+    public async Task Firebird_DateTimeOffsetDeclaredTime_IsTheUtcTimeInItsOffsetZone()
     {
         var (context, _) = Context(SupportedDatabase.Firebird, "5.0.2");
         await using var __ = context;
@@ -176,8 +176,9 @@ public sealed class OracleFirebirdTypeFixesTests
             new DateTimeOffset(1, 1, 1, 13, 45, 30, TimeSpan.FromHours(-5)));
 
         var zoned = Assert.IsType<FbZonedTime>(parameter.Value);
+        // 13:45:30 at -05:00 is 18:45:30 UTC, sent in the Etc/GMT zone of the offset (the offset is kept).
         Assert.Equal(new TimeSpan(18, 45, 30), zoned.Time);
-        Assert.Equal("UTC", zoned.TimeZone);
+        Assert.Equal("Etc/GMT+5", zoned.TimeZone);
     }
 
     [Fact]

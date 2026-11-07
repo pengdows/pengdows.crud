@@ -631,6 +631,13 @@ internal class SqliteDialect : SqlDialect
             return CreateDbParameter(name, type, instant);
         }
 
+        // A DateTimeOffset declared as a time is a TIME WITH TIME ZONE: its time of day and its offset, not an instant.
+        if (type == DbType.Time && value is DateTimeOffset timeWithZone)
+        {
+            return base.CreateDbParameter(name, DbType.String,
+                timeWithZone.ToString("HH:mm:ss.FFFFFFFzzz", CultureInfo.InvariantCulture));
+        }
+
         if (value is bool b && IsNumericDbType(type))
         {
             return base.CreateDbParameter(name, type, b ? 1 : 0);
@@ -638,7 +645,7 @@ internal class SqliteDialect : SqlDialect
 
         if (value is DateTime dt)
         {
-            var utc = TypeCoercionHelper.NormalizeDateTime(dt);
+            var utc = pengdows.crud.types.coercion.DateTimeCoercion.NormalizeDateTime(dt);
             return base.CreateDbParameter(name, DbType.String, utc.ToString("o", CultureInfo.InvariantCulture));
         }
 
@@ -804,6 +811,7 @@ internal class SqliteDialect : SqlDialect
             RegisterTypeMappings = RegisterSqliteTypeMappings,
             // No interval type: an interval is ISO 8601 text, which the interval converters read back exactly.
             IntervalFormat = IntervalWireFormat.Iso8601,
+            TimeWithZoneIsText = true,
             // No spatial type: a geometry is its EWKB in a BLOB, which keeps the SRID (see RegisterSqliteTypeMappings).
             SpatialFormat = SpatialWireFormat.ExtendedWkb,
             // A float vector is stored as float32 bytes (see RegisterSqliteTypeMappings): read it back as the packed vector.

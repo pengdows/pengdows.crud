@@ -12,7 +12,7 @@ public class CompiledTypeConverterCacheTests
     {
         int source = 42;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(long));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(long));
 
         Assert.Equal(42L, result);
         Assert.IsType<long>(result);
@@ -23,7 +23,7 @@ public class CompiledTypeConverterCacheTests
     {
         long source = 42L;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(int));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(int));
 
         Assert.Equal(42, result);
         Assert.IsType<int>(result);
@@ -34,7 +34,7 @@ public class CompiledTypeConverterCacheTests
     {
         string source = "123";
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(int));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(int));
 
         Assert.Equal(123, result);
         Assert.IsType<int>(result);
@@ -45,7 +45,7 @@ public class CompiledTypeConverterCacheTests
     {
         double source = 123.45;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(decimal));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(decimal));
 
         Assert.Equal(123.45m, result);
         Assert.IsType<decimal>(result);
@@ -56,7 +56,7 @@ public class CompiledTypeConverterCacheTests
     {
         int source = 42;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(long?));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(long?));
 
         Assert.Equal(42L, result);
         Assert.IsType<long>(result);
@@ -68,8 +68,8 @@ public class CompiledTypeConverterCacheTests
         int source1 = 10;
         int source2 = 20;
 
-        var result1 = TypeCoercionHelper.ConvertWithCache(source1, typeof(long));
-        var result2 = TypeCoercionHelper.ConvertWithCache(source2, typeof(long));
+        var result1 = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source1, typeof(long));
+        var result2 = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source2, typeof(long));
 
         Assert.Equal(10L, result1);
         Assert.Equal(20L, result2);
@@ -81,7 +81,7 @@ public class CompiledTypeConverterCacheTests
     {
         string source = "12345678-1234-1234-1234-123456789abc";
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(Guid));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(Guid));
 
         Assert.Equal(Guid.Parse("12345678-1234-1234-1234-123456789abc"), result);
         Assert.IsType<Guid>(result);
@@ -92,7 +92,7 @@ public class CompiledTypeConverterCacheTests
     {
         int source = 42;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(string));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(string));
 
         Assert.Equal("42", result);
         Assert.IsType<string>(result);
@@ -103,7 +103,7 @@ public class CompiledTypeConverterCacheTests
     {
         bool source = true;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(int));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(int));
 
         Assert.Equal(1, result);
         Assert.IsType<int>(result);
@@ -114,7 +114,7 @@ public class CompiledTypeConverterCacheTests
     {
         int source = 1;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(bool));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(bool));
 
         Assert.Equal(true, result);
         Assert.IsType<bool>(result);
@@ -126,7 +126,7 @@ public class CompiledTypeConverterCacheTests
         string source = "not a number";
 
         Assert.Throws<InvalidCastException>(() =>
-            TypeCoercionHelper.ConvertWithCache(source, typeof(int)));
+            pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(int)));
     }
 
     [Fact]
@@ -135,7 +135,7 @@ public class CompiledTypeConverterCacheTests
         // This test verifies the converter handles nullable target types
         int source = 42;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(int?));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(int?));
 
         Assert.Equal(42, result);
     }
@@ -145,7 +145,7 @@ public class CompiledTypeConverterCacheTests
     {
         var source = new DateTime(2026, 2, 7, 12, 0, 0, DateTimeKind.Utc);
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(DateTimeOffset));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(DateTimeOffset));
 
         Assert.IsType<DateTimeOffset>(result);
         var dto = (DateTimeOffset)result;
@@ -159,7 +159,7 @@ public class CompiledTypeConverterCacheTests
     {
         decimal source = 123.45m;
 
-        var result = TypeCoercionHelper.ConvertWithCache(source, typeof(double));
+        var result = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(source, typeof(double));
 
         Assert.Equal(123.45, (double)result, precision: 2);
         Assert.IsType<double>(result);
@@ -172,6 +172,6 @@ public class CompiledTypeConverterCacheTests
     public void ConvertWithCache_UnconvertibleStruct_ThrowsInsteadOfReturningDefault()
     {
         Assert.Throws<InvalidCastException>(() =>
-            TypeCoercionHelper.ConvertWithCache(42, typeof(PostgreSqlInterval)));
+            pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(42, typeof(PostgreSqlInterval)));
     }
 }

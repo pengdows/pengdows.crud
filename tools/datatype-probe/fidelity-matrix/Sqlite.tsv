@@ -40,7 +40,7 @@ Sqlite	legacy long binary	legacy_binary	PASS
 Sqlite	rowversion / timestamp token	rowversion	PASS
 Sqlite	local-zone timestamp	local_timestamp	PASS
 Sqlite	second-precision datetime	second_datetime	PASS
-Sqlite	time with zone	time_zoned	FAIL wrote zoned-time:495300000000@72000000000, read zoned-time:423300000000@0
+Sqlite	time with zone	time_zoned	PASS
 Sqlite	year-only	year_only	PASS
 Sqlite	year-month interval	year_month_interval	PASS
 Sqlite	generic interval	generic_interval	PASS

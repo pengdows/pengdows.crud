@@ -372,7 +372,7 @@ internal class ColumnInfo : IColumnInfo
                 {
                     // Use cached underlying type (set during TypeMapRegistry initialization)
                     // EnumUnderlyingType is guaranteed non-null when EnumType is non-null
-                    value = TypeCoercionHelper.ConvertWithCache(current, EnumUnderlyingType!);
+                    value = pengdows.crud.types.coercion.ConverterResolution.ConvertWithCache(current, EnumUnderlyingType!);
                 }
             }
 
@@ -393,7 +393,7 @@ internal class ColumnInfo : IColumnInfo
                 // Use precompiled serializer if available, otherwise fall back to TypeCoercionHelper
                 value = JsonSerializer != null
                     ? JsonSerializer(current)
-                    : TypeCoercionHelper.GetJsonText(current, JsonSerializerOptions ?? JsonSerializerOptions.Default);
+                    : pengdows.crud.types.coercion.JsonCoercion.GetJsonText(current, JsonSerializerOptions ?? JsonSerializerOptions.Default);
             }
         }
 

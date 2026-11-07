@@ -11,7 +11,7 @@ using Xunit;
 
 namespace pengdows.crud.Tests;
 
-public class TypeCoercionHelperResolveCoercerTests
+public class ConverterResolveCoercerTests
 {
     private sealed class FieldTypeTarget
     {
@@ -75,7 +75,7 @@ public class TypeCoercionHelperResolveCoercerTests
 
     private static Func<object?, object?> InvokePrivateResolveCoercer(Type sourceType, Type targetType)
     {
-        var method = typeof(TypeCoercionHelper).GetMethod(
+        var method = typeof(pengdows.crud.types.coercion.ConverterResolution).GetMethod(
             "ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
@@ -124,7 +124,7 @@ public class TypeCoercionHelperResolveCoercerTests
     [Fact]
     public void ResolveCoercer_ForTypePair_ConvertsValue()
     {
-        var method = typeof(TypeCoercionHelper).GetMethod(
+        var method = typeof(pengdows.crud.types.coercion.ConverterResolution).GetMethod(
             "ResolveCoercer",
             BindingFlags.NonPublic | BindingFlags.Static,
             null,
