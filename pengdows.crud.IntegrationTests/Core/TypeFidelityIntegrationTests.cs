@@ -73,6 +73,25 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
                 string status;
                 if (declarations.TryGetValue(semantic, out var declared))
                 {
+                    // A named type or domain the declaration uses is created first (TypeFidelityDeclarations.Prerequisites).
+                    if (TypeFidelityDeclarations.Prerequisites.TryGetValue(provider, out var prerequisites) &&
+                        prerequisites.TryGetValue(semantic, out var ddl))
+                    {
+                        await DropTableIfExistsAsync(context, TableName);
+                        for (var i = 0; i < ddl.Length; i++)
+                        {
+                            try
+                            {
+                                await using var prerequisite = context.CreateSqlContainer(ddl[i]);
+                                await prerequisite.ExecuteNonQueryAsync();
+                            }
+                            catch (Exception) when (i < ddl.Length - 1)
+                            {
+                                // A clean-up that fails (the type or domain does not exist yet) is not an error.
+                            }
+                        }
+                    }
+
                     // A column the server generates is never written by the library: the row is inserted without it, and the
                     // value the server generated is read back through the library's row type.
                     var cell = TypeFidelityIntegrationTests.ServerGenerated(provider, semantic)
@@ -82,7 +101,9 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
                         .GetMethod(cell, BindingFlags.NonPublic | BindingFlags.Static)!
                         .MakeGenericMethod(rowType);
                     // A TIME WITH TIME ZONE keeps no date, so its value is compared by its UTC time of day.
-                    Func<object?, string>? canonical = semantic == "time with zone" ? ZonedTimeOfDay : null;
+                    Func<object?, string>? canonical = semantic == "time with zone" ? ZonedTimeOfDay
+                        : semantic == "geography / geodetic" && provider == SupportedDatabase.SingleStore ? SixPlaceCoordinates
+                        : null;
                     // A server-generated cell takes three arguments; only the round-trip cell takes the comparison.
                     var arguments = cell == nameof(GeneratedCellAsync)
                         ? new object?[] { context, declared.Declaration, column }
@@ -130,9 +151,8 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
         {
             await DropTableIfExistsAsync(context, TableName);
             await using (var create = context.CreateSqlContainer(
-                             $"CREATE TABLE {IntegrationObjectNameHelper.Table(context, TableName)} " +
-                             $"({context.WrapObjectName("id")} INTEGER NOT NULL PRIMARY KEY, " +
-                             $"{context.WrapObjectName(column)} {declaration} NOT NULL)"))
+                             CreateTableSql(context, $"{context.WrapObjectName("id")} INTEGER NOT NULL PRIMARY KEY, " +
+                                                    $"{context.WrapObjectName(column)} {declaration} NOT NULL")))
             {
                 await create.ExecuteNonQueryAsync();
             }
@@ -164,6 +184,15 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
         }
     }
 
+    // The CREATE TABLE for a cell's columns: the database's template where it has one (a tablespace, a rowstore table).
+    private static string CreateTableSql(IDatabaseContext context, string columns)
+    {
+        var table = IntegrationObjectNameHelper.Table(context, TableName);
+        return TypeFidelityDeclarations.TableTemplates.TryGetValue(context.Dialect.DatabaseType, out var template)
+            ? template.Replace("{table}", table).Replace("{columns}", columns)
+            : $"CREATE TABLE {table} ({columns})";
+    }
+
     // One cell: create the table with the declaration, write one row, read it back, compare the value.
     private static async Task<string> RoundTripCellAsync<TRow>(IDatabaseContext context, string declaration, string column,
         Func<object?, string>? canonical = null)
@@ -173,9 +202,8 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
         {
             await DropTableIfExistsAsync(context, TableName);
             await using (var create = context.CreateSqlContainer(
-                             $"CREATE TABLE {IntegrationObjectNameHelper.Table(context, TableName)} " +
-                             $"({context.WrapObjectName("id")} INTEGER NOT NULL PRIMARY KEY, " +
-                             $"{context.WrapObjectName(column)} {declaration} NOT NULL)"))
+                             CreateTableSql(context, $"{context.WrapObjectName("id")} INTEGER NOT NULL PRIMARY KEY, " +
+                                                    $"{context.WrapObjectName(column)} {declaration} NOT NULL")))
             {
                 await create.ExecuteNonQueryAsync();
             }
@@ -214,6 +242,12 @@ public class TypeFidelityIntegrationTests : DatabaseTestBase
     // The coordinates of a WKT compare as numbers: "1" and "1.0" are the same ordinate, and a server prints either.
     // A TIME WITH TIME ZONE holds a time of day and an offset, not a date (a read may return any date): the value is its
     // local time of day and its offset. A lost offset or a shifted time of day fails the comparison.
+    // SingleStore keeps a geography's coordinates in single precision (about seven significant digits): 1 reads back as
+    // 0.99999998. The comparison is at six decimal places for that database only, so every other database is compared exactly.
+    private static string SixPlaceCoordinates(object? value) =>
+        Regex.Replace(Canonical(value).Replace("POINT (", "POINT(").Replace("POLYGON (", "POLYGON("), @"-?\d+(\.\d+)?",
+            m => Math.Round(double.Parse(m.Value, CultureInfo.InvariantCulture), 6).ToString("R", CultureInfo.InvariantCulture));
+
     private static string ZonedTimeOfDay(object? value) =>
         value is DateTimeOffset zoned
             ? "zoned-time:" + zoned.TimeOfDay.Ticks + "@" + zoned.Offset.Ticks

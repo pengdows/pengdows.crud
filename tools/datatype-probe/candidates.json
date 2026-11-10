@@ -57,14 +57,16 @@
     "UINTEGER",
     "UINT4",
     "UINT32",
-    "UNSIGNED INT"
+    "UNSIGNED INT",
+    "NUMERIC(18,0)"
   ],
   "unsigned 64-bit": [
     "BIGINT UNSIGNED",
     "UBIGINT",
     "UINT8",
     "UINT64",
-    "UNSIGNED BIGINT"
+    "UNSIGNED BIGINT",
+    "NUMERIC(20,0)"
   ],
   "unsigned 128-bit": [
     "UHUGEINT",
@@ -171,12 +173,14 @@
   ],
   "national / Unicode character": [
     "NVARCHAR(100)",
+    "NCHAR(40)",
     "NCHAR(10)",
     "NVARCHAR2(100)",
     "NCLOB",
     "NATIONAL CHAR",
     "NVARCHAR",
-    "Unicode text fields"
+    "Unicode text fields",
+    "VARCHAR(100)"
   ],
   "long text LOB": [
     "CLOB",
@@ -237,7 +241,9 @@
     "LONGBLOB",
     "BYTE"
   ],
-  "rowversion / timestamp token": ["BINARY(8)", "CHAR(8) FOR BIT DATA", 
+  "rowversion / timestamp token": [
+    "BINARY(8)",
+    "CHAR(8) FOR BIT DATA",
     "ROWVERSION",
     "TIMESTAMP",
     "no direct SQL rowversion type"
@@ -277,12 +283,14 @@
     "TIMESTAMP(6) WITH LOCAL TIME ZONE",
     "TIMESTAMP_LTZ"
   ],
-  "second-precision datetime": ["DATETIME YEAR TO SECOND", 
+  "second-precision datetime": [
+    "DATETIME YEAR TO SECOND",
     "DATETIME(0)",
     "SMALLDATETIME",
     "DATETIME",
     "DATE",
-    "SECONDDATE"
+    "SECONDDATE",
+    "TIMESTAMP"
   ],
   "year-only": [
     "YEAR",
@@ -311,7 +319,8 @@
     "UNIQUEIDENTIFIER",
     "RAW(16)",
     "CHAR(36)",
-    "BINARY(16)"
+    "BINARY(16)",
+    "CHAR(16) CHARACTER SET OCTETS"
   ],
   "row identifier / ROWID": [
     "ROWID",
@@ -385,34 +394,39 @@
     "GEOMETRY extension",
     "GEOMETRY",
     "spatial DataBlade",
-    "ST_POINT"
+    "ST_POINT",
+    "ST_GEOMETRY(4326)"
   ],
   "line / linestring geometry": [
     "LINESTRING",
     "GEOMETRY(LINESTRING)",
     "GEOMETRY",
     "GEOMETRY extension",
-    "ST_GEOMETRY"
+    "ST_GEOMETRY",
+    "ST_GEOMETRY(4326)"
   ],
   "polygon geometry": [
     "POLYGON",
     "GEOMETRY(POLYGON)",
     "GEOMETRY",
     "GEOMETRY extension",
-    "ST_GEOMETRY"
+    "ST_GEOMETRY",
+    "ST_GEOMETRY(4326)"
   ],
   "general geometry": [
     "GEOMETRY",
     "ST_GEOMETRY",
     "SDO_GEOMETRY",
-    "GEOMETRY extension"
+    "GEOMETRY extension",
+    "ST_GEOMETRY(4326)"
   ],
   "geography / geodetic": [
     "GEOGRAPHY",
     "GEOGRAPHY(POINT,4326)",
     "PostGIS geography",
     "GEOMETRY extension",
-    "ST_GEOMETRY"
+    "ST_GEOMETRY",
+    "ST_GEOMETRY(4326)"
   ],
   "SQL array": [
     "INTEGER ARRAY",
@@ -429,7 +443,8 @@
     "INTEGER[10]",
     "type[n] (not enforced as fixed)",
     "type[n]",
-    "ARRAY(type)"
+    "ARRAY(type)",
+    "INTEGER ARRAY"
   ],
   "list / multiset / set collection": [
     "INTEGER MULTISET",
@@ -437,7 +452,10 @@
     "MULTISET",
     "type[]",
     "LIST",
-    "ARRAY"
+    "ARRAY",
+    "SET(INTEGER NOT NULL)",
+    "MULTISET(INTEGER NOT NULL)",
+    "LIST(INTEGER NOT NULL)"
   ],
   "map / dictionary": [
     "MAP(VARCHAR(10),INTEGER)",
@@ -509,5 +527,16 @@
   ],
   "specialized security label": [
     "IDSSECURITYLABEL"
+  ],
+  "native point": [
+    "POINT"
+  ],
+  "native polygon": [
+    "POLYGON"
+  ],
+  "32-bit transaction ID": [
+    "XID",
+    "BIGINT",
+    "NUMERIC(10,0)"
   ]
 }

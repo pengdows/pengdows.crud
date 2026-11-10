@@ -53,6 +53,9 @@ namespace pengdows.crud.dialects;
 /// </remarks>
 internal class MariaDbDialect : MySqlDialect
 {
+    // MariaDB 11.7+ names its conversion functions VEC_FromText and VEC_ToText.
+    internal override string VectorFromTextFunction => "VEC_FromText";
+    internal override string VectorToTextFunction => "VEC_ToText";
     // MariaDB uses tx_read_only (the original MySQL name); transaction_read_only was added
     // as an alias in MySQL 5.7.20 but MariaDB never adopted it — using it on MariaDB 10.x
     // raises "Unknown system variable 'transaction_read_only'".

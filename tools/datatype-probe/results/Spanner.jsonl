@@ -42,11 +42,13 @@
 {"db":"Spanner","type":"unsigned 32-bit","decl":"UINT4","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cuint4\u003E does not exist."}
 {"db":"Spanner","type":"unsigned 32-bit","decl":"UINT32","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cuint32\u003E does not exist."}
 {"db":"Spanner","type":"unsigned 32-bit","decl":"UNSIGNED INT","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022INT\u0022; failed to parse the DDL statements."}
+{"db":"Spanner","type":"unsigned 32-bit","decl":"NUMERIC(18,0)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type modifier is not supported for type \u003Cnumeric\u003E."}
 {"db":"Spanner","type":"unsigned 64-bit","decl":"BIGINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022UNSIGNED\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"unsigned 64-bit","decl":"UBIGINT","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cubigint\u003E does not exist."}
 {"db":"Spanner","type":"unsigned 64-bit","decl":"UINT8","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cuint8\u003E does not exist."}
 {"db":"Spanner","type":"unsigned 64-bit","decl":"UINT64","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cuint64\u003E does not exist."}
 {"db":"Spanner","type":"unsigned 64-bit","decl":"UNSIGNED BIGINT","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022BIGINT\u0022; failed to parse the DDL statements."}
+{"db":"Spanner","type":"unsigned 64-bit","decl":"NUMERIC(20,0)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type modifier is not supported for type \u003Cnumeric\u003E."}
 {"db":"Spanner","type":"unsigned 128-bit","decl":"UHUGEINT","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cuhugeint\u003E does not exist."}
 {"db":"Spanner","type":"unsigned 128-bit","decl":"UINT128","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cuint128\u003E does not exist."}
 {"db":"Spanner","type":"arbitrary-size integer","decl":"NUMERIC(1000,0)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type modifier is not supported for type \u003Cnumeric\u003E."}
@@ -125,6 +127,7 @@
 {"db":"Spanner","type":"unbounded text","decl":"VARCHAR","accepted":true,"providerType":"character varying","clrType":"System.String"}
 {"db":"Spanner","type":"unbounded text","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cnclob\u003E does not exist."}
 {"db":"Spanner","type":"national / Unicode character","decl":"NVARCHAR(100)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cnvarchar\u003E does not exist."}
+{"db":"Spanner","type":"national / Unicode character","decl":"NCHAR(40)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cbpchar\u003E is not supported."}
 {"db":"Spanner","type":"national / Unicode character","decl":"NCHAR(10)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cbpchar\u003E is not supported."}
 {"db":"Spanner","type":"national / Unicode character","decl":"NVARCHAR2(100)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cnvarchar2\u003E does not exist."}
 {"db":"Spanner","type":"national / Unicode character","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cnclob\u003E does not exist."}
@@ -176,6 +179,8 @@
 {"db":"Spanner","type":"legacy long binary","decl":"MEDIUMBLOB","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cmediumblob\u003E does not exist."}
 {"db":"Spanner","type":"legacy long binary","decl":"LONGBLOB","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Clongblob\u003E does not exist."}
 {"db":"Spanner","type":"legacy long binary","decl":"BYTE","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cbyte\u003E does not exist."}
+{"db":"Spanner","type":"rowversion / timestamp token","decl":"BINARY(8)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cbinary\u003E does not exist."}
+{"db":"Spanner","type":"rowversion / timestamp token","decl":"CHAR(8) FOR BIT DATA","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022FOR\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"rowversion / timestamp token","decl":"ROWVERSION","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Crowversion\u003E does not exist."}
 {"db":"Spanner","type":"rowversion / timestamp token","decl":"TIMESTAMP","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Ctimestamp\u003E is not supported."}
 {"db":"Spanner","type":"rowversion / timestamp token","decl":"no direct SQL rowversion type","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022direct\u0022; failed to parse the DDL statements."}
@@ -202,6 +207,7 @@
 {"db":"Spanner","type":"local-zone timestamp","decl":"TIMESTAMP WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022WITH\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"local-zone timestamp","decl":"TIMESTAMP(6) WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022WITH\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"local-zone timestamp","decl":"TIMESTAMP_LTZ","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Ctimestamp_ltz\u003E does not exist."}
+{"db":"Spanner","type":"second-precision datetime","decl":"DATETIME YEAR TO SECOND","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022YEAR\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"second-precision datetime","decl":"DATETIME(0)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cdatetime\u003E does not exist."}
 {"db":"Spanner","type":"second-precision datetime","decl":"SMALLDATETIME","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Csmalldatetime\u003E does not exist."}
 {"db":"Spanner","type":"second-precision datetime","decl":"DATETIME","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cdatetime\u003E does not exist."}
@@ -226,6 +232,7 @@
 {"db":"Spanner","type":"UUID / GUID","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Craw\u003E does not exist."}
 {"db":"Spanner","type":"UUID / GUID","decl":"CHAR(36)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cbpchar\u003E is not supported."}
 {"db":"Spanner","type":"UUID / GUID","decl":"BINARY(16)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cbinary\u003E does not exist."}
+{"db":"Spanner","type":"UUID / GUID","decl":"CHAR(16) CHARACTER SET OCTETS","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022CHARACTER\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"row identifier / ROWID","decl":"ROWID","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Crowid\u003E does not exist."}
 {"db":"Spanner","type":"row identifier / ROWID","decl":"UROWID","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Curowid\u003E does not exist."}
 {"db":"Spanner","type":"row identifier / ROWID","decl":"CHAR(18)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cbpchar\u003E is not supported."}
@@ -274,20 +281,24 @@
 {"db":"Spanner","type":"point geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cgeometry\u003E does not exist."}
 {"db":"Spanner","type":"point geometry","decl":"spatial DataBlade","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022DataBlade\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"point geometry","decl":"ST_POINT","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cst_point\u003E does not exist."}
+{"db":"Spanner","type":"point geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cst_geometry\u003E does not exist."}
 {"db":"Spanner","type":"line / linestring geometry","decl":"LINESTRING","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Clinestring\u003E does not exist."}
 {"db":"Spanner","type":"line / linestring geometry","decl":"GEOMETRY(LINESTRING)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cgeometry\u003E does not exist."}
 {"db":"Spanner","type":"line / linestring geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cgeometry\u003E does not exist."}
 {"db":"Spanner","type":"line / linestring geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022extension\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"line / linestring geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cst_geometry\u003E does not exist."}
+{"db":"Spanner","type":"line / linestring geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cst_geometry\u003E does not exist."}
 {"db":"Spanner","type":"polygon geometry","decl":"POLYGON","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cpolygon\u003E is not supported."}
 {"db":"Spanner","type":"polygon geometry","decl":"GEOMETRY(POLYGON)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cgeometry\u003E does not exist."}
 {"db":"Spanner","type":"polygon geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cgeometry\u003E does not exist."}
 {"db":"Spanner","type":"polygon geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022extension\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"polygon geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cst_geometry\u003E does not exist."}
+{"db":"Spanner","type":"polygon geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cst_geometry\u003E does not exist."}
 {"db":"Spanner","type":"general geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cgeometry\u003E does not exist."}
 {"db":"Spanner","type":"general geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cst_geometry\u003E does not exist."}
 {"db":"Spanner","type":"general geometry","decl":"SDO_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Csdo_geometry\u003E does not exist."}
 {"db":"Spanner","type":"general geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022extension\u0022; failed to parse the DDL statements."}
+{"db":"Spanner","type":"general geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cst_geometry\u003E does not exist."}
 {"db":"Spanner","type":"geography / geodetic","decl":"GEOGRAPHY","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cgeography\u003E does not exist."}
 {"db":"Spanner","type":"geography / geodetic","decl":"GEOGRAPHY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cgeography\u003E does not exist."}
 {"db":"Spanner","type":"geography / geodetic","decl":"PostGIS geography","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022geography\u0022; failed to parse the DDL statements."}
@@ -353,3 +364,8 @@
 {"db":"Spanner","type":"cursor / table variable","decl":"SYS_REFCURSOR","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Csys_refcursor\u003E does not exist."}
 {"db":"Spanner","type":"cursor / table variable","decl":"TABLE TYPE (SQLScript)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: syntax error at or near \u0022TABLE\u0022; failed to parse the DDL statements."}
 {"db":"Spanner","type":"specialized security label","decl":"IDSSECURITYLABEL","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cidssecuritylabel\u003E does not exist."}
+{"db":"Spanner","type":"native point","decl":"POINT","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cpoint\u003E is not supported."}
+{"db":"Spanner","type":"native polygon","decl":"POLYGON","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cpolygon\u003E is not supported."}
+{"db":"Spanner","type":"32-bit transaction ID","decl":"XID","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type \u003Cxid\u003E is not supported."}
+{"db":"Spanner","type":"32-bit transaction ID","decl":"BIGINT","accepted":true,"providerType":"bigint","clrType":"System.Int64"}
+{"db":"Spanner","type":"32-bit transaction ID","decl":"NUMERIC(10,0)","accepted":false,"stage":"create","error":"Unknown failed on Spanner: P0001: Type modifier is not supported for type \u003Cnumeric\u003E."}

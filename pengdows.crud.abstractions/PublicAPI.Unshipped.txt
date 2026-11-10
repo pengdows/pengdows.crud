@@ -100,3 +100,6 @@ pengdows.crud.configuration.IDatabaseContextConfiguration.SessionSettingsMode.se
 pengdows.crud.enums.SessionSettingsMode
 pengdows.crud.enums.SessionSettingsMode.Normal = 0 -> pengdows.crud.enums.SessionSettingsMode
 pengdows.crud.enums.SessionSettingsMode.Paranoid = 1 -> pengdows.crud.enums.SessionSettingsMode
+pengdows.crud.IProviderValueConverter<T>
+pengdows.crud.IProviderValueConverter<T>.FromProvider(object! value, pengdows.crud.enums.SupportedDatabase provider) -> T
+pengdows.crud.IProviderValueConverter<T>.ToProvider(T value, pengdows.crud.enums.SupportedDatabase provider) -> object?

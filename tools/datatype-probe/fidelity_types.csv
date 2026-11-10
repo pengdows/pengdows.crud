@@ -17,6 +17,10 @@ signed 8-bit,signed_8_bit,sbyte,SByte,FlatFile,declared,SMALLINT,SMALLINT,
 signed 8-bit,signed_8_bit,sbyte,SByte,Access,declared,SMALLINT,DBTYPE_I2,
 signed 8-bit,signed_8_bit,sbyte,SByte,Db2,declared,SMALLINT,SMALLINT,
 signed 8-bit,signed_8_bit,sbyte,SByte,Informix,declared,SMALLINT,SMALLINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,InterBase,declared,SMALLINT,SMALLINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,SapHana,declared,SMALLINT,SMALLINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,AuroraMySql,declared,TINYINT,TINYINT,
+signed 8-bit,signed_8_bit,sbyte,SByte,AuroraPostgreSql,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,PostgreSql,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,SqlServer,declared,SMALLINT,smallint,
 signed 16-bit,signed_16_bit,short,Int16,Oracle,declared,SMALLINT,Decimal,
@@ -35,6 +39,10 @@ signed 16-bit,signed_16_bit,short,Int16,FlatFile,declared,SMALLINT,SMALLINT,
 signed 16-bit,signed_16_bit,short,Int16,Access,declared,SMALLINT,DBTYPE_I2,
 signed 16-bit,signed_16_bit,short,Int16,Db2,declared,SMALLINT,SMALLINT,
 signed 16-bit,signed_16_bit,short,Int16,Informix,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,InterBase,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,SapHana,declared,SMALLINT,smallint,
+signed 16-bit,signed_16_bit,short,Int16,AuroraMySql,declared,SMALLINT,SMALLINT,
+signed 16-bit,signed_16_bit,short,Int16,AuroraPostgreSql,declared,SMALLINT,smallint,
 signed 32-bit,signed_32_bit,int,Int32,PostgreSql,declared,INTEGER,integer,
 signed 32-bit,signed_32_bit,int,Int32,SqlServer,declared,INTEGER,int,
 signed 32-bit,signed_32_bit,int,Int32,Oracle,declared,INTEGER,Decimal,
@@ -53,6 +61,10 @@ signed 32-bit,signed_32_bit,int,Int32,FlatFile,declared,INTEGER,INTEGER,
 signed 32-bit,signed_32_bit,int,Int32,Access,declared,INTEGER,DBTYPE_I4,
 signed 32-bit,signed_32_bit,int,Int32,Db2,declared,INTEGER,INTEGER,
 signed 32-bit,signed_32_bit,int,Int32,Informix,declared,INTEGER,INTEGER,
+signed 32-bit,signed_32_bit,int,Int32,InterBase,declared,INTEGER,INTEGER,
+signed 32-bit,signed_32_bit,int,Int32,SapHana,declared,INTEGER,integer,
+signed 32-bit,signed_32_bit,int,Int32,AuroraMySql,declared,INTEGER,INT,
+signed 32-bit,signed_32_bit,int,Int32,AuroraPostgreSql,declared,INTEGER,integer,
 signed 64-bit,signed_64_bit,long,Int64,PostgreSql,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,SqlServer,declared,BIGINT,bigint,
 signed 64-bit,signed_64_bit,long,Int64,Oracle,declared,"NUMBER(19,0)",Decimal,
@@ -71,6 +83,10 @@ signed 64-bit,signed_64_bit,long,Int64,FlatFile,declared,BIGINT,BIGINT,
 signed 64-bit,signed_64_bit,long,Int64,Access,declared,BIGINT,DBTYPE_I8,
 signed 64-bit,signed_64_bit,long,Int64,Db2,declared,BIGINT,BIGINT,
 signed 64-bit,signed_64_bit,long,Int64,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (int64) not found.
+signed 64-bit,signed_64_bit,long,Int64,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+signed 64-bit,signed_64_bit,long,Int64,SapHana,declared,BIGINT,bigint,
+signed 64-bit,signed_64_bit,long,Int64,AuroraMySql,declared,BIGINT,BIGINT,
+signed 64-bit,signed_64_bit,long,Int64,AuroraPostgreSql,declared,BIGINT,bigint,
 signed 128-bit,signed_128_bit,Int128,Object,PostgreSql,declared,"NUMERIC(38,0)",numeric(38),
 signed 128-bit,signed_128_bit,Int128,Object,SqlServer,declared,"NUMERIC(38,0)",decimal,
 signed 128-bit,signed_128_bit,Int128,Object,Oracle,declared,"NUMBER(38,0)",Decimal,
@@ -89,6 +105,10 @@ signed 128-bit,signed_128_bit,Int128,Object,FlatFile,declared,"NUMERIC(38,0)",NU
 signed 128-bit,signed_128_bit,Int128,Object,Access,unsupported,,,Syntax error in field definition.
 signed 128-bit,signed_128_bit,Int128,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""HUGEINT"" is an undefined name."
 signed 128-bit,signed_128_bit,Int128,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (hugeint) not found.
+signed 128-bit,signed_128_bit,Int128,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+signed 128-bit,signed_128_bit,Int128,Object,SapHana,declared,"NUMBER(38,0)",decimal,
+signed 128-bit,signed_128_bit,Int128,Object,AuroraMySql,declared,"NUMERIC(38,0)",DECIMAL,
+signed 128-bit,signed_128_bit,Int128,Object,AuroraPostgreSql,declared,"NUMERIC(38,0)",numeric(38),
 unsigned 8-bit,unsigned_8_bit,byte,Byte,PostgreSql,widened,SMALLINT,(widened),
 unsigned 8-bit,unsigned_8_bit,byte,Byte,SqlServer,declared,TINYINT,tinyint,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,Oracle,widened,SMALLINT,(widened),
@@ -107,6 +127,10 @@ unsigned 8-bit,unsigned_8_bit,byte,Byte,FlatFile,widened,SMALLINT,(widened),
 unsigned 8-bit,unsigned_8_bit,byte,Byte,Access,declared,BYTE,DBTYPE_UI1,
 unsigned 8-bit,unsigned_8_bit,byte,Byte,Db2,widened,SMALLINT,(widened),
 unsigned 8-bit,unsigned_8_bit,byte,Byte,Informix,declared,SMALLINT,SMALLINT,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,InterBase,widened,SMALLINT,(widened),
+unsigned 8-bit,unsigned_8_bit,byte,Byte,SapHana,declared,TINYINT,tinyint,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,AuroraMySql,declared,TINYINT UNSIGNED,TINYINT,
+unsigned 8-bit,unsigned_8_bit,byte,Byte,AuroraPostgreSql,widened,SMALLINT,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,PostgreSql,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SqlServer,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Oracle,widened,INTEGER,(widened),
@@ -125,6 +149,10 @@ unsigned 16-bit,unsigned_16_bit,ushort,UInt16,FlatFile,widened,INTEGER,(widened)
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Access,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Db2,widened,INTEGER,(widened),
 unsigned 16-bit,unsigned_16_bit,ushort,UInt16,Informix,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,InterBase,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,SapHana,widened,INTEGER,(widened),
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,AuroraMySql,declared,SMALLINT UNSIGNED,SMALLINT,
+unsigned 16-bit,unsigned_16_bit,ushort,UInt16,AuroraPostgreSql,widened,INTEGER,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,PostgreSql,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,SqlServer,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,Oracle,declared,"NUMBER(10,0)",NUMBER,
@@ -143,24 +171,32 @@ unsigned 32-bit,unsigned_32_bit,uint,UInt32,FlatFile,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,Access,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,Db2,widened,BIGINT,(widened),
 unsigned 32-bit,unsigned_32_bit,uint,UInt32,Informix,widened,BIGINT,(widened),
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,PostgreSql,widened,"NUMERIC(20,0)",(widened),
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SqlServer,widened,"NUMERIC(20,0)",(widened),
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Oracle,widened,"NUMERIC(20,0)",(widened),
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Firebird,widened,"NUMERIC(20,0)",(widened),
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,CockroachDb,widened,"NUMERIC(20,0)",(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,InterBase,declared,"NUMERIC(18,0)",NUMERIC,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,SapHana,widened,BIGINT,(widened),
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,AuroraMySql,declared,INT UNSIGNED,INT,
+unsigned 32-bit,unsigned_32_bit,uint,UInt32,AuroraPostgreSql,widened,BIGINT,(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,PostgreSql,declared,"NUMERIC(20,0)",numeric(20),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SqlServer,declared,"NUMERIC(20,0)",decimal,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Oracle,declared,"NUMERIC(20,0)",Decimal,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Firebird,declared,"NUMERIC(20,0)",NUMERIC,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,CockroachDb,declared,"NUMERIC(20,0)",numeric(20),
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,MariaDb,declared,BIGINT UNSIGNED,BIGINT,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,MySql,declared,BIGINT UNSIGNED,BIGINT,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Sqlite,declared,TEXT,text,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,DuckDB,declared,UBIGINT,UnsignedBigInt,
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,YugabyteDb,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,YugabyteDb,declared,"NUMERIC(20,0)",numeric(20),
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,TiDb,declared,BIGINT UNSIGNED,BIGINT,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SingleStore,declared,BIGINT UNSIGNED,BIGINT,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SybaseASE,declared,UNSIGNED BIGINT,unsigned bigint,
 unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Spanner,declared,NUMERIC,numeric,
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,FlatFile,widened,"NUMERIC(20,0)",(widened),
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Access,widened,"NUMERIC(20,0)",(widened),
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Db2,widened,"NUMERIC(20,0)",(widened),
-unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Informix,widened,"NUMERIC(20,0)",(widened),
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,FlatFile,declared,"NUMERIC(20,0)",NUMERIC,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Access,unsupported,,,Syntax error in CREATE TABLE statement.
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Db2,declared,"NUMERIC(20,0)",DECIMAL,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,Informix,declared,"NUMERIC(20,0)",DECIMAL,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 62 UNSIGNED"
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,SapHana,declared,"NUMERIC(20,0)",decimal,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,AuroraMySql,declared,BIGINT UNSIGNED,BIGINT,
+unsigned 64-bit,unsigned_64_bit,ulong,UInt64,AuroraPostgreSql,declared,"NUMERIC(20,0)",numeric(20),
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,PostgreSql,declared,"NUMERIC(1000,0)",numeric(1000),
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,SqlServer,declared,"NUMERIC(38,0)",decimal,
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,Oracle,declared,NUMBER,Decimal,
@@ -179,6 +215,10 @@ arbitrary-size integer,arbitrary_integer,BigInteger,Object,FlatFile,declared,"NU
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,Access,unsupported,,,Invalid precision for decimal data type.
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,Db2,unsupported,,,"ERROR [42611] [IBM][DB2/LINUXX8664] SQL0604N The length, precision, or scale attribute for column, distinct type, structured type, array type, attribute of structured type, routine, cast target ty"
 arbitrary-size integer,arbitrary_integer,BigInteger,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]The scale exceeds the maximum precision specified.
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -842 Precision must be from 1 to 18
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,SapHana,declared,NUMBER,decimal,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,AuroraMySql,declared,"DECIMAL(65,0)",DECIMAL,
+arbitrary-size integer,arbitrary_integer,BigInteger,Object,AuroraPostgreSql,declared,"NUMERIC(1000,0)",numeric(1000),
 binary float32,binary_float32,float,Single,PostgreSql,declared,REAL,real,
 binary float32,binary_float32,float,Single,SqlServer,declared,REAL,real,
 binary float32,binary_float32,float,Single,Oracle,declared,REAL,Decimal,
@@ -197,6 +237,10 @@ binary float32,binary_float32,float,Single,FlatFile,declared,REAL,REAL,
 binary float32,binary_float32,float,Single,Access,declared,REAL,DBTYPE_R4,
 binary float32,binary_float32,float,Single,Db2,declared,REAL,REAL,
 binary float32,binary_float32,float,Single,Informix,declared,REAL,SMALLFLOAT,
+binary float32,binary_float32,float,Single,InterBase,declared,REAL,FLOAT,
+binary float32,binary_float32,float,Single,SapHana,declared,REAL,real,
+binary float32,binary_float32,float,Single,AuroraMySql,declared,REAL,DOUBLE,
+binary float32,binary_float32,float,Single,AuroraPostgreSql,declared,REAL,real,
 binary float64,binary_float64,double,Double,PostgreSql,declared,DOUBLE PRECISION,double precision,
 binary float64,binary_float64,double,Double,SqlServer,declared,DOUBLE PRECISION,float,
 binary float64,binary_float64,double,Double,Oracle,declared,DOUBLE PRECISION,Decimal,
@@ -215,6 +259,10 @@ binary float64,binary_float64,double,Double,FlatFile,declared,DOUBLE PRECISION,D
 binary float64,binary_float64,double,Double,Access,declared,DOUBLE PRECISION,DBTYPE_R8,
 binary float64,binary_float64,double,Double,Db2,declared,DOUBLE PRECISION,DOUBLE PRECISION,
 binary float64,binary_float64,double,Double,Informix,declared,DOUBLE PRECISION,FLOAT,
+binary float64,binary_float64,double,Double,InterBase,declared,DOUBLE PRECISION,DOUBLE PRECISION,
+binary float64,binary_float64,double,Double,SapHana,declared,DOUBLE PRECISION,double,
+binary float64,binary_float64,double,Double,AuroraMySql,declared,DOUBLE PRECISION,DOUBLE,
+binary float64,binary_float64,double,Double,AuroraPostgreSql,declared,DOUBLE PRECISION,double precision,
 fixed decimal,fixed_decimal,decimal,Decimal,PostgreSql,declared,"DECIMAL(18,4)","numeric(18, 4)",
 fixed decimal,fixed_decimal,decimal,Decimal,SqlServer,declared,"DECIMAL(18,4)",decimal,
 fixed decimal,fixed_decimal,decimal,Decimal,Oracle,declared,"DECIMAL(18,4)",Decimal,
@@ -233,6 +281,10 @@ fixed decimal,fixed_decimal,decimal,Decimal,FlatFile,declared,"DECIMAL(18,4)",DE
 fixed decimal,fixed_decimal,decimal,Decimal,Access,declared,"DECIMAL(18,4)",DBTYPE_NUMERIC,
 fixed decimal,fixed_decimal,decimal,Decimal,Db2,declared,"DECIMAL(18,4)",DECIMAL,
 fixed decimal,fixed_decimal,decimal,Decimal,Informix,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,InterBase,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,SapHana,declared,"DECIMAL(18,4)",decimal,
+fixed decimal,fixed_decimal,decimal,Decimal,AuroraMySql,declared,"DECIMAL(18,4)",DECIMAL,
+fixed decimal,fixed_decimal,decimal,Decimal,AuroraPostgreSql,declared,"DECIMAL(18,4)","numeric(18, 4)",
 boolean,boolean,bool,Boolean,PostgreSql,declared,BOOLEAN,boolean,
 boolean,boolean,bool,Boolean,SqlServer,declared,BIT,bit,
 boolean,boolean,bool,Boolean,Oracle,declared,BOOLEAN,Boolean,
@@ -251,6 +303,10 @@ boolean,boolean,bool,Boolean,FlatFile,declared,BOOLEAN,BOOLEAN,
 boolean,boolean,bool,Boolean,Access,declared,BIT,DBTYPE_BOOL,
 boolean,boolean,bool,Boolean,Db2,declared,BOOLEAN,BOOLEAN,
 boolean,boolean,bool,Boolean,Informix,declared,BOOLEAN,BOOLEAN,
+boolean,boolean,bool,Boolean,InterBase,declared,BOOLEAN,BOOLEAN,
+boolean,boolean,bool,Boolean,SapHana,declared,BOOLEAN,boolean,
+boolean,boolean,bool,Boolean,AuroraMySql,declared,BOOLEAN,BOOL,
+boolean,boolean,bool,Boolean,AuroraPostgreSql,declared,BOOLEAN,boolean,
 bit / bitstring,bit_string,BitArray,Object,PostgreSql,declared,BIT VARYING(8),bit varying(8),
 bit / bitstring,bit_string,BitArray,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot specify a column width on data type bit."
 bit / bitstring,bit_string,BitArray,Object,Oracle,unsupported,,,ORA-03060: Data type BIT is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -269,6 +325,10 @@ bit / bitstring,bit_string,BitArray,Object,FlatFile,unsupported,,,SQL feature 'B
 bit / bitstring,bit_string,BitArray,Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 bit / bitstring,bit_string,BitArray,Object,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""BIT"" was found following ""NULL PRIMARY KEY, c"". Expected tokens may include: ""BINARY""."
 bit / bitstring,bit_string,BitArray,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (bit) not found.
+bit / bitstring,bit_string,BitArray,Object,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 58 ("
+bit / bitstring,bit_string,BitArray,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""BIT"": line 1 col 55 (at pos 55)"
+bit / bitstring,bit_string,BitArray,Object,AuroraMySql,declared,BIT(3),bit(3),
+bit / bitstring,bit_string,BitArray,Object,AuroraPostgreSql,declared,BIT VARYING(8),bit varying(8),
 varying character,varying_character,string,String,PostgreSql,declared,VARCHAR(100),character varying(100),
 varying character,varying_character,string,String,SqlServer,declared,VARCHAR(100),varchar,
 varying character,varying_character,string,String,Oracle,declared,VARCHAR(100),Varchar2,
@@ -287,6 +347,10 @@ varying character,varying_character,string,String,FlatFile,declared,VARCHAR(100)
 varying character,varying_character,string,String,Access,declared,VARCHAR(100),DBTYPE_WVARCHAR,
 varying character,varying_character,string,String,Db2,declared,VARCHAR(100),VARCHAR,
 varying character,varying_character,string,String,Informix,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,InterBase,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,SapHana,declared,VARCHAR(100),varchar,
+varying character,varying_character,string,String,AuroraMySql,declared,VARCHAR(100),VARCHAR,
+varying character,varying_character,string,String,AuroraPostgreSql,declared,VARCHAR(100),character varying(100),
 unbounded text,unbounded_text,string,String,PostgreSql,declared,TEXT,text,
 unbounded text,unbounded_text,string,String,SqlServer,declared,TEXT,text,
 unbounded text,unbounded_text,string,String,Oracle,declared,CLOB,Clob,
@@ -305,6 +369,10 @@ unbounded text,unbounded_text,string,String,FlatFile,declared,CLOB,CLOB,
 unbounded text,unbounded_text,string,String,Access,declared,TEXT,DBTYPE_WLONGVARCHAR,
 unbounded text,unbounded_text,string,String,Db2,declared,CLOB,CLOB,
 unbounded text,unbounded_text,string,String,Informix,declared,CLOB,CLOB,
+unbounded text,unbounded_text,string,String,InterBase,declared,BLOB SUB_TYPE TEXT,BLOB SUB_TYPE 1,
+unbounded text,unbounded_text,string,String,SapHana,declared,CLOB,clob,
+unbounded text,unbounded_text,string,String,AuroraMySql,declared,TEXT,VARCHAR,
+unbounded text,unbounded_text,string,String,AuroraPostgreSql,declared,TEXT,text,
 UUID / GUID,uuid,Guid,Guid,PostgreSql,declared,UUID,uuid,
 UUID / GUID,uuid,Guid,Guid,SqlServer,declared,UNIQUEIDENTIFIER,uniqueidentifier,
 UUID / GUID,uuid,Guid,Guid,Oracle,declared,VARCHAR2(36),VARCHAR2,
@@ -323,6 +391,10 @@ UUID / GUID,uuid,Guid,Guid,FlatFile,declared,UUID,UUID,
 UUID / GUID,uuid,Guid,Guid,Access,declared,UNIQUEIDENTIFIER,DBTYPE_GUID,
 UUID / GUID,uuid,Guid,Guid,Db2,declared,CHAR(36),CHAR,
 UUID / GUID,uuid,Guid,Guid,Informix,declared,CHAR(36),CHAR,
+UUID / GUID,uuid,Guid,Guid,InterBase,declared,CHAR(16) CHARACTER SET OCTETS,CHAR,
+UUID / GUID,uuid,Guid,Guid,SapHana,declared,CHAR(36),varchar,
+UUID / GUID,uuid,Guid,Guid,AuroraMySql,declared,CHAR(36),CHAR(36),
+UUID / GUID,uuid,Guid,Guid,AuroraPostgreSql,declared,UUID,uuid,
 calendar date,calendar_date,DateOnly,Date,PostgreSql,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,SqlServer,declared,DATE,date,
 calendar date,calendar_date,DateOnly,Date,Oracle,declared,DATE,Date,
@@ -341,6 +413,10 @@ calendar date,calendar_date,DateOnly,Date,FlatFile,declared,DATE,DATE,
 calendar date,calendar_date,DateOnly,Date,Access,declared,DATE,DBTYPE_DATE,
 calendar date,calendar_date,DateOnly,Date,Db2,declared,DATE,DATE,
 calendar date,calendar_date,DateOnly,Date,Informix,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,InterBase,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,SapHana,declared,DATE,date,
+calendar date,calendar_date,DateOnly,Date,AuroraMySql,declared,DATE,DATE,
+calendar date,calendar_date,DateOnly,Date,AuroraPostgreSql,declared,DATE,date,
 time without zone,time_of_day,TimeOnly,Time,PostgreSql,declared,TIME(6),time(6) without time zone,
 time without zone,time_of_day,TimeOnly,Time,SqlServer,declared,TIME(6),time,
 time without zone,time_of_day,TimeOnly,Time,Oracle,unsupported,,,ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -358,7 +434,11 @@ time without zone,time_of_day,TimeOnly,Time,Spanner,unsupported,,,P0001: Type <t
 time without zone,time_of_day,TimeOnly,Time,FlatFile,declared,TIME(6),TIME,
 time without zone,time_of_day,TimeOnly,Time,Access,declared,TIME,DBTYPE_DATE,
 time without zone,time_of_day,TimeOnly,Time,Db2,declared,TIME,TIME,
-time without zone,time_of_day,TimeOnly,Time,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (time) not found.
+time without zone,time_of_day,TimeOnly,Time,Informix,declared,DATETIME HOUR TO FRACTION(5),DATETIME HOUR TO FRACTION(5),
+time without zone,time_of_day,TimeOnly,Time,InterBase,declared,TIME,TIME,
+time without zone,time_of_day,TimeOnly,Time,SapHana,declared,TIME,time,
+time without zone,time_of_day,TimeOnly,Time,AuroraMySql,declared,TIME(6),TIME,
+time without zone,time_of_day,TimeOnly,Time,AuroraPostgreSql,declared,TIME(6),time(6) without time zone,
 time without zone,time_span,TimeSpan,Time,PostgreSql,declared,TIME(6),time(6) without time zone,
 time without zone,time_span,TimeSpan,Time,SqlServer,declared,TIME(6),time,
 time without zone,time_span,TimeSpan,Time,Oracle,unsupported,,,ORA-03060: Data type TIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/
@@ -376,7 +456,11 @@ time without zone,time_span,TimeSpan,Time,Spanner,unsupported,,,P0001: Type <tim
 time without zone,time_span,TimeSpan,Time,FlatFile,declared,TIME(6),TIME,
 time without zone,time_span,TimeSpan,Time,Access,declared,TIME,DBTYPE_DATE,
 time without zone,time_span,TimeSpan,Time,Db2,declared,TIME,TIME,
-time without zone,time_span,TimeSpan,Time,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (time) not found.
+time without zone,time_span,TimeSpan,Time,Informix,declared,DATETIME HOUR TO FRACTION(5),DATETIME HOUR TO FRACTION(5),
+time without zone,time_span,TimeSpan,Time,InterBase,declared,TIME,TIME,
+time without zone,time_span,TimeSpan,Time,SapHana,declared,TIME,time,
+time without zone,time_span,TimeSpan,Time,AuroraMySql,declared,TIME(6),TIME,
+time without zone,time_span,TimeSpan,Time,AuroraPostgreSql,declared,TIME(6),time(6) without time zone,
 day-time interval,day_time_interval,IntervalDaySecond,Object,PostgreSql,declared,INTERVAL DAY TO SECOND(6),interval(6),
 day-time interval,day_time_interval,IntervalDaySecond,Object,SqlServer,unsupported,,,Incorrect syntax near 'DAY'.
 day-time interval,day_time_interval,IntervalDaySecond,Object,Oracle,declared,INTERVAL DAY TO SECOND(6),IntervalDS,
@@ -391,10 +475,14 @@ day-time interval,day_time_interval,IntervalDaySecond,Object,TiDb,unsupported,,,
 day-time interval,day_time_interval,IntervalDaySecond,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
 day-time interval,day_time_interval,IntervalDaySecond,Object,SybaseASE,unsupported,,,Incorrect syntax near 'DAY'.
 day-time interval,day_time_interval,IntervalDaySecond,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
-day-time interval,day_time_interval,IntervalDaySecond,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+day-time interval,day_time_interval,IntervalDaySecond,Object,FlatFile,declared,INTERVAL,INTERVAL,
 day-time interval,day_time_interval,IntervalDaySecond,Object,Access,unsupported,,,Syntax error in field definition.
 day-time interval,day_time_interval,IntervalDaySecond,Object,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""DAY TO SECOND"" was found following ""MARY KEY, c INTERVAL"". Expected tokens may include: ""<national_clob_type>""."
 day-time interval,day_time_interval,IntervalDaySecond,Object,Informix,declared,INTERVAL DAY TO SECOND,INTERVAL DAY(2) TO SECOND,
+day-time interval,day_time_interval,IntervalDaySecond,Object,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 DAY"
+day-time interval,day_time_interval,IntervalDaySecond,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INTERVAL"": line 1 col 56 (at pos 56)"
+day-time interval,day_time_interval,IntervalDaySecond,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL DAY TO SECOND(6))' at line 1
+day-time interval,day_time_interval,IntervalDaySecond,Object,AuroraPostgreSql,declared,INTERVAL DAY TO SECOND(6),interval(6),
 timestamp without zone,timestamp,DateTime,DateTime2,PostgreSql,declared,TIMESTAMP(6),timestamp(6) without time zone,
 timestamp without zone,timestamp,DateTime,DateTime2,SqlServer,declared,DATETIME2(6),datetime2,
 timestamp without zone,timestamp,DateTime,DateTime2,Oracle,declared,TIMESTAMP(6),TimeStamp,
@@ -413,6 +501,10 @@ timestamp without zone,timestamp,DateTime,DateTime2,FlatFile,declared,TIMESTAMP(
 timestamp without zone,timestamp,DateTime,DateTime2,Access,declared,DATETIME,DBTYPE_DATE,
 timestamp without zone,timestamp,DateTime,DateTime2,Db2,declared,TIMESTAMP(6),TIMESTAMP,
 timestamp without zone,timestamp,DateTime,DateTime2,Informix,declared,DATETIME YEAR TO FRACTION,DATETIME YEAR TO FRACTION(3),
+timestamp without zone,timestamp,DateTime,DateTime2,InterBase,declared,TIMESTAMP,TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,SapHana,declared,DATETIME,timestamp,
+timestamp without zone,timestamp,DateTime,DateTime2,AuroraMySql,declared,TIMESTAMP(6),TIMESTAMP,
+timestamp without zone,timestamp,DateTime,DateTime2,AuroraPostgreSql,declared,TIMESTAMP(6),timestamp(6) without time zone,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,PostgreSql,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SqlServer,declared,DATETIMEOFFSET,datetimeoffset,
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Oracle,declared,TIMESTAMP WITH TIME ZONE,TimeStampTZ,
@@ -431,6 +523,10 @@ timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,FlatFile,d
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""TIME"" was found following ""EY, c TIMESTAMP WITH"". Expected tokens may include: ""REFERENCES""."
 timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 66 WITH"
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""WITH"": line 1 col 66 (at pos 66)"
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+timestamp with zone,timestamp_with_zone,DateTimeOffset,DateTimeOffset,AuroraPostgreSql,declared,TIMESTAMP WITH TIME ZONE,timestamp with time zone,
 binary LOB,binary,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 binary LOB,binary,byte[],Binary,SqlServer,declared,IMAGE,image,
 binary LOB,binary,byte[],Binary,Oracle,declared,BLOB,Blob,
@@ -449,10 +545,14 @@ binary LOB,binary,byte[],Binary,FlatFile,declared,BLOB,BLOB,
 binary LOB,binary,byte[],Binary,Access,declared,IMAGE,DBTYPE_LONGVARBINARY,
 binary LOB,binary,byte[],Binary,Db2,declared,BLOB,BLOB,
 binary LOB,binary,byte[],Binary,Informix,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,InterBase,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,SapHana,declared,BLOB,blob,
+binary LOB,binary,byte[],Binary,AuroraMySql,declared,BLOB,BLOB,
+binary LOB,binary,byte[],Binary,AuroraPostgreSql,declared,BYTEA,bytea,
 JSON text / JSON value,json,JsonDocument,Object,PostgreSql,declared,JSON,json,
 JSON text / JSON value,json,JsonDocument,Object,SqlServer,declared,JSON,json,
 JSON text / JSON value,json,JsonDocument,Object,Oracle,declared,CLOB,Clob,
-JSON text / JSON value,json,JsonDocument,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR237 failed SQL error code = -607 Invalid command Specified domain or source column JSON does not exist
+JSON text / JSON value,json,JsonDocument,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR246 failed SQL error code = -607 Invalid command Specified domain or source column JSON does not exist
 JSON text / JSON value,json,JsonDocument,Object,CockroachDb,declared,JSON,jsonb,
 JSON text / JSON value,json,JsonDocument,Object,MariaDb,declared,JSON,VARCHAR,
 JSON text / JSON value,json,JsonDocument,Object,MySql,declared,JSON,JSON,
@@ -467,6 +567,10 @@ JSON text / JSON value,json,JsonDocument,Object,FlatFile,declared,JSON,JSON,
 JSON text / JSON value,json,JsonDocument,Object,Access,unsupported,,,Syntax error in field definition.
 JSON text / JSON value,json,JsonDocument,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""JSON"" is an undefined name."
 JSON text / JSON value,json,JsonDocument,Object,Informix,declared,JSON,JSON,
+JSON text / JSON value,json,JsonDocument,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+JSON text / JSON value,json,JsonDocument,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""JSON"": line 1 col 56 (at pos 56)"
+JSON text / JSON value,json,JsonDocument,Object,AuroraMySql,declared,JSON,JSON,
+JSON text / JSON value,json,JsonDocument,Object,AuroraPostgreSql,declared,JSON,json,
 IP address,ip_address,IPAddress,Object,PostgreSql,declared,INET,inet,
 IP address,ip_address,IPAddress,Object,SqlServer,declared,VARCHAR(45),varchar,
 IP address,ip_address,IPAddress,Object,Oracle,declared,VARCHAR(45),Varchar2,
@@ -485,9 +589,13 @@ IP address,ip_address,IPAddress,Object,FlatFile,declared,VARCHAR(45),VARCHAR,
 IP address,ip_address,IPAddress,Object,Access,declared,VARCHAR(45),DBTYPE_WVARCHAR,
 IP address,ip_address,IPAddress,Object,Db2,declared,VARCHAR(45),VARCHAR,
 IP address,ip_address,IPAddress,Object,Informix,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,InterBase,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,SapHana,declared,VARCHAR(45),varchar,
+IP address,ip_address,IPAddress,Object,AuroraMySql,declared,VARCHAR(45),VARCHAR,
+IP address,ip_address,IPAddress,Object,AuroraPostgreSql,declared,INET,inet,
 SQL array,int_array,int[],Object,PostgreSql,declared,INTEGER ARRAY,integer[],
 SQL array,int_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
-SQL array,int_array,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+SQL array,int_array,int[],Object,Oracle,declared,probe_varray,Array,
 SQL array,int_array,int[],Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 ARRAY"
 SQL array,int_array,int[],Object,CockroachDb,declared,INTEGER ARRAY,bigint[],
 SQL array,int_array,int[],Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
@@ -502,11 +610,15 @@ SQL array,int_array,int[],Object,Spanner,declared,INTEGER ARRAY,bigint[],
 SQL array,int_array,int[],Object,FlatFile,unsupported,,,"Expected token 'RightParen' at position 63, but found 'Identifier'."
 SQL array,int_array,int[],Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 SQL array,int_array,int[],Object,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "")"" was found following ""KEY, c INTEGER ARRAY"". Expected tokens may include: ""<references_spec>""."
-SQL array,int_array,int[],Object,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+SQL array,int_array,int[],Object,Informix,declared,LIST(INTEGER NOT NULL),LIST,
+SQL array,int_array,int[],Object,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 ARRAY"
+SQL array,int_array,int[],Object,SapHana,declared,INTEGER ARRAY,varbinary,
+SQL array,int_array,int[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY)' at line 1
+SQL array,int_array,int[],Object,AuroraPostgreSql,declared,INTEGER ARRAY,integer[],
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,PostgreSql,unsupported,,,"42704: type ""uhugeint"" does not exist POSITION: 55"
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type UHUGEINT."
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-unsigned 128-bit,unsigned_128_bit,UInt128,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR50 failed SQL error code = -607 Invalid command Specified domain or source column UHUGEINT does not exist
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR52 failed SQL error code = -607 Invalid command Specified domain or source column UHUGEINT does not exist
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,CockroachDb,unsupported,,,"42704: type ""uhugeint"" does not exist"
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,MariaDb,unsupported,,,Unknown data type: 'UHUGEINT'
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
@@ -521,6 +633,10 @@ unsigned 128-bit,unsigned_128_bit,UInt128,Object,FlatFile,unsupported,,,"Unknown
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,Access,unsupported,,,Syntax error in field definition.
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""UHUGEINT"" is an undefined name."
 unsigned 128-bit,unsigned_128_bit,UInt128,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (uhugeint) not found.
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""UHUGEINT"": line 1 col 55 (at pos 55)"
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'UHUGEINT)' at line 1
+unsigned 128-bit,unsigned_128_bit,UInt128,Object,AuroraPostgreSql,unsupported,,,"42704: type ""uhugeint"" does not exist POSITION: 55"
 decimal floating point,decimal_float,decimal,Decimal,PostgreSql,unsupported,,,"42704: type ""decfloat"" does not exist POSITION: 55"
 decimal floating point,decimal_float,decimal,Decimal,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type DECFLOAT."
 decimal floating point,decimal_float,decimal,Decimal,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -529,7 +645,7 @@ decimal floating point,decimal_float,decimal,Decimal,CockroachDb,unsupported,,,"
 decimal floating point,decimal_float,decimal,Decimal,MariaDb,unsupported,,,Unknown data type: 'DECFLOAT'
 decimal floating point,decimal_float,decimal,Decimal,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
 decimal floating point,decimal_float,decimal,Decimal,Sqlite,declared,DECFLOAT,DECFLOAT,
-decimal floating point,decimal_float,decimal,Decimal,DuckDB,unsupported,,,"Catalog Error: Type with name DECFLOAT does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr74 (id INTEGER NOT NULL PRIMARY KEY, c DECFLOAT)"
+decimal floating point,decimal_float,decimal,Decimal,DuckDB,unsupported,,,"Catalog Error: Type with name DECFLOAT does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr76 (id INTEGER NOT NULL PRIMARY KEY, c DECFLOAT)"
 decimal floating point,decimal_float,decimal,Decimal,YugabyteDb,unsupported,,,"42704: type ""decfloat"" does not exist POSITION: 55"
 decimal floating point,decimal_float,decimal,Decimal,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""DECFLOAT)"""
 decimal floating point,decimal_float,decimal,Decimal,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
@@ -538,16 +654,20 @@ decimal floating point,decimal_float,decimal,Decimal,Spanner,unsupported,,,P0001
 decimal floating point,decimal_float,decimal,Decimal,FlatFile,unsupported,,,"Unknown SQL data type 'DECFLOAT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
 decimal floating point,decimal_float,decimal,Decimal,Access,unsupported,,,Syntax error in field definition.
 decimal floating point,decimal_float,decimal,Decimal,Db2,declared,DECFLOAT,DECFLOAT,
-decimal floating point,decimal_float,decimal,Decimal,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (decfloat) not found.
+decimal floating point,decimal_float,decimal,Decimal,Informix,declared,DECIMAL(32),DECIMAL,
+decimal floating point,decimal_float,decimal,Decimal,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+decimal floating point,decimal_float,decimal,Decimal,SapHana,declared,SMALLDECIMAL,decimal,
+decimal floating point,decimal_float,decimal,Decimal,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'DECFLOAT)' at line 1
+decimal floating point,decimal_float,decimal,Decimal,AuroraPostgreSql,unsupported,,,"42704: type ""decfloat"" does not exist POSITION: 55"
 money / currency,money,decimal,Decimal,PostgreSql,declared,MONEY,money,
 money / currency,money,decimal,Decimal,SqlServer,declared,MONEY,money,
 money / currency,money,decimal,Decimal,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-money / currency,money,decimal,Decimal,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR89 failed SQL error code = -607 Invalid command Specified domain or source column MONEY does not exist
+money / currency,money,decimal,Decimal,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR91 failed SQL error code = -607 Invalid command Specified domain or source column MONEY does not exist
 money / currency,money,decimal,Decimal,CockroachDb,unsupported,,,"0A000: at or near "")"": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include"
 money / currency,money,decimal,Decimal,MariaDb,unsupported,,,Unknown data type: 'MONEY'
 money / currency,money,decimal,Decimal,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
 money / currency,money,decimal,Decimal,Sqlite,declared,MONEY,MONEY,
-money / currency,money,decimal,Decimal,DuckDB,unsupported,,,"Catalog Error: Type with name MONEY does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr89 (id INTEGER NOT NULL PRIMARY KEY, c MONEY)"
+money / currency,money,decimal,Decimal,DuckDB,unsupported,,,"Catalog Error: Type with name MONEY does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr91 (id INTEGER NOT NULL PRIMARY KEY, c MONEY)"
 money / currency,money,decimal,Decimal,YugabyteDb,declared,MONEY,money,
 money / currency,money,decimal,Decimal,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 59 near ""MONEY)"""
 money / currency,money,decimal,Decimal,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
@@ -557,6 +677,10 @@ money / currency,money,decimal,Decimal,FlatFile,unsupported,,,"SQL syntax extens
 money / currency,money,decimal,Decimal,Access,declared,MONEY,DBTYPE_CY,
 money / currency,money,decimal,Decimal,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""MONEY"" is an undefined name."
 money / currency,money,decimal,Decimal,Informix,declared,MONEY,MONEY,
+money / currency,money,decimal,Decimal,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+money / currency,money,decimal,Decimal,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""MONEY"": line 1 col 55 (at pos 55)"
+money / currency,money,decimal,Decimal,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MONEY)' at line 1
+money / currency,money,decimal,Decimal,AuroraPostgreSql,declared,MONEY,money,
 fixed character,fixed_character,string,String,PostgreSql,declared,CHAR(10),character(10),
 fixed character,fixed_character,string,String,SqlServer,declared,CHAR(10),char,
 fixed character,fixed_character,string,String,Oracle,declared,CHAR(10),Char,
@@ -575,11 +699,15 @@ fixed character,fixed_character,string,String,FlatFile,declared,CHAR(10),CHAR,
 fixed character,fixed_character,string,String,Access,declared,CHAR(10),DBTYPE_WCHAR,
 fixed character,fixed_character,string,String,Db2,declared,CHAR(10),CHAR,
 fixed character,fixed_character,string,String,Informix,declared,CHAR(10),CHAR,
+fixed character,fixed_character,string,String,InterBase,declared,CHAR(10),CHAR,
+fixed character,fixed_character,string,String,SapHana,declared,CHAR(10),varchar,
+fixed character,fixed_character,string,String,AuroraMySql,declared,CHAR(10),CHAR(10),
+fixed character,fixed_character,string,String,AuroraPostgreSql,declared,CHAR(10),character(10),
 national / Unicode character,national_text,string,String,PostgreSql,declared,VARCHAR(100),character varying(100),
 national / Unicode character,national_text,string,String,SqlServer,declared,NVARCHAR(100),nvarchar,
 national / Unicode character,national_text,string,String,Oracle,declared,NVARCHAR2(100),NVarchar2,
 national / Unicode character,national_text,string,String,Firebird,declared,VARCHAR(100),VARCHAR,
-national / Unicode character,national_text,string,String,CockroachDb,unsupported,,,"42601: at or near ""("": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+national / Unicode character,national_text,string,String,CockroachDb,declared,VARCHAR(100),character varying(100),
 national / Unicode character,national_text,string,String,MariaDb,declared,NVARCHAR(100),VARCHAR,
 national / Unicode character,national_text,string,String,MySql,declared,NVARCHAR(100),VARCHAR,
 national / Unicode character,national_text,string,String,Sqlite,declared,NVARCHAR(100),NVARCHAR,
@@ -589,10 +717,14 @@ national / Unicode character,national_text,string,String,TiDb,declared,NVARCHAR(
 national / Unicode character,national_text,string,String,SingleStore,declared,NVARCHAR(100),VARCHAR,
 national / Unicode character,national_text,string,String,SybaseASE,declared,NVARCHAR(100),nvarchar,
 national / Unicode character,national_text,string,String,Spanner,unsupported,,,P0001: Type <nvarchar> does not exist.
-national / Unicode character,national_text,string,String,FlatFile,declared,NCHAR(10),NCHAR,
+national / Unicode character,national_text,string,String,FlatFile,declared,NCHAR(40),NCHAR,
 national / Unicode character,national_text,string,String,Access,declared,NVARCHAR(100),DBTYPE_WVARCHAR,
 national / Unicode character,national_text,string,String,Db2,declared,NVARCHAR(100),VARCHAR,
 national / Unicode character,national_text,string,String,Informix,declared,NVARCHAR(100),VARCHAR,
+national / Unicode character,national_text,string,String,InterBase,declared,VARCHAR(100),VARCHAR,
+national / Unicode character,national_text,string,String,SapHana,declared,NVARCHAR(100),nvarchar,
+national / Unicode character,national_text,string,String,AuroraMySql,declared,NVARCHAR(100),VARCHAR,
+national / Unicode character,national_text,string,String,AuroraPostgreSql,declared,VARCHAR(100),character varying(100),
 long text LOB,long_text,string,String,PostgreSql,declared,TEXT,text,
 long text LOB,long_text,string,String,SqlServer,declared,TEXT,text,
 long text LOB,long_text,string,String,Oracle,declared,CLOB,Clob,
@@ -611,11 +743,15 @@ long text LOB,long_text,string,String,FlatFile,declared,CLOB,CLOB,
 long text LOB,long_text,string,String,Access,declared,TEXT,DBTYPE_WLONGVARCHAR,
 long text LOB,long_text,string,String,Db2,declared,CLOB,CLOB,
 long text LOB,long_text,string,String,Informix,declared,CLOB,CLOB,
-enumeration,enumeration,string,String,PostgreSql,unsupported,,,"42704: type ""enum"" does not exist POSITION: 56"
+long text LOB,long_text,string,String,InterBase,declared,BLOB SUB_TYPE TEXT,BLOB SUB_TYPE 1,
+long text LOB,long_text,string,String,SapHana,declared,CLOB,clob,
+long text LOB,long_text,string,String,AuroraMySql,declared,TEXT,VARCHAR,
+long text LOB,long_text,string,String,AuroraPostgreSql,declared,TEXT,text,
+enumeration,enumeration,string,String,PostgreSql,declared,probe_enum,probe_enum,
 enumeration,enumeration,string,String,SqlServer,unsupported,,,Incorrect syntax near 'a'.
 enumeration,enumeration,string,String,Oracle,unsupported,,,ORA-03060: Data type ENUM is invalid. https://docs.oracle.com/error-help/db/ora-03060/
 enumeration,enumeration,string,String,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 60 ("
-enumeration,enumeration,string,String,CockroachDb,unsupported,,,"42601: at or near ""("": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+enumeration,enumeration,string,String,CockroachDb,declared,probe_enum,probe_enum,
 enumeration,enumeration,string,String,MariaDb,declared,"ENUM('active','inactive')",ENUM,
 enumeration,enumeration,string,String,MySql,declared,"ENUM('active','inactive')",ENUM,
 enumeration,enumeration,string,String,Sqlite,declared,ENUM,ENUM,
@@ -629,6 +765,10 @@ enumeration,enumeration,string,String,FlatFile,unsupported,,,"Expected token 'Nu
 enumeration,enumeration,string,String,Access,unsupported,,,Syntax error in field definition.
 enumeration,enumeration,string,String,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""("" was found following ""PRIMARY KEY, c ENUM"". Expected tokens may include: ""DEFAULT""."
 enumeration,enumeration,string,String,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+enumeration,enumeration,string,String,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 60 ("
+enumeration,enumeration,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""ENUM"": line 1 col 56 (at pos 56)"
+enumeration,enumeration,string,String,AuroraMySql,declared,"ENUM('active','inactive')",ENUM,
+enumeration,enumeration,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""enum"" does not exist POSITION: 56"
 set-valued enum,set_value,string,String,PostgreSql,unsupported,,,"42704: type ""set"" does not exist POSITION: 56"
 set-valued enum,set_value,string,String,SqlServer,unsupported,,,The definition for column 'c' must include a data type. Incorrect syntax near the keyword 'SET'.
 set-valued enum,set_value,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
@@ -637,7 +777,7 @@ set-valued enum,set_value,string,String,CockroachDb,unsupported,,,"42601: at or 
 set-valued enum,set_value,string,String,MariaDb,declared,"SET('a','b')",SET,
 set-valued enum,set_value,string,String,MySql,declared,"SET('a','b')",SET,
 set-valued enum,set_value,string,String,Sqlite,unsupported,,,"SQLite Error 1: 'near ""SET"": syntax error'."
-set-valued enum,set_value,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name SET does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr145 (id INTEGER NOT NULL PRIMARY KEY, c SET('a','b'))"
+set-valued enum,set_value,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name SET does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr148 (id INTEGER NOT NULL PRIMARY KEY, c SET('a','b'))"
 set-valued enum,set_value,string,String,YugabyteDb,unsupported,,,"42704: type ""set"" does not exist POSITION: 56"
 set-valued enum,set_value,string,String,TiDb,declared,"SET('a','b')",SET,
 set-valued enum,set_value,string,String,SingleStore,declared,"SET('a','b')",VARCHAR,
@@ -647,6 +787,10 @@ set-valued enum,set_value,string,String,FlatFile,unsupported,,,"Expected identif
 set-valued enum,set_value,string,String,Access,unsupported,,,Syntax error in field definition.
 set-valued enum,set_value,string,String,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""("" was found following ""L PRIMARY KEY, c SET"". Expected tokens may include: ""DEFAULT""."
 set-valued enum,set_value,string,String,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+set-valued enum,set_value,string,String,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 SET"
+set-valued enum,set_value,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""SET"": line 1 col 56 (at pos 56)"
+set-valued enum,set_value,string,String,AuroraMySql,declared,"SET('a','b')",SET,
+set-valued enum,set_value,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""set"" does not exist POSITION: 56"
 fixed binary,fixed_binary,byte[],Binary,PostgreSql,unsupported,,,"42704: type ""binary"" does not exist POSITION: 56"
 fixed binary,fixed_binary,byte[],Binary,SqlServer,declared,BINARY(16),binary,
 fixed binary,fixed_binary,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -655,7 +799,7 @@ fixed binary,fixed_binary,byte[],Binary,CockroachDb,unsupported,,,"42601: at or 
 fixed binary,fixed_binary,byte[],Binary,MariaDb,declared,BINARY(16),BLOB,
 fixed binary,fixed_binary,byte[],Binary,MySql,declared,BINARY(16),BLOB,
 fixed binary,fixed_binary,byte[],Binary,Sqlite,declared,BINARY(16),BINARY,
-fixed binary,fixed_binary,byte[],Binary,DuckDB,unsupported,,,"Binder Error: Type 'BLOB' does not take any type parameters LINE 1: CREATE TABLE pr147 (id INTEGER NOT NULL PRIMARY KEY, c BINARY(16))"
+fixed binary,fixed_binary,byte[],Binary,DuckDB,unsupported,,,"Binder Error: Type 'BLOB' does not take any type parameters LINE 1: CREATE TABLE pr150 (id INTEGER NOT NULL PRIMARY KEY, c BINARY(16))"
 fixed binary,fixed_binary,byte[],Binary,YugabyteDb,unsupported,,,"42704: type ""binary"" does not exist POSITION: 56"
 fixed binary,fixed_binary,byte[],Binary,TiDb,declared,BINARY(16),BLOB,
 fixed binary,fixed_binary,byte[],Binary,SingleStore,declared,BINARY(16),BLOB,
@@ -665,6 +809,10 @@ fixed binary,fixed_binary,byte[],Binary,FlatFile,declared,BINARY(16),BINARY,
 fixed binary,fixed_binary,byte[],Binary,Access,declared,BINARY(16),DBTYPE_VARBINARY,
 fixed binary,fixed_binary,byte[],Binary,Db2,declared,BINARY(16),BINARY,
 fixed binary,fixed_binary,byte[],Binary,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (binary) not found.
+fixed binary,fixed_binary,byte[],Binary,InterBase,declared,BLOB SUB_TYPE 0,BLOB,
+fixed binary,fixed_binary,byte[],Binary,SapHana,declared,BINARY(16),varbinary,
+fixed binary,fixed_binary,byte[],Binary,AuroraMySql,declared,BINARY(16),BLOB,
+fixed binary,fixed_binary,byte[],Binary,AuroraPostgreSql,unsupported,,,"42704: type ""binary"" does not exist POSITION: 56"
 varying binary,varying_binary,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 varying binary,varying_binary,byte[],Binary,SqlServer,declared,VARBINARY(16),varbinary,
 varying binary,varying_binary,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -679,10 +827,14 @@ varying binary,varying_binary,byte[],Binary,TiDb,declared,VARBINARY(16),BLOB,
 varying binary,varying_binary,byte[],Binary,SingleStore,declared,VARBINARY(16),BLOB,
 varying binary,varying_binary,byte[],Binary,SybaseASE,declared,VARBINARY(16),varbinary,
 varying binary,varying_binary,byte[],Binary,Spanner,declared,BYTEA,bytea,
-varying binary,varying_binary,byte[],Binary,FlatFile,declared,BLOB,BLOB,
+varying binary,varying_binary,byte[],Binary,FlatFile,declared,VARBINARY(16),VARBINARY,
 varying binary,varying_binary,byte[],Binary,Access,declared,VARBINARY(16),DBTYPE_VARBINARY,
 varying binary,varying_binary,byte[],Binary,Db2,declared,VARBINARY(16),VARBINARY,
 varying binary,varying_binary,byte[],Binary,Informix,declared,BLOB,BLOB,
+varying binary,varying_binary,byte[],Binary,InterBase,declared,BLOB,BLOB,
+varying binary,varying_binary,byte[],Binary,SapHana,declared,VARBINARY(16),varbinary,
+varying binary,varying_binary,byte[],Binary,AuroraMySql,declared,VARBINARY(16),BLOB,
+varying binary,varying_binary,byte[],Binary,AuroraPostgreSql,declared,BYTEA,bytea,
 legacy long binary,legacy_binary,byte[],Binary,PostgreSql,unsupported,,,"42601: syntax error at or near ""RAW"" POSITION: 61"
 legacy long binary,legacy_binary,byte[],Binary,SqlServer,declared,IMAGE,image,
 legacy long binary,legacy_binary,byte[],Binary,Oracle,declared,LONG RAW,LongRaw,
@@ -691,7 +843,7 @@ legacy long binary,legacy_binary,byte[],Binary,CockroachDb,unsupported,,,"42601:
 legacy long binary,legacy_binary,byte[],Binary,MariaDb,declared,TINYBLOB,BLOB,
 legacy long binary,legacy_binary,byte[],Binary,MySql,declared,TINYBLOB,BLOB,
 legacy long binary,legacy_binary,byte[],Binary,Sqlite,declared,LONG RAW,LONG RAW,
-legacy long binary,legacy_binary,byte[],Binary,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""RAW"" LINE 1: ...REATE TABLE pr173 (id INTEGER NOT NULL PRIMARY KEY, c LONG RAW) ^"
+legacy long binary,legacy_binary,byte[],Binary,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""RAW"" LINE 1: ...REATE TABLE pr176 (id INTEGER NOT NULL PRIMARY KEY, c LONG RAW) ^"
 legacy long binary,legacy_binary,byte[],Binary,YugabyteDb,unsupported,,,"42601: syntax error at or near ""RAW"" POSITION: 61"
 legacy long binary,legacy_binary,byte[],Binary,TiDb,declared,TINYBLOB,BLOB,
 legacy long binary,legacy_binary,byte[],Binary,SingleStore,declared,TINYBLOB,BLOB,
@@ -701,6 +853,10 @@ legacy long binary,legacy_binary,byte[],Binary,FlatFile,unsupported,,,"SQL synta
 legacy long binary,legacy_binary,byte[],Binary,Access,declared,IMAGE,DBTYPE_LONGVARBINARY,
 legacy long binary,legacy_binary,byte[],Binary,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "")"" was found following ""MARY KEY, c LONG RAW"". Expected tokens may include: ""<references_spec>""."
 legacy long binary,legacy_binary,byte[],Binary,Informix,declared,BYTE,BYTE,
+legacy long binary,legacy_binary,byte[],Binary,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 61 RAW"
+legacy long binary,legacy_binary,byte[],Binary,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""LONG"": line 1 col 56 (at pos 56)"
+legacy long binary,legacy_binary,byte[],Binary,AuroraMySql,declared,TINYBLOB,BLOB,
+legacy long binary,legacy_binary,byte[],Binary,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near ""RAW"" POSITION: 61"
 rowversion / timestamp token,rowversion,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 rowversion / timestamp token,rowversion,byte[],Binary,SqlServer,declared,ROWVERSION,timestamp,
 rowversion / timestamp token,rowversion,byte[],Binary,Oracle,declared,RAW(16),Raw,
@@ -713,12 +869,16 @@ rowversion / timestamp token,rowversion,byte[],Binary,DuckDB,declared,BYTEA,Blob
 rowversion / timestamp token,rowversion,byte[],Binary,YugabyteDb,declared,BYTEA,bytea,
 rowversion / timestamp token,rowversion,byte[],Binary,TiDb,declared,VARBINARY(16),BLOB,
 rowversion / timestamp token,rowversion,byte[],Binary,SingleStore,declared,VARBINARY(16),BLOB,
-rowversion / timestamp token,rowversion,byte[],Binary,SybaseASE,unsupported,,,Can't find type 'ROWVERSION'.
-rowversion / timestamp token,rowversion,byte[],Binary,Spanner,unsupported,,,P0001: Type <rowversion> does not exist.
-rowversion / timestamp token,rowversion,byte[],Binary,FlatFile,declared,BLOB,BLOB,
+rowversion / timestamp token,rowversion,byte[],Binary,SybaseASE,declared,BINARY(8),varbinary,
+rowversion / timestamp token,rowversion,byte[],Binary,Spanner,unsupported,,,P0001: Type <binary> does not exist.
+rowversion / timestamp token,rowversion,byte[],Binary,FlatFile,declared,VARBINARY(16),VARBINARY,
 rowversion / timestamp token,rowversion,byte[],Binary,Access,declared,VARBINARY(16),DBTYPE_VARBINARY,
 rowversion / timestamp token,rowversion,byte[],Binary,Db2,declared,BINARY(8),BINARY,
 rowversion / timestamp token,rowversion,byte[],Binary,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (binary) not found.
+rowversion / timestamp token,rowversion,byte[],Binary,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 62 ("
+rowversion / timestamp token,rowversion,byte[],Binary,SapHana,declared,BINARY(8),varbinary,
+rowversion / timestamp token,rowversion,byte[],Binary,AuroraMySql,declared,VARBINARY(16),BLOB,
+rowversion / timestamp token,rowversion,byte[],Binary,AuroraPostgreSql,declared,BYTEA,bytea,
 local-zone timestamp,local_timestamp,DateTime,DateTime,PostgreSql,unsupported,,,"42601: syntax error at or near ""WITH"" POSITION: 66"
 local-zone timestamp,local_timestamp,DateTime,DateTime,SqlServer,unsupported,,,"Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"
 local-zone timestamp,local_timestamp,DateTime,DateTime,Oracle,declared,TIMESTAMP WITH LOCAL TIME ZONE,TimeStampLTZ,
@@ -727,7 +887,7 @@ local-zone timestamp,local_timestamp,DateTime,DateTime,CockroachDb,unsupported,,
 local-zone timestamp,local_timestamp,DateTime,DateTime,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
 local-zone timestamp,local_timestamp,DateTime,DateTime,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
 local-zone timestamp,local_timestamp,DateTime,DateTime,Sqlite,declared,TIMESTAMP WITH LOCAL TIME ZONE,TIMESTAMP WITH LOCAL TIME ZONE,
-local-zone timestamp,local_timestamp,DateTime,DateTime,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""WITH"" LINE 1: ... TABLE pr202 (id INTEGER NOT NULL PRIMARY KEY, c TIMESTAMP WITH LOCAL TIME ZONE)"
+local-zone timestamp,local_timestamp,DateTime,DateTime,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""WITH"" LINE 1: ... TABLE pr207 (id INTEGER NOT NULL PRIMARY KEY, c TIMESTAMP WITH LOCAL TIME ZONE)"
 local-zone timestamp,local_timestamp,DateTime,DateTime,YugabyteDb,unsupported,,,"42601: syntax error at or near ""WITH"" POSITION: 66"
 local-zone timestamp,local_timestamp,DateTime,DateTime,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 69 near ""WITH LOCAL TIME ZONE)"""
 local-zone timestamp,local_timestamp,DateTime,DateTime,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
@@ -737,6 +897,10 @@ local-zone timestamp,local_timestamp,DateTime,DateTime,FlatFile,unsupported,,,"E
 local-zone timestamp,local_timestamp,DateTime,DateTime,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 local-zone timestamp,local_timestamp,DateTime,DateTime,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""LOCAL TIME ZONE)"" was found following ""EY, c TIMESTAMP WITH"". Expected tokens may include: ""<space>""."
 local-zone timestamp,local_timestamp,DateTime,DateTime,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+local-zone timestamp,local_timestamp,DateTime,DateTime,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 66 WITH"
+local-zone timestamp,local_timestamp,DateTime,DateTime,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""WITH"": line 1 col 66 (at pos 66)"
+local-zone timestamp,local_timestamp,DateTime,DateTime,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH LOCAL TIME ZONE)' at line 1
+local-zone timestamp,local_timestamp,DateTime,DateTime,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near ""WITH"" POSITION: 66"
 second-precision datetime,second_datetime,DateTime,DateTime,PostgreSql,declared,TIMESTAMP(0),timestamp(0) without time zone,
 second-precision datetime,second_datetime,DateTime,DateTime,SqlServer,declared,DATETIME2(0),datetime2,
 second-precision datetime,second_datetime,DateTime,DateTime,Oracle,declared,DATE,Date,
@@ -755,6 +919,10 @@ second-precision datetime,second_datetime,DateTime,DateTime,FlatFile,declared,TI
 second-precision datetime,second_datetime,DateTime,DateTime,Access,declared,SMALLDATETIME,DBTYPE_DATE,
 second-precision datetime,second_datetime,DateTime,DateTime,Db2,declared,DATETIME,TIMESTAMP,
 second-precision datetime,second_datetime,DateTime,DateTime,Informix,declared,DATETIME YEAR TO SECOND,DATETIME YEAR TO SECOND,
+second-precision datetime,second_datetime,DateTime,DateTime,InterBase,declared,TIMESTAMP,TIMESTAMP,
+second-precision datetime,second_datetime,DateTime,DateTime,SapHana,declared,DATETIME,timestamp,
+second-precision datetime,second_datetime,DateTime,DateTime,AuroraMySql,declared,DATETIME(0),DATETIME,
+second-precision datetime,second_datetime,DateTime,DateTime,AuroraPostgreSql,declared,TIMESTAMP(0),timestamp(0) without time zone,
 time with zone,time_zoned,DateTimeOffset,Time,PostgreSql,declared,TIME WITH TIME ZONE,time with time zone,
 time with zone,time_zoned,DateTimeOffset,Time,SqlServer,unsupported,,,"Incorrect syntax near the keyword 'WITH'. Incorrect syntax near the keyword 'with'. If this statement is a common table expression, an xmlnamespaces clause or a change tracking context clause"
 time with zone,time_zoned,DateTimeOffset,Time,Oracle,unsupported,,,ORA-02000: missing ROWID keyword https://docs.oracle.com/error-help/db/ora-02000/
@@ -763,7 +931,7 @@ time with zone,time_zoned,DateTimeOffset,Time,CockroachDb,declared,TIME WITH TIM
 time with zone,time_zoned,DateTimeOffset,Time,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
 time with zone,time_zoned,DateTimeOffset,Time,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
 time with zone,time_zoned,DateTimeOffset,Time,Sqlite,declared,TIME WITH TIME ZONE,TIME WITH TIME ZONE,
-time with zone,time_zoned,DateTimeOffset,Time,DuckDB,unsupported,,,"Binder Error: Type 'TIME WITH TIME ZONE' does not take any type parameters LINE 1: CREATE TABLE pr187 (id INTEGER NOT NULL PRIMARY KEY, c TIME(6) WITH TIME ZONE)"
+time with zone,time_zoned,DateTimeOffset,Time,DuckDB,declared,TIME WITH TIME ZONE,TimeTz,
 time with zone,time_zoned,DateTimeOffset,Time,YugabyteDb,declared,TIME WITH TIME ZONE,time with time zone,
 time with zone,time_zoned,DateTimeOffset,Time,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near ""WITH TIME ZONE)"""
 time with zone,time_zoned,DateTimeOffset,Time,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
@@ -773,6 +941,10 @@ time with zone,time_zoned,DateTimeOffset,Time,FlatFile,declared,TIME WITH TIME Z
 time with zone,time_zoned,DateTimeOffset,Time,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 time with zone,time_zoned,DateTimeOffset,Time,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""TIME"" was found following ""ARY KEY, c TIME WITH"". Expected tokens may include: ""REFERENCES""."
 time with zone,time_zoned,DateTimeOffset,Time,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+time with zone,time_zoned,DateTimeOffset,Time,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 61 WITH"
+time with zone,time_zoned,DateTimeOffset,Time,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""WITH"": line 1 col 61 (at pos 61)"
+time with zone,time_zoned,DateTimeOffset,Time,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'WITH TIME ZONE)' at line 1
+time with zone,time_zoned,DateTimeOffset,Time,AuroraPostgreSql,declared,TIME WITH TIME ZONE,time with time zone,
 year-only,year_only,short,Int16,PostgreSql,declared,SMALLINT,smallint,
 year-only,year_only,short,Int16,SqlServer,declared,SMALLINT,smallint,
 year-only,year_only,short,Int16,Oracle,declared,SMALLINT,Decimal,
@@ -791,6 +963,10 @@ year-only,year_only,short,Int16,FlatFile,declared,SMALLINT,SMALLINT,
 year-only,year_only,short,Int16,Access,declared,SMALLINT,DBTYPE_I2,
 year-only,year_only,short,Int16,Db2,declared,SMALLINT,SMALLINT,
 year-only,year_only,short,Int16,Informix,declared,SMALLINT,SMALLINT,
+year-only,year_only,short,Int16,InterBase,declared,SMALLINT,SMALLINT,
+year-only,year_only,short,Int16,SapHana,declared,SMALLINT,smallint,
+year-only,year_only,short,Int16,AuroraMySql,declared,YEAR,YEAR,
+year-only,year_only,short,Int16,AuroraPostgreSql,declared,SMALLINT,smallint,
 year-month interval,year_month_interval,IntervalYearMonth,Object,PostgreSql,declared,INTERVAL YEAR TO MONTH,interval(65535),
 year-month interval,year_month_interval,IntervalYearMonth,Object,SqlServer,unsupported,,,Incorrect syntax near 'YEAR'.
 year-month interval,year_month_interval,IntervalYearMonth,Object,Oracle,declared,INTERVAL YEAR TO MONTH,IntervalYM,
@@ -805,14 +981,18 @@ year-month interval,year_month_interval,IntervalYearMonth,Object,TiDb,unsupporte
 year-month interval,year_month_interval,IntervalYearMonth,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL YEAR TO MONTH)' at line 1
 year-month interval,year_month_interval,IntervalYearMonth,Object,SybaseASE,unsupported,,,Incorrect syntax near 'YEAR'.
 year-month interval,year_month_interval,IntervalYearMonth,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
-year-month interval,year_month_interval,IntervalYearMonth,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+year-month interval,year_month_interval,IntervalYearMonth,Object,FlatFile,declared,INTERVAL YEAR TO MONTH,INTERVAL YEAR TO MONTH,
 year-month interval,year_month_interval,IntervalYearMonth,Object,Access,unsupported,,,Syntax error in field definition.
 year-month interval,year_month_interval,IntervalYearMonth,Object,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""TO MONTH)"" was found following ""KEY, c INTERVAL YEAR"". Expected tokens may include: ""<space>""."
 year-month interval,year_month_interval,IntervalYearMonth,Object,Informix,declared,INTERVAL YEAR TO MONTH,INTERVAL YEAR(4) TO MONTH,
+year-month interval,year_month_interval,IntervalYearMonth,Object,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 65 YEAR"
+year-month interval,year_month_interval,IntervalYearMonth,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INTERVAL"": line 1 col 56 (at pos 56)"
+year-month interval,year_month_interval,IntervalYearMonth,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL YEAR TO MONTH)' at line 1
+year-month interval,year_month_interval,IntervalYearMonth,Object,AuroraPostgreSql,declared,INTERVAL YEAR TO MONTH,interval(65535),
 generic interval,generic_interval,PostgreSqlInterval,Object,PostgreSql,declared,INTERVAL,interval,
 generic interval,generic_interval,PostgreSqlInterval,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INTERVAL."
 generic interval,generic_interval,PostgreSqlInterval,Object,Oracle,unsupported,,,ORA-30089: missing or invalid <datetime field> https://docs.oracle.com/error-help/db/ora-30089/
-generic interval,generic_interval,PostgreSqlInterval,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR221 failed SQL error code = -607 Invalid command Specified domain or source column INTERVAL does not exist
+generic interval,generic_interval,PostgreSqlInterval,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR229 failed SQL error code = -607 Invalid command Specified domain or source column INTERVAL does not exist
 generic interval,generic_interval,PostgreSqlInterval,Object,CockroachDb,declared,INTERVAL,interval,
 generic interval,generic_interval,PostgreSqlInterval,Object,MariaDb,unsupported,,,Unknown data type: 'INTERVAL'
 generic interval,generic_interval,PostgreSqlInterval,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL)' at line 1
@@ -823,10 +1003,14 @@ generic interval,generic_interval,PostgreSqlInterval,Object,TiDb,unsupported,,,"
 generic interval,generic_interval,PostgreSqlInterval,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL)' at line 1
 generic interval,generic_interval,PostgreSqlInterval,Object,SybaseASE,unsupported,,,Can't find type 'interval'.
 generic interval,generic_interval,PostgreSqlInterval,Object,Spanner,unsupported,,,P0001: Column of type <interval> is not supported.
-generic interval,generic_interval,PostgreSqlInterval,Object,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Interval'."
+generic interval,generic_interval,PostgreSqlInterval,Object,FlatFile,unsupported,,,"Expected token 'NumericLiteral' at position 65, but found 'Identifier'."
 generic interval,generic_interval,PostgreSqlInterval,Object,Access,unsupported,,,Syntax error in field definition.
 generic interval,generic_interval,PostgreSqlInterval,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""INTERVAL"" is an undefined name."
 generic interval,generic_interval,PostgreSqlInterval,Object,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+generic interval,generic_interval,PostgreSqlInterval,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+generic interval,generic_interval,PostgreSqlInterval,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INTERVAL"": line 1 col 56 (at pos 56)"
+generic interval,generic_interval,PostgreSqlInterval,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INTERVAL)' at line 1
+generic interval,generic_interval,PostgreSqlInterval,Object,AuroraPostgreSql,declared,INTERVAL,interval,
 row identifier / ROWID,row_identifier,string,String,PostgreSql,declared,CHAR(18),character(18),
 row identifier / ROWID,row_identifier,string,String,SqlServer,declared,CHAR(18),char,
 row identifier / ROWID,row_identifier,string,String,Oracle,unsupported,,,no candidate was tried
@@ -845,10 +1029,14 @@ row identifier / ROWID,row_identifier,string,String,FlatFile,declared,CHAR(18),C
 row identifier / ROWID,row_identifier,string,String,Access,declared,CHAR(18),DBTYPE_WCHAR,
 row identifier / ROWID,row_identifier,string,String,Db2,declared,CHAR(18),CHAR,
 row identifier / ROWID,row_identifier,string,String,Informix,declared,CHAR(18),CHAR,
+row identifier / ROWID,row_identifier,string,String,InterBase,declared,CHAR(18),CHAR,
+row identifier / ROWID,row_identifier,string,String,SapHana,declared,CHAR(18),varchar,
+row identifier / ROWID,row_identifier,string,String,AuroraMySql,declared,CHAR(18),CHAR(18),
+row identifier / ROWID,row_identifier,string,String,AuroraPostgreSql,declared,CHAR(18),character(18),
 object identifier / OID,oid,uint,UInt32,PostgreSql,declared,OID,oid,
 object identifier / OID,oid,uint,UInt32,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type OID."
 object identifier / OID,oid,uint,UInt32,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-object identifier / OID,oid,uint,UInt32,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR232 failed SQL error code = -607 Invalid command Specified domain or source column OID does not exist
+object identifier / OID,oid,uint,UInt32,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR241 failed SQL error code = -607 Invalid command Specified domain or source column OID does not exist
 object identifier / OID,oid,uint,UInt32,CockroachDb,declared,OID,oid,
 object identifier / OID,oid,uint,UInt32,MariaDb,unsupported,,,Unknown data type: 'OID'
 object identifier / OID,oid,uint,UInt32,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'OID)' at line 1
@@ -863,15 +1051,19 @@ object identifier / OID,oid,uint,UInt32,FlatFile,unsupported,,,"Unknown SQL data
 object identifier / OID,oid,uint,UInt32,Access,unsupported,,,Syntax error in field definition.
 object identifier / OID,oid,uint,UInt32,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""OID"" is an undefined name."
 object identifier / OID,oid,uint,UInt32,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (oid) not found.
+object identifier / OID,oid,uint,UInt32,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+object identifier / OID,oid,uint,UInt32,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""OID"": line 1 col 56 (at pos 56)"
+object identifier / OID,oid,uint,UInt32,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'OID)' at line 1
+object identifier / OID,oid,uint,UInt32,AuroraPostgreSql,declared,OID,oid,
 transaction ID,transaction_id,ulong,UInt64,PostgreSql,declared,XID8,xid8,
 transaction ID,transaction_id,ulong,UInt64,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type XID."
 transaction ID,transaction_id,ulong,UInt64,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-transaction ID,transaction_id,ulong,UInt64,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR234 failed SQL error code = -607 Invalid command Specified domain or source column XID does not exist
+transaction ID,transaction_id,ulong,UInt64,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR243 failed SQL error code = -607 Invalid command Specified domain or source column XID does not exist
 transaction ID,transaction_id,ulong,UInt64,CockroachDb,unsupported,,,"42704: type ""xid"" does not exist"
 transaction ID,transaction_id,ulong,UInt64,MariaDb,unsupported,,,Unknown data type: 'XID'
 transaction ID,transaction_id,ulong,UInt64,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XID)' at line 1
 transaction ID,transaction_id,ulong,UInt64,Sqlite,declared,XID,XID,
-transaction ID,transaction_id,ulong,UInt64,DuckDB,unsupported,,,"Catalog Error: Type with name XID does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr234 (id INTEGER NOT NULL PRIMARY KEY, c XID)"
+transaction ID,transaction_id,ulong,UInt64,DuckDB,unsupported,,,"Catalog Error: Type with name XID does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr241 (id INTEGER NOT NULL PRIMARY KEY, c XID)"
 transaction ID,transaction_id,ulong,UInt64,YugabyteDb,unsupported,,,no candidate was tried
 transaction ID,transaction_id,ulong,UInt64,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near ""XID)"""
 transaction ID,transaction_id,ulong,UInt64,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XID)' at line 1
@@ -881,15 +1073,19 @@ transaction ID,transaction_id,ulong,UInt64,FlatFile,unsupported,,,"Unknown SQL d
 transaction ID,transaction_id,ulong,UInt64,Access,unsupported,,,Syntax error in field definition.
 transaction ID,transaction_id,ulong,UInt64,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""XID"" is an undefined name."
 transaction ID,transaction_id,ulong,UInt64,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (xid) not found.
+transaction ID,transaction_id,ulong,UInt64,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+transaction ID,transaction_id,ulong,UInt64,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""XID"": line 1 col 56 (at pos 56)"
+transaction ID,transaction_id,ulong,UInt64,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XID)' at line 1
+transaction ID,transaction_id,ulong,UInt64,AuroraPostgreSql,declared,XID8,xid8,
 WAL / log position,wal_position,string,String,PostgreSql,declared,PG_LSN,pg_lsn,
 WAL / log position,wal_position,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type PG_LSN."
 WAL / log position,wal_position,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-WAL / log position,wal_position,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR236 failed SQL error code = -607 Invalid command Specified domain or source column PG_LSN does not exist
+WAL / log position,wal_position,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR245 failed SQL error code = -607 Invalid command Specified domain or source column PG_LSN does not exist
 WAL / log position,wal_position,string,String,CockroachDb,declared,PG_LSN,pg_lsn,
 WAL / log position,wal_position,string,String,MariaDb,unsupported,,,Unknown data type: 'PG_LSN'
 WAL / log position,wal_position,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'PG_LSN)' at line 1
 WAL / log position,wal_position,string,String,Sqlite,declared,PG_LSN,PG_LSN,
-WAL / log position,wal_position,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name PG_LSN does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr236 (id INTEGER NOT NULL PRIMARY KEY, c PG_LSN)"
+WAL / log position,wal_position,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name PG_LSN does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr243 (id INTEGER NOT NULL PRIMARY KEY, c PG_LSN)"
 WAL / log position,wal_position,string,String,YugabyteDb,declared,PG_LSN,pg_lsn,
 WAL / log position,wal_position,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 61 near ""PG_LSN)"""
 WAL / log position,wal_position,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'PG_LSN)' at line 1
@@ -899,10 +1095,14 @@ WAL / log position,wal_position,string,String,FlatFile,unsupported,,,"Unknown SQ
 WAL / log position,wal_position,string,String,Access,unsupported,,,Syntax error in field definition.
 WAL / log position,wal_position,string,String,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""PG_LSN"" is an undefined name."
 WAL / log position,wal_position,string,String,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (pg_lsn) not found.
+WAL / log position,wal_position,string,String,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+WAL / log position,wal_position,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""PG_LSN"": line 1 col 56 (at pos 56)"
+WAL / log position,wal_position,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'PG_LSN)' at line 1
+WAL / log position,wal_position,string,String,AuroraPostgreSql,declared,PG_LSN,pg_lsn,
 native binary JSON,binary_json,JsonDocument,Object,PostgreSql,declared,JSONB,jsonb,
 native binary JSON,binary_json,JsonDocument,Object,SqlServer,declared,JSON,json,
-native binary JSON,binary_json,JsonDocument,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-native binary JSON,binary_json,JsonDocument,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR244 failed SQL error code = -607 Invalid command Specified domain or source column JSONB does not exist
+native binary JSON,binary_json,JsonDocument,Object,Oracle,declared,JSON,Json,
+native binary JSON,binary_json,JsonDocument,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR253 failed SQL error code = -607 Invalid command Specified domain or source column JSONB does not exist
 native binary JSON,binary_json,JsonDocument,Object,CockroachDb,declared,JSONB,jsonb,
 native binary JSON,binary_json,JsonDocument,Object,MariaDb,declared,JSON,VARCHAR,
 native binary JSON,binary_json,JsonDocument,Object,MySql,declared,JSON,JSON,
@@ -917,15 +1117,19 @@ native binary JSON,binary_json,JsonDocument,Object,FlatFile,declared,JSON,JSON,
 native binary JSON,binary_json,JsonDocument,Object,Access,unsupported,,,Syntax error in field definition.
 native binary JSON,binary_json,JsonDocument,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""JSONB"" is an undefined name."
 native binary JSON,binary_json,JsonDocument,Object,Informix,declared,BSON,BSON,
+native binary JSON,binary_json,JsonDocument,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+native binary JSON,binary_json,JsonDocument,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""JSONB"": line 1 col 56 (at pos 56)"
+native binary JSON,binary_json,JsonDocument,Object,AuroraMySql,declared,JSON,JSON,
+native binary JSON,binary_json,JsonDocument,Object,AuroraPostgreSql,declared,JSONB,jsonb,
 XML,xml,string,String,PostgreSql,declared,XML,xml,
 XML,xml,string,String,SqlServer,declared,XML,xml,
 XML,xml,string,String,Oracle,declared,CLOB,Clob,
-XML,xml,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR249 failed SQL error code = -607 Invalid command Specified domain or source column XML does not exist
+XML,xml,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR258 failed SQL error code = -607 Invalid command Specified domain or source column XML does not exist
 XML,xml,string,String,CockroachDb,unsupported,,,"0A000: at or near "")"": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include"
 XML,xml,string,String,MariaDb,unsupported,,,Unknown data type: 'XML'
 XML,xml,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XML)' at line 1
 XML,xml,string,String,Sqlite,declared,XML,XML,
-XML,xml,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name XML does not exist! LINE 1: CREATE TABLE pr249 (id INTEGER NOT NULL PRIMARY KEY, c XML) ^"
+XML,xml,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name XML does not exist! LINE 1: CREATE TABLE pr256 (id INTEGER NOT NULL PRIMARY KEY, c XML) ^"
 XML,xml,string,String,YugabyteDb,unsupported,,,"42704: type ""clob"" does not exist POSITION: 56"
 XML,xml,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 58 near ""XML)"""
 XML,xml,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XML)' at line 1
@@ -935,10 +1139,14 @@ XML,xml,string,String,FlatFile,declared,CLOB,CLOB,
 XML,xml,string,String,Access,unsupported,,,Syntax error in field definition.
 XML,xml,string,String,Db2,declared,XML,XML,
 XML,xml,string,String,Informix,declared,CLOB,CLOB,
+XML,xml,string,String,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+XML,xml,string,String,SapHana,declared,CLOB,clob,
+XML,xml,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'XML)' at line 1
+XML,xml,string,String,AuroraPostgreSql,declared,XML,xml,
 BSON,bson,byte[],Binary,PostgreSql,declared,BYTEA,bytea,
 BSON,bson,byte[],Binary,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type BSON."
 BSON,bson,byte[],Binary,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-BSON,bson,byte[],Binary,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR254 failed SQL error code = -607 Invalid command Specified domain or source column BSON does not exist
+BSON,bson,byte[],Binary,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR263 failed SQL error code = -607 Invalid command Specified domain or source column BSON does not exist
 BSON,bson,byte[],Binary,CockroachDb,declared,BYTEA,bytea,
 BSON,bson,byte[],Binary,MariaDb,unsupported,,,Unknown data type: 'BSON'
 BSON,bson,byte[],Binary,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BSON)' at line 1
@@ -953,10 +1161,14 @@ BSON,bson,byte[],Binary,FlatFile,unsupported,,,"Unknown SQL data type 'BSON'. Us
 BSON,bson,byte[],Binary,Access,unsupported,,,Syntax error in field definition.
 BSON,bson,byte[],Binary,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""BSON"" is an undefined name."
 BSON,bson,byte[],Binary,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (bytea) not found.
+BSON,bson,byte[],Binary,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+BSON,bson,byte[],Binary,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""BSON"": line 1 col 56 (at pos 56)"
+BSON,bson,byte[],Binary,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BSON)' at line 1
+BSON,bson,byte[],Binary,AuroraPostgreSql,declared,BYTEA,bytea,
 variant / dynamic value,variant,object,Object,PostgreSql,unsupported,,,"42704: type ""variant"" does not exist POSITION: 56"
 variant / dynamic value,variant,object,Object,SqlServer,declared,SQL_VARIANT,sql_variant,
 variant / dynamic value,variant,object,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-variant / dynamic value,variant,object,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR257 failed SQL error code = -607 Invalid command Specified domain or source column VARIANT does not exist
+variant / dynamic value,variant,object,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR266 failed SQL error code = -607 Invalid command Specified domain or source column VARIANT does not exist
 variant / dynamic value,variant,object,Object,CockroachDb,unsupported,,,"42704: type ""variant"" does not exist"
 variant / dynamic value,variant,object,Object,MariaDb,unsupported,,,Unknown data type: 'VARIANT'
 variant / dynamic value,variant,object,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARIANT)' at line 1
@@ -971,10 +1183,14 @@ variant / dynamic value,variant,object,Object,FlatFile,unsupported,,,"Unknown SQ
 variant / dynamic value,variant,object,Object,Access,unsupported,,,Syntax error in field definition.
 variant / dynamic value,variant,object,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""VARIANT"" is an undefined name."
 variant / dynamic value,variant,object,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (variant) not found.
+variant / dynamic value,variant,object,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+variant / dynamic value,variant,object,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""VARIANT"": line 1 col 56 (at pos 56)"
+variant / dynamic value,variant,object,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VARIANT)' at line 1
+variant / dynamic value,variant,object,Object,AuroraPostgreSql,unsupported,,,"42704: type ""variant"" does not exist POSITION: 56"
 IP network / CIDR,cidr,Cidr,Object,PostgreSql,declared,CIDR,cidr,
 IP network / CIDR,cidr,Cidr,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type CIDR."
 IP network / CIDR,cidr,Cidr,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-IP network / CIDR,cidr,Cidr,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR265 failed SQL error code = -607 Invalid command Specified domain or source column CIDR does not exist
+IP network / CIDR,cidr,Cidr,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR274 failed SQL error code = -607 Invalid command Specified domain or source column CIDR does not exist
 IP network / CIDR,cidr,Cidr,Object,CockroachDb,declared,INET,inet,
 IP network / CIDR,cidr,Cidr,Object,MariaDb,unsupported,,,Unknown data type: 'CIDR'
 IP network / CIDR,cidr,Cidr,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
@@ -989,15 +1205,19 @@ IP network / CIDR,cidr,Cidr,Object,FlatFile,unsupported,,,"Unknown SQL data type
 IP network / CIDR,cidr,Cidr,Object,Access,unsupported,,,Syntax error in field definition.
 IP network / CIDR,cidr,Cidr,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""CIDR"" is an undefined name."
 IP network / CIDR,cidr,Cidr,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (cidr) not found.
+IP network / CIDR,cidr,Cidr,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+IP network / CIDR,cidr,Cidr,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""CIDR"": line 1 col 56 (at pos 56)"
+IP network / CIDR,cidr,Cidr,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CIDR)' at line 1
+IP network / CIDR,cidr,Cidr,Object,AuroraPostgreSql,declared,CIDR,cidr,
 MAC address,mac_address,MacAddress,Object,PostgreSql,declared,MACADDR,macaddr,
 MAC address,mac_address,MacAddress,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type MACADDR."
 MAC address,mac_address,MacAddress,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-MAC address,mac_address,MacAddress,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR267 failed SQL error code = -607 Invalid command Specified domain or source column MACADDR does not exist
+MAC address,mac_address,MacAddress,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR276 failed SQL error code = -607 Invalid command Specified domain or source column MACADDR does not exist
 MAC address,mac_address,MacAddress,Object,CockroachDb,unsupported,,,"0A000: at or near "")"": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include"
 MAC address,mac_address,MacAddress,Object,MariaDb,unsupported,,,Unknown data type: 'MACADDR'
 MAC address,mac_address,MacAddress,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MACADDR)' at line 1
 MAC address,mac_address,MacAddress,Object,Sqlite,declared,MACADDR,MACADDR,
-MAC address,mac_address,MacAddress,Object,DuckDB,unsupported,,,"Catalog Error: Type with name MACADDR does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr267 (id INTEGER NOT NULL PRIMARY KEY, c MACADDR)"
+MAC address,mac_address,MacAddress,Object,DuckDB,unsupported,,,"Catalog Error: Type with name MACADDR does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr274 (id INTEGER NOT NULL PRIMARY KEY, c MACADDR)"
 MAC address,mac_address,MacAddress,Object,YugabyteDb,declared,MACADDR,macaddr,
 MAC address,mac_address,MacAddress,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""MACADDR)"""
 MAC address,mac_address,MacAddress,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MACADDR)' at line 1
@@ -1007,15 +1227,19 @@ MAC address,mac_address,MacAddress,Object,FlatFile,unsupported,,,"Unknown SQL da
 MAC address,mac_address,MacAddress,Object,Access,unsupported,,,Syntax error in field definition.
 MAC address,mac_address,MacAddress,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""MACADDR"" is an undefined name."
 MAC address,mac_address,MacAddress,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (macaddr) not found.
+MAC address,mac_address,MacAddress,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+MAC address,mac_address,MacAddress,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""MACADDR"": line 1 col 56 (at pos 56)"
+MAC address,mac_address,MacAddress,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MACADDR)' at line 1
+MAC address,mac_address,MacAddress,Object,AuroraPostgreSql,declared,MACADDR,macaddr,
 point geometry,point,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
-point geometry,point,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
+point geometry,point,Geometry,Object,SqlServer,declared,GEOMETRY,geometry,
 point geometry,point,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
-point geometry,point,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR269 failed SQL error code = -607 Invalid command Specified domain or source column POINT does not exist
+point geometry,point,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR278 failed SQL error code = -607 Invalid command Specified domain or source column POINT does not exist
 point geometry,point,Geometry,Object,CockroachDb,declared,"GEOMETRY(POINT,4326)",geometry,
 point geometry,point,Geometry,Object,MariaDb,declared,POINT,GEOMETRY,
 point geometry,point,Geometry,Object,MySql,declared,POINT,GEOMETRY,
 point geometry,point,Geometry,Object,Sqlite,declared,POINT,POINT,
-point geometry,point,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POINT does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr269 (id INTEGER NOT NULL PRIMARY KEY, c POINT)"
+point geometry,point,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POINT does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr276 (id INTEGER NOT NULL PRIMARY KEY, c POINT)"
 point geometry,point,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 point geometry,point,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 60 near ""POINT)"""
 point geometry,point,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POINT)' at line 1
@@ -1025,15 +1249,19 @@ point geometry,point,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL data ty
 point geometry,point,Geometry,Object,Access,unsupported,,,Syntax error in field definition.
 point geometry,point,Geometry,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""POINT"" is an undefined name."
 point geometry,point,Geometry,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (point) not found.
+point geometry,point,Geometry,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+point geometry,point,Geometry,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
+point geometry,point,Geometry,Object,AuroraMySql,declared,POINT,GEOMETRY,
+point geometry,point,Geometry,Object,AuroraPostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 line / linestring geometry,linestring,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
-line / linestring geometry,linestring,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
+line / linestring geometry,linestring,Geometry,Object,SqlServer,declared,GEOMETRY,geometry,
 line / linestring geometry,linestring,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
-line / linestring geometry,linestring,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR277 failed SQL error code = -607 Invalid command Specified domain or source column LINESTRING does not exist
+line / linestring geometry,linestring,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR287 failed SQL error code = -607 Invalid command Specified domain or source column LINESTRING does not exist
 line / linestring geometry,linestring,Geometry,Object,CockroachDb,declared,GEOMETRY(LINESTRING),geometry,
 line / linestring geometry,linestring,Geometry,Object,MariaDb,declared,LINESTRING,GEOMETRY,
 line / linestring geometry,linestring,Geometry,Object,MySql,declared,LINESTRING,GEOMETRY,
 line / linestring geometry,linestring,Geometry,Object,Sqlite,declared,LINESTRING,LINESTRING,
-line / linestring geometry,linestring,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name LINESTRING does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr277 (id INTEGER NOT NULL PRIMARY KEY, c LINESTRING)"
+line / linestring geometry,linestring,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name LINESTRING does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr285 (id INTEGER NOT NULL PRIMARY KEY, c LINESTRING)"
 line / linestring geometry,linestring,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
 line / linestring geometry,linestring,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 65 near ""LINESTRING)"""
 line / linestring geometry,linestring,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'LINESTRING)' at line 1
@@ -1043,15 +1271,19 @@ line / linestring geometry,linestring,Geometry,Object,FlatFile,unsupported,,,"Un
 line / linestring geometry,linestring,Geometry,Object,Access,unsupported,,,Syntax error in field definition.
 line / linestring geometry,linestring,Geometry,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""LINESTRING"" is an undefined name."
 line / linestring geometry,linestring,Geometry,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (linestring) not found.
+line / linestring geometry,linestring,Geometry,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+line / linestring geometry,linestring,Geometry,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
+line / linestring geometry,linestring,Geometry,Object,AuroraMySql,declared,LINESTRING,GEOMETRY,
+line / linestring geometry,linestring,Geometry,Object,AuroraPostgreSql,unsupported,,,"42704: type ""linestring"" does not exist POSITION: 56"
 polygon geometry,polygon,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
-polygon geometry,polygon,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
+polygon geometry,polygon,Geometry,Object,SqlServer,declared,GEOMETRY,geometry,
 polygon geometry,polygon,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
-polygon geometry,polygon,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR282 failed SQL error code = -607 Invalid command Specified domain or source column POLYGON does not exist
+polygon geometry,polygon,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR293 failed SQL error code = -607 Invalid command Specified domain or source column POLYGON does not exist
 polygon geometry,polygon,Geometry,Object,CockroachDb,declared,GEOMETRY(POLYGON),geometry,
 polygon geometry,polygon,Geometry,Object,MariaDb,declared,POLYGON,GEOMETRY,
 polygon geometry,polygon,Geometry,Object,MySql,declared,POLYGON,GEOMETRY,
 polygon geometry,polygon,Geometry,Object,Sqlite,declared,POLYGON,POLYGON,
-polygon geometry,polygon,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POLYGON does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr282 (id INTEGER NOT NULL PRIMARY KEY, c POLYGON)"
+polygon geometry,polygon,Geometry,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POLYGON does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr291 (id INTEGER NOT NULL PRIMARY KEY, c POLYGON)"
 polygon geometry,polygon,Geometry,Object,YugabyteDb,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 polygon geometry,polygon,Geometry,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""POLYGON)"""
 polygon geometry,polygon,Geometry,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POLYGON)' at line 1
@@ -1061,10 +1293,14 @@ polygon geometry,polygon,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL dat
 polygon geometry,polygon,Geometry,Object,Access,unsupported,,,Syntax error in field definition.
 polygon geometry,polygon,Geometry,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""POLYGON"" is an undefined name."
 polygon geometry,polygon,Geometry,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (polygon) not found.
+polygon geometry,polygon,Geometry,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+polygon geometry,polygon,Geometry,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
+polygon geometry,polygon,Geometry,Object,AuroraMySql,declared,POLYGON,GEOMETRY,
+polygon geometry,polygon,Geometry,Object,AuroraPostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 general geometry,geometry,Geometry,Object,PostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
-general geometry,geometry,Geometry,Object,SqlServer,declared,GEOMETRY,crud_test_d5c8b57230.sys.geometry,
+general geometry,geometry,Geometry,Object,SqlServer,declared,GEOMETRY,geometry,
 general geometry,geometry,Geometry,Object,Oracle,declared,SDO_GEOMETRY,Object,
-general geometry,geometry,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR287 failed SQL error code = -607 Invalid command Specified domain or source column GEOMETRY does not exist
+general geometry,geometry,Geometry,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR299 failed SQL error code = -607 Invalid command Specified domain or source column GEOMETRY does not exist
 general geometry,geometry,Geometry,Object,CockroachDb,declared,GEOMETRY,geometry,
 general geometry,geometry,Geometry,Object,MariaDb,declared,GEOMETRY,GEOMETRY,
 general geometry,geometry,Geometry,Object,MySql,declared,GEOMETRY,GEOMETRY,
@@ -1079,24 +1315,32 @@ general geometry,geometry,Geometry,Object,FlatFile,unsupported,,,"Unknown SQL da
 general geometry,geometry,Geometry,Object,Access,unsupported,,,Syntax error in field definition.
 general geometry,geometry,Geometry,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""GEOMETRY"" is an undefined name."
 general geometry,geometry,Geometry,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (geometry) not found.
+general geometry,geometry,Geometry,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+general geometry,geometry,Geometry,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
+general geometry,geometry,Geometry,Object,AuroraMySql,declared,GEOMETRY,GEOMETRY,
+general geometry,geometry,Geometry,Object,AuroraPostgreSql,unsupported,,,"42704: type ""geometry"" does not exist POSITION: 56"
 geography / geodetic,geography,Geography,Object,PostgreSql,unsupported,,,"42704: type ""geography"" does not exist POSITION: 56"
-geography / geodetic,geography,Geography,Object,SqlServer,declared,GEOGRAPHY,crud_test_d5c8b57230.sys.geography,
+geography / geodetic,geography,Geography,Object,SqlServer,declared,GEOGRAPHY,geography,
 geography / geodetic,geography,Geography,Object,Oracle,declared,SDO_GEOMETRY,Object,
-geography / geodetic,geography,Geography,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR291 failed SQL error code = -607 Invalid command Specified domain or source column GEOGRAPHY does not exist
+geography / geodetic,geography,Geography,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR304 failed SQL error code = -607 Invalid command Specified domain or source column GEOGRAPHY does not exist
 geography / geodetic,geography,Geography,Object,CockroachDb,declared,GEOGRAPHY,geography,
 geography / geodetic,geography,Geography,Object,MariaDb,unsupported,,,Unknown data type: 'GEOGRAPHY'
 geography / geodetic,geography,Geography,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GEOGRAPHY)' at line 1
 geography / geodetic,geography,Geography,Object,Sqlite,declared,GEOGRAPHY,GEOGRAPHY,
-geography / geodetic,geography,Geography,Object,DuckDB,unsupported,,,"Catalog Error: Type with name GEOGRAPHY does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr291 (id INTEGER NOT NULL PRIMARY KEY, c GEOGRAPHY)"
+geography / geodetic,geography,Geography,Object,DuckDB,unsupported,,,"Catalog Error: Type with name GEOGRAPHY does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr302 (id INTEGER NOT NULL PRIMARY KEY, c GEOGRAPHY)"
 geography / geodetic,geography,Geography,Object,YugabyteDb,unsupported,,,"42704: type ""geography"" does not exist POSITION: 56"
 geography / geodetic,geography,Geography,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near ""GEOGRAPHY)"""
-geography / geodetic,geography,Geography,Object,SingleStore,unsupported,,,Feature 'GEOGRAPHY column type in COLUMNAR TABLE' is not supported by SingleStore.
+geography / geodetic,geography,Geography,Object,SingleStore,declared,GEOGRAPHY,CHAR(1073741823),
 geography / geodetic,geography,Geography,Object,SybaseASE,unsupported,,,Can't find type 'GEOGRAPHY'.
 geography / geodetic,geography,Geography,Object,Spanner,unsupported,,,P0001: Type <geography> does not exist.
 geography / geodetic,geography,Geography,Object,FlatFile,unsupported,,,"Unknown SQL data type 'GEOGRAPHY'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
 geography / geodetic,geography,Geography,Object,Access,unsupported,,,Syntax error in field definition.
 geography / geodetic,geography,Geography,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""GEOGRAPHY"" is an undefined name."
 geography / geodetic,geography,Geography,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (geography) not found.
+geography / geodetic,geography,Geography,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+geography / geodetic,geography,Geography,Object,SapHana,declared,ST_GEOMETRY(4326),varbinary,
+geography / geodetic,geography,Geography,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'GEOGRAPHY)' at line 1
+geography / geodetic,geography,Geography,Object,AuroraPostgreSql,declared,"geography(POINT,4326)",geography,
 fixed-length array,fixed_array,int[],Object,PostgreSql,declared,INTEGER ARRAY[10],integer[],
 fixed-length array,fixed_array,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'ARRAY'.
 fixed-length array,fixed_array,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/
@@ -1115,25 +1359,33 @@ fixed-length array,fixed_array,int[],Object,FlatFile,unsupported,,,Unexpected ch
 fixed-length array,fixed_array,int[],Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
 fixed-length array,fixed_array,int[],Object,Db2,unsupported,,,"ERROR [428H2] [IBM][DB2/LINUXX8664] SQL20441N A ""ARRAY"" data type is not supported in the context where it is being used."
 fixed-length array,fixed_array,int[],Object,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
-list / multiset / set collection,list_collection,List<int>,Object,PostgreSql,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
-list / multiset / set collection,list_collection,List<int>,Object,SqlServer,unsupported,,,Incorrect syntax near 'MULTISET'.
-list / multiset / set collection,list_collection,List<int>,Object,Oracle,unsupported,,,ORA-03099: unexpected item MULTISET in a column definition https://docs.oracle.com/error-help/db/ora-03099/
-list / multiset / set collection,list_collection,List<int>,Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 MULTISET"
-list / multiset / set collection,list_collection,List<int>,Object,CockroachDb,unsupported,,,"42601: at or near ""multiset"": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
-list / multiset / set collection,list_collection,List<int>,Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
-list / multiset / set collection,list_collection,List<int>,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
-list / multiset / set collection,list_collection,List<int>,Object,Sqlite,declared,INTEGER MULTISET,INTEGER MULTISET,
-list / multiset / set collection,list_collection,List<int>,Object,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""MULTISET"" LINE 1: ... TABLE pr309 (id INTEGER NOT NULL PRIMARY KEY, c INTEGER MULTISET)"
-list / multiset / set collection,list_collection,List<int>,Object,YugabyteDb,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
-list / multiset / set collection,list_collection,List<int>,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 71 near ""MULTISET)"""
-list / multiset / set collection,list_collection,List<int>,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
-list / multiset / set collection,list_collection,List<int>,Object,SybaseASE,unsupported,,,Incorrect syntax near 'MULTISET'.
-list / multiset / set collection,list_collection,List<int>,Object,Spanner,unsupported,,,"P0001: syntax error at or near ""MULTISET""; failed to parse the DDL statements."
-list / multiset / set collection,list_collection,List<int>,Object,FlatFile,unsupported,,,"Expected token 'RightParen' at position 63, but found 'Identifier'."
-list / multiset / set collection,list_collection,List<int>,Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
-list / multiset / set collection,list_collection,List<int>,Object,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "")"" was found following "", c INTEGER MULTISET"". Expected tokens may include: ""<references_spec>""."
-list / multiset / set collection,list_collection,List<int>,Object,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
-map / dictionary,map,"Dictionary<string,object>",Object,PostgreSql,unsupported,,,"42601: syntax error at or near "","" POSITION: 71"
+fixed-length array,fixed_array,int[],Object,InterBase,declared,INTEGER[10],ARRAY,
+fixed-length array,fixed_array,int[],Object,SapHana,declared,INTEGER ARRAY,varbinary,
+fixed-length array,fixed_array,int[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'ARRAY[10])' at line 1
+fixed-length array,fixed_array,int[],Object,AuroraPostgreSql,declared,INTEGER ARRAY[10],integer[],
+list / multiset / set collection,list_collection,int[],Object,PostgreSql,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
+list / multiset / set collection,list_collection,int[],Object,SqlServer,unsupported,,,Incorrect syntax near 'MULTISET'.
+list / multiset / set collection,list_collection,int[],Object,Oracle,unsupported,,,ORA-03099: unexpected item MULTISET in a column definition https://docs.oracle.com/error-help/db/ora-03099/
+list / multiset / set collection,list_collection,int[],Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 MULTISET"
+list / multiset / set collection,list_collection,int[],Object,CockroachDb,unsupported,,,"42601: at or near ""multiset"": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
+list / multiset / set collection,list_collection,int[],Object,MariaDb,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MariaDB server version for the right syntax to use near ')' at line 1
+list / multiset / set collection,list_collection,int[],Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
+list / multiset / set collection,list_collection,int[],Object,Sqlite,declared,INTEGER MULTISET,INTEGER MULTISET,
+list / multiset / set collection,list_collection,int[],Object,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""MULTISET"" LINE 1: ... TABLE pr320 (id INTEGER NOT NULL PRIMARY KEY, c INTEGER MULTISET)"
+list / multiset / set collection,list_collection,int[],Object,YugabyteDb,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
+list / multiset / set collection,list_collection,int[],Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 71 near ""MULTISET)"""
+list / multiset / set collection,list_collection,int[],Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
+list / multiset / set collection,list_collection,int[],Object,SybaseASE,unsupported,,,Incorrect syntax near 'MULTISET'.
+list / multiset / set collection,list_collection,int[],Object,Spanner,unsupported,,,"P0001: syntax error at or near ""MULTISET""; failed to parse the DDL statements."
+list / multiset / set collection,list_collection,int[],Object,FlatFile,unsupported,,,"Expected token 'RightParen' at position 63, but found 'Identifier'."
+list / multiset / set collection,list_collection,int[],Object,Access,unsupported,,,Syntax error in CREATE TABLE statement.
+list / multiset / set collection,list_collection,int[],Object,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "")"" was found following "", c INTEGER MULTISET"". Expected tokens may include: ""<references_spec>""."
+list / multiset / set collection,list_collection,int[],Object,Informix,declared,SET(INTEGER NOT NULL),SET,
+list / multiset / set collection,list_collection,int[],Object,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 64 MULTISET"
+list / multiset / set collection,list_collection,int[],Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""MULTISET"": line 1 col 64 (at pos 64)"
+list / multiset / set collection,list_collection,int[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MULTISET)' at line 1
+list / multiset / set collection,list_collection,int[],Object,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near ""MULTISET"" POSITION: 64"
+map / dictionary,map,"Dictionary<string,object>",Object,PostgreSql,declared,HSTORE,hstore,
 map / dictionary,map,"Dictionary<string,object>",Object,SqlServer,unsupported,,,Incorrect syntax near '('.
 map / dictionary,map,"Dictionary<string,object>",Object,Oracle,unsupported,,,ORA-03060: Data type MAP is invalid. https://docs.oracle.com/error-help/db/ora-03060/
 map / dictionary,map,"Dictionary<string,object>",Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 59 ("
@@ -1151,15 +1403,19 @@ map / dictionary,map,"Dictionary<string,object>",Object,FlatFile,unsupported,,,"
 map / dictionary,map,"Dictionary<string,object>",Object,Access,unsupported,,,Syntax error in field definition.
 map / dictionary,map,"Dictionary<string,object>",Object,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""("" was found following ""L PRIMARY KEY, c MAP"". Expected tokens may include: "".""."
 map / dictionary,map,"Dictionary<string,object>",Object,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+map / dictionary,map,"Dictionary<string,object>",Object,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 59 ("
+map / dictionary,map,"Dictionary<string,object>",Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""MAP"": line 1 col 56 (at pos 56)"
+map / dictionary,map,"Dictionary<string,object>",Object,AuroraMySql,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'MAP(VARCHAR(10),INTEGER))' at line 1"
+map / dictionary,map,"Dictionary<string,object>",Object,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near "","" POSITION: 71"
 range,range,Range<int>,Object,PostgreSql,declared,INT4RANGE,int4range,
 range,range,Range<int>,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INT4RANGE."
 range,range,Range<int>,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-range,range,Range<int>,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR325 failed SQL error code = -607 Invalid command Specified domain or source column INT4RANGE does not exist
+range,range,Range<int>,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR343 failed SQL error code = -607 Invalid command Specified domain or source column INT4RANGE does not exist
 range,range,Range<int>,Object,CockroachDb,unsupported,,,"42704: type ""int4range"" does not exist"
 range,range,Range<int>,Object,MariaDb,unsupported,,,Unknown data type: 'INT4RANGE'
 range,range,Range<int>,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4RANGE)' at line 1
 range,range,Range<int>,Object,Sqlite,declared,INT4RANGE,INT4RANGE,
-range,range,Range<int>,Object,DuckDB,unsupported,,,"Catalog Error: Type with name INT4RANGE does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr325 (id INTEGER NOT NULL PRIMARY KEY, c INT4RANGE)"
+range,range,Range<int>,Object,DuckDB,unsupported,,,"Catalog Error: Type with name INT4RANGE does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr336 (id INTEGER NOT NULL PRIMARY KEY, c INT4RANGE)"
 range,range,Range<int>,Object,YugabyteDb,declared,INT4RANGE,int4range,
 range,range,Range<int>,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 64 near ""INT4RANGE)"""
 range,range,Range<int>,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4RANGE)' at line 1
@@ -1169,15 +1425,19 @@ range,range,Range<int>,Object,FlatFile,unsupported,,,"Unknown SQL data type 'INT
 range,range,Range<int>,Object,Access,unsupported,,,Syntax error in field definition.
 range,range,Range<int>,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""INT4RANGE"" is an undefined name."
 range,range,Range<int>,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (int4range) not found.
+range,range,Range<int>,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+range,range,Range<int>,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INT4RANGE"": line 1 col 56 (at pos 56)"
+range,range,Range<int>,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4RANGE)' at line 1
+range,range,Range<int>,Object,AuroraPostgreSql,declared,INT4RANGE,int4range,
 multirange,multirange,Range<int>[],Object,PostgreSql,declared,INT4MULTIRANGE,int4multirange,
 multirange,multirange,Range<int>[],Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type INT4MULTIRANGE."
 multirange,multirange,Range<int>[],Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-multirange,multirange,Range<int>[],Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR329 failed SQL error code = -607 Invalid command Specified domain or source column INT4MULTIRANGE does not exist
+multirange,multirange,Range<int>[],Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR347 failed SQL error code = -607 Invalid command Specified domain or source column INT4MULTIRANGE does not exist
 multirange,multirange,Range<int>[],Object,CockroachDb,unsupported,,,"42704: type ""int4multirange"" does not exist"
 multirange,multirange,Range<int>[],Object,MariaDb,unsupported,,,Unknown data type: 'INT4MULTIRANGE'
 multirange,multirange,Range<int>[],Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
 multirange,multirange,Range<int>[],Object,Sqlite,declared,INT4MULTIRANGE,INT4MULTIRANGE,
-multirange,multirange,Range<int>[],Object,DuckDB,unsupported,,,"Catalog Error: Type with name INT4MULTIRANGE does not exist! Did you mean ""int4""? LINE 1: CREATE TABLE pr329 (id INTEGER NOT NULL PRIMARY KEY, c INT4MULTIRANGE)"
+multirange,multirange,Range<int>[],Object,DuckDB,unsupported,,,"Catalog Error: Type with name INT4MULTIRANGE does not exist! Did you mean ""int4""? LINE 1: CREATE TABLE pr340 (id INTEGER NOT NULL PRIMARY KEY, c INT4MULTIRANGE)"
 multirange,multirange,Range<int>[],Object,YugabyteDb,declared,INT4MULTIRANGE,int4multirange,
 multirange,multirange,Range<int>[],Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 69 near ""INT4MULTIRANGE)"""
 multirange,multirange,Range<int>[],Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
@@ -1187,15 +1447,19 @@ multirange,multirange,Range<int>[],Object,FlatFile,unsupported,,,"Unknown SQL da
 multirange,multirange,Range<int>[],Object,Access,unsupported,,,Syntax error in field definition.
 multirange,multirange,Range<int>[],Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""INT4MULTIRANGE"" is an undefined name."
 multirange,multirange,Range<int>[],Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (int4multirange) not found.
-user-defined enum / domain,domain,string,String,PostgreSql,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
-user-defined enum / domain,domain,string,String,SqlServer,unsupported,,,The definition for column 'c' must include a data type.
-user-defined enum / domain,domain,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-user-defined enum / domain,domain,string,String,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 CREATE"
+multirange,multirange,Range<int>[],Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+multirange,multirange,Range<int>[],Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""INT4MULTIRANGE"": line 1 col 56 (at pos 56)"
+multirange,multirange,Range<int>[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'INT4MULTIRANGE)' at line 1
+multirange,multirange,Range<int>[],Object,AuroraPostgreSql,declared,INT4MULTIRANGE,int4multirange,
+user-defined enum / domain,domain,string,String,PostgreSql,declared,probe_domain,character varying(100),
+user-defined enum / domain,domain,string,String,SqlServer,declared,probe_domain,varchar,
+user-defined enum / domain,domain,string,String,Oracle,declared,probe_domain,Varchar2,
+user-defined enum / domain,domain,string,String,Firebird,declared,probe_domain,VARCHAR,
 user-defined enum / domain,domain,string,String,CockroachDb,unsupported,,,"42601: at or near ""create"": syntax error DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include this information."
 user-defined enum / domain,domain,string,String,MariaDb,unsupported,,,Unknown data type: 'CREATE'
 user-defined enum / domain,domain,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
 user-defined enum / domain,domain,string,String,Sqlite,declared,ENUM,ENUM,
-user-defined enum / domain,domain,string,String,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""CREATE"" LINE 1: CREATE TABLE pr331 (id INTEGER NOT NULL PRIMARY KEY, c CREATE TYPE) ^"
+user-defined enum / domain,domain,string,String,DuckDB,unsupported,,,"Parser Error: syntax error at or near ""CREATE"" LINE 1: CREATE TABLE pr342 (id INTEGER NOT NULL PRIMARY KEY, c CREATE TYPE) ^"
 user-defined enum / domain,domain,string,String,YugabyteDb,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
 user-defined enum / domain,domain,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 61 near ""CREATE TYPE)"""
 user-defined enum / domain,domain,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
@@ -1203,17 +1467,21 @@ user-defined enum / domain,domain,string,String,SybaseASE,unsupported,,,The defi
 user-defined enum / domain,domain,string,String,Spanner,unsupported,,,"P0001: syntax error at or near ""CREATE""; failed to parse the DDL statements."
 user-defined enum / domain,domain,string,String,FlatFile,unsupported,,,"Expected identifier at position 55, but found 'Create'."
 user-defined enum / domain,domain,string,String,Access,unsupported,,,Syntax error in field definition.
-user-defined enum / domain,domain,string,String,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token "")"" was found following ""Y KEY, c CREATE TYPE"". Expected tokens may include: ""<references_spec>""."
+user-defined enum / domain,domain,string,String,Db2,declared,probe_domain,VARCHAR,
 user-defined enum / domain,domain,string,String,Informix,unsupported,,,ERROR [42000] [Informix][Informix ODBC Driver][Informix]A syntax error has occurred.
+user-defined enum / domain,domain,string,String,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 56 CREATE"
+user-defined enum / domain,domain,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""CREATE"": line 1 col 56 (at pos 56)"
+user-defined enum / domain,domain,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'CREATE TYPE)' at line 1
+user-defined enum / domain,domain,string,String,AuroraPostgreSql,unsupported,,,"42601: syntax error at or near ""CREATE"" POSITION: 56"
 full-text search vector / query,full_text,string,String,PostgreSql,declared,TSQUERY,tsquery,
 full-text search vector / query,full_text,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type TSVECTOR."
 full-text search vector / query,full_text,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-full-text search vector / query,full_text,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR336 failed SQL error code = -607 Invalid command Specified domain or source column TSVECTOR does not exist
+full-text search vector / query,full_text,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR355 failed SQL error code = -607 Invalid command Specified domain or source column TSVECTOR does not exist
 full-text search vector / query,full_text,string,String,CockroachDb,declared,TSQUERY,tsquery,
 full-text search vector / query,full_text,string,String,MariaDb,unsupported,,,Unknown data type: 'TSVECTOR'
 full-text search vector / query,full_text,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
 full-text search vector / query,full_text,string,String,Sqlite,declared,TSVECTOR,TSVECTOR,
-full-text search vector / query,full_text,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name TSVECTOR does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr336 (id INTEGER NOT NULL PRIMARY KEY, c TSVECTOR)"
+full-text search vector / query,full_text,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name TSVECTOR does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr347 (id INTEGER NOT NULL PRIMARY KEY, c TSVECTOR)"
 full-text search vector / query,full_text,string,String,YugabyteDb,declared,TSQUERY,tsquery,
 full-text search vector / query,full_text,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 63 near ""TSVECTOR)"""
 full-text search vector / query,full_text,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
@@ -1223,69 +1491,85 @@ full-text search vector / query,full_text,string,String,FlatFile,unsupported,,,"
 full-text search vector / query,full_text,string,String,Access,unsupported,,,Syntax error in field definition.
 full-text search vector / query,full_text,string,String,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""TSVECTOR"" is an undefined name."
 full-text search vector / query,full_text,string,String,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (tsvector) not found.
+full-text search vector / query,full_text,string,String,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+full-text search vector / query,full_text,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""TSVECTOR"": line 1 col 56 (at pos 56)"
+full-text search vector / query,full_text,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'TSVECTOR)' at line 1
+full-text search vector / query,full_text,string,String,AuroraPostgreSql,declared,TSQUERY,tsquery,
 native point,native_point,PostgreSqlPoint,Object,PostgreSql,declared,POINT,point,
-native point,native_point,PostgreSqlPoint,Object,SqlServer,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type POINT."
 native point,native_point,PostgreSqlPoint,Object,Oracle,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,Firebird,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,CockroachDb,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR375 failed SQL error code = -607 Invalid command Specified domain or source column POINT does not exist
+native point,native_point,PostgreSqlPoint,Object,CockroachDb,unsupported,,,"0A000: at or near "")"": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include"
 native point,native_point,PostgreSqlPoint,Object,MariaDb,unsupported,,,no candidate was tried
 native point,native_point,PostgreSqlPoint,Object,MySql,unsupported,,,no candidate was tried
 native point,native_point,PostgreSqlPoint,Object,Sqlite,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,DuckDB,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POINT does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr370 (id INTEGER NOT NULL PRIMARY KEY, c POINT)"
 native point,native_point,PostgreSqlPoint,Object,YugabyteDb,declared,POINT,point,
-native point,native_point,PostgreSqlPoint,Object,TiDb,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,SingleStore,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,SybaseASE,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,Spanner,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,FlatFile,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 60 near ""POINT)"""
+native point,native_point,PostgreSqlPoint,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POINT)' at line 1
+native point,native_point,PostgreSqlPoint,Object,SybaseASE,unsupported,,,Can't find type 'POINT'.
+native point,native_point,PostgreSqlPoint,Object,Spanner,unsupported,,,P0001: Type <point> is not supported.
+native point,native_point,PostgreSqlPoint,Object,FlatFile,unsupported,,,"Unknown SQL data type 'POINT'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
 native point,native_point,PostgreSqlPoint,Object,Access,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,Db2,unsupported,,,no candidate was tried
-native point,native_point,PostgreSqlPoint,Object,Informix,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""POINT"" is an undefined name."
+native point,native_point,PostgreSqlPoint,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (point) not found.
+native point,native_point,PostgreSqlPoint,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+native point,native_point,PostgreSqlPoint,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""POINT"": line 1 col 56 (at pos 56)"
+native point,native_point,PostgreSqlPoint,Object,AuroraMySql,unsupported,,,no candidate was tried
+native point,native_point,PostgreSqlPoint,Object,AuroraPostgreSql,declared,POINT,point,
 native polygon,native_polygon,PostgreSqlPolygon,Object,PostgreSql,declared,POLYGON,polygon,
-native polygon,native_polygon,PostgreSqlPolygon,Object,SqlServer,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type POLYGON."
 native polygon,native_polygon,PostgreSqlPolygon,Object,Oracle,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,Firebird,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,CockroachDb,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR376 failed SQL error code = -607 Invalid command Specified domain or source column POLYGON does not exist
+native polygon,native_polygon,PostgreSqlPolygon,Object,CockroachDb,unsupported,,,"0A000: at or near "")"": syntax error: unimplemented: this syntax DETAIL: Detail redacted as it may contain sensitive data. Specify 'Include Error Detail' in the connection string to include"
 native polygon,native_polygon,PostgreSqlPolygon,Object,MariaDb,unsupported,,,no candidate was tried
 native polygon,native_polygon,PostgreSqlPolygon,Object,MySql,unsupported,,,no candidate was tried
 native polygon,native_polygon,PostgreSqlPolygon,Object,Sqlite,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,DuckDB,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,DuckDB,unsupported,,,"Catalog Error: Type with name POLYGON does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr371 (id INTEGER NOT NULL PRIMARY KEY, c POLYGON)"
 native polygon,native_polygon,PostgreSqlPolygon,Object,YugabyteDb,declared,POLYGON,polygon,
-native polygon,native_polygon,PostgreSqlPolygon,Object,TiDb,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,SingleStore,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,SybaseASE,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,Spanner,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,FlatFile,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 62 near ""POLYGON)"""
+native polygon,native_polygon,PostgreSqlPolygon,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'POLYGON)' at line 1
+native polygon,native_polygon,PostgreSqlPolygon,Object,SybaseASE,unsupported,,,Can't find type 'POLYGON'.
+native polygon,native_polygon,PostgreSqlPolygon,Object,Spanner,unsupported,,,P0001: Type <polygon> is not supported.
+native polygon,native_polygon,PostgreSqlPolygon,Object,FlatFile,unsupported,,,"Unknown SQL data type 'POLYGON'. Use a supported SQL type name, or a fully qualified CLR type name (e.g. ""System.Guid"") for a type ClrTypeMap supports."
 native polygon,native_polygon,PostgreSqlPolygon,Object,Access,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,Db2,unsupported,,,no candidate was tried
-native polygon,native_polygon,PostgreSqlPolygon,Object,Informix,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""POLYGON"" is an undefined name."
+native polygon,native_polygon,PostgreSqlPolygon,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (polygon) not found.
+native polygon,native_polygon,PostgreSqlPolygon,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+native polygon,native_polygon,PostgreSqlPolygon,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""POLYGON"": line 1 col 56 (at pos 56)"
+native polygon,native_polygon,PostgreSqlPolygon,Object,AuroraMySql,unsupported,,,no candidate was tried
+native polygon,native_polygon,PostgreSqlPolygon,Object,AuroraPostgreSql,declared,POLYGON,polygon,
 32-bit transaction ID,xid32,uint,UInt32,PostgreSql,declared,XID,xid,
-32-bit transaction ID,xid32,uint,UInt32,SqlServer,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,Oracle,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,Firebird,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,CockroachDb,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,MariaDb,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,MySql,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,Sqlite,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,DuckDB,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,SqlServer,declared,BIGINT,bigint,
+32-bit transaction ID,xid32,uint,UInt32,Oracle,declared,"NUMERIC(10,0)",Int64,
+32-bit transaction ID,xid32,uint,UInt32,Firebird,declared,BIGINT,BIGINT,
+32-bit transaction ID,xid32,uint,UInt32,CockroachDb,declared,BIGINT,bigint,
+32-bit transaction ID,xid32,uint,UInt32,MariaDb,declared,BIGINT,BIGINT,
+32-bit transaction ID,xid32,uint,UInt32,MySql,declared,BIGINT,BIGINT,
+32-bit transaction ID,xid32,uint,UInt32,Sqlite,declared,BIGINT,INTEGER,
+32-bit transaction ID,xid32,uint,UInt32,DuckDB,declared,BIGINT,BigInt,
 32-bit transaction ID,xid32,uint,UInt32,YugabyteDb,declared,XID,xid,
-32-bit transaction ID,xid32,uint,UInt32,TiDb,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,SingleStore,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,SybaseASE,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,Spanner,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,FlatFile,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,TiDb,declared,BIGINT,BIGINT,
+32-bit transaction ID,xid32,uint,UInt32,SingleStore,declared,BIGINT,BIGINT,
+32-bit transaction ID,xid32,uint,UInt32,SybaseASE,declared,BIGINT,bigint,
+32-bit transaction ID,xid32,uint,UInt32,Spanner,declared,BIGINT,bigint,
+32-bit transaction ID,xid32,uint,UInt32,FlatFile,declared,BIGINT,BIGINT,
 32-bit transaction ID,xid32,uint,UInt32,Access,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,Db2,unsupported,,,no candidate was tried
-32-bit transaction ID,xid32,uint,UInt32,Informix,unsupported,,,no candidate was tried
+32-bit transaction ID,xid32,uint,UInt32,Db2,declared,BIGINT,BIGINT,
+32-bit transaction ID,xid32,uint,UInt32,Informix,declared,BIGINT,BIGINT,
+32-bit transaction ID,xid32,uint,UInt32,InterBase,declared,"NUMERIC(10,0)",NUMERIC,
+32-bit transaction ID,xid32,uint,UInt32,SapHana,declared,BIGINT,bigint,
+32-bit transaction ID,xid32,uint,UInt32,AuroraMySql,declared,BIGINT,BIGINT,
+32-bit transaction ID,xid32,uint,UInt32,AuroraPostgreSql,declared,XID,xid,
 vector embedding,vector,float[],Object,PostgreSql,unsupported,,,"42704: type ""vector"" does not exist POSITION: 56"
 vector embedding,vector,float[],Object,SqlServer,declared,VECTOR(3),varchar,
-vector embedding,vector,float[],Object,Oracle,unsupported,,,"ORA-43853: VECTOR type cannot be used in non-automatic segment space management tablespace ""SYSTEM"" https://docs.oracle.com/error-help/db/ora-43853/"
+vector embedding,vector,float[],Object,Oracle,declared,VECTOR(3),"VECTOR(3, *)",
 vector embedding,vector,float[],Object,Firebird,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 62 ("
 vector embedding,vector,float[],Object,CockroachDb,declared,VECTOR(3),vector,
-vector embedding,vector,float[],Object,MariaDb,unsupported,,,Unknown data type: 'VECTOR'
-vector embedding,vector,float[],Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VECTOR(3))' at line 1
+vector embedding,vector,float[],Object,MariaDb,declared,VECTOR(3),BLOB,
+vector embedding,vector,float[],Object,MySql,declared,VECTOR(3),VECTOR,
 vector embedding,vector,float[],Object,Sqlite,declared,VECTOR(3),VECTOR,
-vector embedding,vector,float[],Object,DuckDB,unsupported,,,"Catalog Error: Type with name VECTOR does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr338 (id INTEGER NOT NULL PRIMARY KEY, c VECTOR(3))"
+vector embedding,vector,float[],Object,DuckDB,unsupported,,,"Catalog Error: Type with name VECTOR does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr349 (id INTEGER NOT NULL PRIMARY KEY, c VECTOR(3))"
 vector embedding,vector,float[],Object,YugabyteDb,unsupported,,,"42704: type ""vector"" does not exist POSITION: 56"
 vector embedding,vector,float[],Object,TiDb,declared,VECTOR(3),VARCHAR,
 vector embedding,vector,float[],Object,SingleStore,declared,VECTOR(3),BLOB,
@@ -1295,15 +1579,19 @@ vector embedding,vector,float[],Object,FlatFile,unsupported,,,"Unknown SQL data 
 vector embedding,vector,float[],Object,Access,unsupported,,,Syntax error in field definition.
 vector embedding,vector,float[],Object,Db2,unsupported,,,"ERROR [42601] [IBM][DB2/LINUXX8664] SQL0104N An unexpected token ""("" was found following ""RIMARY KEY, c VECTOR"". Expected tokens may include: ""CHECK""."
 vector embedding,vector,float[],Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (vector) not found.
-hierarchical path,hierarchy,HierarchyId,Object,PostgreSql,unsupported,,,"42704: type ""hierarchyid"" does not exist POSITION: 56"
-hierarchical path,hierarchy,HierarchyId,Object,SqlServer,declared,HIERARCHYID,crud_test_d5c8b57230.sys.hierarchyid,
+vector embedding,vector,float[],Object,InterBase,unsupported,,,"Dynamic SQL Error SQL error code = -104 Token unknown - line 1, column 62 ("
+vector embedding,vector,float[],Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""VECTOR"": line 1 col 56 (at pos 56)"
+vector embedding,vector,float[],Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'VECTOR(3))' at line 1
+vector embedding,vector,float[],Object,AuroraPostgreSql,declared,vector(3),vector,
+hierarchical path,hierarchy,HierarchyId,Object,PostgreSql,declared,LTREE,ltree,
+hierarchical path,hierarchy,HierarchyId,Object,SqlServer,declared,HIERARCHYID,hierarchyid,
 hierarchical path,hierarchy,HierarchyId,Object,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-hierarchical path,hierarchy,HierarchyId,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR344 failed SQL error code = -607 Invalid command Specified domain or source column HIERARCHYID does not exist
+hierarchical path,hierarchy,HierarchyId,Object,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR363 failed SQL error code = -607 Invalid command Specified domain or source column HIERARCHYID does not exist
 hierarchical path,hierarchy,HierarchyId,Object,CockroachDb,unsupported,,,"42704: type ""hierarchyid"" does not exist"
 hierarchical path,hierarchy,HierarchyId,Object,MariaDb,unsupported,,,Unknown data type: 'HIERARCHYID'
 hierarchical path,hierarchy,HierarchyId,Object,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
 hierarchical path,hierarchy,HierarchyId,Object,Sqlite,declared,HIERARCHYID,HIERARCHYID,
-hierarchical path,hierarchy,HierarchyId,Object,DuckDB,unsupported,,,"Catalog Error: Type with name HIERARCHYID does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr344 (id INTEGER NOT NULL PRIMARY KEY, c HIERARCHYID)"
+hierarchical path,hierarchy,HierarchyId,Object,DuckDB,unsupported,,,"Catalog Error: Type with name HIERARCHYID does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr355 (id INTEGER NOT NULL PRIMARY KEY, c HIERARCHYID)"
 hierarchical path,hierarchy,HierarchyId,Object,YugabyteDb,unsupported,,,"42704: type ""hierarchyid"" does not exist POSITION: 56"
 hierarchical path,hierarchy,HierarchyId,Object,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 66 near ""HIERARCHYID)"""
 hierarchical path,hierarchy,HierarchyId,Object,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
@@ -1313,15 +1601,19 @@ hierarchical path,hierarchy,HierarchyId,Object,FlatFile,unsupported,,,"Unknown S
 hierarchical path,hierarchy,HierarchyId,Object,Access,unsupported,,,Syntax error in field definition.
 hierarchical path,hierarchy,HierarchyId,Object,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""HIERARCHYID"" is an undefined name."
 hierarchical path,hierarchy,HierarchyId,Object,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (hierarchyid) not found.
+hierarchical path,hierarchy,HierarchyId,Object,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+hierarchical path,hierarchy,HierarchyId,Object,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""HIERARCHYID"": line 1 col 56 (at pos 56)"
+hierarchical path,hierarchy,HierarchyId,Object,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'HIERARCHYID)' at line 1
+hierarchical path,hierarchy,HierarchyId,Object,AuroraPostgreSql,unsupported,,,"42704: type ""hierarchyid"" does not exist POSITION: 56"
 external-file reference,file_reference,string,String,PostgreSql,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
 external-file reference,file_reference,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type BFILE."
 external-file reference,file_reference,string,String,Oracle,declared,BFILE,bfile,
-external-file reference,file_reference,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR348 failed SQL error code = -607 Invalid command Specified domain or source column BFILE does not exist
+external-file reference,file_reference,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR367 failed SQL error code = -607 Invalid command Specified domain or source column BFILE does not exist
 external-file reference,file_reference,string,String,CockroachDb,unsupported,,,"42704: type ""bfile"" does not exist"
 external-file reference,file_reference,string,String,MariaDb,unsupported,,,Unknown data type: 'BFILE'
 external-file reference,file_reference,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
 external-file reference,file_reference,string,String,Sqlite,declared,BFILE,BFILE,
-external-file reference,file_reference,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name BFILE does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr348 (id INTEGER NOT NULL PRIMARY KEY, c BFILE)"
+external-file reference,file_reference,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name BFILE does not exist! Did you mean ""main.INTEGER""? LINE 1: CREATE TABLE pr359 (id INTEGER NOT NULL PRIMARY KEY, c BFILE)"
 external-file reference,file_reference,string,String,YugabyteDb,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
 external-file reference,file_reference,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 60 near ""BFILE)"""
 external-file reference,file_reference,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
@@ -1331,15 +1623,19 @@ external-file reference,file_reference,string,String,FlatFile,unsupported,,,"Unk
 external-file reference,file_reference,string,String,Access,unsupported,,,Syntax error in field definition.
 external-file reference,file_reference,string,String,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""BFILE"" is an undefined name."
 external-file reference,file_reference,string,String,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]Type (bfile) not found.
+external-file reference,file_reference,string,String,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+external-file reference,file_reference,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""BFILE"": line 1 col 56 (at pos 56)"
+external-file reference,file_reference,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'BFILE)' at line 1
+external-file reference,file_reference,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""bfile"" does not exist POSITION: 56"
 specialized security label,security_label,string,String,PostgreSql,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"
 specialized security label,security_label,string,String,SqlServer,unsupported,,,"Column, parameter, or variable #2: Cannot find data type IDSSECURITYLABEL."
 specialized security label,security_label,string,String,Oracle,unsupported,,,ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/
-specialized security label,security_label,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR355 failed SQL error code = -607 Invalid command Specified domain or source column IDSSECURITYLABEL does not exist
+specialized security label,security_label,string,String,Firebird,unsupported,,,unsuccessful metadata update CREATE TABLE PR374 failed SQL error code = -607 Invalid command Specified domain or source column IDSSECURITYLABEL does not exist
 specialized security label,security_label,string,String,CockroachDb,unsupported,,,"42704: type ""idssecuritylabel"" does not exist"
 specialized security label,security_label,string,String,MariaDb,unsupported,,,Unknown data type: 'IDSSECURITYLABEL'
 specialized security label,security_label,string,String,MySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1
 specialized security label,security_label,string,String,Sqlite,declared,IDSSECURITYLABEL,IDSSECURITYLABEL,
-specialized security label,security_label,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name IDSSECURITYLABEL does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr355 (id INTEGER NOT NULL PRIMARY KEY, c IDSSECURITYLABEL)"
+specialized security label,security_label,string,String,DuckDB,unsupported,,,"Catalog Error: Type with name IDSSECURITYLABEL does not exist! Did you mean ""JSON""? LINE 1: CREATE TABLE pr366 (id INTEGER NOT NULL PRIMARY KEY, c IDSSECURITYLABEL)"
 specialized security label,security_label,string,String,YugabyteDb,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"
 specialized security label,security_label,string,String,TiDb,unsupported,,,"You have an error in your SQL syntax; check the manual that corresponds to your TiDB version for the right syntax to use line 1 column 71 near ""IDSSECURITYLABEL)"""
 specialized security label,security_label,string,String,SingleStore,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1
@@ -1349,3 +1645,7 @@ specialized security label,security_label,string,String,FlatFile,unsupported,,,"
 specialized security label,security_label,string,String,Access,unsupported,,,Syntax error in field definition.
 specialized security label,security_label,string,String,Db2,unsupported,,,"ERROR [42704] [IBM][DB2/LINUXX8664] SQL0204N ""IDSSECURITYLABEL"" is an undefined name."
 specialized security label,security_label,string,String,Informix,unsupported,,,ERROR [HY000] [Informix][Informix ODBC Driver][Informix]User (informix) does not have DBSECADM authority.
+specialized security label,security_label,string,String,InterBase,unsupported,,,Dynamic SQL Error SQL error code = -607 Invalid command Specified domain or source column No message for error code 335544641 found.
+specialized security label,security_label,string,String,SapHana,unsupported,,,"sql syntax error: incorrect syntax near ""IDSSECURITYLABEL"": line 1 col 56 (at pos 56)"
+specialized security label,security_label,string,String,AuroraMySql,unsupported,,,You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'IDSSECURITYLABEL)' at line 1
+specialized security label,security_label,string,String,AuroraPostgreSql,unsupported,,,"42704: type ""idssecuritylabel"" does not exist POSITION: 56"

@@ -96,3 +96,5 @@ override pengdows.crud.types.valueobjects.PostgreSqlPolygon.Equals(object? obj) 
 override pengdows.crud.types.valueobjects.PostgreSqlPolygon.GetHashCode() -> int
 static pengdows.crud.types.valueobjects.PostgreSqlPolygon.operator ==(pengdows.crud.types.valueobjects.PostgreSqlPolygon left, pengdows.crud.types.valueobjects.PostgreSqlPolygon right) -> bool
 static pengdows.crud.types.valueobjects.PostgreSqlPolygon.operator !=(pengdows.crud.types.valueobjects.PostgreSqlPolygon left, pengdows.crud.types.valueobjects.PostgreSqlPolygon right) -> bool
+pengdows.crud.ProviderValueConverters
+static pengdows.crud.ProviderValueConverters.Register<T>(pengdows.crud.IProviderValueConverter<T>! converter) -> void

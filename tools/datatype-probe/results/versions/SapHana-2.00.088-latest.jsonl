@@ -1,0 +1,2 @@
+{"db":"SapHana","type":"vector embedding","decl":"REAL_VECTOR(3)","accepted":false,"stage":"create","error":"Unknown failed on SapHana: sql syntax error: incorrect syntax near \u0022REAL_VECTOR\u0022: line 1 col 54 (at pos 54)"}
+{"db":"SapHana","type":"vector embedding","decl":"REAL_VECTOR","accepted":false,"stage":"create","error":"Unknown failed on SapHana: sql syntax error: incorrect syntax near \u0022REAL_VECTOR\u0022: line 1 col 54 (at pos 54)"}

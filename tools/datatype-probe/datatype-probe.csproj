@@ -15,6 +15,7 @@
 
   <ItemGroup>
     <None Include="candidates.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Include="prerequisites.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

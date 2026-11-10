@@ -1,12 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Numerics;
 using pengdows.crud.attributes;
 using pengdows.crud.types.valueobjects;
 using System.Threading.Tasks;
 using pengdows.crud.configuration;
 using pengdows.crud.enums;
 using pengdows.crud.fakeDb;
+using pengdows.crud.@internal;
 using Xunit;
 
 namespace pengdows.crud.Tests;
@@ -156,5 +158,47 @@ public sealed class HanaTypeFixesTests
             new SpatialRow { Id = 1, Geom = Geometry.FromGeoJson("{\"type\":\"Point\",\"coordinates\":[1,2]}", 0) }));
 
         Assert.IsType<NotSupportedException>(ex.GetBaseException());
+    }
+
+    // NUMBER(38,0) and NUMBER are reported as Decimal; HANA's GetValue returns its HanaDecimal wrapper, which no wide-integer
+    // conversion takes. The exact value comes from GetString (the digits), so Int128 and BigInteger properties read it.
+    [Table("hana_wide")]
+    private sealed class HanaWide
+    {
+        [Id(false)]
+        [Column("id", DbType.Int32)]
+        public int Id { get; set; }
+
+        [Column("big", DbType.Object)]
+        public Int128 Big { get; set; }
+
+        [Column("huge", DbType.Object)]
+        public BigInteger Huge { get; set; }
+    }
+
+    [Fact]
+    public async Task TableGateway_ProviderDecimal_ReadsIntoInt128AndBigInteger()
+    {
+        var factory = new fakeDbFactory(SupportedDatabase.SapHana);
+        factory.Connections.Add(new fakeDbConnection { EmulatedProduct = SupportedDatabase.SapHana });
+        var exec = new fakeDbConnection { EmulatedProduct = SupportedDatabase.SapHana };
+        exec.EnqueueReaderResult(new fakeDbDataReader(new[]
+        {
+            new Dictionary<string, object> { ["id"] = 1, ["big"] = 1234567890123456789012m, ["huge"] = 1234567890123456789012m }
+        })
+        {
+            ProviderDecimalColumns = new HashSet<string> { "big", "huge" }
+        });
+        factory.Connections.Add(exec);
+        await using var context = new DatabaseContext(new DatabaseContextConfiguration
+        {
+            ConnectionString = "Server=x;EmulatedProduct=SapHana",
+            DbMode = DbMode.Standard
+        }, factory);
+
+        var rows = await new TableGateway<HanaWide, int>(context).RetrieveAsync(new[] { 1 });
+
+        Assert.Equal(Int128.Parse("1234567890123456789012"), rows[0].Big);
+        Assert.Equal(BigInteger.Parse("1234567890123456789012"), rows[0].Huge);
     }
 }

@@ -202,27 +202,7 @@ public abstract class DatabaseTestBase : IAsyncLifetime
     {
         var providers = IntegrationTestConfiguration.EnabledProviders;
 
-        var only = Environment.GetEnvironmentVariable("INTEGRATION_ONLY");
-        if (string.IsNullOrWhiteSpace(only))
-        {
-            return providers;
-        }
-
-        var filtered = only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(token => Enum.TryParse<SupportedDatabase>(token, true, out var parsed)
-                ? parsed
-                : (SupportedDatabase?)null)
-            .Where(parsed => parsed.HasValue)
-            .Select(parsed => parsed!.Value)
-            .ToList();
-
-        if (filtered.Count == 0)
-        {
-            throw new InvalidOperationException(
-                $"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
-        }
-
-        return providers.Where(filtered.Contains).ToArray();
+        return IntegrationTestConfiguration.SelectIntegrationOnly(providers.ToList(), Environment.GetEnvironmentVariable("INTEGRATION_ONLY"));
     }
 
     // HARN-007: a statement that never returns must fail its provider, not hang the whole run. Seen

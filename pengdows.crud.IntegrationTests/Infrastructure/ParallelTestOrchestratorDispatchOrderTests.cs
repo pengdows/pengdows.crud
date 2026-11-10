@@ -101,7 +101,8 @@ public sealed class ParallelTestOrchestratorDispatchOrderTests
         // TimescaleDB/Fujitsu Enterprise Postgres wire-compatible forks — see
         // ParallelTestOrchestrator.cs's TestbedImageMatrix.PostgreSQL entry) since this assertion
         // was first written for 3 — stale, not a real regression.
-        Assert.Equal(6, configs.Count(c => c.DatabaseProvider == "PostgreSQL"));
+        // 7: PostgreSQL 16.15, 16.4, 15.0, 9.5, Citus, TimescaleDB, Fujitsu.
+        Assert.Equal(7, configs.Count(c => c.DatabaseProvider == "PostgreSQL"));
         Assert.Equal(2, configs.Count(c => c.DatabaseProvider == "Db2"));
         Assert.All(configs.Where(c => c.DatabaseProvider == "PostgreSQL"), c =>
         {
@@ -139,8 +140,8 @@ public sealed class ParallelTestOrchestratorDispatchOrderTests
             "PostgreSQL"
         });
 
-        // See GetTestConfigurations_HasTwoVersionsForDockerEngines's comment — 6, not 3, is current.
-        Assert.Equal(6, configs.Count);
+        // See GetTestConfigurations_HasTwoVersionsForDockerEngines's comment — 7, not 3, is current.
+        Assert.Equal(7, configs.Count);
         Assert.All(configs, c => Assert.Equal("PostgreSQL", c.DatabaseProvider));
     }
 

@@ -42,11 +42,13 @@
 {"db":"YugabyteDb","type":"unsigned 32-bit","decl":"UINT4","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022uint4\u0022 does not exist  POSITION: 55"}
 {"db":"YugabyteDb","type":"unsigned 32-bit","decl":"UINT32","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022uint32\u0022 does not exist  POSITION: 55"}
 {"db":"YugabyteDb","type":"unsigned 32-bit","decl":"UNSIGNED INT","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022INT\u0022  POSITION: 64"}
+{"db":"YugabyteDb","type":"unsigned 32-bit","decl":"NUMERIC(18,0)","accepted":true,"providerType":"numeric(18)","clrType":"System.Decimal"}
 {"db":"YugabyteDb","type":"unsigned 64-bit","decl":"BIGINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022UNSIGNED\u0022  POSITION: 62"}
 {"db":"YugabyteDb","type":"unsigned 64-bit","decl":"UBIGINT","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022ubigint\u0022 does not exist  POSITION: 55"}
 {"db":"YugabyteDb","type":"unsigned 64-bit","decl":"UINT8","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022uint8\u0022 does not exist  POSITION: 55"}
 {"db":"YugabyteDb","type":"unsigned 64-bit","decl":"UINT64","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022uint64\u0022 does not exist  POSITION: 55"}
 {"db":"YugabyteDb","type":"unsigned 64-bit","decl":"UNSIGNED BIGINT","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022BIGINT\u0022  POSITION: 64"}
+{"db":"YugabyteDb","type":"unsigned 64-bit","decl":"NUMERIC(20,0)","accepted":true,"providerType":"numeric(20)","clrType":"System.Decimal"}
 {"db":"YugabyteDb","type":"unsigned 128-bit","decl":"UHUGEINT","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022uhugeint\u0022 does not exist  POSITION: 55"}
 {"db":"YugabyteDb","type":"unsigned 128-bit","decl":"UINT128","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022uint128\u0022 does not exist  POSITION: 55"}
 {"db":"YugabyteDb","type":"arbitrary-size integer","decl":"NUMERIC(1000,0)","accepted":true,"providerType":"numeric(1000)","clrType":"System.Decimal"}
@@ -95,7 +97,7 @@
 {"db":"YugabyteDb","type":"bit / bitstring","decl":"BIT","accepted":true,"providerType":"bit(1)","clrType":"System.Boolean"}
 {"db":"YugabyteDb","type":"bit / bitstring","decl":"RAW(n) [bitstring substitute]","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022bitstring\u0022  POSITION: 63"}
 {"db":"YugabyteDb","type":"bit / bitstring","decl":"BINARY(n) [bitstring substitute]","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022bitstring\u0022  POSITION: 66"}
-{"db":"YugabyteDb","type":"bit / bitstring","decl":"BIT(n)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 22P02: invalid input syntax for type integer: \u0022n\u0022  POSITION: 55"}
+{"db":"YugabyteDb","type":"bit / bitstring","decl":"BIT(n)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 22P02: invalid input syntax for type integer: \u0022n\u0022  POSITION: 56"}
 {"db":"YugabyteDb","type":"boolean","decl":"BOOLEAN","accepted":true,"providerType":"boolean","clrType":"System.Boolean"}
 {"db":"YugabyteDb","type":"boolean","decl":"BOOL","accepted":true,"providerType":"boolean","clrType":"System.Boolean"}
 {"db":"YugabyteDb","type":"boolean","decl":"BIT","accepted":true,"providerType":"bit(1)","clrType":"System.Boolean"}
@@ -125,6 +127,7 @@
 {"db":"YugabyteDb","type":"unbounded text","decl":"VARCHAR","accepted":true,"providerType":"character varying","clrType":"System.String"}
 {"db":"YugabyteDb","type":"unbounded text","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022nclob\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"national / Unicode character","decl":"NVARCHAR(100)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022nvarchar\u0022 does not exist  POSITION: 56"}
+{"db":"YugabyteDb","type":"national / Unicode character","decl":"NCHAR(40)","accepted":true,"providerType":"character(40)","clrType":"System.String"}
 {"db":"YugabyteDb","type":"national / Unicode character","decl":"NCHAR(10)","accepted":true,"providerType":"character(10)","clrType":"System.String"}
 {"db":"YugabyteDb","type":"national / Unicode character","decl":"NVARCHAR2(100)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022nvarchar2\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"national / Unicode character","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022nclob\u0022 does not exist  POSITION: 56"}
@@ -176,6 +179,8 @@
 {"db":"YugabyteDb","type":"legacy long binary","decl":"MEDIUMBLOB","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022mediumblob\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"legacy long binary","decl":"LONGBLOB","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022longblob\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"legacy long binary","decl":"BYTE","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022byte\u0022 does not exist  POSITION: 56"}
+{"db":"YugabyteDb","type":"rowversion / timestamp token","decl":"BINARY(8)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022binary\u0022 does not exist  POSITION: 56"}
+{"db":"YugabyteDb","type":"rowversion / timestamp token","decl":"CHAR(8) FOR BIT DATA","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022FOR\u0022  POSITION: 64"}
 {"db":"YugabyteDb","type":"rowversion / timestamp token","decl":"ROWVERSION","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022rowversion\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"rowversion / timestamp token","decl":"TIMESTAMP","accepted":true,"providerType":"timestamp without time zone","clrType":"System.DateTime"}
 {"db":"YugabyteDb","type":"rowversion / timestamp token","decl":"no direct SQL rowversion type","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022direct\u0022  POSITION: 59"}
@@ -202,6 +207,7 @@
 {"db":"YugabyteDb","type":"local-zone timestamp","decl":"TIMESTAMP WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022WITH\u0022  POSITION: 66"}
 {"db":"YugabyteDb","type":"local-zone timestamp","decl":"TIMESTAMP(6) WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022WITH\u0022  POSITION: 69"}
 {"db":"YugabyteDb","type":"local-zone timestamp","decl":"TIMESTAMP_LTZ","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022timestamp_ltz\u0022 does not exist  POSITION: 56"}
+{"db":"YugabyteDb","type":"second-precision datetime","decl":"DATETIME YEAR TO SECOND","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022YEAR\u0022  POSITION: 65"}
 {"db":"YugabyteDb","type":"second-precision datetime","decl":"DATETIME(0)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022datetime\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"second-precision datetime","decl":"SMALLDATETIME","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022smalldatetime\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"second-precision datetime","decl":"DATETIME","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022datetime\u0022 does not exist  POSITION: 56"}
@@ -226,6 +232,7 @@
 {"db":"YugabyteDb","type":"UUID / GUID","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022raw\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"UUID / GUID","decl":"CHAR(36)","accepted":true,"providerType":"character(36)","clrType":"System.String"}
 {"db":"YugabyteDb","type":"UUID / GUID","decl":"BINARY(16)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022binary\u0022 does not exist  POSITION: 56"}
+{"db":"YugabyteDb","type":"UUID / GUID","decl":"CHAR(16) CHARACTER SET OCTETS","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022CHARACTER\u0022  POSITION: 65"}
 {"db":"YugabyteDb","type":"row identifier / ROWID","decl":"ROWID","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022rowid\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"row identifier / ROWID","decl":"UROWID","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022urowid\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"row identifier / ROWID","decl":"CHAR(18)","accepted":true,"providerType":"character(18)","clrType":"System.String"}
@@ -274,20 +281,24 @@
 {"db":"YugabyteDb","type":"point geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"point geometry","decl":"spatial DataBlade","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022DataBlade\u0022  POSITION: 64"}
 {"db":"YugabyteDb","type":"point geometry","decl":"ST_POINT","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022st_point\u0022 does not exist  POSITION: 56"}
+{"db":"YugabyteDb","type":"point geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"line / linestring geometry","decl":"LINESTRING","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022linestring\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"line / linestring geometry","decl":"GEOMETRY(LINESTRING)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"line / linestring geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"line / linestring geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022extension\u0022  POSITION: 65"}
 {"db":"YugabyteDb","type":"line / linestring geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
+{"db":"YugabyteDb","type":"line / linestring geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"polygon geometry","decl":"POLYGON","accepted":true,"providerType":"polygon","clrType":"NpgsqlTypes.NpgsqlPolygon"}
 {"db":"YugabyteDb","type":"polygon geometry","decl":"GEOMETRY(POLYGON)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"polygon geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"polygon geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022extension\u0022  POSITION: 65"}
 {"db":"YugabyteDb","type":"polygon geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
+{"db":"YugabyteDb","type":"polygon geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"general geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"general geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"general geometry","decl":"SDO_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022sdo_geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"general geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022extension\u0022  POSITION: 65"}
+{"db":"YugabyteDb","type":"general geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022st_geometry\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"geography / geodetic","decl":"GEOGRAPHY","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022geography\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"geography / geodetic","decl":"GEOGRAPHY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42704: type \u0022geography\u0022 does not exist  POSITION: 56"}
 {"db":"YugabyteDb","type":"geography / geodetic","decl":"PostGIS geography","accepted":false,"stage":"create","error":"Unknown failed on YugabyteDb: 42601: syntax error at or near \u0022geography\u0022  POSITION: 64"}

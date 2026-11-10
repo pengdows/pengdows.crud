@@ -37,6 +37,18 @@ internal static class WideIntegerFieldReader
         }
     }
 
+    // A column reported as Decimal read into a wider integer. The exact value is the digits (GetString), which is whole at any
+    // size: GetValue can be a provider's own wrapper that no conversion takes (SAP HANA's HanaDecimal, though the column is
+    // reported as Decimal), and GetDecimal overflows beyond decimal's range. A value that is not whole falls back to GetDecimal,
+    // and the conversion then refuses it as it always did.
+    public static object ReadFromDecimal(IDataRecord record, int ordinal)
+    {
+        var text = record.GetString(ordinal);
+        return BigInteger.TryParse(text, NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var whole)
+            ? whole
+            : record.GetDecimal(ordinal);
+    }
+
     public static decimal ReadDecimal(IDataRecord record, int ordinal)
     {
         try

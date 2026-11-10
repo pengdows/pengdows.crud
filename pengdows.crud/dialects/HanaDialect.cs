@@ -154,6 +154,10 @@ internal sealed class HanaDialect : SqlDialect
     // native UUID-shaped member.
     protected override GuidStorageFormat GuidFormat => GuidStorageFormat.String;
 
+    // NUMBER and DECIMAL columns take a wide integer as its decimal text; a BigInteger parameter is not a type HANA's
+    // provider binds, and the statement templates fail without this ("The parameter data type of BigInteger is invalid").
+    internal override bool BindsWideIntegersAsText => true;
+
     // HanaParameter rejects DbType.Object ("No mapping exists from DbType Object to a known
     // HanaDbType", confirmed live, TYPE-002); the driver infers the type from the value.
     internal override bool AssignsObjectDbType => false;
@@ -198,7 +202,8 @@ internal sealed class HanaDialect : SqlDialect
     // DECIMAL, (N)VARCHAR and date/time columns, and HANA converts INT into a SMALLINT element and
     // DOUBLE into REAL. Reads decode the driver's bytes (HanaArrayCoercion).
     private const string ArrayMarker = "\u0001pengdows:hana:array";
-    private const string ArrayPrefix = "ARRAY(SELECT V FROM JSON_TABLE(";
+    private const string ArrayOpen = "ARRAY(SELECT ";
+    private const string ArrayJsonSource = "JSON_TABLE(";
     private const string ArraySuffix = ") ORDER BY O)";
 
     private static string? ArrayElementSqlType(Type arrayType)
@@ -275,6 +280,28 @@ internal sealed class HanaDialect : SqlDialect
     // No expression keeps a NULL array NULL (JSON_TABLE over NULL is an empty array, and HANA has no
     // typed NULL ARRAY literal, confirmed live), so a null value's ARRAY(...) becomes NULL here and its
     // parameter is dropped. The gateways render the expression, so its text is known.
+    // The start of the ARRAY(SELECT <element> FROM JSON_TABLE(?...) the marker is the JSON of. The element is any expression
+    // (V, or CAST(V AS SMALLINT) for a SMALLINT array), so the match is on the structure, not on one element's text.
+    private static bool TryFindArrayOpen(string text, int marker, out int open)
+    {
+        open = -1;
+        var jsonStart = marker - ArrayJsonSource.Length;
+        if (jsonStart < 0 || string.CompareOrdinal(text, jsonStart, ArrayJsonSource, 0, ArrayJsonSource.Length) != 0)
+        {
+            return false;
+        }
+
+        open = text.LastIndexOf(ArrayOpen, jsonStart, StringComparison.Ordinal);
+        if (open < 0)
+        {
+            return false;
+        }
+
+        // Between the open and the JSON source there is the element, then " FROM ".
+        var between = text.AsSpan(open, jsonStart - open);
+        return between.EndsWith(" FROM ", StringComparison.Ordinal);
+    }
+
     internal override ValueTask PrepareCommandAsync(DbCommand command, CancellationToken cancellationToken)
     {
         for (var i = command.Parameters.Count - 1; i >= 0; i--)
@@ -287,8 +314,7 @@ internal sealed class HanaDialect : SqlDialect
 
             var text = command.CommandText;
             var marker = SqlStatementScanner.FindPositionalMarker(text, i);
-            if (marker < ArrayPrefix.Length ||
-                string.CompareOrdinal(text, marker - ArrayPrefix.Length, ArrayPrefix, 0, ArrayPrefix.Length) != 0)
+            if (!TryFindArrayOpen(text, marker, out var open))
             {
                 continue;
             }
@@ -299,7 +325,7 @@ internal sealed class HanaDialect : SqlDialect
                 continue;
             }
 
-            ReplaceArgumentWithNull(command, i, marker - ArrayPrefix.Length, end + ArraySuffix.Length);
+            ReplaceArgumentWithNull(command, i, open, end + ArraySuffix.Length);
         }
 
         return default;

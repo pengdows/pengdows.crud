@@ -86,7 +86,8 @@ SPEC = [
     ("geometry", "general geometry", "Geometry", "Object", "Geometry.FromWellKnownText(\"POINT (1 2)\", 4326)", "eq"),
     ("geography", "geography / geodetic", "Geography", "Object", "Geography.FromWellKnownText(\"POINT (1 2)\", 4326)", "eq"),
     ("fixed_array", "fixed-length array", "int[]", "Object", "new[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }", "sequence"),
-    ("list_collection", "list / multiset / set collection", "List<int>", "Object", "new List<int> { 1, 2, 3 }", "sequence"),
+    # A collection is an array in the library (docs/advanced-types.md: Informix LIST / SET / MULTISET map to T[]).
+    ("list_collection", "list / multiset / set collection", "int[]", "Object", "new int[] { 1, 2, 3 }", "sequence"),
     ("map", "map / dictionary", "Dictionary<string,object>", "Object", "new Dictionary<string, object> { [\"a\"] = \"1\" }", "sequence"),
     ("range", "range", "Range<int>", "Object", "new Range<int>(1, 10, true, false)", "eq"),
     ("multirange", "multirange", "Range<int>[]", "Object", "new[] { new Range<int>(1, 5, true, false), new Range<int>(7, 9, true, false) }", "sequence"),
@@ -115,13 +116,45 @@ WIDENED = {
 # the declared shape that matches the CLR type. A BitArray has a variable length: BIT(8) refuses a 3-bit value.
 PREFER = {
     "bit / bitstring": ("BIT VARYING", "VARBIT"),
+    # ROWVERSION is the native version type where the server takes it (SQL Server, SQLite); BINARY(8) is the fallback.
+    "rowversion / timestamp token": ("ROWVERSION",),
 }
 
 # Where a database's column affinity would change the stored value, the declaration is one whose affinity keeps it. SQLite
 # gives a column named BIT, or a wide integer, NUMERIC affinity: "101" becomes 101 (the leading zeros are lost), and a
 # 39-digit integer becomes a REAL (lossy). It also accepts any type name, so HUGEINT or BIGINT UNSIGNED get integer
 # affinity (64-bit) and are no place for a 128-bit value. A TEXT-affinity column keeps the text the library writes exactly.
+# A declaration the library's storage format needs: the column must be this one, or the cell is refused. The value is the
+# prefix of the declaration the probe must have accepted. Without the match nothing else is written, so a column the
+# library cannot read back is never declared in its place.
+DB_REQUIRED = {
+    # InformixDialect maps DbType.Time to DATETIME HOUR TO FRACTION(5); the HOUR TO SECOND form drops the fractional seconds.
+    ("Informix", "time without zone"): "DATETIME HOUR TO FRACTION(5)",
+    # InterBase's GuidFormat is Binary: the library writes the 16 bytes, which only an OCTETS column holds.
+    ("InterBase", "UUID / GUID"): "CHAR(16) CHARACTER SET OCTETS",
+    # HANA's GuidFormat is String: the library writes the GUID's text.
+    ("SapHana", "UUID / GUID"): "CHAR(36)",
+    # The fidelity sample is SRID 4326; a HANA column without an SRID is SRID 0 and refuses it.
+    ("SapHana", "point geometry"): "ST_GEOMETRY(4326)",
+    ("SapHana", "line / linestring geometry"): "ST_GEOMETRY(4326)",
+    ("SapHana", "polygon geometry"): "ST_GEOMETRY(4326)",
+    ("SapHana", "general geometry"): "ST_GEOMETRY(4326)",
+    ("SapHana", "geography / geodetic"): "ST_GEOMETRY(4326)",
+    # pengdows.flatfile's INTERVAL YEAR TO MONTH is text (ISO 8601), since months have no fixed length.
+    ("FlatFile", "year-month interval"): "INTERVAL YEAR TO MONTH",
+    # InterBase's TIMESTAMP keeps the time of day; its DATE does not.
+    ("InterBase", "second-precision datetime"): "TIMESTAMP",
+    # NCHAR is Latin-1 on InterBase; a VARCHAR on the NONE charset round-trips any text, as the driver's NONE is pinned to UTF-8.
+    ("InterBase", "national / Unicode character"): "VARCHAR(100)",
+}
+
 DB_PREFER = {
+    # SQLite accepts any type name, so the probe's XID is an unknown name that stores the value by affinity; the 32-bit
+    # transaction ID is an unsigned 32-bit value, stored as BIGINT (as unsigned 32-bit is).
+    ("Sqlite", "32-bit transaction ID"): ("BIGINT", "INTEGER"),
+    # HANA's TINYINT holds 0..255: the probe accepts it at create, but a signed 8-bit value of -5 is out of its range.
+    # SMALLINT holds the whole signed 8-bit range (the same choice as Informix's unsigned 8-bit above).
+    ("SapHana", "signed 8-bit"): ("SMALLINT", "SMALLINT"),
     # Informix's BYTE is a binary blob type: the driver refuses an integer in it ("Illegal attempt to convert Text/Byte blob type",
     # confirmed live 2026-11-06). SMALLINT holds the 0..255 range of an unsigned 8-bit value.
     ("Informix", "unsigned 8-bit"): ("SMALLINT", "SMALLINT"),
@@ -132,6 +165,8 @@ DB_PREFER = {
     ("MariaDb", "bit / bitstring"): ("BIT(3)", "bit(3)"),
     ("TiDb", "bit / bitstring"): ("BIT(3)", "bit(3)"),
     ("SingleStore", "bit / bitstring"): ("BIT(3)", "bit(3)"),
+    # NCHAR is accepted by PostgreSQL too; its national text is VARCHAR (the unicode text type).
+    ("PostgreSql", "national / Unicode character"): ("VARCHAR(100)", "character varying(100)"),
     ("PostgreSql", "native point"): ("POINT", "point"),
     ("PostgreSql", "native polygon"): ("POLYGON", "polygon"),
     ("PostgreSql", "transaction ID"): ("XID8", "xid8"),
@@ -211,6 +246,51 @@ DB_PREFER = {
 # A (database, type) the library documents as unsupported, with the reason. Its declaration is not written, so the cell is
 # UNSUPPORTED with that reason (the same as a database that refused the column): it is a decision, not a fix.
 DB_REFUSED = {
+    # YugabyteDB accepts the XML column declaration (results/YugabyteDb.jsonl), but an INSERT of an XML value fails with
+    # "unsupported XML feature" (YugabyteDb suite): the values are refused, so the cell is refused.
+    ("YugabyteDb", "XML"): "server: YugabyteDB accepts an XML column, but an INSERT of an XML value fails with 'unsupported XML feature' (YugabyteDb suite); the values are refused",
+    # REAL_VECTOR is refused by the HANA Express builds we can pull: 2.00.088 (latest) and 2.00.082, whose catalogue has no vector
+    # type (results/versions/SapHana-2.00.088-latest.jsonl). A newer HANA is needed to test the type.
+    ("SapHana", "vector embedding"): "server: REAL_VECTOR is refused by SAP HANA Express 2.00.088 (latest) and 2.00.082, whose catalogue has no vector type (results/versions/SapHana-2.00.088-latest.jsonl); a newer HANA release is needed",
+    # pgvector is an extension: the default testbed image lacks it. The pgvector image accepts vector(3) as float[]
+    # (results/versions/PostgreSql-pgvector.jsonl). Enabling it means a pgvector testbed image, which is not the default.
+    ("PostgreSql", "vector embedding"): "extension gap: pgvector is not in the default testbed image (extension \"vector\" is not available); the pgvector image accepts vector(3) as float[] (results/versions/PostgreSql-pgvector.jsonl)",
+    # PostGIS is an extension: the default testbed image lacks it. The PostGIS image accepts geography(POINT,4326) as the library's
+    # Geography (results/versions/PostgreSql-postgis.jsonl).
+    ("PostgreSql", "geography / geodetic"): "extension gap: PostGIS is not in the default testbed image (extension \"postgis\" is not available); the PostGIS image accepts geography(POINT,4326) (results/versions/PostgreSql-postgis.jsonl)",
+    # InterBase accepts INTEGER[10] (results/InterBase.jsonl): the same fixed-dimension array as Firebird, so there is no
+    # variable-length SQL array to map.
+    ("InterBase", "SQL array"): "by design: InterBase arrays have fixed dimensions (INTEGER[10] is accepted, results/InterBase.jsonl); there is no variable-length array to map",
+    # Raw bytes have no cast to JSON on Informix (No cast from byte to json, confirmed live). Its BSON is written from JSON text by
+    # the native binary JSON row (?::JSON::BSON), which is declared; this generic row is the raw-bytes form.
+    ("Informix", "BSON"): "by design: raw bytes have no cast to JSON on Informix (No cast from byte to json, confirmed live); Informix BSON is written from JSON text, covered by the native binary JSON row",
+    # back as ReadOnlyMemory<float>, which the library does not map yet, so no cell is declared.
+    # read as BLOB (byte[]), which the library does not map to a vector yet.
+    # Db2 refuses an ARRAY type in a column definition (SQL20441N, a probe result): an array is a parameter or PL/SQL type here.
+    ("Db2", "SQL array"): "server: Db2 refuses an ARRAY type in a column definition (SQL20441N: a ARRAY data type is not supported in the context where it is being used, confirmed live)",
+    # Firebird arrays have fixed dimensions (fblangref 4.0, array_dim): INTEGER[10] reads back as ten elements, padded, so a
+    # variable-length SQL array is not what the server has. The fixed-length array is the Firebird array, and it is declared.
+    ("Firebird", "SQL array"): "by design: Firebird arrays have fixed dimensions (fblangref 4.0, array_dim); INTEGER[10] reads back as ten elements, so there is no variable-length array to map",
+    # native point and native polygon are PostgreSQL's types (CLR PostgreSqlPoint, PostgreSqlPolygon). Another database's POINT
+    # or POLYGON is a geometry, which the point geometry and polygon geometry cells cover.
+    **{(db, sem): "native point is PostgreSQL's point (CLR PostgreSqlPoint); this database's POINT is a geometry, covered by point geometry"
+       for db in ("MySql", "MariaDb", "Oracle", "SqlServer", "Sqlite", "Db2", "Informix", "SapHana", "SingleStore", "TiDb", "DuckDB",
+                  "FlatFile", "Firebird", "CockroachDb", "SybaseASE", "Spanner", "InterBase")
+       for sem in ("native point",)},
+    **{(db, sem): "native polygon is PostgreSQL's polygon (CLR PostgreSqlPolygon); this database's POLYGON is a geometry, covered by polygon geometry"
+       for db in ("MySql", "MariaDb", "Oracle", "SqlServer", "Sqlite", "Db2", "Informix", "SapHana", "SingleStore", "TiDb", "DuckDB",
+                  "FlatFile", "Firebird", "CockroachDb", "SybaseASE", "Spanner", "InterBase")
+       for sem in ("native polygon",)},
+    # The probe's "accepted" for ST_GEOMETRY (provider type SQLUDTVAR) is a false positive: the test database's catalog (sysxtdtypes)
+    # has no st_geometry type, and a CREATE TABLE with it fails with "Type (st_geometry) not found". The cell is refused until a
+    # spatial DataBlade is installed in that database.
+    ("Informix", "geography / geodetic"): "no st_geometry type in the test database (sysxtdtypes; CREATE TABLE: Type (st_geometry) not found); the probe's acceptance was a false positive",
+    # pengdows.flatfile stores an INTERVAL as a TimeSpan (the day-time interval is bound as one). Months have no fixed length,
+    # so no TimeSpan holds a year-month or a generic interval (which carries months): they are refused on FlatFile.
+    ("FlatFile", "generic interval"): "pengdows.flatfile stores an INTERVAL as a TimeSpan: a generic interval has months, which have no fixed length",
+    # The probe accepts TIMESTAMP as a rowversion candidate. On InterBase it is a date-time, which cannot hold the eight token
+    # bytes; InterBase has no rowversion type (every other rowversion candidate is refused by the server).
+    ("InterBase", "rowversion / timestamp token"): "InterBase has no rowversion type: its TIMESTAMP is a date-time, which cannot hold the eight token bytes",
     ("PostgreSql", "point geometry"): "by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row)",
     ("PostgreSql", "polygon geometry"): "by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPolygon (the native polygon row)",
     ("YugabyteDb", "point geometry"): "by design: a PostGIS Geometry carries an SRID that a native point cannot hold; the native type is PostgreSqlPoint (the native point row)",
@@ -225,19 +305,16 @@ DB_REFUSED = {
     # Live: a decimal bound to a DECFLOAT parameter fails (InvalidCastException, decimal to FbDecFloat). The library can't tell a
     # DECFLOAT column from a NUMERIC one by CLR type, so the fix needs a declared column type (see the open decision).
     ("YugabyteDb", "transaction ID"): "upstream: YugabyteDB's xid8 adds high bits on write: 4294967296 (0x100000000) reads back as 18700287606784 (0x110200000000), so no raw integer round-trips",
-    ("YugabyteDb", "XML"): "server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application",
     ("CockroachDb", "XML"): "server: this database has no working xml column type. Map the property as string and store it in a text column; the library writes the text as is, and de/serialization stays in the application",
     # FlatFile's only date type is DATE, which holds no time of day (its zoned time is a DateTimeOffset, keeping the offset).
     # A ROWID is a pseudo-column that identifies a row: a table column of that type keeps no value the library writes (ODP.NET
     # reads the written text back as NULL), so the cell is refused rather than passed on a NULL.
-    ("Oracle", "row identifier / ROWID"): "by design: ROWID is a pseudo-column that identifies a row: a ROWID column keeps no value the library writes (it reads back NULL)",
+    ("Oracle", "row identifier / ROWID"): "by design: a ROWID is read as its text (ROWIDTOCHAR; live-checked on Oracle 23ai) and is NonInsertable/NonUpdateable, because the database assigns it; the fidelity cell writes a value, so it is refused for that reason only",
     # Informix's BIGINT and INT8 exclude -9223372036854775808, their NULL sentinel: the server refuses the value (confirmed live).
     ("Informix", "signed 64-bit"): "server: Informix's BIGINT and INT8 exclude -9223372036854775808, their NULL sentinel; the server refuses the value (Value will not fit in a BIGINT or an INT8, confirmed live 2026-11-06)",
     # Informix writes a BSON document from its JSON text (the JSON-to-BSON cast); the server refuses raw BSON bytes (No cast from byte to json).
-    ("Informix", "BSON"): "by design: Informix writes a BSON document from its JSON text, and the server refuses raw bytes as BSON (No cast from byte to json, confirmed live 2026-11-06)",
     # A DateTimeOffset declared DbType.Time is a time with its offset (the PostgreSQL timetz and Firebird rule). DuckDB and
     # FlatFile have no time-with-zone type to hold the offset, so the parameter is refused at the validator.
-    ("DuckDB", "time with zone"): "by design: DuckDB has no time-with-zone column the library can hold its offset in; a DateTimeOffset declared DbType.Time is refused (ArgumentException, DbTypeValidator)",
 }
 
 # A (database, type) whose column the server generates (a rowversion token, a ROWID): the library never writes it, so the
@@ -249,6 +326,7 @@ DB_GENERATED = {
 DB_ENUM = [
     "PostgreSql", "SqlServer", "Oracle", "Firebird", "CockroachDb", "MariaDb", "MySql", "Sqlite", "DuckDB",
     "YugabyteDb", "TiDb", "SingleStore", "SybaseASE", "Spanner", "FlatFile", "Access", "Db2", "Informix",
+    "InterBase", "SapHana", "AuroraMySql", "AuroraPostgreSql",
 ]
 
 
@@ -304,9 +382,17 @@ ROWVERSION_AS_FIXED_BINARY = {
 # cast never sees another database's type. Only a dialect that casts a native type reads it.
 PG_FAMILY = ("PostgreSql", "YugabyteDb", "CockroachDb")
 NATIVE_TYPE = {
+    # The default images have VECTOR (MySQL 9.7, MariaDB 11.8); the library writes and reads the native VECTOR(3) through its
+    # conversion functions (STRING_TO_VECTOR / VECTOR_TO_STRING; VEC_FromText / VEC_ToText).
+    ("MySql", "vector embedding"): "VECTOR(3)",
+    ("MariaDb", "vector embedding"): "VECTOR(3)",
+    # The VARRAY's native type: the library builds it from the elements' JSON (OracleDialect.CollectionArgument).
+    ("Oracle", "SQL array"): "probe_varray",
     ("Firebird", "decimal floating point"): "DECFLOAT",
     ("Oracle", "external-file reference"): "BFILE",
     **{(db, "bit / bitstring"): "BIT(3)" for db in ("MySql", "MariaDb", "TiDb", "SingleStore")},
+    ("PostgreSql", "map / dictionary"): "hstore",
+    ("PostgreSql", "hierarchical path"): "ltree",
     **{(db, "XML"): "xml" for db in PG_FAMILY},
     **{(db, "WAL / log position"): "pg_lsn" for db in PG_FAMILY},
     **{(db, "full-text search vector / query"): "tsquery" for db in PG_FAMILY},
@@ -317,20 +403,84 @@ NATIVE_TYPE = {
 }
 
 
+# Aurora runs its engine's server (MySQL, PostgreSQL), so its rules are the engine's; its declarations are still its own probe's.
+ENGINE = {"AuroraMySql": "MySql", "AuroraPostgreSql": "PostgreSql"}
+
+# The engine's entries apply to its Aurora alias too.
+for _alias, _engine in ENGINE.items():
+    NATIVE_TYPE.update({(_alias, _sem): _native for (_d, _sem), _native in list(NATIVE_TYPE.items()) if _d == _engine})
+    if _engine in ROWVERSION_AS_FIXED_BINARY:
+        ROWVERSION_AS_FIXED_BINARY.add(_alias)
+
+
+def rules_db(db):
+    return ENGINE.get(db, db)
+
+
+# Extensions that Aurora PostgreSQL installs (AWS extension list) and whose cells come from Aurora's own probe, not the engine's
+# (the default PostgreSQL image lacks them: its refusal stands).
+OWN_EXTENSIONS = {("AuroraPostgreSql", "vector embedding"), ("AuroraPostgreSql", "geography / geodetic")}
+
+
 def resolve(accepted, db, sem):
     """The (declaration, provider type) for a semantic type on a database, or None when it has no column there."""
-    if (db, sem) in DB_REFUSED:
+    rdb = rules_db(db)
+    if (rdb, sem) in DB_REFUSED and (db, sem) not in OWN_EXTENSIONS:
         return None
-    if (db, sem) in DB_PREFER:
-        return DB_PREFER[(db, sem)]
-    if sem == "rowversion / timestamp token" and db in ROWVERSION_AS_FIXED_BINARY:
+    if (rdb, sem) in DB_PREFER:
+        return DB_PREFER[(rdb, sem)]
+    if (rdb, sem) in DB_REQUIRED:
+        required = DB_REQUIRED[(rdb, sem)].upper()
+        return next((c for c in accepted.get((db, sem), []) if c[0].upper().startswith(required)), None)
+    if sem == "rowversion / timestamp token" and rdb in ROWVERSION_AS_FIXED_BINARY:
         binary = resolve(accepted, db, "varying binary")
         if binary is not None:
             return binary
-    hit = pick(accepted.get((db, sem), []), PREFER.get(sem))
-    if hit is None and sem in WIDENED:
+    candidates = accepted.get((db, sem), [])
+    if sem == "unsigned 32-bit" and probed(accepted, db, "BIGINT"):
+        # Where the library's bound type holds the value, that is the column (NUMERIC(18,0) only where BIGINT is refused).
+        candidates = [c for c in candidates if c[0].upper() != "NUMERIC(18,0)"]
+    hit = pick(candidates, PREFER.get(sem))
+    if hit is not None and "." in hit[1]:
+        # A type in a schema is named by its own name: the schema is the testbed's (aurora_pg_test_<ms>), which differs per run.
+        hit = (hit[0], hit[1].rsplit(".", 1)[1])
+    # A widened declaration is written only when the probe accepted it on this database (under some type): an unprobed
+    # BIGINT or NUMERIC(20,0) is an assumption, and the fidelity test then fails on a type the server does not have.
+    if hit is None and sem in WIDENED and probed(accepted, db, WIDENED[sem]):
         hit = (WIDENED[sem], "(widened)")
     return hit
+
+
+# A native row whose CLR type is the library's value type for the database's native type, where the spec's shared CLR
+# type is not one the database's native type takes (PostgreSQL hstore is HStore, docs/advanced-types.md).
+NATIVE_CLR = {
+    ("PostgreSql", "map / dictionary"): ("HStore", "HStore.Parse(\"a=>1\")"),
+    # ltree labels are dot-separated, so its value is text in that form (HierarchyId's /1/2/ is not an ltree).
+    ("PostgreSql", "hierarchical path"): ("string", "\"1.2\""),
+}
+
+
+def native_clr(db, sem, clr, val):
+    """The CLR type and sample of a native row: the library's value type where NATIVE_CLR names one, else the spec's."""
+    return NATIVE_CLR.get((rules_db(db), sem), (clr, val))
+
+
+def prerequisites(prereqs, resolved):
+    """The DDL to run before a cell: only where the cell declares the named type or domain that DDL creates."""
+    out = {}
+    for db, by_sem in prereqs.items():
+        for sem, entry in by_sem.items():
+            hit = resolved.get(db, {}).get(sem)
+            if hit is not None and hit[0].upper() == entry["decl"].upper():
+                out.setdefault(db, {})[sem] = list(entry["ddl"])
+    return out
+
+
+def probed(accepted, db, decl):
+    """True when the probe accepted this exact declaration on the database, for any semantic type."""
+    return any(d.upper() == decl.upper()
+               for (kdb, _), rows in accepted.items() if kdb == db
+               for d, _ in rows)
 
 
 def refused_reason(refused, db, sem):
@@ -382,7 +532,7 @@ def main():
         d.append(f"            [SupportedDatabase.{db}] = new Dictionary<string, string>")
         d.append("            {")
         for sem, refusal in gaps:
-            reason = DB_REFUSED.get((db, sem)) or " ".join(refusal.replace("Unknown failed on " + db + ": ", "").split())[:200]
+            reason = DB_REFUSED.get((rules_db(db), sem)) or " ".join(refusal.replace("Unknown failed on " + db + ": ", "").split())[:200]
             d.append(f"                [{cs_string(sem)}] = {cs_string('refused: ' + reason)},")
         d.append("            },")
     d += ["        };", "",
@@ -392,6 +542,31 @@ def main():
           "        {"]
     for db, sem in sorted(DB_GENERATED):
         d.append(f"            (SupportedDatabase.{db}, {cs_string(sem)}),")
+    d += ["        };", ""]
+    # DDL that must run before a cell's table: a named type or domain the cell's declaration uses (prerequisites.json).
+    prereq_file = os.path.join(S, "prerequisites.json")
+    prereqs = json.load(open(prereq_file, encoding="utf-8")) if os.path.exists(prereq_file) else {}
+    needed = prerequisites(prereqs, resolved)
+    d += ["    // database -> semantic type -> DDL that must run before the cell's table is created (a named type or domain).",
+          "    public static readonly IReadOnlyDictionary<SupportedDatabase, IReadOnlyDictionary<string, string[]>> Prerequisites =",
+          "        new Dictionary<SupportedDatabase, IReadOnlyDictionary<string, string[]>>",
+          "        {"]
+    for db in sorted(needed):
+        d.append(f"            [SupportedDatabase.{db}] = new Dictionary<string, string[]>")
+        d.append("            {")
+        for sem, ddl in sorted(needed[db].items()):
+            statements = ", ".join(cs_string(s) for s in ddl)
+            d.append(f"                [{cs_string(sem)}] = new[] {{ {statements} }},")
+        d.append("            },")
+    d += ["        };", ""]
+    # The CREATE TABLE the cells use on a database that needs a table option (Oracle's tablespace, SingleStore's rowstore).
+    templates = {db: cfg["table_template"] for db, cfg in prereqs.items() if "table_template" in cfg}
+    d += ["    // database -> CREATE TABLE template: {table} and {columns} are filled in; a database needs no entry for plain CREATE TABLE.",
+          "    public static readonly IReadOnlyDictionary<SupportedDatabase, string> TableTemplates =",
+          "        new Dictionary<SupportedDatabase, string>",
+          "        {"]
+    for db in sorted(templates):
+        d.append(f"            [SupportedDatabase.{db}] = {cs_string(templates[db])},")
     d += ["        };", "}", ""]
     with open(os.path.join(OUT, "TypeFidelityDeclarations.cs"), "w", encoding="utf-8") as f:
         f.write("\n".join(d))
@@ -442,6 +617,7 @@ def main():
         if sem not in spec_by_sem:
             continue
         col, clr, dbt, val = spec_by_sem[sem]
+        clr, val = native_clr(db, sem, clr, val)
         name = f"Cell_{pascal(col)}_{db}"
         native_rows.append((db, sem, name))
         c += [

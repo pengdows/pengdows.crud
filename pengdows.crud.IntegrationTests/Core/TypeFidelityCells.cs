@@ -1013,12 +1013,12 @@ public sealed class Cell_ListCollection : IFidelityRow<Cell_ListCollection>
     public int Id { get; set; }
 
     [Column("list_collection", DbType.Object)]
-    public List<int> Value { get; set; }
+    public int[] Value { get; set; }
 
     public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
         new[] { ("list_collection", "Value", "list / multiset / set collection") };
 
-    public static Cell_ListCollection Expected() => new() { Id = 1, Value = new List<int> { 1, 2, 3 } };
+    public static Cell_ListCollection Expected() => new() { Id = 1, Value = new int[] { 1, 2, 3 } };
 }
 
 [Table("type_fidelity")]
@@ -1214,6 +1214,54 @@ public sealed class Cell_SecurityLabel : IFidelityRow<Cell_SecurityLabel>
 }
 
 [Table("type_fidelity")]
+public sealed class Cell_Vector_MySql : IFidelityRow<Cell_Vector_MySql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("vector", DbType.Object, NativeType = "VECTOR(3)")]
+    public float[] Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("vector", "Value", "vector embedding") };
+
+    public static Cell_Vector_MySql Expected() => new() { Id = 1, Value = new float[] { 1f, 2.5f, 3f } };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Vector_MariaDb : IFidelityRow<Cell_Vector_MariaDb>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("vector", DbType.Object, NativeType = "VECTOR(3)")]
+    public float[] Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("vector", "Value", "vector embedding") };
+
+    public static Cell_Vector_MariaDb Expected() => new() { Id = 1, Value = new float[] { 1f, 2.5f, 3f } };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_IntArray_Oracle : IFidelityRow<Cell_IntArray_Oracle>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("int_array", DbType.Object, NativeType = "probe_varray")]
+    public int[] Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("int_array", "Value", "SQL array") };
+
+    public static Cell_IntArray_Oracle Expected() => new() { Id = 1, Value = new[] { 1, 2, 3 } };
+}
+
+[Table("type_fidelity")]
 public sealed class Cell_DecimalFloat_Firebird : IFidelityRow<Cell_DecimalFloat_Firebird>
 {
     [Id(true)]
@@ -1307,6 +1355,38 @@ public sealed class Cell_BitString_SingleStore : IFidelityRow<Cell_BitString_Sin
         new[] { ("bit_string", "Value", "bit / bitstring") };
 
     public static Cell_BitString_SingleStore Expected() => new() { Id = 1, Value = new BitArray(new[] { true, false, true }) };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Map_PostgreSql : IFidelityRow<Cell_Map_PostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("map", DbType.Object, NativeType = "hstore")]
+    public HStore Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("map", "Value", "map / dictionary") };
+
+    public static Cell_Map_PostgreSql Expected() => new() { Id = 1, Value = HStore.Parse("a=>1") };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Hierarchy_PostgreSql : IFidelityRow<Cell_Hierarchy_PostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("hierarchy", DbType.Object, NativeType = "ltree")]
+    public string Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("hierarchy", "Value", "hierarchical path") };
+
+    public static Cell_Hierarchy_PostgreSql Expected() => new() { Id = 1, Value = "1.2" };
 }
 
 [Table("type_fidelity")]
@@ -1581,6 +1661,182 @@ public sealed class Cell_NativePolygon_YugabyteDb : IFidelityRow<Cell_NativePoly
     public static Cell_NativePolygon_YugabyteDb Expected() => new() { Id = 1, Value = PostgreSqlPolygon.Parse("((0,0),(1,0),(1,1),(0,0))") };
 }
 
+[Table("type_fidelity")]
+public sealed class Cell_Vector_AuroraMySql : IFidelityRow<Cell_Vector_AuroraMySql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("vector", DbType.Object, NativeType = "VECTOR(3)")]
+    public float[] Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("vector", "Value", "vector embedding") };
+
+    public static Cell_Vector_AuroraMySql Expected() => new() { Id = 1, Value = new float[] { 1f, 2.5f, 3f } };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_BitString_AuroraMySql : IFidelityRow<Cell_BitString_AuroraMySql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("bit_string", DbType.Object, NativeType = "BIT(3)")]
+    public BitArray Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("bit_string", "Value", "bit / bitstring") };
+
+    public static Cell_BitString_AuroraMySql Expected() => new() { Id = 1, Value = new BitArray(new[] { true, false, true }) };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Map_AuroraPostgreSql : IFidelityRow<Cell_Map_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("map", DbType.Object, NativeType = "hstore")]
+    public HStore Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("map", "Value", "map / dictionary") };
+
+    public static Cell_Map_AuroraPostgreSql Expected() => new() { Id = 1, Value = HStore.Parse("a=>1") };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Hierarchy_AuroraPostgreSql : IFidelityRow<Cell_Hierarchy_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("hierarchy", DbType.Object, NativeType = "ltree")]
+    public string Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("hierarchy", "Value", "hierarchical path") };
+
+    public static Cell_Hierarchy_AuroraPostgreSql Expected() => new() { Id = 1, Value = "1.2" };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Xml_AuroraPostgreSql : IFidelityRow<Cell_Xml_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("xml", DbType.String, NativeType = "xml")]
+    public string Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("xml", "Value", "XML") };
+
+    public static Cell_Xml_AuroraPostgreSql Expected() => new() { Id = 1, Value = "<a>1</a>" };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_WalPosition_AuroraPostgreSql : IFidelityRow<Cell_WalPosition_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("wal_position", DbType.String, NativeType = "pg_lsn")]
+    public string Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("wal_position", "Value", "WAL / log position") };
+
+    public static Cell_WalPosition_AuroraPostgreSql Expected() => new() { Id = 1, Value = "0/16B3748" };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_FullText_AuroraPostgreSql : IFidelityRow<Cell_FullText_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("full_text", DbType.String, NativeType = "tsquery")]
+    public string Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("full_text", "Value", "full-text search vector / query") };
+
+    public static Cell_FullText_AuroraPostgreSql Expected() => new() { Id = 1, Value = "'fat' & 'rat'" };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_TransactionId_AuroraPostgreSql : IFidelityRow<Cell_TransactionId_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("transaction_id", DbType.UInt64, NativeType = "xid8")]
+    public ulong Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("transaction_id", "Value", "transaction ID") };
+
+    public static Cell_TransactionId_AuroraPostgreSql Expected() => new() { Id = 1, Value = 4294967296ul };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_Xid32_AuroraPostgreSql : IFidelityRow<Cell_Xid32_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("xid32", DbType.UInt32, NativeType = "xid")]
+    public uint Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("xid32", "Value", "32-bit transaction ID") };
+
+    public static Cell_Xid32_AuroraPostgreSql Expected() => new() { Id = 1, Value = 4000000000u };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_NativePoint_AuroraPostgreSql : IFidelityRow<Cell_NativePoint_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("native_point", DbType.Object, NativeType = "point")]
+    public PostgreSqlPoint Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("native_point", "Value", "native point") };
+
+    public static Cell_NativePoint_AuroraPostgreSql Expected() => new() { Id = 1, Value = new PostgreSqlPoint(1, 2) };
+}
+
+[Table("type_fidelity")]
+public sealed class Cell_NativePolygon_AuroraPostgreSql : IFidelityRow<Cell_NativePolygon_AuroraPostgreSql>
+{
+    [Id(true)]
+    [Column("id", DbType.Int32)]
+    public int Id { get; set; }
+
+    [Column("native_polygon", DbType.Object, NativeType = "polygon")]
+    public PostgreSqlPolygon Value { get; set; }
+
+    public static IReadOnlyList<(string Column, string Property, string Semantic)> Columns { get; } =
+        new[] { ("native_polygon", "Value", "native polygon") };
+
+    public static Cell_NativePolygon_AuroraPostgreSql Expected() => new() { Id = 1, Value = PostgreSqlPolygon.Parse("((0,0),(1,0),(1,1),(0,0))") };
+}
+
 // Every fidelity type, as the test runs it: its semantic name, its column, and its entity.
 internal static class TypeFidelityCells
 {
@@ -1666,12 +1922,17 @@ internal static class TypeFidelityCells
     // The row class of a type on a database whose column declares a native type; null when the shared row applies.
     public static Type NativeRowFor(SupportedDatabase database, string semantic) => (database, semantic) switch
     {
+        (SupportedDatabase.MySql, "vector embedding") => typeof(Cell_Vector_MySql),
+        (SupportedDatabase.MariaDb, "vector embedding") => typeof(Cell_Vector_MariaDb),
+        (SupportedDatabase.Oracle, "SQL array") => typeof(Cell_IntArray_Oracle),
         (SupportedDatabase.Firebird, "decimal floating point") => typeof(Cell_DecimalFloat_Firebird),
         (SupportedDatabase.Oracle, "external-file reference") => typeof(Cell_FileReference_Oracle),
         (SupportedDatabase.MySql, "bit / bitstring") => typeof(Cell_BitString_MySql),
         (SupportedDatabase.MariaDb, "bit / bitstring") => typeof(Cell_BitString_MariaDb),
         (SupportedDatabase.TiDb, "bit / bitstring") => typeof(Cell_BitString_TiDb),
         (SupportedDatabase.SingleStore, "bit / bitstring") => typeof(Cell_BitString_SingleStore),
+        (SupportedDatabase.PostgreSql, "map / dictionary") => typeof(Cell_Map_PostgreSql),
+        (SupportedDatabase.PostgreSql, "hierarchical path") => typeof(Cell_Hierarchy_PostgreSql),
         (SupportedDatabase.PostgreSql, "XML") => typeof(Cell_Xml_PostgreSql),
         (SupportedDatabase.YugabyteDb, "XML") => typeof(Cell_Xml_YugabyteDb),
         (SupportedDatabase.CockroachDb, "XML") => typeof(Cell_Xml_CockroachDb),
@@ -1689,6 +1950,17 @@ internal static class TypeFidelityCells
         (SupportedDatabase.YugabyteDb, "native point") => typeof(Cell_NativePoint_YugabyteDb),
         (SupportedDatabase.PostgreSql, "native polygon") => typeof(Cell_NativePolygon_PostgreSql),
         (SupportedDatabase.YugabyteDb, "native polygon") => typeof(Cell_NativePolygon_YugabyteDb),
+        (SupportedDatabase.AuroraMySql, "vector embedding") => typeof(Cell_Vector_AuroraMySql),
+        (SupportedDatabase.AuroraMySql, "bit / bitstring") => typeof(Cell_BitString_AuroraMySql),
+        (SupportedDatabase.AuroraPostgreSql, "map / dictionary") => typeof(Cell_Map_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "hierarchical path") => typeof(Cell_Hierarchy_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "XML") => typeof(Cell_Xml_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "WAL / log position") => typeof(Cell_WalPosition_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "full-text search vector / query") => typeof(Cell_FullText_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "transaction ID") => typeof(Cell_TransactionId_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "32-bit transaction ID") => typeof(Cell_Xid32_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "native point") => typeof(Cell_NativePoint_AuroraPostgreSql),
+        (SupportedDatabase.AuroraPostgreSql, "native polygon") => typeof(Cell_NativePolygon_AuroraPostgreSql),
         _ => null,
     };
 }

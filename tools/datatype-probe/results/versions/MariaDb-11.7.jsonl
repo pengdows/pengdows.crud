@@ -1,0 +1,1 @@
+{"db":"MariaDb","type":"vector embedding","decl":"VECTOR(3)","accepted":true,"providerType":"BLOB","clrType":"System.Byte[]"}

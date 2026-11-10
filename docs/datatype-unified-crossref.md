@@ -77,7 +77,7 @@ Each cell records the reconciled *classification*, not a successful ADO.NET test
 | B13 | Key generation | Identity column (declaration, not a type) | `R` | `R` | `R` | `R` | `R` | `R` | `R` | `R` |
 | B14 | Key generation | SERIAL shorthand | `R` | `X` | `X` | `X` | `R` | `R` | `R` | `X` |
 | B15 | Exact numeric | Fixed-point DECIMAL(p,s) | `N` | `N` | `N` | `N` | `N` | `N` | `N` | `A` |
-| B16 | Exact numeric | Decimal floating point | `X` | `X` | `A` | `V` | `X` | `X` | `X` | `X` |
+| B16 | Exact numeric | Decimal floating point | `X` | `X` | `X` | `V` | `X` | `X` | `X` | `X` |
 | B17 | Exact numeric | Money / currency | `N` | `N` | `X` | `X` | `X` | `X` | `X` | `X` |
 | B18 | Approximate numeric | 32-bit IEEE float | `N` | `N` | `N` | `N` | `N` | `N` | `N` | `A` |
 | B19 | Approximate numeric | 64-bit IEEE double | `N` | `N` | `N` | `N` | `N` | `N` | `N` | `N` |
@@ -104,9 +104,9 @@ Each cell records the reconciled *classification*, not a successful ADO.NET test
 | B40 | Temporal | Time with time zone | `N` | `X` | `X` | `V` | `N` | `X` | `X` | `X` |
 | B41 | Temporal | Timestamp without time zone | `N` | `N` | `N` | `N` | `N` | `N` | `N` | `A` |
 | B42 | Temporal | Timestamp with time zone (offset/zone retained) | `X` | `N` | `N` | `V` | `X` | `X` | `X` | `X` |
-| B43 | Temporal | Instant (UTC-normalized, session-zone rendered) | `N` | `X` | `N` | `X` | `N` | `A` | `A` | `X` |
+| B43 | Temporal | Instant (UTC-normalized, session-zone rendered) | `X` | `X` | `N` | `X` | `X` | `A` | `A` | `X` |
 | B44 | Temporal | Interval year–month | `N` | `X` | `N` | `X` | `N` | `X` | `X` | `X` |
-| B45 | Temporal | Interval day–second | `N` | `X` | `N` | `X` | `N` | `A` | `A` | `X` |
+| B45 | Temporal | Interval day–second | `N` | `X` | `N` | `X` | `N` | `X` | `X` | `X` |
 | B46 | Temporal | Year | `X` | `X` | `X` | `X` | `X` | `N` | `N` | `X` |
 | B47 | Temporal | Row version (not a time) | `X` | `N` | `R` | `X` | `X` | `X` | `X` | `X` |
 | B48 | Identifier | UUID / GUID | `N` | `N` | `X` | `X` | `N` | `V` | `X` | `X` |

@@ -65,7 +65,43 @@ internal class MySqlDialect : SqlDialect
     internal override string? NativeTypeArgument(string parameterMarker, string nativeType) =>
         nativeType.StartsWith("BIT(", StringComparison.OrdinalIgnoreCase)
             ? $"CONV({parameterMarker}, 2, 10) + 0"
-            : null;
+            : VectorColumnIn(nativeType) && VectorFunctions
+                ? $"{VectorFromTextFunction}({parameterMarker})"
+                : null;
+
+    // A VECTOR column is written and read through the server's text conversion (MySQL 9: STRING_TO_VECTOR and
+    // VECTOR_TO_STRING; MariaDB 11.7 overrides the names). The server refuses a plain text literal for a VECTOR.
+    // TiDB and SingleStore bind their vectors as text already (BindsVectorsAsText) and keep that path.
+    internal virtual string VectorFromTextFunction => "STRING_TO_VECTOR";
+    internal virtual string VectorToTextFunction => "VECTOR_TO_STRING";
+
+    private bool VectorFunctions => !BindsVectorsAsText;
+
+    private static bool VectorColumnIn(string? nativeType) =>
+        nativeType != null && nativeType.StartsWith("VECTOR", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsVectorColumn(IColumnInfo column) => VectorFunctions && VectorColumnIn(column.NativeType);
+
+    internal override bool MarksColumnParameter(IColumnInfo column) =>
+        IsVectorColumn(column) || base.MarksColumnParameter(column);
+
+    // A float array is written as its bracketed JSON text, which the conversion function takes.
+    public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
+    {
+        base.MarkColumnParameter(parameter, column);
+        if (IsVectorColumn(column) && parameter.Value is float[] vector)
+        {
+            parameter.Value = System.Text.Json.JsonSerializer.Serialize(vector);
+            parameter.DbType = DbType.String;
+        }
+    }
+
+    internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        IsVectorColumn(column)
+            ? $"{VectorToTextFunction}({columnReference}) AS {wrappedName}"
+            : base.RenderColumnSelect(columnReference, wrappedName, column);
+
+    // A vector is read as its bracketed text, which the numeric JSON array path parses into the float array.
     private static readonly Regex AuroraBanner =
         new(@"^(\d+)\.(\d+)\.mysql_aurora\.(\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 

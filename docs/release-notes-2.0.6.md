@@ -147,6 +147,11 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
 
 ## New API
 
+- `IProviderValueConverter<T>` (abstractions) and `ProviderValueConverters.Register<T>` (pengdows.crud): the escape hatch
+  for an application type the library does not map. Registration is process-wide and refuses a second registration for the
+  same type. The library owns the conversion once registered. See `docs/advanced-types.md`, "Application converters".
+  Added (not changed): nothing shipped is altered, so this is a semver-safe addition.
+
 - `ColumnName(string propertyName)` on `ITableGateway`/`IPrimaryKeyTableGateway`, and
   `ColumnName<TEntity>(string propertyName)` as an `IDatabaseContext` extension, return a property's
   mapped `[Column]` name for custom SQL: `sc.WrapObjectName("o." + ColumnName(nameof(Order.CustomerId)))`
@@ -215,7 +220,20 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
   mysqld_stmt_execute"; confirmed live, MySQL 8.4.11, MySqlConnector 2.6.2). Just before execution the parameter's
   type is reset, so the driver types it from the value.
 
+- Oracle `VARRAY` columns (a declared collection): a `T[]` property is written as JSON text and built into the VARRAY in
+  SQL. ODP.NET refuses a typed array bind for a VARRAY (ORA-50071), so the library does not use one (TYPE-030).
+- MySQL 9 and MariaDB 11.7+ `VECTOR` columns: a `float[]` is written with the server's conversion function
+  (STRING_TO_VECTOR; VEC_FromText on MariaDB). The server refuses a plain text literal (TYPE-031).
+- Informix `DECIMAL(p)` floating decimal, and `DATETIME HOUR TO FRACTION(5)` for a time of day (TYPE-031 family).
+
 ## Reads that now work
+
+- Oracle `ROWID` reads as its text (`ROWIDTOCHAR`). Mark the property `NonInsertable` and `NonUpdateable`; the database
+  assigns the value, so it is never written.
+
+- SAP HANA `NUMBER(38,0)` and `NUMBER` read into `Int128`, `UInt128` or `BigInteger` through the gateways. Sap.Data.Hana.Net
+  reports them as `decimal`, but its `GetValue` returns its own `HanaDecimal`, which no wide-integer conversion takes; the
+  exact digits come from `GetString` instead (see "Driver issues" in `advanced-types.md`).
 
 - An integer beyond `long` (Snowflake `NUMBER`) read into a `double` through the gateway rounds to
   the nearest double, as `DataReaderMapper` and `TypeCoercionHelper` do; it was truncated
@@ -251,6 +269,12 @@ the integration run (`INCLUDE_AURORA=true`). Per-database requirements and versi
   failed the read with `DataMappingException` (an `InvalidCastException` inside) (COR-008, REV-072).
 - A `decimal` column (Oracle `NUMBER`) read into an enum property works; 2.0.5 failed building the
   mapper with `InvalidOperationException` (COR-013).
+
+- Oracle VARRAY reads return the whole array: the aggregate is `RETURNING CLOB`, because the default `VARCHAR2` raised
+  ORA-40478 past 4000 bytes. A test reads an 11 KB collection live (TYPE-030).
+- Aurora PostgreSQL `vector` and `geography` (pgvector, PostGIS) are declared from Aurora's own probe (TYPE-032).
+- DuckDB `TIME WITH TIME ZONE` reads its offset (TIMETZ); PostgreSQL `hstore` and `ltree` pass the fidelity matrix.
+- A byte array is never parsed as a JSON collection (a guard on the collection-literal path).
 
 ## Guids in 16-byte binary columns
 

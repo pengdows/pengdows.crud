@@ -1021,6 +1021,12 @@ internal abstract class SqlDialect : IInternalSqlDialect
     internal virtual bool ReturnsCollectionsAsLiteralText => false;
 
     /// <summary>
+    /// True when a collection column arrives as a JSON array text (Oracle VARRAY: JSON_ARRAYAGG of its elements). An array
+    /// property is read by deserializing that text, so text elements as well as numbers come back typed.
+    /// </summary>
+    internal virtual bool ReturnsCollectionsAsJsonText => false;
+
+    /// <summary>
     /// Opening connections must be serialized: concurrent opens corrupt the provider (DuckDB).
     /// </summary>
     internal virtual bool RequiresSerializedConnectionOpen => false;
@@ -2638,7 +2644,8 @@ internal abstract class SqlDialect : IInternalSqlDialect
         // Then validate using the pre-resolved type to avoid boxing T into object?.
         var runtimeType = valueIsNull ? null : ResolveClrType(value);
 
-        if (!valueIsNull)
+        // An application type with a registered converter is validated by its converted value, not by its CLR type.
+        if (!valueIsNull && !(runtimeType is not null && ProviderValueConverters.IsRegistered(runtimeType)))
         {
             // Validate CLR type compatibility with DbType before setting the value.
             // Catches mismatches early with clear messages instead of deferring to

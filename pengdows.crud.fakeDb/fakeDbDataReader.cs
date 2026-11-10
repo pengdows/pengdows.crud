@@ -995,6 +995,12 @@ public class fakeDbDataReader : DbDataReader
             return text;
         }
 
+        // A provider decimal's text is its digits, at any size (Sap.Data.Hana.Net's GetString), where its GetValue is a wrapper.
+        if (IsProviderDecimal(i) && RawValue(i) is decimal providerDecimal)
+        {
+            return providerDecimal.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        }
+
         return (string)GetValue(i);
     }
 

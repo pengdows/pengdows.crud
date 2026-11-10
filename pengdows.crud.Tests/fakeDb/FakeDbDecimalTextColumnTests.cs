@@ -99,4 +99,16 @@ public class FakeDbDecimalTextColumnTests
 
         Assert.Equal(Wide, reader.GetValue(0));
     }
+
+    // SAP HANA (confirmed live): a DECIMAL column reported as Decimal. GetValue returns the provider's wrapper, and GetString
+    // returns the value's digits (the exact text the library reads a wide integer from).
+    [Fact]
+    public void ProviderDecimalColumn_GetString_ReturnsTheDigits()
+    {
+        var rows = new[] { new Dictionary<string, object> { ["n"] = 1234567890123456789012m } };
+        using var reader = new fakeDbDataReader(rows) { ProviderDecimalColumns = new HashSet<string> { "n" } };
+        Assert.True(reader.Read());
+
+        Assert.Equal("1234567890123456789012", reader.GetString(0));
+    }
 }

@@ -249,13 +249,19 @@ Char[]{'a','b'} -> Char: throws InvalidCastException
     Single[]{float:1,float:2,float:3}  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
     throws FormatException  [Informix]
 "[1,2,3]" -> String[]
-    throws InvalidCastException  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
+    throws InvalidCastException  [PostgreSql,SqlServer,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
+    throws JsonException  [Oracle]
     throws FormatException  [Informix]
 "[1,2,3]" -> List`1: List`1{Int32:1,Int32:2,Int32:3}
-"{1,2,3}" -> Int32[]: throws FormatException
-"{1,2,3}" -> Single[]: throws FormatException
+"{1,2,3}" -> Int32[]
+    throws FormatException  [PostgreSql,SqlServer,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
+    throws JsonException  [Oracle]
+"{1,2,3}" -> Single[]
+    throws FormatException  [PostgreSql,SqlServer,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,Informix,SapHana,InterBase,Access]
+    throws JsonException  [Oracle]
 "{1,2,3}" -> String[]
-    throws InvalidCastException  [PostgreSql,SqlServer,Oracle,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
+    throws InvalidCastException  [PostgreSql,SqlServer,Firebird,CockroachDb,MariaDb,MySql,Sqlite,DuckDB,YugabyteDb,TiDb,Snowflake,AuroraMySql,AuroraPostgreSql,Db2,FlatFile,SingleStore,SybaseASE,Spanner,SapHana,InterBase,Access]
+    throws JsonException  [Oracle]
     throws FormatException  [Informix]
 "{1,2,3}" -> List`1: throws FormatException
 Int32[]{Int32:1,Int32:2} -> Int32[]: Int32[]{Int32:1,Int32:2}

@@ -377,4 +377,17 @@ public class InterBaseDialectTests
 
         public override int ErrorCode { get; }
     }
+
+    // The InterBase driver refuses DbType.DateTime2 ("Invalid data type: 26" while building the SQL templates, found by the
+    // live fidelity run). A timestamp without a zone is a DateTime on InterBase's TIMESTAMP, as on Db2 and Informix.
+    [Fact]
+    public void DateTime2_IsBoundAsDateTime()
+    {
+        var dialect = CreateDialect();
+        var value = new DateTime(2026, 1, 2, 3, 4, 5, DateTimeKind.Utc);
+
+        var parameter = dialect.CreateDbParameter("p", DbType.DateTime2, value);
+
+        Assert.Equal(DbType.DateTime, parameter.DbType);
+    }
 }

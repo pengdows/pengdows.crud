@@ -340,5 +340,11 @@ internal class FlatFileDialect : SqlDialect
     // REV-039: the translator for this database's provider exceptions; no type mappings or
     // value formats of its own.
     internal static DatabaseTraits CreateFlatFileTraits() =>
-        new(SupportedDatabase.FlatFile, new FlatFileExceptionTranslator());
+        new(SupportedDatabase.FlatFile, new FlatFileExceptionTranslator())
+        {
+            // pengdows.flatfile parses an INTERVAL value as a TimeSpan and refuses ISO 8601 text (confirmed live, 2026-11-07), so a
+            // day-time interval is bound as its TimeSpan; reads take it back as one.
+            IntervalFormat = IntervalWireFormat.DayTimeSpan,
+            IntervalReadsAsTextWhenTimeSpan = true,
+        };
 }

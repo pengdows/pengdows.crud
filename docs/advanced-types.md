@@ -233,6 +233,18 @@ plain .NET type (verified live, TYPE-005).
 | Spanner (PostgreSQL) `uuid`, arrays | `Guid`, `T[]` | A Guid is sent untyped (a uuid column refuses text, and Npgsql can't type it as uuid) and read from its 16 bytes; arrays Npgsql refuses as non-nullable elements are read with nullable ones. |
 | Informix `TEXT`, `BYTE`, `BLOB`, `CLOB` | `string` / `byte[]` | The gateways learn the column's declared type ([below](#declared-column-types)). `TEXT` is bound as `IfxType.Text`. A `BLOB`/`CLOB` value (no host variable works on `UPDATE`, or on `INSERT` below about 9,000 bytes, and the driver's locator API fails) and a `BYTE`/`TEXT` value in a MERGE upsert are staged first in a session temp table, `pengdows_lob_stage` (created on first use, `WITH NO LOG`), then read back by key in the same statement on the same connection (WRT-006, TYPE-020, live). In your own SQL, bind `TEXT` with `IfxType.Text`, and stage a `BLOB`/`CLOB` the same way or use `LVARCHAR`. |
 | Informix `BSON` | `string` (JSON text) | The gateways write `?::JSON::BSON` and read `col::JSON` (TYPE-020). Use the same casts in your own SQL. |
+| Oracle `VARRAY` (a declared collection) | `T[]` (numbers or text) | Written as JSON text and built in SQL (JSON_TABLE, COLLECT, CAST); read as JSON_ARRAYAGG RETURNING CLOB, so arrays over 4000 bytes come back whole. An empty collection reads as `[]`, a NULL as null (TYPE-030). |
+| MySQL 9 `VECTOR` | `float[]` | Written with `STRING_TO_VECTOR`, read with `VECTOR_TO_STRING`. The default testbed image is mysql:9.7 (TYPE-031). |
+| MariaDB 11.7+ `VECTOR` | `float[]` | Written with `VEC_FromText`, read with `VEC_ToText` (TYPE-031). |
+| Aurora PostgreSQL `vector` (pgvector) | `float[]` | Declared from Aurora's own probe; the default PostgreSQL image lacks the extension (TYPE-032). |
+| Aurora PostgreSQL `geography` (PostGIS) | `Geography` | Declared from Aurora's own probe; the default PostgreSQL image lacks the extension (TYPE-032). |
+| Informix `LIST` / `SET` / `MULTISET` | `T[]` | Read from the collection literal; `LIST(INTEGER NOT NULL)` is the declared form. |
+| Informix `DECIMAL(p)` (floating) | `decimal` | The server's floating decimal (`DECIMAL(32)` is probed). |
+| Informix `DATETIME HOUR TO FRACTION(5)` | `DateTime` (time of day) | The fractional form; `HOUR TO SECOND` drops fractions. |
+| DuckDB `TIME WITH TIME ZONE` (`TIMETZ`) | `DateTimeOffset` | Read with its offset; a `DateTimeOffset` declared as a time is written as its time and offset text. |
+| PostgreSQL `hstore` | `HStore` | The library's `HStore` value (TYPE-005 family). |
+| PostgreSQL `ltree` | `string` | Dotted labels (`1.2`); the server refuses the HierarchyId form. |
+
 | Informix `BOOLEAN` in `WHERE` | `bool` | Writing and reading work. A `bool` parameter binds as `SMALLINT`, which a `BOOLEAN` column compares only with `'t'`/`'f'` text, so compare with text in your own SQL. |
 | Informix `DATETIME HOUR TO FRACTION(n)` | `TimeOnly` / `TimeSpan` | The gateways write the value as text cast to the column's type, keeping `n` digits (truncated, never rounded). In your own SQL Informix.Net.Core truncates a `TimeSpan` parameter to whole seconds, so compare with `CAST({P}p AS DATETIME HOUR TO FRACTION(n))` bound as `'hh:mm:ss.fffff'` (TYPE-022). `DATETIME YEAR TO FRACTION` with a `DateTime` keeps its fraction. |
 | Sybase ASE `BIGDATETIME`, `BIGTIME` | `DateTime` / `DateTimeOffset` with `DbType.DateTime2` / `DbType.DateTimeOffset`; `TimeSpan` / `TimeOnly` with `DbType.Time` | AdoNetCore.AseClient 0.19 truncates `BIGDATETIME` fractions to milliseconds on write, decodes them a few microseconds off on read, and can't read `BIGTIME` at all ("Unsupported data type 188"). So `DateTime2`/`DateTimeOffset` values are bound as microsecond text (truncated), which ASE converts into `BIGDATETIME` exactly and into `DATETIME` as before, in your own SQL too; the gateways write a `DbType.Time` column as `CONVERT(BIGTIME, text)` and read these columns through `CONVERT(VARCHAR, col, 140)` (dates) and `137` (times), so both round-trip to the microsecond (TYPE-022, live). In your own SQL, read them with the same `CONVERT`s, and compare a `BIGTIME` with `CONVERT(BIGTIME, {P}p)` bound as `'hh:mm:ss.ffffff'`: a `TimeSpan` parameter is truncated to milliseconds and `BIGTIME` refuses plain text. |
@@ -242,10 +254,14 @@ plain .NET type (verified live, TYPE-005).
 | InterBase text with the database charset `NONE` | `string` | The driver resolves `NONE` once, to the system code page if .NET code pages are registered first (SqlClient registers them), storing other characters as `?`; pengdows pins it to UTF-8, so any text round-trips. `NCHAR` (ISO8859_1) still takes only Latin-1. With `Charset=UTF8` in the connection string, `UTF8` columns and text BLOBs round-trip any text, but the server can't return non-ASCII text from a `NONE` column (the fetch fails, "string truncation"), so keep the default charset for `NONE` columns. A `CHAR(n)` value longer than `n` bytes fails with the driver's `ArgumentException` rather than a truncation error (TYPE-022, live). |
 | Informix `LIST` / `SET` / `MULTISET` | `T[]` | Written as a `LIST{...}` literal (Informix converts it to a `SET` or `MULTISET` too) and read by parsing the literal text the driver returns. `ROW` maps to `string` only: Informix.Net.Core reads it as literal text with numbers padded (`ROW(5          ,'q',NULL)`) and takes a literal as a text parameter (cast it, `?::ROW(a INT, ...)`, when a field is a `DATE`). It reports the column's type as plain `ROW`, with no fields, so pengdows can't map one to a structure. Select the fields (`col.a`, `col.b`) to read them typed (TYPE-020, live). |
 | HANA `ARRAY`, Sybase ASE `XML` | — | HANA: not supported yet (the driver refuses array parameters, HANA converts no text or binary into an `ARRAY`, and reads return an undocumented encoding; TYPE-020). ASE has no `XML` column type: XML Services store it in text columns. |
-| SAP HANA `DECIMAL` / `SMALLDECIMAL` | `decimal` | Sap.Data.Hana.Net's `GetValue` returns its own `HanaDecimal`; the value is read with `GetDecimal`. A decimal with trailing zeros is sent without them: the driver cut `12345678901234567.00m` (Precision 18, Scale 0) to `2345678901234567` with no error. |
+| SAP HANA `DECIMAL` / `SMALLDECIMAL` / `NUMBER` | `decimal`; `Int128`, `BigInteger` for a wide integer | Sap.Data.Hana.Net reports the column as `decimal`, but its `GetValue` returns its own `HanaDecimal` (see [Driver issues](#driver-issues)), so the value is read with `GetDecimal`. An integer wider than `decimal` (`NUMBER(38,0)`) is read from `GetString`, which returns the exact digits at any size. A decimal with trailing zeros is sent without them: the driver cut `12345678901234567.00m` (Precision 18, Scale 0) to `2345678901234567` with no error. |
 | SAP HANA `ST_GEOMETRY` / `ST_POINT` | `Geometry` / `Geography` | Written as EWKB with the value's SRID through `ST_GeomFromEWKB(?)` (WKT is encoded to it; HANA refuses WKT text), read with `ST_AsEWKB()`, so the SRID round-trips. A column declared with a spatial reference (`ST_GEOMETRY(4326)`) refuses a value with a different SRID. Your own `SELECT` gets the SRID only if it selects `col.ST_AsEWKB()`; the plain column reads as WKB with SRID 0. |
 | SAP HANA `ARRAY` | `int[]`, `long[]`, `short[]`, `double[]`, `float[]`, `string[]` (value-type elements may be nullable: `long?[]`) | Sap.Data.Hana.Net refuses array parameters and HANA converts no text or binary into an `ARRAY`, so an array is bound as its JSON text and the gateways write `ARRAY(SELECT V FROM JSON_TABLE(?, '$[*]' COLUMNS (O FOR ORDINALITY, V INT PATH '$')) ORDER BY O)` (`BIGINT`, `DOUBLE` or `NVARCHAR(5000)` for the other element types; a null array is written as `NULL`). Reads decode the bytes the driver returns, HANA's wire encoding. The driver reports the column only as `varbinary`, so the property's element type must match the column's: `int[]` for `INTEGER ARRAY`, `long[]` for `BIGINT`, `short[]` for `SMALLINT`, `double[]` for `DOUBLE`, `float[]` for `REAL`, `string[]` for `(N)VARCHAR`. A mismatch fails as `DataMappingException` rather than misreading. HANA can't compare an `ARRAY` with `=`. In your own SQL, an array parameter is sent as JSON text; build the `ARRAY` with the same subquery (TYPE-020, live). |
 | SAP HANA `TIMESTAMP` | `DateTime` (`DbType.DateTime` / `DateTime2`) | HANA stores 7 fraction digits (a tick) but Sap.Data.Hana.Net 2.29 truncates to microseconds on write and read. `DateTime` parameters are therefore bound as 7-digit text, which HANA converts into `TIMESTAMP` exactly and into `SECONDDATE`/`DATE` as before, in your own SQL too; gateway reads select `TO_VARCHAR(col, 'YYYY-MM-DD HH24:MI:SS.FF7')`, so values round-trip to the tick (TYPE-022, live). Select that expression in your own SQL to read all 7 digits. |
+| Informix `GEOGRAPHY` / `ST_GEOMETRY` | refused | The developer database has no spatial type: the Informix Spatial DataBlade (`spatial.8.22.FC4`) is in the image, but its installer (`bladeManager`) is not, and registering it by hand does not create its types. A geography column needs the DataBlade installed. |
+| pengdows.flatfile `INTERVAL` (day-time) | `IntervalDaySecond` (`DbType.Object`) | The driver stores an `INTERVAL` as a `TimeSpan` and reads an ISO 8601 day-time duration (`P1DT2H3M4S`) as one; a day-time interval is bound as its `TimeSpan`. |
+| pengdows.flatfile `INTERVAL YEAR TO MONTH` | `IntervalYearMonth` (`DbType.Object`) | Months have no fixed length, so the column is text: the ISO 8601 form (`P2Y3M`), which the value object reads and writes. |
+| pengdows.flatfile generic interval (months, days and microseconds together) | refused | Not standard SQL, and no `TimeSpan` holds the months: the driver has no column for it. |
 | SAP HANA `BINTEXT` | `string` | The driver reads it back as text. |
 | Snowflake `VARIANT` / `OBJECT` / `ARRAY` | `JsonValue` (or a `[Json]` property) | Snowflake.Data can't bind them, so the JSON is sent as text and written as `PARSE_JSON(:p)`. Snowflake refuses that inside `INSERT ... VALUES`, so inserts, batch inserts, the MERGE upsert source and batch updates of such an entity take their values from a `SELECT` (`UNION ALL` for several rows). |
 | Snowflake `GEOGRAPHY` / `GEOMETRY` | `Geography` / `Geometry` | Written as EWKT text (or EWKB hex / GeoJSON for a value without WKT); the session returns them as EWKT, so the SRID reads back. |
@@ -320,14 +336,52 @@ fails (permissions, a write-only context) nothing changes: the column is written
 methods never query; they use the types once a gateway has learned them on that context. Dialects that
 need no declared types never probe. PostgreSQL needs them only for writes, so its reads don't probe.
 
-## Not a public extension point
+## Application converters (the escape hatch)
 
-`AdvancedTypeRegistry`, `CoercionRegistry`, and `ProviderTypeMapping` are all `internal`. The
-wiki's `v2-Type-System` page currently shows an example calling
-`AdvancedTypeRegistry.Shared.RegisterMapping<EmailAddress>(...)` from application code — **this
-does not compile against the public API**; it was written against an earlier/aspirational shape
-of this system. There is currently no supported way for a consumer to register a custom advanced
-type mapping. That is deliberate: the supported built-in matrix is the product contract. If a
-provider's supported type is missing from the matrix, it should be implemented in the built-in
-coercion/converter layer and covered by provider integration tests; applications should not have
-to reimplement that conversion in each entity.
+The library owns every type it can map, and the supported matrix above is the product contract. For a type the library
+does not map, an application can register a converter once per process:
+
+```csharp
+public sealed class MinorUnitsConverter : IProviderValueConverter<MinorUnits>
+{
+    public object? ToProvider(MinorUnits value, SupportedDatabase provider) => value.Value.ToString(CultureInfo.InvariantCulture);
+    public MinorUnits FromProvider(object value, SupportedDatabase provider) => new() { Value = Convert.ToInt64(value, CultureInfo.InvariantCulture) };
+}
+
+ProviderValueConverters.Register(new MinorUnitsConverter());
+```
+
+After that, the library writes and reads `MinorUnits` through the converter, as it does its own types. A null stays
+null. A second registration for the same type throws `InvalidOperationException`, because the converter is process-wide.
+The converter's output is validated against the column's declared `DbType`, not the application type.
+
+Use it only for a type the library does not map. A type the database supports natively and the library does not map is a
+gap to report, not a converter to write.
+
+**Composite types** (a struct, row, or record column, such as DuckDB `STRUCT` or Informix `ROW`) are an application type,
+so they use the escape hatch. Map the composite to a class or record, and let the converter write it as JSON text and read
+it back. The column is declared as the database's composite type, and the converter's text is what the server takes.
+The library adds no composite mapping of its own. This pattern has no live integration test in the repository yet.
+
+**Oracle `ROWID`** is read as its text (`ROWIDTOCHAR`) and is `NonInsertable` and `NonUpdateable`: the database assigns it,
+so an insert or update leaves it out. Read it on a property marked with those attributes.
+
+## Driver issues
+
+Problems in a provider's driver that pengdows.crud works around. Each one names the driver version it was seen on, the
+workaround, and whether it has been reported to the vendor.
+
+### SAP HANA: `GetValue` returns `HanaDecimal` for a column reported as `decimal`
+
+- **Driver:** Sap.Data.Hana.Net 2.29.27 (`Sap.Data.Hana.Net.v8.0`), .NET 10.0. Server: SAP HANA Express (`saplabs/hanaexpress:latest`).
+- **What happens:** for a `NUMBER(38,0)` or `NUMBER` column, `GetFieldType` returns `System.Decimal` and `DataTypeName` returns
+  `decimal`, but `GetValue` returns `Sap.Data.Hana.HanaDecimal`, a provider type, not a `decimal` (ADO.NET expects the type
+  `GetFieldType` reports, or `DBNull`). `GetFieldValue<decimal>` throws; a consumer that converts `GetValue` to a wide integer
+  finds no conversion (`Cannot convert value from HanaDecimal to Int128`).
+- **What works:** `GetDecimal` returns the value up to `decimal`'s range (about 7.9e28), `Convert.ToDecimal` converts `HanaDecimal`,
+  and `GetString` returns the exact digits at any size. `GetDecimal` throws `OverflowException` beyond that range.
+- **Workaround:** a decimal column is read with `GetDecimal` into `decimal`, and into `Int128`, `UInt128` or `BigInteger`
+  from `GetString` (parsed exactly; a value that isn't whole still fails as before). fakeDb emulates the wrapper with
+  `ProviderDecimalColumns`.
+- **Reported to SAP:** not yet submitted. The report is drafted and waits for a submission channel; the repro is the
+  `NUMBER(38,0)` select above, which needs no pengdows.crud code.

@@ -24,6 +24,7 @@ using testbed.FlatFile;
 using testbed.Access;
 using testbed.Db2;
 using testbed.Informix;
+using testbed.Aurora;
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -52,11 +53,24 @@ ITestContainer Make(string name) => name switch
     "Access" => new AccessTestContainer(),
     "Db2" => new Db2TestContainer(image),
     "Informix" => new InformixTestContainer(image),
+    "InterBase" => new testbed.InterBase.InterBaseTestContainer(),
+    "AuroraPostgreSql" => new testbed.Aurora.AuroraPostgreSqlTestContainer(),
+    "AuroraMySql" => new testbed.Aurora.AuroraMySqlTestContainer(),
+    "SapHana" => new testbed.SapHana.HanaTestContainer(image),
     _ => throw new ArgumentException($"no container for {name}")
 };
 
 var candidates = JsonSerializer.Deserialize<Dictionary<string, string[]>>(
     File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "candidates.json")))!;
+// Prerequisite DDL: a type that must exist before a column can use it (an enum, a domain). Each entry runs before the
+// candidates of its semantic type, and its declared name is added to them. A refusal of the DDL is recorded, not hidden.
+var prerequisites = JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, JsonElement>>>(
+    File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "prerequisites.json")))?
+    .GetValueOrDefault(dbName) ?? new();
+var prerequisiteErrors = new Dictionary<string, string>();
+// The CREATE TABLE a probe column uses on this database: some need a table option (a tablespace with automatic segment space
+// management for VECTOR on Oracle; a rowstore table for GEOGRAPHY on SingleStore).
+var TableTemplate = prerequisites.TryGetValue("table_template", out var tt) ? tt.GetString() ?? "CREATE TABLE {table} ({columns})" : "CREATE TABLE {table} ({columns})";
 
 static string Short(Exception ex)
 {
@@ -96,8 +110,34 @@ async Task<string?> TryExecAsync(string sql)
 }
 
 var n = 0;
-foreach (var (semanticType, decls) in candidates)
+foreach (var (semanticType, declsRaw) in candidates)
 {
+    var decls = declsRaw;
+    if (prerequisites.TryGetValue(semanticType, out var pre))
+    {
+        var ddl = pre.GetProperty("ddl").EnumerateArray().Select(e => e.GetString()!).ToArray();
+        string? ddlError = null;
+        // Each statement runs; a clean-up that fails (no DROP ... IF EXISTS on this database) is not an error. The last
+        // statement creates the named type or domain, and its failure is the prerequisite's failure.
+        for (var i = 0; i < ddl.Length; i++)
+        {
+            var statementError = await TryExecAsync(ddl[i]);
+            if (i == ddl.Length - 1)
+            {
+                ddlError = statementError;
+            }
+        }
+
+        if (ddlError != null)
+        {
+            prerequisiteErrors[semanticType] = ddlError;
+            Emit(new { db = dbName, type = semanticType, decl = pre.GetProperty("decl").GetString(), accepted = false, stage = "prerequisite", error = ddlError });
+            continue;
+        }
+
+        decls = decls.Append(pre.GetProperty("decl").GetString()!).ToArray();
+    }
+
     if (decls.Length == 0)
     {
         Emit(new { db = dbName, type = semanticType, decl = (string?)null, accepted = false, notProbed = true });
@@ -110,7 +150,7 @@ foreach (var (semanticType, decls) in candidates)
         var table = $"pr{n}";
         await TryExecAsync($"DROP TABLE {table}");
 
-        var createError = await TryExecAsync($"CREATE TABLE {table} (id INTEGER NOT NULL PRIMARY KEY, c {decl})");
+        var createError = await TryExecAsync(TableTemplate.Replace("{table}", table).Replace("{columns}", $"id INTEGER NOT NULL PRIMARY KEY, c {decl}"));
         if (createError != null)
         {
             Emit(new { db = dbName, type = semanticType, decl, accepted = false, stage = "create", error = createError });

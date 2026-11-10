@@ -42,11 +42,13 @@
 {"db":"Sqlite","type":"unsigned 32-bit","decl":"UINT4","accepted":true,"providerType":"UINT4","clrType":"System.Int64"}
 {"db":"Sqlite","type":"unsigned 32-bit","decl":"UINT32","accepted":true,"providerType":"UINT32","clrType":"System.Int64"}
 {"db":"Sqlite","type":"unsigned 32-bit","decl":"UNSIGNED INT","accepted":true,"providerType":"UNSIGNED INT","clrType":"System.Int64"}
+{"db":"Sqlite","type":"unsigned 32-bit","decl":"NUMERIC(18,0)","accepted":true,"providerType":"NUMERIC","clrType":"System.String"}
 {"db":"Sqlite","type":"unsigned 64-bit","decl":"BIGINT UNSIGNED","accepted":true,"providerType":"BIGINT UNSIGNED","clrType":"System.Int64"}
 {"db":"Sqlite","type":"unsigned 64-bit","decl":"UBIGINT","accepted":true,"providerType":"UBIGINT","clrType":"System.Int64"}
 {"db":"Sqlite","type":"unsigned 64-bit","decl":"UINT8","accepted":true,"providerType":"UINT8","clrType":"System.Int64"}
 {"db":"Sqlite","type":"unsigned 64-bit","decl":"UINT64","accepted":true,"providerType":"UINT64","clrType":"System.Int64"}
 {"db":"Sqlite","type":"unsigned 64-bit","decl":"UNSIGNED BIGINT","accepted":true,"providerType":"UNSIGNED BIGINT","clrType":"System.Int64"}
+{"db":"Sqlite","type":"unsigned 64-bit","decl":"NUMERIC(20,0)","accepted":true,"providerType":"NUMERIC","clrType":"System.String"}
 {"db":"Sqlite","type":"unsigned 128-bit","decl":"UHUGEINT","accepted":true,"providerType":"UHUGEINT","clrType":"System.Int64"}
 {"db":"Sqlite","type":"unsigned 128-bit","decl":"UINT128","accepted":true,"providerType":"UINT128","clrType":"System.Int64"}
 {"db":"Sqlite","type":"arbitrary-size integer","decl":"NUMERIC(1000,0)","accepted":true,"providerType":"NUMERIC","clrType":"System.String"}
@@ -125,6 +127,7 @@
 {"db":"Sqlite","type":"unbounded text","decl":"VARCHAR","accepted":true,"providerType":"VARCHAR","clrType":"System.String"}
 {"db":"Sqlite","type":"unbounded text","decl":"NCLOB","accepted":true,"providerType":"NCLOB","clrType":"System.String"}
 {"db":"Sqlite","type":"national / Unicode character","decl":"NVARCHAR(100)","accepted":true,"providerType":"NVARCHAR","clrType":"System.String"}
+{"db":"Sqlite","type":"national / Unicode character","decl":"NCHAR(40)","accepted":true,"providerType":"NCHAR","clrType":"System.String"}
 {"db":"Sqlite","type":"national / Unicode character","decl":"NCHAR(10)","accepted":true,"providerType":"NCHAR","clrType":"System.String"}
 {"db":"Sqlite","type":"national / Unicode character","decl":"NVARCHAR2(100)","accepted":true,"providerType":"NVARCHAR2","clrType":"System.String"}
 {"db":"Sqlite","type":"national / Unicode character","decl":"NCLOB","accepted":true,"providerType":"NCLOB","clrType":"System.String"}
@@ -176,6 +179,8 @@
 {"db":"Sqlite","type":"legacy long binary","decl":"MEDIUMBLOB","accepted":true,"providerType":"MEDIUMBLOB","clrType":"System.Byte[]"}
 {"db":"Sqlite","type":"legacy long binary","decl":"LONGBLOB","accepted":true,"providerType":"LONGBLOB","clrType":"System.Byte[]"}
 {"db":"Sqlite","type":"legacy long binary","decl":"BYTE","accepted":true,"providerType":"BYTE","clrType":"System.String"}
+{"db":"Sqlite","type":"rowversion / timestamp token","decl":"BINARY(8)","accepted":true,"providerType":"BINARY","clrType":"System.String"}
+{"db":"Sqlite","type":"rowversion / timestamp token","decl":"CHAR(8) FOR BIT DATA","accepted":false,"stage":"create","error":"Unknown failed on Sqlite: SQLite Error 1: \u0027near \u0022FOR\u0022: syntax error\u0027."}
 {"db":"Sqlite","type":"rowversion / timestamp token","decl":"ROWVERSION","accepted":true,"providerType":"ROWVERSION","clrType":"System.String"}
 {"db":"Sqlite","type":"rowversion / timestamp token","decl":"TIMESTAMP","accepted":true,"providerType":"TIMESTAMP","clrType":"System.String"}
 {"db":"Sqlite","type":"rowversion / timestamp token","decl":"no direct SQL rowversion type","accepted":true,"providerType":"no direct SQL rowversion type","clrType":"System.String"}
@@ -202,6 +207,7 @@
 {"db":"Sqlite","type":"local-zone timestamp","decl":"TIMESTAMP WITH LOCAL TIME ZONE","accepted":true,"providerType":"TIMESTAMP WITH LOCAL TIME ZONE","clrType":"System.String"}
 {"db":"Sqlite","type":"local-zone timestamp","decl":"TIMESTAMP(6) WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on Sqlite: SQLite Error 1: \u0027near \u0022WITH\u0022: syntax error\u0027."}
 {"db":"Sqlite","type":"local-zone timestamp","decl":"TIMESTAMP_LTZ","accepted":true,"providerType":"TIMESTAMP_LTZ","clrType":"System.String"}
+{"db":"Sqlite","type":"second-precision datetime","decl":"DATETIME YEAR TO SECOND","accepted":false,"stage":"create","error":"Unknown failed on Sqlite: SQLite Error 1: \u0027near \u0022TO\u0022: syntax error\u0027."}
 {"db":"Sqlite","type":"second-precision datetime","decl":"DATETIME(0)","accepted":true,"providerType":"DATETIME","clrType":"System.String"}
 {"db":"Sqlite","type":"second-precision datetime","decl":"SMALLDATETIME","accepted":true,"providerType":"SMALLDATETIME","clrType":"System.String"}
 {"db":"Sqlite","type":"second-precision datetime","decl":"DATETIME","accepted":true,"providerType":"DATETIME","clrType":"System.String"}
@@ -226,6 +232,7 @@
 {"db":"Sqlite","type":"UUID / GUID","decl":"RAW(16)","accepted":true,"providerType":"RAW","clrType":"System.String"}
 {"db":"Sqlite","type":"UUID / GUID","decl":"CHAR(36)","accepted":true,"providerType":"CHAR","clrType":"System.String"}
 {"db":"Sqlite","type":"UUID / GUID","decl":"BINARY(16)","accepted":true,"providerType":"BINARY","clrType":"System.String"}
+{"db":"Sqlite","type":"UUID / GUID","decl":"CHAR(16) CHARACTER SET OCTETS","accepted":false,"stage":"create","error":"Unknown failed on Sqlite: SQLite Error 1: \u0027near \u0022CHARACTER\u0022: syntax error\u0027."}
 {"db":"Sqlite","type":"row identifier / ROWID","decl":"ROWID","accepted":true,"providerType":"ROWID","clrType":"System.String"}
 {"db":"Sqlite","type":"row identifier / ROWID","decl":"UROWID","accepted":true,"providerType":"UROWID","clrType":"System.String"}
 {"db":"Sqlite","type":"row identifier / ROWID","decl":"CHAR(18)","accepted":true,"providerType":"CHAR","clrType":"System.String"}
@@ -274,20 +281,24 @@
 {"db":"Sqlite","type":"point geometry","decl":"GEOMETRY","accepted":true,"providerType":"GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"point geometry","decl":"spatial DataBlade","accepted":true,"providerType":"spatial DataBlade","clrType":"System.String"}
 {"db":"Sqlite","type":"point geometry","decl":"ST_POINT","accepted":true,"providerType":"ST_POINT","clrType":"System.Int64"}
+{"db":"Sqlite","type":"point geometry","decl":"ST_GEOMETRY(4326)","accepted":true,"providerType":"ST_GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"line / linestring geometry","decl":"LINESTRING","accepted":true,"providerType":"LINESTRING","clrType":"System.String"}
 {"db":"Sqlite","type":"line / linestring geometry","decl":"GEOMETRY(LINESTRING)","accepted":false,"stage":"create","error":"Unknown failed on Sqlite: SQLite Error 1: \u0027near \u0022LINESTRING\u0022: syntax error\u0027."}
 {"db":"Sqlite","type":"line / linestring geometry","decl":"GEOMETRY","accepted":true,"providerType":"GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"line / linestring geometry","decl":"GEOMETRY extension","accepted":true,"providerType":"GEOMETRY extension","clrType":"System.String"}
 {"db":"Sqlite","type":"line / linestring geometry","decl":"ST_GEOMETRY","accepted":true,"providerType":"ST_GEOMETRY","clrType":"System.String"}
+{"db":"Sqlite","type":"line / linestring geometry","decl":"ST_GEOMETRY(4326)","accepted":true,"providerType":"ST_GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"polygon geometry","decl":"POLYGON","accepted":true,"providerType":"POLYGON","clrType":"System.String"}
 {"db":"Sqlite","type":"polygon geometry","decl":"GEOMETRY(POLYGON)","accepted":false,"stage":"create","error":"Unknown failed on Sqlite: SQLite Error 1: \u0027near \u0022POLYGON\u0022: syntax error\u0027."}
 {"db":"Sqlite","type":"polygon geometry","decl":"GEOMETRY","accepted":true,"providerType":"GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"polygon geometry","decl":"GEOMETRY extension","accepted":true,"providerType":"GEOMETRY extension","clrType":"System.String"}
 {"db":"Sqlite","type":"polygon geometry","decl":"ST_GEOMETRY","accepted":true,"providerType":"ST_GEOMETRY","clrType":"System.String"}
+{"db":"Sqlite","type":"polygon geometry","decl":"ST_GEOMETRY(4326)","accepted":true,"providerType":"ST_GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"general geometry","decl":"GEOMETRY","accepted":true,"providerType":"GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"general geometry","decl":"ST_GEOMETRY","accepted":true,"providerType":"ST_GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"general geometry","decl":"SDO_GEOMETRY","accepted":true,"providerType":"SDO_GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"general geometry","decl":"GEOMETRY extension","accepted":true,"providerType":"GEOMETRY extension","clrType":"System.String"}
+{"db":"Sqlite","type":"general geometry","decl":"ST_GEOMETRY(4326)","accepted":true,"providerType":"ST_GEOMETRY","clrType":"System.String"}
 {"db":"Sqlite","type":"geography / geodetic","decl":"GEOGRAPHY","accepted":true,"providerType":"GEOGRAPHY","clrType":"System.String"}
 {"db":"Sqlite","type":"geography / geodetic","decl":"GEOGRAPHY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on Sqlite: SQLite Error 1: \u0027near \u0022POINT\u0022: syntax error\u0027."}
 {"db":"Sqlite","type":"geography / geodetic","decl":"PostGIS geography","accepted":true,"providerType":"PostGIS geography","clrType":"System.String"}
@@ -353,3 +364,8 @@
 {"db":"Sqlite","type":"cursor / table variable","decl":"SYS_REFCURSOR","accepted":true,"providerType":"SYS_REFCURSOR","clrType":"System.String"}
 {"db":"Sqlite","type":"cursor / table variable","decl":"TABLE TYPE (SQLScript)","accepted":false,"stage":"create","error":"Unknown failed on Sqlite: SQLite Error 1: \u0027near \u0022TABLE\u0022: syntax error\u0027."}
 {"db":"Sqlite","type":"specialized security label","decl":"IDSSECURITYLABEL","accepted":true,"providerType":"IDSSECURITYLABEL","clrType":"System.String"}
+{"db":"Sqlite","type":"native point","decl":"POINT","accepted":true,"providerType":"POINT","clrType":"System.Int64"}
+{"db":"Sqlite","type":"native polygon","decl":"POLYGON","accepted":true,"providerType":"POLYGON","clrType":"System.String"}
+{"db":"Sqlite","type":"32-bit transaction ID","decl":"XID","accepted":true,"providerType":"XID","clrType":"System.String"}
+{"db":"Sqlite","type":"32-bit transaction ID","decl":"BIGINT","accepted":true,"providerType":"BIGINT","clrType":"System.Int64"}
+{"db":"Sqlite","type":"32-bit transaction ID","decl":"NUMERIC(10,0)","accepted":true,"providerType":"NUMERIC","clrType":"System.String"}

@@ -70,4 +70,13 @@ public sealed class DatabaseTraitsTests
             new[] { SupportedDatabase.MySql, SupportedDatabase.MariaDb, SupportedDatabase.AuroraMySql }.OrderBy(d => d),
             mySqlInternal.OrderBy(d => d));
     }
+
+    // pengdows.flatfile reports an INTERVAL column as TimeSpan and returns its text (ISO 8601): a TimeSpan read must not go
+    // through GetValue there. Npgsql's TimeSpan-reported interval must not, since GetValue drops or refuses its months.
+    [Fact]
+    public void IntervalReadsAsText_IsSetForFlatFileOnly()
+    {
+        Assert.True(DatabaseTraits.For(SupportedDatabase.FlatFile).IntervalReadsAsTextWhenTimeSpan);
+        Assert.False(DatabaseTraits.For(SupportedDatabase.PostgreSql).IntervalReadsAsTextWhenTimeSpan);
+    }
 }

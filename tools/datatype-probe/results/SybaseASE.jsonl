@@ -42,11 +42,13 @@
 {"db":"SybaseASE","type":"unsigned 32-bit","decl":"UINT4","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027UINT4\u0027. "}
 {"db":"SybaseASE","type":"unsigned 32-bit","decl":"UINT32","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027UINT32\u0027. "}
 {"db":"SybaseASE","type":"unsigned 32-bit","decl":"UNSIGNED INT","accepted":true,"providerType":"unsigned int","clrType":"System.UInt32"}
+{"db":"SybaseASE","type":"unsigned 32-bit","decl":"NUMERIC(18,0)","accepted":true,"providerType":"numeric","clrType":"System.Decimal"}
 {"db":"SybaseASE","type":"unsigned 64-bit","decl":"BIGINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027UNSIGNED\u0027. "}
 {"db":"SybaseASE","type":"unsigned 64-bit","decl":"UBIGINT","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027UBIGINT\u0027. "}
 {"db":"SybaseASE","type":"unsigned 64-bit","decl":"UINT8","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027UINT8\u0027. "}
 {"db":"SybaseASE","type":"unsigned 64-bit","decl":"UINT64","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027UINT64\u0027. "}
 {"db":"SybaseASE","type":"unsigned 64-bit","decl":"UNSIGNED BIGINT","accepted":true,"providerType":"unsigned bigint","clrType":"System.UInt64"}
+{"db":"SybaseASE","type":"unsigned 64-bit","decl":"NUMERIC(20,0)","accepted":true,"providerType":"numeric","clrType":"System.Decimal"}
 {"db":"SybaseASE","type":"unsigned 128-bit","decl":"UHUGEINT","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027UHUGEINT\u0027. "}
 {"db":"SybaseASE","type":"unsigned 128-bit","decl":"UINT128","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027UINT128\u0027. "}
 {"db":"SybaseASE","type":"arbitrary-size integer","decl":"NUMERIC(1000,0)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Length or precision specification 1000 is not within the range of 1 to 255. "}
@@ -125,6 +127,7 @@
 {"db":"SybaseASE","type":"unbounded text","decl":"VARCHAR","accepted":true,"providerType":"varchar","clrType":"System.String"}
 {"db":"SybaseASE","type":"unbounded text","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027NCLOB\u0027. "}
 {"db":"SybaseASE","type":"national / Unicode character","decl":"NVARCHAR(100)","accepted":true,"providerType":"nvarchar","clrType":"System.String"}
+{"db":"SybaseASE","type":"national / Unicode character","decl":"NCHAR(40)","accepted":true,"providerType":"varchar","clrType":"System.String"}
 {"db":"SybaseASE","type":"national / Unicode character","decl":"NCHAR(10)","accepted":true,"providerType":"varchar","clrType":"System.String"}
 {"db":"SybaseASE","type":"national / Unicode character","decl":"NVARCHAR2(100)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027NVARCHAR2\u0027. "}
 {"db":"SybaseASE","type":"national / Unicode character","decl":"NCLOB","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027NCLOB\u0027. "}
@@ -176,6 +179,8 @@
 {"db":"SybaseASE","type":"legacy long binary","decl":"MEDIUMBLOB","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027MEDIUMBLOB\u0027. "}
 {"db":"SybaseASE","type":"legacy long binary","decl":"LONGBLOB","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027LONGBLOB\u0027. "}
 {"db":"SybaseASE","type":"legacy long binary","decl":"BYTE","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027BYTE\u0027. "}
+{"db":"SybaseASE","type":"rowversion / timestamp token","decl":"BINARY(8)","accepted":true,"providerType":"varbinary","clrType":"System.Byte[]"}
+{"db":"SybaseASE","type":"rowversion / timestamp token","decl":"CHAR(8) FOR BIT DATA","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near the keyword \u0027FOR\u0027. "}
 {"db":"SybaseASE","type":"rowversion / timestamp token","decl":"ROWVERSION","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027ROWVERSION\u0027. "}
 {"db":"SybaseASE","type":"rowversion / timestamp token","decl":"TIMESTAMP","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027TIMESTAMP\u0027. "}
 {"db":"SybaseASE","type":"rowversion / timestamp token","decl":"no direct SQL rowversion type","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027direct\u0027. "}
@@ -202,6 +207,7 @@
 {"db":"SybaseASE","type":"local-zone timestamp","decl":"TIMESTAMP WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near the keyword \u0027WITH\u0027. "}
 {"db":"SybaseASE","type":"local-zone timestamp","decl":"TIMESTAMP(6) WITH LOCAL TIME ZONE","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near the keyword \u0027WITH\u0027. "}
 {"db":"SybaseASE","type":"local-zone timestamp","decl":"TIMESTAMP_LTZ","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027TIMESTAMP_LTZ\u0027. "}
+{"db":"SybaseASE","type":"second-precision datetime","decl":"DATETIME YEAR TO SECOND","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027YEAR\u0027. "}
 {"db":"SybaseASE","type":"second-precision datetime","decl":"DATETIME(0)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Length or precision specification 0 is not within the range of 1 to 255. "}
 {"db":"SybaseASE","type":"second-precision datetime","decl":"SMALLDATETIME","accepted":true,"providerType":"smalldatetime","clrType":"System.DateTime"}
 {"db":"SybaseASE","type":"second-precision datetime","decl":"DATETIME","accepted":true,"providerType":"datetime","clrType":"System.DateTime"}
@@ -226,6 +232,7 @@
 {"db":"SybaseASE","type":"UUID / GUID","decl":"RAW(16)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027RAW\u0027. "}
 {"db":"SybaseASE","type":"UUID / GUID","decl":"CHAR(36)","accepted":true,"providerType":"varchar","clrType":"System.String"}
 {"db":"SybaseASE","type":"UUID / GUID","decl":"BINARY(16)","accepted":true,"providerType":"varbinary","clrType":"System.Byte[]"}
+{"db":"SybaseASE","type":"UUID / GUID","decl":"CHAR(16) CHARACTER SET OCTETS","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027CHARACTER\u0027. "}
 {"db":"SybaseASE","type":"row identifier / ROWID","decl":"ROWID","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027ROWID\u0027. "}
 {"db":"SybaseASE","type":"row identifier / ROWID","decl":"UROWID","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027UROWID\u0027. "}
 {"db":"SybaseASE","type":"row identifier / ROWID","decl":"CHAR(18)","accepted":true,"providerType":"varchar","clrType":"System.String"}
@@ -274,20 +281,24 @@
 {"db":"SybaseASE","type":"point geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027GEOMETRY\u0027. "}
 {"db":"SybaseASE","type":"point geometry","decl":"spatial DataBlade","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027DataBlade\u0027. "}
 {"db":"SybaseASE","type":"point geometry","decl":"ST_POINT","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027ST_POINT\u0027. "}
+{"db":"SybaseASE","type":"point geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Length or precision specification 4326 is not within the range of 1 to 255. "}
 {"db":"SybaseASE","type":"line / linestring geometry","decl":"LINESTRING","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027LINESTRING\u0027. "}
 {"db":"SybaseASE","type":"line / linestring geometry","decl":"GEOMETRY(LINESTRING)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027LINESTRING\u0027. "}
 {"db":"SybaseASE","type":"line / linestring geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027GEOMETRY\u0027. "}
 {"db":"SybaseASE","type":"line / linestring geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027extension\u0027. "}
 {"db":"SybaseASE","type":"line / linestring geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027ST_GEOMETRY\u0027. "}
+{"db":"SybaseASE","type":"line / linestring geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Length or precision specification 4326 is not within the range of 1 to 255. "}
 {"db":"SybaseASE","type":"polygon geometry","decl":"POLYGON","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027POLYGON\u0027. "}
 {"db":"SybaseASE","type":"polygon geometry","decl":"GEOMETRY(POLYGON)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027POLYGON\u0027. "}
 {"db":"SybaseASE","type":"polygon geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027GEOMETRY\u0027. "}
 {"db":"SybaseASE","type":"polygon geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027extension\u0027. "}
 {"db":"SybaseASE","type":"polygon geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027ST_GEOMETRY\u0027. "}
+{"db":"SybaseASE","type":"polygon geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Length or precision specification 4326 is not within the range of 1 to 255. "}
 {"db":"SybaseASE","type":"general geometry","decl":"GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027GEOMETRY\u0027. "}
 {"db":"SybaseASE","type":"general geometry","decl":"ST_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027ST_GEOMETRY\u0027. "}
 {"db":"SybaseASE","type":"general geometry","decl":"SDO_GEOMETRY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027SDO_GEOMETRY\u0027. "}
 {"db":"SybaseASE","type":"general geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027extension\u0027. "}
+{"db":"SybaseASE","type":"general geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Length or precision specification 4326 is not within the range of 1 to 255. "}
 {"db":"SybaseASE","type":"geography / geodetic","decl":"GEOGRAPHY","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027GEOGRAPHY\u0027. "}
 {"db":"SybaseASE","type":"geography / geodetic","decl":"GEOGRAPHY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027POINT\u0027. "}
 {"db":"SybaseASE","type":"geography / geodetic","decl":"PostGIS geography","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near \u0027geography\u0027. "}
@@ -353,3 +364,8 @@
 {"db":"SybaseASE","type":"cursor / table variable","decl":"SYS_REFCURSOR","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027SYS_REFCURSOR\u0027. "}
 {"db":"SybaseASE","type":"cursor / table variable","decl":"TABLE TYPE (SQLScript)","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Incorrect syntax near the keyword \u0027TABLE\u0027. "}
 {"db":"SybaseASE","type":"specialized security label","decl":"IDSSECURITYLABEL","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027IDSSECURITYLABEL\u0027. "}
+{"db":"SybaseASE","type":"native point","decl":"POINT","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027POINT\u0027. "}
+{"db":"SybaseASE","type":"native polygon","decl":"POLYGON","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027POLYGON\u0027. "}
+{"db":"SybaseASE","type":"32-bit transaction ID","decl":"XID","accepted":false,"stage":"create","error":"Unknown failed on SybaseASE: Can\u0027t find type \u0027XID\u0027. "}
+{"db":"SybaseASE","type":"32-bit transaction ID","decl":"BIGINT","accepted":true,"providerType":"bigint","clrType":"System.Int64"}
+{"db":"SybaseASE","type":"32-bit transaction ID","decl":"NUMERIC(10,0)","accepted":true,"providerType":"numeric","clrType":"System.Decimal"}

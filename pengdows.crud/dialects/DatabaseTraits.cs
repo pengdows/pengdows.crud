@@ -136,6 +136,13 @@ internal sealed class DatabaseTraits
     public bool TimeWithZoneIsText { get; init; }
 
     /// <summary>
+    /// True when the provider reports an interval column as TimeSpan but returns its text (pengdows.flatfile: ISO 8601, "P2Y3M"
+    /// or "P1DT2H"), so the value is read as the provider returns it and the interval converter takes the text. Npgsql's
+    /// TimeSpan-reported interval is not this: its GetValue drops or refuses the months, so it is read as NpgsqlInterval.
+    /// </summary>
+    public bool IntervalReadsAsTextWhenTimeSpan { get; init; }
+
+    /// <summary>
     /// Inet, Cidr, PostgreSqlInterval and Range values are sent as Npgsql's own types
     /// (NpgsqlInet, NpgsqlCidr, NpgsqlInterval, NpgsqlRange) when Npgsql is loaded.
     /// </summary>

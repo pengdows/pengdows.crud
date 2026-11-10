@@ -49,6 +49,9 @@ public sealed record TypeCoercionOptions(
     /// </summary>
     internal bool ReadsCollectionLiterals { get; init; }
 
+    /// <summary>Collection columns arrive as a JSON array text (<c>SqlDialect.ReturnsCollectionsAsJsonText</c>).</summary>
+    internal bool ReadsCollectionJson { get; init; }
+
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<dialects.ISqlDialect, TypeCoercionOptions>
         ByDialect = new();
 
@@ -66,6 +69,7 @@ public sealed record TypeCoercionOptions(
         GuidBytesBigEndian = dialect is not dialects.SqlDialect { StoresGuidBytesBigEndian: false },
         ReadsOffsetTimestampsFromValue = dialect is dialects.SqlDialect { ReportsOffsetTimestampsAsDateTime: true },
         OffsetTimestampDataTypeName = (dialect as dialects.SqlDialect)?.OffsetTimestampDataTypeName,
-        ReadsCollectionLiterals = dialect is dialects.SqlDialect { ReturnsCollectionsAsLiteralText: true }
+        ReadsCollectionLiterals = dialect is dialects.SqlDialect { ReturnsCollectionsAsLiteralText: true },
+        ReadsCollectionJson = dialect is dialects.SqlDialect { ReturnsCollectionsAsJsonText: true }
     };
 }

@@ -1,0 +1,1 @@
+{"db":"MariaDb","type":"vector embedding","decl":"VECTOR(3)","accepted":false,"stage":"create","error":"Unknown failed on MariaDb: Unknown data type: \u0027VECTOR\u0027"}

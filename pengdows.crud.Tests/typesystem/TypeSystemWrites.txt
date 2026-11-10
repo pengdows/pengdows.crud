@@ -919,7 +919,7 @@
   Cidr: String "10.0.0.0/8"
   MacAddress: String "08:00:2B:01:02:03"
   IntervalYearMonth: String "1 years 2 months"
-  IntervalDaySecond: String "P1DT2H3M4S"
+  IntervalDaySecond: Object TimeSpan:1.02:03:04
   Range<int>: String "[1, 5)"
   HierarchyId: String "/1/2/"
   RowVersion: Binary 0x0000000000000009
@@ -1214,8 +1214,8 @@
   HierarchyId: String "/1/2/"
   RowVersion: Binary 0x0000000000000009
   BitArray: AnsiString BitArray:101
-  Int128: AnsiString BigInteger:36893488147419103228
-  BigInteger: AnsiString BigInteger:123456789012345678901234567890
+  Int128: String "36893488147419103228"
+  BigInteger: String "123456789012345678901234567890"
 == InterBase
   null String: String DBNull
   DBNull Int32: Int32 DBNull
@@ -1238,7 +1238,7 @@
   Guid as String: String "0f8fad5b-d9cb-469f-a165-70867728950e"
   Guid as Binary: Binary 0x0F8FAD5BD9CB469FA16570867728950E
   DateTime Utc: DateTime DateTime:2026-10-05T13:45:30.1234567Z/Utc
-  DateTime Unspecified DateTime2: DateTime2 DateTime:2026-10-05T13:45:30.1234567/Unspecified
+  DateTime Unspecified DateTime2: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   DateTime as Date: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
   null DateTimeOffset: DateTime DBNull
@@ -1246,7 +1246,7 @@
   DateTime Unspecified as DateTimeOffset: DateTime DateTime:2026-10-05T13:45:30.1234567/Unspecified
   text as DateTimeOffset: DateTime DateTime:2026-10-05T11:45:30.1234567/Unspecified
   DateTimeOffset as DateTime: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
-  DateTimeOffset as DateTime2: DateTime2 DateTime:2026-10-05T11:45:30.1234567Z/Utc
+  DateTimeOffset as DateTime2: DateTime DateTime:2026-10-05T11:45:30.1234567Z/Utc
   DateOnly: Date DateTime:2026-10-05T00:00:00.0000000/Unspecified
   TimeOnly: Time TimeSpan:13:45:30.1234567
   TimeSpan as Time: Time TimeSpan:13:45:30.1234567

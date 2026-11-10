@@ -436,6 +436,13 @@ internal class DuckDbDialect : SqlDialect
 
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
+        // A DateTimeOffset declared as a time is TIME WITH TIME ZONE (TIMETZ): its time and offset go as text, which TIMETZ casts
+        // to. The base validator refuses the CLR type, so this is converted before it runs.
+        if (type == DbType.Time && (object?)value is DateTimeOffset zoned)
+        {
+            return CreateDbParameter<string>(name, DbType.String, zoned.ToString("HH:mm:ss.ffffffzzz", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
         var parameter = base.CreateDbParameter(name, type, value);
 
         // DuckDB BIT takes its bit string; DuckDB.NET binds a BitArray as its ToString() (TYPE-002).

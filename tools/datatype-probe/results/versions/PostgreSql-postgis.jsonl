@@ -1,0 +1,2 @@
+{"db":"PostgreSql","type":"vector embedding","decl":"vector(3)","accepted":false,"stage":"prerequisite","error":"Unknown failed on PostgreSql: 0A000: extension \u0022vector\u0022 is not available  DETAIL: Detail redacted as it may contain sensitive data. Specify \u0027Include Error Detail\u0027 in the connection string to include this information."}
+{"db":"PostgreSql","type":"geography / geodetic","decl":"geography(POINT,4326)","accepted":true,"providerType":"public.geography","clrType":"pengdows.crud.types.valueobjects.Geography"}

@@ -10,6 +10,7 @@ interface pengdows.crud.IDatabaseContextFactory
 interface pengdows.crud.IEphemeralSecureString : System.IDisposable
 interface pengdows.crud.IMapperOptions
 interface pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>
+interface pengdows.crud.IProviderValueConverter`1<T>
 interface pengdows.crud.ISqlContainer : System.IAsyncDisposable, System.IDisposable, pengdows.crud.infrastructure.ISafeAsyncDisposableBase
 interface pengdows.crud.ISqlQueryBuilder : System.IDisposable
 interface pengdows.crud.ITableGateway`2<TEntity, TRowID>
@@ -94,6 +95,8 @@ method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(TEntity, bo
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpdateAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpsertAsync(System.Collections.Generic.IReadOnlyList`1<TEntity>, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
 method pengdows.crud.IPrimaryKeyTableGateway`1<TEntity>::UpsertAsync(TEntity, pengdows.crud.IDatabaseContext, System.Threading.CancellationToken) -> System.Threading.Tasks.ValueTask`1<int>
+method pengdows.crud.IProviderValueConverter`1<T>::FromProvider(object, pengdows.crud.enums.SupportedDatabase) -> T
+method pengdows.crud.IProviderValueConverter`1<T>::ToProvider(T, pengdows.crud.enums.SupportedDatabase) -> object
 method pengdows.crud.ISqlContainer::AddParameter(System.Data.Common.DbParameter) -> void
 method pengdows.crud.ISqlContainer::AddParameterWithValue<T>(System.Data.DbType, T) -> System.Data.Common.DbParameter
 method pengdows.crud.ISqlContainer::AddParameterWithValue<T>(System.Data.DbType, T, System.Data.ParameterDirection) -> System.Data.Common.DbParameter

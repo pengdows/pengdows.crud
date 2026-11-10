@@ -508,6 +508,13 @@ native type is a probe case). Checked against the core sources on 2026-10-30: th
 | TYPE-027 | Multirange types `int4multirange`, `int8multirange`, `nummultirange`, `datemultirange`, `tsmultirange`, `tstzmultirange` (6 cases each) | Open |
 | TYPE-028 | Arrays of types the core already handles: `int4range[]` and the other scalar range arrays (6 each), `cidr[]` (6). Arrays of ranges are where EF's model finalization refuses a range element mapping, so the core needs the element mapping first | Open |
 | TYPE-029 | `bit varying` (`varbit`) and its arrays. The core maps `bit` to `BitArray` but nothing for `varbit` (6 cases each, including `bit[]` and `bit varying[]`) | Open |
+| TYPE-030 | Oracle VARRAY (`SQL array`) written and read through the library (JSON_TABLE / COLLECT / CAST; JSON_ARRAYAGG RETURNING CLOB). Closed 2026-11-09. | Done |
+| TYPE-031 | MySQL 9 and MariaDB 11.7 `VECTOR` round-trip through the library (STRING_TO_VECTOR / VECTOR_TO_STRING; VEC_FromText / VEC_ToText). The default images are now mysql:9.7 and mariadb:11.8, and the fidelity matrix declares the cells. Closed. | Done |
+| TYPE-032 | pgvector and PostGIS on Aurora PostgreSQL: declared from Aurora's own probe, verified on a live cluster. The default PostgreSQL image still lacks both extensions. Open: a second testbed entry or a switch of the default. | Open (decision) |
+| TYPE-033 | SAP HANA `REAL_VECTOR` (cross-reference B71, V). Needs a HANA release from QRC01/2024 or later. The testbed image predates it, and the HANA image needs 16 to 32 GB (about 14 GB available on the dev machine). | Open (resources) |
+| TYPE-034 | SAP ASE native `POINT` / `LINESTRING` / `POLYGON` (cross-reference N). No ASE spatial documentation found; the ASE probe finds no point type. | Open (no source) |
+| TYPE-035 | Db2 12.1 native JSON (cross-reference R) and the Db2 / Informix security labels (need an access policy). Not tested. | Open |
+| TYPE-036 | Application converters (escape hatch): `IProviderValueConverter<T>` and `ProviderValueConverters.Register<T>`. Added 2.0.6; a second registration for a type is refused. | Done |
 
 **Already in the core, failing only in the EF provider:** `bit`, `pg_lsn`, `timetz`, `money`, the scalar range types, `cidr`,
 `inet`, `macaddr`/`macaddr8`. The EF provider needs its own mappings for those; the core already has the CLR side and the

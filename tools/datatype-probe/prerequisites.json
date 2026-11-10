@@ -1,0 +1,109 @@
+{
+  "PostgreSql": {
+    "enumeration": {
+      "decl": "probe_enum",
+      "ddl": [
+        "DROP TYPE IF EXISTS probe_enum CASCADE",
+        "CREATE TYPE probe_enum AS ENUM ('active','inactive')"
+      ]
+    },
+    "user-defined enum / domain": {
+      "decl": "probe_domain",
+      "ddl": [
+        "DROP DOMAIN IF EXISTS probe_domain CASCADE",
+        "CREATE DOMAIN probe_domain AS VARCHAR(100)"
+      ]
+    },
+    "map / dictionary": {
+      "decl": "hstore",
+      "ddl": [
+        "CREATE EXTENSION IF NOT EXISTS hstore"
+      ]
+    },
+    "hierarchical path": {
+      "decl": "ltree",
+      "ddl": [
+        "CREATE EXTENSION IF NOT EXISTS ltree"
+      ]
+    }
+  },
+  "CockroachDb": {
+    "enumeration": {
+      "decl": "probe_enum",
+      "ddl": [
+        "DROP TYPE IF EXISTS probe_enum CASCADE",
+        "CREATE TYPE probe_enum AS ENUM ('active','inactive')"
+      ]
+    }
+  },
+  "Oracle": {
+    "user-defined enum / domain": {
+      "decl": "probe_domain",
+      "ddl": [
+        "DROP DOMAIN probe_domain",
+        "CREATE DOMAIN probe_domain AS VARCHAR2(100)"
+      ]
+    },
+    "table_template": "CREATE TABLE {table} ({columns}) TABLESPACE USERS",
+    "SQL array": {
+      "decl": "probe_varray",
+      "ddl": [
+        "DROP TYPE probe_varray",
+        "CREATE OR REPLACE TYPE probe_varray AS VARRAY(10) OF NUMBER(10)"
+      ]
+    }
+  },
+  "Firebird": {
+    "user-defined enum / domain": {
+      "decl": "probe_domain",
+      "ddl": [
+        "DROP DOMAIN probe_domain",
+        "CREATE DOMAIN probe_domain AS VARCHAR(100)"
+      ]
+    }
+  },
+  "Db2": {
+    "user-defined enum / domain": {
+      "decl": "probe_domain",
+      "ddl": [
+        "DROP TYPE probe_domain",
+        "CREATE DISTINCT TYPE probe_domain AS VARCHAR(100) WITH COMPARISONS"
+      ]
+    },
+    "SQL array": {
+      "decl": "probe_array",
+      "ddl": [
+        "DROP TYPE probe_array",
+        "CREATE TYPE probe_array AS INTEGER ARRAY[10]"
+      ]
+    }
+  },
+  "SqlServer": {
+    "user-defined enum / domain": {
+      "decl": "probe_domain",
+      "ddl": [
+        "DROP TYPE probe_domain",
+        "CREATE TYPE probe_domain FROM VARCHAR(100)"
+      ]
+    }
+  },
+  "SingleStore": {
+    "table_template": "CREATE ROWSTORE TABLE {table} ({columns})"
+  },
+  "AuroraPostgreSql": {
+    "vector embedding": {
+      "decl": "vector(3)",
+      "ddl": [
+        "DROP TABLE IF EXISTS probe_ext_check",
+        "CREATE EXTENSION IF NOT EXISTS vector"
+      ]
+    },
+    "geography / geodetic": {
+      "decl": "geography(POINT,4326)",
+      "ddl": [
+        "DROP TABLE IF EXISTS probe_ext_check",
+        "CREATE EXTENSION IF NOT EXISTS postgis"
+      ]
+    }
+  }
+}

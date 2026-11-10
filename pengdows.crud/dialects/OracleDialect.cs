@@ -74,6 +74,9 @@ internal class OracleDialect : SqlDialect
     // decimal text is bound and stored without loss.
     internal override bool BindsWideIntegersAsText => true;
 
+    // A collection column is read as its elements' JSON array (CollectionSelect), deserialized into the array property.
+    internal override bool ReturnsCollectionsAsJsonText => true;
+
     // ODP.NET cannot return a NUMBER wider than decimal as a number: the digits are selected as text.
     internal override string WideIntegerTextCast(string columnReference) => $"TO_CHAR({columnReference})";
 
@@ -536,9 +539,10 @@ internal class OracleDialect : SqlDialect
     }
 
     public override bool RendersColumnArgument(IColumnInfo column) =>
-        IsSpatial(column) || base.RendersColumnArgument(column);
+        IsSpatial(column) || IsCollectionColumn(column) || base.RendersColumnArgument(column);
 
     public override string RenderColumnArgument(string parameterMarker, IColumnInfo column) =>
+        IsCollectionColumn(column) ? CollectionArgument(parameterMarker, column) :
         IsSpatial(column)
             ? "(SELECT CASE WHEN x IS NULL THEN NULL ELSE SDO_GEOMETRY(SUBSTR(x, INSTR(x, ';') + 1), " +
               "NULLIF(TO_NUMBER(SUBSTR(x, 6, INSTR(x, ';') - 6)), 0)) END " +
@@ -630,7 +634,64 @@ internal class OracleDialect : SqlDialect
     }
 
     internal override bool MarksColumnParameter(IColumnInfo column) =>
-        NationalTypeOf(column) != null || base.MarksColumnParameter(column);
+        NationalTypeOf(column) != null || IsCollectionColumn(column) || base.MarksColumnParameter(column);
+
+    // A column of a declared collection type (CREATE TYPE ... AS VARRAY) takes a CLR array. ODP.NET refuses to bind an array to
+    // it (ORA-50071 without a custom type mapping), so the library builds the collection in SQL from the elements' JSON text.
+    // A VECTOR keeps its own text path (BindsVectorsAsText), and a byte array is RAW.
+    internal static bool IsCollectionColumn(IColumnInfo column) =>
+        column.NativeType is { Length: > 0 } nativeType &&
+        !nativeType.StartsWith("VECTOR", StringComparison.OrdinalIgnoreCase) &&
+        column.PropertyInfo?.PropertyType is { IsArray: true } type && type != typeof(byte[]);
+
+    // The JSON_TABLE column type for an element: a number or text. Any other element type is refused, not guessed.
+    private static string CollectionElementSqlType(IColumnInfo column)
+    {
+        var element = column.PropertyInfo!.PropertyType.GetElementType()!;
+        element = Nullable.GetUnderlyingType(element) ?? element;
+        if (element == typeof(string))
+        {
+            return "VARCHAR2(4000)";
+        }
+
+        if (element == typeof(int) || element == typeof(long) || element == typeof(short) || element == typeof(byte) ||
+            element == typeof(sbyte) || element == typeof(uint) || element == typeof(ulong) || element == typeof(ushort) ||
+            element == typeof(decimal))
+        {
+            return "NUMBER";
+        }
+
+        throw new NotSupportedException(
+            $"Oracle collection column '{column.Name}' has element type {element.Name}; the library maps numeric and text elements.");
+    }
+
+    // A collection column's argument: the JSON text bound once, read as rows by JSON_TABLE and gathered into the declared VARRAY.
+    // A NULL stays NULL (JSON_TABLE of NULL would be an empty collection, not NULL). The bind is in a single-row subquery, as
+    // BFILENAME is, so the marker appears once: Oracle rejects a repeated bind name.
+    private static string CollectionArgument(string parameterMarker, IColumnInfo column) =>
+        $"(SELECT CASE WHEN v.x IS NULL THEN NULL ELSE (SELECT CAST(COLLECT(jt.val) AS {column.NativeType}) " +
+        $"FROM JSON_TABLE(v.x, '$[*]' COLUMNS (val {CollectionElementSqlType(column)} PATH '$')) jt) END " +
+        $"FROM (SELECT {parameterMarker} AS x FROM DUAL) v)";
+
+    // A collection column is read as its elements' JSON text: JSON_ARRAYAGG over TABLE(column). An empty collection reads as
+    // "[]", distinct from a NULL column. RETURNING CLOB: the default VARCHAR2 raises ORA-40478 past 4000 bytes (confirmed live
+    // on Oracle 23ai with an 11001-byte array; RETURNING CLOB returns all of it).
+    private static string CollectionSelect(string columnReference, string wrappedName) =>
+        $"CASE WHEN {columnReference} IS NULL THEN NULL ELSE COALESCE((SELECT JSON_ARRAYAGG(COLUMN_VALUE RETURNING CLOB) FROM TABLE({columnReference})), TO_CLOB('[]')) END AS {wrappedName}";
+
+    // A ROWID is read as its text (ROWIDTOCHAR). It is never written: the database assigns it.
+    private static bool IsRowId(IColumnInfo column) =>
+        string.Equals(column.NativeType, "ROWID", StringComparison.OrdinalIgnoreCase);
+
+    // A collection column is written as its JSON text (System.Text.Json), which RenderColumnArgument rebuilds in SQL.
+    private static void MarkCollectionParameter(DbParameter parameter)
+    {
+        if (parameter.Value is { } array and not string)
+        {
+            parameter.Value = System.Text.Json.JsonSerializer.Serialize(array);
+            parameter.DbType = DbType.String;
+        }
+    }
 
     // DRY-029: TIMESTAMP WITH TIME ZONE keeps the offset (WITH LOCAL TIME ZONE only the instant), and the
     // write probe above already learns every temporal column's declared type.
@@ -651,6 +712,11 @@ internal class OracleDialect : SqlDialect
     public override void MarkColumnParameter(DbParameter parameter, IColumnInfo column)
     {
         base.MarkColumnParameter(parameter, column);
+        if (IsCollectionColumn(column))
+        {
+            MarkCollectionParameter(parameter);
+        }
+
         if (NationalTypeOf(column) is { } national)
         {
             ProviderPropertySetter.TrySet(parameter, "OracleDbType", national);
@@ -669,6 +735,8 @@ internal class OracleDialect : SqlDialect
     internal override string? OffsetTimestampDataTypeName => "TimeStampTZ";
 
     internal override string RenderColumnSelect(string columnReference, string wrappedName, IColumnInfo column) =>
+        IsCollectionColumn(column) ? CollectionSelect(columnReference, wrappedName) :
+        IsRowId(column) ? $"ROWIDTOCHAR({columnReference}) AS {wrappedName}" :
         IsSpatial(column)
             ? $"CASE WHEN {columnReference} IS NULL THEN NULL ELSE 'SRID=' || " +
               $"NVL(TO_CHAR((SELECT v.g.SDO_SRID FROM (SELECT {columnReference} g FROM DUAL) v)), '0') || ';' || " +

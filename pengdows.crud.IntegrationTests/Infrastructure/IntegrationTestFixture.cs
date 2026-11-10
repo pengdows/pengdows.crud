@@ -106,7 +106,34 @@ internal static class IntegrationTestConfiguration
         return providers;
     }
 
+    private static bool IsAurora(SupportedDatabase database) =>
+        database is SupportedDatabase.AuroraPostgreSql or SupportedDatabase.AuroraMySql;
+
     internal static IReadOnlyList<SupportedDatabase> FilterIntegrationOnly(
+        IReadOnlyList<SupportedDatabase> providers,
+        string? only)
+    {
+        var matched = SelectIntegrationOnly(providers, only);
+        if (matched.Count == 0 && !string.IsNullOrWhiteSpace(only))
+        {
+            // An Aurora database is a real SupportedDatabase value; it is absent from the run because it is opt-in.
+            if (ParseOnly(only).Any(IsAurora))
+            {
+                throw new InvalidOperationException(
+                    $"INTEGRATION_ONLY names an Aurora database ('{only}'), which this run does not enable: set INCLUDE_AURORA=true " +
+                    "(and sign in with aws login).");
+            }
+
+            throw new InvalidOperationException(
+                $"INTEGRATION_ONLY did not match any database this run enables: '{only}'.");
+        }
+
+        return matched;
+    }
+
+    // The providers a suite runs for: the ones INTEGRATION_ONLY names, or all of them when it is unset. A suite that does not
+    // include the named database gets nothing and is not an error.
+    internal static IReadOnlyList<SupportedDatabase> SelectIntegrationOnly(
         IReadOnlyList<SupportedDatabase> providers,
         string? only)
     {
@@ -115,29 +142,24 @@ internal static class IntegrationTestConfiguration
             return providers;
         }
 
-        var filtered = only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+        var named = ParseOnly(only);
+        if (named.Count == 0)
+        {
+            throw new InvalidOperationException(
+                $"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
+        }
+
+        return providers.Where(named.Contains).ToArray();
+    }
+
+    private static List<SupportedDatabase> ParseOnly(string only) =>
+        only.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Select(token => Enum.TryParse<SupportedDatabase>(token, true, out var parsed)
                 ? parsed
                 : (SupportedDatabase?)null)
             .Where(parsed => parsed.HasValue)
             .Select(parsed => parsed!.Value)
             .ToList();
-
-        if (filtered.Count == 0)
-        {
-            throw new InvalidOperationException(
-                $"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
-        }
-
-        var matched = providers.Where(filtered.Contains).ToArray();
-        if (matched.Length == 0)
-        {
-            throw new InvalidOperationException(
-                $"INTEGRATION_ONLY did not match any SupportedDatabase values: '{only}'.");
-        }
-
-        return matched;
-    }
 }
 
 public class IntegrationTestFixture : IAsyncLifetime

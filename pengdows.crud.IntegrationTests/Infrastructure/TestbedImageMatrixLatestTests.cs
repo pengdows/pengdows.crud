@@ -48,4 +48,15 @@ public class TestbedImageMatrixLatestTests
     {
         Assert.Throws<ArgumentException>(() => TestbedImageMatrix.Latest("NoSuchDatabase"));
     }
+
+    // The newest published release of each line: MySQL 9.x is where VECTOR exists (9.0+), MariaDB 11.7+ has VECTOR, and
+    // PostgreSQL 16 takes its last minor. The all-types matrix runs on these.
+    [Theory]
+    [InlineData("MySQL", "mysql:9.7")]
+    [InlineData("MariaDB", "mariadb:11.8")]
+    [InlineData("PostgreSQL", "postgres:16.15")]
+    public void Latest_IsTheNewestReleaseOfItsLine(string provider, string image)
+    {
+        Assert.Equal(image, TestbedImageMatrix.Latest(provider));
+    }
 }

@@ -220,6 +220,11 @@ internal sealed class InterBaseDialect : SqlDialect
     /// correctly once coerced (<see cref="DateTimeKind.Unspecified"/> prevents the provider from
     /// applying its own timezone adjustment on top).
     /// </summary>
+    // The InterBase driver refuses DbType.DateTime2 ("Invalid data type: 26" when the SQL templates are built). A timestamp
+    // without a zone is bound as DateTime, which is what its TIMESTAMP column holds (as Db2 and Informix do).
+    protected override DbType RemapDbType(DbType type) =>
+        type == DbType.DateTime2 ? DbType.DateTime : base.RemapDbType(type);
+
     public override DbParameter CreateDbParameter<T>(string? name, DbType type, T value)
     {
         if (type == DbType.DateTimeOffset)

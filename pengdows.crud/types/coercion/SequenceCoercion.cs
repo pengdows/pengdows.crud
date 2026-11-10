@@ -35,6 +35,15 @@ internal static class SequenceCoercion
         // TYPE-015: vector columns. SQL Server's VECTOR reads as "[1.5000000e+000,...]" through
         // SqlClient 6.0 and as SqlVector<T> (Memory) through 6.1+; the Pgvector.Npgsql plugin reads
         // pgvector as Pgvector.Vector (ToArray()). Each becomes an array, coerced element-wise below.
+        // A JSON array text (Oracle VARRAY read as its elements' JSON): deserialized with System.Text.Json, so text and numeric
+        // elements both come back typed and escaped text is unescaped by the parser, not by hand.
+        // A byte array is binary, never a collection: its text keeps the binary decoding (base64).
+        if (value is string json && options.ReadsCollectionJson && target.IsArray && elementType != typeof(byte))
+        {
+            result = System.Text.Json.JsonSerializer.Deserialize(json, target);
+            return true;
+        }
+
         if (value is string literal && options.ReadsCollectionLiterals && target.IsArray)
         {
             // The dialect returns collections as literal text (Informix LIST/SET/MULTISET).

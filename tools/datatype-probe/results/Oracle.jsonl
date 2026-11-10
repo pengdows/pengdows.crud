@@ -42,11 +42,13 @@
 {"db":"Oracle","type":"unsigned 32-bit","decl":"UINT4","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"unsigned 32-bit","decl":"UINT32","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"unsigned 32-bit","decl":"UNSIGNED INT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
+{"db":"Oracle","type":"unsigned 32-bit","decl":"NUMERIC(18,0)","accepted":true,"providerType":"Int64","clrType":"System.Int64"}
 {"db":"Oracle","type":"unsigned 64-bit","decl":"BIGINT UNSIGNED","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
 {"db":"Oracle","type":"unsigned 64-bit","decl":"UBIGINT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"unsigned 64-bit","decl":"UINT8","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"unsigned 64-bit","decl":"UINT64","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"unsigned 64-bit","decl":"UNSIGNED BIGINT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
+{"db":"Oracle","type":"unsigned 64-bit","decl":"NUMERIC(20,0)","accepted":true,"providerType":"Decimal","clrType":"System.Decimal"}
 {"db":"Oracle","type":"unsigned 128-bit","decl":"UHUGEINT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"unsigned 128-bit","decl":"UINT128","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"arbitrary-size integer","decl":"NUMERIC(1000,0)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-01727: numeric precision specifier is out of range (1 to 38) https://docs.oracle.com/error-help/db/ora-01727/"}
@@ -125,12 +127,14 @@
 {"db":"Oracle","type":"unbounded text","decl":"VARCHAR","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00906: missing left parenthesis https://docs.oracle.com/error-help/db/ora-00906/"}
 {"db":"Oracle","type":"unbounded text","decl":"NCLOB","accepted":true,"providerType":"NClob","clrType":"System.String"}
 {"db":"Oracle","type":"national / Unicode character","decl":"NVARCHAR(100)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type NVARCHAR is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
+{"db":"Oracle","type":"national / Unicode character","decl":"NCHAR(40)","accepted":true,"providerType":"NChar","clrType":"System.String"}
 {"db":"Oracle","type":"national / Unicode character","decl":"NCHAR(10)","accepted":true,"providerType":"NChar","clrType":"System.String"}
 {"db":"Oracle","type":"national / Unicode character","decl":"NVARCHAR2(100)","accepted":true,"providerType":"NVarchar2","clrType":"System.String"}
 {"db":"Oracle","type":"national / Unicode character","decl":"NCLOB","accepted":true,"providerType":"NClob","clrType":"System.String"}
 {"db":"Oracle","type":"national / Unicode character","decl":"NATIONAL CHAR","accepted":true,"providerType":"NChar","clrType":"System.String"}
 {"db":"Oracle","type":"national / Unicode character","decl":"NVARCHAR","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"national / Unicode character","decl":"Unicode text fields","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item TEXT in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
+{"db":"Oracle","type":"national / Unicode character","decl":"VARCHAR(100)","accepted":true,"providerType":"Varchar2","clrType":"System.String"}
 {"db":"Oracle","type":"long text LOB","decl":"CLOB","accepted":true,"providerType":"Clob","clrType":"System.String"}
 {"db":"Oracle","type":"long text LOB","decl":"TEXT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"long text LOB","decl":"NTEXT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
@@ -176,6 +180,8 @@
 {"db":"Oracle","type":"legacy long binary","decl":"MEDIUMBLOB","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"legacy long binary","decl":"LONGBLOB","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"legacy long binary","decl":"BYTE","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"rowversion / timestamp token","decl":"BINARY(8)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type BINARY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
+{"db":"Oracle","type":"rowversion / timestamp token","decl":"CHAR(8) FOR BIT DATA","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item FOR in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"rowversion / timestamp token","decl":"ROWVERSION","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"rowversion / timestamp token","decl":"TIMESTAMP","accepted":true,"providerType":"TimeStamp","clrType":"System.DateTime"}
 {"db":"Oracle","type":"rowversion / timestamp token","decl":"no direct SQL rowversion type","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item DIRECT in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
@@ -202,11 +208,13 @@
 {"db":"Oracle","type":"local-zone timestamp","decl":"TIMESTAMP WITH LOCAL TIME ZONE","accepted":true,"providerType":"TimeStampLTZ","clrType":"System.DateTime"}
 {"db":"Oracle","type":"local-zone timestamp","decl":"TIMESTAMP(6) WITH LOCAL TIME ZONE","accepted":true,"providerType":"TimeStampLTZ","clrType":"System.DateTime"}
 {"db":"Oracle","type":"local-zone timestamp","decl":"TIMESTAMP_LTZ","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"second-precision datetime","decl":"DATETIME YEAR TO SECOND","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item YEAR in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"second-precision datetime","decl":"DATETIME(0)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type DATETIME is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"second-precision datetime","decl":"SMALLDATETIME","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"second-precision datetime","decl":"DATETIME","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"second-precision datetime","decl":"DATE","accepted":true,"providerType":"Date","clrType":"System.DateTime"}
 {"db":"Oracle","type":"second-precision datetime","decl":"SECONDDATE","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"second-precision datetime","decl":"TIMESTAMP","accepted":true,"providerType":"TimeStamp","clrType":"System.DateTime"}
 {"db":"Oracle","type":"year-only","decl":"YEAR","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"year-only","decl":"SMALLINT","accepted":true,"providerType":"Decimal","clrType":"System.Decimal"}
 {"db":"Oracle","type":"year-only","decl":"DATETIME YEAR TO YEAR","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item YEAR in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
@@ -226,6 +234,7 @@
 {"db":"Oracle","type":"UUID / GUID","decl":"RAW(16)","accepted":true,"providerType":"Raw","clrType":"System.Byte[]"}
 {"db":"Oracle","type":"UUID / GUID","decl":"CHAR(36)","accepted":true,"providerType":"Char","clrType":"System.String"}
 {"db":"Oracle","type":"UUID / GUID","decl":"BINARY(16)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type BINARY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
+{"db":"Oracle","type":"UUID / GUID","decl":"CHAR(16) CHARACTER SET OCTETS","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
 {"db":"Oracle","type":"row identifier / ROWID","decl":"ROWID","accepted":true,"providerType":"Varchar2","clrType":"System.String"}
 {"db":"Oracle","type":"row identifier / ROWID","decl":"UROWID","accepted":true,"providerType":"Varchar2","clrType":"System.String"}
 {"db":"Oracle","type":"row identifier / ROWID","decl":"CHAR(18)","accepted":true,"providerType":"Char","clrType":"System.String"}
@@ -234,7 +243,7 @@
 {"db":"Oracle","type":"transaction ID","decl":"XID","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"transaction ID","decl":"XID8","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"WAL / log position","decl":"PG_LSN","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
-{"db":"Oracle","type":"JSON text / JSON value","decl":"JSON","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-43853: JSON type cannot be used in non-automatic segment space management tablespace \u0022SYSTEM\u0022 https://docs.oracle.com/error-help/db/ora-43853/"}
+{"db":"Oracle","type":"JSON text / JSON value","decl":"JSON","accepted":true,"providerType":"Json","clrType":"System.String"}
 {"db":"Oracle","type":"JSON text / JSON value","decl":"JSONB","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"JSON text / JSON value","decl":"CLOB CHECK (c IS JSON)","accepted":true,"providerType":"Clob","clrType":"System.String"}
 {"db":"Oracle","type":"JSON text / JSON value","decl":"JSON -\u003E JSONB","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item - in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
@@ -245,11 +254,11 @@
 {"db":"Oracle","type":"native binary JSON","decl":"BSON","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"native binary JSON","decl":"JSON (binary storage)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03077: unexpected left parenthesis after JSON https://docs.oracle.com/error-help/db/ora-03077/"}
 {"db":"Oracle","type":"native binary JSON","decl":"VARIANT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
-{"db":"Oracle","type":"native binary JSON","decl":"JSON","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-43853: JSON type cannot be used in non-automatic segment space management tablespace \u0022SYSTEM\u0022 https://docs.oracle.com/error-help/db/ora-43853/"}
+{"db":"Oracle","type":"native binary JSON","decl":"JSON","accepted":true,"providerType":"Json","clrType":"System.String"}
 {"db":"Oracle","type":"XML","decl":"XML","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"XML","decl":"CLOB","accepted":true,"providerType":"Clob","clrType":"System.String"}
 {"db":"Oracle","type":"XML","decl":"NCLOB","accepted":true,"providerType":"NClob","clrType":"System.String"}
-{"db":"Oracle","type":"XML","decl":"XMLTYPE","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-43853: SecureFiles LOBs (Large Objects) cannot be used in non-automatic segment space management tablespace \u0022SYSTEM\u0022 https://docs.oracle.com/error-help/db/ora-43853/"}
+{"db":"Oracle","type":"XML","decl":"XMLTYPE","accepted":true,"providerType":"XmlType","clrType":"System.String"}
 {"db":"Oracle","type":"XML","decl":"PARSE_XML -\u003E VARIANT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item - in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"BSON","decl":"BSON","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"BSON","decl":"BYTEA","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
@@ -274,25 +283,30 @@
 {"db":"Oracle","type":"point geometry","decl":"GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
 {"db":"Oracle","type":"point geometry","decl":"spatial DataBlade","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
 {"db":"Oracle","type":"point geometry","decl":"ST_POINT","accepted":true,"providerType":"Object","clrType":"System.Object"}
+{"db":"Oracle","type":"point geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type ST_GEOMETRY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"line / linestring geometry","decl":"LINESTRING","accepted":true,"providerType":"Object","clrType":"System.Object"}
 {"db":"Oracle","type":"line / linestring geometry","decl":"GEOMETRY(LINESTRING)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type GEOMETRY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"line / linestring geometry","decl":"GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
 {"db":"Oracle","type":"line / linestring geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
 {"db":"Oracle","type":"line / linestring geometry","decl":"ST_GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
+{"db":"Oracle","type":"line / linestring geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type ST_GEOMETRY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"polygon geometry","decl":"POLYGON","accepted":true,"providerType":"Object","clrType":"System.Object"}
 {"db":"Oracle","type":"polygon geometry","decl":"GEOMETRY(POLYGON)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type GEOMETRY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"polygon geometry","decl":"GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
 {"db":"Oracle","type":"polygon geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
 {"db":"Oracle","type":"polygon geometry","decl":"ST_GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
+{"db":"Oracle","type":"polygon geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type ST_GEOMETRY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"general geometry","decl":"GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
 {"db":"Oracle","type":"general geometry","decl":"ST_GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
 {"db":"Oracle","type":"general geometry","decl":"SDO_GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
 {"db":"Oracle","type":"general geometry","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
+{"db":"Oracle","type":"general geometry","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type ST_GEOMETRY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"geography / geodetic","decl":"GEOGRAPHY","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"geography / geodetic","decl":"GEOGRAPHY(POINT,4326)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type GEOGRAPHY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"geography / geodetic","decl":"PostGIS geography","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
 {"db":"Oracle","type":"geography / geodetic","decl":"GEOMETRY extension","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
 {"db":"Oracle","type":"geography / geodetic","decl":"ST_GEOMETRY","accepted":true,"providerType":"Object","clrType":"System.Object"}
+{"db":"Oracle","type":"geography / geodetic","decl":"ST_GEOMETRY(4326)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type ST_GEOMETRY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"SQL array","decl":"INTEGER ARRAY","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"SQL array","decl":"INTEGER[]","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item [ in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"SQL array","decl":"INT[]","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item [ in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
@@ -306,12 +320,16 @@
 {"db":"Oracle","type":"fixed-length array","decl":"type[n] (not enforced as fixed)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item [ in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"fixed-length array","decl":"type[n]","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item [ in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"fixed-length array","decl":"ARRAY(type)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type ARRAY is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
+{"db":"Oracle","type":"fixed-length array","decl":"INTEGER ARRAY","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item ARRAY in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"list / multiset / set collection","decl":"INTEGER MULTISET","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item MULTISET in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"list / multiset / set collection","decl":"LIST(INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type LIST is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"list / multiset / set collection","decl":"MULTISET","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"list / multiset / set collection","decl":"type[]","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item [ in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"list / multiset / set collection","decl":"LIST","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"list / multiset / set collection","decl":"ARRAY","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"list / multiset / set collection","decl":"SET(INTEGER NOT NULL) NOT NULL","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"list / multiset / set collection","decl":"MULTISET(INTEGER NOT NULL) NOT NULL","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type MULTISET is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
+{"db":"Oracle","type":"list / multiset / set collection","decl":"LIST(INTEGER NOT NULL) NOT NULL","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type LIST is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"map / dictionary","decl":"MAP(VARCHAR(10),INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03060: Data type MAP is invalid. https://docs.oracle.com/error-help/db/ora-03060/"}
 {"db":"Oracle","type":"map / dictionary","decl":"HSTORE","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"struct / composite / row","decl":"ROW(a INTEGER)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
@@ -332,13 +350,14 @@
 {"db":"Oracle","type":"user-defined enum / domain","decl":"CREATE DOMAIN","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"user-defined enum / domain","decl":"ENUM","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"user-defined enum / domain","decl":"CREATE DISTINCT TYPE","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"user-defined enum / domain","decl":"probe_domain","accepted":true,"providerType":"Varchar2","clrType":"System.String"}
 {"db":"Oracle","type":"user-defined scalar / object","decl":"CREATE TYPE alias","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"full-text search vector / query","decl":"TSVECTOR","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"full-text search vector / query","decl":"TSQUERY","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
-{"db":"Oracle","type":"vector embedding","decl":"VECTOR(3)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-43853: VECTOR type cannot be used in non-automatic segment space management tablespace \u0022SYSTEM\u0022 https://docs.oracle.com/error-help/db/ora-43853/"}
-{"db":"Oracle","type":"vector embedding","decl":"VECTOR(3,FLOAT32)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-43853: VECTOR type cannot be used in non-automatic segment space management tablespace \u0022SYSTEM\u0022 https://docs.oracle.com/error-help/db/ora-43853/"}
+{"db":"Oracle","type":"vector embedding","decl":"VECTOR(3)","accepted":true,"providerType":"VECTOR(3, *)","clrType":"System.Array"}
+{"db":"Oracle","type":"vector embedding","decl":"VECTOR(3,FLOAT32)","accepted":true,"providerType":"VECTOR(3, FLOAT32)","clrType":"System.Single[]"}
 {"db":"Oracle","type":"vector embedding","decl":"VECTOR(n)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-51801: Invalid VECTOR type specification: Invalid dimension count (\u0027N\u0027). Valid values can either be * (i.e. flexible) or an integer between 1 and 65535. https://docs.oracle.com/error-help/db"}
-{"db":"Oracle","type":"vector embedding","decl":"VECTOR","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-43853: VECTOR type cannot be used in non-automatic segment space management tablespace \u0022SYSTEM\u0022 https://docs.oracle.com/error-help/db/ora-43853/"}
+{"db":"Oracle","type":"vector embedding","decl":"VECTOR","accepted":true,"providerType":"VECTOR(*, *)","clrType":"System.Array"}
 {"db":"Oracle","type":"vector embedding","decl":"VECTOR (not in standard MySQL 8.4)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-51801: Invalid VECTOR type specification: Invalid dimension count (\u0027NOT\u0027). Valid values can either be * (i.e. flexible) or an integer between 1 and 65535. https://docs.oracle.com/error-help/"}
 {"db":"Oracle","type":"vector embedding","decl":"FLOAT[dimension]","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03099: unexpected item [ in a column definition https://docs.oracle.com/error-help/db/ora-03099/"}
 {"db":"Oracle","type":"hierarchical path","decl":"HIERARCHYID","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
@@ -353,3 +372,9 @@
 {"db":"Oracle","type":"cursor / table variable","decl":"SYS_REFCURSOR","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
 {"db":"Oracle","type":"cursor / table variable","decl":"TABLE TYPE (SQLScript)","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-03062: missing comma or right parenthesis https://docs.oracle.com/error-help/db/ora-03062/"}
 {"db":"Oracle","type":"specialized security label","decl":"IDSSECURITYLABEL","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"native point","decl":"POINT","accepted":true,"providerType":"Object","clrType":"System.Object"}
+{"db":"Oracle","type":"native polygon","decl":"POLYGON","accepted":true,"providerType":"Object","clrType":"System.Object"}
+{"db":"Oracle","type":"32-bit transaction ID","decl":"XID","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"32-bit transaction ID","decl":"BIGINT","accepted":false,"stage":"create","error":"Unknown failed on Oracle: ORA-00902: invalid datatype https://docs.oracle.com/error-help/db/ora-00902/"}
+{"db":"Oracle","type":"32-bit transaction ID","decl":"NUMERIC(10,0)","accepted":true,"providerType":"Int64","clrType":"System.Int64"}
+{"db":"Oracle","type":"SQL array","decl":"probe_varray","accepted":true,"providerType":"Array","clrType":"System.Object"}

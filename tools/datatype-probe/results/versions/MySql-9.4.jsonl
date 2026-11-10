@@ -1,0 +1,1 @@
+{"db":"MySql","type":"vector embedding","decl":"VECTOR(3)","accepted":true,"providerType":"VECTOR","clrType":"System.ReadOnlyMemory\u00601[[System.Single, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]"}

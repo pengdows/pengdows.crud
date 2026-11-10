@@ -87,6 +87,24 @@ public sealed class HanaArrayTests
         Assert.Contains(values, v => v is byte[]);
     }
 
+    // A SMALLINT array's element is CAST, so its expression is ARRAY(SELECT CAST(V AS SMALLINT) FROM JSON_TABLE(?...)). The NULL
+    // rewrite must cover that form too: otherwise a NULL SMALLINT array is stored as an empty array (live, HANA).
+    [Fact]
+    public async Task Create_NullSmallIntArray_IsWrittenAsNull_NotAnEmptyArray()
+    {
+        var (context, exec) = Hana();
+        await using var _ = context;
+        var row = Sample();
+        row.Shorts = null;
+
+        await new TableGateway<Row, int>(context).CreateAsync(row);
+
+        var insert = exec.ExecutedNonQueryCommands.Single(c => c.CommandText.StartsWith("INSERT", StringComparison.Ordinal));
+        Assert.DoesNotContain("ARRAY(SELECT CAST(V AS SMALLINT)", insert.CommandText);
+        Assert.Equal(insert.CommandText.Count(ch => ch == '?'), insert.Parameters.Count);
+        Assert.DoesNotContain(insert.Parameters, p => Equals(p.Value, "[]"));
+    }
+
     [Fact]
     public async Task Create_NullArray_IsWrittenAsNull_EmptyArrayStaysEmpty()
     {

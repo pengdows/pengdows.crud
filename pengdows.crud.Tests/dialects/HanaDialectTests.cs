@@ -471,4 +471,17 @@ public class HanaDialectTests
             NativeError = nativeError;
         }
     }
+
+    // HANA's NUMBER and DECIMAL columns take a wide integer as its decimal text (the same binding as every dialect that
+    // sets BindsWideIntegersAsText). Without it the SQL templates fail: "The parameter data type of BigInteger is invalid".
+    [Fact]
+    public void BigInteger_IsBoundAsItsDecimalText()
+    {
+        var dialect = CreateDialect();
+        var value = System.Numerics.BigInteger.Parse("123456789012345678901234567890");
+
+        var parameter = dialect.CreateDbParameter("p", DbType.Object, value);
+
+        Assert.Equal("123456789012345678901234567890", Assert.IsType<string>(parameter.Value));
+    }
 }

@@ -2,6 +2,17 @@
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Docker resources: the containers and anonymous volumes this run creates are removed when the script exits, however
+# it exits (tools/docker-run-cleanup.sh). Each EXIT trap below calls on_exit, because a later trap replaces an earlier one.
+source "${root}/tools/docker-run-cleanup.sh"
+run_snapshot="$(mktemp -d)"
+docker_snapshot "${run_snapshot}"
+on_exit() {
+  docker_cleanup_since "${run_snapshot}/containers" "${run_snapshot}/volumes"
+  rm -rf -- "${run_snapshot}"
+}
+trap on_exit EXIT
 results="${root}/TestResults/integration"
 mkdir -p "${results}"
 
@@ -62,7 +73,7 @@ if db2_in_scope &&
     db2_compat_runtime_dir="${DB2_COMPAT_RUNTIME_DIR:-}"
     # Appended, so the host's own libraries win and the compatibility copies only fill the gaps.
     export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+${LD_LIBRARY_PATH}:}${DB2_COMPAT_LIB_DIR}"
-    trap cleanup_db2_compat_runtime EXIT
+    trap 'cleanup_db2_compat_runtime; on_exit' EXIT
   else
     echo "  WARN    Db2: could not provision the libxml2/ICU compatibility libraries; Db2 tests will fail" >&2
   fi
@@ -194,7 +205,7 @@ if [[ -z "${FIREBIRD_EMBEDDED_CLIENT_LIBRARY:-}" ]]; then
     fi
     cleanup_db2_compat_runtime
   }
-  trap cleanup_firebird_runtime EXIT
+  trap 'cleanup_firebird_runtime; on_exit' EXIT
 fi
 
 # Aurora: create the clusters now and delete them when the script exits for any reason (success, failure, Ctrl-C),
@@ -210,7 +221,7 @@ cleanup_aurora_it() {
 }
 if aurora_in_scope && ! aurora_given; then
   aurora_provisioned=1
-  trap 'cleanup_aurora_it; if declare -F cleanup_firebird_runtime >/dev/null; then cleanup_firebird_runtime; else cleanup_db2_compat_runtime; fi' EXIT
+  trap 'cleanup_aurora_it; if declare -F cleanup_firebird_runtime >/dev/null; then cleanup_firebird_runtime; else cleanup_db2_compat_runtime; fi; on_exit' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
   "${root}/tools/aurora-it.sh" up || { echo "Aurora provisioning failed; deleting what was created." >&2; exit 1; }

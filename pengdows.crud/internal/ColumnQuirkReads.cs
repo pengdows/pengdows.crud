@@ -1,6 +1,7 @@
 using System.Data;
 using System.Linq.Expressions;
 using System.Reflection;
+using pengdows.crud.dialects;
 using pengdows.crud.types.converters;
 using pengdows.crud.types.valueobjects;
 
@@ -71,6 +72,19 @@ internal static class ColumnQuirkReads
             return ColumnConversion.Build(raw, typeof(object), targetType, options);
         }
 
+        // A provider whose TimeSpan-reported interval is its text (DatabaseTraits.IntervalReadsAsTextWhenTimeSpan). Npgsql's is not:
+        // its GetValue drops or refuses the months, so it is read through its NpgsqlInterval (Aurora PostgreSQL, live 2026-11-07).
+        if (fieldType == typeof(TimeSpan) && options != null &&
+            DatabaseTraits.For(options.Provider).IntervalReadsAsTextWhenTimeSpan &&
+            (underlying == typeof(IntervalDaySecond) || underlying == typeof(IntervalYearMonth)))
+        {
+            // FlatFile reports an INTERVAL column as TimeSpan but returns its text ("P1DT2H3M4S", "2 years 3 months"), which is not a
+            // TimeSpan, and its GetTimeSpan parses that text and throws FormatException. The value is read as the provider returns it,
+            // and the interval converter takes the text (or a TimeSpan) as it does.
+            var raw = Expression.Call(record, ReaderGetters.GetValue, ordinalExpr);
+            return ColumnConversion.Build(raw, typeof(object), targetType, options);
+        }
+
         if (fieldType == typeof(decimal) && NumericFieldReader.IsFloatingPoint(targetType))
         {
             // A NUMBER beyond decimal (ODP.NET) reads with GetDouble (TYPE-002).
@@ -101,7 +115,7 @@ internal static class ColumnQuirkReads
         {
             // Npgsql reports NUMERIC as decimal and its typed read throws beyond decimal's range; the number's text
             // is the exact value, read through the same fallback as an Int64-reported column.
-            var raw = Expression.Call(typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.Read))!,
+            var raw = Expression.Call(typeof(WideIntegerFieldReader).GetMethod(nameof(WideIntegerFieldReader.ReadFromDecimal))!,
                 record, ordinalExpr);
             return ColumnConversion.Build(raw, typeof(object), targetType, options);
         }

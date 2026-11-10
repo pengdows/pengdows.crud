@@ -53,7 +53,7 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="pengdows.flatfile" Version="0.2.1-preview.25"/>
+        <PackageReference Include="pengdows.flatfile" Version="0.2.1-preview.27"/>
     </ItemGroup>
 
 
