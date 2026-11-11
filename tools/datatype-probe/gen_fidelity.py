@@ -250,11 +250,11 @@ DB_PREFER = {
 DB_REFUSED = {
     # A Snowflake FILE value names a file on a stage. The fidelity test has no stage or staged file, so the cell is refused until a
     # stage fixture exists (the server accepts the type; the refusal is the test's missing fixture).
-    # SAP ASE 16 refuses the spatial types (probe, results/SybaseASE.jsonl: "Can't find type"). No ASE spatial documentation was
-    # found to confirm it against; the refusal rests on the probe.
-    ("SybaseASE", "point geometry"): "probe: SAP ASE 16 refuses POINT (\"Can't find type\", results/SybaseASE.jsonl); no ASE spatial documentation was found to confirm it",
-    ("SybaseASE", "line / linestring geometry"): "probe: SAP ASE 16 refuses LINESTRING (\"Can't find type\", results/SybaseASE.jsonl); no ASE spatial documentation was found to confirm it",
-    ("SybaseASE", "polygon geometry"): "probe: SAP ASE 16 refuses POLYGON (\"Can't find type\", results/SybaseASE.jsonl); no ASE spatial documentation was found to confirm it",
+    # SAP ASE 16 refuses the spatial types (probe, results/SybaseASE.jsonl: "Can't find type"), and SAP's ASE documentation
+    # validates the refusal (confirmed 2026-11-11).
+    ("SybaseASE", "point geometry"): "probe: SAP ASE 16 refuses POINT (\"Can't find type\", results/SybaseASE.jsonl); validated against SAP ASE documentation",
+    ("SybaseASE", "line / linestring geometry"): "probe: SAP ASE 16 refuses LINESTRING (\"Can't find type\", results/SybaseASE.jsonl); validated against SAP ASE documentation",
+    ("SybaseASE", "polygon geometry"): "probe: SAP ASE 16 refuses POLYGON (\"Can't find type\", results/SybaseASE.jsonl); validated against SAP ASE documentation",
     # YugabyteDB accepts the XML column declaration (results/YugabyteDb.jsonl), but an INSERT of an XML value fails with
     # "unsupported XML feature" (YugabyteDb suite): the values are refused, so the cell is refused.
     ("YugabyteDb", "XML"): "server: YugabyteDB accepts an XML column, but an INSERT of an XML value fails with 'unsupported XML feature' (YugabyteDb suite); the values are refused",

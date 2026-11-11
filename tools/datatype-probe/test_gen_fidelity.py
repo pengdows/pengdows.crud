@@ -316,13 +316,14 @@ class ResolveTests(unittest.TestCase):
         self.assertNotIn("reads back NULL", reason)
 
 
-    def test_sybase_ase_spatial_refusals_cite_the_probe_not_an_unverified_vendor_claim(self):
-        # ASE 16 refuses POINT, LINESTRING and POLYGON ("Can't find type", results/SybaseASE.jsonl). SAP's own ASE spatial
-        # documentation was not found, so the reason names the probe, not a documentation source.
+    def test_sybase_ase_spatial_refusals_cite_the_probe_and_the_validated_documentation(self):
+        # ASE 16 refuses POINT, LINESTRING and POLYGON ("Can't find type", results/SybaseASE.jsonl), and SAP's ASE documentation
+        # validates the refusal (the user confirmed it 2026-11-11). Each reason names both.
         for sem in ("point geometry", "line / linestring geometry", "polygon geometry"):
-            if ("SybaseASE", sem) in g.DB_REFUSED:
-                self.assertIn("probe", g.DB_REFUSED[("SybaseASE", sem)])
-                self.assertIn("no ASE spatial documentation", g.DB_REFUSED[("SybaseASE", sem)])
+            self.assertIn(("SybaseASE", sem), g.DB_REFUSED)
+            self.assertIn("probe", g.DB_REFUSED[("SybaseASE", sem)])
+            self.assertIn("validated against SAP ASE documentation", g.DB_REFUSED[("SybaseASE", sem)])
+            self.assertNotIn("no ASE spatial documentation", g.DB_REFUSED[("SybaseASE", sem)])
 
 
     def test_snowflake_is_enumerated_and_its_accepted_types_are_declared(self):

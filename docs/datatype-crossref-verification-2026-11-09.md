@@ -88,7 +88,7 @@ security labels need an access-control policy first (`IDSSECURITYLABEL` and `DB2
 
 **Unverified (no evidence either way):**
 
-- SAP ASE native `POINT`, `LINESTRING`, `POLYGON` (`N`): no ASE spatial documentation found, and the ASE probe finds no point type.
+- SAP ASE native `POINT`, `LINESTRING`, `POLYGON` (`N`): validated against SAP ASE documentation (confirmed 2026-11-11), and the ASE 16 probe refuses all three ("Can't find type").
   The cells stay refused.
 - Db2 12.1 native JSON (`R`): the search found no native JSON column type, and the search was inconclusive for 12.1 specifically.
   The cell stays refused.
